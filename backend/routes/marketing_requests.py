@@ -11,13 +11,15 @@ Lifecycle (extended):
 Multi-tenant. Mirrors Tasks structure but stays in its own collection so
 both modules can evolve independently.
 """
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field
 import uuid
 import logging
 import secrets
+import base64
+import io
 
 from database import get_tenant_db
 from deps import get_current_user
@@ -743,6 +745,27 @@ async def add_design_option(req_id: str, payload: DesignOptionCreate, current_us
         },
     )
     return option
+
+
+@router.post("/{req_id}/upload-image")
+async def upload_option_image(
+    req_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Accept an image upload and return a base64 data URL the frontend can
+    attach to a design option (mirrors the bottle_preview upload pattern so we
+    don't need an object-storage integration for Phase 1)."""
+    allowed = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "image/svg+xml"}
+    if file.content_type not in allowed:
+        raise HTTPException(400, "Only PNG / JPG / WebP / GIF / SVG images are allowed")
+    contents = await file.read()
+    max_bytes = 5 * 1024 * 1024  # 5 MB safety cap for base64 storage
+    if len(contents) > max_bytes:
+        raise HTTPException(400, "Image too large (max 5 MB). Use a link instead.")
+    b64 = base64.b64encode(contents).decode()
+    data_url = f"data:{file.content_type};base64,{b64}"
+    return {"url": data_url, "name": file.filename, "size": len(contents), "mime_type": file.content_type}
 
 
 @router.put("/{req_id}/options/{option_id}")

@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-globals */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
@@ -224,16 +224,41 @@ function HeroTile({ label, value, sub, icon: Icon, accent = 'indigo', onClick, d
 
 // ─── Design Options: versioned option cards w/ select + per-option comments ───
 function DesignOptionsSection({ requestId, request, onChanged }) {
+  const [showAdd, setShowAdd] = useState(false);
   const [label, setLabel] = useState('');
   const [notes, setNotes] = useState('');
+  const [imgList, setImgList] = useState([]); // array of image URLs (uploaded or pasted)
   const [imgInput, setImgInput] = useState('');
-  const [imgList, setImgList] = useState([]);
   const [adding, setAdding] = useState(false);
-  const [commentTexts, setCommentTexts] = useState({}); // {optionId: text}
+  const [uploading, setUploading] = useState(false);
+  const [previewOption, setPreviewOption] = useState(null);
+  const [commentText, setCommentText] = useState('');
+  const [posting, setPosting] = useState(false);
+  const fileRef = React.useRef(null);
 
   const options = (request.design_options || []).slice().sort((a, b) => (a.version || 0) - (b.version || 0));
 
+  const resetAdd = () => { setLabel(''); setNotes(''); setImgList([]); setImgInput(''); setShowAdd(false); };
+
+  const uploadFile = async (files) => {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      for (const f of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', f);
+        const { data } = await axios.post(`${API}/marketing-requests/${requestId}/upload-image`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setImgList((p) => [...p, data.url]);
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Upload failed');
+    } finally { setUploading(false); }
+  };
+
   const addOption = async () => {
+    if (!label.trim() && imgList.length === 0) { toast.error('Add a label or at least one image'); return; }
     setAdding(true);
     try {
       await axios.post(`${API}/marketing-requests/${requestId}/options`, {
@@ -241,7 +266,7 @@ function DesignOptionsSection({ requestId, request, onChanged }) {
         notes: notes.trim() || undefined,
         image_urls: imgList,
       });
-      setLabel(''); setNotes(''); setImgInput(''); setImgList([]);
+      resetAdd();
       onChanged?.();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to add option');
@@ -252,18 +277,27 @@ function DesignOptionsSection({ requestId, request, onChanged }) {
     try {
       await axios.post(`${API}/marketing-requests/${requestId}/options/${optionId}/select`);
       onChanged?.();
-    } catch (e) { toast.error('Failed to select option'); }
+      // Refresh preview with updated option
+      setPreviewOption((p) => p && p.id === optionId ? { ...p, selected: true } : p);
+    } catch { toast.error('Failed to select option'); }
   };
 
-  const commentOnOption = async (optionId) => {
-    const text = (commentTexts[optionId] || '').trim();
-    if (!text) return;
+  const postComment = async () => {
+    if (!previewOption || !commentText.trim()) return;
+    setPosting(true);
     try {
-      await axios.post(`${API}/marketing-requests/${requestId}/options/${optionId}/comments`, { text });
-      setCommentTexts((p) => ({ ...p, [optionId]: '' }));
+      await axios.post(`${API}/marketing-requests/${requestId}/options/${previewOption.id}/comments`, { text: commentText.trim() });
+      setCommentText('');
       onChanged?.();
-    } catch (e) { toast.error('Failed to post comment'); }
+      // Fetch latest to refresh the comments on the preview
+      const { data } = await axios.get(`${API}/marketing-requests/${requestId}`);
+      const fresh = (data.design_options || []).find((o) => o.id === previewOption.id);
+      if (fresh) setPreviewOption(fresh);
+    } catch { toast.error('Failed to post comment'); }
+    finally { setPosting(false); }
   };
+
+  const removeImg = (url) => setImgList((p) => p.filter((u) => u !== url));
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4" data-testid="mr-design-options">
@@ -273,105 +307,204 @@ function DesignOptionsSection({ requestId, request, onChanged }) {
             <Sparkles className="h-4 w-4 text-indigo-500" />
             Design Options <span className="text-slate-400 font-normal">({options.length})</span>
           </h3>
-          <p className="text-[11px] text-slate-500">Submit multiple design versions. Sales or the client picks one.</p>
+          <p className="text-[11px] text-slate-500">Upload multiple versions as a grid. Click any tile to preview, comment, or select.</p>
         </div>
       </div>
 
-      {options.length === 0 && <p className="text-xs text-slate-400 italic py-4 text-center border border-dashed border-slate-200 rounded-lg">No options submitted yet. Add the first version below.</p>}
-
-      <div className="space-y-3">
-        {options.map((o) => (
-          <div key={o.id} className={`rounded-xl border-2 p-4 transition-all ${o.selected ? 'border-emerald-400 bg-emerald-50/40' : 'border-slate-200 bg-slate-50/50'}`} data-testid={`mr-option-${o.id}`}>
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-mono text-xs">v{o.version}</Badge>
-                  <div className="font-semibold text-sm text-slate-800 truncate">{o.label}</div>
-                  {o.selected && <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Selected</Badge>}
+      {/* ── Grid of option tiles + a "+" tile to add ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {options.map((o) => {
+          const cover = (o.image_urls || [])[0] || (o.files || [])[0]?.url;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => { setPreviewOption(o); setCommentText(''); }}
+              className={`group relative aspect-square rounded-xl overflow-hidden border-2 transition-all text-left ${o.selected ? 'border-emerald-400 ring-2 ring-emerald-200' : 'border-slate-200 hover:border-indigo-400 hover:shadow-md'}`}
+              data-testid={`mr-option-tile-${o.id}`}
+            >
+              {cover ? (
+                <img src={cover} alt={o.label} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              ) : (
+                <div className="w-full h-full bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center">
+                  <Sparkles className="h-8 w-8 text-slate-300" />
                 </div>
-                {o.notes && <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{o.notes}</p>}
-              </div>
-              {!o.selected && (
-                <Button size="sm" variant="outline" onClick={() => selectOption(o.id)} className="shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50" data-testid={`option-select-${o.id}`}>
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Select
-                </Button>
               )}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                <div className="flex items-center gap-1 text-[10px] text-white/90 font-mono">v{o.version}</div>
+                <div className="text-xs font-semibold text-white truncate">{o.label}</div>
+              </div>
+              {o.selected && (
+                <div className="absolute top-2 right-2 bg-emerald-500 text-white rounded-full p-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                </div>
+              )}
+              {(o.comments || []).length > 0 && (
+                <div className="absolute top-2 left-2 bg-black/50 text-white rounded-full px-1.5 py-0.5 text-[10px] flex items-center gap-1">
+                  <MessageSquare className="h-2.5 w-2.5" />{o.comments.length}
+                </div>
+              )}
+            </button>
+          );
+        })}
+
+        {/* + tile */}
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="group aspect-square rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-500 flex flex-col items-center justify-center transition-all"
+          data-testid="mr-option-add-tile"
+        >
+          <div className="h-12 w-12 rounded-full bg-indigo-100 group-hover:bg-indigo-200 flex items-center justify-center transition-colors">
+            <Plus className="h-6 w-6 text-indigo-600" />
+          </div>
+          <p className="text-xs font-semibold text-indigo-700 mt-2">Add Option</p>
+          <p className="text-[10px] text-slate-500 mt-0.5">Upload + comment</p>
+        </button>
+      </div>
+
+      {/* ── Add modal ── */}
+      <Dialog open={showAdd} onOpenChange={(o) => { if (!o) resetAdd(); else setShowAdd(true); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader><DialogTitle>Add Design Option</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Label <span className="text-slate-400 font-normal">(optional)</span></Label>
+              <Input placeholder="e.g. Modern Blue" value={label} onChange={(e) => setLabel(e.target.value)} className="h-10" data-testid="mr-add-label" />
             </div>
 
-            {(o.image_urls || []).length > 0 && (
-              <div className="flex gap-2 flex-wrap mb-2">
-                {o.image_urls.map((url, i) => (
-                  <a key={i} href={url} target="_blank" rel="noreferrer" className="block h-20 w-20 rounded-lg overflow-hidden border border-slate-200 hover:ring-2 hover:ring-indigo-300">
-                    <img src={url} alt={`v${o.version}-${i}`} className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                  </a>
-                ))}
-              </div>
-            )}
-            {(o.files || []).length > 0 && (
-              <div className="flex gap-2 flex-wrap mb-2">
-                {o.files.map((f) => (
-                  <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white border border-slate-200 text-xs hover:bg-slate-50">
-                    <Paperclip className="h-3 w-3" />{f.name}
-                  </a>
-                ))}
-              </div>
-            )}
-
-            {/* inline comments */}
-            <div className="mt-2 pt-2 border-t border-slate-200/70">
-              <div className="space-y-1 mb-2">
-                {(o.comments || []).map((c) => (
-                  <div key={c.id} className="flex gap-2 items-start text-xs">
-                    <span className="font-medium text-slate-700">{c.by_name || 'User'}:</span>
-                    <span className="text-slate-600 flex-1">{c.text}</span>
-                    <span className="text-slate-400 text-[10px]">{new Date(c.at).toLocaleDateString()}</span>
+            <div>
+              <Label className="text-xs">Images</Label>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-1">
+                {imgList.map((u, i) => (
+                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group bg-slate-100">
+                    <img src={u} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    <button type="button" onClick={() => removeImg(u)} className="absolute top-1 right-1 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <X className="h-3 w-3" />
+                    </button>
                   </div>
                 ))}
-                {(o.comments || []).length === 0 && <p className="text-[11px] text-slate-400 italic">No comments yet.</p>}
+                {/* Add-image tile */}
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="aspect-square rounded-lg border-2 border-dashed border-slate-300 hover:border-indigo-500 hover:bg-indigo-50/40 flex flex-col items-center justify-center text-slate-500 hover:text-indigo-600 transition-all"
+                  data-testid="mr-add-image-btn"
+                >
+                  {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5" />}
+                  <span className="text-[10px] mt-1">{uploading ? 'Uploading…' : 'Upload'}</span>
+                </button>
+                <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { uploadFile(e.target.files); e.target.value = ''; }} />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-2">
                 <Input
-                  className="h-8 text-xs"
-                  placeholder="Add a comment on this option…"
-                  value={commentTexts[o.id] || ''}
-                  onChange={(e) => setCommentTexts((p) => ({ ...p, [o.id]: e.target.value }))}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commentOnOption(o.id); } }}
-                  data-testid={`option-comment-input-${o.id}`}
+                  placeholder="…or paste an image URL + Enter"
+                  value={imgInput}
+                  onChange={(e) => setImgInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && imgInput.trim()) { e.preventDefault(); setImgList((p) => [...p, imgInput.trim()]); setImgInput(''); } }}
+                  className="h-9 flex-1"
                 />
-                <Button size="sm" variant="outline" onClick={() => commentOnOption(o.id)} disabled={!(commentTexts[o.id] || '').trim()}>Post</Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => { if (imgInput.trim()) { setImgList((p) => [...p, imgInput.trim()]); setImgInput(''); } }} disabled={!imgInput.trim()}>Add URL</Button>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
 
-      {/* Add new option */}
-      <div className="mt-4 border-t border-slate-200 pt-4">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Add new version</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <Input placeholder="Label (e.g. Modern Blue)" value={label} onChange={(e) => setLabel(e.target.value)} className="h-9" data-testid="option-label-input" />
-          <div className="flex gap-2">
-            <Input placeholder="Paste an image URL, then press +" value={imgInput} onChange={(e) => setImgInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && imgInput.trim()) { setImgList((p) => [...p, imgInput.trim()]); setImgInput(''); } }} className="h-9 flex-1" />
-            <Button type="button" size="sm" variant="outline" onClick={() => { if (imgInput.trim()) { setImgList((p) => [...p, imgInput.trim()]); setImgInput(''); } }} disabled={!imgInput.trim()}>Add img</Button>
+            <div>
+              <Label className="text-xs">Comments / Notes <span className="text-slate-400 font-normal">(optional)</span></Label>
+              <Textarea rows={3} placeholder="e.g. Bold sans-serif, emerald accent, 2-color print." value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="mr-add-notes" />
+            </div>
           </div>
-        </div>
-        {imgList.length > 0 && (
-          <div className="flex gap-1 flex-wrap mt-2">
-            {imgList.map((u, i) => (
-              <div key={i} className="flex items-center gap-1 text-[11px] px-2 py-0.5 bg-slate-100 rounded">
-                <span className="truncate max-w-[140px]">{u}</span>
-                <button onClick={() => setImgList((p) => p.filter((_, idx) => idx !== i))}><X className="h-3 w-3" /></button>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetAdd}>Cancel</Button>
+            <Button onClick={addOption} disabled={adding || uploading} className="bg-indigo-600 hover:bg-indigo-700" data-testid="mr-add-save">
+              {adding ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : <><Plus className="h-3.5 w-3.5 mr-1" />Add Option</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Preview modal ── */}
+      <Dialog open={!!previewOption} onOpenChange={(o) => { if (!o) { setPreviewOption(null); setCommentText(''); } }}>
+        <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto">
+          {previewOption && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 font-mono">v{previewOption.version}</Badge>
+                  <DialogTitle>{previewOption.label}</DialogTitle>
+                  {previewOption.selected && <Badge className="bg-emerald-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Selected</Badge>}
+                </div>
+              </DialogHeader>
+
+              {(previewOption.image_urls || []).length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {previewOption.image_urls.map((u, i) => (
+                    <a key={i} href={u} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-50 hover:ring-2 hover:ring-indigo-300">
+                      <img src={u} alt={`v${previewOption.version}-${i}`} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    </a>
+                  ))}
+                </div>
+              )}
+              {(previewOption.files || []).length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                  {previewOption.files.map((f) => (
+                    <a key={f.id} href={f.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-50 border border-slate-200 text-xs hover:bg-slate-100">
+                      <Paperclip className="h-3 w-3" />{f.name}
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {previewOption.notes && (
+                <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Notes</p>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{previewOption.notes}</p>
+                </div>
+              )}
+
+              {/* Comments */}
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Inline comments</p>
+                <div className="space-y-2 mb-2 max-h-60 overflow-y-auto">
+                  {(previewOption.comments || []).length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No comments yet — be the first.</p>
+                  ) : (
+                    previewOption.comments.map((c) => (
+                      <div key={c.id} className="bg-slate-50 rounded px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-medium text-slate-700">{c.by_name || 'User'}</span>
+                          <span className="text-[10px] text-slate-400">{new Date(c.at).toLocaleString()}</span>
+                        </div>
+                        <p className="text-slate-600 whitespace-pre-wrap">{c.text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    className="h-9"
+                    placeholder="Write a comment on this option…"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); postComment(); } }}
+                    data-testid="mr-preview-comment-input"
+                  />
+                  <Button size="sm" onClick={postComment} disabled={!commentText.trim() || posting}>Post</Button>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-        <Textarea rows={2} placeholder="Notes on this version…" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-2" data-testid="option-notes-input" />
-        <div className="flex justify-end mt-2">
-          <Button size="sm" onClick={addOption} disabled={adding} className="bg-indigo-600 hover:bg-indigo-700" data-testid="option-add-btn">
-            {adding ? 'Adding…' : (<><Plus className="h-3.5 w-3.5 mr-1" />Add option</>)}
-          </Button>
-        </div>
-      </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setPreviewOption(null); setCommentText(''); }}>Close</Button>
+                {!previewOption.selected && (
+                  <Button onClick={() => selectOption(previewOption.id)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="mr-preview-select">
+                    <CheckCircle2 className="h-4 w-4 mr-1" />Select this option
+                  </Button>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -768,6 +901,7 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
 // ──────────────────────────────────────────────────────────────────────────
 
 export default function MarketingRequests() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -776,7 +910,6 @@ export default function MarketingRequests() {
   const [departments, setDepartments] = useState([]);
   const [filter, setFilter] = useState({ status: '', request_type_id: '', department: '', q: '' });
   const [sort, setSort] = useState({ key: 'updated_at', dir: 'desc' });
-  const [openCreate, setOpenCreate] = useState(false);
   const [openId, setOpenId] = useState(searchParams.get('id') || '');
   const [leadOptions, setLeadOptions] = useState([]);
 
@@ -891,7 +1024,7 @@ export default function MarketingRequests() {
             <p className="text-xs sm:text-sm text-slate-500">Sales raises · Marketing fulfils · Track every step</p>
           </div>
         </div>
-        <Button onClick={() => setOpenCreate(true)} className="bg-indigo-600 hover:bg-indigo-700" data-testid="open-create-btn">
+        <Button onClick={() => navigate('/marketing-requests/new')} className="bg-indigo-600 hover:bg-indigo-700" data-testid="open-create-btn">
           <Plus className="h-4 w-4 mr-1.5" /> New Request
         </Button>
       </div>
@@ -948,7 +1081,7 @@ export default function MarketingRequests() {
           <div className="p-12 text-center">
             <Sparkles className="h-10 w-10 text-slate-300 mx-auto mb-3" />
             <p className="text-sm text-slate-500">No marketing requests match the current filters</p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={() => setOpenCreate(true)} data-testid="empty-create-btn">
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate('/marketing-requests/new')} data-testid="empty-create-btn">
               <Plus className="h-3.5 w-3.5 mr-1" /> Create the first request
             </Button>
           </div>
@@ -1018,16 +1151,6 @@ export default function MarketingRequests() {
           </div>
         )}
       </div>
-
-      {openCreate && (
-        <CreateRequestModal
-          types={types}
-          leadOptions={leadOptions}
-          departments={departments}
-          onClose={() => setOpenCreate(false)}
-          onCreated={(id) => { setOpenCreate(false); onChanged(); setOpenId(id); }}
-        />
-      )}
 
       {openId && (
         <RequestDetailDrawer
@@ -1153,254 +1276,3 @@ function LeadLinker({ requestId, currentLeads, currentLeadIds, onChanged }) {
   );
 }
 
-// ─── Create modal ───
-const OTHER_TYPE_VALUE = '__other__';
-
-function CreateRequestModal({ types, leadOptions, departments, onClose, onCreated }) {
-  const [form, setForm] = useState({
-    description: '', request_type_id: '',
-    custom_request_type: '',
-    priority: 'medium', due_date: '',
-    assigned_to_department: 'Marketing', lead_id: '',
-    reference_links: [],
-    approval_type: 'internal',
-  });
-  const [linkLabel, setLinkLabel] = useState('');
-  const [linkUrl, setLinkUrl] = useState('');
-  const [leadSearch, setLeadSearch] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const isOther = form.request_type_id === OTHER_TYPE_VALUE;
-  const selectedLead = leadOptions.find((l) => l.id === form.lead_id);
-
-  const submit = async () => {
-    if (!form.request_type_id) { toast.error('Please choose a request type'); return; }
-    if (isOther && !form.custom_request_type.trim()) {
-      toast.error('Please specify the request type');
-      return;
-    }
-    setSaving(true);
-    try {
-      const payload = {
-        description: form.description,
-        priority: form.priority,
-        due_date: form.due_date || null,
-        assigned_to_department: form.assigned_to_department,
-        lead_ids: form.lead_id ? [form.lead_id] : [],
-        reference_links: form.reference_links,
-        approval_type: form.approval_type,
-      };
-      if (isOther) {
-        payload.custom_request_type = form.custom_request_type.trim();
-      } else {
-        payload.request_type_id = form.request_type_id;
-      }
-      const { data } = await axios.post(`${API}/marketing-requests`, payload);
-      toast.success('Marketing request created');
-      onCreated?.(data.id);
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Failed to create request');
-    } finally { setSaving(false); }
-  };
-
-  const addLink = () => {
-    if (!linkUrl.trim() || !linkLabel.trim()) return;
-    setForm((p) => ({ ...p, reference_links: [...p.reference_links, { label: linkLabel, url: linkUrl, kind: 'reference' }] }));
-    setLinkLabel(''); setLinkUrl('');
-  };
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto" data-testid="mr-create-modal">
-        <DialogHeader>
-          <DialogTitle>New Marketing Request</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          {/* ── Primary action — pick a Request Type ── */}
-          <div className="rounded-2xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Tag className="h-4 w-4 text-indigo-600" />
-              <Label className="text-sm font-semibold text-indigo-900">Request Type *</Label>
-            </div>
-            <p className="text-xs text-slate-500 mb-3">Start by telling us what you need.</p>
-            <Select
-              value={form.request_type_id}
-              onValueChange={(v) => setForm((p) => ({ ...p, request_type_id: v, custom_request_type: v === OTHER_TYPE_VALUE ? p.custom_request_type : '' }))}
-            >
-              <SelectTrigger className="h-11 text-base bg-white" data-testid="form-type">
-                <SelectValue placeholder="Pick a request type to begin" />
-              </SelectTrigger>
-              <SelectContent>
-                {types.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                <SelectItem value={OTHER_TYPE_VALUE}>Other (specify)</SelectItem>
-              </SelectContent>
-            </Select>
-            {isOther && (
-              <div className="mt-3">
-                <Label className="text-xs font-medium text-indigo-900">Specify the type</Label>
-                <Input
-                  value={form.custom_request_type}
-                  onChange={(e) => setForm((p) => ({ ...p, custom_request_type: e.target.value }))}
-                  placeholder="e.g. Trade-show booth visuals"
-                  className="mt-1 bg-white"
-                  data-testid="form-custom-type"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* ── Description with bigger area for image refs / drive links / notes ── */}
-          <div>
-            <Label>Description / Notes</Label>
-            <Textarea
-              value={form.description}
-              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-              rows={8}
-              className="min-h-[180px]"
-              placeholder="Describe the request, paste reference image URLs, Google Drive links, brand guidelines, dimensions, deadlines…"
-              data-testid="form-description"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <Label>Priority</Label>
-              <Select value={form.priority} onValueChange={(v) => setForm((p) => ({ ...p, priority: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Due Date <span className="text-slate-400 font-normal">(optional)</span></Label>
-              <Input type="date" value={form.due_date} onChange={(e) => setForm((p) => ({ ...p, due_date: e.target.value }))} data-testid="form-due-date" />
-            </div>
-            <div>
-              <Label>Department</Label>
-              <Select value={form.assigned_to_department} onValueChange={(v) => setForm((p) => ({ ...p, assigned_to_department: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Approval Type */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <Label className="text-xs font-semibold text-slate-700">Approval Type</Label>
-            <p className="text-[11px] text-slate-500 mb-2">Does the client need to sign off, or is internal approval enough?</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { v: 'internal', label: 'Internal only',   hint: 'Marketing Manager approves' },
-                { v: 'client',   label: 'Client required', hint: 'Share link, client picks option' },
-              ].map((opt) => (
-                <button
-                  key={opt.v}
-                  type="button"
-                  onClick={() => setForm((p) => ({ ...p, approval_type: opt.v }))}
-                  className={`text-left rounded-lg border-2 p-2.5 transition-all ${form.approval_type === opt.v ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200' : 'border-slate-200 bg-white hover:border-slate-300'}`}
-                  data-testid={`approval-type-${opt.v}`}
-                >
-                  <div className="text-xs font-semibold text-slate-800">{opt.label}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">{opt.hint}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ── Single Lead picker ── */}
-          <div>
-            <Label>Linked Lead <span className="text-slate-400 font-normal">(optional)</span></Label>
-            <div className="text-[11px] text-slate-400 mb-1">{leadOptions.length} leads · search and select one</div>
-            <Input
-              value={leadSearch}
-              onChange={(e) => setLeadSearch(e.target.value)}
-              placeholder="Search leads by company or contact…"
-              className="h-9 mb-2"
-              data-testid="form-lead-search"
-            />
-            <div className="border border-slate-200 rounded-md p-2 max-h-44 overflow-y-auto space-y-1">
-              {(() => {
-                const q = leadSearch.trim().toLowerCase();
-                const base = q ? leadOptions.filter((l) => l.label.toLowerCase().includes(q)) : leadOptions;
-                const shown = base.slice(0, 100);
-                if (shown.length === 0) {
-                  return <p className="text-xs text-slate-400 italic">{leadOptions.length === 0 ? 'No leads available' : 'No leads match your search'}</p>;
-                }
-                return (
-                  <>
-                    {shown.map((l) => (
-                      <label
-                        key={l.id}
-                        className={`flex items-center gap-2 text-sm cursor-pointer rounded px-2 py-1 transition-colors ${form.lead_id === l.id ? 'bg-indigo-50 ring-1 ring-indigo-300' : 'hover:bg-slate-50'}`}
-                      >
-                        <input
-                          type="radio"
-                          name="mr-create-lead"
-                          checked={form.lead_id === l.id}
-                          onChange={() => setForm((p) => ({ ...p, lead_id: l.id }))}
-                          data-testid={`form-lead-${l.id}`}
-                        />
-                        <span className="truncate">{l.label}</span>
-                      </label>
-                    ))}
-                    {base.length > shown.length && (
-                      <p className="text-[10px] text-slate-400 italic pt-1">Showing first 100 of {base.length}. Refine your search to see more.</p>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-            {selectedLead && (
-              <div className="mt-2 flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200">
-                <div className="min-w-0">
-                  <div className="text-xs uppercase tracking-wider text-indigo-500 font-semibold">Lead ID</div>
-                  <div className="font-mono text-sm font-bold text-indigo-900 truncate" data-testid="selected-lead-id">{selectedLead.id}</div>
-                  <div className="text-xs text-indigo-700 truncate">{selectedLead.label}</div>
-                </div>
-                <button
-                  type="button"
-                  className="text-rose-500 hover:bg-rose-50 rounded p-1"
-                  onClick={() => setForm((p) => ({ ...p, lead_id: '' }))}
-                  data-testid="clear-selected-lead"
-                  title="Remove lead"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <Label>Reference Links (Google Drive, etc.)</Label>
-            <div className="space-y-1.5 mb-2">
-              {form.reference_links.map((l, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs px-2 py-1 bg-slate-50 rounded">
-                  <span className="font-medium">{l.label}</span>
-                  <span className="text-slate-400 truncate flex-1">{l.url}</span>
-                  <button onClick={() => setForm((p) => ({ ...p, reference_links: p.reference_links.filter((_, idx) => idx !== i) }))}><X className="h-3 w-3" /></button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <Input className="flex-1" placeholder="Label" value={linkLabel} onChange={(e) => setLinkLabel(e.target.value)} />
-              <Input className="flex-[2]" placeholder="https://drive.google.com/..." value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} />
-              <Button size="sm" type="button" variant="outline" onClick={addLink} disabled={!linkUrl.trim()}>Add</Button>
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700" data-testid="form-submit-btn">
-            {saving ? 'Creating…' : 'Create Request'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
