@@ -1,6 +1,6 @@
 /* eslint-disable no-restricted-globals */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
@@ -576,7 +576,7 @@ function ClientShareSection({ requestId, request }) {
 // Lives inline in this file to keep the module self-contained.
 // ──────────────────────────────────────────────────────────────────────────
 
-function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments, leadOptions }) {
+export function RequestDetailContent({ requestId, onChanged, types, departments, leadOptions }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -585,7 +585,6 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [linkKind, setLinkKind] = useState('output');
-  const [rejectReason, setRejectReason] = useState('');
 
   const refresh = useCallback(async () => {
     try {
@@ -674,11 +673,7 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
 
   if (loading || !data) {
     return (
-      <Dialog open onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl">
-          <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
-        </DialogContent>
-      </Dialog>
+      <div className="flex items-center justify-center h-40"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>
     );
   }
 
@@ -686,32 +681,30 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
   const allLinks = [...(data.reference_links || []), ...(data.output_links || [])];
 
   return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="mr-detail-drawer">
-        <DialogHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-indigo-500" />
-                {data.title}
-              </DialogTitle>
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <StatusPill status={data.status} />
-                <PriorityPill priority={data.priority} />
-                {data.request_type_name && (
-                  <Badge variant="outline" className="bg-slate-50">
-                    <Tag className="h-3 w-3 mr-1" />{data.request_type_name}
-                  </Badge>
-                )}
-                {data.due_date && (
-                  <Badge variant="outline" className="bg-slate-50">
-                    <Calendar className="h-3 w-3 mr-1" />Due {data.due_date}
-                  </Badge>
-                )}
-              </div>
-            </div>
+    <div className="space-y-4" data-testid="mr-detail-content">
+      {/* ── Title strip ── */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-indigo-500" />
+            {data.title}
+          </h1>
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <StatusPill status={data.status} />
+            <PriorityPill priority={data.priority} />
+            {data.request_type_name && (
+              <Badge variant="outline" className="bg-slate-50">
+                <Tag className="h-3 w-3 mr-1" />{data.request_type_name}
+              </Badge>
+            )}
+            {data.due_date && (
+              <Badge variant="outline" className="bg-slate-50">
+                <Calendar className="h-3 w-3 mr-1" />Due {data.due_date}
+              </Badge>
+            )}
           </div>
-        </DialogHeader>
+        </div>
+      </div>
 
         {/* ── Status Tracker + Next Action Owner ── */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -887,12 +880,7 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
             ))}
           </div>
         </details>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }
 
@@ -902,7 +890,6 @@ function RequestDetailDrawer({ requestId, onClose, onChanged, types, departments
 
 export default function MarketingRequests() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({});
@@ -910,7 +897,6 @@ export default function MarketingRequests() {
   const [departments, setDepartments] = useState([]);
   const [filter, setFilter] = useState({ status: '', request_type_id: '', department: '', q: '' });
   const [sort, setSort] = useState({ key: 'updated_at', dir: 'desc' });
-  const [openId, setOpenId] = useState(searchParams.get('id') || '');
   const [leadOptions, setLeadOptions] = useState([]);
 
   const fetchRows = useCallback(async () => {
@@ -959,12 +945,6 @@ export default function MarketingRequests() {
   }, []);
 
   useEffect(() => { fetchRows(); fetchSummary(); }, [fetchRows, fetchSummary]);
-
-  // Sync drawer id ↔ url
-  useEffect(() => {
-    if (openId) setSearchParams({ id: openId }, { replace: true });
-    else if (searchParams.get('id')) setSearchParams({}, { replace: true });
-  }, [openId]); // eslint-disable-line
 
   const filtered = useMemo(() => {
     const base = !filter.q
@@ -1128,7 +1108,7 @@ export default function MarketingRequests() {
                   const customer = r.customer_name || (r.leads_summary && r.leads_summary[0] && r.leads_summary[0].name) || '—';
                   const typeLabel = r.request_type_name || r.custom_request_type || 'Untyped';
                   return (
-                    <tr key={r.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => setOpenId(r.id)} data-testid={`mr-row-${r.id}`}>
+                    <tr key={r.id} className="hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/marketing-requests/${r.id}`)} data-testid={`mr-row-${r.id}`}>
                       <td className="px-4 py-3">
                         <Badge variant="outline" className="bg-slate-50 font-medium">{typeLabel}</Badge>
                         {r.description && <div className="text-[11px] text-slate-400 truncate max-w-[280px] mt-1">{r.description}</div>}
@@ -1152,16 +1132,7 @@ export default function MarketingRequests() {
         )}
       </div>
 
-      {openId && (
-        <RequestDetailDrawer
-          requestId={openId}
-          onClose={() => setOpenId('')}
-          onChanged={onChanged}
-          types={types}
-          departments={departments}
-          leadOptions={leadOptions}
-        />
-      )}
+      {/* Detail view is now a dedicated route at /marketing-requests/:id */}
     </div>
   );
 }

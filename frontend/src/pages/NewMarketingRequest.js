@@ -118,7 +118,7 @@ export default function NewMarketingRequest() {
       else payload.request_type_id = form.request_type_id;
       const { data } = await axios.post(`${API}/marketing-requests`, payload);
       toast.success('Marketing request created');
-      navigate(`/marketing-requests?id=${data.id}`);
+      navigate(`/marketing-requests/${data.id}`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to create request');
     } finally { setSaving(false); }

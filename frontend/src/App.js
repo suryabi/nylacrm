@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import RegisterTenant from './pages/RegisterTenant';
 import PublicMarketingRequest from './pages/PublicMarketingRequest';
 import NewMarketingRequest from './pages/NewMarketingRequest';
+import MarketingRequestDetail from './pages/MarketingRequestDetail';
 import AuthCallback from './components/AuthCallback';
 import GoogleAuthCallback from './pages/GoogleAuthCallback';
 import Dashboard from './pages/Dashboard';
@@ -306,6 +307,7 @@ function AppRouter() {
           {/* Marketing Requests — independent module visible from Sales + Marketing sidebars */}
           <Route path="/marketing-requests" element={<ProtectedRoute moduleKey="marketing_requests"><MarketingRequests /></ProtectedRoute>} />
           <Route path="/marketing-requests/new" element={<ProtectedRoute moduleKey="marketing_requests"><NewMarketingRequest /></ProtectedRoute>} />
+          <Route path="/marketing-requests/:id" element={<ProtectedRoute moduleKey="marketing_requests"><MarketingRequestDetail /></ProtectedRoute>} />
           <Route path="/admin/marketing-request-types" element={<ProtectedRoute moduleKey="master_request_types"><MarketingRequestTypes /></ProtectedRoute>} />
           {/* Personal Calendar */}
           <Route path="/personal-calendar" element={<ProtectedRoute><PersonalCalendar /></ProtectedRoute>} />
