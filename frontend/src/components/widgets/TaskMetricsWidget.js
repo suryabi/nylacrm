@@ -94,16 +94,16 @@ export function TaskMetricsWidget() {
           >
             <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${tile.gradient}`} />
             <div className="p-3 sm:p-5">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1 sm:space-y-2">
-                  <p className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider line-clamp-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1 sm:space-y-2 min-w-0">
+                  <p className="text-[11px] sm:text-xs font-medium text-muted-foreground uppercase tracking-wider line-clamp-2 leading-tight">
                     {tile.label}
                   </p>
-                  <p className={`text-2xl sm:text-3xl font-bold ${tile.textColor} tabular-nums`}>
+                  <p className={`text-xl sm:text-3xl font-bold ${tile.textColor} tabular-nums`}>
                     {tile.value}
                   </p>
                 </div>
-                <div className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl ${tile.iconBg} group-hover:scale-110 transition-transform duration-300`}>
+                <div className={`shrink-0 p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl ${tile.iconBg} group-hover:scale-110 transition-transform duration-300`}>
                   <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${tile.textColor}`} />
                 </div>
               </div>

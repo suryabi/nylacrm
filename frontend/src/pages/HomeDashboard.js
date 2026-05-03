@@ -334,15 +334,15 @@ export default function HomeDashboard() {
           </section>
 
           {/* Main Content - Bento Grid */}
-          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
-            {/* Left Column - Primary Content (full width on mobile, 8 cols on desktop) */}
-            <div className="lg:col-span-8 space-y-4 sm:space-y-6 order-2 lg:order-1">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-12 lg:grid-cols-12">
+            {/* Left Column - Primary Content (full on mobile, 7/12 on tablet, 8/12 on desktop) */}
+            <div className="md:col-span-7 lg:col-span-8 space-y-4 sm:space-y-6 order-2 md:order-1">
               {/* Bottom Row - Upcoming Follow-ups full width */}
               <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
             </div>
 
-            {/* Right Column - Secondary Content (full width on mobile, 4 cols on desktop) */}
-            <div className="lg:col-span-4 space-y-4 sm:space-y-6 order-1 lg:order-2">
+            {/* Right Column - Secondary Content (full on mobile, 5/12 on tablet, 4/12 on desktop) */}
+            <div className="md:col-span-5 lg:col-span-4 space-y-4 sm:space-y-6 order-1 md:order-2">
               {/* Meetings - Featured Card */}
               <UpcomingMeetingsWidget
                 upcomingMeetings={upcoming_meetings}
@@ -355,11 +355,30 @@ export default function HomeDashboard() {
                 onEditMeeting={handleEditMeeting}
                 onCancelMeeting={handleCancelMeeting}
               />
-              
+
               {/* Pipeline - Compact Card */}
               <PipelineSummaryWidget pipeline={pipeline} />
             </div>
           </div>
+
+          {/* Sales ROI Panel — accessible on mobile/tablet via collapsible section.
+              Hidden here on lg+ where the right-rail panel takes over. */}
+          {showSalesROIPanel && (
+            <details className="lg:hidden mt-4 sm:mt-6 group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg overflow-hidden">
+              <summary className="cursor-pointer list-none p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-violet-100 to-fuchsia-100 dark:from-violet-900/50 dark:to-fuchsia-900/30">
+                    <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-800 dark:text-white">Sales ROI Statement</span>
+                </div>
+                <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="border-t border-slate-100 dark:border-slate-800">
+                <SalesROIPanel />
+              </div>
+            </details>
+          )}
 
         </div>
       </div>
