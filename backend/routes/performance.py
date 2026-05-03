@@ -846,3 +846,223 @@ async def reset_account_value_override(
         {"tenant_id": tenant_id, "account_id": account_id, "plan_id": plan_id}
     )
     return {"message": "Account value override reset"}
+
+
+
+# ════════════════════════════════════════════════════════════════════
+# Top-10 Priorities — Case Targets per Account, per SKU
+# ════════════════════════════════════════════════════════════════════
+from pydantic import BaseModel  # noqa: E402
+
+MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+               "July", "August", "September", "October", "November", "December"]
+
+
+def _month_bounds(year: int, month: int):
+    """Return (iso_start, iso_end) bounds for given year/month (UTC)."""
+    start = datetime(year, month, 1, tzinfo=timezone.utc).isoformat()
+    if month == 12:
+        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc).isoformat()
+    else:
+        end = datetime(year, month + 1, 1, tzinfo=timezone.utc).isoformat()
+    return start, end
+
+
+async def _sum_cases_per_sku(tenant_id: str, account_ids, start_iso, end_iso):
+    """Aggregate cases (quantity) shipped per (account_id, sku_name) inside the window.
+    Source: distributor_deliveries + distributor_delivery_items."""
+    pipeline = [
+        {"$match": {
+            "tenant_id": tenant_id,
+            "delivery_date": {"$gte": start_iso, "$lt": end_iso},
+            "account_id": {"$in": account_ids},
+            "status": {"$in": ["delivered", "confirmed", "completed"]},
+        }},
+        {"$lookup": {
+            "from": "distributor_delivery_items",
+            "localField": "id",
+            "foreignField": "delivery_id",
+            "as": "items",
+        }},
+        {"$unwind": "$items"},
+        {"$group": {
+            "_id": {"account_id": "$account_id", "sku": "$items.sku_name"},
+            "cases": {"$sum": "$items.quantity"},
+        }},
+    ]
+    out = {}
+    async for row in db.distributor_deliveries.aggregate(pipeline):
+        key = (row["_id"]["account_id"], row["_id"]["sku"])
+        out[key] = row.get("cases", 0)
+    return out
+
+
+@router.get("/account-case-targets")
+async def get_account_case_targets(
+    year: int,
+    month: int,
+    resource_ids: str = "",
+    current_user: dict = Depends(get_current_user),
+):
+    """For the Top-10 Priorities → Case Targets section.
+
+    For each account belonging to the selected resource(s):
+      * lists SKUs the account is priced on
+      * current cases shipped this month (per SKU)
+      * default target = previous month's shipped cases (per SKU)
+      * override target if admin saved one
+      * pipeline values = cases × price_per_unit
+    """
+    tenant_id = get_current_tenant_id()
+    if not (1 <= month <= 12):
+        raise HTTPException(400, "Invalid month")
+
+    rids = [r for r in (resource_ids or "").split(",") if r]
+    acc_query = {"tenant_id": tenant_id}
+    if rids:
+        acc_query["assigned_to"] = {"$in": rids}
+    accounts = await db.accounts.find(
+        acc_query,
+        {"_id": 0, "id": 1, "account_name": 1, "sku_pricing": 1, "assigned_to": 1, "city": 1},
+    ).to_list(2000)
+    accounts = [a for a in accounts if (a.get("sku_pricing") or [])]
+    account_ids = [a["id"] for a in accounts]
+
+    if not account_ids:
+        return {
+            "month_label": f"{MONTH_NAMES[month - 1]} {year}",
+            "accounts": [],
+            "totals": {"current_cases": 0, "target_cases": 0, "current_value": 0.0, "target_value": 0.0, "achievement_pct": None},
+        }
+
+    cur_start, cur_end = _month_bounds(year, month)
+    prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
+    prev_start, prev_end = _month_bounds(prev_year, prev_month)
+
+    current_cases_map = await _sum_cases_per_sku(tenant_id, account_ids, cur_start, cur_end)
+    prev_cases_map = await _sum_cases_per_sku(tenant_id, account_ids, prev_start, prev_end)
+
+    overrides = await db.account_case_targets.find(
+        {"tenant_id": tenant_id, "year": year, "month": month, "account_id": {"$in": account_ids}},
+        {"_id": 0},
+    ).to_list(5000)
+    override_map = {(o["account_id"], o["sku_name"]): o for o in overrides}
+
+    out_accounts = []
+    grand = {"current_cases": 0, "target_cases": 0, "current_value": 0.0, "target_value": 0.0}
+
+    for acc in accounts:
+        acc_id = acc["id"]
+        rows = []
+        acc_totals = {"current_cases": 0, "target_cases": 0, "current_value": 0.0, "target_value": 0.0}
+        for sp in acc.get("sku_pricing") or []:
+            sku = sp.get("sku")
+            price = float(sp.get("price_per_unit") or 0)
+            cur_cases = int(current_cases_map.get((acc_id, sku), 0))
+            default_target = int(prev_cases_map.get((acc_id, sku), 0))
+            ov = override_map.get((acc_id, sku))
+            target_cases = int(ov["target_cases"]) if ov else default_target
+            cur_val = cur_cases * price
+            tgt_val = target_cases * price
+            rows.append({
+                "sku": sku,
+                "price_per_unit": price,
+                "current_cases": cur_cases,
+                "default_target_cases": default_target,
+                "target_cases": target_cases,
+                "is_overridden": bool(ov),
+                "current_pipeline_value": cur_val,
+                "target_pipeline_value": tgt_val,
+                "achievement_pct": round((cur_val / tgt_val) * 100, 1) if tgt_val > 0 else None,
+            })
+            acc_totals["current_cases"] += cur_cases
+            acc_totals["target_cases"] += target_cases
+            acc_totals["current_value"] += cur_val
+            acc_totals["target_value"] += tgt_val
+        rows.sort(key=lambda r: r["target_pipeline_value"], reverse=True)
+        out_accounts.append({
+            "account_id": acc_id,
+            "account_name": acc.get("account_name"),
+            "city": acc.get("city"),
+            "rows": rows,
+            "totals": acc_totals,
+            "achievement_pct": round((acc_totals["current_value"] / acc_totals["target_value"]) * 100, 1) if acc_totals["target_value"] > 0 else None,
+        })
+        for k, v in acc_totals.items():
+            grand[k] = grand.get(k, 0) + v
+
+    out_accounts.sort(key=lambda a: a["totals"]["target_value"], reverse=True)
+
+    return {
+        "month_label": f"{MONTH_NAMES[month - 1]} {year}",
+        "accounts": out_accounts,
+        "totals": {
+            **grand,
+            "achievement_pct": round((grand["current_value"] / grand["target_value"]) * 100, 1) if grand["target_value"] > 0 else None,
+        },
+    }
+
+
+class CaseTargetUpsert(BaseModel):
+    account_id: str
+    sku_name: str
+    year: int
+    month: int
+    target_cases: int
+
+
+@router.post("/account-case-targets")
+async def upsert_account_case_target(
+    payload: CaseTargetUpsert,
+    current_user: dict = Depends(get_current_user),
+):
+    """Store/update an admin override for one (account, sku, month) cell."""
+    tenant_id = get_current_tenant_id()
+    if payload.target_cases < 0:
+        raise HTTPException(400, "Target cases cannot be negative")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.account_case_targets.update_one(
+        {
+            "tenant_id": tenant_id,
+            "account_id": payload.account_id,
+            "sku_name": payload.sku_name,
+            "year": payload.year,
+            "month": payload.month,
+        },
+        {"$set": {
+            "target_cases": int(payload.target_cases),
+            "updated_at": now,
+            "updated_by": current_user.get("id"),
+            "updated_by_name": current_user.get("name"),
+        }, "$setOnInsert": {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "account_id": payload.account_id,
+            "sku_name": payload.sku_name,
+            "year": payload.year,
+            "month": payload.month,
+            "created_at": now,
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "target_cases": payload.target_cases}
+
+
+@router.delete("/account-case-targets")
+async def reset_account_case_target(
+    account_id: str,
+    sku_name: str,
+    year: int,
+    month: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove an override and revert to the auto-derived default (prev-month sales)."""
+    tenant_id = get_current_tenant_id()
+    await db.account_case_targets.delete_one({
+        "tenant_id": tenant_id,
+        "account_id": account_id,
+        "sku_name": sku_name,
+        "year": year,
+        "month": month,
+    })
+    return {"ok": True}

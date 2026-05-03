@@ -14,7 +14,7 @@ import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
   ChevronDown, ChevronRight, Building2, Clock, ArrowUp, ArrowDown, Minus,
-  Pencil, X, MessageSquare, Mail
+  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -726,6 +726,15 @@ export default function PerformanceTracker() {
             </div>
           </div>
 
+          {/* ─── Top 10 Priorities — Execution Driven ─── */}
+          <Top10PrioritiesSection
+            year={selectedYear}
+            month={selectedMonth}
+            resourceIds={resolveResourceIds()}
+            headers={headers}
+            isLocked={isLocked}
+          />
+
           {/* Month-on-Month Comparison */}
           {comparison?.months?.length > 0 && (
             <ComparisonTable
@@ -1166,6 +1175,338 @@ function AccountValueCell({ account, planId, onRefresh }) {
           <RotateCcw className="h-2.5 w-2.5" />
         </button>
       )}
+    </div>
+  );
+}
+
+
+
+// ════════════════════════════════════════════════════════════════════
+// Top 10 Priorities — Execution Driven
+// ════════════════════════════════════════════════════════════════════
+
+function Top10PrioritiesSection({ year, month, resourceIds, headers, isLocked }) {
+  const [open, setOpen] = useState(true);
+  const [activeSub, setActiveSub] = useState('case_targets');
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-sm" data-testid="top10-priorities-section">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 hover:bg-slate-50 transition-colors"
+      >
+        <div className="p-1.5 bg-amber-100 rounded-sm">
+          <Star className="h-4 w-4 text-amber-700" />
+        </div>
+        <div className="flex-1 text-left">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+            Top 10 Priorities
+            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 font-medium text-[10px]">Execution Driven</Badge>
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">Account-level targets, gaps, and priority drivers for the month</p>
+        </div>
+        {open ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+      </button>
+
+      {open && (
+        <div className="p-4 sm:p-5 space-y-4">
+          {/* Sub-section tabs */}
+          <div className="flex flex-wrap gap-1.5 border-b border-slate-100 pb-2">
+            <SubTab id="case_targets" active={activeSub} onClick={setActiveSub} icon={Package}>
+              Case Targets — {MONTH_NAMES[month]} {year}
+            </SubTab>
+            {/* Future sub-sections (gap analysis, pipeline-at-risk, collections priority…) plug in here */}
+          </div>
+
+          {activeSub === 'case_targets' && (
+            <CaseTargetsSubsection
+              year={year}
+              month={month}
+              resourceIds={resourceIds}
+              headers={headers}
+              isLocked={isLocked}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubTab({ id, active, onClick, icon: Icon, children }) {
+  const isActive = active === id;
+  return (
+    <button
+      onClick={() => onClick(id)}
+      className={`px-3 py-1.5 rounded-sm text-xs font-semibold flex items-center gap-1.5 transition-all ${
+        isActive
+          ? 'bg-amber-600 text-white shadow-sm'
+          : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+      }`}
+      data-testid={`sub-tab-${id}`}
+    >
+      {Icon && <Icon className="h-3 w-3" />}
+      {children}
+    </button>
+  );
+}
+
+function CaseTargetsSubsection({ year, month, resourceIds, headers, isLocked }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState({}); // {accountId: bool}
+  const [drafts, setDrafts] = useState({}); // {accountId-sku: stringValue}
+  const [savingKey, setSavingKey] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const ridParam = resourceIds && resourceIds.length ? `&resource_ids=${resourceIds.join(',')}` : '';
+      const res = await fetch(`${API_URL}/api/performance/account-case-targets?year=${year}&month=${month}${ridParam}`, { headers });
+      const d = await res.json();
+      setData(d);
+      setDrafts({});
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [year, month, resourceIds, headers]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const cellKey = (accId, sku) => `${accId}__${sku}`;
+
+  const draftValue = (accId, sku, fallback) => {
+    const k = cellKey(accId, sku);
+    return drafts[k] !== undefined ? drafts[k] : String(fallback ?? 0);
+  };
+
+  const setDraft = (accId, sku, val) => {
+    const sanitized = val.replace(/[^0-9]/g, '');
+    setDrafts(p => ({ ...p, [cellKey(accId, sku)]: sanitized }));
+  };
+
+  const isDraftDirty = (accId, sku, currentTarget) => {
+    const k = cellKey(accId, sku);
+    if (drafts[k] === undefined) return false;
+    const num = parseInt(drafts[k] || '0', 10);
+    return num !== Number(currentTarget);
+  };
+
+  const saveRow = async (account, row) => {
+    const k = cellKey(account.account_id, row.sku);
+    setSavingKey(k);
+    try {
+      const target = parseInt(drafts[k] ?? row.target_cases, 10) || 0;
+      const res = await fetch(`${API_URL}/api/performance/account-case-targets`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ account_id: account.account_id, sku_name: row.sku, year, month, target_cases: target }),
+      });
+      if (res.ok) {
+        await load();
+      }
+    } catch (e) { console.error(e); }
+    finally { setSavingKey(null); }
+  };
+
+  const resetRow = async (account, row) => {
+    const k = cellKey(account.account_id, row.sku);
+    setSavingKey(k);
+    try {
+      const url = `${API_URL}/api/performance/account-case-targets?account_id=${encodeURIComponent(account.account_id)}&sku_name=${encodeURIComponent(row.sku)}&year=${year}&month=${month}`;
+      const res = await fetch(url, { method: 'DELETE', headers });
+      if (res.ok) await load();
+    } catch (e) { console.error(e); }
+    finally { setSavingKey(null); }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (!data || !data.accounts || data.accounts.length === 0) {
+    return (
+      <div className="text-center py-10 text-sm text-slate-500" data-testid="case-targets-empty">
+        No accounts with SKU pricing found for the selected resource(s) in {data?.month_label || `${MONTH_NAMES[month]} ${year}`}.
+      </div>
+    );
+  }
+
+  const t = data.totals || {};
+
+  return (
+    <div className="space-y-4" data-testid="case-targets-subsection">
+      {/* Roll-up summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <SummaryStat label="Accounts" value={data.accounts.length} sub="with pricing" />
+        <SummaryStat label="Cases — Current / Target" value={`${fmt(t.current_cases)} / ${fmt(t.target_cases)}`} sub={`${fmtPct(t.current_cases && t.target_cases ? (t.current_cases / t.target_cases) * 100 : 0)}`} />
+        <SummaryStat label="Pipeline — Current" value={`₹${fmt(t.current_value)}`} sub="invoiced + delivered" />
+        <SummaryStat label="Pipeline — Target" value={`₹${fmt(t.target_value)}`} sub={`Achievement ${fmtPct(t.achievement_pct || 0)}`} highlight={t.achievement_pct >= 100 ? 'green' : t.achievement_pct >= 70 ? 'amber' : 'red'} />
+      </div>
+
+      {/* Account cards */}
+      <div className="space-y-2">
+        {data.accounts.map((acc) => {
+          const isOpen = expanded[acc.account_id] !== false; // default open
+          return (
+            <div key={acc.account_id} className="border border-slate-200 rounded-sm overflow-hidden" data-testid={`case-account-${acc.account_id}`}>
+              <button
+                onClick={() => setExpanded(p => ({ ...p, [acc.account_id]: !isOpen }))}
+                className="w-full p-3 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  {isOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />}
+                  <div className="p-1.5 bg-slate-100 rounded-sm shrink-0">
+                    <Building2 className="h-4 w-4 text-slate-700" />
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{acc.account_name}</p>
+                    {acc.city && <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{acc.city}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Cases</p>
+                    <p className="text-sm font-bold tabular-nums text-slate-900">{fmt(acc.totals.current_cases)} / {fmt(acc.totals.target_cases)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Value</p>
+                    <p className="text-sm font-bold tabular-nums text-slate-900">₹{fmt(acc.totals.current_value)} / ₹{fmt(acc.totals.target_value)}</p>
+                  </div>
+                  <Badge variant="outline" className={`tabular-nums shrink-0 ${
+                    (acc.achievement_pct || 0) >= 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    (acc.achievement_pct || 0) >= 70 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                    'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {acc.achievement_pct != null ? fmtPct(acc.achievement_pct) : '—'}
+                  </Badge>
+                </div>
+              </button>
+
+              {isOpen && (
+                <div className="border-t border-slate-100 overflow-x-auto">
+                  <table className="w-full text-sm" data-testid={`case-table-${acc.account_id}`}>
+                    <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">SKU</th>
+                        <th className="px-3 py-2 text-right font-semibold">Price (₹)</th>
+                        <th className="px-3 py-2 text-right font-semibold">Current</th>
+                        <th className="px-3 py-2 text-right font-semibold">Target</th>
+                        <th className="px-3 py-2 text-right font-semibold">Default</th>
+                        <th className="px-3 py-2 text-right font-semibold">Curr&nbsp;Pipeline</th>
+                        <th className="px-3 py-2 text-right font-semibold">Tgt&nbsp;Pipeline</th>
+                        <th className="px-3 py-2 text-right font-semibold">Ach %</th>
+                        <th className="px-3 py-2 text-right font-semibold w-[110px]"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {acc.rows.map((r) => {
+                        const k = cellKey(acc.account_id, r.sku);
+                        const dirty = isDraftDirty(acc.account_id, r.sku, r.target_cases);
+                        const saving = savingKey === k;
+                        return (
+                          <tr key={r.sku} className="border-t border-slate-100 hover:bg-amber-50/30">
+                            <td className="px-3 py-2 font-medium text-slate-800">{r.sku}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">{r.price_per_unit ? r.price_per_unit.toLocaleString('en-IN') : '—'}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-900 font-semibold">{fmt(r.current_cases)}</td>
+                            <td className="px-3 py-2 text-right">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                value={draftValue(acc.account_id, r.sku, r.target_cases)}
+                                onChange={(e) => setDraft(acc.account_id, r.sku, e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && dirty) saveRow(acc, r); }}
+                                disabled={isLocked || saving}
+                                className={`h-7 w-20 text-right tabular-nums text-xs px-2 ml-auto ${dirty ? 'ring-2 ring-amber-300 border-amber-400' : ''} ${r.is_overridden ? 'bg-amber-50' : ''}`}
+                                data-testid={`case-target-input-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-400 text-xs">{fmt(r.default_target_cases)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">₹{fmt(r.current_pipeline_value)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">₹{fmt(r.target_pipeline_value)}</td>
+                            <td className="px-3 py-2 text-right">
+                              {r.achievement_pct != null ? (
+                                <Badge variant="outline" className={`tabular-nums ${
+                                  r.achievement_pct >= 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                  r.achievement_pct >= 70 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                  'bg-rose-50 text-rose-700 border-rose-200'
+                                }`}>
+                                  {fmtPct(r.achievement_pct)}
+                                </Badge>
+                              ) : <span className="text-slate-300 text-xs">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                {dirty && !isLocked && (
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="h-6 px-2 text-[10px] bg-amber-600 hover:bg-amber-700"
+                                    disabled={saving}
+                                    onClick={() => saveRow(acc, r)}
+                                    data-testid={`case-target-save-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
+                                  >
+                                    {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="h-3 w-3 mr-1" />Save</>}
+                                  </Button>
+                                )}
+                                {r.is_overridden && !dirty && !isLocked && (
+                                  <button
+                                    onClick={() => resetRow(acc, r)}
+                                    disabled={saving}
+                                    title="Reset to default (last month sales)"
+                                    className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+                                    data-testid={`case-target-reset-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
+                                  >
+                                    {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-slate-50 text-xs">
+                      <tr className="font-semibold text-slate-900">
+                        <td className="px-3 py-2">Totals</td>
+                        <td></td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmt(acc.totals.current_cases)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmt(acc.totals.target_cases)}</td>
+                        <td></td>
+                        <td className="px-3 py-2 text-right tabular-nums">₹{fmt(acc.totals.current_value)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">₹{fmt(acc.totals.target_value)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{acc.achievement_pct != null ? fmtPct(acc.achievement_pct) : '—'}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value, sub, highlight }) {
+  const hl = {
+    green: 'bg-emerald-50 border-emerald-200',
+    amber: 'bg-amber-50 border-amber-200',
+    red:   'bg-rose-50 border-rose-200',
+  }[highlight] || 'bg-white border-slate-200';
+  return (
+    <div className={`rounded-sm border p-3 ${hl}`}>
+      <p className="text-[9px] uppercase tracking-[0.15em] text-slate-500 font-semibold leading-tight">{label}</p>
+      <p className="text-base sm:text-lg font-bold text-slate-900 tabular-nums truncate mt-1" title={String(value)}>{value}</p>
+      {sub && <p className="text-[10px] text-slate-500 mt-0.5 truncate">{sub}</p>}
     </div>
   );
 }
