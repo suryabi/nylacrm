@@ -107,26 +107,26 @@ export function UpcomingMeetingsWidget({ onNewMeeting, onViewMeeting }) {
   return (
     <Card className="overflow-hidden border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
       {/* Header */}
-      <div className="p-4 sm:p-5 pb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/30">
+      <div className="p-4 sm:p-5 pb-3 flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-white flex items-center gap-2 min-w-0">
+          <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/50 dark:to-indigo-900/30 shrink-0">
             <CalendarDays className="h-4 w-4 text-blue-600 dark:text-blue-400" />
           </div>
-          <span>Week Ahead</span>
-          <span className="text-xs font-normal text-slate-500 dark:text-slate-400">· {totalUpcoming} event{totalUpcoming !== 1 ? 's' : ''}</span>
+          <span className="shrink-0">Week Ahead</span>
+          <span className="text-xs font-normal text-slate-500 dark:text-slate-400 truncate">· {totalUpcoming} event{totalUpcoming !== 1 ? 's' : ''}</span>
         </h2>
         <Link
           to="/personal-calendar"
-          className="text-xs font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 hover:underline"
+          className="text-xs font-semibold text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 hover:underline shrink-0"
           data-testid="open-personal-calendar"
         >
           View Calendar <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
 
-      {/* 7-day strip */}
-      <div className="px-3 sm:px-4 pb-2">
-        <div className="grid grid-cols-7 gap-1.5">
+      {/* 7-day strip — tightens gaps and padding on narrow widths so day tiles stay readable */}
+      <div className="px-2 sm:px-4 pb-2">
+        <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
           {days.map(d => {
             const k = isoDay(d);
             const dayEvs = eventsByDay[k] || [];
@@ -136,7 +136,7 @@ export function UpcomingMeetingsWidget({ onNewMeeting, onViewMeeting }) {
               <button
                 key={k}
                 onClick={() => setSelectedDay(k)}
-                className={`relative flex flex-col items-center justify-center py-2 rounded-xl transition-all border ${
+                className={`relative flex flex-col items-center justify-center py-1.5 sm:py-2 rounded-lg sm:rounded-xl transition-all border min-w-0 ${
                   isSelected
                     ? 'bg-slate-900 text-white border-slate-900 shadow-md'
                     : isToday
@@ -145,17 +145,17 @@ export function UpcomingMeetingsWidget({ onNewMeeting, onViewMeeting }) {
                 }`}
                 data-testid={`week-strip-${k}`}
               >
-                <span className={`text-[9px] font-bold uppercase tracking-[0.12em] ${isSelected ? 'text-white/80' : 'opacity-60'}`}>{DAYS_ABBR[d.getDay()]}</span>
-                <span className="text-base font-black tabular-nums leading-tight mt-0.5">{d.getDate()}</span>
+                <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-wider ${isSelected ? 'text-white/80' : 'opacity-60'}`}>{DAYS_ABBR[d.getDay()]}</span>
+                <span className="text-sm sm:text-base font-black tabular-nums leading-tight">{d.getDate()}</span>
                 {dayEvs.length > 0 ? (
-                  <div className="flex items-center gap-0.5 mt-1 h-1.5">
+                  <div className="flex items-center gap-0.5 mt-0.5 sm:mt-1 h-1.5">
                     {dayEvs.slice(0, 3).map((ev, i) => (
-                      <span key={i} className={`w-1.5 h-1.5 rounded-full ${SOURCE_STYLES[ev.source]?.dot || 'bg-slate-400'} ${isSelected ? 'opacity-90' : ''}`}></span>
+                      <span key={i} className={`w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full ${SOURCE_STYLES[ev.source]?.dot || 'bg-slate-400'} ${isSelected ? 'opacity-90' : ''}`}></span>
                     ))}
-                    {dayEvs.length > 3 && <span className={`text-[8px] font-bold ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>+{dayEvs.length - 3}</span>}
+                    {dayEvs.length > 3 && <span className={`hidden sm:inline text-[8px] font-bold ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>+{dayEvs.length - 3}</span>}
                   </div>
                 ) : (
-                  <div className="h-1.5 mt-1"></div>
+                  <div className="h-1.5 mt-0.5 sm:mt-1"></div>
                 )}
               </button>
             );

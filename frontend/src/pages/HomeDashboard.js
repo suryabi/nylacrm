@@ -333,16 +333,20 @@ export default function HomeDashboard() {
             <TaskMetricsWidget />
           </section>
 
-          {/* Main Content - Bento Grid */}
-          <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-12 lg:grid-cols-12">
-            {/* Left Column - Primary Content (full on mobile, 7/12 on tablet, 8/12 on desktop) */}
-            <div className="md:col-span-7 lg:col-span-8 space-y-4 sm:space-y-6 order-2 md:order-1">
+          {/* Main Content - Bento Grid
+              Phone + iPad portrait: stacked single column (lots of breathing room).
+              iPad landscape / desktop (lg+): 8 / 4 two-column layout. */}
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
+            {/* Left Column - Primary Content (full on mobile+tablet, 8 cols on desktop) */}
+            <div className="lg:col-span-8 space-y-4 sm:space-y-6 order-2 lg:order-1">
               {/* Bottom Row - Upcoming Follow-ups full width */}
               <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
             </div>
 
-            {/* Right Column - Secondary Content (full on mobile, 5/12 on tablet, 4/12 on desktop) */}
-            <div className="md:col-span-5 lg:col-span-4 space-y-4 sm:space-y-6 order-1 md:order-2">
+            {/* Right Column - Meetings & Pipeline stacked.
+                Phone + iPad: single column full width (calendar gets the full page width).
+                Desktop (lg+): pulls into the 4-col rail. */}
+            <div className="lg:col-span-4 order-1 lg:order-2 space-y-4 sm:space-y-6">
               {/* Meetings - Featured Card */}
               <UpcomingMeetingsWidget
                 upcomingMeetings={upcoming_meetings}
