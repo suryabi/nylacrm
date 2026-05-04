@@ -407,14 +407,12 @@ export default function PerformanceTracker() {
           </div>
 
           {/* Summary Cards Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-sm" data-testid="summary-cards">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-sm" data-testid="summary-cards">
             <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} testId="metric-target" />
             <SummaryTile label="Revenue" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
             <SummaryTile label="Existing A/C" value={data.accounts?.existing_count} icon={Users} testId="metric-existing" />
             <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Building2} testId="metric-new" />
             <SummaryTile label={`${MONTH_NAMES[data.pipeline?.next_month] || 'Next'} Pipeline`} value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} icon={TrendingUp} sub={`${data.pipeline?.next_month_leads_count || 0} leads`} testId="metric-pipeline" />
-            <SummaryTile label="Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} icon={AlertTriangle} testId="metric-outstanding" />
-            <SummaryTile label="Activities" value={data.activities?.total || 0} icon={Phone} sub={`${data.activities?.unique_visits || 0} visits`} testId="metric-activity" />
           </div>
 
           {/* Main Content Grid */}
