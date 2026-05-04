@@ -654,88 +654,6 @@ export default function PerformanceTracker() {
                 </div>
               </div>
             </div>
-
-            {/* Support Section */}
-            <div className="bg-white border border-slate-200 rounded-sm" data-testid="support-section">
-              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
-                <div className="p-1.5 bg-slate-100 rounded-sm">
-                  <MapPin className="h-4 w-4 text-slate-700" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Support Needed</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Add a support area and describe what you need (one entry per area)</p>
-                </div>
-              </div>
-              <div className="p-4 sm:p-5 pt-3 sm:pt-4 space-y-3">
-                {/* Existing support rows */}
-                {supportNeeded.length > 0 && (
-                  <div className="border border-slate-200 rounded-sm overflow-hidden divide-y divide-slate-100" data-testid="support-rows">
-                    {supportNeeded.map(row => (
-                      <div key={row.category} className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-2 sm:gap-3 p-3 bg-white items-start" data-testid={`support-row-${row.category.toLowerCase().replace(/\s+/g, '-')}`}>
-                        <Badge variant="outline" className="bg-slate-900 text-white border-slate-900 text-[10px] uppercase tracking-wider w-fit shrink-0 self-start">
-                          {row.category}
-                        </Badge>
-                        <Textarea
-                          value={row.details}
-                          onChange={(e) => updateSupportDetails(row.category, e.target.value)}
-                          placeholder={`What support is needed for ${row.category}?`}
-                          className="bg-slate-50 border-slate-200 rounded-sm text-sm"
-                          rows={2}
-                          disabled={isLocked}
-                          data-testid={`support-details-${row.category.toLowerCase().replace(/\s+/g, '-')}`}
-                        />
-                        {!isLocked && (
-                          <button
-                            onClick={() => removeSupport(row.category)}
-                            className="p-2 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600 self-start"
-                            title={`Remove ${row.category}`}
-                            data-testid={`support-remove-${row.category.toLowerCase().replace(/\s+/g, '-')}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Add new support area */}
-                {(() => {
-                  const usedSet = new Set(supportNeeded.map(s => s.category));
-                  const available = SUPPORT_CATEGORIES.filter(c => !usedSet.has(c));
-                  if (isLocked || available.length === 0) {
-                    return available.length === 0 && !isLocked ? (
-                      <p className="text-xs text-slate-400 italic">All support areas have been added.</p>
-                    ) : null;
-                  }
-                  return (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Select value="" onValueChange={(v) => v && addSupport(v)}>
-                        <SelectTrigger className="h-9 w-full sm:w-64 bg-white" data-testid="support-add-select">
-                          <SelectValue placeholder="+ Add a support area..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {available.map(cat => (
-                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-slate-400">{supportNeeded.length} of {SUPPORT_CATEGORIES.length} areas added</p>
-                    </div>
-                  );
-                })()}
-
-                <div className="pt-2 border-t border-slate-100">
-                  <label className="text-xs font-medium text-slate-500">General Remarks</label>
-                  <Textarea
-                    value={remarks} onChange={e => setRemarks(e.target.value)}
-                    placeholder="Additional comments or observations..."
-                    className="mt-1.5 bg-slate-50 border-slate-200 rounded-sm" rows={3} disabled={isLocked}
-                    data-testid="remarks"
-                  />
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* ─── Top 10 Priorities ─── */}
@@ -768,6 +686,102 @@ export default function PerformanceTracker() {
                 <KPICard label="Outstanding Ratio" value={fmtPct(data.calculated?.outstanding_ratio)} good={data.calculated?.outstanding_ratio < 20} bad={data.calculated?.outstanding_ratio > 50} invert />
                 <KPICard label="Conversion Rate" value={fmtPct(data.calculated?.account_conversion_rate)} good={data.calculated?.account_conversion_rate >= 20} />
               </div>
+          </div>
+
+          {/* Support Section — Last */}
+          <div className="bg-white border border-slate-200 rounded-sm" data-testid="support-section">
+            <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
+              <div className="p-1.5 bg-slate-100 rounded-sm">
+                <MapPin className="h-4 w-4 text-slate-700" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Support Needed</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Add a support area and describe what you need (one entry per area). Drag the bottom-right corner of the text area to expand.</p>
+              </div>
+            </div>
+            <div className="p-4 sm:p-5 pt-3 sm:pt-4 space-y-3">
+              {/* Existing support rows */}
+              {supportNeeded.length > 0 && (
+                <div className="border border-slate-200 rounded-sm overflow-hidden divide-y divide-slate-100" data-testid="support-rows">
+                  {supportNeeded.map(row => (
+                    <div key={row.category} className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-2 sm:gap-3 p-3 bg-white items-start" data-testid={`support-row-${row.category.toLowerCase().replace(/\s+/g, '-')}`}>
+                      <Badge variant="outline" className="bg-slate-900 text-white border-slate-900 text-[10px] uppercase tracking-wider w-fit shrink-0 self-start">
+                        {row.category}
+                      </Badge>
+                      <Textarea
+                        value={row.details}
+                        onChange={(e) => updateSupportDetails(row.category, e.target.value)}
+                        placeholder={`What support is needed for ${row.category}?`}
+                        className="bg-slate-50 border-slate-200 rounded-sm text-sm resize-y min-h-[64px]"
+                        rows={2}
+                        disabled={isLocked}
+                        data-testid={`support-details-${row.category.toLowerCase().replace(/\s+/g, '-')}`}
+                      />
+                      <div className="flex items-start gap-1 self-start">
+                        {!isLocked && (
+                          <Button
+                            size="sm"
+                            className="h-9 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                            onClick={() => saveRecord(false)}
+                            disabled={saving}
+                            title={`Save ${row.category}`}
+                            data-testid={`support-save-${row.category.toLowerCase().replace(/\s+/g, '-')}`}
+                          >
+                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" />Save</>}
+                          </Button>
+                        )}
+                        {!isLocked && (
+                          <button
+                            onClick={() => removeSupport(row.category)}
+                            className="p-2 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600"
+                            title={`Remove ${row.category}`}
+                            data-testid={`support-remove-${row.category.toLowerCase().replace(/\s+/g, '-')}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new support area */}
+              {(() => {
+                const usedSet = new Set(supportNeeded.map(s => s.category));
+                const available = SUPPORT_CATEGORIES.filter(c => !usedSet.has(c));
+                if (isLocked || available.length === 0) {
+                  return available.length === 0 && !isLocked ? (
+                    <p className="text-xs text-slate-400 italic">All support areas have been added.</p>
+                  ) : null;
+                }
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select value="" onValueChange={(v) => v && addSupport(v)}>
+                      <SelectTrigger className="h-9 w-full sm:w-64 bg-white" data-testid="support-add-select">
+                        <SelectValue placeholder="+ Add a support area..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {available.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-400">{supportNeeded.length} of {SUPPORT_CATEGORIES.length} areas added</p>
+                  </div>
+                );
+              })()}
+
+              <div className="pt-2 border-t border-slate-100">
+                <label className="text-xs font-medium text-slate-500">General Remarks</label>
+                <Textarea
+                  value={remarks} onChange={e => setRemarks(e.target.value)}
+                  placeholder="Additional comments or observations..."
+                  className="mt-1.5 bg-slate-50 border-slate-200 rounded-sm resize-y min-h-[80px]" rows={3} disabled={isLocked}
+                  data-testid="remarks"
+                />
+              </div>
+            </div>
           </div>
         </>
       )}
