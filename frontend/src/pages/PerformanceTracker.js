@@ -2348,17 +2348,6 @@ const TIME_FILTER_OPTIONS = [
   { value: 'this_year', label: 'This Year' },
 ];
 
-const accountTypeColors = (t) => {
-  const map = {
-    horeca: 'bg-blue-100 text-blue-700 border-blue-200',
-    retail: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    distributor: 'bg-violet-100 text-violet-700 border-violet-200',
-    institutional: 'bg-amber-100 text-amber-700 border-amber-200',
-    online: 'bg-pink-100 text-pink-700 border-pink-200',
-  };
-  return map[(t || '').toLowerCase()] || 'bg-slate-100 text-slate-700 border-slate-200';
-};
-
 const formatDateShort = (iso) => {
   if (!iso) return '—';
   try {
@@ -2462,18 +2451,18 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
         </div>
       ) : (
         <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="collections-table">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" style={{ minWidth: '1100px' }}>
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-3 py-2.5 text-left font-semibold">Account</th>
-                <th className="px-3 py-2.5 text-left font-semibold">Type</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Invoice Value</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Avg Order</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Bottle Credit</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Contribution</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Last Payment</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Outstanding</th>
-                <th className="px-3 py-2.5 text-right font-semibold">Overdue</th>
+                <th className="px-4 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10 min-w-[220px]">Account</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Invoice Value</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Net Value</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Avg Order</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Bottle Credit</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Contribution</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Last Payment</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Outstanding</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Overdue</th>
               </tr>
             </thead>
             <tbody>
@@ -2484,42 +2473,33 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
                   onClick={() => navigate(`/accounts/${row.account_id}`)}
                   data-testid={`collections-row-${row.account_id}`}
                 >
-                  <td className="px-3 py-2.5">
-                    <p className="text-sm font-semibold text-slate-900">{row.account_name}</p>
-                    {(row.city || row.state) && <p className="text-[10px] text-slate-400 uppercase tracking-wider">{[row.city, row.state].filter(Boolean).join(', ')}</p>}
-                    <p className="text-[10px] text-slate-400 font-mono">{row.account_id}</p>
+                  <td className="px-4 py-3 sticky left-0 bg-white hover:bg-amber-50/30 transition-colors">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{row.account_name}</p>
                   </td>
-                  <td className="px-3 py-2.5">
-                    {row.account_type ? (
-                      <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${accountTypeColors(row.account_type)}`}>{row.account_type}</Badge>
-                    ) : <span className="text-slate-300 text-xs">—</span>}
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700">₹{fmt(row.gross_invoice_total)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-blue-600">₹{fmt(row.net_invoice_total)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
+                    <span className="font-medium text-indigo-600">₹{fmt(row.average_order_amount)}</span>
+                    <span className="text-[10px] text-slate-400 ml-1">· {fmt(row.invoice_count)}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    <p className="font-semibold text-emerald-700">₹{fmt(row.gross_invoice_total)}</p>
-                    <p className="text-[10px] text-blue-600">Net ₹{fmt(row.net_invoice_total)}</p>
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    <p className="font-medium text-indigo-600">₹{fmt(row.average_order_amount)}</p>
-                    <p className="text-[10px] text-slate-400">{fmt(row.invoice_count)} orders</p>
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-purple-600">₹{fmt(row.bottle_credit)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-purple-600">₹{fmt(row.bottle_credit)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
                     <span className={`font-semibold ${
                       row.contribution_pct >= 10 ? 'text-emerald-700'
                       : row.contribution_pct >= 5 ? 'text-blue-600'
                       : row.contribution_pct > 0 ? 'text-amber-600' : 'text-slate-400'
                     }`}>{fmt(row.contribution_pct)}%</span>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    <p className="font-medium text-slate-700">₹{fmt(row.last_payment_amount)}</p>
-                    <p className="text-[10px] text-slate-400">{formatDateShort(row.last_payment_date)}</p>
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
+                    <span className="font-medium text-slate-700">₹{fmt(row.last_payment_amount)}</span>
+                    {row.last_payment_date && <span className="text-[10px] text-slate-400 ml-1">· {formatDateShort(row.last_payment_date)}</span>}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
                     <span className={(row.outstanding_balance || 0) > 0 ? 'text-amber-600 font-semibold' : 'text-emerald-600'}>
                       ₹{fmt(row.outstanding_balance)}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">
                     <span className={(row.overdue_amount || 0) > 0 ? 'text-rose-700 font-semibold' : 'text-emerald-600'}>
                       ₹{fmt(row.overdue_amount)}
                     </span>
@@ -2529,14 +2509,15 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
             </tbody>
             <tfoot className="bg-slate-50 text-xs">
               <tr className="font-bold text-slate-900">
-                <td className="px-3 py-2.5" colSpan={2}>Total — {filtered.length} account{filtered.length !== 1 ? 's' : ''}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700">₹{fmt(filtered.reduce((s, r) => s + (r.gross_invoice_total || 0), 0))}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">—</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-purple-600">₹{fmt(filtered.reduce((s, r) => s + (r.bottle_credit || 0), 0))}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">—</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">—</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-amber-600" data-testid="collections-total-outstanding">₹{fmt(filtered.reduce((s, r) => s + (r.outstanding_balance || 0), 0))}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-rose-700">₹{fmt(filtered.reduce((s, r) => s + (r.overdue_amount || 0), 0))}</td>
+                <td className="px-4 py-3 sticky left-0 bg-slate-50 whitespace-nowrap">Total — {filtered.length} account{filtered.length !== 1 ? 's' : ''}</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-emerald-700">₹{fmt(filtered.reduce((s, r) => s + (r.gross_invoice_total || 0), 0))}</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-blue-600">₹{fmt(filtered.reduce((s, r) => s + (r.net_invoice_total || 0), 0))}</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-400">—</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-purple-600">₹{fmt(filtered.reduce((s, r) => s + (r.bottle_credit || 0), 0))}</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-400">—</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-400">—</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-amber-600" data-testid="collections-total-outstanding">₹{fmt(filtered.reduce((s, r) => s + (r.outstanding_balance || 0), 0))}</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-rose-700">₹{fmt(filtered.reduce((s, r) => s + (r.overdue_amount || 0), 0))}</td>
               </tr>
             </tfoot>
           </table>
