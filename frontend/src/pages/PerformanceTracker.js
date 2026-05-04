@@ -14,7 +14,7 @@ import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
   ChevronDown, ChevronRight, Building2, Clock, ArrowUp, ArrowDown, Minus,
-  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package, FlaskConical, Plus, Trash2, Calendar
+  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package, FlaskConical, Plus, Trash2, Calendar, Wallet
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -595,42 +595,6 @@ export default function PerformanceTracker() {
                   <InfoRow label={`${MONTH_NAMES[data.pipeline?.next_month] || 'Next'} Pipeline Value`} value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
                 </div>
-              </div>
-            </div>
-
-            {/* Outstanding Section */}
-            <div className="bg-white border border-slate-200 rounded-sm" data-testid="outstanding-section">
-              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 cursor-pointer" onClick={() => toggleSection('outstanding')}>
-                <div className="p-1.5 bg-slate-100 rounded-sm">
-                  <AlertTriangle className="h-4 w-4 text-slate-700" />
-                </div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Collections / Outstanding</h3>
-                {expandedSections.outstanding ? <ChevronDown className="h-4 w-4 ml-auto text-slate-400" /> : <ChevronRight className="h-4 w-4 ml-auto text-slate-400" />}
-              </div>
-              <div className="p-4 sm:p-5 pt-3 sm:pt-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <InfoRow label="Total Outstanding" value={`₹${fmt(data.collections?.total_outstanding)}`} highlight={data.collections?.total_outstanding > 0 ? 'red' : 'green'} />
-                  <InfoRow label="Outstanding Ratio" value={fmtPct(data.collections?.outstanding_ratio)} />
-                </div>
-                {data.collections?.aging && (
-                  <div className="mt-3 sm:mt-4 grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
-                    <AgingBucket label="0-30d" value={data.collections.aging['0_30']} color="emerald" />
-                    <AgingBucket label="31-60d" value={data.collections.aging['31_60']} color="amber" />
-                    <AgingBucket label="61-90d" value={data.collections.aging['61_90']} color="orange" />
-                    <AgingBucket label="90+d" value={data.collections.aging['90_plus']} color="red" />
-                  </div>
-                )}
-                {expandedSections.outstanding && data.collections?.account_details?.length > 0 && (
-                  <div className="mt-4 border-t border-slate-100 pt-3">
-                    <p className="text-[10px] font-semibold text-red-700 uppercase tracking-wider mb-2">Account-Level Outstanding</p>
-                    {data.collections.account_details.slice(0, 10).map(a => (
-                      <div key={a.account_id} className="text-sm flex justify-between py-1.5 border-b border-slate-100">
-                        <span className="text-slate-600">{a.account_id?.slice(0, 12)}... ({a.invoices} inv)</span>
-                        <span className="font-semibold text-red-700 tabular-nums">₹{fmt(a.outstanding)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -1225,6 +1189,9 @@ function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isL
             <SubTab id="focus_leads" active={activeSub} onClick={setActiveSub} icon={Target}>
               Top 5 Leads to Focus
             </SubTab>
+            <SubTab id="collections" active={activeSub} onClick={setActiveSub} icon={Wallet}>
+              Collections / Outstanding
+            </SubTab>
           </div>
 
           {activeSub === 'case_targets' && (
@@ -1255,6 +1222,14 @@ function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isL
               token={token}
               tenantId={tenantId}
               isLocked={isLocked}
+            />
+          )}
+
+          {activeSub === 'collections' && (
+            <CollectionsSubsection
+              resourceIdsKey={resourceIdsKey}
+              token={token}
+              tenantId={tenantId}
             />
           )}
         </div>
@@ -2349,6 +2324,214 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums" data-testid="focus-leads-total-revenue">₹{fmt(totalRevenue)}</td>
                 {isEditable && <td></td>}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+
+// ════════════════════════════════════════════════════════════════════
+// Collections / Outstanding Subsection
+// (Same fields as the Account Performance report, scoped to selected resources)
+// ════════════════════════════════════════════════════════════════════
+
+const TIME_FILTER_OPTIONS = [
+  { value: 'lifetime', label: 'Lifetime' },
+  { value: 'this_month', label: 'This Month' },
+  { value: 'last_month', label: 'Last Month' },
+  { value: 'this_quarter', label: 'This Quarter' },
+  { value: 'this_year', label: 'This Year' },
+];
+
+const accountTypeColors = (t) => {
+  const map = {
+    horeca: 'bg-blue-100 text-blue-700 border-blue-200',
+    retail: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    distributor: 'bg-violet-100 text-violet-700 border-violet-200',
+    institutional: 'bg-amber-100 text-amber-700 border-amber-200',
+    online: 'bg-pink-100 text-pink-700 border-pink-200',
+  };
+  return map[(t || '').toLowerCase()] || 'bg-slate-100 text-slate-700 border-slate-200';
+};
+
+const formatDateShort = (iso) => {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch { return '—'; }
+};
+
+function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [timeFilter, setTimeFilter] = useState('lifetime');
+  const [search, setSearch] = useState('');
+  const navigate = useNavigate();
+
+  const authHeaders = useCallback(() => ({
+    Authorization: `Bearer ${token}`,
+    'X-Tenant-ID': tenantId,
+    'Content-Type': 'application/json',
+  }), [token, tenantId]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const ridParam = resourceIdsKey ? `&resource_ids=${resourceIdsKey}` : '';
+      const res = await fetch(`${API_URL}/api/performance/account-collections?time_filter=${timeFilter}${ridParam}`, { headers: authHeaders() });
+      const d = await res.json();
+      setData(d);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [resourceIdsKey, timeFilter, authHeaders]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12" data-testid="collections-loading">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  const accounts = data?.accounts || [];
+  const summary = data?.summary || {};
+
+  const searchLower = search.trim().toLowerCase();
+  const filtered = searchLower
+    ? accounts.filter(r =>
+        (r.account_name || '').toLowerCase().includes(searchLower)
+        || (r.account_id || '').toLowerCase().includes(searchLower)
+        || (r.city || '').toLowerCase().includes(searchLower)
+        || (r.state || '').toLowerCase().includes(searchLower))
+    : accounts;
+
+  return (
+    <div className="space-y-4" data-testid="collections-subsection">
+      {/* Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+        <SummaryStat label="Accounts" value={fmt(summary.account_count || 0)} />
+        <SummaryStat label="Invoice Value" value={`₹${fmt(summary.total_gross || 0)}`} sub={`Net: ₹${fmt(summary.total_net || 0)}`} highlight={(summary.total_gross || 0) > 0 ? 'green' : undefined} />
+        <SummaryStat label="Bottle Credit" value={`₹${fmt(summary.total_bottle_credit || 0)}`} />
+        <SummaryStat label="Avg Order" value={`₹${fmt(summary.average_order_amount || 0)}`} sub={`${fmt(summary.total_invoice_count || 0)} orders`} />
+        <SummaryStat label="Outstanding" value={`₹${fmt(summary.total_outstanding || 0)}`} highlight={(summary.total_outstanding || 0) > 0 ? 'amber' : 'green'} />
+        <SummaryStat label="Overdue" value={`₹${fmt(summary.total_overdue || 0)}`} highlight={(summary.total_overdue || 0) > 0 ? 'red' : 'green'} />
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={timeFilter} onValueChange={setTimeFilter}>
+            <SelectTrigger className="h-9 w-44 bg-white" data-testid="collections-time-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {TIME_FILTER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search account, city, state..."
+            className="h-9 w-64 bg-white"
+            data-testid="collections-search"
+          />
+        </div>
+        <div className="text-xs text-slate-500">{filtered.length} of {accounts.length} accounts</div>
+      </div>
+
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-10 text-sm text-slate-500 border border-dashed border-slate-200 rounded-sm" data-testid="collections-empty">
+          {accounts.length === 0
+            ? 'No accounts found for the selected resource(s).'
+            : 'No accounts match your search.'}
+        </div>
+      ) : (
+        <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="collections-table">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-3 py-2.5 text-left font-semibold">Account</th>
+                <th className="px-3 py-2.5 text-left font-semibold">Type</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Invoice Value</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Avg Order</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Bottle Credit</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Contribution</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Last Payment</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Outstanding</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Overdue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row, idx) => (
+                <tr
+                  key={row.account_id || idx}
+                  className="border-t border-slate-100 hover:bg-amber-50/30 cursor-pointer"
+                  onClick={() => navigate(`/accounts/${row.account_id}`)}
+                  data-testid={`collections-row-${row.account_id}`}
+                >
+                  <td className="px-3 py-2.5">
+                    <p className="text-sm font-semibold text-slate-900">{row.account_name}</p>
+                    {(row.city || row.state) && <p className="text-[10px] text-slate-400 uppercase tracking-wider">{[row.city, row.state].filter(Boolean).join(', ')}</p>}
+                    <p className="text-[10px] text-slate-400 font-mono">{row.account_id}</p>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {row.account_type ? (
+                      <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${accountTypeColors(row.account_type)}`}>{row.account_type}</Badge>
+                    ) : <span className="text-slate-300 text-xs">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <p className="font-semibold text-emerald-700">₹{fmt(row.gross_invoice_total)}</p>
+                    <p className="text-[10px] text-blue-600">Net ₹{fmt(row.net_invoice_total)}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <p className="font-medium text-indigo-600">₹{fmt(row.average_order_amount)}</p>
+                    <p className="text-[10px] text-slate-400">{fmt(row.invoice_count)} orders</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-purple-600">₹{fmt(row.bottle_credit)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <span className={`font-semibold ${
+                      row.contribution_pct >= 10 ? 'text-emerald-700'
+                      : row.contribution_pct >= 5 ? 'text-blue-600'
+                      : row.contribution_pct > 0 ? 'text-amber-600' : 'text-slate-400'
+                    }`}>{fmt(row.contribution_pct)}%</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <p className="font-medium text-slate-700">₹{fmt(row.last_payment_amount)}</p>
+                    <p className="text-[10px] text-slate-400">{formatDateShort(row.last_payment_date)}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <span className={(row.outstanding_balance || 0) > 0 ? 'text-amber-600 font-semibold' : 'text-emerald-600'}>
+                      ₹{fmt(row.outstanding_balance)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <span className={(row.overdue_amount || 0) > 0 ? 'text-rose-700 font-semibold' : 'text-emerald-600'}>
+                      ₹{fmt(row.overdue_amount)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-slate-50 text-xs">
+              <tr className="font-bold text-slate-900">
+                <td className="px-3 py-2.5" colSpan={2}>Total — {filtered.length} account{filtered.length !== 1 ? 's' : ''}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700">₹{fmt(filtered.reduce((s, r) => s + (r.gross_invoice_total || 0), 0))}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">—</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-purple-600">₹{fmt(filtered.reduce((s, r) => s + (r.bottle_credit || 0), 0))}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">—</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">—</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-amber-600" data-testid="collections-total-outstanding">₹{fmt(filtered.reduce((s, r) => s + (r.outstanding_balance || 0), 0))}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-rose-700">₹{fmt(filtered.reduce((s, r) => s + (r.overdue_amount || 0), 0))}</td>
               </tr>
             </tfoot>
           </table>

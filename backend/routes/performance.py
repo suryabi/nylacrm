@@ -1521,3 +1521,149 @@ async def upsert_focus_leads(
         upsert=True,
     )
     return {"ok": True, "count": len(unique_ids), "lead_ids": unique_ids}
+
+
+
+# ════════════════════════════════════════════════════════════════════
+# Top-10 Priorities — Collections / Outstanding (per resource)
+# ════════════════════════════════════════════════════════════════════
+
+
+def _collections_time_range(time_filter: str):
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    now = _dt.now(_tz.utc)
+    if time_filter == 'this_month':
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return start, now
+    if time_filter == 'last_month':
+        first = now.replace(day=1)
+        last_month_end = first - _td(days=1)
+        start = last_month_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return start, last_month_end.replace(hour=23, minute=59, second=59)
+    if time_filter == 'this_quarter':
+        q = (now.month - 1) // 3
+        return now.replace(month=q * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0), now
+    if time_filter == 'this_year':
+        return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0), now
+    # lifetime
+    return None, None
+
+
+@router.get("/account-collections")
+async def account_collections(
+    resource_ids: str = "",
+    time_filter: str = "lifetime",
+    current_user: dict = Depends(get_current_user),
+):
+    """Returns accounts assigned to selected resource(s) with the same fields
+    shown in the Account Performance report (gross/net invoice totals, bottle
+    credit, contribution %, average order, last payment, outstanding, overdue).
+    """
+    tenant_id = get_current_tenant_id()
+    rids = [r for r in (resource_ids or "").split(",") if r]
+
+    acc_q = {"tenant_id": tenant_id}
+    if rids:
+        acc_q["assigned_to"] = {"$in": rids}
+    accounts = await db.accounts.find(acc_q, {"_id": 0}).to_list(2000)
+
+    start_date, end_date = _collections_time_range(time_filter)
+    inv_q = {"tenant_id": tenant_id}
+    if start_date and end_date:
+        inv_q["created_at"] = {"$gte": start_date.isoformat(), "$lte": end_date.isoformat()}
+    invoices = await db.invoices.find(inv_q, {"_id": 0}).to_list(20000)
+
+    # Aggregate invoice metrics per account (match by lead_id or fuzzy customer_name)
+    inv_agg = {}
+    for inv in invoices:
+        lead_id = inv.get("lead_id")
+        cust_name = (inv.get("customer_name") or "").lower().strip()
+        for acc in accounts:
+            acc_id = acc.get("account_id") or acc.get("id")
+            if not acc_id:
+                continue
+            acc_lead_id = acc.get("lead_id")
+            acc_name = (acc.get("account_name") or "").lower().strip()
+            matched = False
+            if lead_id and acc_lead_id and lead_id == acc_lead_id:
+                matched = True
+            elif cust_name and acc_name and (cust_name in acc_name or acc_name in cust_name):
+                matched = True
+            if matched:
+                bucket = inv_agg.setdefault(acc_id, {
+                    "gross_total": 0, "net_total": 0, "bottle_credit": 0, "invoice_count": 0,
+                })
+                bucket["gross_total"] += inv.get("gross_amount", inv.get("total_amount", 0)) or 0
+                bucket["net_total"] += inv.get("net_amount", inv.get("total_amount", 0)) or 0
+                bucket["bottle_credit"] += inv.get("bottle_credit", 0) or 0
+                bucket["invoice_count"] += 1
+                break
+
+    # Filtered total for contribution %
+    filtered_total_gross = sum(b["gross_total"] for b in inv_agg.values()) or 0
+
+    rows = []
+    summary_gross = summary_net = summary_credit = summary_outstanding = summary_overdue = 0
+    for acc in accounts:
+        acc_id = acc.get("account_id") or acc.get("id")
+        if not acc_id:
+            continue
+        agg = inv_agg.get(acc_id, {"gross_total": 0, "net_total": 0, "bottle_credit": 0, "invoice_count": 0})
+        contribution_pct = round((agg["gross_total"] / filtered_total_gross * 100), 2) if filtered_total_gross > 0 else 0
+        avg_order = round(agg["gross_total"] / agg["invoice_count"], 2) if agg["invoice_count"] > 0 else 0
+        sku_pricing = acc.get("sku_pricing") or []
+        estimated_credit = sum((sku.get("return_bottle_credit") or 0) for sku in sku_pricing)
+        bottle_credit = agg["bottle_credit"] if agg["bottle_credit"] > 0 else estimated_credit
+
+        outstanding = acc.get("outstanding_balance", 0) or 0
+        overdue = acc.get("overdue_amount", 0) or 0
+        last_payment_amount = acc.get("last_payment_amount", 0) or 0
+        last_payment_date = acc.get("last_payment_date", "")
+
+        rows.append({
+            "account_id": acc_id,
+            "account_name": acc.get("account_name", "Unknown"),
+            "account_type": acc.get("account_type", ""),
+            "territory": acc.get("territory", ""),
+            "state": acc.get("state", ""),
+            "city": acc.get("city", ""),
+            "assigned_to": acc.get("assigned_to"),
+            "gross_invoice_total": round(agg["gross_total"], 2),
+            "net_invoice_total": round(agg["net_total"], 2),
+            "bottle_credit": round(bottle_credit, 2),
+            "contribution_pct": contribution_pct,
+            "average_order_amount": avg_order,
+            "outstanding_balance": round(outstanding, 2),
+            "overdue_amount": round(overdue, 2),
+            "last_payment_amount": round(last_payment_amount, 2),
+            "last_payment_date": last_payment_date,
+            "invoice_count": agg["invoice_count"],
+        })
+
+        summary_gross += agg["gross_total"]
+        summary_net += agg["net_total"]
+        summary_credit += bottle_credit
+        summary_outstanding += outstanding
+        summary_overdue += overdue
+
+    # Sort by outstanding desc (most-needs-attention first), then by gross
+    rows.sort(key=lambda r: (-(r["outstanding_balance"] or 0), -(r["gross_invoice_total"] or 0)))
+
+    total_invoice_count = sum(r["invoice_count"] for r in rows)
+    overall_avg_order = round(summary_gross / total_invoice_count, 2) if total_invoice_count > 0 else 0
+
+    return {
+        "time_filter": time_filter,
+        "resource_ids": rids,
+        "accounts": rows,
+        "summary": {
+            "account_count": len(rows),
+            "total_gross": round(summary_gross, 2),
+            "total_net": round(summary_net, 2),
+            "total_bottle_credit": round(summary_credit, 2),
+            "total_outstanding": round(summary_outstanding, 2),
+            "total_overdue": round(summary_overdue, 2),
+            "average_order_amount": overall_avg_order,
+            "total_invoice_count": total_invoice_count,
+        },
+    }
