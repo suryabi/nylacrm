@@ -2252,11 +2252,6 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
                           <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${statusBadgeClasses(lead.status)}`}>
                             {formatStatusLabel(lead.status)}
                           </Badge>
-                          {lead.priority && (
-                            <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${priorityBadgeClasses(lead.priority)}`}>
-                              {lead.priority}
-                            </Badge>
-                          )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -2287,7 +2282,6 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
                 <th className="px-3 py-2 text-left font-semibold">Lead</th>
                 <th className="px-3 py-2 text-left font-semibold">City</th>
                 <th className="px-3 py-2 text-left font-semibold">Status</th>
-                <th className="px-3 py-2 text-left font-semibold">Priority</th>
                 <th className="px-3 py-2 text-right font-semibold">Est. Monthly Revenue (₹)</th>
                 {isEditable && <th className="w-10"></th>}
               </tr>
@@ -2305,13 +2299,6 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
                     <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${statusBadgeClasses(lead.status)}`}>
                       {formatStatusLabel(lead.status)}
                     </Badge>
-                  </td>
-                  <td className="px-3 py-2">
-                    {lead.priority ? (
-                      <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${priorityBadgeClasses(lead.priority)}`}>
-                        {lead.priority}
-                      </Badge>
-                    ) : <span className="text-slate-300 text-xs">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700">₹{fmt(lead.estimated_monthly_revenue)}</td>
                   {isEditable && (
@@ -2331,7 +2318,7 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
             </tbody>
             <tfoot className="bg-slate-50 text-xs">
               <tr className="font-semibold text-slate-900">
-                <td className="px-3 py-2" colSpan={5}>
+                <td className="px-3 py-2" colSpan={4}>
                   Total — {selectedLeads.length} lead{selectedLeads.length !== 1 ? 's' : ''}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums" data-testid="focus-leads-total-revenue">₹{fmt(totalRevenue)}</td>
