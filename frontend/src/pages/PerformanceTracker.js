@@ -1198,6 +1198,7 @@ function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isL
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 hover:bg-slate-50 transition-colors"
+        data-testid="top10-priorities-toggle"
       >
         <div className="p-1.5 bg-amber-100 rounded-sm">
           <Star className="h-4 w-4 text-amber-700" />

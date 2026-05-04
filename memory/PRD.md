@@ -20,6 +20,16 @@
 - [x] **Testing**: iteration_156 — 15/15 backend pytest + full frontend Playwright pass. Pytest at `backend/tests/test_sampling_trials.py`.
 
 
+
+### Performance Tracker — Top 10 Priorities: Top 5 Leads to Focus sub-section (2026-05-04)
+- [x] **New 3rd sub-tab** "Top 5 Leads to Focus" in Top 10 Priorities (alongside Case Targets and Sampling / Trials). User picks any number of leads assigned to them (no cap) to focus on for the period.
+- [x] **Scope**: Per-month selection saved per (tenant_id, year, month, resource_id). Single-resource filter → editable; multi-resource filter → read-only union view.
+- [x] **UI**: Picker dialog with search by lead name/city, per-row status + priority badges and est. monthly revenue. Selection grid shows #, Lead (name + lead_id), City, Status, Priority, Est. Monthly Revenue (₹), with footer row showing total revenue and lead count. Remove per-row, Reset/Save actions when dirty.
+- [x] **Backend**: `GET /api/performance/focus-leads?year=X&month=Y&resource_ids=Z` returns `{leads, selected_lead_ids, is_editable, totals}`. `POST /api/performance/focus-leads` upserts selection with de-duplication preserving order. Collection: `focus_leads` (unique key tenant_id + year + month + resource_id).
+- [x] **Validations**: month in 1..12 (400), resource_id required on POST (400).
+- [x] **Files**: `backend/routes/performance.py` (new endpoints + helpers + FocusLeadsUpsert model), `frontend/src/pages/PerformanceTracker.js` (new `FocusLeadsSubsection`, added 3rd SubTab, added `top10-priorities-toggle` data-testid for automation).
+- [x] **Testing**: iteration_157 — 15/15 backend pytest pass. Pytest at `backend/tests/test_focus_leads.py`. Frontend data-testids verified via code review; UI rendering pattern identical to iteration 156.
+
 ## Completed Features
 
 ### Distribution Module
