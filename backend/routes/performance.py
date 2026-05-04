@@ -448,13 +448,13 @@ async def generate_performance(
     
     metrics = await compute_metrics(tenant_id, resource_ids, plan_id, month, year)
     
-    # Check for existing saved record (only for single resource with a plan)
-    if len(resource_ids) == 1 and plan_id:
+    # Check for existing saved record (only for single resource — plan_id may be None for Month mode)
+    if len(resource_ids) == 1:
         existing = await db.monthly_performance.find_one(
             {
                 "tenant_id": tenant_id,
                 "resource_id": resource_ids[0],
-                "plan_id": plan_id,
+                "plan_id": plan_id if plan_id else None,
                 "month": month,
                 "year": year
             },
@@ -493,13 +493,13 @@ async def save_performance(
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
     
-    plan_id = data.get("plan_id")
+    plan_id = data.get("plan_id") or None
     resource_id = data.get("resource_id")
     month = data.get("month")
     year = data.get("year")
     
-    if not all([plan_id, resource_id, month, year]):
-        raise HTTPException(status_code=400, detail="plan_id, resource_id, month, year are required")
+    if not all([resource_id, month, year]):
+        raise HTTPException(status_code=400, detail="resource_id, month, year are required")
     
     existing = await db.monthly_performance.find_one(
         {"tenant_id": tenant_id, "resource_id": resource_id, "plan_id": plan_id, "month": month, "year": year}

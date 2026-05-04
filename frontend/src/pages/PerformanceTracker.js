@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -231,6 +232,10 @@ export default function PerformanceTracker() {
 
   const saveRecord = async (submitAfter = false) => {
     if (!data) return;
+    if (!selectedResource[0]) {
+      toast.error('Pick at least one resource before saving');
+      return;
+    }
     setSaving(true);
     try {
       const body = {
@@ -258,9 +263,13 @@ export default function PerformanceTracker() {
           const saved = await res.json();
           await fetch(`${API_URL}/api/performance/${saved.id}/submit`, { method: 'POST', headers });
         }
+        toast.success('Saved');
         generate();
+      } else {
+        const err = await res.text();
+        toast.error(`Save failed: ${err.slice(0, 200)}`);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error(e); toast.error('Save failed: ' + (e.message || 'network error')); }
     finally { setSaving(false); }
   };
 
