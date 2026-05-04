@@ -1441,20 +1441,21 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
             </tr>
           </thead>
           <tbody>
-            {data.accounts.map((acc) => {
+            {data.accounts.map((acc, idx) => {
               const isOpen = expanded[acc.account_id] !== false; // default open
               const ach = acc.achievement_pct;
+              const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
               return (
                 <React.Fragment key={acc.account_id}>
                   <tr
-                    className="border-t border-slate-100 hover:bg-amber-50/30 cursor-pointer group"
+                    className={`border-t border-slate-100 ${rowBg} hover:bg-amber-50/30 cursor-pointer group`}
                     onClick={() => setExpanded(p => ({ ...p, [acc.account_id]: !isOpen }))}
                     data-testid={`case-account-${acc.account_id}`}
                   >
-                    <td className="px-2 py-3 text-center sticky left-0 bg-white group-hover:bg-amber-50/30 transition-colors">
+                    <td className={`px-2 py-3 text-center sticky left-0 ${rowBg} group-hover:bg-amber-50/30 transition-colors`}>
                       {isOpen ? <ChevronDown className="h-4 w-4 text-slate-500 inline" /> : <ChevronRight className="h-4 w-4 text-slate-400 inline" />}
                     </td>
-                    <td className="px-3 py-3 sticky left-8 bg-white group-hover:bg-amber-50/30 transition-colors min-w-[220px] max-w-[280px]">
+                    <td className={`px-3 py-3 sticky left-8 ${rowBg} group-hover:bg-amber-50/30 transition-colors min-w-[220px] max-w-[280px]`}>
                       <p className="text-sm font-semibold text-slate-900 truncate" title={acc.account_name}>{acc.account_name}</p>
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-600">{fmt(acc.totals?.last_month_cases || 0)}</td>
@@ -1489,12 +1490,13 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
                               </tr>
                             </thead>
                             <tbody>
-                              {acc.rows.map((r) => {
+                              {acc.rows.map((r, sIdx) => {
                                 const k = cellKey(acc.account_id, r.sku);
                                 const dirty = isDraftDirty(acc.account_id, r.sku, r.target_cases);
                                 const saving = savingKey === k;
+                                const skuBg = sIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
                                 return (
-                                  <tr key={r.sku} className="border-t border-slate-200 hover:bg-amber-50/30 bg-white" onClick={(e) => e.stopPropagation()}>
+                                  <tr key={r.sku} className={`border-t border-slate-200 hover:bg-amber-50/30 ${skuBg}`} onClick={(e) => e.stopPropagation()}>
                                     <td className="pl-12 pr-3 py-2 font-medium text-slate-800 whitespace-nowrap">{r.sku}</td>
                                     <td className="px-3 py-2 text-right tabular-nums text-slate-600 whitespace-nowrap">{r.price_per_unit ? r.price_per_unit.toLocaleString('en-IN') : '—'}</td>
                                     <td className="px-3 py-2 text-right tabular-nums text-slate-600 whitespace-nowrap">{fmt(r.last_month_cases ?? r.default_target_cases ?? 0)}</td>
@@ -2030,21 +2032,22 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
               </tr>
             </thead>
             <tbody>
-              {trials.map((t) => {
+              {trials.map((t, idx) => {
                 const meta = statusMeta(t.status);
                 const isExpanded = !!expandedTrials[t.id];
                 const toggleExpand = () => setExpandedTrials(prev => ({ ...prev, [t.id]: !prev[t.id] }));
+                const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
                 return (
                   <React.Fragment key={t.id}>
                     <tr
-                      className="border-t border-slate-100 hover:bg-amber-50/30 cursor-pointer group"
+                      className={`border-t border-slate-100 ${rowBg} hover:bg-amber-50/30 cursor-pointer group`}
                       onClick={toggleExpand}
                       data-testid={`sampling-trial-${t.id}`}
                     >
-                      <td className="px-2 py-3 text-center sticky left-0 bg-white group-hover:bg-amber-50/30 transition-colors" data-testid={`sampling-trial-toggle-${t.id}`}>
+                      <td className={`px-2 py-3 text-center sticky left-0 ${rowBg} group-hover:bg-amber-50/30 transition-colors`} data-testid={`sampling-trial-toggle-${t.id}`}>
                         {isExpanded ? <ChevronDown className="h-4 w-4 text-slate-500 inline" /> : <ChevronRight className="h-4 w-4 text-slate-400 inline" />}
                       </td>
-                      <td className="px-3 py-3 sticky left-8 bg-white group-hover:bg-amber-50/30 transition-colors min-w-[220px] max-w-[280px]">
+                      <td className={`px-3 py-3 sticky left-8 ${rowBg} group-hover:bg-amber-50/30 transition-colors min-w-[220px] max-w-[280px]`}>
                         <p className="text-sm font-semibold text-slate-900 truncate" title={t.lead_name || ''}>{t.lead_name || '—'}</p>
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
@@ -2056,7 +2059,7 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
                       <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-600">{t.duration_days || 0} day{t.duration_days === 1 ? '' : 's'}</td>
                       <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-bold text-emerald-700">₹{fmt(t.total_amount || 0)}</td>
                       {!isLocked && (
-                        <td className="px-2 py-3 text-right sticky right-0 bg-white group-hover:bg-amber-50/30 transition-colors">
+                        <td className={`px-2 py-3 text-right sticky right-0 ${rowBg} group-hover:bg-amber-50/30 transition-colors`}>
                           <div className="flex items-center justify-end gap-1">
                             <button onClick={(e) => { e.stopPropagation(); openEditForm(t); }} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900" data-testid={`sampling-edit-${t.id}`}>
                               <Pencil className="h-3.5 w-3.5" />
@@ -2394,10 +2397,12 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
               </tr>
             </thead>
             <tbody>
-              {selectedLeads.map((lead, idx) => (
-                <tr key={lead.id} className="border-t border-slate-100 hover:bg-amber-50/30 group" data-testid={`focus-lead-row-${lead.id}`}>
-                  <td className="px-3 py-3 tabular-nums text-slate-400 text-xs sticky left-0 bg-white group-hover:bg-amber-50/30 transition-colors">{idx + 1}</td>
-                  <td className="px-3 py-3 sticky left-10 bg-white group-hover:bg-amber-50/30 transition-colors min-w-[260px] max-w-[320px]">
+              {selectedLeads.map((lead, idx) => {
+                const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
+                return (
+                <tr key={lead.id} className={`border-t border-slate-100 ${rowBg} hover:bg-amber-50/30 group`} data-testid={`focus-lead-row-${lead.id}`}>
+                  <td className={`px-3 py-3 tabular-nums text-slate-400 text-xs sticky left-0 ${rowBg} group-hover:bg-amber-50/30 transition-colors`}>{idx + 1}</td>
+                  <td className={`px-3 py-3 sticky left-10 ${rowBg} group-hover:bg-amber-50/30 transition-colors min-w-[260px] max-w-[320px]`}>
                     <p className="text-sm font-semibold text-slate-900 truncate" title={lead.name}>{lead.name}</p>
                     {lead.lead_id && <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{lead.lead_id}</p>}
                   </td>
@@ -2408,7 +2413,7 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700">₹{fmt(lead.estimated_monthly_revenue)}</td>
                   {isEditable && (
-                    <td className="px-2 py-3 text-right sticky right-0 bg-white group-hover:bg-amber-50/30 transition-colors">
+                    <td className={`px-2 py-3 text-right sticky right-0 ${rowBg} group-hover:bg-amber-50/30 transition-colors`}>
                       <button
                         onClick={() => removeLead(lead.id)}
                         className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600"
@@ -2420,7 +2425,8 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
             <tfoot className="bg-slate-50 text-xs">
               <tr className="font-semibold text-slate-900">
@@ -2552,15 +2558,17 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row, idx) => (
+              {filtered.map((row, idx) => {
+                const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
+                return (
                 <tr
                   key={row.account_id || idx}
-                  className="border-t border-slate-100 hover:bg-amber-50/30 cursor-pointer"
+                  className={`border-t border-slate-100 ${rowBg} hover:bg-amber-50/30 cursor-pointer group`}
                   onClick={() => navigate(`/accounts/${row.account_id}`)}
                   data-testid={`collections-row-${row.account_id}`}
                 >
-                  <td className="px-4 py-3 sticky left-0 bg-white hover:bg-amber-50/30 transition-colors">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{row.account_name}</p>
+                  <td className={`px-4 py-3 sticky left-0 ${rowBg} group-hover:bg-amber-50/30 transition-colors`}>
+                    <p className="text-sm font-semibold text-slate-900 truncate" title={row.account_name}>{row.account_name}</p>
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700">₹{fmt(row.gross_invoice_total)}</td>
                   <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-blue-600">₹{fmt(row.net_invoice_total)}</td>
@@ -2591,7 +2599,8 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
                     </span>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
             <tfoot className="bg-slate-50 text-xs">
               <tr className="font-bold text-slate-900">
