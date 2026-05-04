@@ -21,6 +21,16 @@
 
 
 
+### Performance Tracker — Top 10 Priorities: Collections / Outstanding sub-tab (2026-05-04)
+- [x] **Removed** the old top-level "Collections / Outstanding" section from the Performance Tracker main body (was rendered between Account Metrics and Activity Metrics).
+- [x] **Added** as a new 4th sub-tab inside Top 10 Priorities (alongside Case Targets, Sampling/Trials, Top 5 Leads to Focus). Shows all accounts assigned to the selected sales resource(s).
+- [x] **Same fields as Account Performance report**: Account (name + city/state + id), Type, Invoice Value (gross + net), Avg Order (with order count), Bottle Credit, Contribution %, Last Payment (amount + date), Outstanding, Overdue.
+- [x] **Toolbar**: Time filter (Lifetime / This Month / Last Month / This Quarter / This Year — narrows invoice aggregation only, not the account list) + search by name/id/city/state. 6 summary cards on top, sortable footer totals. Row click navigates to `/accounts/{id}`.
+- [x] **Backend**: `GET /api/performance/account-collections?resource_ids=...&time_filter=...` returns `{accounts, summary, time_filter, resource_ids}`. Sort: outstanding desc → gross desc. Reuses logic from `/reports/account-performance` with `accounts.assigned_to ∈ resource_ids` filter.
+- [x] **Files**: `backend/routes/performance.py` (new endpoint + helper `_collections_time_range`), `frontend/src/pages/PerformanceTracker.js` (new `CollectionsSubsection`, removed old outstanding-section block, added 4th SubTab + `Wallet` icon).
+- [x] **Testing**: iteration_158 — 21/21 backend pytest pass + full frontend flow verified (sub-tab navigation, table rendering, row click → /accounts/{id}). Pytest: `backend/tests/test_account_collections.py`.
+
+
 ### Performance Tracker — Top 10 Priorities: Top 5 Leads to Focus sub-section (2026-05-04)
 - [x] **New 3rd sub-tab** "Top 5 Leads to Focus" in Top 10 Priorities (alongside Case Targets and Sampling / Trials). User picks any number of leads assigned to them (no cap) to focus on for the period.
 - [x] **Scope**: Per-month selection saved per (tenant_id, year, month, resource_id). Single-resource filter → editable; multi-resource filter → read-only union view.

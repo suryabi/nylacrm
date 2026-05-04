@@ -2386,10 +2386,15 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
     try {
       const ridParam = resourceIdsKey ? `&resource_ids=${resourceIdsKey}` : '';
       const res = await fetch(`${API_URL}/api/performance/account-collections?time_filter=${timeFilter}${ridParam}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       setData(d);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error('Failed to load collections:', e);
+      setData({ accounts: [], summary: {} });
+    } finally {
+      setLoading(false);
+    }
   }, [resourceIdsKey, timeFilter, authHeaders]);
 
   useEffect(() => { load(); }, [load]);
