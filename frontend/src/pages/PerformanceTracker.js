@@ -2383,14 +2383,6 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
 // (Same fields as the Account Performance report, scoped to selected resources)
 // ════════════════════════════════════════════════════════════════════
 
-const TIME_FILTER_OPTIONS = [
-  { value: 'lifetime', label: 'Lifetime' },
-  { value: 'this_month', label: 'This Month' },
-  { value: 'last_month', label: 'Last Month' },
-  { value: 'this_quarter', label: 'This Quarter' },
-  { value: 'this_year', label: 'This Year' },
-];
-
 const formatDateShort = (iso) => {
   if (!iso) return '—';
   try {
@@ -2403,7 +2395,6 @@ const formatDateShort = (iso) => {
 function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [timeFilter, setTimeFilter] = useState('lifetime');
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
 
@@ -2417,7 +2408,7 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
     setLoading(true);
     try {
       const ridParam = resourceIdsKey ? `&resource_ids=${resourceIdsKey}` : '';
-      const res = await fetch(`${API_URL}/api/performance/account-collections?time_filter=${timeFilter}${ridParam}`, { headers: authHeaders() });
+      const res = await fetch(`${API_URL}/api/performance/account-collections?time_filter=lifetime${ridParam}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       setData(d);
@@ -2427,7 +2418,7 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
     } finally {
       setLoading(false);
     }
-  }, [resourceIdsKey, timeFilter, authHeaders]);
+  }, [resourceIdsKey, authHeaders]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -2465,23 +2456,13 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Select value={timeFilter} onValueChange={setTimeFilter}>
-            <SelectTrigger className="h-9 w-44 bg-white" data-testid="collections-time-filter">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TIME_FILTER_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search account, city, state..."
-            className="h-9 w-64 bg-white"
-            data-testid="collections-search"
-          />
-        </div>
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search account, city, state..."
+          className="h-9 w-64 bg-white"
+          data-testid="collections-search"
+        />
         <div className="text-xs text-slate-500">{filtered.length} of {accounts.length} accounts</div>
       </div>
 
