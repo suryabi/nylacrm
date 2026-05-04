@@ -1347,35 +1347,35 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
   }
 
   const t = data.totals || {};
+  const prevLabel = data.previous_month_label || 'Last Month';
+  const curLabel = data.month_label || `${MONTH_NAMES[month - 1]} ${year}`;
 
   // Aggregate footer totals
+  const footerLastMonth = data.accounts.reduce((s, a) => s + (a.totals?.last_month_cases || 0), 0);
   const footerCurrentCases = data.accounts.reduce((s, a) => s + (a.totals?.current_cases || 0), 0);
   const footerTargetCases = data.accounts.reduce((s, a) => s + (a.totals?.target_cases || 0), 0);
-  const footerCurrentValue = data.accounts.reduce((s, a) => s + (a.totals?.current_value || 0), 0);
-  const footerTargetValue = data.accounts.reduce((s, a) => s + (a.totals?.target_value || 0), 0);
 
   return (
     <div className="space-y-4" data-testid="case-targets-subsection">
       {/* Roll-up summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         <SummaryStat label="Accounts" value={data.accounts.length} sub="with pricing" />
-        <SummaryStat label="Cases — Current / Target" value={`${fmt(t.current_cases)} / ${fmt(t.target_cases)}`} sub={`${fmtPct(t.current_cases && t.target_cases ? (t.current_cases / t.target_cases) * 100 : 0)}`} />
-        <SummaryStat label="Pipeline — Current" value={`₹${fmt(t.current_value)}`} sub="invoiced + delivered" />
-        <SummaryStat label="Pipeline — Target" value={`₹${fmt(t.target_value)}`} sub={`Achievement ${fmtPct(t.achievement_pct || 0)}`} highlight={t.achievement_pct >= 100 ? 'green' : t.achievement_pct >= 70 ? 'amber' : 'red'} />
+        <SummaryStat label={`Last Month (${prevLabel})`} value={fmt(t.last_month_cases || 0)} sub="cases sold" />
+        <SummaryStat label={`Target — ${curLabel}`} value={fmt(t.target_cases || 0)} sub={`Pipeline ₹${fmt(t.target_value || 0)}`} />
+        <SummaryStat label="Achieved So Far" value={fmt(t.current_cases || 0)} sub={`${fmtPct(t.achievement_pct || 0)} achieved`} highlight={t.achievement_pct >= 100 ? 'green' : t.achievement_pct >= 70 ? 'amber' : 'red'} />
       </div>
 
       {/* Accounts table — same style as Collections grid */}
       <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="case-targets-table">
-        <table className="w-full text-sm" style={{ minWidth: '1000px' }}>
+        <table className="w-full text-sm" style={{ minWidth: '780px' }}>
           <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
             <tr>
               <th className="px-2 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10 w-8"></th>
               <th className="px-3 py-3 text-left font-semibold sticky left-8 bg-slate-50 z-10 min-w-[220px] max-w-[280px]">Account</th>
-              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Current Cases</th>
-              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Target Cases</th>
-              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Current Value</th>
-              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Target Value</th>
-              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Achievement</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap" title={prevLabel}>Last Month</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">This Month Target</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Achieved So Far</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">%</th>
             </tr>
           </thead>
           <tbody>
@@ -1395,10 +1395,9 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
                     <td className="px-3 py-3 sticky left-8 bg-white group-hover:bg-amber-50/30 transition-colors min-w-[220px] max-w-[280px]">
                       <p className="text-sm font-semibold text-slate-900 truncate" title={acc.account_name}>{acc.account_name}</p>
                     </td>
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-slate-900">{fmt(acc.totals.current_cases)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-slate-900">{fmt(acc.totals.target_cases)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-emerald-700">₹{fmt(acc.totals.current_value)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-blue-600">₹{fmt(acc.totals.target_value)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-600">{fmt(acc.totals?.last_month_cases || 0)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-blue-600">{fmt(acc.totals.target_cases)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700">{fmt(acc.totals.current_cases)}</td>
                     <td className="px-3 py-3 text-right whitespace-nowrap">
                       {ach != null ? (
                         <Badge variant="outline" className={`tabular-nums text-[10px] font-bold ${
@@ -1412,18 +1411,18 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
 
                   {isOpen && (
                     <tr data-testid={`case-account-detail-${acc.account_id}`}>
-                      <td colSpan={7} className="p-0 bg-slate-50/40 border-t border-slate-200">
+                      <td colSpan={6} className="p-0 bg-slate-50/40 border-t border-slate-200">
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm" data-testid={`case-table-${acc.account_id}`}>
                             <thead className="bg-slate-100/70 text-[10px] uppercase tracking-wider text-slate-500">
                               <tr>
                                 <th className="pl-12 pr-3 py-2 text-left font-semibold">SKU</th>
                                 <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Price (₹)</th>
-                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Current</th>
-                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Target</th>
-                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Curr Pipeline</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Last Month</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">This Month Target</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Achieved</th>
                                 <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Tgt Pipeline</th>
-                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Ach %</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">%</th>
                                 <th className="px-3 py-2 text-right font-semibold w-[110px]"></th>
                               </tr>
                             </thead>
@@ -1436,7 +1435,7 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
                                   <tr key={r.sku} className="border-t border-slate-200 hover:bg-amber-50/30 bg-white" onClick={(e) => e.stopPropagation()}>
                                     <td className="pl-12 pr-3 py-2 font-medium text-slate-800 whitespace-nowrap">{r.sku}</td>
                                     <td className="px-3 py-2 text-right tabular-nums text-slate-600 whitespace-nowrap">{r.price_per_unit ? r.price_per_unit.toLocaleString('en-IN') : '—'}</td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-slate-900 font-semibold whitespace-nowrap">{fmt(r.current_cases)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-600 whitespace-nowrap">{fmt(r.last_month_cases ?? r.default_target_cases ?? 0)}</td>
                                     <td className="px-3 py-2 text-right whitespace-nowrap">
                                       <Input
                                         type="text"
@@ -1450,7 +1449,7 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
                                         data-testid={`case-target-input-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
                                       />
                                     </td>
-                                    <td className="px-3 py-2 text-right tabular-nums text-slate-700 whitespace-nowrap">₹{fmt(r.current_pipeline_value)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-900 font-semibold whitespace-nowrap">{fmt(r.current_cases)}</td>
                                     <td className="px-3 py-2 text-right tabular-nums text-slate-700 whitespace-nowrap">₹{fmt(r.target_pipeline_value)}</td>
                                     <td className="px-3 py-2 text-right whitespace-nowrap">
                                       {r.achievement_pct != null ? (
@@ -1496,9 +1495,9 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
                               <tr className="font-semibold text-slate-900">
                                 <td className="pl-12 pr-3 py-2 whitespace-nowrap">Account Subtotal</td>
                                 <td></td>
-                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(acc.totals.current_cases)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(acc.totals?.last_month_cases || 0)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(acc.totals.target_cases)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">₹{fmt(acc.totals.current_value)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(acc.totals.current_cases)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">₹{fmt(acc.totals.target_value)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{acc.achievement_pct != null ? fmtPct(acc.achievement_pct) : '—'}</td>
                                 <td></td>
@@ -1517,10 +1516,9 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
             <tr className="font-bold text-slate-900">
               <td className="px-2 py-3 sticky left-0 bg-slate-50"></td>
               <td className="px-3 py-3 sticky left-8 bg-slate-50 whitespace-nowrap">Total — {data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}</td>
-              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap" data-testid="case-targets-total-current-cases">{fmt(footerCurrentCases)}</td>
-              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap" data-testid="case-targets-total-target-cases">{fmt(footerTargetCases)}</td>
-              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-emerald-700">₹{fmt(footerCurrentValue)}</td>
-              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-blue-600" data-testid="case-targets-total-target-value">₹{fmt(footerTargetValue)}</td>
+              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-600" data-testid="case-targets-total-last-month">{fmt(footerLastMonth)}</td>
+              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-blue-600" data-testid="case-targets-total-target-cases">{fmt(footerTargetCases)}</td>
+              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-emerald-700" data-testid="case-targets-total-current-cases">{fmt(footerCurrentCases)}</td>
               <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{fmtPct(t.achievement_pct || 0)}</td>
             </tr>
           </tfoot>

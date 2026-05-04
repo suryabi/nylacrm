@@ -950,32 +950,34 @@ async def get_account_case_targets(
     override_map = {(o["account_id"], o["sku_name"]): o for o in overrides}
 
     out_accounts = []
-    grand = {"current_cases": 0, "target_cases": 0, "current_value": 0.0, "target_value": 0.0}
+    grand = {"last_month_cases": 0, "current_cases": 0, "target_cases": 0, "current_value": 0.0, "target_value": 0.0}
 
     for acc in accounts:
         acc_id = acc["id"]
         rows = []
-        acc_totals = {"current_cases": 0, "target_cases": 0, "current_value": 0.0, "target_value": 0.0}
+        acc_totals = {"last_month_cases": 0, "current_cases": 0, "target_cases": 0, "current_value": 0.0, "target_value": 0.0}
         for sp in acc.get("sku_pricing") or []:
             sku = sp.get("sku")
             price = float(sp.get("price_per_unit") or 0)
             cur_cases = int(current_cases_map.get((acc_id, sku), 0))
-            default_target = int(prev_cases_map.get((acc_id, sku), 0))
+            last_month_cases = int(prev_cases_map.get((acc_id, sku), 0))
             ov = override_map.get((acc_id, sku))
-            target_cases = int(ov["target_cases"]) if ov else default_target
+            target_cases = int(ov["target_cases"]) if ov else last_month_cases
             cur_val = cur_cases * price
             tgt_val = target_cases * price
             rows.append({
                 "sku": sku,
                 "price_per_unit": price,
+                "last_month_cases": last_month_cases,
                 "current_cases": cur_cases,
-                "default_target_cases": default_target,
+                "default_target_cases": last_month_cases,  # kept for backwards compatibility
                 "target_cases": target_cases,
                 "is_overridden": bool(ov),
                 "current_pipeline_value": cur_val,
                 "target_pipeline_value": tgt_val,
                 "achievement_pct": round((cur_val / tgt_val) * 100, 1) if tgt_val > 0 else None,
             })
+            acc_totals["last_month_cases"] += last_month_cases
             acc_totals["current_cases"] += cur_cases
             acc_totals["target_cases"] += target_cases
             acc_totals["current_value"] += cur_val
@@ -996,6 +998,7 @@ async def get_account_case_targets(
 
     return {
         "month_label": f"{MONTH_NAMES[month - 1]} {year}",
+        "previous_month_label": f"{MONTH_NAMES[prev_month - 1]} {prev_year}",
         "accounts": out_accounts,
         "totals": {
             **grand,
