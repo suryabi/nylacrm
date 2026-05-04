@@ -1348,6 +1348,12 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
 
   const t = data.totals || {};
 
+  // Aggregate footer totals
+  const footerCurrentCases = data.accounts.reduce((s, a) => s + (a.totals?.current_cases || 0), 0);
+  const footerTargetCases = data.accounts.reduce((s, a) => s + (a.totals?.target_cases || 0), 0);
+  const footerCurrentValue = data.accounts.reduce((s, a) => s + (a.totals?.current_value || 0), 0);
+  const footerTargetValue = data.accounts.reduce((s, a) => s + (a.totals?.target_value || 0), 0);
+
   return (
     <div className="space-y-4" data-testid="case-targets-subsection">
       {/* Roll-up summary */}
@@ -1358,147 +1364,167 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
         <SummaryStat label="Pipeline — Target" value={`₹${fmt(t.target_value)}`} sub={`Achievement ${fmtPct(t.achievement_pct || 0)}`} highlight={t.achievement_pct >= 100 ? 'green' : t.achievement_pct >= 70 ? 'amber' : 'red'} />
       </div>
 
-      {/* Account cards */}
-      <div className="space-y-2">
-        {data.accounts.map((acc) => {
-          const isOpen = expanded[acc.account_id] !== false; // default open
-          return (
-            <div key={acc.account_id} className="border border-slate-200 rounded-sm overflow-hidden" data-testid={`case-account-${acc.account_id}`}>
-              <button
-                onClick={() => setExpanded(p => ({ ...p, [acc.account_id]: !isOpen }))}
-                className="w-full p-3 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  {isOpen ? <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 shrink-0" />}
-                  <div className="p-1.5 bg-slate-100 rounded-sm shrink-0">
-                    <Building2 className="h-4 w-4 text-slate-700" />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{acc.account_name}</p>
-                    {acc.city && <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{acc.city}</p>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-                  <div className="text-right hidden sm:block">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Cases</p>
-                    <p className="text-sm font-bold tabular-nums text-slate-900">{fmt(acc.totals.current_cases)} / {fmt(acc.totals.target_cases)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Value</p>
-                    <p className="text-sm font-bold tabular-nums text-slate-900">₹{fmt(acc.totals.current_value)} / ₹{fmt(acc.totals.target_value)}</p>
-                  </div>
-                  <Badge variant="outline" className={`tabular-nums shrink-0 ${
-                    (acc.achievement_pct || 0) >= 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                    (acc.achievement_pct || 0) >= 70 ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                    'bg-rose-50 text-rose-700 border-rose-200'
-                  }`}>
-                    {acc.achievement_pct != null ? fmtPct(acc.achievement_pct) : '—'}
-                  </Badge>
-                </div>
-              </button>
+      {/* Accounts table — same style as Collections grid */}
+      <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="case-targets-table">
+        <table className="w-full text-sm" style={{ minWidth: '1000px' }}>
+          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+            <tr>
+              <th className="px-2 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10 w-8"></th>
+              <th className="px-3 py-3 text-left font-semibold sticky left-8 bg-slate-50 z-10 min-w-[220px] max-w-[280px]">Account</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Current Cases</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Target Cases</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Current Value</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Target Value</th>
+              <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Achievement</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.accounts.map((acc) => {
+              const isOpen = expanded[acc.account_id] !== false; // default open
+              const ach = acc.achievement_pct;
+              return (
+                <React.Fragment key={acc.account_id}>
+                  <tr
+                    className="border-t border-slate-100 hover:bg-amber-50/30 cursor-pointer group"
+                    onClick={() => setExpanded(p => ({ ...p, [acc.account_id]: !isOpen }))}
+                    data-testid={`case-account-${acc.account_id}`}
+                  >
+                    <td className="px-2 py-3 text-center sticky left-0 bg-white group-hover:bg-amber-50/30 transition-colors">
+                      {isOpen ? <ChevronDown className="h-4 w-4 text-slate-500 inline" /> : <ChevronRight className="h-4 w-4 text-slate-400 inline" />}
+                    </td>
+                    <td className="px-3 py-3 sticky left-8 bg-white group-hover:bg-amber-50/30 transition-colors min-w-[220px] max-w-[280px]">
+                      <p className="text-sm font-semibold text-slate-900 truncate" title={acc.account_name}>{acc.account_name}</p>
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-slate-900">{fmt(acc.totals.current_cases)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-slate-900">{fmt(acc.totals.target_cases)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-emerald-700">₹{fmt(acc.totals.current_value)}</td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-blue-600">₹{fmt(acc.totals.target_value)}</td>
+                    <td className="px-3 py-3 text-right whitespace-nowrap">
+                      {ach != null ? (
+                        <Badge variant="outline" className={`tabular-nums text-[10px] font-bold ${
+                          ach >= 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          ach >= 70 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          'bg-rose-50 text-rose-700 border-rose-200'
+                        }`}>{fmtPct(ach)}</Badge>
+                      ) : <span className="text-slate-300 text-xs">—</span>}
+                    </td>
+                  </tr>
 
-              {isOpen && (
-                <div className="border-t border-slate-100 overflow-x-auto">
-                  <table className="w-full text-sm" data-testid={`case-table-${acc.account_id}`}>
-                    <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-semibold">SKU</th>
-                        <th className="px-3 py-2 text-right font-semibold">Price (₹)</th>
-                        <th className="px-3 py-2 text-right font-semibold">Current</th>
-                        <th className="px-3 py-2 text-right font-semibold">Target</th>
-                        <th className="px-3 py-2 text-right font-semibold">Default</th>
-                        <th className="px-3 py-2 text-right font-semibold">Curr&nbsp;Pipeline</th>
-                        <th className="px-3 py-2 text-right font-semibold">Tgt&nbsp;Pipeline</th>
-                        <th className="px-3 py-2 text-right font-semibold">Ach %</th>
-                        <th className="px-3 py-2 text-right font-semibold w-[110px]"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {acc.rows.map((r) => {
-                        const k = cellKey(acc.account_id, r.sku);
-                        const dirty = isDraftDirty(acc.account_id, r.sku, r.target_cases);
-                        const saving = savingKey === k;
-                        return (
-                          <tr key={r.sku} className="border-t border-slate-100 hover:bg-amber-50/30">
-                            <td className="px-3 py-2 font-medium text-slate-800">{r.sku}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">{r.price_per_unit ? r.price_per_unit.toLocaleString('en-IN') : '—'}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-900 font-semibold">{fmt(r.current_cases)}</td>
-                            <td className="px-3 py-2 text-right">
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                value={draftValue(acc.account_id, r.sku, r.target_cases)}
-                                onChange={(e) => setDraft(acc.account_id, r.sku, e.target.value)}
-                                onKeyDown={(e) => { if (e.key === 'Enter' && dirty) saveRow(acc, r); }}
-                                disabled={isLocked || saving}
-                                className={`h-7 w-20 text-right tabular-nums text-xs px-2 ml-auto ${dirty ? 'ring-2 ring-amber-300 border-amber-400' : ''} ${r.is_overridden ? 'bg-amber-50' : ''}`}
-                                data-testid={`case-target-input-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
-                              />
-                            </td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-400 text-xs">{fmt(r.default_target_cases)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">₹{fmt(r.current_pipeline_value)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-700">₹{fmt(r.target_pipeline_value)}</td>
-                            <td className="px-3 py-2 text-right">
-                              {r.achievement_pct != null ? (
-                                <Badge variant="outline" className={`tabular-nums ${
-                                  r.achievement_pct >= 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                                  r.achievement_pct >= 70 ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                  'bg-rose-50 text-rose-700 border-rose-200'
-                                }`}>
-                                  {fmtPct(r.achievement_pct)}
-                                </Badge>
-                              ) : <span className="text-slate-300 text-xs">—</span>}
-                            </td>
-                            <td className="px-3 py-2 text-right">
-                              <div className="flex items-center justify-end gap-1">
-                                {dirty && !isLocked && (
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    className="h-6 px-2 text-[10px] bg-amber-600 hover:bg-amber-700"
-                                    disabled={saving}
-                                    onClick={() => saveRow(acc, r)}
-                                    data-testid={`case-target-save-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
-                                  >
-                                    {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="h-3 w-3 mr-1" />Save</>}
-                                  </Button>
-                                )}
-                                {r.is_overridden && !dirty && !isLocked && (
-                                  <button
-                                    onClick={() => resetRow(acc, r)}
-                                    disabled={saving}
-                                    title="Reset to default (last month sales)"
-                                    className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700"
-                                    data-testid={`case-target-reset-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
-                                  >
-                                    {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot className="bg-slate-50 text-xs">
-                      <tr className="font-semibold text-slate-900">
-                        <td className="px-3 py-2">Totals</td>
-                        <td></td>
-                        <td className="px-3 py-2 text-right tabular-nums">{fmt(acc.totals.current_cases)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{fmt(acc.totals.target_cases)}</td>
-                        <td></td>
-                        <td className="px-3 py-2 text-right tabular-nums">₹{fmt(acc.totals.current_value)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">₹{fmt(acc.totals.target_value)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{acc.achievement_pct != null ? fmtPct(acc.achievement_pct) : '—'}</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                  {isOpen && (
+                    <tr data-testid={`case-account-detail-${acc.account_id}`}>
+                      <td colSpan={7} className="p-0 bg-slate-50/40 border-t border-slate-200">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm" data-testid={`case-table-${acc.account_id}`}>
+                            <thead className="bg-slate-100/70 text-[10px] uppercase tracking-wider text-slate-500">
+                              <tr>
+                                <th className="pl-12 pr-3 py-2 text-left font-semibold">SKU</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Price (₹)</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Current</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Target</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Curr Pipeline</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Tgt Pipeline</th>
+                                <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Ach %</th>
+                                <th className="px-3 py-2 text-right font-semibold w-[110px]"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {acc.rows.map((r) => {
+                                const k = cellKey(acc.account_id, r.sku);
+                                const dirty = isDraftDirty(acc.account_id, r.sku, r.target_cases);
+                                const saving = savingKey === k;
+                                return (
+                                  <tr key={r.sku} className="border-t border-slate-200 hover:bg-amber-50/30 bg-white" onClick={(e) => e.stopPropagation()}>
+                                    <td className="pl-12 pr-3 py-2 font-medium text-slate-800 whitespace-nowrap">{r.sku}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-600 whitespace-nowrap">{r.price_per_unit ? r.price_per_unit.toLocaleString('en-IN') : '—'}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-900 font-semibold whitespace-nowrap">{fmt(r.current_cases)}</td>
+                                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                                      <Input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={draftValue(acc.account_id, r.sku, r.target_cases)}
+                                        onChange={(e) => setDraft(acc.account_id, r.sku, e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' && dirty) saveRow(acc, r); }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        disabled={isLocked || saving}
+                                        className={`h-7 w-20 text-right tabular-nums text-xs px-2 ml-auto ${dirty ? 'ring-2 ring-amber-300 border-amber-400' : ''} ${r.is_overridden ? 'bg-amber-50' : ''}`}
+                                        data-testid={`case-target-input-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
+                                      />
+                                    </td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-700 whitespace-nowrap">₹{fmt(r.current_pipeline_value)}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-slate-700 whitespace-nowrap">₹{fmt(r.target_pipeline_value)}</td>
+                                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                                      {r.achievement_pct != null ? (
+                                        <Badge variant="outline" className={`tabular-nums ${
+                                          r.achievement_pct >= 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                          r.achievement_pct >= 70 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                          'bg-rose-50 text-rose-700 border-rose-200'
+                                        }`}>{fmtPct(r.achievement_pct)}</Badge>
+                                      ) : <span className="text-slate-300 text-xs">—</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                                      <div className="flex items-center justify-end gap-1">
+                                        {dirty && !isLocked && (
+                                          <Button
+                                            size="sm"
+                                            variant="default"
+                                            className="h-6 px-2 text-[10px] bg-amber-600 hover:bg-amber-700"
+                                            disabled={saving}
+                                            onClick={(e) => { e.stopPropagation(); saveRow(acc, r); }}
+                                            data-testid={`case-target-save-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
+                                          >
+                                            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Save className="h-3 w-3 mr-1" />Save</>}
+                                          </Button>
+                                        )}
+                                        {r.is_overridden && !dirty && !isLocked && (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); resetRow(acc, r); }}
+                                            disabled={saving}
+                                            title="Reset to default (last month sales)"
+                                            className="p-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700"
+                                            data-testid={`case-target-reset-${acc.account_id}-${r.sku.replace(/\s+/g, '-')}`}
+                                          >
+                                            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot className="bg-slate-100/50 text-xs">
+                              <tr className="font-semibold text-slate-900">
+                                <td className="pl-12 pr-3 py-2 whitespace-nowrap">Account Subtotal</td>
+                                <td></td>
+                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(acc.totals.current_cases)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(acc.totals.target_cases)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">₹{fmt(acc.totals.current_value)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">₹{fmt(acc.totals.target_value)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{acc.achievement_pct != null ? fmtPct(acc.achievement_pct) : '—'}</td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+          <tfoot className="bg-slate-50 text-xs">
+            <tr className="font-bold text-slate-900">
+              <td className="px-2 py-3 sticky left-0 bg-slate-50"></td>
+              <td className="px-3 py-3 sticky left-8 bg-slate-50 whitespace-nowrap">Total — {data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''}</td>
+              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap" data-testid="case-targets-total-current-cases">{fmt(footerCurrentCases)}</td>
+              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap" data-testid="case-targets-total-target-cases">{fmt(footerTargetCases)}</td>
+              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-emerald-700">₹{fmt(footerCurrentValue)}</td>
+              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-blue-600" data-testid="case-targets-total-target-value">₹{fmt(footerTargetValue)}</td>
+              <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">{fmtPct(t.achievement_pct || 0)}</td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </div>
   );
