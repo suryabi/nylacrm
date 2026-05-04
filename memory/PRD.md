@@ -9,6 +9,17 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Performance Tracker — Top 10 Priorities: Sampling / Trials sub-section (2026-05-04)
+- [x] **New sub-tab** "Sampling / Trials" added alongside "Case Targets" inside the Top 10 Priorities section of Performance Tracker.
+- [x] **Flow**: User picks one of their assigned leads, sets a tentative trial date + duration (days); end date auto-populates as `trial_date + (duration - 1)` days. Status dropdown: Not Started / Trial In Progress / Completed.
+- [x] **SKU grid**: Auto-populated from the lead's `proposed_sku_pricing` (SKU + price per bottle + bottles/crate from `master_skus.units_per_package`). User enters approximate crates; Amount = `crates × bottles/crate × price_per_bottle` computes live per-row and in the footer.
+- [x] **Backend**: `GET /api/performance/sampling-trials` (list leads+trials+totals), `POST /api/performance/sampling-trials`, `PUT /api/performance/sampling-trials/{id}` (recomputes end_date on trial_date/duration change), `DELETE /api/performance/sampling-trials/{id}`. Collection: `sampling_trials` (multi-tenant via tenant_id).
+- [x] **Validations**: duration_days >= 1 (400), status ∈ {not_started, in_progress, completed} (400), lead must exist in same tenant (404).
+- [x] **UI**: Summary cards (Total Trials / In Progress / Completed / Pipeline Amount ₹), in-page form with cancel/save, expandable list rows with SKU breakdown, per-trial edit/delete actions.
+- [x] **Files**: `backend/routes/performance.py` (new endpoints + models at end of file), `frontend/src/pages/PerformanceTracker.js` (new `SamplingTrialsSubsection`).
+- [x] **Testing**: iteration_156 — 15/15 backend pytest + full frontend Playwright pass. Pytest at `backend/tests/test_sampling_trials.py`.
+
+
 ## Completed Features
 
 ### Distribution Module

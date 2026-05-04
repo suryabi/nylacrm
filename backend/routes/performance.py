@@ -1077,15 +1077,6 @@ async def reset_account_case_target(
 SAMPLING_STATUSES = {"not_started", "in_progress", "completed"}
 
 
-def _add_days(iso_date: str, days: int) -> str:
-    """Add N days to a YYYY-MM-DD date string, returning YYYY-MM-DD."""
-    try:
-        d = datetime.strptime(iso_date[:10], "%Y-%m-%d")
-        return (d + timedelta(days=max(0, int(days) - 1 if int(days) > 0 else 0))).strftime("%Y-%m-%d")
-    except Exception:
-        return iso_date
-
-
 def _compute_end_date(trial_date: Optional[str], duration_days: Optional[int]) -> Optional[str]:
     if not trial_date or duration_days is None:
         return None
