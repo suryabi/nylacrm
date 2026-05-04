@@ -1221,6 +1221,9 @@ function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isL
             <SubTab id="sampling_trials" active={activeSub} onClick={setActiveSub} icon={FlaskConical}>
               Sampling / Trials
             </SubTab>
+            <SubTab id="focus_leads" active={activeSub} onClick={setActiveSub} icon={Target}>
+              Top 5 Leads to Focus
+            </SubTab>
           </div>
 
           {activeSub === 'case_targets' && (
@@ -1236,6 +1239,17 @@ function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isL
 
           {activeSub === 'sampling_trials' && (
             <SamplingTrialsSubsection
+              resourceIdsKey={resourceIdsKey}
+              token={token}
+              tenantId={tenantId}
+              isLocked={isLocked}
+            />
+          )}
+
+          {activeSub === 'focus_leads' && (
+            <FocusLeadsSubsection
+              year={year}
+              month={month}
               resourceIdsKey={resourceIdsKey}
               token={token}
               tenantId={tenantId}
@@ -2021,3 +2035,312 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
     </div>
   );
 }
+
+
+// ════════════════════════════════════════════════════════════════════
+// Top 5 Leads to Focus Subsection
+// ════════════════════════════════════════════════════════════════════
+
+const statusBadgeClasses = (status) => {
+  // Generic color mapping for lead statuses; keeps semantics without depending on tenant configs
+  const map = {
+    new: 'bg-slate-100 text-slate-700 border-slate-300',
+    contacted: 'bg-sky-100 text-sky-800 border-sky-300',
+    qualified: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    proposal_shared: 'bg-violet-100 text-violet-800 border-violet-300',
+    proposal_internal_review: 'bg-violet-100 text-violet-800 border-violet-300',
+    negotiation: 'bg-amber-100 text-amber-800 border-amber-300',
+    won: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    lost: 'bg-rose-100 text-rose-800 border-rose-300',
+    on_hold: 'bg-slate-100 text-slate-600 border-slate-300',
+  };
+  return map[status] || 'bg-slate-100 text-slate-700 border-slate-300';
+};
+
+const priorityBadgeClasses = (priority) => {
+  const map = {
+    high: 'bg-rose-100 text-rose-700 border-rose-300',
+    medium: 'bg-amber-100 text-amber-700 border-amber-300',
+    low: 'bg-slate-100 text-slate-600 border-slate-300',
+  };
+  return map[priority] || 'bg-slate-100 text-slate-600 border-slate-300';
+};
+
+const formatStatusLabel = (s) => (s || '—').toString().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, isLocked }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [search, setSearch] = useState('');
+  // draftIds: the in-memory selection (dirty) prior to Save
+  const [draftIds, setDraftIds] = useState([]);
+
+  const authHeaders = useCallback(() => ({
+    Authorization: `Bearer ${token}`,
+    'X-Tenant-ID': tenantId,
+    'Content-Type': 'application/json',
+  }), [token, tenantId]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const ridParam = resourceIdsKey ? `&resource_ids=${resourceIdsKey}` : '';
+      const res = await fetch(`${API_URL}/api/performance/focus-leads?year=${year}&month=${month}${ridParam}`, { headers: authHeaders() });
+      const d = await res.json();
+      setData(d);
+      setDraftIds(d.selected_lead_ids || []);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [year, month, resourceIdsKey, authHeaders]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const leads = data?.leads || [];
+  const isEditable = !!data?.is_editable && !isLocked;
+  const singleResourceId = (data?.resource_ids || [])[0];
+
+  const leadMap = React.useMemo(() => Object.fromEntries(leads.map(l => [l.id, l])), [leads]);
+  const selectedLeads = draftIds.map(id => leadMap[id]).filter(Boolean);
+  const dirty = React.useMemo(() => {
+    const saved = data?.selected_lead_ids || [];
+    if (saved.length !== draftIds.length) return true;
+    return saved.some((id, idx) => id !== draftIds[idx]);
+  }, [data, draftIds]);
+
+  const totalRevenue = selectedLeads.reduce((s, l) => s + Number(l.estimated_monthly_revenue || 0), 0);
+
+  const toggleLead = (leadId) => {
+    setDraftIds(prev => prev.includes(leadId) ? prev.filter(x => x !== leadId) : [...prev, leadId]);
+  };
+
+  const removeLead = (leadId) => {
+    setDraftIds(prev => prev.filter(x => x !== leadId));
+  };
+
+  const save = async () => {
+    if (!isEditable || !singleResourceId) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/performance/focus-leads`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ year, month, resource_id: singleResourceId, lead_ids: draftIds }),
+      });
+      if (res.ok) {
+        await load();
+      } else {
+        const err = await res.text();
+        alert('Failed to save: ' + err);
+      }
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const resetDraft = () => setDraftIds(data?.selected_lead_ids || []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12" data-testid="focus-leads-loading">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  const available = leads.filter(l => !draftIds.includes(l.id));
+  const searchLower = search.trim().toLowerCase();
+  const filtered = searchLower
+    ? available.filter(l => (l.name || '').toLowerCase().includes(searchLower) || (l.city || '').toLowerCase().includes(searchLower))
+    : available;
+
+  return (
+    <div className="space-y-4" data-testid="focus-leads-subsection">
+      {/* Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+        <SummaryStat label="Leads Selected" value={fmt(draftIds.length)} sub={data?.totals?.selected_count != null && dirty ? `${data.totals.selected_count} saved` : 'saved & in sync'} />
+        <SummaryStat label="Total Est. Monthly Revenue" value={`₹${fmt(totalRevenue)}`} sub="based on proposed pricing" highlight={totalRevenue > 0 ? 'green' : undefined} />
+        <SummaryStat label="Period" value={`${MONTH_NAMES[month]} ${year}`} sub={isEditable ? 'Editable' : (data?.resource_ids?.length > 1 ? 'Multi-resource view' : 'Read-only')} />
+      </div>
+
+      {/* Not editable banner */}
+      {!isEditable && (data?.resource_ids || []).length > 1 && (
+        <div className="flex items-start gap-2 p-3 rounded-sm border border-amber-200 bg-amber-50 text-xs text-amber-800" data-testid="focus-leads-readonly-banner">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            Focus leads is saved per resource. You've selected multiple resources, so this shows the <span className="font-semibold">union</span> of their focus lists (read-only). Pick a single resource to edit.
+          </div>
+        </div>
+      )}
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-slate-500">{leads.length} lead{leads.length !== 1 ? 's' : ''} assigned</div>
+        <div className="flex items-center gap-2">
+          {dirty && isEditable && (
+            <>
+              <Button variant="outline" size="sm" className="h-8 text-xs" onClick={resetDraft} data-testid="focus-leads-reset-btn">
+                <RotateCcw className="h-3 w-3 mr-1" /> Reset
+              </Button>
+              <Button size="sm" className="h-8 bg-amber-600 hover:bg-amber-700 text-white text-xs" onClick={save} disabled={saving} data-testid="focus-leads-save-btn">
+                {saving ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Save className="h-3 w-3 mr-1" />}
+                Save Selection
+              </Button>
+            </>
+          )}
+          {isEditable && !showPicker && (
+            <Button
+              size="sm"
+              className="h-8 bg-amber-600 hover:bg-amber-700 text-white text-xs"
+              onClick={() => { setShowPicker(true); setSearch(''); }}
+              data-testid="focus-leads-add-btn"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" /> Add Lead
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Lead picker */}
+      {showPicker && isEditable && (
+        <div className="border border-amber-300 rounded-sm bg-amber-50/40 p-3 sm:p-4 space-y-2" data-testid="focus-leads-picker">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-amber-100 rounded-sm">
+                <Target className="h-4 w-4 text-amber-700" />
+              </div>
+              <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900">Pick leads to focus</h4>
+            </div>
+            <button
+              onClick={() => { setShowPicker(false); setSearch(''); }}
+              className="text-slate-400 hover:text-slate-700"
+              data-testid="focus-leads-picker-close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by lead name or city..."
+            className="h-9 bg-white"
+            data-testid="focus-leads-search"
+          />
+
+          <div className="border border-slate-200 rounded-sm bg-white max-h-80 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500">
+                {available.length === 0 ? 'All assigned leads are already in focus.' : 'No matching leads found.'}
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {filtered.map(lead => (
+                  <li key={lead.id} data-testid={`focus-leads-option-${lead.id}`}>
+                    <button
+                      onClick={() => toggleLead(lead.id)}
+                      className="w-full flex items-center gap-3 p-3 hover:bg-amber-50 text-left transition-colors"
+                    >
+                      <div className="p-1.5 bg-slate-100 rounded-sm shrink-0">
+                        <Building2 className="h-3.5 w-3.5 text-slate-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{lead.name}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          {lead.city && <span className="text-[10px] text-slate-400 uppercase tracking-wider">{lead.city}</span>}
+                          <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${statusBadgeClasses(lead.status)}`}>
+                            {formatStatusLabel(lead.status)}
+                          </Badge>
+                          {lead.priority && (
+                            <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${priorityBadgeClasses(lead.priority)}`}>
+                              {lead.priority}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Est. Monthly</p>
+                        <p className="text-xs font-bold tabular-nums text-emerald-700">₹{fmt(lead.estimated_monthly_revenue)}</p>
+                      </div>
+                      <Plus className="h-4 w-4 text-amber-600 shrink-0" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Selection grid */}
+      {selectedLeads.length === 0 ? (
+        <div className="text-center py-10 text-sm text-slate-500 border border-dashed border-slate-200 rounded-sm" data-testid="focus-leads-empty">
+          No leads selected yet.{isEditable ? <> Click <span className="font-semibold">Add Lead</span> to start building your focus list.</> : ''}
+        </div>
+      ) : (
+        <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="focus-leads-grid">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-3 py-2 text-left font-semibold w-10">#</th>
+                <th className="px-3 py-2 text-left font-semibold">Lead</th>
+                <th className="px-3 py-2 text-left font-semibold">City</th>
+                <th className="px-3 py-2 text-left font-semibold">Status</th>
+                <th className="px-3 py-2 text-left font-semibold">Priority</th>
+                <th className="px-3 py-2 text-right font-semibold">Est. Monthly Revenue (₹)</th>
+                {isEditable && <th className="w-10"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {selectedLeads.map((lead, idx) => (
+                <tr key={lead.id} className="border-t border-slate-100 hover:bg-amber-50/30" data-testid={`focus-lead-row-${lead.id}`}>
+                  <td className="px-3 py-2 tabular-nums text-slate-400 text-xs">{idx + 1}</td>
+                  <td className="px-3 py-2">
+                    <p className="text-sm font-semibold text-slate-900">{lead.name}</p>
+                    {lead.lead_id && <p className="text-[10px] text-slate-400 uppercase tracking-wider">{lead.lead_id}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{lead.city || '—'}</td>
+                  <td className="px-3 py-2">
+                    <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${statusBadgeClasses(lead.status)}`}>
+                      {formatStatusLabel(lead.status)}
+                    </Badge>
+                  </td>
+                  <td className="px-3 py-2">
+                    {lead.priority ? (
+                      <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${priorityBadgeClasses(lead.priority)}`}>
+                        {lead.priority}
+                      </Badge>
+                    ) : <span className="text-slate-300 text-xs">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700">₹{fmt(lead.estimated_monthly_revenue)}</td>
+                  {isEditable && (
+                    <td className="px-2 py-2 text-right">
+                      <button
+                        onClick={() => removeLead(lead.id)}
+                        className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600"
+                        data-testid={`focus-lead-remove-${lead.id}`}
+                        title="Remove from focus"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="bg-slate-50 text-xs">
+              <tr className="font-semibold text-slate-900">
+                <td className="px-3 py-2" colSpan={5}>
+                  Total — {selectedLeads.length} lead{selectedLeads.length !== 1 ? 's' : ''}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums" data-testid="focus-leads-total-revenue">₹{fmt(totalRevenue)}</td>
+                {isEditable && <td></td>}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+

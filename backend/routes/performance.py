@@ -1339,3 +1339,185 @@ async def delete_sampling_trial(
     if res.deleted_count == 0:
         raise HTTPException(404, "Trial not found")
     return {"ok": True}
+
+
+
+# ════════════════════════════════════════════════════════════════════
+# Top-10 Priorities — Focus Leads (Top N Leads to Focus)
+# ════════════════════════════════════════════════════════════════════
+
+
+def _lead_estimated_monthly_revenue(lead: dict) -> float:
+    """Derive estimated monthly revenue from proposed_sku_pricing.
+
+    Uses stored `estimated_monthly_revenue` if present; otherwise computes
+    using lead.estimation.final_monthly * pricing percentages.
+    """
+    stored = lead.get("estimated_monthly_revenue") or (lead.get("estimation") or {}).get("estimated_monthly_revenue")
+    try:
+        if stored is not None:
+            return float(stored)
+    except Exception:
+        pass
+    try:
+        est = lead.get("estimation") or {}
+        monthly_bottles = float(est.get("final_monthly") or est.get("calculated_monthly") or 0)
+        total = 0.0
+        for sp in (lead.get("proposed_sku_pricing") or []):
+            price = sp.get("price_per_unit")
+            if price is None:
+                price = sp.get("proposed_price")
+            pct = sp.get("percentage")
+            if pct is not None and monthly_bottles > 0:
+                total += (monthly_bottles * float(pct or 0) / 100.0) * float(price or 0)
+        return round(total, 2)
+    except Exception:
+        return 0.0
+
+
+async def _focus_leads_enrich(tenant_id: str, resource_ids: List[str]) -> List[dict]:
+    """Return leads assigned to the selected resource(s) with focus-display fields."""
+    q = {"tenant_id": tenant_id}
+    if resource_ids:
+        q["assigned_to"] = {"$in": resource_ids}
+    cursor = db.leads.find(
+        q,
+        {
+            "_id": 0,
+            "id": 1,
+            "lead_id": 1,
+            "company": 1,
+            "city": 1,
+            "status": 1,
+            "priority": 1,
+            "assigned_to": 1,
+            "estimated_value": 1,
+            "estimated_monthly_revenue": 1,
+            "estimation": 1,
+            "proposed_sku_pricing": 1,
+            "next_followup_date": 1,
+        },
+    )
+    out = []
+    async for lead in cursor:
+        out.append({
+            "id": lead.get("id"),
+            "lead_id": lead.get("lead_id"),
+            "name": lead.get("company"),
+            "city": lead.get("city"),
+            "status": lead.get("status"),
+            "priority": lead.get("priority"),
+            "assigned_to": lead.get("assigned_to"),
+            "estimated_monthly_revenue": _lead_estimated_monthly_revenue(lead),
+            "next_followup_date": lead.get("next_followup_date"),
+        })
+    out.sort(key=lambda x: (x.get("name") or "").lower())
+    return out
+
+
+@router.get("/focus-leads")
+async def get_focus_leads(
+    year: int,
+    month: int,
+    resource_ids: str = "",
+    current_user: dict = Depends(get_current_user),
+):
+    """For the Top-10 Priorities → Top N Leads to Focus section.
+
+    Returns all leads assigned to the selected resource(s) plus the current
+    selection for (year, month). If a single resource is selected, we read
+    that resource's selection; if multiple, we return the union (read-only aggregate).
+    """
+    tenant_id = get_current_tenant_id()
+    if not (1 <= month <= 12):
+        raise HTTPException(400, "Invalid month")
+
+    rids = [r for r in (resource_ids or "").split(",") if r]
+    leads = await _focus_leads_enrich(tenant_id, rids)
+
+    sel_query = {"tenant_id": tenant_id, "year": year, "month": month}
+    if rids:
+        sel_query["resource_id"] = {"$in": rids}
+    selections = await db.focus_leads.find(sel_query, {"_id": 0}).to_list(1000)
+
+    selected_lead_ids = []
+    if len(rids) <= 1:
+        if selections:
+            selected_lead_ids = list(selections[0].get("lead_ids") or [])
+    else:
+        seen = set()
+        for s in selections:
+            for lid in (s.get("lead_ids") or []):
+                if lid not in seen:
+                    selected_lead_ids.append(lid)
+                    seen.add(lid)
+
+    lead_map = {ld["id"]: ld for ld in leads}
+    total_revenue = 0.0
+    for lid in selected_lead_ids:
+        ld = lead_map.get(lid)
+        if ld:
+            total_revenue += float(ld.get("estimated_monthly_revenue") or 0)
+
+    return {
+        "year": year,
+        "month": month,
+        "resource_ids": rids,
+        "is_editable": len(rids) == 1,
+        "leads": leads,
+        "selected_lead_ids": selected_lead_ids,
+        "totals": {
+            "selected_count": len(selected_lead_ids),
+            "estimated_monthly_revenue": round(total_revenue, 2),
+        },
+    }
+
+
+class FocusLeadsUpsert(BaseModel):
+    year: int
+    month: int
+    resource_id: str
+    lead_ids: List[str] = []
+
+
+@router.post("/focus-leads")
+async def upsert_focus_leads(
+    payload: FocusLeadsUpsert,
+    current_user: dict = Depends(get_current_user),
+):
+    """Save the focus-leads selection for (year, month, resource_id)."""
+    tenant_id = get_current_tenant_id()
+    if not (1 <= payload.month <= 12):
+        raise HTTPException(400, "Invalid month")
+    if not payload.resource_id:
+        raise HTTPException(400, "resource_id is required")
+
+    seen = set()
+    unique_ids = []
+    for lid in (payload.lead_ids or []):
+        if lid and lid not in seen:
+            unique_ids.append(lid)
+            seen.add(lid)
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.focus_leads.update_one(
+        {"tenant_id": tenant_id, "year": payload.year, "month": payload.month, "resource_id": payload.resource_id},
+        {
+            "$set": {
+                "lead_ids": unique_ids,
+                "updated_at": now,
+                "updated_by": current_user.get("id"),
+                "updated_by_name": current_user.get("name"),
+            },
+            "$setOnInsert": {
+                "id": str(uuid.uuid4()),
+                "tenant_id": tenant_id,
+                "year": payload.year,
+                "month": payload.month,
+                "resource_id": payload.resource_id,
+                "created_at": now,
+            },
+        },
+        upsert=True,
+    )
+    return {"ok": True, "count": len(unique_ids), "lead_ids": unique_ids}
