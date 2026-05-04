@@ -5,7 +5,8 @@ Linked to Target Setup Module for target vs achievement tracking.
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from typing import List, Optional
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from database import db
@@ -1065,4 +1066,285 @@ async def reset_account_case_target(
         "year": year,
         "month": month,
     })
+    return {"ok": True}
+
+
+
+# ════════════════════════════════════════════════════════════════════
+# Top-10 Priorities — Sampling / Trials
+# ════════════════════════════════════════════════════════════════════
+
+SAMPLING_STATUSES = {"not_started", "in_progress", "completed"}
+
+
+def _add_days(iso_date: str, days: int) -> str:
+    """Add N days to a YYYY-MM-DD date string, returning YYYY-MM-DD."""
+    try:
+        d = datetime.strptime(iso_date[:10], "%Y-%m-%d")
+        return (d + timedelta(days=max(0, int(days) - 1 if int(days) > 0 else 0))).strftime("%Y-%m-%d")
+    except Exception:
+        return iso_date
+
+
+def _compute_end_date(trial_date: Optional[str], duration_days: Optional[int]) -> Optional[str]:
+    if not trial_date or duration_days is None:
+        return None
+    try:
+        days = int(duration_days)
+        if days <= 0:
+            return trial_date[:10]
+        d = datetime.strptime(trial_date[:10], "%Y-%m-%d")
+        # A 1-day trial ends same day; an N-day trial ends on start + (N-1) days.
+        return (d + timedelta(days=days - 1)).strftime("%Y-%m-%d")
+    except Exception:
+        return None
+
+
+def _lead_sku_options(lead: dict) -> List[dict]:
+    """Normalize a lead's SKU pricing into [{sku, price_per_unit}] rows."""
+    out = []
+    seen = set()
+    for sp in (lead.get("proposed_sku_pricing") or []):
+        sku = sp.get("sku") or sp.get("sku_name")
+        if not sku or sku in seen:
+            continue
+        price = sp.get("price_per_unit")
+        if price is None:
+            price = sp.get("proposed_price")
+        try:
+            price = float(price) if price is not None else 0.0
+        except Exception:
+            price = 0.0
+        seen.add(sku)
+        out.append({"sku": sku, "price_per_unit": price})
+    return out
+
+
+async def _sku_units_map(tenant_id: str, sku_names: List[str]) -> dict:
+    """Fetch units_per_package for a list of SKU names from master_skus."""
+    if not sku_names:
+        return {}
+    cursor = db.master_skus.find(
+        {"tenant_id": tenant_id, "sku_name": {"$in": list(set(sku_names))}},
+        {"_id": 0, "sku_name": 1, "units_per_package": 1},
+    )
+    out = {}
+    async for row in cursor:
+        upp = row.get("units_per_package")
+        if upp:
+            out[row.get("sku_name")] = int(upp)
+    return out
+
+
+def _compute_sku_plans_amount(sku_plans: List[dict]) -> float:
+    total = 0.0
+    for p in (sku_plans or []):
+        try:
+            crates = float(p.get("crates") or 0)
+            upp = float(p.get("units_per_package") or 0)
+            price = float(p.get("price_per_unit") or 0)
+            total += crates * upp * price
+        except Exception:
+            pass
+    return round(total, 2)
+
+
+@router.get("/sampling-trials")
+async def list_sampling_trials(
+    resource_ids: str = "",
+    current_user: dict = Depends(get_current_user),
+):
+    """List sampling/trial records for leads assigned to the selected resource(s).
+
+    Returns:
+      - leads: [{id, lead_id, name, city, status, sku_options: [{sku, price_per_unit, units_per_package}]}]
+      - trials: [{id, lead_id, lead_name, lead_city, trial_date, duration_days, end_date,
+                  status, sku_plans, total_amount, notes, created_at}]
+    """
+    tenant_id = get_current_tenant_id()
+
+    rids = [r for r in (resource_ids or "").split(",") if r]
+    lead_q = {"tenant_id": tenant_id}
+    if rids:
+        lead_q["assigned_to"] = {"$in": rids}
+
+    leads = await db.leads.find(
+        lead_q,
+        {"_id": 0, "id": 1, "lead_id": 1, "company": 1, "city": 1, "status": 1, "assigned_to": 1, "proposed_sku_pricing": 1},
+    ).to_list(5000)
+
+    # Gather all SKUs across leads to bulk-lookup units_per_package
+    all_skus = []
+    for lead in leads:
+        for row in _lead_sku_options(lead):
+            all_skus.append(row["sku"])
+    units_map = await _sku_units_map(tenant_id, all_skus)
+
+    out_leads = []
+    for lead in leads:
+        opts = _lead_sku_options(lead)
+        for o in opts:
+            o["units_per_package"] = int(units_map.get(o["sku"], 0)) or None
+        out_leads.append({
+            "id": lead.get("id"),
+            "lead_id": lead.get("lead_id"),
+            "name": lead.get("company"),
+            "city": lead.get("city"),
+            "status": lead.get("status"),
+            "sku_options": opts,
+        })
+    out_leads.sort(key=lambda x: (x.get("name") or "").lower())
+
+    # Load trials for those leads
+    lead_ids = [x["id"] for x in out_leads if x.get("id")]
+    trial_q = {"tenant_id": tenant_id}
+    if lead_ids:
+        trial_q["lead_id"] = {"$in": lead_ids}
+    trials = await db.sampling_trials.find(trial_q, {"_id": 0}).to_list(5000)
+    # Enrich with lead meta
+    lead_map = {x["id"]: x for x in out_leads}
+    for t in trials:
+        lead = lead_map.get(t.get("lead_id")) or {}
+        t["lead_name"] = lead.get("name")
+        t["lead_city"] = lead.get("city")
+        t["total_amount"] = _compute_sku_plans_amount(t.get("sku_plans") or [])
+        # Recompute end_date defensively
+        if t.get("trial_date") and t.get("duration_days") is not None:
+            t["end_date"] = _compute_end_date(t.get("trial_date"), t.get("duration_days"))
+    trials.sort(key=lambda x: (x.get("trial_date") or ""), reverse=True)
+
+    # Totals
+    total_amount = sum(t.get("total_amount", 0) for t in trials)
+    by_status = {s: 0 for s in SAMPLING_STATUSES}
+    for t in trials:
+        s = t.get("status") or "not_started"
+        if s in by_status:
+            by_status[s] += 1
+
+    return {
+        "leads": out_leads,
+        "trials": trials,
+        "totals": {
+            "total_trials": len(trials),
+            "total_amount": round(total_amount, 2),
+            "by_status": by_status,
+        },
+    }
+
+
+class SkuPlan(BaseModel):
+    sku: str
+    crates: float = 0
+    units_per_package: Optional[int] = None
+    price_per_unit: Optional[float] = None
+
+
+class SamplingTrialCreate(BaseModel):
+    lead_id: str
+    trial_date: str  # YYYY-MM-DD
+    duration_days: int = 1
+    status: str = "not_started"
+    sku_plans: List[SkuPlan] = []
+    notes: Optional[str] = None
+
+
+class SamplingTrialUpdate(BaseModel):
+    trial_date: Optional[str] = None
+    duration_days: Optional[int] = None
+    status: Optional[str] = None
+    sku_plans: Optional[List[SkuPlan]] = None
+    notes: Optional[str] = None
+
+
+def _validate_status(status: str):
+    if status not in SAMPLING_STATUSES:
+        raise HTTPException(400, f"Invalid status. Must be one of {sorted(SAMPLING_STATUSES)}")
+
+
+@router.post("/sampling-trials")
+async def create_sampling_trial(
+    payload: SamplingTrialCreate,
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    _validate_status(payload.status)
+    if payload.duration_days < 1:
+        raise HTTPException(400, "Duration must be >= 1 day")
+
+    lead = await db.leads.find_one({"id": payload.lead_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    sku_plans = [p.dict() for p in (payload.sku_plans or [])]
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "lead_id": payload.lead_id,
+        "trial_date": payload.trial_date[:10],
+        "duration_days": int(payload.duration_days),
+        "end_date": _compute_end_date(payload.trial_date, payload.duration_days),
+        "status": payload.status,
+        "sku_plans": sku_plans,
+        "notes": payload.notes,
+        "created_at": now,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name"),
+        "updated_at": now,
+    }
+    await db.sampling_trials.insert_one(dict(doc))  # copy so local dict not mutated
+    doc["total_amount"] = _compute_sku_plans_amount(sku_plans)
+    return doc
+
+
+@router.put("/sampling-trials/{trial_id}")
+async def update_sampling_trial(
+    trial_id: str,
+    payload: SamplingTrialUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    existing = await db.sampling_trials.find_one({"id": trial_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Trial not found")
+
+    updates = {}
+    if payload.status is not None:
+        _validate_status(payload.status)
+        updates["status"] = payload.status
+    if payload.trial_date is not None:
+        updates["trial_date"] = payload.trial_date[:10]
+    if payload.duration_days is not None:
+        if payload.duration_days < 1:
+            raise HTTPException(400, "Duration must be >= 1 day")
+        updates["duration_days"] = int(payload.duration_days)
+    # Recompute end_date if either changed
+    if "trial_date" in updates or "duration_days" in updates:
+        td = updates.get("trial_date", existing.get("trial_date"))
+        dd = updates.get("duration_days", existing.get("duration_days"))
+        updates["end_date"] = _compute_end_date(td, dd)
+    if payload.sku_plans is not None:
+        updates["sku_plans"] = [p.dict() for p in payload.sku_plans]
+    if payload.notes is not None:
+        updates["notes"] = payload.notes
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    updates["updated_by"] = current_user.get("id")
+    updates["updated_by_name"] = current_user.get("name")
+
+    await db.sampling_trials.update_one({"id": trial_id, "tenant_id": tenant_id}, {"$set": updates})
+    doc = await db.sampling_trials.find_one({"id": trial_id, "tenant_id": tenant_id}, {"_id": 0})
+    if doc:
+        doc["total_amount"] = _compute_sku_plans_amount(doc.get("sku_plans") or [])
+    return doc
+
+
+@router.delete("/sampling-trials/{trial_id}")
+async def delete_sampling_trial(
+    trial_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    res = await db.sampling_trials.delete_one({"id": trial_id, "tenant_id": tenant_id})
+    if res.deleted_count == 0:
+        raise HTTPException(404, "Trial not found")
     return {"ok": True}

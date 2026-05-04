@@ -14,7 +14,7 @@ import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
   ChevronDown, ChevronRight, Building2, Clock, ArrowUp, ArrowDown, Minus,
-  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package
+  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package, FlaskConical, Plus, Trash2, Calendar
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -726,12 +726,13 @@ export default function PerformanceTracker() {
             </div>
           </div>
 
-          {/* ─── Top 10 Priorities — Execution Driven ─── */}
+          {/* ─── Top 10 Priorities ─── */}
           <Top10PrioritiesSection
             year={selectedYear}
             month={selectedMonth}
             resourceIds={resolveResourceIds()}
-            headers={headers}
+            token={token}
+            tenantId={tenantId}
             isLocked={isLocked}
           />
 
@@ -1185,9 +1186,12 @@ function AccountValueCell({ account, planId, onRefresh }) {
 // Top 10 Priorities — Execution Driven
 // ════════════════════════════════════════════════════════════════════
 
-function Top10PrioritiesSection({ year, month, resourceIds, headers, isLocked }) {
+function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isLocked }) {
   const [open, setOpen] = useState(true);
   const [activeSub, setActiveSub] = useState('case_targets');
+
+  // Stable primitive key so child effects don't re-run on every parent render
+  const resourceIdsKey = React.useMemo(() => (resourceIds || []).join(','), [resourceIds]);
 
   return (
     <div className="bg-white border border-slate-200 rounded-sm" data-testid="top10-priorities-section">
@@ -1199,9 +1203,8 @@ function Top10PrioritiesSection({ year, month, resourceIds, headers, isLocked })
           <Star className="h-4 w-4 text-amber-700" />
         </div>
         <div className="flex-1 text-left">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">
             Top 10 Priorities
-            <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 font-medium text-[10px]">Execution Driven</Badge>
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">Account-level targets, gaps, and priority drivers for the month</p>
         </div>
@@ -1215,15 +1218,27 @@ function Top10PrioritiesSection({ year, month, resourceIds, headers, isLocked })
             <SubTab id="case_targets" active={activeSub} onClick={setActiveSub} icon={Package}>
               Case Targets — {MONTH_NAMES[month]} {year}
             </SubTab>
-            {/* Future sub-sections (gap analysis, pipeline-at-risk, collections priority…) plug in here */}
+            <SubTab id="sampling_trials" active={activeSub} onClick={setActiveSub} icon={FlaskConical}>
+              Sampling / Trials
+            </SubTab>
           </div>
 
           {activeSub === 'case_targets' && (
             <CaseTargetsSubsection
               year={year}
               month={month}
-              resourceIds={resourceIds}
-              headers={headers}
+              resourceIdsKey={resourceIdsKey}
+              token={token}
+              tenantId={tenantId}
+              isLocked={isLocked}
+            />
+          )}
+
+          {activeSub === 'sampling_trials' && (
+            <SamplingTrialsSubsection
+              resourceIdsKey={resourceIdsKey}
+              token={token}
+              tenantId={tenantId}
               isLocked={isLocked}
             />
           )}
@@ -1251,7 +1266,7 @@ function SubTab({ id, active, onClick, icon: Icon, children }) {
   );
 }
 
-function CaseTargetsSubsection({ year, month, resourceIds, headers, isLocked }) {
+function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, isLocked }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState({}); // {accountId: bool}
@@ -1261,7 +1276,8 @@ function CaseTargetsSubsection({ year, month, resourceIds, headers, isLocked }) 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const ridParam = resourceIds && resourceIds.length ? `&resource_ids=${resourceIds.join(',')}` : '';
+      const ridParam = resourceIdsKey ? `&resource_ids=${resourceIdsKey}` : '';
+      const headers = { Authorization: `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
       const res = await fetch(`${API_URL}/api/performance/account-case-targets?year=${year}&month=${month}${ridParam}`, { headers });
       const d = await res.json();
       setData(d);
@@ -1271,7 +1287,7 @@ function CaseTargetsSubsection({ year, month, resourceIds, headers, isLocked }) 
     } finally {
       setLoading(false);
     }
-  }, [year, month, resourceIds, headers]);
+  }, [year, month, resourceIdsKey, token, tenantId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1294,6 +1310,8 @@ function CaseTargetsSubsection({ year, month, resourceIds, headers, isLocked }) 
     return num !== Number(currentTarget);
   };
 
+  const authHeaders = () => ({ Authorization: `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' });
+
   const saveRow = async (account, row) => {
     const k = cellKey(account.account_id, row.sku);
     setSavingKey(k);
@@ -1301,7 +1319,7 @@ function CaseTargetsSubsection({ year, month, resourceIds, headers, isLocked }) 
       const target = parseInt(drafts[k] ?? row.target_cases, 10) || 0;
       const res = await fetch(`${API_URL}/api/performance/account-case-targets`, {
         method: 'POST',
-        headers,
+        headers: authHeaders(),
         body: JSON.stringify({ account_id: account.account_id, sku_name: row.sku, year, month, target_cases: target }),
       });
       if (res.ok) {
@@ -1316,7 +1334,7 @@ function CaseTargetsSubsection({ year, month, resourceIds, headers, isLocked }) 
     setSavingKey(k);
     try {
       const url = `${API_URL}/api/performance/account-case-targets?account_id=${encodeURIComponent(account.account_id)}&sku_name=${encodeURIComponent(row.sku)}&year=${year}&month=${month}`;
-      const res = await fetch(url, { method: 'DELETE', headers });
+      const res = await fetch(url, { method: 'DELETE', headers: authHeaders() });
       if (res.ok) await load();
     } catch (e) { console.error(e); }
     finally { setSavingKey(null); }
@@ -1511,3 +1529,495 @@ function SummaryStat({ label, value, sub, highlight }) {
   );
 }
 
+
+
+// ════════════════════════════════════════════════════════════════════
+// Sampling / Trials Subsection
+// ════════════════════════════════════════════════════════════════════
+
+const STATUS_OPTIONS = [
+  { value: 'not_started', label: 'Not Started', color: 'bg-slate-100 text-slate-700 border-slate-300' },
+  { value: 'in_progress', label: 'Trial In Progress', color: 'bg-amber-100 text-amber-800 border-amber-300' },
+  { value: 'completed', label: 'Completed', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+];
+
+const statusMeta = (s) => STATUS_OPTIONS.find(o => o.value === s) || STATUS_OPTIONS[0];
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+const computeEndDate = (startIso, days) => {
+  if (!startIso) return '';
+  const d = parseInt(days || 0, 10);
+  if (!d || d < 1) return startIso;
+  try {
+    const dt = new Date(`${startIso}T00:00:00Z`);
+    dt.setUTCDate(dt.getUTCDate() + d - 1);
+    return dt.toISOString().slice(0, 10);
+  } catch {
+    return startIso;
+  }
+};
+
+function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const authHeaders = useCallback(() => ({
+    Authorization: `Bearer ${token}`,
+    'X-Tenant-ID': tenantId,
+    'Content-Type': 'application/json',
+  }), [token, tenantId]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const ridParam = resourceIdsKey ? `?resource_ids=${resourceIdsKey}` : '';
+      const res = await fetch(`${API_URL}/api/performance/sampling-trials${ridParam}`, { headers: authHeaders() });
+      const d = await res.json();
+      setData(d);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [resourceIdsKey, authHeaders]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const leads = data?.leads || [];
+  const trials = data?.trials || [];
+  const totals = data?.totals || { total_trials: 0, total_amount: 0, by_status: {} };
+
+  const openNewForm = () => {
+    setEditingId(null);
+    setForm({
+      lead_id: '',
+      trial_date: todayIso(),
+      duration_days: 3,
+      status: 'not_started',
+      sku_plans: [],
+      notes: '',
+    });
+    setShowForm(true);
+  };
+
+  const openEditForm = (trial) => {
+    setEditingId(trial.id);
+    setForm({
+      lead_id: trial.lead_id || '',
+      trial_date: (trial.trial_date || '').slice(0, 10),
+      duration_days: trial.duration_days || 1,
+      status: trial.status || 'not_started',
+      sku_plans: (trial.sku_plans || []).map(p => ({
+        sku: p.sku || '',
+        crates: p.crates ?? 0,
+        units_per_package: p.units_per_package ?? null,
+        price_per_unit: p.price_per_unit ?? 0,
+      })),
+      notes: trial.notes || '',
+    });
+    setShowForm(true);
+  };
+
+  const onLeadChange = (leadId) => {
+    const lead = leads.find(l => l.id === leadId);
+    const skuPlans = (lead?.sku_options || []).map(o => ({
+      sku: o.sku,
+      crates: 0,
+      units_per_package: o.units_per_package || null,
+      price_per_unit: o.price_per_unit || 0,
+    }));
+    setForm(f => ({ ...f, lead_id: leadId, sku_plans: skuPlans }));
+  };
+
+  const updateSkuPlan = (idx, field, value) => {
+    setForm(f => {
+      const next = [...(f.sku_plans || [])];
+      next[idx] = { ...next[idx], [field]: value };
+      return { ...f, sku_plans: next };
+    });
+  };
+
+  const addSkuPlan = () => {
+    setForm(f => ({ ...f, sku_plans: [...(f.sku_plans || []), { sku: '', crates: 0, units_per_package: null, price_per_unit: 0 }] }));
+  };
+
+  const removeSkuPlan = (idx) => {
+    setForm(f => ({ ...f, sku_plans: (f.sku_plans || []).filter((_, i) => i !== idx) }));
+  };
+
+  const rowAmount = (p) => (Number(p.crates || 0) * Number(p.units_per_package || 0) * Number(p.price_per_unit || 0));
+  const formTotal = (form?.sku_plans || []).reduce((s, p) => s + rowAmount(p), 0);
+  const formEndDate = computeEndDate(form?.trial_date, form?.duration_days);
+
+  const saveForm = async () => {
+    if (!form?.lead_id) return;
+    setSaving(true);
+    try {
+      const body = {
+        lead_id: form.lead_id,
+        trial_date: form.trial_date,
+        duration_days: parseInt(form.duration_days, 10) || 1,
+        status: form.status,
+        sku_plans: (form.sku_plans || []).map(p => ({
+          sku: p.sku,
+          crates: Number(p.crates) || 0,
+          units_per_package: p.units_per_package ? parseInt(p.units_per_package, 10) : null,
+          price_per_unit: Number(p.price_per_unit) || 0,
+        })),
+        notes: form.notes || null,
+      };
+      const url = editingId
+        ? `${API_URL}/api/performance/sampling-trials/${editingId}`
+        : `${API_URL}/api/performance/sampling-trials`;
+      const method = editingId ? 'PUT' : 'POST';
+      const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(body) });
+      if (!res.ok) {
+        const err = await res.text();
+        alert('Failed to save: ' + err);
+      } else {
+        setShowForm(false);
+        setEditingId(null);
+        setForm(null);
+        await load();
+      }
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const deleteTrial = async (trial) => {
+    if (!window.confirm(`Delete trial for "${trial.lead_name}"?`)) return;
+    try {
+      const res = await fetch(`${API_URL}/api/performance/sampling-trials/${trial.id}`, { method: 'DELETE', headers: authHeaders() });
+      if (res.ok) await load();
+    } catch (e) { console.error(e); }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12" data-testid="sampling-trials-loading">
+        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4" data-testid="sampling-trials-subsection">
+      {/* Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        <SummaryStat label="Total Trials" value={fmt(totals.total_trials)} />
+        <SummaryStat label="In Progress" value={fmt(totals.by_status?.in_progress || 0)} highlight="amber" />
+        <SummaryStat label="Completed" value={fmt(totals.by_status?.completed || 0)} highlight="green" />
+        <SummaryStat label="Pipeline Amount" value={`₹${fmt(totals.total_amount)}`} sub="crates × units × price" />
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs text-slate-500">
+          {leads.length} lead{leads.length !== 1 ? 's' : ''} assigned to selected resource(s)
+        </div>
+        {!isLocked && !showForm && (
+          <Button
+            size="sm"
+            className="bg-amber-600 hover:bg-amber-700 text-white h-8"
+            onClick={openNewForm}
+            data-testid="sampling-add-trial-btn"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" /> New Trial
+          </Button>
+        )}
+      </div>
+
+      {/* Form */}
+      {showForm && form && (
+        <div className="border border-amber-300 rounded-sm bg-amber-50/40 p-3 sm:p-4 space-y-3" data-testid="sampling-form">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-amber-100 rounded-sm">
+                <FlaskConical className="h-4 w-4 text-amber-700" />
+              </div>
+              <h4 className="text-sm font-bold uppercase tracking-wider text-slate-900">
+                {editingId ? 'Edit Trial' : 'New Sampling / Trial'}
+              </h4>
+            </div>
+            <button
+              onClick={() => { setShowForm(false); setEditingId(null); setForm(null); }}
+              className="text-slate-400 hover:text-slate-700"
+              data-testid="sampling-form-close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="lg:col-span-2">
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Lead</label>
+              <Select value={form.lead_id} onValueChange={onLeadChange}>
+                <SelectTrigger className="h-9 mt-1 bg-white" data-testid="sampling-lead-select">
+                  <SelectValue placeholder="Select a lead" />
+                </SelectTrigger>
+                <SelectContent>
+                  {leads.length === 0 ? (
+                    <div className="px-3 py-2 text-xs text-slate-500">No leads found for selected resource(s)</div>
+                  ) : leads.map(l => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name}{l.city ? ` — ${l.city}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Tentative Date</label>
+              <Input
+                type="date"
+                value={form.trial_date}
+                onChange={(e) => setForm(f => ({ ...f, trial_date: e.target.value }))}
+                className="h-9 mt-1 bg-white"
+                data-testid="sampling-trial-date"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Duration (days)</label>
+              <Input
+                type="number"
+                min="1"
+                value={form.duration_days}
+                onChange={(e) => setForm(f => ({ ...f, duration_days: e.target.value }))}
+                className="h-9 mt-1 bg-white"
+                data-testid="sampling-duration-days"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">End Date</label>
+              <div className="h-9 mt-1 px-3 rounded-sm bg-slate-100 border border-slate-200 flex items-center gap-1.5 text-sm text-slate-700 tabular-nums" data-testid="sampling-end-date">
+                <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                {formEndDate || '—'}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Status</label>
+              <Select value={form.status} onValueChange={(v) => setForm(f => ({ ...f, status: v }))}>
+                <SelectTrigger className="h-9 mt-1 bg-white" data-testid="sampling-status-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Notes</label>
+              <Input
+                value={form.notes || ''}
+                onChange={(e) => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Optional notes..."
+                className="h-9 mt-1 bg-white"
+                data-testid="sampling-notes"
+              />
+            </div>
+          </div>
+
+          <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">SKU</th>
+                  <th className="px-3 py-2 text-right font-semibold">Crates</th>
+                  <th className="px-3 py-2 text-right font-semibold">Bottles / Crate</th>
+                  <th className="px-3 py-2 text-right font-semibold">Price / Bottle</th>
+                  <th className="px-3 py-2 text-right font-semibold">Amount (₹)</th>
+                  <th className="w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(form.sku_plans || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-4 text-center text-xs text-slate-500">
+                      {form.lead_id ? 'No SKUs configured for this lead. Use "Add SKU" below.' : 'Select a lead to populate SKUs from its proposed pricing.'}
+                    </td>
+                  </tr>
+                ) : form.sku_plans.map((p, idx) => (
+                  <tr key={idx} className="border-t border-slate-100">
+                    <td className="px-3 py-2">
+                      <Input
+                        value={p.sku || ''}
+                        onChange={(e) => updateSkuPlan(idx, 'sku', e.target.value)}
+                        className="h-8 text-xs"
+                        placeholder="SKU name"
+                        data-testid={`sampling-sku-name-${idx}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={p.crates ?? 0}
+                        onChange={(e) => updateSkuPlan(idx, 'crates', e.target.value)}
+                        className="h-8 w-24 text-right text-xs ml-auto tabular-nums"
+                        data-testid={`sampling-sku-crates-${idx}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={p.units_per_package ?? ''}
+                        onChange={(e) => updateSkuPlan(idx, 'units_per_package', e.target.value)}
+                        className="h-8 w-20 text-right text-xs ml-auto tabular-nums"
+                        placeholder="—"
+                        data-testid={`sampling-sku-units-${idx}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={p.price_per_unit ?? 0}
+                        onChange={(e) => updateSkuPlan(idx, 'price_per_unit', e.target.value)}
+                        className="h-8 w-24 text-right text-xs ml-auto tabular-nums"
+                        data-testid={`sampling-sku-price-${idx}`}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-sm text-emerald-700 font-semibold" data-testid={`sampling-sku-amount-${idx}`}>
+                      ₹{fmt(rowAmount(p))}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <button
+                        onClick={() => removeSkuPlan(idx)}
+                        className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600"
+                        data-testid={`sampling-sku-remove-${idx}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-slate-50 text-xs">
+                <tr>
+                  <td className="px-3 py-2 font-semibold text-slate-900">Total</td>
+                  <td></td><td></td><td></td>
+                  <td className="px-3 py-2 text-right tabular-nums font-bold text-slate-900" data-testid="sampling-form-total">₹{fmt(formTotal)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+            <div className="p-2 border-t border-slate-100">
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addSkuPlan} data-testid="sampling-add-sku-row">
+                <Plus className="h-3 w-3 mr-1" /> Add SKU
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+            <Button variant="outline" size="sm" onClick={() => { setShowForm(false); setEditingId(null); setForm(null); }} data-testid="sampling-cancel-btn">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!form.lead_id || saving}
+              onClick={saveForm}
+              data-testid="sampling-save-btn"
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+              {editingId ? 'Save Changes' : 'Create Trial'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Trials list */}
+      {trials.length === 0 ? (
+        <div className="text-center py-10 text-sm text-slate-500 border border-dashed border-slate-200 rounded-sm" data-testid="sampling-trials-empty">
+          No trials recorded yet. Click <span className="font-semibold">New Trial</span> to add one.
+        </div>
+      ) : (
+        <div className="space-y-2" data-testid="sampling-trials-list">
+          {trials.map((t) => {
+            const meta = statusMeta(t.status);
+            return (
+              <div key={t.id} className="border border-slate-200 rounded-sm bg-white overflow-hidden" data-testid={`sampling-trial-${t.id}`}>
+                <div className="p-3 sm:p-4 flex flex-wrap items-center gap-3 border-b border-slate-100">
+                  <div className="p-1.5 bg-slate-100 rounded-sm shrink-0">
+                    <FlaskConical className="h-4 w-4 text-slate-700" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900 truncate">{t.lead_name || '—'}</p>
+                    {t.lead_city && <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{t.lead_city}</p>}
+                  </div>
+                  <Badge variant="outline" className={`${meta.color} text-[10px] font-semibold uppercase tracking-wider`}>
+                    {meta.label}
+                  </Badge>
+                  <div className="text-right">
+                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Trial Dates</p>
+                    <p className="text-xs font-semibold tabular-nums text-slate-900">
+                      {t.trial_date || '—'} → {t.end_date || '—'}
+                    </p>
+                    <p className="text-[10px] text-slate-500">{t.duration_days || 0} day{t.duration_days === 1 ? '' : 's'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Amount</p>
+                    <p className="text-sm font-bold tabular-nums text-emerald-700">₹{fmt(t.total_amount || 0)}</p>
+                  </div>
+                  {!isLocked && (
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => openEditForm(t)} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900" data-testid={`sampling-edit-${t.id}`}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => deleteTrial(t)} className="p-1.5 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600" data-testid={`sampling-delete-${t.id}`}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {(t.sku_plans || []).length > 0 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold">SKU</th>
+                          <th className="px-3 py-2 text-right font-semibold">Crates</th>
+                          <th className="px-3 py-2 text-right font-semibold">Bottles/Crate</th>
+                          <th className="px-3 py-2 text-right font-semibold">Price/Bottle</th>
+                          <th className="px-3 py-2 text-right font-semibold">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {t.sku_plans.map((p, idx) => {
+                          const amt = Number(p.crates || 0) * Number(p.units_per_package || 0) * Number(p.price_per_unit || 0);
+                          return (
+                            <tr key={idx} className="border-t border-slate-100">
+                              <td className="px-3 py-1.5 text-slate-800 font-medium">{p.sku}</td>
+                              <td className="px-3 py-1.5 text-right tabular-nums">{fmt(p.crates)}</td>
+                              <td className="px-3 py-1.5 text-right tabular-nums">{p.units_per_package || '—'}</td>
+                              <td className="px-3 py-1.5 text-right tabular-nums">₹{fmt(p.price_per_unit)}</td>
+                              <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700">₹{fmt(amt)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {t.notes && (
+                  <div className="px-3 py-2 text-xs text-slate-600 border-t border-slate-100 bg-slate-50/50">
+                    <span className="font-semibold text-slate-500 uppercase tracking-wider text-[9px]">Notes:</span> {t.notes}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
