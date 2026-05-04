@@ -50,6 +50,7 @@ export default function PerformanceTracker() {
   const { user } = useAuth();
   const { statuses: leadStatuses, getStatusLabel, getStatusById } = useLeadStatuses();
   const [plans, setPlans] = useState([]);
+  const [viewMode, setViewMode] = useState(() => ssGet('view_mode', 'target_plan')); // 'target_plan' | 'month'
   const [selectedPlan, setSelectedPlan] = useState(() => ssGet('plan', ''));
   const [resources, setResources] = useState([]);
   const [territoryFilter, setTerritoryFilter] = useState(() => ssGet('territory', 'all'));
@@ -77,6 +78,7 @@ export default function PerformanceTracker() {
   const headers = { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
 
   // Persist filters to sessionStorage on change
+  useEffect(() => { ssSet('view_mode', viewMode); }, [viewMode]);
   useEffect(() => { ssSet('plan', selectedPlan); }, [selectedPlan]);
   useEffect(() => { ssSet('territory', territoryFilter); }, [territoryFilter]);
   useEffect(() => { ssSet('city', cityFilter); }, [cityFilter]);
@@ -95,6 +97,11 @@ export default function PerformanceTracker() {
   // Auto-select the logged-in user as default resource (only once, when resources load and no session state exists)
   useEffect(() => {
     if (defaultsApplied || !user?.id || resources.length === 0) return;
+    if (viewMode === 'target_plan') {
+      // Plan-mode handles its own auto-selection (all plan resources)
+      setDefaultsApplied(true);
+      return;
+    }
     // Only apply defaults if no resource was restored from session
     const savedResource = ssGet('resource', []);
     if (savedResource.length === 0) {
@@ -104,7 +111,7 @@ export default function PerformanceTracker() {
       }
     }
     setDefaultsApplied(true);
-  }, [resources, user, defaultsApplied]);
+  }, [resources, user, defaultsApplied, viewMode]);
 
   // When plan changes, reload plan-specific resources if plan is selected (for target amounts)
   useEffect(() => {
@@ -113,13 +120,34 @@ export default function PerformanceTracker() {
       .then(r => r.json()).then(planRes => {
         // Merge plan resources with all resources — plan resources have target amounts
         setResources(prev => {
-          const planMap = new Map(planRes.map(r => [r.resource_id, r]));
           // If plan has specific resource allocations, use those (they contain territory_id, city, amount)
           if (planRes.length > 0) return planRes;
           return prev;
         });
+        // In target_plan mode: auto-select all plan resources (user can deselect afterwards)
+        if (viewMode === 'target_plan' && planRes.length > 0) {
+          setSelectedResource(planRes.map(r => r.resource_id).filter(Boolean));
+          setTerritoryFilter('all');
+          setCityFilter('all');
+        }
       }).catch(() => {});
-  }, [selectedPlan]);
+
+    // In target_plan mode: align selectedMonth/Year with plan period
+    if (viewMode === 'target_plan') {
+      const plan = plans.find(p => p.id === selectedPlan);
+      if (plan && plan.end_date) {
+        try {
+          const today = new Date();
+          const start = new Date(`${plan.start_date}T00:00:00Z`);
+          const end = new Date(`${plan.end_date}T00:00:00Z`);
+          // Pick "current month within plan range" else end-of-plan month
+          const target = (today >= start && today <= end) ? today : end;
+          setSelectedMonth(target.getUTCMonth() + 1);
+          setSelectedYear(target.getUTCFullYear());
+        } catch { /* ignore date parse error */ }
+      }
+    }
+  }, [selectedPlan, viewMode, plans]);
 
   // Derive unique territories and cities from the plan's resource allocations
   const planTerritories = [...new Map(resources.map(r => [r.territory_id, { id: r.territory_id, name: r.territory_name || r.territory_id }])).values()];
@@ -272,75 +300,162 @@ export default function PerformanceTracker() {
 
       {/* Selectors */}
       <div className="bg-white border border-slate-200 rounded-sm p-3 sm:p-4 lg:p-5 space-y-3" data-testid="performance-selectors">
-          {/* Row 1: Location & Resource filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Territory</label>
-              <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setCityFilter('all'); setSelectedResource([]); }}>
-                <SelectTrigger data-testid="select-territory"><SelectValue placeholder="All" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Territories</SelectItem>
-                  {planTerritories.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">City</label>
-              <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setSelectedResource([]); }}>
-                <SelectTrigger data-testid="select-city"><SelectValue placeholder="All" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Cities</SelectItem>
-                  {planCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Resource</label>
-              <MultiSelect
-                options={filteredResources.map(r => ({ value: r.resource_id, label: `${r.resource_name}` }))}
-                selected={selectedResource}
-                onChange={setSelectedResource}
-                placeholder="All Resources"
-                data-testid="select-resource"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Target Plan <span className="text-slate-400 normal-case">(optional)</span></label>
-              <Select value={selectedPlan || '__none__'} onValueChange={v => setSelectedPlan(v === '__none__' ? '' : v)}>
-                <SelectTrigger data-testid="select-plan"><SelectValue placeholder="No plan selected" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No Plan</SelectItem>
-                  {plans.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          {/* View Mode Toggle — primary selection */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] block">View Performance By</label>
+            <div className="grid grid-cols-2 gap-2 max-w-md">
+              <button
+                onClick={() => { setViewMode('target_plan'); setDefaultsApplied(false); }}
+                className={`px-4 py-3 rounded-sm border text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                  viewMode === 'target_plan'
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+                data-testid="view-mode-target-plan"
+              >
+                <Target className="h-4 w-4" /> Target Plan
+              </button>
+              <button
+                onClick={() => { setViewMode('month'); setDefaultsApplied(false); }}
+                className={`px-4 py-3 rounded-sm border text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+                  viewMode === 'month'
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                }`}
+                data-testid="view-mode-month"
+              >
+                <Calendar className="h-4 w-4" /> Month
+              </button>
             </div>
           </div>
-          {/* Row 2: Time period & Generate */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 items-end">
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Month</label>
-              <Select value={String(selectedMonth)} onValueChange={v => setSelectedMonth(parseInt(v))}>
-                <SelectTrigger data-testid="select-month"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {MONTHS.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Year</label>
-              <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(parseInt(v))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[2025, 2026, 2027].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Button onClick={generate} disabled={loading || !hasSelection} className="w-full bg-slate-900 hover:bg-slate-800 text-white border-0 rounded-sm" data-testid="generate-btn">
-                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                Generate
-              </Button>
-            </div>
+
+          {viewMode === 'target_plan' ? (
+            <>
+              {/* Primary: Target Plan select */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 items-end">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Target Plan <span className="text-rose-500 normal-case">*</span></label>
+                  <Select value={selectedPlan || '__none__'} onValueChange={v => setSelectedPlan(v === '__none__' ? '' : v)}>
+                    <SelectTrigger data-testid="select-plan"><SelectValue placeholder="Select a target plan..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Select a plan</SelectItem>
+                      {plans.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(() => {
+                  const plan = plans.find(p => p.id === selectedPlan);
+                  if (!plan) return <div className="text-xs text-slate-500 italic">Pick a plan to auto-load its resources, territories, cities, and date range.</div>;
+                  return (
+                    <div className="bg-slate-50 border border-slate-200 rounded-sm px-3 py-2 text-xs" data-testid="plan-period-banner">
+                      <div className="flex items-center gap-2 text-slate-500 uppercase tracking-wider text-[10px] font-semibold mb-0.5">
+                        <Calendar className="h-3 w-3" /> Plan Period
+                      </div>
+                      <div className="text-slate-900 font-semibold tabular-nums">{plan.start_date} → {plan.end_date}</div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Secondary filters — auto-populated, deselectable */}
+              {selectedPlan && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 pt-2 border-t border-slate-100">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Territory <span className="text-slate-400 normal-case">(filter)</span></label>
+                    <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setCityFilter('all'); }}>
+                      <SelectTrigger data-testid="select-territory"><SelectValue placeholder="All" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Territories</SelectItem>
+                        {planTerritories.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">City <span className="text-slate-400 normal-case">(filter)</span></label>
+                    <Select value={cityFilter} onValueChange={(v) => setCityFilter(v)}>
+                      <SelectTrigger data-testid="select-city"><SelectValue placeholder="All" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Cities</SelectItem>
+                        {planCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Resources <span className="text-slate-400 normal-case">(deselect to narrow)</span></label>
+                    <MultiSelect
+                      options={filteredResources.map(r => ({ value: r.resource_id, label: `${r.resource_name}` }))}
+                      selected={selectedResource}
+                      onChange={setSelectedResource}
+                      placeholder="All Resources"
+                      data-testid="select-resource"
+                    />
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Month mode: Month/Year primary; resource filters secondary */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Month <span className="text-rose-500 normal-case">*</span></label>
+                  <Select value={String(selectedMonth)} onValueChange={v => setSelectedMonth(parseInt(v))}>
+                    <SelectTrigger data-testid="select-month"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Year <span className="text-rose-500 normal-case">*</span></label>
+                  <Select value={String(selectedYear)} onValueChange={v => setSelectedYear(parseInt(v))}>
+                    <SelectTrigger data-testid="select-year"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[2025, 2026, 2027].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 pt-2 border-t border-slate-100">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Territory</label>
+                  <Select value={territoryFilter} onValueChange={(v) => { setTerritoryFilter(v); setCityFilter('all'); setSelectedResource([]); }}>
+                    <SelectTrigger data-testid="select-territory"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Territories</SelectItem>
+                      {planTerritories.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">City</label>
+                  <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setSelectedResource([]); }}>
+                    <SelectTrigger data-testid="select-city"><SelectValue placeholder="All" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Cities</SelectItem>
+                      {planCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Resource</label>
+                  <MultiSelect
+                    options={filteredResources.map(r => ({ value: r.resource_id, label: `${r.resource_name}` }))}
+                    selected={selectedResource}
+                    onChange={setSelectedResource}
+                    placeholder="All Resources"
+                    data-testid="select-resource"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="pt-2 border-t border-slate-100 flex justify-end">
+            <Button onClick={generate} disabled={loading || !hasSelection || (viewMode === 'target_plan' && !selectedPlan)} className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 text-white border-0 rounded-sm" data-testid="generate-btn">
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Generate
+            </Button>
           </div>
       </div>
 
