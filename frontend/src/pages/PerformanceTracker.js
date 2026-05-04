@@ -1580,6 +1580,7 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [expandedTrials, setExpandedTrials] = useState({}); // {trialId: bool}
 
   const authHeaders = useCallback(() => ({
     Authorization: `Bearer ${token}`,
@@ -1957,9 +1958,19 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
         <div className="space-y-2" data-testid="sampling-trials-list">
           {trials.map((t) => {
             const meta = statusMeta(t.status);
+            const isExpanded = !!expandedTrials[t.id];
+            const toggleExpand = () => setExpandedTrials(prev => ({ ...prev, [t.id]: !prev[t.id] }));
             return (
               <div key={t.id} className="border border-slate-200 rounded-sm bg-white overflow-hidden" data-testid={`sampling-trial-${t.id}`}>
                 <div className="p-3 sm:p-4 flex flex-wrap items-center gap-3 border-b border-slate-100">
+                  <button
+                    onClick={toggleExpand}
+                    className="p-1 -ml-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 shrink-0"
+                    aria-label={isExpanded ? 'Collapse trial details' : 'Expand trial details'}
+                    data-testid={`sampling-trial-toggle-${t.id}`}
+                  >
+                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
                   <div className="p-1.5 bg-slate-100 rounded-sm shrink-0">
                     <FlaskConical className="h-4 w-4 text-slate-700" />
                   </div>
@@ -1971,9 +1982,9 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
                     {meta.label}
                   </Badge>
                   <div className="text-right">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Trial Dates</p>
+                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Trial Date</p>
                     <p className="text-xs font-semibold tabular-nums text-slate-900">
-                      {t.trial_date || '—'} → {t.end_date || '—'}
+                      {t.trial_date || '—'}
                     </p>
                     <p className="text-[10px] text-slate-500">{t.duration_days || 0} day{t.duration_days === 1 ? '' : 's'}</p>
                   </div>
@@ -1993,40 +2004,55 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
                   )}
                 </div>
 
-                {(t.sku_plans || []).length > 0 && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
-                        <tr>
-                          <th className="px-3 py-2 text-left font-semibold">SKU</th>
-                          <th className="px-3 py-2 text-right font-semibold">Crates</th>
-                          <th className="px-3 py-2 text-right font-semibold">Bottles/Crate</th>
-                          <th className="px-3 py-2 text-right font-semibold">Price/Bottle</th>
-                          <th className="px-3 py-2 text-right font-semibold">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {t.sku_plans.map((p, idx) => {
-                          const amt = Number(p.crates || 0) * Number(p.units_per_package || 0) * Number(p.price_per_unit || 0);
-                          return (
-                            <tr key={idx} className="border-t border-slate-100">
-                              <td className="px-3 py-1.5 text-slate-800 font-medium">{p.sku}</td>
-                              <td className="px-3 py-1.5 text-right tabular-nums">{fmt(p.crates)}</td>
-                              <td className="px-3 py-1.5 text-right tabular-nums">{p.units_per_package || '—'}</td>
-                              <td className="px-3 py-1.5 text-right tabular-nums">₹{fmt(p.price_per_unit)}</td>
-                              <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700">₹{fmt(amt)}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {isExpanded && (
+                  <>
+                    <div className="px-3 sm:px-4 py-2 bg-slate-50/60 border-b border-slate-100 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs" data-testid={`sampling-trial-details-${t.id}`}>
+                      <div>
+                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mr-1.5">End Date</span>
+                        <span className="tabular-nums font-semibold text-slate-900">{t.end_date || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mr-1.5">Period</span>
+                        <span className="tabular-nums text-slate-700">{t.trial_date || '—'} → {t.end_date || '—'}</span>
+                      </div>
+                    </div>
 
-                {t.notes && (
-                  <div className="px-3 py-2 text-xs text-slate-600 border-t border-slate-100 bg-slate-50/50">
-                    <span className="font-semibold text-slate-500 uppercase tracking-wider text-[9px]">Notes:</span> {t.notes}
-                  </div>
+                    {(t.sku_plans || []).length > 0 && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-semibold">SKU</th>
+                              <th className="px-3 py-2 text-right font-semibold">Crates</th>
+                              <th className="px-3 py-2 text-right font-semibold">Bottles/Crate</th>
+                              <th className="px-3 py-2 text-right font-semibold">Price/Bottle</th>
+                              <th className="px-3 py-2 text-right font-semibold">Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {t.sku_plans.map((p, idx) => {
+                              const amt = Number(p.crates || 0) * Number(p.units_per_package || 0) * Number(p.price_per_unit || 0);
+                              return (
+                                <tr key={idx} className="border-t border-slate-100">
+                                  <td className="px-3 py-1.5 text-slate-800 font-medium">{p.sku}</td>
+                                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(p.crates)}</td>
+                                  <td className="px-3 py-1.5 text-right tabular-nums">{p.units_per_package || '—'}</td>
+                                  <td className="px-3 py-1.5 text-right tabular-nums">₹{fmt(p.price_per_unit)}</td>
+                                  <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700">₹{fmt(amt)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {t.notes && (
+                      <div className="px-3 py-2 text-xs text-slate-600 border-t border-slate-100 bg-slate-50/50">
+                        <span className="font-semibold text-slate-500 uppercase tracking-wider text-[9px]">Notes:</span> {t.notes}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             );
