@@ -2225,7 +2225,7 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by lead name or city..."
+            placeholder="Search by lead name..."
             className="h-9 bg-white"
             data-testid="focus-leads-search"
           />
@@ -2249,7 +2249,6 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-900 truncate">{lead.name}</p>
                         <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                          {lead.city && <span className="text-[10px] text-slate-400 uppercase tracking-wider">{lead.city}</span>}
                           <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${statusBadgeClasses(lead.status)}`}>
                             {formatStatusLabel(lead.status)}
                           </Badge>
@@ -2276,34 +2275,32 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
         </div>
       ) : (
         <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="focus-leads-grid">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm" style={{ minWidth: '720px' }}>
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold w-10">#</th>
-                <th className="px-3 py-2 text-left font-semibold">Lead</th>
-                <th className="px-3 py-2 text-left font-semibold">City</th>
-                <th className="px-3 py-2 text-left font-semibold">Status</th>
-                <th className="px-3 py-2 text-right font-semibold">Est. Monthly Revenue (₹)</th>
-                {isEditable && <th className="w-10"></th>}
+                <th className="px-3 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10 w-10">#</th>
+                <th className="px-3 py-3 text-left font-semibold sticky left-10 bg-slate-50 z-10 min-w-[260px] max-w-[320px]">Lead</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap">Status</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Est. Monthly Revenue (₹)</th>
+                {isEditable && <th className="w-10 sticky right-0 bg-slate-50 z-10"></th>}
               </tr>
             </thead>
             <tbody>
               {selectedLeads.map((lead, idx) => (
-                <tr key={lead.id} className="border-t border-slate-100 hover:bg-amber-50/30" data-testid={`focus-lead-row-${lead.id}`}>
-                  <td className="px-3 py-2 tabular-nums text-slate-400 text-xs">{idx + 1}</td>
-                  <td className="px-3 py-2">
-                    <p className="text-sm font-semibold text-slate-900">{lead.name}</p>
-                    {lead.lead_id && <p className="text-[10px] text-slate-400 uppercase tracking-wider">{lead.lead_id}</p>}
+                <tr key={lead.id} className="border-t border-slate-100 hover:bg-amber-50/30 group" data-testid={`focus-lead-row-${lead.id}`}>
+                  <td className="px-3 py-3 tabular-nums text-slate-400 text-xs sticky left-0 bg-white group-hover:bg-amber-50/30 transition-colors">{idx + 1}</td>
+                  <td className="px-3 py-3 sticky left-10 bg-white group-hover:bg-amber-50/30 transition-colors min-w-[260px] max-w-[320px]">
+                    <p className="text-sm font-semibold text-slate-900 truncate" title={lead.name}>{lead.name}</p>
+                    {lead.lead_id && <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{lead.lead_id}</p>}
                   </td>
-                  <td className="px-3 py-2 text-xs text-slate-600">{lead.city || '—'}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-3 whitespace-nowrap">
                     <Badge variant="outline" className={`text-[9px] uppercase tracking-wider ${statusBadgeClasses(lead.status)}`}>
                       {formatStatusLabel(lead.status)}
                     </Badge>
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700">₹{fmt(lead.estimated_monthly_revenue)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700">₹{fmt(lead.estimated_monthly_revenue)}</td>
                   {isEditable && (
-                    <td className="px-2 py-2 text-right">
+                    <td className="px-2 py-3 text-right sticky right-0 bg-white group-hover:bg-amber-50/30 transition-colors">
                       <button
                         onClick={() => removeLead(lead.id)}
                         className="p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600"
@@ -2319,11 +2316,11 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
             </tbody>
             <tfoot className="bg-slate-50 text-xs">
               <tr className="font-semibold text-slate-900">
-                <td className="px-3 py-2" colSpan={4}>
+                <td className="px-3 py-3 sticky left-0 bg-slate-50 whitespace-nowrap" colSpan={3}>
                   Total — {selectedLeads.length} lead{selectedLeads.length !== 1 ? 's' : ''}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums" data-testid="focus-leads-total-revenue">₹{fmt(totalRevenue)}</td>
-                {isEditable && <td></td>}
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap" data-testid="focus-leads-total-revenue">₹{fmt(totalRevenue)}</td>
+                {isEditable && <td className="sticky right-0 bg-slate-50"></td>}
               </tr>
             </tfoot>
           </table>
