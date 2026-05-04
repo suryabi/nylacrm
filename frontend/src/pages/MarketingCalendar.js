@@ -202,27 +202,30 @@ function PostCard({ post, onClick, onDelete, onDragStart }) {
   const status = STATUS_CONFIG[post.status] || STATUS_CONFIG.draft;
   const ct = CONTENT_TYPE_ICONS[post.content_type] || CONTENT_TYPE_ICONS.other;
   const CtIcon = ct.icon;
+  const borderColor = {
+    draft: 'border-l-slate-400',
+    review: 'border-l-amber-400',
+    scheduled: 'border-l-blue-500',
+    published: 'border-l-emerald-500',
+  }[post.status] || 'border-l-slate-400';
 
   return (
     <div
       draggable
       onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('text/plain', post.id); e.dataTransfer.effectAllowed = 'move'; onDragStart?.(post.id); }}
-      className={`w-full text-left px-2.5 py-2 rounded-lg border border-slate-200 ${status.bg} transition-all hover:shadow-sm cursor-grab active:cursor-grabbing group/card`}
+      className={`w-full text-left rounded-lg border-l-[3px] ${borderColor} ${status.bg} hover:brightness-95 transition-all cursor-grab active:cursor-grabbing group/card`}
       data-testid={`post-pill-${post.id}`}>
-      <div className="flex items-start justify-between gap-1">
+      <div className="flex items-start justify-between gap-1 px-2 py-1.5">
         <button onClick={(e) => { e.stopPropagation(); onClick(post); }} className="flex-1 min-w-0 text-left">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${status.dot} shrink-0`} />
-            <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${ct.bg}`}>
-              <CtIcon size={12} className={ct.text} />
-            </span>
-            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider truncate">{post.category || ct.label}</span>
+          <div className="flex items-center gap-1 mb-0.5">
+            <CtIcon className={`w-3 h-3 ${ct.text}`} />
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${status.text} truncate`}>{post.category || ct.label}</span>
           </div>
-          <p className="text-xs font-medium text-slate-700 leading-snug line-clamp-2">{post.concept || 'Untitled'}</p>
+          <p className={`text-xs font-semibold ${status.text} leading-snug line-clamp-2`}>{post.concept || 'Untitled'}</p>
         </button>
         <button onClick={(e) => { e.stopPropagation(); onDelete(post.id); }}
-          className="shrink-0 opacity-0 group-hover/card:opacity-100 transition-opacity p-0.5 rounded hover:bg-slate-200/50 mt-0.5"
-          data-testid={`delete-pill-${post.id}`}><X size={11} className="text-slate-400" /></button>
+          className="shrink-0 opacity-0 group-hover/card:opacity-100 transition-opacity p-0.5 rounded hover:bg-white/60"
+          data-testid={`delete-pill-${post.id}`}><X className="w-3 h-3 text-slate-400" /></button>
       </div>
     </div>
   );
@@ -232,44 +235,53 @@ function PostCard({ post, onClick, onDelete, onDragStart }) {
 function EventBadge({ event }) {
   const isIndian = event.type === 'indian';
   const isCustom = event.type === 'custom';
+  const styles = isIndian
+    ? { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-l-orange-500' }
+    : isCustom
+    ? { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-l-violet-500' }
+    : { bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-l-sky-500' };
   return (
-    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold mb-1 border ${isIndian ? 'bg-orange-50 text-orange-700 border-orange-200' : isCustom ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-sky-50 text-sky-700 border-sky-200'}`} title={event.name}>
-      <Sparkles size={10} className="shrink-0" />
-      <span className="truncate">{event.name}</span>
+    <div className={`flex items-center gap-1.5 rounded-lg border-l-[3px] ${styles.border} ${styles.bg} px-2 py-1`} title={event.name}>
+      <Sparkles className={`w-3 h-3 ${styles.text} shrink-0`} />
+      <span className={`text-[11px] font-semibold ${styles.text} truncate`}>{event.name}</span>
     </div>
   );
 }
 
 // --- Calendar Event Card (full events with requirements/tasks) ---
 function CalendarEventCard({ event, onClick }) {
-  const statusColors = {
-    planned: 'border-l-violet-500 bg-violet-50',
-    in_progress: 'border-l-amber-500 bg-amber-50',
-    completed: 'border-l-emerald-500 bg-emerald-50',
-    cancelled: 'border-l-red-400 bg-red-50 opacity-60',
+  const styles = {
+    planned: { bg: 'bg-violet-50', text: 'text-violet-700', border: 'border-l-violet-500' },
+    in_progress: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-l-amber-500' },
+    completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-l-emerald-500' },
+    cancelled: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-l-rose-400' },
   };
-  const cls = statusColors[event.status] || statusColors.planned;
+  const s = styles[event.status] || styles.planned;
   const tasksDone = (event.tasks || []).filter(t => t.status === 'done').length;
   const tasksTotal = (event.tasks || []).length;
 
   return (
     <div
-      className={`w-full text-left px-2.5 py-2 rounded-lg border border-slate-200 border-l-[3px] ${cls} transition-all hover:shadow-sm cursor-pointer group/evcard mb-1.5`}
+      className={`w-full text-left rounded-lg border-l-[3px] ${s.border} ${s.bg} hover:brightness-95 transition-all cursor-pointer group/evcard ${event.status === 'cancelled' ? 'opacity-60' : ''}`}
       onClick={(e) => { e.stopPropagation(); onClick(event); }}
       data-testid={`cal-event-${event.id}`}
     >
-      <div className="flex items-center gap-1.5 mb-0.5">
-        <CalendarDays size={11} className="text-violet-500 shrink-0" />
-        {event.event_type && (
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: event.event_type_color || '#8B5CF6' }} />
+      <div className="px-2 py-1.5">
+        <div className="flex items-center gap-1 mb-0.5">
+          <CalendarDays className={`w-3 h-3 ${s.text} shrink-0`} />
+          {event.event_type && (
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: event.event_type_color || '#8B5CF6' }} />
+          )}
+          <span className={`text-[10px] font-bold uppercase tracking-wider ${s.text} truncate`}>{event.event_type || 'Event'}</span>
+        </div>
+        <p className={`text-xs font-semibold ${s.text} leading-snug line-clamp-1`}>{event.name}</p>
+        {(event.start_time || event.location || tasksTotal > 0) && (
+          <div className={`flex items-center gap-2 mt-0.5 text-[10px] ${s.text} opacity-70`}>
+            {event.start_time && <span className="tabular-nums">{event.start_time}</span>}
+            {event.location && <span className="flex items-center gap-0.5 truncate"><MapPin className="w-2.5 h-2.5" />{event.location}</span>}
+            {tasksTotal > 0 && <span className="tabular-nums">{tasksDone}/{tasksTotal}</span>}
+          </div>
         )}
-        <span className="text-[10px] font-medium text-violet-500 uppercase tracking-wider truncate">{event.event_type || 'Event'}</span>
-      </div>
-      <p className="text-xs font-semibold text-slate-800 leading-snug line-clamp-1">{event.name}</p>
-      <div className="flex items-center gap-2 mt-0.5 text-[9px] text-slate-400">
-        {event.start_time && <span>{event.start_time}</span>}
-        {event.location && <span className="flex items-center gap-0.5 truncate"><MapPin size={8} />{event.location}</span>}
-        {tasksTotal > 0 && <span>{tasksDone}/{tasksTotal} tasks</span>}
       </div>
     </div>
   );
@@ -484,122 +496,102 @@ export default function MarketingCalendar() {
   const getEventsForDate = (mmdd, fullDate) => events.filter(e => e.date === mmdd || e.date === fullDate);
 
   return (
-    <div className="min-h-screen bg-white" data-testid="marketing-calendar">
+    <div className="space-y-5 sm:space-y-6 p-6 lg:p-8 bg-slate-50/40 min-h-screen" data-testid="marketing-calendar">
       {/* Header */}
-      <div className="border-b border-slate-200 sticky top-0 z-40 bg-white">
-        <div className="px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1.5">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center shadow-lg shadow-slate-900/10">
+              <CalendarIcon className="w-5 h-5 text-white" />
+            </div>
             <div>
-              <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">Content Calendar</h1>
-              <p className="text-sm text-slate-500 mt-0.5">Plan, schedule & publish</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={handleExport}
-                className="border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm"
-                data-testid="export-btn"><Download size={15} /> Export</button>
-              <button onClick={() => { setUploadOpen(true); setUploadStep('choose'); setUploadParsed(null); }}
-                className="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors font-medium px-4 py-2.5 rounded-lg flex items-center gap-2 text-sm"
-                data-testid="upload-btn"><Upload size={15} /> Upload</button>
-              <button onClick={() => openNew(todayStr)}
-                className="bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm"
-                data-testid="new-post-btn"><Plus size={16} /> New Post</button>
-              <button onClick={() => openNewEvent(todayStr)}
-                className="bg-violet-600 text-white hover:bg-violet-700 transition-colors font-medium px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm"
-                data-testid="new-event-btn"><CalendarDays size={16} /> New Event</button>
-            </div>
-          </div>
-
-          {/* Controls */}
-          <div className="flex items-center justify-between mt-4">
-            <div className="flex items-center gap-2">
-              <button onClick={view === 'week' ? prevWeek : prevMonth} className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600" data-testid="prev-period-btn"><ChevronLeft size={18} /></button>
-              <h2 className="text-base font-semibold text-slate-900 min-w-[180px] text-center">{view === 'day' ? todayStr : `${MONTHS[month - 1]} ${year}`}</h2>
-              <button onClick={view === 'week' ? nextWeek : nextMonth} className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-600" data-testid="next-period-btn"><ChevronRight size={18} /></button>
-              <button onClick={goToday} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors ml-1" data-testid="today-btn">Today</button>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Status counts */}
-              <div className="hidden md:flex items-center gap-3">
-                {Object.entries(STATUS_CONFIG).map(([key, s]) => (
-                  <span key={key} className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <span className={`w-2 h-2 rounded-full ${s.dot}`} />
-                    {stats.by_status[key] || 0} {s.label}
-                  </span>
-                ))}
-              </div>
-              <div className="h-4 w-px bg-slate-200 hidden md:block" />
-              {/* View toggle */}
-              <div className="flex bg-slate-100 rounded-lg p-0.5" data-testid="view-toggle">
-                {VIEWS.map(v => (
-                  <button key={v} onClick={() => setView(v)}
-                    className={`px-3.5 py-1.5 text-xs font-medium rounded-md capitalize transition-all ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    data-testid={`view-${v}`}>{v === 'list' ? <span className="flex items-center gap-1"><List size={12} /> List</span> : v}</button>
-                ))}
-              </div>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Content Calendar</h1>
+              <p className="text-sm text-slate-500 mt-0.5">Plan, schedule & publish your marketing posts and events</p>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Metrics Bar */}
-      <div className="px-6 lg:px-8 pt-4 pb-0">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          {/* Total Posts */}
-          <div className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid="metric-total">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Total Posts</div>
-            <div className="text-2xl font-semibold text-slate-900 mt-0.5">{stats.total}</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="hidden sm:flex items-center gap-2 px-3 h-10 rounded-xl bg-white border border-slate-200">
+            <span className="text-xs text-slate-500">Posts</span>
+            <span className="text-sm font-bold text-slate-900 tabular-nums">{stats.total}</span>
+            <span className="text-xs text-slate-400">·</span>
+            <span className="text-xs text-slate-500">Events</span>
+            <span className="text-sm font-bold text-slate-900 tabular-nums">{stats.calendar_events_count || events.length}</span>
           </div>
-          {/* Events this month */}
-          <div className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid="metric-events">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Events</div>
-            <div className="text-2xl font-semibold text-sky-600 mt-0.5">{stats.events_count || events.length}</div>
-          </div>
-          {/* Calendar Events */}
-          <div className="border border-violet-200/70 rounded-lg px-4 py-3 bg-violet-50/50" data-testid="metric-cal-events">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-violet-500">Calendar Events</div>
-            <div className="text-2xl font-semibold text-violet-600 mt-0.5">{stats.calendar_events_count || 0}</div>
-          </div>
-          {/* Reels */}
-          <div className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid="metric-reels">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Reels</div>
-            <div className="text-2xl font-semibold text-violet-600 mt-0.5">{stats.by_content_type?.reel || 0}</div>
-          </div>
-          {/* Category breakdown */}
-          {Object.entries(stats.by_category || {}).slice(0, 3).map(([cat, count]) => {
-            const catDef = categories.find(c => c.name === cat);
-            return (
-              <div key={cat} className="border border-slate-200 rounded-lg px-4 py-3 bg-white" data-testid={`metric-cat-${cat}`}>
-                <div className="text-[11px] font-medium uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                  {catDef && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: catDef.color }} />}
-                  {cat}
-                </div>
-                <div className="text-2xl font-semibold text-slate-900 mt-0.5">{count}</div>
-              </div>
-            );
-          })}
+          <button onClick={handleExport}
+            className="h-10 px-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
+            data-testid="export-btn"><Download className="w-4 h-4" /> Export</button>
+          <button onClick={() => { setUploadOpen(true); setUploadStep('choose'); setUploadParsed(null); }}
+            className="h-10 px-3.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1.5"
+            data-testid="upload-btn"><Upload className="w-4 h-4" /> Upload</button>
+          <button onClick={() => openNewEvent(todayStr)}
+            className="h-10 px-3.5 rounded-xl border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 text-sm font-semibold flex items-center gap-1.5"
+            data-testid="new-event-btn"><CalendarDays className="w-4 h-4" /> New Event</button>
+          <button onClick={() => openNew(todayStr)}
+            className="h-10 px-4 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white text-sm font-semibold hover:from-slate-800 flex items-center gap-2"
+            data-testid="new-post-btn"><Plus className="w-4 h-4" /> New Post</button>
         </div>
       </div>
 
-      {/* Calendar Body */}
-      <div className="px-6 lg:px-8 py-4">
+      {/* Calendar shell */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-gradient-to-b from-slate-50 to-white gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+              <button onClick={view === 'week' ? prevWeek : prevMonth} className="w-8 h-8 rounded-lg hover:bg-white hover:shadow-sm flex items-center justify-center" data-testid="prev-period-btn">
+                <ChevronLeft className="w-4 h-4 text-slate-700" />
+              </button>
+              <button onClick={goToday} className="px-3 h-8 rounded-lg text-xs font-semibold text-slate-700 hover:bg-white hover:shadow-sm" data-testid="today-btn">Today</button>
+              <button onClick={view === 'week' ? nextWeek : nextMonth} className="w-8 h-8 rounded-lg hover:bg-white hover:shadow-sm flex items-center justify-center" data-testid="next-period-btn">
+                <ChevronRight className="w-4 h-4 text-slate-700" />
+              </button>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              {view === 'day'
+                ? <>{MONTHS[now.getMonth()]} {now.getDate()}, <span className="text-slate-400 font-light">{now.getFullYear()}</span></>
+                : <>{MONTHS[month - 1]} <span className="text-slate-400 font-light">{year}</span></>}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-4">
+              {Object.entries(STATUS_CONFIG).map(([key, s]) => (
+                <span key={key} className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+                  <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />{stats.by_status[key] || 0} {s.label}
+                </span>
+              ))}
+            </div>
+            <div className="flex items-center bg-slate-100 rounded-xl p-1" data-testid="view-toggle">
+              {VIEWS.map(v => (
+                <button key={v} onClick={() => setView(v)}
+                  className={`px-3.5 h-8 rounded-lg text-xs font-semibold capitalize transition-all ${view === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                  data-testid={`view-${v}`}>
+                  {v === 'list' ? <span className="flex items-center gap-1"><List className="w-3 h-3" /> List</span> : v}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Calendar Body */}
         {loading ? (
-          <div className="flex items-center justify-center py-20"><div className="text-sm text-slate-400">Loading...</div></div>
+          <div className="flex items-center justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>
         ) : (
           <>
             {/* MONTH VIEW */}
             {view === 'month' && (
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+              <>
+                <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/50">
                   {DAYS.map((d, di) => (
-                    <div key={d} className={`py-2.5 text-center text-[11px] font-medium uppercase tracking-wider border-r border-slate-200 last:border-r-0 ${di === 0 || di === 6 ? 'text-slate-400/70 bg-slate-100/60' : 'text-slate-400'}`}>{d}</div>
+                    <div key={d} className={`text-center text-[11px] font-bold uppercase tracking-[0.14em] py-2.5 ${di === 0 || di === 6 ? 'text-slate-400' : 'text-slate-500'}`}>{d}</div>
                   ))}
                 </div>
                 <div className="grid grid-cols-7">
                   {calendarDays.map((day, i) => {
                     const colIndex = i % 7;
                     const isWeekend = colIndex === 0 || colIndex === 6;
-                    if (day === null) return <div key={`e-${i}`} className={`min-h-[130px] border-r border-b border-slate-100 ${isWeekend ? 'bg-slate-50/80' : 'bg-slate-50/50'}`} />;
+                    if (day === null) return <div key={`e-${i}`} className="min-h-[170px] sm:min-h-[200px] border-r border-b border-slate-100 bg-slate-50/40" />;
                     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                     const isToday = dateStr === todayStr;
                     const posts = postsByDate[dateStr] || [];
@@ -609,71 +601,94 @@ export default function MarketingCalendar() {
 
                     return (
                       <div key={dateStr}
-                        className={`min-h-[130px] p-2 border-r border-b border-slate-100 cursor-pointer transition-all group ${isToday ? 'bg-blue-50/30' : isWeekend ? 'bg-slate-50/60 hover:bg-slate-100/40' : 'bg-white hover:bg-slate-50/50'} ${isDrop ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset' : ''}`}
+                        className={`group relative min-h-[170px] sm:min-h-[200px] border-r border-b border-slate-100 p-2 sm:p-2.5 cursor-pointer transition-all hover:bg-slate-50/70 ${isToday ? 'bg-sky-50/40' : isWeekend ? 'bg-slate-50/30' : 'bg-white'} ${isDrop ? 'bg-sky-50 ring-2 ring-sky-400 ring-inset' : ''}`}
                         onClick={() => openNew(dateStr)}
                         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTarget(dateStr); }}
                         onDragLeave={() => setDropTarget(null)}
                         onDrop={(e) => { e.preventDefault(); handleDrop(dateStr); }}
                         data-testid={`cal-cell-${dateStr}`}>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className={`text-sm ${isToday ? 'bg-blue-600 text-white w-7 h-7 flex items-center justify-center rounded-full font-semibold' : isWeekend ? 'text-slate-400 font-medium' : 'text-slate-500 font-medium'}`}>{day}</span>
-                          <Plus size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <span className={`inline-flex items-center justify-center min-w-[28px] h-7 px-1.5 rounded-full text-sm font-bold tabular-nums ${isToday ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-700 group-hover:bg-slate-100'}`}>{day}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openNew(dateStr); }}
+                            className="opacity-0 group-hover:opacity-100 w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center hover:scale-110 transition-all"
+                            title="New post"
+                            data-testid={`day-create-${dateStr}`}>
+                            <Plus className="w-3 h-3" />
+                          </button>
                         </div>
-                        {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
-                        {(calEventsByDate[dateStr] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />)}
-                        <div className="space-y-1.5 mt-1">
+                        <div className="space-y-1 overflow-hidden">
+                          {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
+                          {(calEventsByDate[dateStr] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />)}
                           {posts.slice(0, 3).map(p => (
                             <PostCard key={p.id} post={p} onClick={openEdit} onDelete={deletePost} onDragStart={setDraggingPostId} />
                           ))}
-                          {posts.length > 3 && <div className="text-[10px] text-slate-400 font-medium pl-1">+{posts.length - 3} more</div>}
+                          {posts.length > 3 && (
+                            <button onClick={(e) => { e.stopPropagation(); openNew(dateStr); }} className="text-[11px] font-semibold text-slate-500 hover:text-slate-900 px-1.5 py-0.5">
+                              +{posts.length - 3} more
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </>
             )}
 
             {/* WEEK VIEW */}
             {view === 'week' && (
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+              <>
+                <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/50">
                   {getWeekDates().map(d => {
                     const ds = fmtDate(d);
                     const isToday = ds === todayStr;
                     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                     return (
-                      <div key={ds} className={`py-3 text-center border-r border-slate-200 last:border-r-0 ${isToday ? 'bg-blue-50' : isWeekend ? 'bg-slate-100/60' : ''}`}>
-                        <div className={`text-[11px] font-medium uppercase tracking-wider ${isWeekend ? 'text-slate-400/70' : 'text-slate-400'}`}>{DAYS[d.getDay()]}</div>
-                        <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-blue-600' : isWeekend ? 'text-slate-400' : 'text-slate-700'}`}>{d.getDate()}</div>
+                      <div key={ds} className={`px-3 py-3 ${isToday ? 'border-b-2 border-sky-300' : ''} ${isWeekend ? 'bg-slate-50/40' : ''}`}>
+                        <div className={`text-[10px] font-bold uppercase tracking-[0.14em] ${isWeekend ? 'text-slate-400' : 'text-slate-400'}`}>{DAYS[d.getDay()]}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`inline-flex items-center justify-center w-9 h-9 rounded-full text-xl font-black tabular-nums ${isToday ? 'bg-slate-900 text-white' : isWeekend ? 'text-slate-400' : 'text-slate-800'}`}>{d.getDate()}</span>
+                          {(postsByDate[ds] || []).length > 0 && (
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              {(postsByDate[ds] || []).length} post{(postsByDate[ds] || []).length !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
-                <div className="grid grid-cols-7 min-h-[420px]">
+                <div className="grid grid-cols-7 min-h-[460px] divide-x divide-slate-100">
                   {getWeekDates().map(d => {
                     const ds = fmtDate(d);
                     const posts = postsByDate[ds] || [];
                     const mmdd = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     const dayEvents = getEventsForDate(mmdd, ds);
                     const isDrop = dropTarget === ds;
+                    const isToday = ds === todayStr;
                     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                     return (
-                      <div key={ds} className={`p-2 border-r border-slate-100 last:border-r-0 cursor-pointer transition-all ${isWeekend ? 'bg-slate-50/60 hover:bg-slate-100/40' : 'hover:bg-slate-50/50'} ${isDrop ? 'bg-blue-50 ring-2 ring-blue-400 ring-inset' : ''}`}
+                      <div key={ds} className={`p-2 cursor-pointer transition-all group ${isToday ? 'bg-sky-50/30' : isWeekend ? 'bg-slate-50/30' : 'bg-white hover:bg-slate-50/40'} ${isDrop ? 'bg-sky-50 ring-2 ring-sky-400 ring-inset' : ''}`}
                         onClick={() => openNew(ds)}
                         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropTarget(ds); }}
                         onDragLeave={() => setDropTarget(null)}
                         onDrop={(e) => { e.preventDefault(); handleDrop(ds); }}>
-                        {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
-                        {(calEventsByDate[ds] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />)}
-                        <div className="space-y-1.5 mt-1">
+                        <div className="space-y-1">
+                          {dayEvents.map((ev, ei) => <EventBadge key={ei} event={ev} />)}
+                          {(calEventsByDate[ds] || []).map(ce => <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />)}
                           {posts.map(p => <PostCard key={p.id} post={p} onClick={openEdit} onDelete={deletePost} onDragStart={setDraggingPostId} />)}
+                          {posts.length === 0 && dayEvents.length === 0 && (calEventsByDate[ds] || []).length === 0 && (
+                            <div className="opacity-0 group-hover:opacity-100 mt-2 rounded-lg border border-dashed border-slate-300 py-2 text-center text-[11px] text-slate-400 flex items-center justify-center gap-1">
+                              <Plus className="w-3 h-3" /> Add
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
+              </>
             )}
 
             {/* DAY VIEW */}
@@ -682,53 +697,67 @@ export default function MarketingCalendar() {
               const mmdd = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
               const dayEvents = getEventsForDate(mmdd, todayStr);
               return (
-                <div className="max-w-xl mx-auto space-y-4">
-                  <div className="border border-slate-200 rounded-lg p-6 bg-white">
-                    <h3 className="text-lg font-semibold text-slate-900">{MONTHS[now.getMonth()]} {now.getDate()}, {now.getFullYear()}</h3>
+                <div className="flex flex-col">
+                  <div className="px-5 py-4 border-b border-slate-100 bg-sky-50/30">
+                    <div className="flex items-baseline gap-3">
+                      <span className="inline-flex items-center justify-center w-12 h-12 rounded-2xl text-2xl font-black tabular-nums bg-slate-900 text-white">{now.getDate()}</span>
+                      <div>
+                        <div className="text-sm font-bold text-slate-900">{['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][now.getDay()]}</div>
+                        <div className="text-xs text-slate-500">{MONTHS[now.getMonth()]} {now.getFullYear()} · {dayPosts.length + (calEventsByDate[todayStr] || []).length} item{dayPosts.length + (calEventsByDate[todayStr] || []).length !== 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
                     {dayEvents.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-3">
+                      <div className="flex flex-wrap gap-1.5 mt-3">
                         {dayEvents.map((ev, i) => (
-                          <span key={i} className="px-2.5 py-1 bg-sky-50 text-sky-600 rounded-full text-xs font-medium flex items-center gap-1">
-                            <Sparkles size={10} /> {ev.name}
+                          <span key={i} className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-semibold flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> {ev.name}
                           </span>
                         ))}
                       </div>
                     )}
-                    {/* Calendar Events for today */}
+                  </div>
+
+                  <div className="px-5 py-4 space-y-3">
                     {(calEventsByDate[todayStr] || []).length > 0 && (
-                      <div className="mt-3 space-y-2">
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1">Events</div>
                         {(calEventsByDate[todayStr] || []).map(ce => (
                           <CalendarEventCard key={ce.id} event={ce} onClick={openEditEvent} />
                         ))}
                       </div>
                     )}
+
                     {dayPosts.length === 0 ? (
                       <div className="text-center py-12 text-slate-400">
-                        <CalendarIcon size={32} className="mx-auto mb-3 opacity-30" />
+                        <CalendarIcon className="w-8 h-8 mx-auto mb-3 opacity-30" />
                         <p className="text-sm font-medium">No posts planned</p>
                         <button onClick={() => openNew(todayStr)}
-                          className="mt-3 bg-blue-600 text-white hover:bg-blue-700 transition-colors font-medium px-4 py-2 rounded-lg text-sm inline-flex items-center gap-1.5">
-                          <Plus size={14} /> Plan a Post
+                          className="mt-3 h-9 px-4 rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white text-sm font-semibold hover:from-slate-800 inline-flex items-center gap-1.5">
+                          <Plus className="w-4 h-4" /> Plan a Post
                         </button>
                       </div>
                     ) : (
-                      <div className="space-y-3 mt-4">
+                      <div className="space-y-2">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 mb-1">Posts</div>
                         {dayPosts.map(post => {
                           const s = STATUS_CONFIG[post.status] || STATUS_CONFIG.draft;
                           const ct = CONTENT_TYPE_ICONS[post.content_type] || CONTENT_TYPE_ICONS.other;
                           const CtIcon = ct.icon;
                           return (
                             <div key={post.id} onClick={() => openEdit(post)}
-                              className="border border-slate-200 rounded-lg p-4 cursor-pointer hover:border-slate-300 hover:shadow-sm transition-all"
+                              className={`rounded-xl border-l-[3px] ${s.dot.replace('bg-', 'border-l-')} bg-white border-y border-r border-slate-200 p-3.5 cursor-pointer hover:shadow-md hover:border-slate-300 transition-all`}
                               data-testid={`day-post-${post.id}`}>
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-2.5">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-center gap-2.5 min-w-0">
                                   <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${ct.bg}`}>
-                                    <CtIcon size={18} className={ct.text} />
+                                    <CtIcon className={`w-4 h-4 ${ct.text}`} />
                                   </span>
-                                  <span className="font-medium text-slate-900 text-sm">{post.concept || 'Untitled'}</span>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-slate-900 line-clamp-1">{post.concept || 'Untitled'}</p>
+                                    {post.category && <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mt-0.5">{post.category}</p>}
+                                  </div>
                                 </div>
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${s.bg} ${s.text}`}>{s.label}</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${s.bg} ${s.text}`}>{s.label}</span>
                               </div>
                               {post.message && <p className="text-xs text-slate-500 mt-2 line-clamp-2">{post.message}</p>}
                               <div className="flex gap-1 mt-2.5">
