@@ -1948,114 +1948,136 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
         </div>
       )}
 
-      {/* Trials list */}
+      {/* Trials list — table style consistent with Collections / Case Targets / Focus Leads */}
       {trials.length === 0 ? (
         <div className="text-center py-10 text-sm text-slate-500 border border-dashed border-slate-200 rounded-sm" data-testid="sampling-trials-empty">
           No trials recorded yet. Click <span className="font-semibold">New Trial</span> to add one.
         </div>
       ) : (
-        <div className="space-y-2" data-testid="sampling-trials-list">
-          {trials.map((t) => {
-            const meta = statusMeta(t.status);
-            const isExpanded = !!expandedTrials[t.id];
-            const toggleExpand = () => setExpandedTrials(prev => ({ ...prev, [t.id]: !prev[t.id] }));
-            return (
-              <div key={t.id} className="border border-slate-200 rounded-sm bg-white overflow-hidden" data-testid={`sampling-trial-${t.id}`}>
-                <div className="p-3 sm:p-4 flex flex-wrap items-center gap-3 border-b border-slate-100">
-                  <button
-                    onClick={toggleExpand}
-                    className="p-1 -ml-1 rounded hover:bg-slate-100 text-slate-400 hover:text-slate-700 shrink-0"
-                    aria-label={isExpanded ? 'Collapse trial details' : 'Expand trial details'}
-                    data-testid={`sampling-trial-toggle-${t.id}`}
-                  >
-                    {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  </button>
-                  <div className="p-1.5 bg-slate-100 rounded-sm shrink-0">
-                    <FlaskConical className="h-4 w-4 text-slate-700" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900 truncate">{t.lead_name || '—'}</p>
-                    {t.lead_city && <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{t.lead_city}</p>}
-                  </div>
-                  <Badge variant="outline" className={`${meta.color} text-[10px] font-semibold uppercase tracking-wider`}>
-                    {meta.label}
-                  </Badge>
-                  <div className="text-right">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Trial Date</p>
-                    <p className="text-xs font-semibold tabular-nums text-slate-900">
-                      {t.trial_date || '—'}
-                    </p>
-                    <p className="text-[10px] text-slate-500">{t.duration_days || 0} day{t.duration_days === 1 ? '' : 's'}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Amount</p>
-                    <p className="text-sm font-bold tabular-nums text-emerald-700">₹{fmt(t.total_amount || 0)}</p>
-                  </div>
-                  {!isLocked && (
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openEditForm(t)} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900" data-testid={`sampling-edit-${t.id}`}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button onClick={() => deleteTrial(t)} className="p-1.5 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600" data-testid={`sampling-delete-${t.id}`}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
+        <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="sampling-trials-list">
+          <table className="w-full text-sm" style={{ minWidth: '900px' }}>
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-2 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10 w-8"></th>
+                <th className="px-3 py-3 text-left font-semibold sticky left-8 bg-slate-50 z-10 min-w-[220px] max-w-[280px]">Lead</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap">Status</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Trial Date</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Duration</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Amount</th>
+                {!isLocked && <th className="w-20 sticky right-0 bg-slate-50 z-10"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {trials.map((t) => {
+                const meta = statusMeta(t.status);
+                const isExpanded = !!expandedTrials[t.id];
+                const toggleExpand = () => setExpandedTrials(prev => ({ ...prev, [t.id]: !prev[t.id] }));
+                return (
+                  <React.Fragment key={t.id}>
+                    <tr
+                      className="border-t border-slate-100 hover:bg-amber-50/30 cursor-pointer group"
+                      onClick={toggleExpand}
+                      data-testid={`sampling-trial-${t.id}`}
+                    >
+                      <td className="px-2 py-3 text-center sticky left-0 bg-white group-hover:bg-amber-50/30 transition-colors" data-testid={`sampling-trial-toggle-${t.id}`}>
+                        {isExpanded ? <ChevronDown className="h-4 w-4 text-slate-500 inline" /> : <ChevronRight className="h-4 w-4 text-slate-400 inline" />}
+                      </td>
+                      <td className="px-3 py-3 sticky left-8 bg-white group-hover:bg-amber-50/30 transition-colors min-w-[220px] max-w-[280px]">
+                        <p className="text-sm font-semibold text-slate-900 truncate" title={t.lead_name || ''}>{t.lead_name || '—'}</p>
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap">
+                        <Badge variant="outline" className={`${meta.color} text-[10px] font-semibold uppercase tracking-wider`}>
+                          {meta.label}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-900 font-semibold">{t.trial_date || '—'}</td>
+                      <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-600">{t.duration_days || 0} day{t.duration_days === 1 ? '' : 's'}</td>
+                      <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-bold text-emerald-700">₹{fmt(t.total_amount || 0)}</td>
+                      {!isLocked && (
+                        <td className="px-2 py-3 text-right sticky right-0 bg-white group-hover:bg-amber-50/30 transition-colors">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={(e) => { e.stopPropagation(); openEditForm(t); }} className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-900" data-testid={`sampling-edit-${t.id}`}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); deleteTrial(t); }} className="p-1.5 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600" data-testid={`sampling-delete-${t.id}`}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
 
-                {isExpanded && (
-                  <>
-                    <div className="px-3 sm:px-4 py-2 bg-slate-50/60 border-b border-slate-100 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs" data-testid={`sampling-trial-details-${t.id}`}>
-                      <div>
-                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mr-1.5">End Date</span>
-                        <span className="tabular-nums font-semibold text-slate-900">{t.end_date || '—'}</span>
-                      </div>
-                      <div>
-                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mr-1.5">Period</span>
-                        <span className="tabular-nums text-slate-700">{t.trial_date || '—'} → {t.end_date || '—'}</span>
-                      </div>
-                    </div>
+                    {isExpanded && (
+                      <tr data-testid={`sampling-trial-details-${t.id}`}>
+                        <td colSpan={isLocked ? 6 : 7} className="p-0 bg-slate-50/40 border-t border-slate-200">
+                          <div className="px-5 py-2.5 border-b border-slate-200 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
+                            <div>
+                              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mr-1.5">End Date</span>
+                              <span className="tabular-nums font-semibold text-slate-900">{t.end_date || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mr-1.5">Period</span>
+                              <span className="tabular-nums text-slate-700">{t.trial_date || '—'} → {t.end_date || '—'}</span>
+                            </div>
+                            {t.lead_city && (
+                              <div>
+                                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mr-1.5">City</span>
+                                <span className="text-slate-700">{t.lead_city}</span>
+                              </div>
+                            )}
+                          </div>
 
-                    {(t.sku_plans || []).length > 0 && (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
-                            <tr>
-                              <th className="px-3 py-2 text-left font-semibold">SKU</th>
-                              <th className="px-3 py-2 text-right font-semibold">Crates</th>
-                              <th className="px-3 py-2 text-right font-semibold">Bottles/Crate</th>
-                              <th className="px-3 py-2 text-right font-semibold">Price/Bottle</th>
-                              <th className="px-3 py-2 text-right font-semibold">Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {t.sku_plans.map((p, idx) => {
-                              const amt = Number(p.crates || 0) * Number(p.units_per_package || 0) * Number(p.price_per_unit || 0);
-                              return (
-                                <tr key={idx} className="border-t border-slate-100">
-                                  <td className="px-3 py-1.5 text-slate-800 font-medium">{p.sku}</td>
-                                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(p.crates)}</td>
-                                  <td className="px-3 py-1.5 text-right tabular-nums">{p.units_per_package || '—'}</td>
-                                  <td className="px-3 py-1.5 text-right tabular-nums">₹{fmt(p.price_per_unit)}</td>
-                                  <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700">₹{fmt(amt)}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
+                          {(t.sku_plans || []).length > 0 && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead className="bg-slate-100/70 text-[10px] uppercase tracking-wider text-slate-500">
+                                  <tr>
+                                    <th className="pl-12 pr-3 py-2 text-left font-semibold">SKU</th>
+                                    <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Crates</th>
+                                    <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Bottles/Crate</th>
+                                    <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Price/Bottle</th>
+                                    <th className="px-3 py-2 text-right font-semibold whitespace-nowrap">Amount</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {t.sku_plans.map((p, idx) => {
+                                    const amt = Number(p.crates || 0) * Number(p.units_per_package || 0) * Number(p.price_per_unit || 0);
+                                    return (
+                                      <tr key={idx} className="border-t border-slate-200 bg-white">
+                                        <td className="pl-12 pr-3 py-2 text-slate-800 font-medium whitespace-nowrap">{p.sku}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{fmt(p.crates)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">{p.units_per_package || '—'}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">₹{fmt(p.price_per_unit)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700">₹{fmt(amt)}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          {t.notes && (
+                            <div className="px-5 py-2.5 text-xs text-slate-600 border-t border-slate-200">
+                              <span className="font-semibold text-slate-500 uppercase tracking-wider text-[9px]">Notes:</span> {t.notes}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
                     )}
-
-                    {t.notes && (
-                      <div className="px-3 py-2 text-xs text-slate-600 border-t border-slate-100 bg-slate-50/50">
-                        <span className="font-semibold text-slate-500 uppercase tracking-wider text-[9px]">Notes:</span> {t.notes}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            );
-          })}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+            <tfoot className="bg-slate-50 text-xs">
+              <tr className="font-bold text-slate-900">
+                <td className="px-2 py-3 sticky left-0 bg-slate-50"></td>
+                <td className="px-3 py-3 sticky left-8 bg-slate-50 whitespace-nowrap" colSpan={4}>Total — {trials.length} trial{trials.length !== 1 ? 's' : ''}</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-emerald-700" data-testid="sampling-trials-total-amount">₹{fmt(trials.reduce((s, t) => s + (t.total_amount || 0), 0))}</td>
+                {!isLocked && <td className="sticky right-0 bg-slate-50"></td>}
+              </tr>
+            </tfoot>
+          </table>
         </div>
       )}
     </div>
