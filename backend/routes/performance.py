@@ -1128,18 +1128,46 @@ def _lead_sku_options(lead: dict) -> List[dict]:
 
 
 async def _sku_units_map(tenant_id: str, sku_names: List[str]) -> dict:
-    """Fetch units_per_package for a list of SKU names from master_skus."""
+    """Fetch packaging info for a list of SKU names from master_skus.
+    Returns: {sku_name: {default_units_per_package, packaging_options: [{id, name, units_per_package, is_default}]}}.
+    Packaging options come from packaging_config.stock_out (the sales/distribution packaging set).
+    """
     if not sku_names:
         return {}
     cursor = db.master_skus.find(
-        {"tenant_id": tenant_id, "sku_name": {"$in": list(set(sku_names))}},
-        {"_id": 0, "sku_name": 1, "units_per_package": 1},
+        {"sku_name": {"$in": list(set(sku_names))}},
+        {"_id": 0, "sku_name": 1, "packaging_config": 1},
     )
     out = {}
     async for row in cursor:
-        upp = row.get("units_per_package")
-        if upp:
-            out[row.get("sku_name")] = int(upp)
+        sku_name = row.get("sku_name")
+        cfg = (row.get("packaging_config") or {})
+        # Prefer stock_out (sales packaging); fall back to production.
+        opts_raw = cfg.get("stock_out") or cfg.get("production") or []
+        options = []
+        default_upp = None
+        for o in opts_raw:
+            try:
+                upp = int(o.get("units_per_package") or 0)
+            except Exception:
+                upp = 0
+            if upp <= 0:
+                continue
+            entry = {
+                "packaging_type_id": o.get("packaging_type_id"),
+                "name": o.get("packaging_type_name") or "",
+                "units_per_package": upp,
+                "is_default": bool(o.get("is_default")),
+            }
+            options.append(entry)
+            if entry["is_default"] and default_upp is None:
+                default_upp = upp
+        if default_upp is None and options:
+            default_upp = options[0]["units_per_package"]
+        out[sku_name] = {
+            "default_units_per_package": default_upp,
+            "packaging_options": options,
+        }
     return out
 
 
@@ -1191,7 +1219,9 @@ async def list_sampling_trials(
     for lead in leads:
         opts = _lead_sku_options(lead)
         for o in opts:
-            o["units_per_package"] = int(units_map.get(o["sku"], 0)) or None
+            sku_meta = units_map.get(o["sku"]) or {}
+            o["units_per_package"] = sku_meta.get("default_units_per_package") or None
+            o["packaging_options"] = sku_meta.get("packaging_options") or []
         out_leads.append({
             "id": lead.get("id"),
             "lead_id": lead.get("lead_id"),
@@ -1243,6 +1273,7 @@ class SkuPlan(BaseModel):
     sku: str
     crates: float = 0
     units_per_package: Optional[int] = None
+    packaging_type_id: Optional[str] = None
     price_per_unit: Optional[float] = None
 
 

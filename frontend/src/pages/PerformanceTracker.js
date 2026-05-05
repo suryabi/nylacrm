@@ -1931,6 +1931,7 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
         sku: p.sku || '',
         crates: p.crates ?? 0,
         units_per_package: p.units_per_package ?? null,
+        packaging_type_id: p.packaging_type_id ?? null,
         price_per_unit: p.price_per_unit ?? 0,
       })),
       notes: trial.notes || '',
@@ -1944,10 +1945,36 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
       sku: o.sku,
       crates: 0,
       units_per_package: o.units_per_package || null,
+      packaging_type_id: (o.packaging_options || []).find(p => p.is_default)?.packaging_type_id
+        || (o.packaging_options || [])[0]?.packaging_type_id
+        || null,
       price_per_unit: o.price_per_unit || 0,
     }));
     setForm(f => ({ ...f, lead_id: leadId, sku_plans: skuPlans }));
   };
+
+  // Resolve packaging options for a given SKU using the currently selected lead's sku_options.
+  const getPackagingOptionsForSku = (sku) => {
+    if (!sku || !form?.lead_id) return [];
+    const lead = leads.find(l => l.id === form.lead_id);
+    const opt = (lead?.sku_options || []).find(o => o.sku === sku);
+    return opt?.packaging_options || [];
+  };
+
+  // Resolve the price-per-unit from the lead's proposed pricing for a given SKU.
+  const getPriceForSku = (sku) => {
+    if (!sku || !form?.lead_id) return 0;
+    const lead = leads.find(l => l.id === form.lead_id);
+    const opt = (lead?.sku_options || []).find(o => o.sku === sku);
+    return opt?.price_per_unit || 0;
+  };
+
+  // SKUs proposed for the currently selected lead (used for the SKU dropdown).
+  const leadSkuOptions = (() => {
+    if (!form?.lead_id) return [];
+    const lead = leads.find(l => l.id === form.lead_id);
+    return lead?.sku_options || [];
+  })();
 
   const updateSkuPlan = (idx, field, value) => {
     setForm(f => {
@@ -1958,7 +1985,7 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
   };
 
   const addSkuPlan = () => {
-    setForm(f => ({ ...f, sku_plans: [...(f.sku_plans || []), { sku: '', crates: 0, units_per_package: null, price_per_unit: 0 }] }));
+    setForm(f => ({ ...f, sku_plans: [...(f.sku_plans || []), { sku: '', crates: 0, units_per_package: null, packaging_type_id: null, price_per_unit: 0 }] }));
   };
 
   const removeSkuPlan = (idx) => {
@@ -1982,6 +2009,7 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
           sku: p.sku,
           crates: Number(p.crates) || 0,
           units_per_package: p.units_per_package ? parseInt(p.units_per_package, 10) : null,
+          packaging_type_id: p.packaging_type_id || null,
           price_per_unit: Number(p.price_per_unit) || 0,
         })),
         notes: form.notes || null,
@@ -2159,16 +2187,45 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
                       {form.lead_id ? 'No SKUs configured for this lead. Use "Add SKU" below.' : 'Select a lead to populate SKUs from its proposed pricing.'}
                     </td>
                   </tr>
-                ) : form.sku_plans.map((p, idx) => (
+                ) : form.sku_plans.map((p, idx) => {
+                  const pkgOptions = getPackagingOptionsForSku(p.sku);
+                  return (
                   <tr key={idx} className="border-t border-slate-100">
                     <td className="px-3 py-2">
-                      <Input
+                      <Select
                         value={p.sku || ''}
-                        onChange={(e) => updateSkuPlan(idx, 'sku', e.target.value)}
-                        className="h-8 text-xs"
-                        placeholder="SKU name"
-                        data-testid={`sampling-sku-name-${idx}`}
-                      />
+                        onValueChange={(v) => {
+                          const opts = getPackagingOptionsForSku(v);
+                          const def = opts.find(o => o.is_default) || opts[0];
+                          const price = getPriceForSku(v);
+                          setForm(f => {
+                            const next = [...(f.sku_plans || [])];
+                            next[idx] = {
+                              ...next[idx],
+                              sku: v,
+                              packaging_type_id: def?.packaging_type_id || null,
+                              units_per_package: def?.units_per_package || null,
+                              price_per_unit: price || next[idx].price_per_unit || 0,
+                            };
+                            return { ...f, sku_plans: next };
+                          });
+                        }}
+                        disabled={!form.lead_id || leadSkuOptions.length === 0}
+                      >
+                        <SelectTrigger className="h-8 text-xs" data-testid={`sampling-sku-name-${idx}`}>
+                          <SelectValue placeholder={form.lead_id ? 'Select SKU' : 'Select lead first'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {leadSkuOptions.map((o) => (
+                            <SelectItem key={o.sku} value={o.sku} disabled={form.sku_plans.some((sp, i) => i !== idx && sp.sku === o.sku)}>
+                              {o.sku}
+                            </SelectItem>
+                          ))}
+                          {leadSkuOptions.length === 0 && (
+                            <SelectItem value="__none__" disabled>No proposed SKUs on this lead</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Input
@@ -2182,15 +2239,38 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
                       />
                     </td>
                     <td className="px-3 py-2 text-right">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={p.units_per_package ?? ''}
-                        onChange={(e) => updateSkuPlan(idx, 'units_per_package', e.target.value)}
-                        className="h-8 w-20 text-right text-xs ml-auto tabular-nums"
-                        placeholder="—"
-                        data-testid={`sampling-sku-units-${idx}`}
-                      />
+                      <Select
+                        value={p.packaging_type_id || ''}
+                        onValueChange={(v) => {
+                          const chosen = pkgOptions.find(o => o.packaging_type_id === v);
+                          setForm(f => {
+                            const next = [...(f.sku_plans || [])];
+                            next[idx] = {
+                              ...next[idx],
+                              packaging_type_id: v,
+                              units_per_package: chosen?.units_per_package || null,
+                            };
+                            return { ...f, sku_plans: next };
+                          });
+                        }}
+                        disabled={!p.sku || pkgOptions.length === 0}
+                      >
+                        <SelectTrigger className="h-8 text-xs ml-auto w-32" data-testid={`sampling-sku-units-${idx}`}>
+                          <SelectValue placeholder={!p.sku ? 'Pick SKU' : pkgOptions.length === 0 ? 'No packaging' : 'Select pack'}>
+                            {p.units_per_package ? `${p.units_per_package} bottles` : null}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {pkgOptions.map((o) => (
+                            <SelectItem key={o.packaging_type_id || o.name} value={o.packaging_type_id || o.name}>
+                              {o.name} ({o.units_per_package} bottles)
+                            </SelectItem>
+                          ))}
+                          {pkgOptions.length === 0 && p.sku && (
+                            <SelectItem value="__none__" disabled>No packaging configured for this SKU</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </td>
                     <td className="px-3 py-2 text-right">
                       <Input
@@ -2215,7 +2295,8 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot className="bg-slate-50 text-xs">
                 <tr>
