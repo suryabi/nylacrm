@@ -14,7 +14,7 @@ router = APIRouter()
 # ════════════════════════════════════════════════════════════════════
 # Home page widget order (per-user)
 # ════════════════════════════════════════════════════════════════════
-DEFAULT_HOME_WIDGET_ORDER = ["meetings", "pipeline", "followups"]
+DEFAULT_HOME_WIDGET_ORDER = ["meetings", "followups"]
 HOME_WIDGET_IDS = set(DEFAULT_HOME_WIDGET_ORDER)
 
 

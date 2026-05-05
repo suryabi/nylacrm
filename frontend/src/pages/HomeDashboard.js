@@ -21,7 +21,6 @@ import {
   TaskMetricsWidget,
   UpcomingFollowupsWidget,
   UpcomingMeetingsWidget,
-  PipelineSummaryWidget,
   SalesROIPanel,
   NewMeetingDialog,
   MeetingDetailDialog
@@ -68,7 +67,7 @@ export default function HomeDashboard() {
   const [locationName, setLocationName] = useState('');
 
   // Per-user widget order (saved in user_preferences)
-  const DEFAULT_WIDGET_ORDER = ['meetings', 'pipeline', 'followups'];
+  const DEFAULT_WIDGET_ORDER = ['meetings', 'followups'];
   const [widgetOrder, setWidgetOrder] = useState(DEFAULT_WIDGET_ORDER);
 
   useEffect(() => {
@@ -303,7 +302,7 @@ export default function HomeDashboard() {
     );
   }
 
-  const { upcoming_leads, upcoming_meetings, pipeline } = dashboardData || {};
+  const { upcoming_leads, upcoming_meetings } = dashboardData || {};
   
   // Check if user is in Sales department for ROI Panel
   const userDepts = Array.isArray(user?.department) ? user.department : [user?.department || ''];
@@ -374,9 +373,6 @@ export default function HomeDashboard() {
                     onCancelMeeting={handleCancelMeeting}
                   />
                 ),
-              },
-              pipeline: {
-                render: () => <PipelineSummaryWidget pipeline={pipeline} />,
               },
               followups: {
                 render: () => <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />,
