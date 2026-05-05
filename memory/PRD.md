@@ -9,6 +9,16 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Performance Tracker — Support Needed: Save → Edit toggle (2026-05-05)
+- [x] Fixed user-reported issue: Support Needed rows showed a persistent Save button after saving instead of switching to an Edit pencil. Each row now toggles between an editable state (Save button + amber-bordered editable textarea) and a saved/read-only state (Edit pencil + greyed-out disabled textarea).
+- [x] New rows added via the '+ Add a support area...' dropdown start in edit mode. Saved rows loaded from the server start in read-only mode.
+- [x] Clicking Edit pencil unlocks the textarea and restores the Save button. Clicking Save commits via existing POST /api/performance/save and (on success) flips back to read-only.
+- [x] On save FAILURE (e.g. no resource selected, server 500), the row STAYS in edit mode so the user can retry without losing context. `saveRecord()` now returns boolean; `saveSupportRow` only flips `supportEditing[cat]=false` when saveRecord resolves true.
+- [x] Multiple rows can be in different states simultaneously (per-category `supportEditing` map). Verified by testing agent with mixed Saved + Editing rows side-by-side.
+- [x] **Files**: `frontend/src/pages/PerformanceTracker.js` — `supportEditing` state, `saveRecord()` returns boolean, new `saveSupportRow()` helper, conditional Save vs Edit button render, textarea disabled when not editing.
+- [x] **Testing**: iteration_167 — 7/7 acceptance criteria PASS. Failure path verified via `page.route` intercept returning 500 — row stays in edit mode, no premature flip.
+
+
 ### Home — Per-user widget reorder (drag-style ↑/↓ persisted) (2026-05-05)
 - [x] Each user can now **reorder the 3 home widgets** (Calendar, Pipeline, Follow-ups) and the order is **persisted per user** (not per tenant).
 - [x] Subtle reorder overlay appears on hover/focus on each widget section: GripVertical icon + ↑/↓ arrow buttons in a small floating pill on the top-right. Edge buttons (move-up on first widget, move-down on last) are disabled.
