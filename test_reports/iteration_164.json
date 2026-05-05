@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend validation of the UpcomingMeetingsWidget redesign (home page / CEO). All 12 acceptance criteria from the review request PASS. The widget has been moved out of the lg:col-span-4 right rail into its own full-width <section> above the bento grid (verified: widget width 1136px on 1920 viewport, not inside any lg:col-span-4 ancestor, and renders ABOVE the .lg:grid-cols-12 bento grid containing Upcoming Follow-ups + My Pipeline). 7-day strip renders 7 week-strip-YYYY-MM-DD buttons; clicking a day with no events shows the meetings-empty placeholder with 'Nothing scheduled' + 'Schedule a meeting' CTA. Meetings render as HORIZONTAL flex-row cards inside data-testid='meetings-horizontal-scroll' (computed style display:flex, flex-direction:row, overflow-x:auto). Seeded 4 CRM meetings via POST /api/meetings on TODAY (UTC): LIVE (started -30m, 60m), UPNEXT (starts +15m), UPCOMING (+60m), PAST (-90m/30m). With all 4 present: data-status mapping verified — LIVE card data-status='live' with emerald gradient/ring + animated 'LIVE NOW' pill; PAST card data-status='past' with opacity 0.6 + line-through title + 'DONE' pill; the remaining two future meetings are both 'upcoming' and up_next count is 0 (live supresses up_next as specced). After deleting the live meeting via DELETE /api/meetings/{id} and reloading, exactly ONE card becomes data-status='up_next' (the chronologically next future event = TEST_UPNEXT_MEETING) with the blue 'UP NEXT' pill, confirming the 'only one up_next / live wins' invariant. Scroll chevrons (meetings-scroll-left, meetings-scroll-right) appear when >2 meetings on the selected day and smoothly scroll the container (scrollLeft 4 -> 60 after click). Widget has setInterval(30000) to re-evaluate live/up_next without hard reload (verified in source at UpcomingMeetingsWidget.js line 70-73). Previously-validated functionality (View Calendar link, Open Calendar button, Schedule button) still present. No backend changes required; 100% pure UI redesign works as intended.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/seed_home_meetings.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "UpcomingMeetingsWidget reads event.start as a NAIVE ISO string (no timezone suffix) — JS new Date() parses it in the browser's local timezone. Backend /api/personal-calendar/events returns '{meeting_date}T{start_time}:00' which is timezone-less and assumed to be 'local to whoever created it'. For multi-TZ tenants or users traveling, LIVE / UP_NEXT classification will drift. Consider appending the tenant's configured timezone offset server-side, or a dedicated start_utc/start_local pair.",
+    "statusByEvent computes up_next from events filtered by start > now across the entire visible window, but only assigns status for events on the SELECTED day. That is correct, BUT when user navigates to a future day and no live exists, the up_next for that day is still 'the earliest future across the week' — which may sit on a DIFFERENT day than the currently selected one, so the user sees no up_next card on the day they're looking at. Consider either (a) computing up_next per selectedDay, or (b) showing a small 'Next meeting is on <day>' hint.",
+    "handleEventClick silently swallows the GET /api/meetings/{id} failure (empty catch). Add a toast so users understand why nothing happened when a CRM card is unclickable due to a stale/deleted meeting.",
+    "The fetchEvents callback depends on `days` which is memoized on today.getTime(). Across midnight the window does not advance until a remount — the widget will show yesterday's 7-day window until hard reload. The 30s setNow interval does not refresh `days`. Consider deriving `days` from `now` (ticked state) to self-heal at midnight.",
+    "Event id used as React key and data-testid is 'meeting:{uuid}'. The colon is fine for data-testid but makes CSS attribute selectors awkward (need escaping). Consider 'meeting-{uuid}' or exposing ev.ref_id as the testid suffix.",
+    "No error state surfaced when the /events API fails — catch block is empty. A tiny inline banner ('Couldn\\'t load calendar. Retry') would be user-friendly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/seed_home_meetings.py"
+  ],
+  "success_rate": {"backend": "N/A (frontend-only review)", "frontend": "12/12 acceptance criteria PASS"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water). /api/auth/login returns 'session_token' and AuthContext stores it under localStorage key 'token'.",
+  "seed_data_creation": "Created 4 CRM meetings via POST /api/meetings (TEST_LIVE_MEETING, TEST_UPNEXT_MEETING, TEST_UPCOMING_MEETING, TEST_PAST_MEETING) timed around current UTC to exercise live/up_next/upcoming/past states. One was deleted mid-test to verify up_next-after-live-removed invariant; the remaining three were deleted in cleanup. No lingering TEST_ meetings in DB.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Home page widget is fully working. Gotchas for future regression: (1) Backend /api/personal-calendar/events returns timestamps without timezone — to seed meetings that land in correct live/past states during Playwright runs, compute start/end in UTC (the Playwright container browser runs in UTC despite the app showing IST in its clock widget). Use /app/backend/tests/seed_home_meetings.py which defaults to USE_TZ=UTC. (2) Meeting card data-testid is 'meeting-card-meeting:{uuid}' (double 'meeting' prefix because the event id from the unified feed is prefixed with 'meeting:'). (3) data-status attribute is the source-of-truth for live/up_next/upcoming/past; prefer asserting on it over visual pill text. (4) 'up_next' is suppressed to 0 whenever any live event exists; after deleting/ending the live event the NEXT future event across the full 7-day window becomes the sole up_next card.",
+  "rca of the issue": "No bug. Feature works as designed."
+}

@@ -333,33 +333,33 @@ export default function HomeDashboard() {
             <TaskMetricsWidget />
           </section>
 
+          {/* Calendar gets its own full-width row above the bento grid */}
+          <section className="mb-4 sm:mb-6">
+            <UpcomingMeetingsWidget
+              upcomingMeetings={upcoming_meetings}
+              onNewMeeting={() => {
+                setNewMeeting(getDefaultMeetingState());
+                setEditMode(false);
+                setShowNewMeetingDialog(true);
+              }}
+              onViewMeeting={handleViewMeeting}
+              onEditMeeting={handleEditMeeting}
+              onCancelMeeting={handleCancelMeeting}
+            />
+          </section>
+
           {/* Main Content - Bento Grid
               Phone + iPad portrait: stacked single column (lots of breathing room).
               iPad landscape / desktop (lg+): 8 / 4 two-column layout. */}
           <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
             {/* Left Column - Primary Content (full on mobile+tablet, 8 cols on desktop) */}
-            <div className="lg:col-span-8 space-y-4 sm:space-y-6 order-2 lg:order-1">
+            <div className="lg:col-span-8 space-y-4 sm:space-y-6">
               {/* Bottom Row - Upcoming Follow-ups full width */}
               <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
             </div>
 
-            {/* Right Column - Meetings & Pipeline stacked.
-                Phone + iPad: single column full width (calendar gets the full page width).
-                Desktop (lg+): pulls into the 4-col rail. */}
-            <div className="lg:col-span-4 order-1 lg:order-2 space-y-4 sm:space-y-6">
-              {/* Meetings - Featured Card */}
-              <UpcomingMeetingsWidget
-                upcomingMeetings={upcoming_meetings}
-                onNewMeeting={() => {
-                  setNewMeeting(getDefaultMeetingState());
-                  setEditMode(false);
-                  setShowNewMeetingDialog(true);
-                }}
-                onViewMeeting={handleViewMeeting}
-                onEditMeeting={handleEditMeeting}
-                onCancelMeeting={handleCancelMeeting}
-              />
-
+            {/* Right Column - Pipeline */}
+            <div className="lg:col-span-4 space-y-4 sm:space-y-6">
               {/* Pipeline - Compact Card */}
               <PipelineSummaryWidget pipeline={pipeline} />
             </div>
