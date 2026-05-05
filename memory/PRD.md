@@ -9,6 +9,17 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Performance Tracker — Top 10 Priorities: New Accounts / Existing Accounts split (2026-05-05)
+- [x] Replaced single "Collections / Outstanding" sub-tab with two date-scoped tabs: **New Accounts** (accounts created during the active period) and **Existing Accounts** (accounts created BEFORE the active period start).
+- [x] Removed the old standalone Account Metrics section between Pipeline and Activity (consolidated into Top 10 Priorities).
+- [x] **Active period source**: viewMode='target_plan' → `plan.start_date / plan.end_date`; viewMode='month' → 1st-to-last day of selectedMonth.
+- [x] **Backend**: `GET /api/performance/account-collections?mode={all|new|existing}&period_start=YYYY-MM-DD[&period_end=YYYY-MM-DD]&resource_ids=...` — `mode='new'` filters `accounts.created_at` between [period_start, period_end]; `mode='existing'` filters `created_at < period_start`; `mode='all'` legacy default.
+- [x] **Frontend**: `AccountsSubsection` component reused for both tabs (mode prop). Period banner with green NEW / blue EXISTING pill, helper text, and date range. Same 6 summary cards + 9-column sticky-left zebra-striped grid + search + totals footer + clickable rows as the other Top 10 priority tables.
+- [x] Test ids: `sub-tab-new_accounts`, `sub-tab-existing_accounts`, `new-accounts-subsection`/`existing-accounts-subsection`, `${prefix}-table`, `${prefix}-row-{id}`, `${prefix}-search`, `${prefix}-period`, `${prefix}-empty`, `${prefix}-total-outstanding`.
+- [x] **Files**: `frontend/src/pages/PerformanceTracker.js` (resolvePeriodDates helper, AccountsSubsection refactor, Top10 tabs), `backend/routes/performance.py` (account-collections mode/period dispatch — already in place from prior session).
+- [x] **Testing**: iteration_159 — 33/33 backend pytest PASS (12 new tests in `backend/tests/test_account_collections_modes.py` + 21 regression) + frontend Playwright verified end-to-end. Disjointness (new ∩ existing = ∅) and subset-of-all asserted.
+
+
 ### Performance Tracker — Top 10 Priorities: Sampling / Trials sub-section (2026-05-04)
 - [x] **New sub-tab** "Sampling / Trials" added alongside "Case Targets" inside the Top 10 Priorities section of Performance Tracker.
 - [x] **Flow**: User picks one of their assigned leads, sets a tentative trial date + duration (days); end date auto-populates as `trial_date + (duration - 1)` days. Status dropdown: Not Started / Trial In Progress / Completed.
