@@ -107,12 +107,16 @@ export default function PerformanceTracker() {
   // Load all sales resources on mount (independent of plan)
   useEffect(() => {
     fetch(`${API_URL}/api/performance/all-sales-resources`, { headers })
-      .then(r => r.json()).then(setResources).catch(() => {});
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setResources(Array.isArray(d) ? d : []))
+      .catch(() => setResources([]));
     fetch(`${API_URL}/api/performance/target-plans`, { headers })
-      .then(r => r.json()).then(setPlans).catch(() => {});
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setPlans(Array.isArray(d) ? d : []))
+      .catch(() => setPlans([]));
     // Section order (per-tenant, falls back to default if unset)
     fetch(`${API_URL}/api/performance/section-order`, { headers })
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.order?.length) setSectionOrder(d.order); })
       .catch(() => {});
   }, []);
