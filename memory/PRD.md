@@ -9,6 +9,14 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Home — Pipeline & Follow-ups redesign (2026-05-05)
+- [x] Removed the cramped 8/4 bento grid below the calendar. Pipeline and Upcoming Follow-ups are now **two stacked full-width sections** with proper breathing room.
+- [x] **PipelineSummaryWidget rebuilt**: large total leads count + 'View all' link in the header, full-width stacked horizontal pipeline bar (each segment clickable → `/leads?status=...`), and a **responsive 2/3/4/6-col grid of status tiles**. Each tile shows count (large), % of total (top-right), a mini progress bar in the status color, and uppercase label. Tile palette mapped from each status's color name (blue/emerald/amber/orange/indigo/cyan/purple/green/red/gray).
+- [x] **UpcomingFollowupsWidget rebuilt** as a 1/2/3/4-col responsive card grid. Each card has a type chip (Account/Lead), urgency-coloured due pill (overdue/today=rose, tomorrow=amber, later=slate), bold title, contact name + Phone/Mail icon hints. Header shows 'X urgent' rose badge when overdue+today follow-ups exist. Empty state with 'You're all caught up' message. Caps at 8 cards with a 'Show more' link to /leads.
+- [x] **Files**: `frontend/src/components/widgets/PipelineSummaryWidget.js` (rewrite), `frontend/src/components/widgets/UpcomingFollowupsWidget.js` (rewrite), `frontend/src/pages/HomeDashboard.js` (bento grid replaced with stacked sections).
+- [x] **Testing**: iteration_165 — 11/11 acceptance criteria PASS on desktop (1920×1080) and mobile (390×844). Both widgets measured at full container width (1136px) and stacked vertically. Seed-test confirmed urgent badge shows '1 urgent' when one Today + one Tomorrow + one Later follow-up exist.
+
+
 ### Home — Meeting card density + prominent scroll affordance (2026-05-05)
 - [x] Reduced meeting card width from 260–280px → **180–200px** so 5+ cards fit in view at desktop sizes (was ~3). Internal padding, time/title/icon sizes scaled down to keep cards readable.
 - [x] **Prominent scroll affordance**: kept the small "Prev / Next" pill buttons in the header AND added two **floating circular chevron buttons** (h-10 w-10, white with thick borders + shadow-lg) positioned absolutely over the left/right edges of the scroller. Edge gradient fades reinforce that there's more content to scroll.
