@@ -174,6 +174,23 @@ export default function PerformanceTracker() {
     return filteredResources.map(r => r.resource_id).filter(Boolean);
   };
 
+  // Compute period date range based on viewMode (used by Top 10 Priorities → New/Existing Accounts split)
+  const resolvePeriodDates = () => {
+    if (viewMode === 'target_plan') {
+      const plan = plans.find(p => p.id === selectedPlan);
+      if (plan?.start_date && plan?.end_date) {
+        return { periodStart: plan.start_date, periodEnd: plan.end_date };
+      }
+    }
+    // Month mode (or no plan selected): full selected month
+    const y = selectedYear;
+    const m = selectedMonth;
+    const start = `${y}-${String(m).padStart(2, '0')}-01`;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const end = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    return { periodStart: start, periodEnd: end };
+  };
+
   const generate = useCallback(async () => {
     const resourceIds = selectedResource.length > 0
       ? selectedResource
@@ -714,6 +731,9 @@ export default function PerformanceTracker() {
             year={selectedYear}
             month={selectedMonth}
             resourceIds={resolveResourceIds()}
+            periodStart={resolvePeriodDates().periodStart}
+            periodEnd={resolvePeriodDates().periodEnd}
+            viewMode={viewMode}
             token={token}
             tenantId={tenantId}
             isLocked={isLocked}
@@ -1265,12 +1285,23 @@ function AccountValueCell({ account, planId, onRefresh }) {
 // Top 10 Priorities — Execution Driven
 // ════════════════════════════════════════════════════════════════════
 
-function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isLocked }) {
+function Top10PrioritiesSection({ year, month, resourceIds, periodStart, periodEnd, viewMode, token, tenantId, isLocked }) {
   const [open, setOpen] = useState(true);
   const [activeSub, setActiveSub] = useState('case_targets');
 
   // Stable primitive key so child effects don't re-run on every parent render
   const resourceIdsKey = React.useMemo(() => (resourceIds || []).join(','), [resourceIds]);
+
+  const periodLabel = React.useMemo(() => {
+    if (!periodStart || !periodEnd) return '';
+    try {
+      const fmt = (iso) => {
+        const d = new Date(`${iso}T00:00:00Z`);
+        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+      };
+      return `${fmt(periodStart)} → ${fmt(periodEnd)}`;
+    } catch { return ''; }
+  }, [periodStart, periodEnd]);
 
   return (
     <div className="bg-white border border-slate-200 rounded-sm" data-testid="top10-priorities-section">
@@ -1304,8 +1335,11 @@ function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isL
             <SubTab id="focus_leads" active={activeSub} onClick={setActiveSub} icon={Target}>
               Top 5 Leads to Focus
             </SubTab>
-            <SubTab id="collections" active={activeSub} onClick={setActiveSub} icon={Wallet}>
-              Collections / Outstanding
+            <SubTab id="new_accounts" active={activeSub} onClick={setActiveSub} icon={Users}>
+              New Accounts
+            </SubTab>
+            <SubTab id="existing_accounts" active={activeSub} onClick={setActiveSub} icon={Wallet}>
+              Existing Accounts
             </SubTab>
           </div>
 
@@ -1340,8 +1374,26 @@ function Top10PrioritiesSection({ year, month, resourceIds, token, tenantId, isL
             />
           )}
 
-          {activeSub === 'collections' && (
-            <CollectionsSubsection
+          {activeSub === 'new_accounts' && (
+            <AccountsSubsection
+              key={`new-${periodStart}-${periodEnd}-${resourceIdsKey}`}
+              mode="new"
+              periodStart={periodStart}
+              periodEnd={periodEnd}
+              periodLabel={periodLabel}
+              resourceIdsKey={resourceIdsKey}
+              token={token}
+              tenantId={tenantId}
+            />
+          )}
+
+          {activeSub === 'existing_accounts' && (
+            <AccountsSubsection
+              key={`existing-${periodStart}-${resourceIdsKey}`}
+              mode="existing"
+              periodStart={periodStart}
+              periodEnd={periodEnd}
+              periodLabel={periodLabel}
               resourceIdsKey={resourceIdsKey}
               token={token}
               tenantId={tenantId}
@@ -2500,8 +2552,10 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
 
 
 // ════════════════════════════════════════════════════════════════════
-// Collections / Outstanding Subsection
-// (Same fields as the Account Performance report, scoped to selected resources)
+// ════════════════════════════════════════════════════════════════════
+// Accounts Subsection — handles both "Existing Accounts" and "New Accounts" tabs
+// (Same fields as the Account Performance report, scoped to selected resources +
+//  filtered by created_at relative to the active period from Target Plan / Month)
 // ════════════════════════════════════════════════════════════════════
 
 const formatDateShort = (iso) => {
@@ -2513,11 +2567,18 @@ const formatDateShort = (iso) => {
   } catch { return '—'; }
 };
 
-function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
+function AccountsSubsection({ mode, periodStart, periodEnd, periodLabel, resourceIdsKey, token, tenantId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
+
+  const isNew = mode === 'new';
+  const tabTitle = isNew ? 'New Accounts' : 'Existing Accounts';
+  const tabHelper = isNew
+    ? `Accounts onboarded during ${periodLabel || 'the selected period'}`
+    : `Accounts onboarded before ${periodLabel ? periodLabel.split(' → ')[0] : 'the period'}`;
+  const testIdPrefix = isNew ? 'new-accounts' : 'existing-accounts';
 
   const authHeaders = useCallback(() => ({
     Authorization: `Bearer ${token}`,
@@ -2526,26 +2587,32 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
   }), [token, tenantId]);
 
   const load = useCallback(async () => {
+    if (!periodStart || (isNew && !periodEnd)) {
+      setData({ accounts: [], summary: {} });
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const ridParam = resourceIdsKey ? `&resource_ids=${resourceIdsKey}` : '';
-      const res = await fetch(`${API_URL}/api/performance/account-collections?time_filter=lifetime${ridParam}`, { headers: authHeaders() });
+      const params = `mode=${mode}&period_start=${periodStart}${isNew ? `&period_end=${periodEnd}` : ''}${ridParam}`;
+      const res = await fetch(`${API_URL}/api/performance/account-collections?${params}`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       setData(d);
     } catch (e) {
-      console.error('Failed to load collections:', e);
+      console.error(`Failed to load ${mode} accounts:`, e);
       setData({ accounts: [], summary: {} });
     } finally {
       setLoading(false);
     }
-  }, [resourceIdsKey, authHeaders]);
+  }, [mode, isNew, periodStart, periodEnd, resourceIdsKey, authHeaders]);
 
   useEffect(() => { load(); }, [load]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12" data-testid="collections-loading">
+      <div className="flex items-center justify-center py-12" data-testid={`${testIdPrefix}-loading`}>
         <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
       </div>
     );
@@ -2564,7 +2631,20 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
     : accounts;
 
   return (
-    <div className="space-y-4" data-testid="collections-subsection">
+    <div className="space-y-4" data-testid={`${testIdPrefix}-subsection`}>
+      {/* Period banner */}
+      {periodLabel && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm">
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider ${isNew ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+              {tabTitle}
+            </span>
+            <span className="text-xs text-slate-500">{tabHelper}</span>
+          </div>
+          <span className="text-[10px] tabular-nums text-slate-500" data-testid={`${testIdPrefix}-period`}>{periodLabel}</span>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
         <SummaryStat label="Accounts" value={fmt(summary.account_count || 0)} />
@@ -2582,20 +2662,22 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search account, city, state..."
           className="h-9 w-64 bg-white"
-          data-testid="collections-search"
+          data-testid={`${testIdPrefix}-search`}
         />
         <div className="text-xs text-slate-500">{filtered.length} of {accounts.length} accounts</div>
       </div>
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="text-center py-10 text-sm text-slate-500 border border-dashed border-slate-200 rounded-sm" data-testid="collections-empty">
+        <div className="text-center py-10 text-sm text-slate-500 border border-dashed border-slate-200 rounded-sm" data-testid={`${testIdPrefix}-empty`}>
           {accounts.length === 0
-            ? 'No accounts found for the selected resource(s).'
+            ? (isNew
+                ? 'No new accounts onboarded during this period.'
+                : 'No existing accounts found for the selected resource(s) prior to this period.')
             : 'No accounts match your search.'}
         </div>
       ) : (
-        <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="collections-table">
+        <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid={`${testIdPrefix}-table`}>
           <table className="w-full text-sm" style={{ minWidth: '1100px' }}>
             <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
               <tr>
@@ -2618,7 +2700,7 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
                   key={row.account_id || idx}
                   className={`border-t border-slate-100 ${rowBg} hover:bg-amber-50/30 cursor-pointer group`}
                   onClick={() => navigate(`/accounts/${row.account_id}`)}
-                  data-testid={`collections-row-${row.account_id}`}
+                  data-testid={`${testIdPrefix}-row-${row.account_id}`}
                 >
                   <td className={`px-4 py-3 sticky left-0 ${rowBg} group-hover:bg-amber-50/30 transition-colors`}>
                     <p className="text-sm font-semibold text-slate-900 truncate" title={row.account_name}>{row.account_name}</p>
@@ -2664,7 +2746,7 @@ function CollectionsSubsection({ resourceIdsKey, token, tenantId }) {
                 <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-purple-600">₹{fmt(filtered.reduce((s, r) => s + (r.bottle_credit || 0), 0))}</td>
                 <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-400">—</td>
                 <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-slate-400">—</td>
-                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-amber-600" data-testid="collections-total-outstanding">₹{fmt(filtered.reduce((s, r) => s + (r.outstanding_balance || 0), 0))}</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-amber-600" data-testid={`${testIdPrefix}-total-outstanding`}>₹{fmt(filtered.reduce((s, r) => s + (r.outstanding_balance || 0), 0))}</td>
                 <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-rose-700">₹{fmt(filtered.reduce((s, r) => s + (r.overdue_amount || 0), 0))}</td>
               </tr>
             </tfoot>
