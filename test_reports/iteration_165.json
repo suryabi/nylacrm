@@ -1,0 +1,39 @@
+{
+  "summary": "Frontend-only UI redesign verified for HomeDashboard. PipelineSummaryWidget and UpcomingFollowupsWidget are now stacked as two consecutive full-width sections (no bento grid). All data-testids, responsive grids, urgency styling, navigation click-throughs, empty state, and urgent badge behavior work as expected.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/.screenshots/home_dashboard_desktop.jpg",
+    "/app/.screenshots/followups_with_data.jpg",
+    "/app/.screenshots/home_mobile.jpg"
+  ],
+  "verified_acceptance_criteria": [
+    "HomeDashboard now stacks Pipeline (top) and Upcoming Follow-ups (below) as full-width sections; both measured at pipeWidth=1136 and fuWidth=1136 on a 1920px viewport; pipeTop(795) < fuTop(1185) confirming order.",
+    "PipelineSummaryWidget header renders 'My Pipeline' with pipeline-total (70 before seeding, 73 with 3 TEST_* seeded leads) and 'TOTAL LEADS' label + 'View all' link navigating to /leads (verified).",
+    "pipeline-bar renders with 7 non-zero segments, each click navigates to /leads?status={status} (verified for first segment -> /leads?status=new).",
+    "pipeline-tiles container uses grid classes: 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6' (responsive verified on mobile 390px -> grid-cols-2 and desktop 1920px -> lg:grid-cols-6).",
+    "11 pipeline-tile-{status} elements rendered (new, qualified, contacted, proposal_internal_review, ready_to_share_proposal, proposal_shared_with_customer, trial_in_progress, won, lost, not_qualified, proposal_approved_by_customer). Each shows count, % of total, mini progress bar, and uppercase label.",
+    "Clicking pipeline-tile-new navigates to /leads?status=new (verified).",
+    "Color palette: 'new' tile blue, 'qualified' emerald, 'won' green, 'lost' red — visually confirmed in screenshot.",
+    "With 3 seeded leads (today/tomorrow/later): followups-grid rendered 3 cards; followups-urgent-badge displayed '1 urgent' (only today counts, matching overdue+today logic).",
+    "Each followup-card-{id} shows: type chip (LEAD), due-date pill (Today rose-bold, Tomorrow amber, Fri May 8 slate), bold title, contact name with User icon. data-urgency attribute correctly set to 'today', 'tomorrow', 'later'.",
+    "Empty state (followups-empty) shown when upcomingLeads is empty (verified prior to seeding).",
+    "Calendar widget (Week Ahead) still renders and is unaffected."
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PipelineSummaryWidget.js and UpcomingFollowupsWidget.js are small, focused components; no DRY/async/size concerns.",
+    "Minor: Show more logic triggers only when items.length > 8 — backend currently caps upcoming_leads at 10 combined, so show-more visibility can only occur with 9-10 items; not a bug, just noting the small range."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (frontend-only)", "frontend": "100%" },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Temporarily inserted 3 TEST_Followup leads (today/tomorrow/+3 days) assigned to the CEO user to exercise urgency styling and urgent badge; all seed docs cleaned up (delete_many on company regex ^TEST_Followup returned 3).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "HomeDashboard pipeline+followups redesign fully validated on desktop (1920x1080) and mobile (390x844). Seed data cleanup already done. If re-running urgency tests, insert leads into test_database.leads with tenant_id=nyla-air-water, assigned_to='7d03cff4-4db2-4b2e-969b-f5b3d57d58a6', and field 'next_followup_date' (YYYY-MM-DD)."
+}
