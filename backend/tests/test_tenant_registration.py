@@ -8,7 +8,7 @@ import os
 import uuid
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://invoice-reports-2.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://qc-settlement-hub.preview.emergentagent.com').rstrip('/')
 
 
 class TestSubdomainAvailability:

@@ -1,5 +1,5 @@
 <analysis>**original_problem_statement**: 
-The application requires tracking of Production QC (phases for labeling, final QC, rejection cost calculations), dynamic Distributor & Warehouse configuration, automated settlement generation, and detailed reporting modules. Additionally, the application requires a robust Marketing Request Lifecycle module to manage sales-driven marketing requests with custom workflows, client approvals, and AI-powered feedback tracking. Performance tracking needs enhancements including execution-driven priority targets.
+The application requires tracking of Production QC (phases for labeling, final QC, rejection cost calculations), dynamic Distributor & Warehouse configuration, automated settlement generation, and detailed reporting modules. Additionally, the application requires a robust Marketing Request Lifecycle module to manage sales-driven marketing requests with custom workflows, client approvals, and AI-powered feedback tracking. Performance tracking needs enhancements including execution-driven priority targets and deep UI standardizations.
 
 **PRODUCT REQUIREMENTS:**
 - Complete Production QC Tracking Module.
@@ -8,33 +8,33 @@ The application requires tracking of Production QC (phases for labeling, final Q
 - Build Comprehensive Reporting Module.
 - Marketing Request Lifecycle module with a 10-stage workflow, design option grids, client public approval links, and phase 2 AI features.
 - Personal Calendar syncing (two-way) with Google Calendar.
-- Performance Tracker enhancements (Top 10 Priorities for case targets).
+- Performance Tracker enhancements (Top 10 Priorities for case targets, sampling, focus leads, and accounts).
 - Refactor  to prevent memory bloat.
 
-**User's preferred language**: English
-(INSTRUCT next agent to respond in English only)
+**User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A multi-tenant Sales, Production, Marketing, & Distribution CRM. In this session, significant work was completed across multiple modules. The Target Planning creation and editing bugs were fully resolved, and a publishing workflow was added. The Personal Calendar module now fully syncs creations, updates, and cancellations back to Google Calendar. The Marketing Request module received a massive UX and backend overhaul: it now features a 10-stage workflow, a public token-based client approval link, a full-page creation form (replacing the modal), a dedicated detail page, and a grid UX for uploading design options. The Home Dashboard was overhauled to be fully responsive for iPad and mobile screens. A new Top 10 Priorities - Case Targets section was added to the Performance Tracker. 
+A multi-tenant Sales, Production, Marketing, & Distribution CRM. The Performance Tracker has been heavily overhauled to include a robust Top 10 Priorities section with standardized, scrollable grid layouts (sticky columns, zebra stripes) containing Case Targets, Sampling / Trials, Top 5 Focus Leads, and Collections. The tracker now supports dual viewing modes (Target Plan vs Month). The Marketing Calendar has been redesigned to perfectly match the Personal Calendar's aesthetic. A multi-row, resizable Support Needed section with per-row saving has been established at the bottom of the tracker.
 
 **Last working item**:
-    - Last item agent was working: Fixing a UI flickering bug and removing the Execution Driven label and Default column from the newly built Top 10 Priorities section in the Performance Tracker.
-    - Status: USER VERIFICATION PENDING
-    - Agent Testing Done: Y
-    - Which testing method agent to use? screenshot tool / curl
+    - Last item agent was working: Adding a New Accounts tab to the Top 10 Priorities section and renaming the Collections / Outstanding tab to Existing Accounts. The user wants New Accounts to show accounts added during the selected Target Plan period (or selected Month), and Existing Accounts to show accounts added *before* that period. The agent successfully removed the old standalone accounts metric section and updated the backend  route to accept  ('existing', 'new') and / parameters. 
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? testing_agent_v3_fork (since it involves significant UI tab addition and data fetching logic)
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
   Issue 1: Invoices module showing blank page in Production (P0)
-     - Attempted fixes: Agent started investigating  and App routing but was interrupted by a context switch from the user. 
-     - Next debug checklist: Check  for unhandled undefined/null values in the render cycle or  hooks. User mentioned this happens in production. Review console logs if the user provides them, or check if the  route is properly registered and accessible by the user's role.
+     - Attempted fixes: Agent previously started investigating  but abandoned it due to priority shifts.
+     - Next debug checklist: Check  for unhandled undefined/null values in the render cycle or  hooks. Look for  or missing properties on loaded invoice objects.
      - Why fix this issue and what will be achieved with the fix?: Unblocks users from viewing invoices.
      - Status: NOT STARTED
      - Is recurring issue? N
      - Should Test frontend/backend/both after fix? frontend
+     - Blocked on other issue: None
 
   Issue 2: Production Deployment Failure / 520 Outage (P0)
-     - Attempted fixes: Handled in previous forks; identified as a Kubernetes infrastructure issue (OOMKilled/memory limit).
+     - Attempted fixes: Identified as a Kubernetes infrastructure issue (OOMKilled/memory limit).
      - Next debug checklist: DO NOT attempt code fixes for this. Escalate to Emergent Support.
      - Why fix this issue and what will be achieved with the fix?: Restores production access.
      - Status: BLOCKED (Awaiting platform engineering)
@@ -51,7 +51,12 @@ A multi-tenant Sales, Production, Marketing, & Distribution CRM. In this session
      - Should Test frontend/backend/both after fix? both
 
 **In progress Task List**: 
-  None
+  Task 1: Split Accounts into New Accounts and Existing Accounts tabs in Top 10 Priorities (P0)
+     - Where to resume: Backend  has already been updated to accept  ('existing' vs 'new') and /. You need to update  to: 1) Rename the Collections tab to Existing Accounts. 2) Add a new New Accounts tab. 3) Pass the correct  and calculated date ranges based on the selected Target Plan or Month. 4) Ensure both tabs use the standardized grid style.
+     - What will be achieved with this?: Fulfills the user's latest requirement before session timeout.
+     - Status: IN PROGRESS
+     - Should Test frontend/backend/both after fix? both (Use testing_agent_v3_fork)
+     - Blocked on something: None
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
@@ -69,18 +74,14 @@ A multi-tenant Sales, Production, Marketing, & Distribution CRM. In this session
     - P2: Slack Integration (User requested to keep this on hold for now).
 
 **Completed work in this session**
-- Fixed Target Planning Creation 500 error by deduplicating API routers (DONE)
-- Fixed Target Planning Edit routing (blank page) by replacing it with a deep-linked dialog/page view (DONE)
-- Added Publish Plan, Mark Completed, and Revert to Draft workflows to Target Planning (DONE)
-- Added Auto-delete to Google Calendar sync when a Personal Calendar meeting is cancelled (DONE)
-- Overhauled Marketing Requests UI to remove Title, emphasize Request Type, and add Other category (DONE)
-- Made all columns sortable in the Marketing Requests list view (DONE)
-- Built Marketing Requests Phase 1 Workflow with 10 stages and Client vs Internal approval logic (DONE)
-- Built a secure, token-based public unauthenticated page () for client design approvals (DONE)
-- Migrated Marketing Request creation and details views from popup modals to dedicated full-page routes (DONE)
-- Added Grid UI and file upload endpoints for Marketing Request design options (DONE)
-- Fixed Home Dashboard layout to be fully responsive on iPad and Mobile devices (DONE)
-- Built Top 10 Priorities - Case Targets section in Performance Tracker with backend target mapping (DONE)
+- Added Sampling / Trials sub-tab to Top 10 Priorities (DONE)
+- Added Top 5 Leads to Focus sub-tab to Top 10 Priorities (DONE)
+- Completely overhauled Marketing Calendar UI to match the sleek design of the Personal Calendar (DONE)
+- Moved Collections / Outstanding out of main body into Top 10 Priorities as a sub-tab (DONE)
+- Standardized all Top 10 Priority grids (sticky left/right columns, zebra striping, horizontal scroll, uniform truncating) (DONE)
+- Two-mode Performance Tracker (Target Plan vs Month views) implemented with auto-resource selection (DONE)
+- Redesigned Support Needed into a resizable, multi-row component with per-row saving (DONE)
+- Fixed bug where Performance Tracker saves failed silently if no plan was selected (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    Issue 1: Clicking on invoices in production taking to a blank page
@@ -98,13 +99,14 @@ A multi-tenant Sales, Production, Marketing, & Distribution CRM. In this session
 -  - Domain-specific FastAPI routers.
 -  - React views and full-page components.
 -  - Shadcn UI components.
--  - Reusable dashboard widgets.
 
 **Key Technical Concepts**
-- Marketing Requests now have a split internal () and public () routing structure for client approvals.
-- Global Axios Auth Interceptor handles auth headers automatically for standard requests.
+- Performance Tracker now operates in two modes: Target Plan (default) where dates and resources are derived from a specific plan, and Month mode where they are manually picked.
+- Top 10 Priority tables use custom sticky CSS (, etc.) to allow complex horizontal scrolling without losing context.
+- Support Needed saves incrementally per row using the  backend flow, handling  as optional.
 
 **key DB schema**
+  - : 
   - : 
   - : 
 
@@ -112,40 +114,43 @@ A multi-tenant Sales, Production, Marketing, & Distribution CRM. In this session
   - None
 
 **All files of reference** 
-- , , ,  (Major marketing overhauls)
--  (Extended workflow and public endpoints)
--  &  (Fixed router duplication)
--  &  (Responsive fixes)
--  &  (Added Top 10 case targets)
+-  (Heavily modified for Top 10 Priorities, new tabs, layout modes, and support section)
+-  (Modified to handle  for collections, trial operations, target operations)
+-  (Fully redesigned)
 
 **Areas that need refactoring**: 
--  remains incredibly large (>10k lines) and contains many models and routes that should be extracted to their respective modules.
-- Leftover dialog/modal code across the app can be cleaned up as more workflows move to dedicated pages.
+-  remains incredibly large (>10k lines) and contains many models and routes that should be extracted.
 
 **key api endpoints**
-- 
-- 
+-  (Just updated)
 - 
 - 
 
 **Critical Info for New Agent** 
 - **DO NOT test auth workflows or prompt the user to refresh/clear cache for the 520 production error**. It is an infrastructure OOMKilled issue.
-- For the Marketing Requests Phase 2 AI features, use **Gemini 3 Flash** via the Emergent LLM key as explicitly requested by the user during the  tool phase.
-- Be aware that the user previously reported a blank page on the  route. The agent got distracted before fixing it. You should prioritize verifying and fixing this if the user brings it up, or preemptively check it.
+- The user is extremely specific about UI layouts matching across tabs. Ensure the new New Accounts tab uses the exact same  and zebra stripe logic added to the other Top 10 Priority tables.
+- For the Marketing Requests Phase 2 AI features (when you get to it), use **Gemini 3 Flash** via the Emergent LLM key.
 
 **documents and test reports created in this job** 
-  -  updated with completed tasks.
+  -  
+  - 
+  - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- 1. : Create request should not be a pop up. It should be a regular form... Uploading multiple design options should be easier, like a grid (DONE)
- 2. : do not open a pop-up when I open a marketing request. instead, navigate to details page just like task detail (DONE)
- 3. : Show me preview (DONE)
- 4. : The home page is not mobile and ipad friendly. Please fix the issue . Would like to see it responsive (DONE)
- 5. : On ipad , on the home page, the calendar still looks cluttered. It needs to be fixed... (DONE)
- 6. : In the performance tracker Add top 10 proritoers main section and then sub sections for each... Case targets for May (DONE)
- 7. : [User clarified Case Targets math, time scope, and prioritization in  response] (DONE)
- 8. : screen is flickering espeically the top 10 priorities section. Remove execution driven sentense (DONE)
- 9. : Remove Default column (DONE - Verification Pending)
+ 1. : In the top leads to focus, implement eclipses for account name, remove the city and also implement table scrolling... (DONE)
+ 2. : Also, in the case targets show the table exactly the same way as collections outstanding grid... (DONE)
+ 3. : In the case targets, it should always show last months, This month target, Acheived so far and the % (DONE)
+ 4. : Sampling and trails section and any other section in Top 10 priiority section . Keep the tables consistent... (DONE)
+ 5. : Remove time filter from collections and outstanding tab (DONE)
+ 6. : Remove outstandng and activites tiles on the top from performance tracker (DONE)
+ 7. : Support needed should be multi row. Where the support areas can be choosen from drop down... (DONE)
+ 8. : The text area should be exapandabale... Also, I don’t see a Save button... (DONE)
+ 9. : All the rows in each table grids in Top 10 priorities should have alternate colors... (DONE)
+ 10. : Now, the peformance tracker should work in two ways. The peformance can be viewed for a specific Target plan or for a specific month... (DONE)
+ 11. : I dont see the data is getting save when support area items are added (DONE)
+ 12. : Add another tab in Top priorities - called new accounts. Give the same list as the collections/ outstanding view however, jsut show the accounts that are added during the time... Change collections / Outstanding to Existing acocunts... Remove accounts metric section since the above is added... (PENDING - Backend modified, Frontend needed)
+ 13. : resume the work. Credits added (PENDING)
 
 **Project Health Check:**
 - Broken: Invoices List View (user reported blank page), Production Environment (Infrastructure Blocked).
@@ -160,7 +165,7 @@ A multi-tenant Sales, Production, Marketing, & Distribution CRM. In this session
 - (Pending) Gemini 3 Flash via Emergent LLM Key (for Phase 2 Marketing AI)
 
 **Testing status**
-  - Testing agent used after significant changes: NO (Mainly self-tested via curl and screenshots)
+  - Testing agent used after significant changes: YES (Testing agent V3 fork used multiple times yielding 15/15 and 21/21 passes)
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created: None
   - Known regressions: Invoices List view (unverified blank page).
@@ -171,5 +176,5 @@ A multi-tenant Sales, Production, Marketing, & Distribution CRM. In this session
 - Tenant ID: 
 
 **What agent forgot to execute**
-- The agent was investigating the **Invoices blank page** issue reported by the user but abandoned it when the user asked about Calendar Syncs. This is a critical functional bug that needs to be addressed.
-- The agent successfully implemented Phase 1 of the Marketing Request workflow but has not yet started **Phase 2 (AI Features with Gemini 3 Flash)** which was agreed upon during the  check.</analysis>
+- The agent was interrupted by a session timeout while implementing the split between Existing Accounts and New Accounts. The old account metrics section was deleted, and the backend route was updated to handle . The frontend changes to  (building the  and passing the dates) remain unwritten.
+- The Invoices blank page bug from the previous handoff is still pending.</analysis>

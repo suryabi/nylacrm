@@ -1556,11 +1556,19 @@ def _collections_time_range(time_filter: str):
 async def account_collections(
     resource_ids: str = "",
     time_filter: str = "lifetime",
+    mode: str = "all",  # "all" | "new" | "existing"
+    period_start: Optional[str] = None,  # YYYY-MM-DD
+    period_end: Optional[str] = None,    # YYYY-MM-DD
     current_user: dict = Depends(get_current_user),
 ):
     """Returns accounts assigned to selected resource(s) with the same fields
     shown in the Account Performance report (gross/net invoice totals, bottle
     credit, contribution %, average order, last payment, outstanding, overdue).
+
+    Filters by account creation date:
+      - mode='new': accounts created BETWEEN period_start AND period_end
+      - mode='existing': accounts created BEFORE period_start
+      - mode='all' (default): all accounts assigned to the resource(s)
     """
     tenant_id = get_current_tenant_id()
     rids = [r for r in (resource_ids or "").split(",") if r]
@@ -1568,6 +1576,13 @@ async def account_collections(
     acc_q = {"tenant_id": tenant_id}
     if rids:
         acc_q["assigned_to"] = {"$in": rids}
+
+    # Date filter on account creation
+    if mode == "new" and period_start and period_end:
+        acc_q["created_at"] = {"$gte": period_start, "$lte": f"{period_end}T23:59:59"}
+    elif mode == "existing" and period_start:
+        acc_q["created_at"] = {"$lt": period_start}
+
     accounts = await db.accounts.find(acc_q, {"_id": 0}).to_list(2000)
 
     start_date, end_date = _collections_time_range(time_filter)
