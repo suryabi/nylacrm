@@ -9,6 +9,15 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Performance Tracker — Section renames + reorderable order persisted per tenant (2026-05-05)
+- [x] **Renamed sections**: `Top 5 Leads to Focus` → `Top Leads to Focus`; `Case Targets — {Month}` → `Volume Targets for Existing Accounts — {Month}`; `New Accounts` → `Accounts Added this Period`. (Section ids left as `focus_leads`, `case_targets`, `new_accounts` for backward-compat.)
+- [x] **Default section order**: `new_accounts`, `case_targets`, `sampling_trials`, `focus_leads`, `next_month_leads`, `existing_accounts`. First section (`Accounts Added this Period`) is expanded by default; others collapsed.
+- [x] **Reorderable per tenant** — CEO and System Admin see ↑ / ↓ arrows in each section header. First section's up arrow is disabled; last section's down arrow is disabled. Click swaps adjacent sections; immediately persists via `PUT /api/performance/section-order`. Other roles do NOT see the arrows.
+- [x] **Backend** `GET /api/performance/section-order` returns `{order, is_default}` (default merged when no row exists; unknown ids dropped + missing ids appended). `PUT` requires CEO / System Admin role (403 otherwise) and validates the payload (drops unknowns, appends missing defaults). Stored in `performance_settings` collection keyed by `(tenant_id, 'section_order')`.
+- [x] **Files**: `backend/routes/performance.py` (DEFAULT_SECTION_ORDER constant + GET/PUT endpoints + REORDER_ROLES guard), `frontend/src/pages/PerformanceTracker.js` (sectionConfigs map + sectionOrder state + moveSection helper + PerfSection canReorder/isFirst/isLast/onMoveUp/onMoveDown props rendering ↑/↓ buttons).
+- [x] **Testing**: iteration_162 — 11/11 acceptance criteria PASS. Backend pytest at `backend/tests/test_performance_section_order.py` (4 PASS, 1 skipped — no non-admin password). Reorder persists across reload. Minor StrictMode double-PUT fixed post-test by moving fetch out of setState updater.
+
+
 ### Performance Tracker — Tabs flattened into stacked collapsible sections (2026-05-05)
 - [x] Replaced the single Top 10 Priorities wrapper + 6 in-section tabs with **6 independent expandable/collapsible sections** stacked vertically: Case Targets, Sampling / Trials, Top 5 Leads to Focus, Leads Targeting {NextMonth}, New Accounts, Existing Accounts.
 - [x] **Default open state**: only the FIRST section (Case Targets) is expanded; the other 5 are collapsed.

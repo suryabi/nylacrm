@@ -107,24 +107,21 @@ export default function PerformanceTracker() {
       .catch(() => {});
   }, []);
 
-  const moveSection = useCallback(async (sectionId, direction) => {
-    setSectionOrder(prev => {
-      const idx = prev.indexOf(sectionId);
-      if (idx === -1) return prev;
-      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
-      if (newIdx < 0 || newIdx >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
-      // Fire-and-forget save (CEO / System Admin only — backend re-validates)
-      fetch(`${API_URL}/api/performance/section-order`, {
-        method: 'PUT', headers,
-        body: JSON.stringify({ order: next }),
-      }).then(r => {
-        if (!r.ok) toast.error('Could not save section order');
-      }).catch(() => toast.error('Could not save section order'));
-      return next;
-    });
-  }, [headers]);
+  const moveSection = useCallback((sectionId, direction) => {
+    const idx = sectionOrder.indexOf(sectionId);
+    if (idx === -1) return;
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= sectionOrder.length) return;
+    const next = [...sectionOrder];
+    [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+    setSectionOrder(next);
+    fetch(`${API_URL}/api/performance/section-order`, {
+      method: 'PUT', headers,
+      body: JSON.stringify({ order: next }),
+    }).then(r => {
+      if (!r.ok) toast.error('Could not save section order');
+    }).catch(() => toast.error('Could not save section order'));
+  }, [sectionOrder, headers]);
 
   // Auto-select the logged-in user as default resource (only once, when resources load and no session state exists)
   useEffect(() => {
