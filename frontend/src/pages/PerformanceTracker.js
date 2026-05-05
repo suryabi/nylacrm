@@ -1606,7 +1606,7 @@ function CaseTargetsSubsection({ year, month, resourceIdsKey, token, tenantId, i
           </thead>
           <tbody>
             {data.accounts.map((acc, idx) => {
-              const isOpen = expanded[acc.account_id] !== false; // default open
+              const isOpen = expanded[acc.account_id] === true; // default collapsed
               const ach = acc.achievement_pct;
               const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
               return (

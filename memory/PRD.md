@@ -9,6 +9,16 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Performance Tracker — Tabs flattened into stacked collapsible sections (2026-05-05)
+- [x] Replaced the single Top 10 Priorities wrapper + 6 in-section tabs with **6 independent expandable/collapsible sections** stacked vertically: Case Targets, Sampling / Trials, Top 5 Leads to Focus, Leads Targeting {NextMonth}, New Accounts, Existing Accounts.
+- [x] **Default open state**: only the FIRST section (Case Targets) is expanded; the other 5 are collapsed.
+- [x] **Lazy-mount on first open**: each section's children are not mounted until the user opens it for the first time, so collapsed sections do NOT fetch data. Once opened, content stays mounted (hidden when collapsed) and is NOT re-fetched on subsequent toggles.
+- [x] **Sub-state collapsed by default**: per-account rows in Case Targets now default to COLLAPSED (`expanded[acc.account_id] === true`); previously they were open by default.
+- [x] New reusable `PerfSection` component with header (icon + title + subtitle + chevron) replaces `Top10PrioritiesSection` + `SubTab`. Test ids: `perf-section-{id}`, `perf-section-{id}-toggle`, `perf-section-{id}-body`.
+- [x] **Files**: `frontend/src/pages/PerformanceTracker.js` (PerfSection component, IIFE rendering 6 sections in parent, removed Top10PrioritiesSection / SubTab, fixed CaseTargetsSubsection per-account default-collapse).
+- [x] **Testing**: iteration_161 — 7/8 acceptance criteria PASS on first run (lazy-mount, order, collapsed-by-default, no re-fetch, vertical spacing all verified). Per-account default-collapse bug found and fixed (one-line change `!== false` → `=== true`); manually verified post-fix: 0 `case-account-detail-*` elements on first render, 6 collapsed account header rows.
+
+
 ### Performance Tracker — Tile Layout + Leads Targeting Next Month tab (2026-05-05)
 - [x] **Replaced Revenue Metrics card section with editable summary tiles.** Top summary row now has 6 tiles in order: Target, Revenue Lifetime, Revenue {selected month / target range}, Revenue from New A/C, Existing A/C, New A/C. Revenue tiles use new `OverridableTile` component (hover pencil → inline edit → save → amber dot + amber number, RotateCcw to reset to auto). Override values flow through the existing `revenue_*_override` save/load — no backend change.
 - [x] **Moved 'Leads Targeting Next Month' into Top 10 Priorities** as a new tabular sub-tab (4th of 6, between Top 5 Leads to Focus and New Accounts). Removes the old block CTA + 'Next Pipeline Value' InfoRow from Pipeline Metrics. Sub-tab label is dynamic ('Leads Targeting May').
