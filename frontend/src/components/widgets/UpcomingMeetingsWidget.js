@@ -244,30 +244,56 @@ export function UpcomingMeetingsWidget({ onNewMeeting, onViewMeeting }) {
           {selectedDay === todayKey ? 'Today' : new Date(selectedDay + 'T00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
           <span className="ml-2 text-[10px] font-semibold text-slate-400 normal-case tracking-normal">{selectedEvents.length} event{selectedEvents.length !== 1 ? 's' : ''}</span>
         </p>
-        {selectedEvents.length > 2 && (
-          <div className="flex items-center gap-1">
+        {selectedEvents.length > 3 && (
+          <div className="flex items-center gap-1.5">
             <button
-              onClick={() => scrollBy(-280)}
-              className="p-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              onClick={() => scrollBy(-220)}
+              className="flex items-center gap-1 h-8 px-2.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-900 hover:text-white hover:border-slate-900 shadow-sm transition-all font-bold text-[11px]"
               aria-label="Scroll left"
               data-testid="meetings-scroll-left"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Prev</span>
             </button>
             <button
-              onClick={() => scrollBy(280)}
-              className="p-1.5 rounded-md border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              onClick={() => scrollBy(220)}
+              className="flex items-center gap-1 h-8 px-2.5 rounded-lg bg-slate-900 text-white hover:bg-slate-700 shadow-sm transition-all font-bold text-[11px]"
               aria-label="Scroll right"
               data-testid="meetings-scroll-right"
             >
-              <ChevronRight className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         )}
       </div>
 
-      {/* Horizontal meeting cards */}
-      <div className="px-4 sm:px-5 pb-4">
+      {/* Horizontal meeting cards with edge fades + floating arrow buttons */}
+      <div className="relative px-4 sm:px-5 pb-4">
+        {selectedEvents.length > 3 && !loading && (
+          <>
+            {/* Floating left chevron — visible on hover/sm+ for prominence */}
+            <button
+              onClick={() => scrollBy(-220)}
+              className="hidden sm:flex absolute left-1 top-1/2 -translate-y-1/2 z-10 items-center justify-center h-10 w-10 rounded-full bg-white border-2 border-slate-200 hover:border-slate-900 hover:bg-slate-900 hover:text-white text-slate-700 shadow-lg transition-all"
+              aria-label="Previous meetings"
+              data-testid="meetings-scroll-left-floating"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => scrollBy(220)}
+              className="hidden sm:flex absolute right-1 top-1/2 -translate-y-1/2 z-10 items-center justify-center h-10 w-10 rounded-full bg-white border-2 border-slate-200 hover:border-slate-900 hover:bg-slate-900 hover:text-white text-slate-700 shadow-lg transition-all"
+              aria-label="Next meetings"
+              data-testid="meetings-scroll-right-floating"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+            {/* Edge fade overlays so users sense there's more to scroll */}
+            <div className="hidden sm:block absolute left-4 top-0 bottom-4 w-8 bg-gradient-to-r from-white dark:from-slate-900 to-transparent pointer-events-none z-[5]" />
+            <div className="hidden sm:block absolute right-4 top-0 bottom-4 w-8 bg-gradient-to-l from-white dark:from-slate-900 to-transparent pointer-events-none z-[5]" />
+          </>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-12" data-testid="meetings-loading">
             <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
@@ -287,7 +313,7 @@ export function UpcomingMeetingsWidget({ onNewMeeting, onViewMeeting }) {
         ) : (
           <div
             ref={scrollerRef}
-            className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory -mx-1 px-1 scroll-smooth scrollbar-thin"
+            className="flex gap-2.5 overflow-x-auto pb-2 snap-x snap-mandatory -mx-1 px-1 scroll-smooth scrollbar-thin"
             style={{ scrollbarWidth: 'thin' }}
             data-testid="meetings-horizontal-scroll"
           >
@@ -322,53 +348,53 @@ export function UpcomingMeetingsWidget({ onNewMeeting, onViewMeeting }) {
                 <button
                   key={ev.id}
                   onClick={() => handleEventClick(ev)}
-                  className={`group snap-start flex-shrink-0 w-[260px] sm:w-[280px] text-left rounded-xl border ${cardCls} transition-all p-3.5 flex flex-col gap-2 relative overflow-hidden`}
+                  className={`group snap-start flex-shrink-0 w-[180px] sm:w-[200px] text-left rounded-xl border ${cardCls} transition-all p-3 flex flex-col gap-1.5 relative overflow-hidden`}
                   data-testid={`meeting-card-${ev.id}`}
                   data-status={status}
                 >
                   {/* Status pill */}
                   {status === 'live' && (
-                    <div className="absolute top-2 right-2 flex items-center gap-1 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full shadow-md">
+                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-emerald-500 text-white text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shadow-md">
                       <span className="relative flex h-1.5 w-1.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-white" />
                       </span>
-                      Live Now
+                      Live
                     </div>
                   )}
                   {status === 'up_next' && (
-                    <div className="absolute top-2 right-2 flex items-center gap-1 bg-blue-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full shadow-sm">
-                      <Radio className="h-2.5 w-2.5" />
-                      Up Next
+                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1 bg-blue-600 text-white text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full shadow-sm">
+                      <Radio className="h-2 w-2" />
+                      Next
                     </div>
                   )}
                   {status === 'past' && (
-                    <div className="absolute top-2 right-2 bg-slate-300 text-slate-600 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
+                    <div className="absolute top-1.5 right-1.5 bg-slate-300 text-slate-600 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full">
                       Done
                     </div>
                   )}
 
                   {/* Time */}
-                  <div className="flex items-center gap-1.5">
-                    <Clock className={`h-3.5 w-3.5 ${textTime}`} />
-                    <span className={`text-[12px] font-bold tabular-nums ${textTime}`}>
+                  <div className="flex items-center gap-1">
+                    <Clock className={`h-3 w-3 ${textTime}`} />
+                    <span className={`text-[11px] font-bold tabular-nums ${textTime}`}>
                       {time || 'All day'}
                     </span>
                     {ev.duration_minutes && (
-                      <span className={`text-[10px] font-semibold ${textTime} opacity-70`}>
+                      <span className={`text-[9px] font-semibold ${textTime} opacity-70`}>
                         · {ev.duration_minutes}m
                       </span>
                     )}
                   </div>
 
                   {/* Title */}
-                  <p className={`text-sm font-bold ${textPrimary} leading-snug line-clamp-2 mt-0.5 pr-14`}>
+                  <p className={`text-[12px] font-bold ${textPrimary} leading-snug line-clamp-2 pr-10`}>
                     {ev.title}
                   </p>
 
                   {/* Footer row: source chip + platform icon */}
-                  <div className="flex items-center justify-between mt-auto pt-2">
-                    <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${sourceBadge.chipBg}`}>
+                  <div className="flex items-center justify-between mt-auto pt-1">
+                    <span className={`inline-flex items-center gap-1 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${sourceBadge.chipBg}`}>
                       <span className={`w-1 h-1 rounded-full ${sourceBadge.dot}`} />
                       {sourceBadge.label}
                     </span>

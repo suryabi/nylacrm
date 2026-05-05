@@ -9,6 +9,14 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Home — Meeting card density + prominent scroll affordance (2026-05-05)
+- [x] Reduced meeting card width from 260–280px → **180–200px** so 5+ cards fit in view at desktop sizes (was ~3). Internal padding, time/title/icon sizes scaled down to keep cards readable.
+- [x] **Prominent scroll affordance**: kept the small "Prev / Next" pill buttons in the header AND added two **floating circular chevron buttons** (h-10 w-10, white with thick borders + shadow-lg) positioned absolutely over the left/right edges of the scroller. Edge gradient fades reinforce that there's more content to scroll.
+- [x] Threshold for showing scroll controls lifted from `> 2` to `> 3` events to match the new visible-cards capacity.
+- [x] **Files**: `frontend/src/components/widgets/UpcomingMeetingsWidget.js` (card width / spacing / paddings + floating arrow buttons + edge gradient fades).
+- [x] **Self-tested**: seeded 6 CRM meetings (live + up_next + 4 future), confirmed cards render at 200px width, floating-left/right buttons present, status colors intact (live emerald, up_next blue, past greyed). Screenshot verified.
+
+
 ### Home — Calendar full-width row + horizontal meeting cards with live/up-next highlighting (2026-05-05)
 - [x] **Layout**: UpcomingMeetingsWidget moved out of the lg:col-span-4 right rail into its OWN full-width section above the bento grid. Bento below now houses Upcoming Follow-ups (lg:col-span-8) + Pipeline (lg:col-span-4).
 - [x] **Horizontal meeting cards**: Selected day's events render as a horizontal flex-row scroll container (snap-x, scrollbar-thin) with 260–280px-wide cards. Scroll-left/right chevron buttons appear when there are more than 2 events.
