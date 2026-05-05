@@ -9,6 +9,14 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Performance Tracker — Sampling/Trials: SKU & Bottles/Crate dropdowns (2026-05-05)
+- [x] **SKU column** in the Edit Trial / New Trial form is now a Select dropdown populated only from the currently-selected lead's `proposed_sku_pricing` (already-picked SKUs are disabled to prevent duplicate rows).
+- [x] **Bottles/Crate column** is a Select dropdown populated from `master_skus.packaging_config.stock_out` (falls back to `production`). Each option label is `'{packaging name} ({units_per_package} bottles)'`. Default packaging auto-selected on SKU change.
+- [x] **Backend**: `_sku_units_map` rewritten to return `{default_units_per_package, packaging_options[]}` per SKU. `_lead_sku_options` enriches each row with `packaging_options[]`. Pydantic `SkuPlan` model now has `packaging_type_id: Optional[str]` for round-trip persistence on POST/PUT.
+- [x] **Files**: `backend/routes/performance.py` (_sku_units_map rewrite, SkuPlan model, sku_options enrichment), `frontend/src/pages/PerformanceTracker.js` (SamplingTrialsSubsection — Select dropdowns + getPackagingOptionsForSku/getPriceForSku/leadSkuOptions helpers + auto-select default packaging on SKU change).
+- [x] **Testing**: iteration_163 — 5/5 backend pytest PASS (`backend/tests/test_sampling_trials_packaging.py`) + 10/10 frontend acceptance criteria PASS. Round-trip persistence verified (Save → Edit reopens with same SKU, packaging, crates, price).
+
+
 ### Performance Tracker — Section renames + reorderable order persisted per tenant (2026-05-05)
 - [x] **Renamed sections**: `Top 5 Leads to Focus` → `Top Leads to Focus`; `Case Targets — {Month}` → `Volume Targets for Existing Accounts — {Month}`; `New Accounts` → `Accounts Added this Period`. (Section ids left as `focus_leads`, `case_targets`, `new_accounts` for backward-compat.)
 - [x] **Default section order**: `new_accounts`, `case_targets`, `sampling_trials`, `focus_leads`, `next_month_leads`, `existing_accounts`. First section (`Accounts Added this Period`) is expanded by default; others collapsed.
