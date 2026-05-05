@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,6 +66,30 @@ export default function HomeDashboard() {
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [locationName, setLocationName] = useState('');
+
+  // Per-user widget order (saved in user_preferences)
+  const DEFAULT_WIDGET_ORDER = ['meetings', 'pipeline', 'followups'];
+  const [widgetOrder, setWidgetOrder] = useState(DEFAULT_WIDGET_ORDER);
+
+  useEffect(() => {
+    axios.get(`${API_URL}/preferences/home-widget-order`, { withCredentials: true })
+      .then(r => { if (r.data?.order?.length) setWidgetOrder(r.data.order); })
+      .catch(() => {});
+  }, []);
+
+  const moveWidget = useCallback((widgetId, direction) => {
+    setWidgetOrder(prev => {
+      const idx = prev.indexOf(widgetId);
+      if (idx === -1) return prev;
+      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      axios.put(`${API_URL}/preferences/home-widget-order`, { order: next }, { withCredentials: true })
+        .catch(() => toast.error('Could not save widget order'));
+      return next;
+    });
+  }, []);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -333,30 +357,67 @@ export default function HomeDashboard() {
             <TaskMetricsWidget />
           </section>
 
-          {/* Calendar gets its own full-width row above the bento grid */}
-          <section className="mb-4 sm:mb-6">
-            <UpcomingMeetingsWidget
-              upcomingMeetings={upcoming_meetings}
-              onNewMeeting={() => {
-                setNewMeeting(getDefaultMeetingState());
-                setEditMode(false);
-                setShowNewMeetingDialog(true);
-              }}
-              onViewMeeting={handleViewMeeting}
-              onEditMeeting={handleEditMeeting}
-              onCancelMeeting={handleCancelMeeting}
-            />
-          </section>
-
-          {/* Pipeline — full-width row with horizontal status tiles */}
-          <section className="mb-4 sm:mb-6">
-            <PipelineSummaryWidget pipeline={pipeline} />
-          </section>
-
-          {/* Upcoming Follow-ups — full-width row with multi-column card grid */}
-          <section className="mb-4 sm:mb-6">
-            <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
-          </section>
+          {/* Reorderable widgets — order saved per user */}
+          {(() => {
+            const widgetConfigs = {
+              meetings: {
+                render: () => (
+                  <UpcomingMeetingsWidget
+                    upcomingMeetings={upcoming_meetings}
+                    onNewMeeting={() => {
+                      setNewMeeting(getDefaultMeetingState());
+                      setEditMode(false);
+                      setShowNewMeetingDialog(true);
+                    }}
+                    onViewMeeting={handleViewMeeting}
+                    onEditMeeting={handleEditMeeting}
+                    onCancelMeeting={handleCancelMeeting}
+                  />
+                ),
+              },
+              pipeline: {
+                render: () => <PipelineSummaryWidget pipeline={pipeline} />,
+              },
+              followups: {
+                render: () => <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />,
+              },
+            };
+            return widgetOrder.map((id, idx) => {
+              const cfg = widgetConfigs[id];
+              if (!cfg) return null;
+              const isFirst = idx === 0;
+              const isLast = idx === widgetOrder.length - 1;
+              return (
+                <section key={id} className="mb-4 sm:mb-6 relative group/widget" data-testid={`home-widget-${id}`}>
+                  {/* Reorder controls — appear on hover (or always on touch) */}
+                  <div className="absolute top-3 right-3 z-20 flex items-center gap-1 opacity-0 group-hover/widget:opacity-100 focus-within:opacity-100 transition-opacity" data-testid={`home-widget-${id}-reorder`}>
+                    <div className="hidden sm:flex items-center gap-0.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm px-1 py-0.5">
+                      <span className="text-slate-300 mr-0.5"><GripVertical className="h-3.5 w-3.5" /></span>
+                      <button
+                        onClick={() => !isFirst && moveWidget(id, 'up')}
+                        disabled={isFirst}
+                        className="p-1 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Move up"
+                        data-testid={`home-widget-${id}-move-up`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => !isLast && moveWidget(id, 'down')}
+                        disabled={isLast}
+                        className="p-1 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Move down"
+                        data-testid={`home-widget-${id}-move-down`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  {cfg.render()}
+                </section>
+              );
+            });
+          })()}
 
           {/* Sales ROI Panel — accessible on mobile/tablet via collapsible section.
               Hidden here on lg+ where the right-rail panel takes over. */}
