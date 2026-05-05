@@ -360,21 +360,30 @@ export default function PerformanceTracker() {
   const isLocked = data?.status === 'approved';
 
   return (
-    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen" data-testid="performance-tracker">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 bg-gradient-to-br from-slate-50 via-amber-50/20 to-slate-50 min-h-screen" data-testid="performance-tracker">
       <AppBreadcrumb />
-      {/* Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2 sm:gap-3">
-          <div className="p-1.5 sm:p-2 bg-slate-100 rounded-sm">
-            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-slate-700" />
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white via-amber-50/30 to-orange-50/20 p-5 sm:p-6 lg:p-8 shadow-sm">
+        {/* Decorative gradient orb */}
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-gradient-to-br from-amber-200/30 to-orange-300/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-32 -left-32 w-80 h-80 rounded-full bg-gradient-to-br from-blue-200/20 to-indigo-200/10 blur-3xl pointer-events-none" />
+        <div className="relative flex items-start gap-4">
+          <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 shadow-lg shadow-amber-300/40 flex-shrink-0">
+            <BarChart3 className="h-6 w-6 sm:h-7 sm:w-7 text-white" />
           </div>
-          Monthly Performance Tracker
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 mt-1 ml-9 sm:ml-12">Track sales outcomes, activity, pipeline, and collections per resource</p>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900 leading-[1.05]">
+              Monthly Performance Tracker
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1.5 font-medium max-w-2xl">
+              Track sales outcomes, activity, pipeline, and collections per resource. Built for the boardroom.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Selectors */}
-      <div className="bg-white border border-slate-200 rounded-sm p-3 sm:p-4 lg:p-5 space-y-3" data-testid="performance-selectors">
+      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-3 sm:p-4 lg:p-5 space-y-3" data-testid="performance-selectors">
           {/* View Mode Toggle — primary selection */}
           <div className="space-y-2">
             <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] block">View Performance By</label>
@@ -602,8 +611,8 @@ export default function PerformanceTracker() {
           </div>
 
           {/* Summary Cards Row — Target + 3 Revenue tiles + Account counters */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-sm" data-testid="summary-cards">
-            <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-target" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3" data-testid="summary-cards">
+            <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-target" accent="amber" />
             <OverridableTile
               label="Revenue Lifetime"
               autoValue={data.revenue?.lifetime}
@@ -611,6 +620,7 @@ export default function PerformanceTracker() {
               editing={revenueEditing.lifetime}
               locked={isLocked}
               icon={DollarSign}
+              accent="emerald"
               onEdit={() => setRevenueEditing(p => ({ ...p, lifetime: true }))}
               onChange={(v) => setRevenueOverrides(p => ({ ...p, lifetime: v }))}
               onSave={() => setRevenueEditing(p => ({ ...p, lifetime: false }))}
@@ -624,6 +634,7 @@ export default function PerformanceTracker() {
               editing={revenueEditing.this_month}
               locked={isLocked}
               icon={TrendingUp}
+              accent="blue"
               sub={fmtPct(data.revenue?.achievement_pct)}
               onEdit={() => setRevenueEditing(p => ({ ...p, this_month: true }))}
               onChange={(v) => setRevenueOverrides(p => ({ ...p, this_month: v }))}
@@ -638,25 +649,29 @@ export default function PerformanceTracker() {
               editing={revenueEditing.new_accounts}
               locked={isLocked}
               icon={Building2}
+              accent="violet"
               onEdit={() => setRevenueEditing(p => ({ ...p, new_accounts: true }))}
               onChange={(v) => setRevenueOverrides(p => ({ ...p, new_accounts: v }))}
               onSave={() => setRevenueEditing(p => ({ ...p, new_accounts: false }))}
               onReset={() => { setRevenueOverrides(p => ({ ...p, new_accounts: '' })); setRevenueEditing(p => ({ ...p, new_accounts: false })); }}
               testId="metric-revenue-new-accounts"
             />
-            <SummaryTile label="Existing A/C" value={data.accounts?.existing_count} icon={Users} testId="metric-existing" />
-            <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Users} testId="metric-new" />
+            <SummaryTile label="Existing A/C" value={data.accounts?.existing_count} icon={Users} testId="metric-existing" accent="slate" />
+            <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Users} testId="metric-new" accent="emerald" />
           </div>
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
             {/* Pipeline Section */}
-            <div className="bg-white border border-slate-200 rounded-sm" data-testid="pipeline-section">
-              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
-                <div className="p-1.5 bg-slate-100 rounded-sm">
-                  <TrendingUp className="h-4 w-4 text-slate-700" />
+            <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden" data-testid="pipeline-section">
+              <div className="flex items-center gap-3 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 bg-gradient-to-r from-blue-50/40 via-indigo-50/20 to-transparent">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 shadow-md shadow-blue-200/60">
+                  <TrendingUp className="h-[18px] w-[18px] text-white" />
                 </div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Pipeline Metrics</h3>
+                <div>
+                  <h3 className="text-[15px] font-black tracking-tight text-slate-900 leading-tight">Pipeline Metrics</h3>
+                  <p className="text-xs text-slate-500 font-medium">Lead distribution by status</p>
+                </div>
               </div>
               <div className="p-4 sm:p-5 pt-3 sm:pt-4">
                 <table className="w-full text-left border-collapse" data-testid="pipeline-status-table">
@@ -713,12 +728,15 @@ export default function PerformanceTracker() {
             </div>
 
             {/* Activity Section */}
-            <div className="bg-white border border-slate-200 rounded-sm" data-testid="activity-section">
-              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
-                <div className="p-1.5 bg-slate-100 rounded-sm">
-                  <Phone className="h-4 w-4 text-slate-700" />
+            <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden" data-testid="activity-section">
+              <div className="flex items-center gap-3 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 bg-gradient-to-r from-emerald-50/40 via-teal-50/20 to-transparent">
+                <div className="p-2 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 shadow-md shadow-emerald-200/60">
+                  <Phone className="h-[18px] w-[18px] text-white" />
                 </div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Activity Metrics</h3>
+                <div>
+                  <h3 className="text-[15px] font-black tracking-tight text-slate-900 leading-tight">Activity Metrics</h3>
+                  <p className="text-xs text-slate-500 font-medium">Communication and engagement breakdown</p>
+                </div>
               </div>
               <div className="p-3 sm:p-4 lg:p-5 pt-3 sm:pt-4 space-y-4">
                 <div>
@@ -886,6 +904,7 @@ export default function PerformanceTracker() {
                       title={cfg.title}
                       subtitle={cfg.subtitle}
                       defaultOpen={idx === 0}
+                      sectionIndex={idx + 1}
                       canReorder={canReorder}
                       isFirst={idx === 0}
                       isLast={idx === sectionOrder.length - 1}
@@ -912,25 +931,33 @@ export default function PerformanceTracker() {
           )}
 
           {/* Calculated KPIs */}
-          <div className="bg-white border border-slate-200 rounded-sm p-3 sm:p-4 lg:p-5" data-testid="kpi-section">
-            <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-900 mb-3 sm:mb-4">Performance KPIs</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KPICard label="Achievement %" value={fmtPct(data.calculated?.achievement_pct)} good={data.calculated?.achievement_pct >= 80} bad={data.calculated?.achievement_pct < 50} />
-                <KPICard label="Pipeline Coverage" value={fmtPct(data.calculated?.pipeline_coverage)} good={data.calculated?.pipeline_coverage >= 100} bad={data.calculated?.pipeline_coverage < 50} />
-                <KPICard label="Outstanding Ratio" value={fmtPct(data.calculated?.outstanding_ratio)} good={data.calculated?.outstanding_ratio < 20} bad={data.calculated?.outstanding_ratio > 50} invert />
-                <KPICard label="Conversion Rate" value={fmtPct(data.calculated?.account_conversion_rate)} good={data.calculated?.account_conversion_rate >= 20} />
+          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm p-4 sm:p-5 lg:p-6" data-testid="kpi-section">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-indigo-400 to-violet-500 shadow-md shadow-indigo-200/60">
+                <BarChart3 className="h-[18px] w-[18px] text-white" />
               </div>
+              <div>
+                <h3 className="text-[15px] font-black tracking-tight text-slate-900 leading-tight">Performance KPIs</h3>
+                <p className="text-xs text-slate-500 font-medium">Headline indicators against this period's targets</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <KPICard label="Achievement %" value={fmtPct(data.calculated?.achievement_pct)} good={data.calculated?.achievement_pct >= 80} bad={data.calculated?.achievement_pct < 50} accent="blue" />
+              <KPICard label="Pipeline Coverage" value={fmtPct(data.calculated?.pipeline_coverage)} good={data.calculated?.pipeline_coverage >= 100} bad={data.calculated?.pipeline_coverage < 50} accent="violet" />
+              <KPICard label="Outstanding Ratio" value={fmtPct(data.calculated?.outstanding_ratio)} good={data.calculated?.outstanding_ratio < 20} bad={data.calculated?.outstanding_ratio > 50} invert accent="amber" />
+              <KPICard label="Conversion Rate" value={fmtPct(data.calculated?.account_conversion_rate)} good={data.calculated?.account_conversion_rate >= 20} accent="emerald" />
+            </div>
           </div>
 
           {/* Support Section — Last */}
-          <div className="bg-white border border-slate-200 rounded-sm" data-testid="support-section">
-            <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
-              <div className="p-1.5 bg-slate-100 rounded-sm">
-                <MapPin className="h-4 w-4 text-slate-700" />
+          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden" data-testid="support-section">
+            <div className="flex items-center gap-3 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 bg-gradient-to-r from-rose-50/40 via-pink-50/20 to-transparent">
+              <div className="p-2 rounded-xl bg-gradient-to-br from-rose-400 to-pink-500 shadow-md shadow-rose-200/60">
+                <MapPin className="h-[18px] w-[18px] text-white" />
               </div>
               <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Support Needed</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Add a support area and describe what you need (one entry per area). Drag the bottom-right corner of the text area to expand.</p>
+                <h3 className="text-[15px] font-black tracking-tight text-slate-900 leading-tight">Support Needed</h3>
+                <p className="text-xs text-slate-500 mt-0.5 font-medium">Add a support area and describe what you need. Drag the bottom-right corner of the text area to expand.</p>
               </div>
             </div>
             <div className="p-4 sm:p-5 pt-3 sm:pt-4 space-y-3">
@@ -1098,26 +1125,54 @@ function OverridableRow({ label, autoValue, overrideValue, editing, locked, onEd
 
 // --- Sub-components ---
 
-function SummaryTile({ label, value, icon: Icon, sub, testId }) {
+// Tile accent palette — subtle gradients used by SummaryTile / OverridableTile.
+// Each accent contributes a soft tinted background, a colored ring on hover,
+// and a small colored icon pill for visual hierarchy.
+const TILE_ACCENT = {
+  amber:   { bg: 'bg-gradient-to-br from-amber-50/80 to-orange-50/40',    pill: 'bg-amber-100 text-amber-700',    ring: 'hover:ring-amber-200',    bar: 'from-amber-400 to-orange-500' },
+  emerald: { bg: 'bg-gradient-to-br from-emerald-50/80 to-teal-50/30',    pill: 'bg-emerald-100 text-emerald-700', ring: 'hover:ring-emerald-200',  bar: 'from-emerald-400 to-teal-500' },
+  blue:    { bg: 'bg-gradient-to-br from-blue-50/80 to-sky-50/30',        pill: 'bg-blue-100 text-blue-700',       ring: 'hover:ring-blue-200',     bar: 'from-blue-400 to-sky-500' },
+  violet:  { bg: 'bg-gradient-to-br from-violet-50/80 to-fuchsia-50/30',  pill: 'bg-violet-100 text-violet-700',   ring: 'hover:ring-violet-200',   bar: 'from-violet-400 to-fuchsia-500' },
+  slate:   { bg: 'bg-gradient-to-br from-slate-50/80 to-slate-100/40',    pill: 'bg-slate-100 text-slate-700',     ring: 'hover:ring-slate-200',    bar: 'from-slate-400 to-slate-500' },
+  rose:    { bg: 'bg-gradient-to-br from-rose-50/80 to-pink-50/30',       pill: 'bg-rose-100 text-rose-700',       ring: 'hover:ring-rose-200',     bar: 'from-rose-400 to-pink-500' },
+};
+
+function SummaryTile({ label, value, icon: Icon, sub, testId, accent = 'slate' }) {
+  const a = TILE_ACCENT[accent] || TILE_ACCENT.slate;
   return (
-    <div className="bg-white p-3 sm:p-4 relative group flex flex-col justify-between min-h-[80px] sm:min-h-[90px] hover:bg-slate-50 transition-colors overflow-hidden" data-testid={testId}>
-      <p className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-[0.15em] leading-tight pr-5">{label}</p>
-      <Icon className="h-3.5 w-3.5 text-slate-300 absolute top-3 right-3 sm:top-4 sm:right-4" />
-      <div className="min-w-0 mt-auto">
-        <p className="text-base sm:text-lg font-bold tracking-tight text-slate-900 tabular-nums truncate" title={String(value)}>{value}</p>
-        <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium h-4 truncate">{sub || '\u00A0'}</p>
+    <div
+      className={`relative group flex flex-col justify-between min-h-[96px] sm:min-h-[108px] p-3 sm:p-4 rounded-xl border border-slate-200/80 ring-1 ring-transparent ${a.bg} ${a.ring} hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden`}
+      data-testid={testId}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-[0.16em] leading-tight pr-1">{label}</p>
+        {Icon && (
+          <div className={`p-1 rounded-md ${a.pill} shrink-0`}>
+            <Icon className="h-3.5 w-3.5" />
+          </div>
+        )}
       </div>
+      <div className="min-w-0 mt-auto">
+        <p className="text-lg sm:text-2xl font-black tracking-tight text-slate-900 tabular-nums truncate leading-tight" title={String(value)}>{value}</p>
+        <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold h-4 truncate">{sub || '\u00A0'}</p>
+      </div>
+      {/* Subtle gradient accent bar at the bottom */}
+      <div className={`absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r ${a.bar} opacity-0 group-hover:opacity-100 transition-opacity`} />
     </div>
   );
 }
 
-function OverridableTile({ label, autoValue, overrideValue, editing, locked, onEdit, onChange, onSave, onReset, icon: Icon, sub, testId }) {
+function OverridableTile({ label, autoValue, overrideValue, editing, locked, onEdit, onChange, onSave, onReset, icon: Icon, sub, testId, accent = 'slate' }) {
   const displayValue = overrideValue !== '' ? parseFloat(overrideValue) : autoValue;
   const hasOverride = overrideValue !== '' && overrideValue !== null && overrideValue !== undefined;
+  const a = TILE_ACCENT[accent] || TILE_ACCENT.slate;
   return (
-    <div className={`bg-white p-3 sm:p-4 relative group flex flex-col justify-between min-h-[80px] sm:min-h-[90px] hover:bg-slate-50 transition-colors overflow-hidden ${hasOverride ? 'ring-1 ring-amber-300' : ''}`} data-testid={testId}>
+    <div
+      className={`relative group flex flex-col justify-between min-h-[96px] sm:min-h-[108px] p-3 sm:p-4 rounded-xl border border-slate-200/80 ring-1 ring-transparent ${a.bg} ${a.ring} hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden ${hasOverride ? '!ring-amber-300' : ''}`}
+      data-testid={testId}
+    >
       <div className="flex items-start justify-between gap-1.5">
-        <p className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-[0.15em] leading-tight pr-1 flex items-center gap-1">
+        <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-[0.16em] leading-tight pr-1 flex items-center gap-1">
           {label}
           {hasOverride && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override" />}
         </p>
@@ -1125,7 +1180,7 @@ function OverridableTile({ label, autoValue, overrideValue, editing, locked, onE
           {!editing && !locked && (
             <button
               onClick={() => { onChange(String(autoValue || 0)); onEdit(); }}
-              className="p-0.5 rounded hover:bg-slate-100 text-slate-300 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="p-1 rounded-md hover:bg-white/80 text-slate-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Override"
               data-testid={`${testId}-edit`}
             >
@@ -1135,14 +1190,18 @@ function OverridableTile({ label, autoValue, overrideValue, editing, locked, onE
           {hasOverride && !editing && !locked && (
             <button
               onClick={onReset}
-              className="p-0.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="p-1 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity"
               title="Reset to auto"
               data-testid={`${testId}-reset`}
             >
               <RotateCcw className="h-3 w-3" />
             </button>
           )}
-          {Icon && !editing && <Icon className="h-3.5 w-3.5 text-slate-300" />}
+          {Icon && !editing && (
+            <div className={`p-1 rounded-md ${a.pill} shrink-0`}>
+              <Icon className="h-3.5 w-3.5" />
+            </div>
+          )}
         </div>
       </div>
       <div className="min-w-0 mt-auto">
@@ -1150,21 +1209,22 @@ function OverridableTile({ label, autoValue, overrideValue, editing, locked, onE
           <div className="flex items-center gap-1.5">
             <input
               type="number"
-              className="w-full text-base sm:text-lg font-bold tracking-tight tabular-nums text-slate-900 bg-white border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              className="w-full text-lg sm:text-2xl font-black tracking-tight tabular-nums text-slate-900 bg-white border border-blue-300 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
               value={overrideValue}
               onChange={(e) => onChange(e.target.value)}
               autoFocus
               data-testid={`${testId}-input`}
             />
-            <button onClick={onSave} className="p-0.5 rounded hover:bg-blue-100 text-blue-600 flex-shrink-0" title="Done" data-testid={`${testId}-save`}>
+            <button onClick={onSave} className="p-1 rounded-md bg-blue-600 hover:bg-blue-700 text-white flex-shrink-0 shadow-sm" title="Done" data-testid={`${testId}-save`}>
               <Check className="h-4 w-4" />
             </button>
           </div>
         ) : (
-          <p className={`text-base sm:text-lg font-bold tracking-tight tabular-nums truncate ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`} title={`₹${fmt(displayValue)}`}>₹{fmt(displayValue)}</p>
+          <p className={`text-lg sm:text-2xl font-black tracking-tight tabular-nums truncate leading-tight ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`} title={`₹${fmt(displayValue)}`}>₹{fmt(displayValue)}</p>
         )}
-        <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium h-4 truncate">{sub || '\u00A0'}</p>
+        <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold h-4 truncate">{sub || '\u00A0'}</p>
       </div>
+      <div className={`absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r ${a.bar} opacity-0 group-hover:opacity-100 transition-opacity`} />
     </div>
   );
 }
@@ -1218,15 +1278,25 @@ function AgingBucket({ label, value, color }) {
   );
 }
 
-function KPICard({ label, value, good, bad, invert }) {
+function KPICard({ label, value, good, bad, invert, accent = 'slate' }) {
   const isGood = invert ? bad : good;
   const isBad = invert ? good : bad;
-  const bg = isGood ? 'bg-emerald-50 border-emerald-200' : isBad ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200';
-  const text = isGood ? 'text-emerald-800' : isBad ? 'text-red-700' : 'text-slate-900';
+  // Use accent palette for the resting/info state; switch to status colors when good/bad
+  const a = TILE_ACCENT[accent] || TILE_ACCENT.slate;
+  const stateBg = isGood ? 'bg-gradient-to-br from-emerald-50 to-teal-50/40 border-emerald-200' : isBad ? 'bg-gradient-to-br from-rose-50 to-red-50/40 border-rose-200' : `${a.bg} border-slate-200/80`;
+  const stateText = isGood ? 'text-emerald-700' : isBad ? 'text-rose-700' : 'text-slate-900';
+  const statePill = isGood ? 'bg-emerald-100 text-emerald-700' : isBad ? 'bg-rose-100 text-rose-700' : a.pill;
+  const stateBar = isGood ? 'from-emerald-400 to-teal-500' : isBad ? 'from-rose-400 to-pink-500' : a.bar;
   return (
-    <div className={`border rounded-sm p-3 sm:p-4 text-center ${bg}`}>
-      <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 mb-1.5">{label}</p>
-      <p className={`text-lg sm:text-xl lg:text-2xl font-semibold tracking-tight tabular-nums ${text}`}>{value}</p>
+    <div className={`group relative rounded-xl border ${stateBg} p-3 sm:p-4 hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.16em] font-bold text-slate-500 leading-tight">{label}</p>
+        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md ${statePill}`}>
+          {isGood ? <ArrowUp className="h-3 w-3" /> : isBad ? <ArrowDown className="h-3 w-3" /> : <span className="block w-1.5 h-1.5 rounded-full bg-current opacity-60" />}
+        </span>
+      </div>
+      <p className={`text-xl sm:text-2xl lg:text-3xl font-black tracking-tight tabular-nums ${stateText} leading-tight`}>{value}</p>
+      <div className={`absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r ${stateBar} opacity-70`} />
     </div>
   );
 }
@@ -1527,7 +1597,7 @@ function AccountValueCell({ account, planId, onRefresh }) {
 // Children are lazy-mounted on first open so collapsed sections don't fetch data.
 // ════════════════════════════════════════════════════════════════════
 
-function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, canReorder = false, isFirst = false, isLast = false, onMoveUp, onMoveDown, children }) {
+function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, canReorder = false, isFirst = false, isLast = false, onMoveUp, onMoveDown, sectionIndex, children }) {
   const [open, setOpen] = useState(defaultOpen);
   const [hasOpened, setHasOpened] = useState(defaultOpen);
 
@@ -1540,20 +1610,27 @@ function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, can
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-sm" data-testid={`perf-section-${id}`}>
-      <div className="w-full flex items-center gap-2.5 p-4 sm:p-5 hover:bg-slate-50 transition-colors">
+    <div className={`bg-white border border-slate-200/80 rounded-2xl shadow-sm transition-all overflow-hidden ${open ? 'ring-1 ring-amber-100/60 shadow-md' : 'hover:shadow-md hover:border-slate-300'}`} data-testid={`perf-section-${id}`}>
+      <div className={`w-full flex items-center gap-3 p-4 sm:p-5 transition-colors ${open ? 'bg-gradient-to-r from-amber-50/40 via-orange-50/20 to-transparent' : 'hover:bg-slate-50/60'}`}>
         <button
           onClick={toggle}
-          className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+          className="flex items-center gap-3 flex-1 min-w-0 text-left"
           data-testid={`perf-section-${id}-toggle`}
           aria-expanded={open}
         >
-          <div className="p-1.5 bg-amber-100 rounded-sm flex-shrink-0">
-            {Icon && <Icon className="h-4 w-4 text-amber-700" />}
+          {/* Section index pill */}
+          {sectionIndex !== undefined && (
+            <span className={`hidden sm:flex items-center justify-center min-w-[28px] h-7 px-1.5 rounded-md text-[11px] font-black tabular-nums tracking-tight ${open ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              {String(sectionIndex).padStart(2, '0')}
+            </span>
+          )}
+          {/* Icon with gradient pill */}
+          <div className={`p-2 rounded-xl flex-shrink-0 transition-all ${open ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-md shadow-amber-200/60' : 'bg-gradient-to-br from-amber-100 to-orange-100'}`}>
+            {Icon && <Icon className={`h-4 w-4 sm:h-[18px] sm:w-[18px] ${open ? 'text-white' : 'text-amber-700'}`} />}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 truncate">{title}</h3>
-            {subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>}
+            <h3 className="text-sm sm:text-[15px] font-black tracking-tight text-slate-900 truncate leading-tight">{title}</h3>
+            {subtitle && <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate font-medium">{subtitle}</p>}
           </div>
         </button>
 
@@ -1562,7 +1639,7 @@ function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, can
             <button
               onClick={(e) => { e.stopPropagation(); if (!isFirst) onMoveUp?.(); }}
               disabled={isFirst}
-              className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              className="p-1.5 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               title="Move up"
               data-testid={`perf-section-${id}-move-up`}
             >
@@ -1582,16 +1659,16 @@ function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, can
 
         <button
           onClick={toggle}
-          className="p-1 rounded hover:bg-slate-100 flex-shrink-0"
+          className={`p-1.5 rounded-md hover:bg-slate-100 flex-shrink-0 transition-transform ${open ? 'rotate-0' : ''}`}
           aria-label={open ? 'Collapse' : 'Expand'}
           tabIndex={-1}
         >
-          {open ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+          {open ? <ChevronDown className="h-4 w-4 text-slate-500" /> : <ChevronRight className="h-4 w-4 text-slate-500" />}
         </button>
       </div>
 
       {hasOpened && (
-        <div className={`border-t border-slate-100 p-4 sm:p-5 ${open ? '' : 'hidden'}`} data-testid={`perf-section-${id}-body`}>
+        <div className={`border-t border-slate-100 p-4 sm:p-5 bg-slate-50/40 ${open ? '' : 'hidden'}`} data-testid={`perf-section-${id}-body`}>
           {children}
         </div>
       )}

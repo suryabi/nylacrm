@@ -9,6 +9,18 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Performance Tracker — Contemporary visual redesign (2026-05-05)
+- [x] **Page hero**: replaced flat title with a gradient hero card (amber→orange→rose icon, decorative blurred orbs, large H1, "Built for the boardroom" tagline).
+- [x] **Summary tiles** (Target / Revenue Lifetime / Revenue Period / Revenue New A/C / Existing A/C / New A/C): introduced shared `TILE_ACCENT` palette with 6 accent variants (amber/emerald/blue/violet/slate/rose). Each tile now has a rounded-xl card, soft tinted gradient bg, colored icon pill, hover lift + shadow + animated gradient bottom bar.
+- [x] **PerfSection cards**: numbered section index pill (01-06) + larger gradient amber→orange icon pill (active sections get a glowing white-on-gradient version), confident H3 typography, subtle amber-tinted header gradient when open. Body wrapped in slate-50 tinted area for content separation.
+- [x] **Pipeline + Activity Metrics cards**: header bars now have gradient tinted backgrounds (blue/indigo for Pipeline, emerald/teal for Activity), gradient icon pills with colored shadows, subtitle text below the title for context.
+- [x] **Performance KPIs strip**: card shell now has gradient indigo→violet icon + subtitle. Each KPI tile uses accent palette + status colors (good=emerald gradient + ArrowUp, bad=rose gradient + ArrowDown, neutral=accent), gradient bottom bar, hover lift, large XL/2XL/3XL number typography.
+- [x] **Support Needed card**: gradient rose→pink icon, refined helper text, rounded-2xl shell.
+- [x] All `data-testid` selectors preserved → no test regressions; reorder + collapse + override flows unchanged.
+- [x] **Files**: `frontend/src/pages/PerformanceTracker.js` (TILE_ACCENT palette, SummaryTile/OverridableTile rebuilt, PerfSection header upgrade with sectionIndex prop, KPICard with accent + state-aware gradients, page hero + Pipeline + Activity headers + Support Needed header restyled).
+- [x] Lint clean.
+
+
 ### Performance Tracker — Support Needed: Save → Edit toggle (2026-05-05)
 - [x] Fixed user-reported issue: Support Needed rows showed a persistent Save button after saving instead of switching to an Edit pencil. Each row now toggles between an editable state (Save button + amber-bordered editable textarea) and a saved/read-only state (Edit pencil + greyed-out disabled textarea).
 - [x] New rows added via the '+ Add a support area...' dropdown start in edit mode. Saved rows loaded from the server start in read-only mode.
