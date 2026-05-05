@@ -34,7 +34,7 @@ const ROUTE_META = {
   '/sku-performance': { label: 'SKU Performance', icon: 'package' },
   '/resource-performance': { label: 'Resource Performance', icon: 'users' },
   '/account-performance': { label: 'Account Performance', icon: 'building' },
-  '/performance': { label: 'Performance Tracker', icon: 'bar-chart-3' },
+  '/performance': { label: 'Targets & Performance Tracker', icon: 'bar-chart-3' },
   '/transportation-calculator': { label: 'Transportation Calculator', icon: 'truck' },
   '/sku-management': { label: 'SKU Management', icon: 'package' },
   '/company-profile': { label: 'Company Profile', icon: 'building' },

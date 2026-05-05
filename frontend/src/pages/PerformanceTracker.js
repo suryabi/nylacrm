@@ -382,7 +382,7 @@ export default function PerformanceTracker() {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-slate-900 leading-[1.05]">
-              Monthly Performance Tracker
+              Targets &amp; Performance Tracker
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 mt-1.5 font-medium max-w-2xl">
               Track sales outcomes, activity, pipeline, and collections per resource. Built for the boardroom.
