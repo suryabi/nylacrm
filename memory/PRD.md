@@ -5,6 +5,15 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Performance Tracker — Pipeline Metrics overlap fix + compact-number tile values (2026-05-05)
+- [x] User-reported: pipeline status table rows showed values colliding (e.g. "3 ₹1,69,200" / "42 ₹1,69,200" with no spacing between Leads count and ₹ Value). Bottom Coverage Ratio / Total Pipeline Value were cramped in a 2-col grid that overlapped on narrower widths. And summary tiles risked overlap once revenue numbers grew bigger than ₹0.
+- [x] **Pipeline status table**: explicit column widths (`w-[64px]` Leads, padding-left on Value column), `whitespace-nowrap` + `tabular-nums` on numeric cells, status cell wraps label in `flex min-w-0 truncate` so long status names don't push the layout. Removed redundant `ChevronRight` icon collision with status text.
+- [x] **Coverage Ratio / Total Pipeline Value**: replaced `grid-cols-2` with stacked `flex flex-col` so each metric gets full row width with label-left / value-right alignment. `InfoRow` hardened with `gap-3 min-w-0 truncate` on label and `whitespace-nowrap` on value.
+- [x] **Compact tile values**: introduced `fmtCompact()` Indian-style formatter (`Cr / L / K`) used for `Target` SummaryTile and all `OverridableTile` revenue values. Full ₹ value preserved in `title` tooltip so hover still reveals the precise number. Tile width is no longer a function of digit-count → no overflow regardless of revenue magnitude.
+- [x] All `data-testid`s preserved → no test regressions.
+- [x] **Files**: `frontend/src/pages/PerformanceTracker.js` (`fmtCompact` helper, pipeline-status-table column widths/whitespace, InfoRow hardening, stacked Coverage/Total layout, OverridableTile compact display, SummaryTile `fullValue` prop for tooltip).
+- [x] **Verification**: Lint clean. Live screenshots at desktop (1920×800) and narrow (1100×900) viewports confirm no overlap in pipeline rows or bottom metric pairs; tiles render with sentence-case headers + safely-sized numbers.
+
 ### Performance Tracker — Typography softening + overflow fix (2026-05-05)
 - [x] User-reported issue: When numbers in Pipeline metrics / summary tiles were large, they overflowed or felt cluttered. User also disliked the BOLD UPPERCASE headers throughout the Performance Tracker.
 - [x] **SummaryTile / OverridableTile**: removed `uppercase tracking-[0.16em] font-bold` headers → now `text-[11px] sm:text-xs font-semibold` (sentence-case, semibold). Number font reduced from `text-lg sm:text-2xl font-black` → `text-base sm:text-lg lg:text-xl font-bold` and added `truncate min-w-0` so large numbers no longer overflow. Min-height tightened from 96/108px → 88/100px. Sub-text `font-medium` (was `font-semibold`).

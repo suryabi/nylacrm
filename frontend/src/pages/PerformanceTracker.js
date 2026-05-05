@@ -21,6 +21,15 @@ import {
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const fmt = (v) => (v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
 const fmtPct = (v) => `${(v || 0).toFixed(1)}%`;
+// Indian compact number format for tiles: 1,50,00,000 -> "1.5Cr", 12,50,000 -> "12.5L", 75,000 -> "75K"
+const fmtCompact = (v) => {
+  const n = Number(v) || 0;
+  const abs = Math.abs(n);
+  if (abs >= 10000000) return `${(n / 10000000).toFixed(abs >= 100000000 ? 0 : 1).replace(/\.0$/, '')}Cr`;
+  if (abs >= 100000) return `${(n / 100000).toFixed(abs >= 10000000 ? 0 : 1).replace(/\.0$/, '')}L`;
+  if (abs >= 1000) return `${(n / 1000).toFixed(abs >= 100000 ? 0 : 1).replace(/\.0$/, '')}K`;
+  return fmt(n);
+};
 const MONTHS = [
   { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
   { value: 4, label: 'April' }, { value: 5, label: 'May' }, { value: 6, label: 'June' },
@@ -612,7 +621,7 @@ export default function PerformanceTracker() {
 
           {/* Summary Cards Row — Target + 3 Revenue tiles + Account counters */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3" data-testid="summary-cards">
-            <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-target" accent="amber" />
+            <SummaryTile label="Target" value={`₹${fmtCompact(data.revenue?.target)}`} fullValue={`₹${fmt(data.revenue?.target)}`} icon={Target} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-target" accent="amber" />
             <OverridableTile
               label="Revenue Lifetime"
               autoValue={data.revenue?.lifetime}
@@ -677,9 +686,9 @@ export default function PerformanceTracker() {
                 <table className="w-full text-left border-collapse" data-testid="pipeline-status-table">
                   <thead>
                     <tr>
-                      <th className="pb-3 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500">Status</th>
-                      <th className="pb-3 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500 text-right">Leads</th>
-                      <th className="pb-3 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500 text-right">Value</th>
+                      <th className="pb-3 pr-2 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500">Status</th>
+                      <th className="pb-3 px-2 sm:px-3 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500 text-right whitespace-nowrap w-[64px]">Leads</th>
+                      <th className="pb-3 pl-3 sm:pl-4 border-b border-slate-200 text-[10px] uppercase tracking-wider font-semibold text-slate-500 text-right whitespace-nowrap">Value</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -699,13 +708,14 @@ export default function PerformanceTracker() {
                         }}
                         data-testid={`pipeline-row-${row.status}`}
                       >
-                        <td className="py-3 text-sm font-medium text-slate-900 capitalize flex items-center gap-2.5">
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-                          {getStatusLabel(row.status)}
-                          <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 text-slate-300 ml-auto" />
+                        <td className="py-3 pr-2 text-sm font-medium text-slate-900 capitalize">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+                            <span className="truncate">{getStatusLabel(row.status)}</span>
+                          </div>
                         </td>
-                        <td className="py-3 text-right text-sm font-medium text-slate-700 tabular-nums">{row.count}</td>
-                        <td className="py-3 text-right text-sm font-medium text-slate-700 tabular-nums">₹{fmt(row.value)}</td>
+                        <td className="py-3 px-2 sm:px-3 text-right text-sm font-medium text-slate-700 tabular-nums whitespace-nowrap w-[64px]">{row.count}</td>
+                        <td className="py-3 pl-3 sm:pl-4 text-right text-sm font-medium text-slate-700 tabular-nums whitespace-nowrap">₹{fmt(row.value)}</td>
                       </tr>
                       );
                     })}
@@ -713,14 +723,14 @@ export default function PerformanceTracker() {
                       <tr><td colSpan={3} className="text-center py-6 text-xs text-slate-400">No active pipeline leads</td></tr>
                     )}
                     <tr className="bg-slate-50 font-semibold border-t-2 border-slate-200">
-                      <td className="py-3 text-xs text-slate-700 uppercase tracking-wide">Total</td>
-                      <td className="py-3 text-right text-sm text-slate-900 tabular-nums">{data.pipeline?.total_count || 0}</td>
-                      <td className="py-3 text-right text-sm text-slate-900 tabular-nums">₹{fmt(data.pipeline?.total_value)}</td>
+                      <td className="py-3 pr-2 text-xs text-slate-700">Total</td>
+                      <td className="py-3 px-2 sm:px-3 text-right text-sm text-slate-900 tabular-nums whitespace-nowrap w-[64px]">{data.pipeline?.total_count || 0}</td>
+                      <td className="py-3 pl-3 sm:pl-4 text-right text-sm text-slate-900 tabular-nums whitespace-nowrap">₹{fmt(data.pipeline?.total_value)}</td>
                     </tr>
                   </tbody>
                 </table>
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-4 flex flex-col">
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
                   <InfoRow label="Total Pipeline Value" value={`₹${fmt(data.pipeline?.total_value)}`} />
                 </div>
@@ -1137,7 +1147,7 @@ const TILE_ACCENT = {
   rose:    { bg: 'bg-gradient-to-br from-rose-50/80 to-pink-50/30',       pill: 'bg-rose-100 text-rose-700',       ring: 'hover:ring-rose-200',     bar: 'from-rose-400 to-pink-500' },
 };
 
-function SummaryTile({ label, value, icon: Icon, sub, testId, accent = 'slate' }) {
+function SummaryTile({ label, value, fullValue, icon: Icon, sub, testId, accent = 'slate' }) {
   const a = TILE_ACCENT[accent] || TILE_ACCENT.slate;
   return (
     <div
@@ -1153,7 +1163,7 @@ function SummaryTile({ label, value, icon: Icon, sub, testId, accent = 'slate' }
         )}
       </div>
       <div className="min-w-0 mt-auto">
-        <p className="text-base sm:text-lg lg:text-xl font-bold tracking-tight text-slate-900 tabular-nums truncate leading-tight" title={String(value)}>{value}</p>
+        <p className="text-base sm:text-lg lg:text-xl font-bold tracking-tight text-slate-900 tabular-nums truncate leading-tight" title={String(fullValue || value)}>{value}</p>
         <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium h-4 truncate">{sub || '\u00A0'}</p>
       </div>
       <div className={`absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r ${a.bar} opacity-0 group-hover:opacity-100 transition-opacity`} />
@@ -1219,7 +1229,7 @@ function OverridableTile({ label, autoValue, overrideValue, editing, locked, onE
             </button>
           </div>
         ) : (
-          <p className={`text-base sm:text-lg lg:text-xl font-bold tracking-tight tabular-nums truncate leading-tight ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`} title={`₹${fmt(displayValue)}`}>₹{fmt(displayValue)}</p>
+          <p className={`text-base sm:text-lg lg:text-xl font-bold tracking-tight tabular-nums truncate leading-tight ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`} title={`₹${fmt(displayValue)}`}>₹{fmtCompact(displayValue)}</p>
         )}
         <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium h-4 truncate">{sub || '\u00A0'}</p>
       </div>
@@ -1255,9 +1265,9 @@ function MetricCard({ label, value, icon, color, sub, testId }) {
 function InfoRow({ label, value, highlight }) {
   const hlMap = { red: 'text-red-700', green: 'text-emerald-700', amber: 'text-amber-700' };
   return (
-    <div className="flex justify-between items-center py-2.5 border-b border-slate-100">
-      <span className="text-sm font-medium text-slate-500">{label}</span>
-      <span className={`text-base font-bold tabular-nums ${highlight ? hlMap[highlight] : 'text-slate-900'}`}>{value}</span>
+    <div className="flex justify-between items-center gap-3 py-2.5 border-b border-slate-100 last:border-b-0">
+      <span className="text-sm font-medium text-slate-500 min-w-0 truncate">{label}</span>
+      <span className={`text-sm sm:text-base font-bold tabular-nums whitespace-nowrap ${highlight ? hlMap[highlight] : 'text-slate-900'}`}>{value}</span>
     </div>
   );
 }
