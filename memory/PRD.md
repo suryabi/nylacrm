@@ -5,6 +5,15 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Performance Tracker — Typography softening + overflow fix (2026-05-05)
+- [x] User-reported issue: When numbers in Pipeline metrics / summary tiles were large, they overflowed or felt cluttered. User also disliked the BOLD UPPERCASE headers throughout the Performance Tracker.
+- [x] **SummaryTile / OverridableTile**: removed `uppercase tracking-[0.16em] font-bold` headers → now `text-[11px] sm:text-xs font-semibold` (sentence-case, semibold). Number font reduced from `text-lg sm:text-2xl font-black` → `text-base sm:text-lg lg:text-xl font-bold` and added `truncate min-w-0` so large numbers no longer overflow. Min-height tightened from 96/108px → 88/100px. Sub-text `font-medium` (was `font-semibold`).
+- [x] **KPICard**: same softening — labels now sentence-case `font-semibold` with `truncate`; numbers reduced from `text-xl/2xl/3xl font-black` → `text-base/lg/xl font-bold` with `truncate`.
+- [x] **AgingBucket**: dropped `uppercase tracking-wider`, kept compact label.
+- [x] All `data-testid` attributes preserved → no test regressions.
+- [x] **Files**: `frontend/src/pages/PerformanceTracker.js` (SummaryTile, OverridableTile, KPICard, AgingBucket).
+- [x] **Verification**: Lint clean. Live screenshot at `/performance` confirms tiles render correctly with new typography (Target / Revenue Lifetime / Revenue {Month} / Revenue from New / Existing A/C / New A/C); no overlap; sentence-case headers throughout.
+
 ## Recent Fixes (2026-04-29)
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 

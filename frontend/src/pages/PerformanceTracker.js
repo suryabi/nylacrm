@@ -1271,7 +1271,7 @@ function AgingBucket({ label, value, color }) {
   };
   return (
     <div className={`rounded-sm p-2 sm:p-2.5 text-center ${styles[color]}`}>
-      <p className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-wider">{label}</p>
+      <p className="text-[10px] sm:text-[11px] font-semibold leading-tight truncate">{label}</p>
       <p className="text-xs sm:text-sm font-bold tabular-nums mt-0.5 sm:mt-1 truncate">₹{fmt(value)}</p>
     </div>
   );
@@ -1289,12 +1289,12 @@ function KPICard({ label, value, good, bad, invert, accent = 'slate' }) {
   return (
     <div className={`group relative rounded-xl border ${stateBg} p-3 sm:p-4 hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden`}>
       <div className="flex items-center justify-between gap-2 mb-2">
-        <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.16em] font-bold text-slate-500 leading-tight">{label}</p>
-        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md ${statePill}`}>
+        <p className="text-[11px] sm:text-xs font-semibold text-slate-500 leading-tight truncate pr-1">{label}</p>
+        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 ${statePill}`}>
           {isGood ? <ArrowUp className="h-3 w-3" /> : isBad ? <ArrowDown className="h-3 w-3" /> : <span className="block w-1.5 h-1.5 rounded-full bg-current opacity-60" />}
         </span>
       </div>
-      <p className={`text-xl sm:text-2xl lg:text-3xl font-black tracking-tight tabular-nums ${stateText} leading-tight`}>{value}</p>
+      <p className={`text-base sm:text-lg lg:text-xl font-bold tracking-tight tabular-nums ${stateText} leading-tight truncate`} title={String(value)}>{value}</p>
       <div className={`absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r ${stateBar} opacity-70`} />
     </div>
   );
