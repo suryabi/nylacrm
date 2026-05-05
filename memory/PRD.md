@@ -9,6 +9,16 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Home — Per-user widget reorder (drag-style ↑/↓ persisted) (2026-05-05)
+- [x] Each user can now **reorder the 3 home widgets** (Calendar, Pipeline, Follow-ups) and the order is **persisted per user** (not per tenant).
+- [x] Subtle reorder overlay appears on hover/focus on each widget section: GripVertical icon + ↑/↓ arrow buttons in a small floating pill on the top-right. Edge buttons (move-up on first widget, move-down on last) are disabled.
+- [x] Click swaps adjacent widgets; new order is immediately PUT to backend; persists across hard reload + new login session.
+- [x] **Backend**: new file `routes/user_preferences.py` registered without prefix. `GET /api/preferences/home-widget-order` returns `{order, is_default}`; `PUT` validates payload (drops unknowns, dedupes, appends missing default ids so the array is always exactly the 3 widgets). Stored in `user_preferences` collection keyed by `(user_id, key='home_widget_order')` via single-doc upsert.
+- [x] Two different users can have two different orders simultaneously — verified via testing agent isolation test.
+- [x] **Files**: `backend/routes/user_preferences.py` (new), `backend/routes/__init__.py` (registered router), `frontend/src/pages/HomeDashboard.js` (widgetOrder state + moveWidget callback + IIFE rendering 3 widgets via widgetConfigs map + reorder overlay).
+- [x] **Testing**: iteration_166 — 12/12 acceptance criteria PASS. Backend pytest 7/7 (`backend/tests/test_home_widget_order.py`). Frontend Playwright confirmed reorder overlay visibility, edge-button disabled state, DOM order swap, persistence across reload, per-user isolation, and cleanup.
+
+
 ### Home — Pipeline & Follow-ups redesign (2026-05-05)
 - [x] Removed the cramped 8/4 bento grid below the calendar. Pipeline and Upcoming Follow-ups are now **two stacked full-width sections** with proper breathing room.
 - [x] **PipelineSummaryWidget rebuilt**: large total leads count + 'View all' link in the header, full-width stacked horizontal pipeline bar (each segment clickable → `/leads?status=...`), and a **responsive 2/3/4/6-col grid of status tiles**. Each tile shows count (large), % of total (top-right), a mini progress bar in the status color, and uppercase label. Tile palette mapped from each status's color name (blue/emerald/amber/orange/indigo/cyan/purple/green/red/gray).
