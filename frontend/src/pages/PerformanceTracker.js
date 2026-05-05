@@ -552,41 +552,55 @@ export default function PerformanceTracker() {
             </div>
           </div>
 
-          {/* Summary Cards Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-sm" data-testid="summary-cards">
-            <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} testId="metric-target" />
-            <SummaryTile label="Revenue" value={`₹${fmt(data.revenue?.this_month)}`} icon={DollarSign} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-achieved" />
+          {/* Summary Cards Row — Target + 3 Revenue tiles + Account counters */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-slate-200 border border-slate-200 overflow-hidden rounded-sm" data-testid="summary-cards">
+            <SummaryTile label="Target" value={`₹${fmt(data.revenue?.target)}`} icon={Target} sub={fmtPct(data.revenue?.achievement_pct)} testId="metric-target" />
+            <OverridableTile
+              label="Revenue Lifetime"
+              autoValue={data.revenue?.lifetime}
+              overrideValue={revenueOverrides.lifetime}
+              editing={revenueEditing.lifetime}
+              locked={isLocked}
+              icon={DollarSign}
+              onEdit={() => setRevenueEditing(p => ({ ...p, lifetime: true }))}
+              onChange={(v) => setRevenueOverrides(p => ({ ...p, lifetime: v }))}
+              onSave={() => setRevenueEditing(p => ({ ...p, lifetime: false }))}
+              onReset={() => { setRevenueOverrides(p => ({ ...p, lifetime: '' })); setRevenueEditing(p => ({ ...p, lifetime: false })); }}
+              testId="metric-revenue-lifetime"
+            />
+            <OverridableTile
+              label={viewMode === 'target_plan' && plans.find(p => p.id === selectedPlan) ? 'Revenue (Target Range)' : `Revenue ${MONTH_NAMES[selectedMonth] || ''}`}
+              autoValue={data.revenue?.this_month}
+              overrideValue={revenueOverrides.this_month}
+              editing={revenueEditing.this_month}
+              locked={isLocked}
+              icon={TrendingUp}
+              sub={fmtPct(data.revenue?.achievement_pct)}
+              onEdit={() => setRevenueEditing(p => ({ ...p, this_month: true }))}
+              onChange={(v) => setRevenueOverrides(p => ({ ...p, this_month: v }))}
+              onSave={() => setRevenueEditing(p => ({ ...p, this_month: false }))}
+              onReset={() => { setRevenueOverrides(p => ({ ...p, this_month: '' })); setRevenueEditing(p => ({ ...p, this_month: false })); }}
+              testId="metric-revenue-period"
+            />
+            <OverridableTile
+              label="Revenue from New A/C"
+              autoValue={data.revenue?.from_new_accounts}
+              overrideValue={revenueOverrides.new_accounts}
+              editing={revenueEditing.new_accounts}
+              locked={isLocked}
+              icon={Building2}
+              onEdit={() => setRevenueEditing(p => ({ ...p, new_accounts: true }))}
+              onChange={(v) => setRevenueOverrides(p => ({ ...p, new_accounts: v }))}
+              onSave={() => setRevenueEditing(p => ({ ...p, new_accounts: false }))}
+              onReset={() => { setRevenueOverrides(p => ({ ...p, new_accounts: '' })); setRevenueEditing(p => ({ ...p, new_accounts: false })); }}
+              testId="metric-revenue-new-accounts"
+            />
             <SummaryTile label="Existing A/C" value={data.accounts?.existing_count} icon={Users} testId="metric-existing" />
-            <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Building2} testId="metric-new" />
-            <SummaryTile label={`${MONTH_NAMES[data.pipeline?.next_month] || 'Next'} Pipeline`} value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} icon={TrendingUp} sub={`${data.pipeline?.next_month_leads_count || 0} leads`} testId="metric-pipeline" />
+            <SummaryTile label="New A/C" value={data.accounts?.new_onboarded} icon={Users} testId="metric-new" />
           </div>
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
-            {/* Revenue Section */}
-            <div className="bg-white border border-slate-200 rounded-sm" data-testid="revenue-section">
-              <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
-                <div className="p-1.5 bg-slate-100 rounded-sm">
-                  <DollarSign className="h-4 w-4 text-slate-700" />
-                </div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">Revenue Metrics</h3>
-              </div>
-              <div className="p-4 sm:p-5 pt-3 sm:pt-4">
-                <div className="space-y-1">
-                  <div className="grid grid-cols-2 gap-3">
-                    <InfoRow label="Monthly Target" value={`₹${fmt(data.revenue?.target)}`} />
-                    <InfoRow label="Achievement %" value={fmtPct(data.revenue?.achievement_pct)} highlight={data.revenue?.achievement_pct < 50 ? 'red' : data.revenue?.achievement_pct >= 100 ? 'green' : 'amber'} />
-                  </div>
-                  <div className="space-y-1 border-t border-slate-100 pt-3 mt-3">
-                    <OverridableRow label="Revenue Lifetime (As-on-date)" autoValue={data.revenue?.lifetime} overrideValue={revenueOverrides.lifetime} editing={revenueEditing.lifetime} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, lifetime: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, lifetime: v }))} onSave={() => setRevenueEditing(p => ({ ...p, lifetime: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, lifetime: '' })); setRevenueEditing(p => ({ ...p, lifetime: false })); }} testId="revenue-lifetime" />
-                    <OverridableRow label="Revenue This Month (All Accounts)" autoValue={data.revenue?.this_month} overrideValue={revenueOverrides.this_month} editing={revenueEditing.this_month} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, this_month: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, this_month: v }))} onSave={() => setRevenueEditing(p => ({ ...p, this_month: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, this_month: '' })); setRevenueEditing(p => ({ ...p, this_month: false })); }} testId="revenue-this-month" />
-                    <OverridableRow label="Revenue from New Accounts" autoValue={data.revenue?.from_new_accounts} overrideValue={revenueOverrides.new_accounts} editing={revenueEditing.new_accounts} locked={isLocked} onEdit={() => setRevenueEditing(p => ({ ...p, new_accounts: true }))} onChange={(v) => setRevenueOverrides(p => ({ ...p, new_accounts: v }))} onSave={() => setRevenueEditing(p => ({ ...p, new_accounts: false }))} onReset={() => { setRevenueOverrides(p => ({ ...p, new_accounts: '' })); setRevenueEditing(p => ({ ...p, new_accounts: false })); }} testId="revenue-new-accounts" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Accounts Section */}
             {/* Pipeline Section */}
             <div className="bg-white border border-slate-200 rounded-sm" data-testid="pipeline-section">
               <div className="flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100">
@@ -642,31 +656,9 @@ export default function PerformanceTracker() {
                   </tbody>
                 </table>
 
-                {/* Leads Targeting Next Month - Block CTA */}
-                <div
-                  className="flex justify-between items-center p-3 sm:p-4 bg-slate-50 border border-slate-200 rounded-sm mt-4 sm:mt-5 hover:border-slate-400 hover:bg-slate-100 transition-colors cursor-pointer group"
-                  onClick={() => {
-                    const nm = data.pipeline?.next_month;
-                    const ny = data.pipeline?.next_year;
-                    const params = new URLSearchParams();
-                    params.set('target_closure_month', nm);
-                    params.set('target_closure_year', ny);
-                    const rids = resolveResourceIds();
-                    if (rids.length > 0) params.set('assigned_to', rids.join(','));
-                    navigate(`/leads?${params.toString()}`);
-                  }}
-                  data-testid="leads-targeting-next-month-link"
-                >
-                  <span className="text-[10px] sm:text-xs font-semibold text-slate-900 uppercase tracking-wide">Leads Targeting {MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}</span>
-                  <span className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2 tabular-nums">
-                    {data.pipeline?.next_month_leads_count || 0}
-                    <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-700 transition-colors" />
-                  </span>
-                </div>
-
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <InfoRow label={`${MONTH_NAMES[data.pipeline?.next_month] || 'Next'} Pipeline Value`} value={`₹${fmt(data.pipeline?.next_month_pipeline_value)}`} />
                   <InfoRow label="Coverage Ratio" value={fmtPct(data.pipeline?.coverage_ratio)} highlight={data.pipeline?.coverage_ratio < 50 ? 'red' : 'green'} />
+                  <InfoRow label="Total Pipeline Value" value={`₹${fmt(data.pipeline?.total_value)}`} />
                 </div>
               </div>
             </div>
@@ -734,6 +726,10 @@ export default function PerformanceTracker() {
             periodStart={resolvePeriodDates().periodStart}
             periodEnd={resolvePeriodDates().periodEnd}
             viewMode={viewMode}
+            nextMonthLeads={data.pipeline?.next_month_leads_list || []}
+            nextMonth={data.pipeline?.next_month}
+            nextYear={data.pipeline?.next_year}
+            nextMonthPipelineValue={data.pipeline?.next_month_pipeline_value || 0}
             token={token}
             tenantId={tenantId}
             isLocked={isLocked}
@@ -923,6 +919,64 @@ function SummaryTile({ label, value, icon: Icon, sub, testId }) {
       <Icon className="h-3.5 w-3.5 text-slate-300 absolute top-3 right-3 sm:top-4 sm:right-4" />
       <div className="min-w-0 mt-auto">
         <p className="text-base sm:text-lg font-bold tracking-tight text-slate-900 tabular-nums truncate" title={String(value)}>{value}</p>
+        <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium h-4 truncate">{sub || '\u00A0'}</p>
+      </div>
+    </div>
+  );
+}
+
+function OverridableTile({ label, autoValue, overrideValue, editing, locked, onEdit, onChange, onSave, onReset, icon: Icon, sub, testId }) {
+  const displayValue = overrideValue !== '' ? parseFloat(overrideValue) : autoValue;
+  const hasOverride = overrideValue !== '' && overrideValue !== null && overrideValue !== undefined;
+  return (
+    <div className={`bg-white p-3 sm:p-4 relative group flex flex-col justify-between min-h-[80px] sm:min-h-[90px] hover:bg-slate-50 transition-colors overflow-hidden ${hasOverride ? 'ring-1 ring-amber-300' : ''}`} data-testid={testId}>
+      <div className="flex items-start justify-between gap-1.5">
+        <p className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-[0.15em] leading-tight pr-1 flex items-center gap-1">
+          {label}
+          {hasOverride && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override" />}
+        </p>
+        <div className="flex items-center gap-0.5">
+          {!editing && !locked && (
+            <button
+              onClick={() => { onChange(String(autoValue || 0)); onEdit(); }}
+              className="p-0.5 rounded hover:bg-slate-100 text-slate-300 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Override"
+              data-testid={`${testId}-edit`}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+          {hasOverride && !editing && !locked && (
+            <button
+              onClick={onReset}
+              className="p-0.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Reset to auto"
+              data-testid={`${testId}-reset`}
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          )}
+          {Icon && !editing && <Icon className="h-3.5 w-3.5 text-slate-300" />}
+        </div>
+      </div>
+      <div className="min-w-0 mt-auto">
+        {editing ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              className="w-full text-base sm:text-lg font-bold tracking-tight tabular-nums text-slate-900 bg-white border border-blue-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              value={overrideValue}
+              onChange={(e) => onChange(e.target.value)}
+              autoFocus
+              data-testid={`${testId}-input`}
+            />
+            <button onClick={onSave} className="p-0.5 rounded hover:bg-blue-100 text-blue-600 flex-shrink-0" title="Done" data-testid={`${testId}-save`}>
+              <Check className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <p className={`text-base sm:text-lg font-bold tracking-tight tabular-nums truncate ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`} title={`₹${fmt(displayValue)}`}>₹{fmt(displayValue)}</p>
+        )}
         <p className="text-[9px] sm:text-[10px] text-slate-400 font-medium h-4 truncate">{sub || '\u00A0'}</p>
       </div>
     </div>
@@ -1285,7 +1339,7 @@ function AccountValueCell({ account, planId, onRefresh }) {
 // Top 10 Priorities — Execution Driven
 // ════════════════════════════════════════════════════════════════════
 
-function Top10PrioritiesSection({ year, month, resourceIds, periodStart, periodEnd, viewMode, token, tenantId, isLocked }) {
+function Top10PrioritiesSection({ year, month, resourceIds, periodStart, periodEnd, viewMode, nextMonthLeads, nextMonth, nextYear, nextMonthPipelineValue, token, tenantId, isLocked }) {
   const [open, setOpen] = useState(true);
   const [activeSub, setActiveSub] = useState('case_targets');
 
@@ -1335,6 +1389,9 @@ function Top10PrioritiesSection({ year, month, resourceIds, periodStart, periodE
             <SubTab id="focus_leads" active={activeSub} onClick={setActiveSub} icon={Target}>
               Top 5 Leads to Focus
             </SubTab>
+            <SubTab id="next_month_leads" active={activeSub} onClick={setActiveSub} icon={Calendar}>
+              Leads Targeting {MONTH_NAMES[nextMonth] || 'Next Month'}
+            </SubTab>
             <SubTab id="new_accounts" active={activeSub} onClick={setActiveSub} icon={Users}>
               New Accounts
             </SubTab>
@@ -1371,6 +1428,15 @@ function Top10PrioritiesSection({ year, month, resourceIds, periodStart, periodE
               token={token}
               tenantId={tenantId}
               isLocked={isLocked}
+            />
+          )}
+
+          {activeSub === 'next_month_leads' && (
+            <NextMonthLeadsSubsection
+              leads={nextMonthLeads}
+              nextMonth={nextMonth}
+              nextYear={nextYear}
+              totalPipelineValue={nextMonthPipelineValue}
             />
           )}
 
@@ -2552,6 +2618,135 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
 
 
 // ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+// Next Month Leads Subsection — leads with target_closure_month/year matching the month after the selected period
+// ════════════════════════════════════════════════════════════════════
+
+function NextMonthLeadsSubsection({ leads, nextMonth, nextYear, totalPipelineValue }) {
+  const navigate = useNavigate();
+  const { getStatusLabel, getStatusById } = useLeadStatuses();
+  const [search, setSearch] = useState('');
+
+  const list = Array.isArray(leads) ? leads : [];
+  const monthLabel = MONTH_NAMES[nextMonth] || 'Next Month';
+  const periodLabel = `${monthLabel} ${nextYear || ''}`.trim();
+
+  const searchLower = search.trim().toLowerCase();
+  const filtered = searchLower
+    ? list.filter(l =>
+        (l.name || '').toLowerCase().includes(searchLower)
+        || (l.company || '').toLowerCase().includes(searchLower)
+        || (l.city || '').toLowerCase().includes(searchLower)
+        || (l.status || '').toLowerCase().includes(searchLower))
+    : list;
+
+  const filteredValue = filtered.reduce((s, l) => s + (l.pipeline_value || 0), 0);
+
+  return (
+    <div className="space-y-4" data-testid="next-month-leads-subsection">
+      {/* Period banner */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-sm">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider bg-violet-100 text-violet-700">
+            Leads Targeting {monthLabel}
+          </span>
+          <span className="text-xs text-slate-500">Active leads with target closure in {periodLabel}</span>
+        </div>
+        <span className="text-[10px] tabular-nums text-slate-500" data-testid="next-month-leads-period">{periodLabel}</span>
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+        <SummaryStat label={`Leads Targeting ${monthLabel}`} value={fmt(list.length)} highlight={list.length > 0 ? 'green' : undefined} />
+        <SummaryStat label={`${monthLabel} Pipeline Value`} value={`₹${fmt(totalPipelineValue || 0)}`} highlight={(totalPipelineValue || 0) > 0 ? 'green' : undefined} />
+        <SummaryStat label="Filtered Value" value={`₹${fmt(filteredValue)}`} sub={`${filtered.length} of ${list.length}`} />
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search lead, company, city, status..."
+          className="h-9 w-64 bg-white"
+          data-testid="next-month-leads-search"
+        />
+        <button
+          onClick={() => {
+            const params = new URLSearchParams();
+            params.set('target_closure_month', nextMonth);
+            params.set('target_closure_year', nextYear);
+            navigate(`/leads?${params.toString()}`);
+          }}
+          className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+          data-testid="next-month-leads-open-all"
+        >
+          Open in Leads
+          <ChevronRight className="h-3 w-3" />
+        </button>
+      </div>
+
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-10 text-sm text-slate-500 border border-dashed border-slate-200 rounded-sm" data-testid="next-month-leads-empty">
+          {list.length === 0
+            ? `No leads currently targeting closure in ${periodLabel}.`
+            : 'No leads match your search.'}
+        </div>
+      ) : (
+        <div className="border border-slate-200 rounded-sm overflow-x-auto bg-white" data-testid="next-month-leads-table">
+          <table className="w-full text-sm" style={{ minWidth: '900px' }}>
+            <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold sticky left-0 bg-slate-50 z-10 min-w-[220px]">Lead</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap">Company</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap">City</th>
+                <th className="px-3 py-3 text-left font-semibold whitespace-nowrap">Status</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Pipeline Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((lead, idx) => {
+                const rowBg = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60';
+                const statusInfo = getStatusById(lead.status);
+                const dotColor = statusInfo?.bg || 'bg-slate-400';
+                return (
+                  <tr
+                    key={lead.id || idx}
+                    className={`border-t border-slate-100 ${rowBg} hover:bg-amber-50/30 cursor-pointer group`}
+                    onClick={() => navigate(`/leads/${lead.id}`)}
+                    data-testid={`next-month-leads-row-${lead.id}`}
+                  >
+                    <td className={`px-4 py-3 sticky left-0 ${rowBg} group-hover:bg-amber-50/30 transition-colors`}>
+                      <p className="text-sm font-semibold text-slate-900 truncate" title={lead.name}>{lead.name}</p>
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-slate-700 truncate max-w-[220px]" title={lead.company}>{lead.company || '—'}</td>
+                    <td className="px-3 py-3 whitespace-nowrap text-slate-600">{lead.city || '—'}</td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 capitalize">
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+                        {getStatusLabel(lead.status)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap font-semibold text-emerald-700">₹{fmt(lead.pipeline_value)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot className="bg-slate-50 text-xs">
+              <tr className="font-bold text-slate-900">
+                <td className="px-4 py-3 sticky left-0 bg-slate-50 whitespace-nowrap" colSpan={4}>Total — {filtered.length} lead{filtered.length !== 1 ? 's' : ''}</td>
+                <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap text-emerald-700" data-testid="next-month-leads-total-value">₹{fmt(filteredValue)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ════════════════════════════════════════════════════════════════════
 // Accounts Subsection — handles both "Existing Accounts" and "New Accounts" tabs
 // (Same fields as the Account Performance report, scoped to selected resources +

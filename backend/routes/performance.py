@@ -304,6 +304,19 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
             "next_year": next_year,
             "next_month_leads_count": len(next_month_leads),
             "next_month_pipeline_value": round(next_month_pipeline_value, 2),
+            "next_month_leads_list": [
+                {
+                    "id": lead.get("id"),
+                    "name": lead.get("name") or lead.get("company") or "—",
+                    "company": lead.get("company") or "",
+                    "city": lead.get("city") or "",
+                    "status": lead.get("status") or "",
+                    "pipeline_value": round(get_pipeline_value(lead) or 0, 2),
+                    "target_closure_month": lead.get("target_closure_month"),
+                    "target_closure_year": lead.get("target_closure_year"),
+                }
+                for lead in next_month_leads
+            ],
             "coverage_ratio": pipeline_coverage,
         },
         "collections": {

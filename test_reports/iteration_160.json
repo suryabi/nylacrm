@@ -1,0 +1,33 @@
+{
+  "summary": "Verified Performance Tracker changes end-to-end. (1) Top summary row now renders 6 tiles in the exact spec order (metric-target → metric-revenue-lifetime → metric-revenue-period → metric-revenue-new-accounts → metric-existing → metric-new) with correct horizontal positions. (2) Old DOM nodes confirmed REMOVED: revenue-section, revenue-lifetime, revenue-this-month, revenue-new-accounts, leads-targeting-next-month-link, metric-pipeline. (3) Top-10 Priorities shows 6 sub-tabs in the exact order: case_targets, sampling_trials, focus_leads, next_month_leads, new_accounts, existing_accounts. (4) sub-tab-next_month_leads label = 'Leads Targeting May' — clicking it renders the violet 'LEADS TARGETING MAY' pill, helper 'Active leads with target closure in May 2026', period chip 'May 2026', three summary cards (Leads Targeting May / May Pipeline Value / Filtered Value 0 of 0), search box (next-month-leads-search), 'Open in Leads' link, and the next-month-leads-empty placeholder ('No leads currently targeting closure in May 2026.'). (5) Pipeline Metrics section now shows ONLY Status table + Coverage Ratio + Total Pipeline Value — Leads-Targeting CTA and Next-Pipeline InfoRow are gone. (6) OverridableTile flow on metric-revenue-lifetime works: hover shows pencil → edit → input ₹7,77,000 → save → tile renders amber dot + amber-styled override value (verified inner_html contains 'amber'). Backend: GET /api/performance/generate returns pipeline.next_month_leads_list with the spec'd item shape (id/name/company/city/status/pipeline_value/target_closure_month/target_closure_year), count==len(list), pipeline_value sum matches next_month_pipeline_value, no _id leak. POST /api/performance/save persists revenue_lifetime_override / revenue_this_month_override / revenue_new_accounts_override and clears them when nulled. 7/7 backend pytest PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_performance_next_month_leads.py",
+    "/app/test_reports/pytest/iteration_160_results.xml"
+  ],
+  "action_items": [
+    "None blocking — feature complete and verified.",
+    "(Carry-over) PerformanceTracker.js continues to grow (~2760+ lines). Splitting NextMonthLeadsSubsection / OverridableTile / Top10PrioritiesSection into /pages/performance/<name>.js would help maintainability.",
+    "(Minor) Test seed has 0 leads with target_closure_month/year matching May 2026 — empty-state path verified, but the populated table (next-month-leads-table + rows + total) was NOT exercised against real data. To regression-test the populated branch, either seed a lead with target_closure_month=5/year=2026 or pick a target plan whose period maps to a month with leads."
+  ],
+  "critical_code_review_comments": [
+    "performance.py:307 next_month_leads_list builds rows inline inside the response dict — fine for current scale but if next_month_leads grows large, prefer a list comprehension into a local var so it's profileable / testable.",
+    "PerformanceTracker.js OverridableTile — override save dispatches through saveRecord(). Verify the saved_record returned by GET /api/performance/generate also re-hydrates the override on reload (currently confirmed at API layer but UI re-hydration on hard reload was not directly tested in this iteration; reload was implicit via Generate). Recommend explicit reload test in next iteration.",
+    "Frontend — when sub-tab switches mount NextMonthLeadsSubsection it reads data.pipeline.next_month_leads_list from the parent generate() payload. If the user edits a lead's target_closure_month/year on /leads detail and returns, the parent must re-Generate for the table to refresh — confirm UX expectation with PM (auto-refresh vs manual Generate)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_performance_next_month_leads.py (NEW — 7 pytest tests: 5 cover next_month_leads_list shape/consistency/no-_id-leak; 2 cover revenue override save+clear roundtrip via /api/performance/save → /api/performance/generate)"
+  ],
+  "success_rate": {"backend": "100% (7/7 pytest)", "frontend": "100% on verified flows — all 6 new tile testids present in correct order, all 6 sub-tabs present in correct order, 5 stale testids confirmed removed, override edit→save→amber styling confirmed, empty-state of new tab confirmed."},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "None — used existing seed. Set & cleared revenue_lifetime/this_month/new_accounts override on Surya's May 2026 record during testing; final state cleared (all overrides = null).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "GET /api/performance/generate REQUIRES query params resource_id, month, year (and optional plan_id). Login returns session_token (NOT access_token). Default landing after login is /home, not /. /api/performance/save requires resource_id+month+year too. The new pipeline.next_month_leads_list field carries id/name/company/city/status/pipeline_value/target_closure_month/target_closure_year. Frontend OverridableTile testIds: metric-revenue-lifetime, metric-revenue-period, metric-revenue-new-accounts. Top-10 sub-tabs in order: case_targets, sampling_trials, focus_leads, next_month_leads, new_accounts, existing_accounts. Test seed has 0 leads in May 2026 — empty-state shows next-month-leads-empty; to test populated table, seed a lead with target_closure_month=5/year=2026.",
+  "rca of the issue": "N/A — feature verification iteration. Backend route + frontend tiles + new sub-tab + override flow all match spec."
+}
