@@ -67,6 +67,7 @@ export default function PerformanceTracker() {
   const [expandedAccountList, setExpandedAccountList] = useState({ existing: false, new: false });
   // Editable fields
   const [supportNeeded, setSupportNeeded] = useState([]);
+  const [supportEditing, setSupportEditing] = useState({}); // { [category]: true } means row is in edit mode
   const [remarks, setRemarks] = useState('');
   const [manualRevenue, setManualRevenue] = useState('');
   // Revenue overrides
@@ -244,6 +245,8 @@ export default function PerformanceTracker() {
         const raw = d.support_needed || [];
         const normalized = raw.map(item => typeof item === 'string' ? { category: item, details: '' } : { category: item.category, details: item.details || '' }).filter(x => x.category);
         setSupportNeeded(normalized);
+        // Saved rows start in read-only mode; user clicks pencil to edit
+        setSupportEditing({});
         setRemarks(d.remarks || '');
         setManualRevenue(d.manual_revenue ?? '');
         setRevenueOverrides({
@@ -253,6 +256,7 @@ export default function PerformanceTracker() {
         });
       } else {
         setSupportNeeded([]); setRemarks(''); setManualRevenue('');
+        setSupportEditing({});
         setRevenueOverrides({ lifetime: '', this_month: '', new_accounts: '' });
       }
       setRevenueEditing({ lifetime: false, this_month: false, new_accounts: false });
@@ -276,10 +280,10 @@ export default function PerformanceTracker() {
   useEffect(() => { generate(); }, [generate]);
 
   const saveRecord = async (submitAfter = false) => {
-    if (!data) return;
+    if (!data) return false;
     if (!selectedResource[0]) {
       toast.error('Pick at least one resource before saving');
-      return;
+      return false;
     }
     setSaving(true);
     try {
@@ -310,11 +314,13 @@ export default function PerformanceTracker() {
         }
         toast.success('Saved');
         generate();
+        return true;
       } else {
         const err = await res.text();
         toast.error(`Save failed: ${err.slice(0, 200)}`);
+        return false;
       }
-    } catch (e) { console.error(e); toast.error('Save failed: ' + (e.message || 'network error')); }
+    } catch (e) { console.error(e); toast.error('Save failed: ' + (e.message || 'network error')); return false; }
     finally { setSaving(false); }
   };
 
@@ -332,9 +338,24 @@ export default function PerformanceTracker() {
   };
 
   const toggleSection = (s) => setExpandedSections(prev => ({ ...prev, [s]: !prev[s] }));
-  const addSupport = (cat) => setSupportNeeded(prev => prev.some(s => s.category === cat) ? prev : [...prev, { category: cat, details: '' }]);
+  const addSupport = (cat) => {
+    setSupportNeeded(prev => prev.some(s => s.category === cat) ? prev : [...prev, { category: cat, details: '' }]);
+    setSupportEditing(prev => ({ ...prev, [cat]: true })); // new rows start editable
+  };
   const updateSupportDetails = (cat, text) => setSupportNeeded(prev => prev.map(s => s.category === cat ? { ...s, details: text } : s));
-  const removeSupport = (cat) => setSupportNeeded(prev => prev.filter(s => s.category !== cat));
+  const removeSupport = (cat) => {
+    setSupportNeeded(prev => prev.filter(s => s.category !== cat));
+    setSupportEditing(prev => { const { [cat]: _omit, ...rest } = prev; return rest; });
+  };
+  const saveSupportRow = async (cat) => {
+    const ok = await saveRecord(false);
+    if (ok) {
+      // Server save succeeded — generate() will refetch & reset supportEditing globally,
+      // but flip locally too for instant feedback in case generate is still pending.
+      setSupportEditing(prev => ({ ...prev, [cat]: false }));
+    }
+    // On failure, leave the row in edit mode so the user can fix and retry.
+  };
 
   const isLocked = data?.status === 'approved';
 
@@ -916,8 +937,11 @@ export default function PerformanceTracker() {
               {/* Existing support rows */}
               {supportNeeded.length > 0 && (
                 <div className="border border-slate-200 rounded-sm overflow-hidden divide-y divide-slate-100" data-testid="support-rows">
-                  {supportNeeded.map(row => (
-                    <div key={row.category} className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-2 sm:gap-3 p-3 bg-white items-start" data-testid={`support-row-${row.category.toLowerCase().replace(/\s+/g, '-')}`}>
+                  {supportNeeded.map(row => {
+                    const isEditing = supportEditing[row.category] === true;
+                    const slug = row.category.toLowerCase().replace(/\s+/g, '-');
+                    return (
+                    <div key={row.category} className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-2 sm:gap-3 p-3 bg-white items-start" data-testid={`support-row-${slug}`}>
                       <Badge variant="outline" className="bg-slate-900 text-white border-slate-900 text-[10px] uppercase tracking-wider w-fit shrink-0 self-start">
                         {row.category}
                       </Badge>
@@ -925,37 +949,55 @@ export default function PerformanceTracker() {
                         value={row.details}
                         onChange={(e) => updateSupportDetails(row.category, e.target.value)}
                         placeholder={`What support is needed for ${row.category}?`}
-                        className="bg-slate-50 border-slate-200 rounded-sm text-sm resize-y min-h-[64px]"
+                        className={`rounded-sm text-sm resize-y min-h-[64px] ${
+                          isEditing
+                            ? 'bg-white border-amber-300 ring-1 ring-amber-200/60 focus-visible:ring-amber-300'
+                            : 'bg-slate-50 border-slate-200 cursor-not-allowed'
+                        }`}
                         rows={2}
-                        disabled={isLocked}
-                        data-testid={`support-details-${row.category.toLowerCase().replace(/\s+/g, '-')}`}
+                        disabled={isLocked || !isEditing}
+                        data-testid={`support-details-${slug}`}
                       />
                       <div className="flex items-start gap-1 self-start">
                         {!isLocked && (
-                          <Button
-                            size="sm"
-                            className="h-9 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs"
-                            onClick={() => saveRecord(false)}
-                            disabled={saving}
-                            title={`Save ${row.category}`}
-                            data-testid={`support-save-${row.category.toLowerCase().replace(/\s+/g, '-')}`}
-                          >
-                            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" />Save</>}
-                          </Button>
+                          isEditing ? (
+                            <Button
+                              size="sm"
+                              className="h-9 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs"
+                              onClick={() => saveSupportRow(row.category)}
+                              disabled={saving}
+                              title={`Save ${row.category}`}
+                              data-testid={`support-save-${slug}`}
+                            >
+                              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" />Save</>}
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-9 px-3 border-slate-300 hover:bg-slate-100 text-slate-700 text-xs"
+                              onClick={() => setSupportEditing(prev => ({ ...prev, [row.category]: true }))}
+                              title={`Edit ${row.category}`}
+                              data-testid={`support-edit-${slug}`}
+                            >
+                              <Pencil className="h-3.5 w-3.5 mr-1" />Edit
+                            </Button>
+                          )
                         )}
                         {!isLocked && (
                           <button
                             onClick={() => removeSupport(row.category)}
                             className="p-2 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-600"
                             title={`Remove ${row.category}`}
-                            data-testid={`support-remove-${row.category.toLowerCase().replace(/\s+/g, '-')}`}
+                            data-testid={`support-remove-${slug}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
