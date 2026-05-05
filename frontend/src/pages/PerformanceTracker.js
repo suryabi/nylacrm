@@ -1141,11 +1141,11 @@ function SummaryTile({ label, value, icon: Icon, sub, testId, accent = 'slate' }
   const a = TILE_ACCENT[accent] || TILE_ACCENT.slate;
   return (
     <div
-      className={`relative group flex flex-col justify-between min-h-[96px] sm:min-h-[108px] p-3 sm:p-4 rounded-xl border border-slate-200/80 ring-1 ring-transparent ${a.bg} ${a.ring} hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden`}
+      className={`relative group flex flex-col justify-between min-h-[88px] sm:min-h-[100px] p-3 sm:p-4 rounded-xl border border-slate-200/80 ring-1 ring-transparent ${a.bg} ${a.ring} hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden`}
       data-testid={testId}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-[0.16em] leading-tight pr-1">{label}</p>
+        <p className="text-[11px] sm:text-xs font-semibold text-slate-500 leading-tight pr-1 truncate">{label}</p>
         {Icon && (
           <div className={`p-1 rounded-md ${a.pill} shrink-0`}>
             <Icon className="h-3.5 w-3.5" />
@@ -1153,10 +1153,9 @@ function SummaryTile({ label, value, icon: Icon, sub, testId, accent = 'slate' }
         )}
       </div>
       <div className="min-w-0 mt-auto">
-        <p className="text-lg sm:text-2xl font-black tracking-tight text-slate-900 tabular-nums truncate leading-tight" title={String(value)}>{value}</p>
-        <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold h-4 truncate">{sub || '\u00A0'}</p>
+        <p className="text-base sm:text-lg lg:text-xl font-bold tracking-tight text-slate-900 tabular-nums truncate leading-tight" title={String(value)}>{value}</p>
+        <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium h-4 truncate">{sub || '\u00A0'}</p>
       </div>
-      {/* Subtle gradient accent bar at the bottom */}
       <div className={`absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r ${a.bar} opacity-0 group-hover:opacity-100 transition-opacity`} />
     </div>
   );
@@ -1168,13 +1167,13 @@ function OverridableTile({ label, autoValue, overrideValue, editing, locked, onE
   const a = TILE_ACCENT[accent] || TILE_ACCENT.slate;
   return (
     <div
-      className={`relative group flex flex-col justify-between min-h-[96px] sm:min-h-[108px] p-3 sm:p-4 rounded-xl border border-slate-200/80 ring-1 ring-transparent ${a.bg} ${a.ring} hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden ${hasOverride ? '!ring-amber-300' : ''}`}
+      className={`relative group flex flex-col justify-between min-h-[88px] sm:min-h-[100px] p-3 sm:p-4 rounded-xl border border-slate-200/80 ring-1 ring-transparent ${a.bg} ${a.ring} hover:shadow-md hover:-translate-y-0.5 transition-all overflow-hidden ${hasOverride ? '!ring-amber-300' : ''}`}
       data-testid={testId}
     >
       <div className="flex items-start justify-between gap-1.5">
-        <p className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-[0.16em] leading-tight pr-1 flex items-center gap-1">
-          {label}
-          {hasOverride && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" title="Manual override" />}
+        <p className="text-[11px] sm:text-xs font-semibold text-slate-500 leading-tight pr-1 flex items-center gap-1 truncate">
+          <span className="truncate">{label}</span>
+          {hasOverride && <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Manual override" />}
         </p>
         <div className="flex items-center gap-0.5">
           {!editing && !locked && (
@@ -1209,7 +1208,7 @@ function OverridableTile({ label, autoValue, overrideValue, editing, locked, onE
           <div className="flex items-center gap-1.5">
             <input
               type="number"
-              className="w-full text-lg sm:text-2xl font-black tracking-tight tabular-nums text-slate-900 bg-white border border-blue-300 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40"
+              className="w-full text-base sm:text-lg lg:text-xl font-bold tracking-tight tabular-nums text-slate-900 bg-white border border-blue-300 rounded-md px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-blue-400/40 min-w-0"
               value={overrideValue}
               onChange={(e) => onChange(e.target.value)}
               autoFocus
@@ -1220,9 +1219,9 @@ function OverridableTile({ label, autoValue, overrideValue, editing, locked, onE
             </button>
           </div>
         ) : (
-          <p className={`text-lg sm:text-2xl font-black tracking-tight tabular-nums truncate leading-tight ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`} title={`₹${fmt(displayValue)}`}>₹{fmt(displayValue)}</p>
+          <p className={`text-base sm:text-lg lg:text-xl font-bold tracking-tight tabular-nums truncate leading-tight ${hasOverride ? 'text-amber-700' : 'text-slate-900'}`} title={`₹${fmt(displayValue)}`}>₹{fmt(displayValue)}</p>
         )}
-        <p className="text-[9px] sm:text-[10px] text-slate-500 font-semibold h-4 truncate">{sub || '\u00A0'}</p>
+        <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium h-4 truncate">{sub || '\u00A0'}</p>
       </div>
       <div className={`absolute bottom-0 inset-x-0 h-0.5 bg-gradient-to-r ${a.bar} opacity-0 group-hover:opacity-100 transition-opacity`} />
     </div>
