@@ -9,6 +9,19 @@
 - [x] **Target Plan Creation 500 Bug**: Removed duplicate `targets_router` (routes/targets.py) that was registered at `/target-planning` prefix in `routes/__init__.py`. The older router's POST handler returned the insert_one dict without popping `_id`, causing `ObjectId` not iterable serialization failure. Ported unique `/achievement` endpoint (used by TargetPlanDashboard.js) into `routes/target_planning.py`. All target-planning CRUD + achievement endpoints now fully handled by the V2 router.
 
 
+### Home — Calendar full-width row + horizontal meeting cards with live/up-next highlighting (2026-05-05)
+- [x] **Layout**: UpcomingMeetingsWidget moved out of the lg:col-span-4 right rail into its OWN full-width section above the bento grid. Bento below now houses Upcoming Follow-ups (lg:col-span-8) + Pipeline (lg:col-span-4).
+- [x] **Horizontal meeting cards**: Selected day's events render as a horizontal flex-row scroll container (snap-x, scrollbar-thin) with 260–280px-wide cards. Scroll-left/right chevron buttons appear when there are more than 2 events.
+- [x] **Live & Up-Next highlighting** (the headline ask): each card carries `data-status` ∈ {live, up_next, upcoming, past}:
+  - **live** — emerald gradient + emerald-300 ring + animated 'LIVE NOW' pill (pulse dot)
+  - **up_next** — blue gradient + blue ring + 'UP NEXT' pill (Radio icon). Suppressed whenever any live event exists.
+  - **upcoming** — neutral white card.
+  - **past** — opacity 0.6, line-through title, 'DONE' pill.
+- [x] **Auto-refresh**: a 30s interval ticks `now` so live → past and up_next → live transitions happen without page reload.
+- [x] **Files**: `frontend/src/components/widgets/UpcomingMeetingsWidget.js` (full rewrite), `frontend/src/pages/HomeDashboard.js` (lifted widget out of right rail).
+- [x] **Testing**: iteration_164 — 12/12 acceptance criteria PASS. Seeded LIVE/UPNEXT/UPCOMING/PAST CRM meetings verified all four data-status values + 'live wins over up_next' invariant + scroll chevrons + setInterval(30000) tick.
+
+
 ### Performance Tracker — Sampling/Trials: SKU & Bottles/Crate dropdowns (2026-05-05)
 - [x] **SKU column** in the Edit Trial / New Trial form is now a Select dropdown populated only from the currently-selected lead's `proposed_sku_pricing` (already-picked SKUs are disabled to prevent duplicate rows).
 - [x] **Bottles/Crate column** is a Select dropdown populated from `master_skus.packaging_config.stock_out` (falls back to `production`). Each option label is `'{packaging name} ({units_per_package} bottles)'`. Default packaging auto-selected on SKU change.
