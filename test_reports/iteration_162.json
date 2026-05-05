@@ -1,0 +1,32 @@
+{
+  "summary": "Tested iteration_162 Performance Tracker section reorder feature end-to-end. All 11 acceptance criteria PASS. Backend GET/PUT /api/performance/section-order works correctly: returns required default order, persists per-tenant on PUT, RBAC guard enforces CEO/System Admin only, validation drops unknown ids and appends missing default ids, empty list rejected with 400. Frontend renders 6 PerfSection components in the DB-returned order with renamed titles exactly matching spec ('Accounts Added this Period', 'Volume Targets for Existing Accounts — Apr 2026', 'Sampling / Trials', 'Top Leads to Focus', 'Leads Targeting May', 'Existing Accounts'). First section (new_accounts) expanded by default; other 5 collapsed AND not yet mounted in DOM (lazy-mount preserved from iteration_161). For CEO user 12 reorder buttons render (6 up + 6 down); first's move-up disabled, last's move-down disabled. Click on case_targets move-down swaps DOM order, fires PUT /api/performance/section-order, and persists across hard reload (verified by re-loading the page and confirming order). Non-admin role check verified via code (canReorder gate at PerformanceTracker.js:82, conditional render at line 1521) and backend 403 in PUT (routes/performance.py:1740) — could not fully UI-impersonate as no non-admin password is known, but the static code path is unambiguous.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Section reorder PUT", "issue": "Each click of move-up/move-down fires the PUT to /api/performance/section-order TWICE (likely React StrictMode dev-mode double-effect inside setSectionOrder updater function — same dup pattern noted in iteration_161 for /api/performance/sampling-trials). Not a correctness issue (idempotent upsert with same payload), but worth confirming whether moveSection's network call should live outside the setState updater or be guarded. Production build (no StrictMode) likely fires once.", "affected_selectors": ["[data-testid$='-move-up']", "[data-testid$='-move-down']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_performance_section_order.py",
+    "/app/test_reports/pytest/section_order_results.xml"
+  ],
+  "action_items": [
+    "(Low priority / informational) Move the fetch PUT call inside moveSection out of the setSectionOrder updater function so it does not get double-invoked in React StrictMode dev mode. Pattern: compute next array first, call setSectionOrder(next), then issue the PUT once."
+  ],
+  "critical_code_review_comments": [
+    "moveSection (PerformanceTracker.js:110-127) issues the PUT inside the setSectionOrder updater. setState updaters can be invoked twice in dev StrictMode — each invocation fires its own fetch. Functionally idempotent (cleaned order is the same) but wasteful. Refactor to compute next outside the updater, then setSectionOrder(next) and a single fetch.",
+    "headers object in moveSection deps array is recreated on every render, so the useCallback dep [headers] effectively never memoizes. Minor — moveSection is rarely called.",
+    "Backend PUT response includes is_default:false for any saved order, even when the saved order equals DEFAULT_SECTION_ORDER. Acceptable per spec ('After PUT subsequent GET returns saved order with is_default=false') but if the product wants is_default to mean 'still at default ordering' rather than 'has saved row', consider deep-comparing to DEFAULT_SECTION_ORDER.",
+    "PerformanceTracker.js is now 3026 lines — splitting per-section subsections into separate files remains overdue (carryover from iteration_161)."
+  ],
+  "updated_files": ["/app/backend/tests/test_performance_section_order.py"],
+  "success_rate": {"backend": "4/4 active tests PASS (1 skipped — non-admin login credentials unavailable)", "frontend": "11/11 acceptance criteria PASS"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water).",
+  "seed_data_creation": "None. Reset section_order to default ['new_accounts','case_targets','sampling_trials','focus_leads','next_month_leads','existing_accounts'] both before tests and on cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Section order endpoint is /api/performance/section-order, persisted in performance_settings collection {tenant_id, key:'section_order', order:[...]}. To impersonate a non-admin and verify PUT-403 in UI, you'll need to either (a) seed a sales user with a known password, or (b) extend /api/auth/login or use an admin impersonate endpoint. Login may redirect to /home (not /), so wait_for_timeout instead of wait_for_url('**/'). PUT is fired twice per click in dev StrictMode; idempotent so harmless. Default-collapse bug from iteration_161 (CaseTargetsSubsection per-account rows) was not retested in this iteration because case_targets was not the first section — re-verify if needed by clicking perf-section-case_targets-toggle and inspecting [data-testid^='case-account-detail-'] presence.",
+  "rca of the issue": "No bug — feature works end-to-end. The only minor smell is moveSection issuing fetch inside setState updater, causing double network call under React StrictMode (dev only). Idempotent upsert means no data corruption."
+}

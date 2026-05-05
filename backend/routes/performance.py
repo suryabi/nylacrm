@@ -1698,3 +1698,77 @@ async def account_collections(
             "total_invoice_count": total_invoice_count,
         },
     }
+
+
+
+# ════════════════════════════════════════════════════════════════════
+# Performance Tracker — Section Order (CEO / System Admin reorderable)
+# ════════════════════════════════════════════════════════════════════
+
+DEFAULT_SECTION_ORDER = [
+    "new_accounts",         # "Accounts Added this Period"
+    "case_targets",         # "Volume Targets for Existing Accounts — {Month}"
+    "sampling_trials",      # "Sampling / Trials"
+    "focus_leads",          # "Top Leads to Focus"
+    "next_month_leads",     # "Leads Targeting {NextMonth}"
+    "existing_accounts",    # "Existing Accounts"
+]
+
+REORDER_ROLES = {"CEO", "System Admin"}
+
+
+@router.get("/section-order")
+async def get_section_order(current_user: dict = Depends(get_current_user)):
+    """Return saved section order for the current tenant. Falls back to default when unset."""
+    tenant_id = get_current_tenant_id()
+    doc = await db.performance_settings.find_one(
+        {"tenant_id": tenant_id, "key": "section_order"}, {"_id": 0}
+    )
+    saved = (doc or {}).get("order") or []
+    # Merge: keep saved order for known ids, append any new defaults missing, drop unknowns
+    valid = [s for s in saved if s in DEFAULT_SECTION_ORDER]
+    for s in DEFAULT_SECTION_ORDER:
+        if s not in valid:
+            valid.append(s)
+    return {"order": valid, "is_default": not saved}
+
+
+@router.put("/section-order")
+async def update_section_order(payload: dict, current_user: dict = Depends(get_current_user)):
+    """Upsert the section order for the current tenant. CEO / System Admin only."""
+    role = (current_user or {}).get("role") or ""
+    if role not in REORDER_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO or System Admin can reorder sections")
+
+    order = payload.get("order") or []
+    if not isinstance(order, list) or not order:
+        raise HTTPException(status_code=400, detail="order must be a non-empty list")
+
+    # Validate ids
+    cleaned = []
+    seen = set()
+    for s in order:
+        if s in DEFAULT_SECTION_ORDER and s not in seen:
+            cleaned.append(s)
+            seen.add(s)
+    # Fill any missing defaults at the end so we never lose a section
+    for s in DEFAULT_SECTION_ORDER:
+        if s not in seen:
+            cleaned.append(s)
+
+    tenant_id = get_current_tenant_id()
+    await db.performance_settings.update_one(
+        {"tenant_id": tenant_id, "key": "section_order"},
+        {
+            "$set": {
+                "tenant_id": tenant_id,
+                "key": "section_order",
+                "order": cleaned,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_by": (current_user or {}).get("id"),
+                "updated_by_name": (current_user or {}).get("name"),
+            }
+        },
+        upsert=True,
+    )
+    return {"order": cleaned, "is_default": False}

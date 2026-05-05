@@ -74,6 +74,13 @@ export default function PerformanceTracker() {
   const [revenueEditing, setRevenueEditing] = useState({ lifetime: false, this_month: false, new_accounts: false });
   const [defaultsApplied, setDefaultsApplied] = useState(false);
 
+  // Performance section ordering (CEO / System Admin can reorder; persisted per tenant)
+  const DEFAULT_SECTION_ORDER = React.useMemo(() => [
+    'new_accounts', 'case_targets', 'sampling_trials', 'focus_leads', 'next_month_leads', 'existing_accounts',
+  ], []);
+  const [sectionOrder, setSectionOrder] = useState(DEFAULT_SECTION_ORDER);
+  const canReorder = !!user && (user.role === 'CEO' || user.role === 'System Admin');
+
   const token = localStorage.getItem('token');
   const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
   const headers = { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': tenantId, 'Content-Type': 'application/json' };
@@ -93,7 +100,31 @@ export default function PerformanceTracker() {
       .then(r => r.json()).then(setResources).catch(() => {});
     fetch(`${API_URL}/api/performance/target-plans`, { headers })
       .then(r => r.json()).then(setPlans).catch(() => {});
+    // Section order (per-tenant, falls back to default if unset)
+    fetch(`${API_URL}/api/performance/section-order`, { headers })
+      .then(r => r.json())
+      .then(d => { if (d?.order?.length) setSectionOrder(d.order); })
+      .catch(() => {});
   }, []);
+
+  const moveSection = useCallback(async (sectionId, direction) => {
+    setSectionOrder(prev => {
+      const idx = prev.indexOf(sectionId);
+      if (idx === -1) return prev;
+      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      // Fire-and-forget save (CEO / System Admin only — backend re-validates)
+      fetch(`${API_URL}/api/performance/section-order`, {
+        method: 'PUT', headers,
+        body: JSON.stringify({ order: next }),
+      }).then(r => {
+        if (!r.ok) toast.error('Could not save section order');
+      }).catch(() => toast.error('Could not save section order'));
+      return next;
+    });
+  }, [headers]);
 
   // Auto-select the logged-in user as default resource (only once, when resources load and no session state exists)
   useEffect(() => {
@@ -718,7 +749,7 @@ export default function PerformanceTracker() {
             </div>
           </div>
 
-          {/* ─── Per-section blocks (replaces old Top 10 Priorities tabs) ─── */}
+          {/* ─── Per-section blocks (configurable order; CEO / System Admin can reorder) ─── */}
           {(() => {
             const periodLabel = (() => {
               const { periodStart, periodEnd } = resolvePeriodDates();
@@ -730,79 +761,13 @@ export default function PerformanceTracker() {
             })();
             const { periodStart, periodEnd } = resolvePeriodDates();
             const resourceIdsKey = resolveResourceIds().join(',');
-            return (
-              <>
-                <PerfSection
-                  id="case_targets"
-                  icon={Package}
-                  title={`Case Targets — ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
-                  subtitle="Per-account SKU case targets vs. last month, achievement, and gap"
-                  defaultOpen={true}
-                >
-                  <CaseTargetsSubsection
-                    year={selectedYear}
-                    month={selectedMonth}
-                    resourceIdsKey={resourceIdsKey}
-                    token={token}
-                    tenantId={tenantId}
-                    isLocked={isLocked}
-                  />
-                </PerfSection>
 
-                <PerfSection
-                  id="sampling_trials"
-                  icon={FlaskConical}
-                  title="Sampling / Trials"
-                  subtitle="Live sampling and trial pipeline by SKU"
-                  defaultOpen={false}
-                >
-                  <SamplingTrialsSubsection
-                    resourceIdsKey={resourceIdsKey}
-                    token={token}
-                    tenantId={tenantId}
-                    isLocked={isLocked}
-                  />
-                </PerfSection>
-
-                <PerfSection
-                  id="focus_leads"
-                  icon={Target}
-                  title="Top 5 Leads to Focus"
-                  subtitle="Curated lead picks for the period with status, priority, and revenue"
-                  defaultOpen={false}
-                >
-                  <FocusLeadsSubsection
-                    year={selectedYear}
-                    month={selectedMonth}
-                    resourceIdsKey={resourceIdsKey}
-                    token={token}
-                    tenantId={tenantId}
-                    isLocked={isLocked}
-                  />
-                </PerfSection>
-
-                <PerfSection
-                  id="next_month_leads"
-                  icon={Calendar}
-                  title={`Leads Targeting ${MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}`}
-                  subtitle="Active leads with target closure in the upcoming month"
-                  defaultOpen={false}
-                >
-                  <NextMonthLeadsSubsection
-                    leads={data.pipeline?.next_month_leads_list || []}
-                    nextMonth={data.pipeline?.next_month}
-                    nextYear={data.pipeline?.next_year}
-                    totalPipelineValue={data.pipeline?.next_month_pipeline_value || 0}
-                  />
-                </PerfSection>
-
-                <PerfSection
-                  id="new_accounts"
-                  icon={Users}
-                  title="New Accounts"
-                  subtitle="Accounts onboarded during the active period"
-                  defaultOpen={false}
-                >
+            const sectionConfigs = {
+              new_accounts: {
+                icon: Users,
+                title: 'Accounts Added this Period',
+                subtitle: 'Accounts onboarded during the active period',
+                render: () => (
                   <AccountsSubsection
                     key={`new-${periodStart}-${periodEnd}-${resourceIdsKey}`}
                     mode="new"
@@ -813,15 +778,69 @@ export default function PerformanceTracker() {
                     token={token}
                     tenantId={tenantId}
                   />
-                </PerfSection>
-
-                <PerfSection
-                  id="existing_accounts"
-                  icon={Wallet}
-                  title="Existing Accounts"
-                  subtitle="Accounts onboarded before the active period start"
-                  defaultOpen={false}
-                >
+                ),
+              },
+              case_targets: {
+                icon: Package,
+                title: `Volume Targets for Existing Accounts — ${MONTH_NAMES[selectedMonth]} ${selectedYear}`,
+                subtitle: 'Per-account SKU case targets vs. last month, achievement, and gap',
+                render: () => (
+                  <CaseTargetsSubsection
+                    year={selectedYear}
+                    month={selectedMonth}
+                    resourceIdsKey={resourceIdsKey}
+                    token={token}
+                    tenantId={tenantId}
+                    isLocked={isLocked}
+                  />
+                ),
+              },
+              sampling_trials: {
+                icon: FlaskConical,
+                title: 'Sampling / Trials',
+                subtitle: 'Live sampling and trial pipeline by SKU',
+                render: () => (
+                  <SamplingTrialsSubsection
+                    resourceIdsKey={resourceIdsKey}
+                    token={token}
+                    tenantId={tenantId}
+                    isLocked={isLocked}
+                  />
+                ),
+              },
+              focus_leads: {
+                icon: Target,
+                title: 'Top Leads to Focus',
+                subtitle: 'Curated lead picks for the period with status, priority, and revenue',
+                render: () => (
+                  <FocusLeadsSubsection
+                    year={selectedYear}
+                    month={selectedMonth}
+                    resourceIdsKey={resourceIdsKey}
+                    token={token}
+                    tenantId={tenantId}
+                    isLocked={isLocked}
+                  />
+                ),
+              },
+              next_month_leads: {
+                icon: Calendar,
+                title: `Leads Targeting ${MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}`,
+                subtitle: 'Active leads with target closure in the upcoming month',
+                render: () => (
+                  <NextMonthLeadsSubsection
+                    leads={data.pipeline?.next_month_leads_list || []}
+                    nextMonth={data.pipeline?.next_month}
+                    nextYear={data.pipeline?.next_year}
+                    totalPipelineValue={data.pipeline?.next_month_pipeline_value || 0}
+                  />
+                ),
+              },
+              existing_accounts: {
+                icon: Wallet,
+                title: 'Existing Accounts',
+                subtitle: 'Accounts onboarded before the active period start',
+                render: () => (
                   <AccountsSubsection
                     key={`existing-${periodStart}-${resourceIdsKey}`}
                     mode="existing"
@@ -832,7 +851,33 @@ export default function PerformanceTracker() {
                     token={token}
                     tenantId={tenantId}
                   />
-                </PerfSection>
+                ),
+              },
+            };
+
+            return (
+              <>
+                {sectionOrder.map((id, idx) => {
+                  const cfg = sectionConfigs[id];
+                  if (!cfg) return null;
+                  return (
+                    <PerfSection
+                      key={id}
+                      id={id}
+                      icon={cfg.icon}
+                      title={cfg.title}
+                      subtitle={cfg.subtitle}
+                      defaultOpen={idx === 0}
+                      canReorder={canReorder}
+                      isFirst={idx === 0}
+                      isLast={idx === sectionOrder.length - 1}
+                      onMoveUp={() => moveSection(id, 'up')}
+                      onMoveDown={() => moveSection(id, 'down')}
+                    >
+                      {cfg.render()}
+                    </PerfSection>
+                  );
+                })}
               </>
             );
           })()}
@@ -1443,7 +1488,7 @@ function AccountValueCell({ account, planId, onRefresh }) {
 // Children are lazy-mounted on first open so collapsed sections don't fetch data.
 // ════════════════════════════════════════════════════════════════════
 
-function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, children }) {
+function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, canReorder = false, isFirst = false, isLast = false, onMoveUp, onMoveDown, children }) {
   const [open, setOpen] = useState(defaultOpen);
   const [hasOpened, setHasOpened] = useState(defaultOpen);
 
@@ -1457,21 +1502,54 @@ function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, chi
 
   return (
     <div className="bg-white border border-slate-200 rounded-sm" data-testid={`perf-section-${id}`}>
-      <button
-        onClick={toggle}
-        className="w-full flex items-center gap-2.5 p-4 sm:p-5 hover:bg-slate-50 transition-colors"
-        data-testid={`perf-section-${id}-toggle`}
-        aria-expanded={open}
-      >
-        <div className="p-1.5 bg-amber-100 rounded-sm flex-shrink-0">
-          {Icon && <Icon className="h-4 w-4 text-amber-700" />}
-        </div>
-        <div className="flex-1 text-left min-w-0">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 truncate">{title}</h3>
-          {subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>}
-        </div>
-        {open ? <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />}
-      </button>
+      <div className="w-full flex items-center gap-2.5 p-4 sm:p-5 hover:bg-slate-50 transition-colors">
+        <button
+          onClick={toggle}
+          className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+          data-testid={`perf-section-${id}-toggle`}
+          aria-expanded={open}
+        >
+          <div className="p-1.5 bg-amber-100 rounded-sm flex-shrink-0">
+            {Icon && <Icon className="h-4 w-4 text-amber-700" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 truncate">{title}</h3>
+            {subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>}
+          </div>
+        </button>
+
+        {canReorder && (
+          <div className="flex items-center gap-0.5 flex-shrink-0" data-testid={`perf-section-${id}-reorder`}>
+            <button
+              onClick={(e) => { e.stopPropagation(); if (!isFirst) onMoveUp?.(); }}
+              disabled={isFirst}
+              className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="Move up"
+              data-testid={`perf-section-${id}-move-up`}
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); if (!isLast) onMoveDown?.(); }}
+              disabled={isLast}
+              className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title="Move down"
+              data-testid={`perf-section-${id}-move-down`}
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={toggle}
+          className="p-1 rounded hover:bg-slate-100 flex-shrink-0"
+          aria-label={open ? 'Collapse' : 'Expand'}
+          tabIndex={-1}
+        >
+          {open ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+        </button>
+      </div>
 
       {hasOpened && (
         <div className={`border-t border-slate-100 p-4 sm:p-5 ${open ? '' : 'hidden'}`} data-testid={`perf-section-${id}-body`}>
