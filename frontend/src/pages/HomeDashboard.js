@@ -363,8 +363,12 @@ export default function HomeDashboard() {
                 render: () => (
                   <UpcomingMeetingsWidget
                     upcomingMeetings={upcoming_meetings}
-                    onNewMeeting={() => {
-                      setNewMeeting(getDefaultMeetingState());
+                    onNewMeeting={(selectedDate) => {
+                      const base = getDefaultMeetingState();
+                      setNewMeeting({
+                        ...base,
+                        meeting_date: selectedDate || base.meeting_date,
+                      });
                       setEditMode(false);
                       setShowNewMeetingDialog(true);
                     }}

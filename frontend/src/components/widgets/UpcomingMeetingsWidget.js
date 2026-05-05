@@ -14,6 +14,15 @@ const DAYS_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n) => String(n).padStart(2, '0');
 const isoDay = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const ordinalSuffix = (d) => {
+  if (d >= 11 && d <= 13) return 'th';
+  switch (d % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+};
 
 function fmtTime(iso) {
   if (!iso || iso.length === 10) return null;
@@ -303,11 +312,18 @@ export function UpcomingMeetingsWidget({ onNewMeeting, onViewMeeting }) {
             <Calendar className="h-8 w-8 text-slate-200 dark:text-slate-700 mx-auto mb-2" />
             <p className="text-xs text-slate-400">Nothing scheduled</p>
             <button
-              onClick={onNewMeeting}
+              onClick={() => onNewMeeting(selectedDay)}
               className="mt-2 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
               data-testid="empty-state-schedule"
             >
-              Schedule a meeting
+              {(() => {
+                const todayKey = isoDay(today);
+                if (selectedDay === todayKey) return 'Schedule a meeting';
+                const d = new Date(selectedDay + 'T00:00');
+                const day = d.getDate();
+                const month = d.toLocaleDateString(undefined, { month: 'short' });
+                return `Schedule for ${day}${ordinalSuffix(day)} ${month}`;
+              })()}
             </button>
           </div>
         ) : (
@@ -428,10 +444,18 @@ export function UpcomingMeetingsWidget({ onNewMeeting, onViewMeeting }) {
           variant="outline"
           size="default"
           className="h-10 text-sm font-medium border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-800 dark:hover:text-blue-300 bg-white dark:bg-slate-900"
-          onClick={onNewMeeting}
+          onClick={() => onNewMeeting(selectedDay)}
           data-testid="footer-schedule"
         >
-          <Plus className="h-4 w-4 mr-2" /> Schedule
+          <Plus className="h-4 w-4 mr-2" />
+          {(() => {
+            const todayKey = isoDay(today);
+            if (selectedDay === todayKey) return 'Schedule';
+            const d = new Date(selectedDay + 'T00:00');
+            const day = d.getDate();
+            const month = d.toLocaleDateString(undefined, { month: 'short' });
+            return `Schedule for ${day}${ordinalSuffix(day)} ${month}`;
+          })()}
         </Button>
       </div>
     </Card>
