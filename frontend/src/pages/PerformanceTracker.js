@@ -718,22 +718,124 @@ export default function PerformanceTracker() {
             </div>
           </div>
 
-          {/* ─── Top 10 Priorities ─── */}
-          <Top10PrioritiesSection
-            year={selectedYear}
-            month={selectedMonth}
-            resourceIds={resolveResourceIds()}
-            periodStart={resolvePeriodDates().periodStart}
-            periodEnd={resolvePeriodDates().periodEnd}
-            viewMode={viewMode}
-            nextMonthLeads={data.pipeline?.next_month_leads_list || []}
-            nextMonth={data.pipeline?.next_month}
-            nextYear={data.pipeline?.next_year}
-            nextMonthPipelineValue={data.pipeline?.next_month_pipeline_value || 0}
-            token={token}
-            tenantId={tenantId}
-            isLocked={isLocked}
-          />
+          {/* ─── Per-section blocks (replaces old Top 10 Priorities tabs) ─── */}
+          {(() => {
+            const periodLabel = (() => {
+              const { periodStart, periodEnd } = resolvePeriodDates();
+              if (!periodStart || !periodEnd) return '';
+              try {
+                const fmtDate = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+                return `${fmtDate(periodStart)} → ${fmtDate(periodEnd)}`;
+              } catch { return ''; }
+            })();
+            const { periodStart, periodEnd } = resolvePeriodDates();
+            const resourceIdsKey = resolveResourceIds().join(',');
+            return (
+              <>
+                <PerfSection
+                  id="case_targets"
+                  icon={Package}
+                  title={`Case Targets — ${MONTH_NAMES[selectedMonth]} ${selectedYear}`}
+                  subtitle="Per-account SKU case targets vs. last month, achievement, and gap"
+                  defaultOpen={true}
+                >
+                  <CaseTargetsSubsection
+                    year={selectedYear}
+                    month={selectedMonth}
+                    resourceIdsKey={resourceIdsKey}
+                    token={token}
+                    tenantId={tenantId}
+                    isLocked={isLocked}
+                  />
+                </PerfSection>
+
+                <PerfSection
+                  id="sampling_trials"
+                  icon={FlaskConical}
+                  title="Sampling / Trials"
+                  subtitle="Live sampling and trial pipeline by SKU"
+                  defaultOpen={false}
+                >
+                  <SamplingTrialsSubsection
+                    resourceIdsKey={resourceIdsKey}
+                    token={token}
+                    tenantId={tenantId}
+                    isLocked={isLocked}
+                  />
+                </PerfSection>
+
+                <PerfSection
+                  id="focus_leads"
+                  icon={Target}
+                  title="Top 5 Leads to Focus"
+                  subtitle="Curated lead picks for the period with status, priority, and revenue"
+                  defaultOpen={false}
+                >
+                  <FocusLeadsSubsection
+                    year={selectedYear}
+                    month={selectedMonth}
+                    resourceIdsKey={resourceIdsKey}
+                    token={token}
+                    tenantId={tenantId}
+                    isLocked={isLocked}
+                  />
+                </PerfSection>
+
+                <PerfSection
+                  id="next_month_leads"
+                  icon={Calendar}
+                  title={`Leads Targeting ${MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}`}
+                  subtitle="Active leads with target closure in the upcoming month"
+                  defaultOpen={false}
+                >
+                  <NextMonthLeadsSubsection
+                    leads={data.pipeline?.next_month_leads_list || []}
+                    nextMonth={data.pipeline?.next_month}
+                    nextYear={data.pipeline?.next_year}
+                    totalPipelineValue={data.pipeline?.next_month_pipeline_value || 0}
+                  />
+                </PerfSection>
+
+                <PerfSection
+                  id="new_accounts"
+                  icon={Users}
+                  title="New Accounts"
+                  subtitle="Accounts onboarded during the active period"
+                  defaultOpen={false}
+                >
+                  <AccountsSubsection
+                    key={`new-${periodStart}-${periodEnd}-${resourceIdsKey}`}
+                    mode="new"
+                    periodStart={periodStart}
+                    periodEnd={periodEnd}
+                    periodLabel={periodLabel}
+                    resourceIdsKey={resourceIdsKey}
+                    token={token}
+                    tenantId={tenantId}
+                  />
+                </PerfSection>
+
+                <PerfSection
+                  id="existing_accounts"
+                  icon={Wallet}
+                  title="Existing Accounts"
+                  subtitle="Accounts onboarded before the active period start"
+                  defaultOpen={false}
+                >
+                  <AccountsSubsection
+                    key={`existing-${periodStart}-${resourceIdsKey}`}
+                    mode="existing"
+                    periodStart={periodStart}
+                    periodEnd={periodEnd}
+                    periodLabel={periodLabel}
+                    resourceIdsKey={resourceIdsKey}
+                    token={token}
+                    tenantId={tenantId}
+                  />
+                </PerfSection>
+              </>
+            );
+          })()}
 
           {/* Month-on-Month Comparison */}
           {comparison?.months?.length > 0 && (
@@ -1336,156 +1438,47 @@ function AccountValueCell({ account, planId, onRefresh }) {
 
 
 // ════════════════════════════════════════════════════════════════════
-// Top 10 Priorities — Execution Driven
+// PerfSection — Reusable expandable/collapsible section for Performance Tracker
+// (Replaces the old Top10PrioritiesSection wrapper + SubTab tabs)
+// Children are lazy-mounted on first open so collapsed sections don't fetch data.
 // ════════════════════════════════════════════════════════════════════
 
-function Top10PrioritiesSection({ year, month, resourceIds, periodStart, periodEnd, viewMode, nextMonthLeads, nextMonth, nextYear, nextMonthPipelineValue, token, tenantId, isLocked }) {
-  const [open, setOpen] = useState(true);
-  const [activeSub, setActiveSub] = useState('case_targets');
+function PerfSection({ id, icon: Icon, title, subtitle, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [hasOpened, setHasOpened] = useState(defaultOpen);
 
-  // Stable primitive key so child effects don't re-run on every parent render
-  const resourceIdsKey = React.useMemo(() => (resourceIds || []).join(','), [resourceIds]);
-
-  const periodLabel = React.useMemo(() => {
-    if (!periodStart || !periodEnd) return '';
-    try {
-      const fmt = (iso) => {
-        const d = new Date(`${iso}T00:00:00Z`);
-        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
-      };
-      return `${fmt(periodStart)} → ${fmt(periodEnd)}`;
-    } catch { return ''; }
-  }, [periodStart, periodEnd]);
+  const toggle = () => {
+    setOpen(prev => {
+      const next = !prev;
+      if (next) setHasOpened(true);
+      return next;
+    });
+  };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-sm" data-testid="top10-priorities-section">
+    <div className="bg-white border border-slate-200 rounded-sm" data-testid={`perf-section-${id}`}>
       <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2.5 p-4 sm:p-5 pb-3 sm:pb-4 border-b border-slate-100 hover:bg-slate-50 transition-colors"
-        data-testid="top10-priorities-toggle"
+        onClick={toggle}
+        className="w-full flex items-center gap-2.5 p-4 sm:p-5 hover:bg-slate-50 transition-colors"
+        data-testid={`perf-section-${id}-toggle`}
+        aria-expanded={open}
       >
-        <div className="p-1.5 bg-amber-100 rounded-sm">
-          <Star className="h-4 w-4 text-amber-700" />
+        <div className="p-1.5 bg-amber-100 rounded-sm flex-shrink-0">
+          {Icon && <Icon className="h-4 w-4 text-amber-700" />}
         </div>
-        <div className="flex-1 text-left">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900">
-            Top 10 Priorities
-          </h3>
-          <p className="text-xs text-slate-500 mt-0.5">Account-level targets, gaps, and priority drivers for the month</p>
+        <div className="flex-1 text-left min-w-0">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-900 truncate">{title}</h3>
+          {subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate">{subtitle}</p>}
         </div>
-        {open ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+        {open ? <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" /> : <ChevronRight className="h-4 w-4 text-slate-400 flex-shrink-0" />}
       </button>
 
-      {open && (
-        <div className="p-4 sm:p-5 space-y-4">
-          {/* Sub-section tabs */}
-          <div className="flex flex-wrap gap-1.5 border-b border-slate-100 pb-2">
-            <SubTab id="case_targets" active={activeSub} onClick={setActiveSub} icon={Package}>
-              Case Targets — {MONTH_NAMES[month]} {year}
-            </SubTab>
-            <SubTab id="sampling_trials" active={activeSub} onClick={setActiveSub} icon={FlaskConical}>
-              Sampling / Trials
-            </SubTab>
-            <SubTab id="focus_leads" active={activeSub} onClick={setActiveSub} icon={Target}>
-              Top 5 Leads to Focus
-            </SubTab>
-            <SubTab id="next_month_leads" active={activeSub} onClick={setActiveSub} icon={Calendar}>
-              Leads Targeting {MONTH_NAMES[nextMonth] || 'Next Month'}
-            </SubTab>
-            <SubTab id="new_accounts" active={activeSub} onClick={setActiveSub} icon={Users}>
-              New Accounts
-            </SubTab>
-            <SubTab id="existing_accounts" active={activeSub} onClick={setActiveSub} icon={Wallet}>
-              Existing Accounts
-            </SubTab>
-          </div>
-
-          {activeSub === 'case_targets' && (
-            <CaseTargetsSubsection
-              year={year}
-              month={month}
-              resourceIdsKey={resourceIdsKey}
-              token={token}
-              tenantId={tenantId}
-              isLocked={isLocked}
-            />
-          )}
-
-          {activeSub === 'sampling_trials' && (
-            <SamplingTrialsSubsection
-              resourceIdsKey={resourceIdsKey}
-              token={token}
-              tenantId={tenantId}
-              isLocked={isLocked}
-            />
-          )}
-
-          {activeSub === 'focus_leads' && (
-            <FocusLeadsSubsection
-              year={year}
-              month={month}
-              resourceIdsKey={resourceIdsKey}
-              token={token}
-              tenantId={tenantId}
-              isLocked={isLocked}
-            />
-          )}
-
-          {activeSub === 'next_month_leads' && (
-            <NextMonthLeadsSubsection
-              leads={nextMonthLeads}
-              nextMonth={nextMonth}
-              nextYear={nextYear}
-              totalPipelineValue={nextMonthPipelineValue}
-            />
-          )}
-
-          {activeSub === 'new_accounts' && (
-            <AccountsSubsection
-              key={`new-${periodStart}-${periodEnd}-${resourceIdsKey}`}
-              mode="new"
-              periodStart={periodStart}
-              periodEnd={periodEnd}
-              periodLabel={periodLabel}
-              resourceIdsKey={resourceIdsKey}
-              token={token}
-              tenantId={tenantId}
-            />
-          )}
-
-          {activeSub === 'existing_accounts' && (
-            <AccountsSubsection
-              key={`existing-${periodStart}-${resourceIdsKey}`}
-              mode="existing"
-              periodStart={periodStart}
-              periodEnd={periodEnd}
-              periodLabel={periodLabel}
-              resourceIdsKey={resourceIdsKey}
-              token={token}
-              tenantId={tenantId}
-            />
-          )}
+      {hasOpened && (
+        <div className={`border-t border-slate-100 p-4 sm:p-5 ${open ? '' : 'hidden'}`} data-testid={`perf-section-${id}-body`}>
+          {children}
         </div>
       )}
     </div>
-  );
-}
-
-function SubTab({ id, active, onClick, icon: Icon, children }) {
-  const isActive = active === id;
-  return (
-    <button
-      onClick={() => onClick(id)}
-      className={`px-3 py-1.5 rounded-sm text-xs font-semibold flex items-center gap-1.5 transition-all ${
-        isActive
-          ? 'bg-amber-600 text-white shadow-sm'
-          : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
-      }`}
-      data-testid={`sub-tab-${id}`}
-    >
-      {Icon && <Icon className="h-3 w-3" />}
-      {children}
-    </button>
   );
 }
 

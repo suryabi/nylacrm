@@ -1,0 +1,34 @@
+{
+  "summary": "Verified Performance Tracker UI restructure (tabs -> 6 expandable sections). All 8 acceptance criteria PASS except ONE: per-account rows inside Case Targets are EXPANDED by default (spec requires collapsed). Specifically verified: (1) 6 PerfSection components render in exact required order — perf-section-case_targets, perf-section-sampling_trials, perf-section-focus_leads, perf-section-next_month_leads, perf-section-new_accounts, perf-section-existing_accounts. (2) Legacy testids fully removed: top10-priorities-section absent, 0 sub-tab-* matches. (3) Initial render: only case_targets body is in the DOM and visible (aria-expanded=true); the other 5 bodies are NOT mounted at all (in_dom=False) — true lazy-mount on first open, not just hidden. (4) Click perf-section-sampling_trials-toggle expands the section, chevron flips to ChevronDown, body becomes visible, sampling-trials-subsection mounts, GET /api/performance/sampling-trials fires (twice — see minor below). (5) Click perf-section-case_targets-toggle collapses Case Targets (body visible=False). (6) Lazy-mount survives collapse: after collapsing then re-expanding sampling_trials, the body stays in DOM (hidden) and ZERO additional /api/performance/sampling-trials requests fire — confirms data is NOT refetched. (7) All other subsections render correctly when their section is expanded: next-month-leads-subsection (with period banner/leads-targeting-may pill), new-accounts-subsection (with new-accounts-period, new-accounts-search, new-accounts-empty), existing_accounts body, focus-leads-subsection, sampling-trials-subsection. (8) Vertical spacing: outer container at line 314 has 'space-y-4 sm:space-y-6'; the React fragment in the IIFE returning the 6 sections unwraps so all 6 are direct siblings of the parent — measured 104px gap between case_targets and sampling_trials top edges, gaps consistent across all sections.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CaseTargetsSubsection (PerformanceTracker.js:1609)",
+        "issue": "Per-account rows are OPEN by default. Code reads: const isOpen = expanded[acc.account_id] !== false. With initial state {} and undefined !== false === true, ALL account rows render expanded on first paint. At test run, all 6 account header rows had their detail (case-account-detail-*) sub-tables visible. Spec requires account expand toggles to initialise to false (collapsed).",
+        "selector": "[data-testid^='case-account-detail-']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "FIX PerformanceTracker.js:1609 default-collapse for per-account rows in Case Targets. Change `const isOpen = expanded[acc.account_id] !== false;` to `const isOpen = expanded[acc.account_id] === true;` and update the toggle setter accordingly (`setExpanded(p => ({ ...p, [acc.account_id]: !isOpen }))` already works with that flip). After the fix, on first render no [data-testid^='case-account-detail-'] should be present until the user clicks an account row.",
+    "(Minor / informational) On first expand of sampling_trials, /api/performance/sampling-trials fires TWICE (likely a dev StrictMode double-effect or a duplicate trigger from parent). Not a blocker but worth confirming whether intentional in production build."
+  ],
+  "critical_code_review_comments": [
+    "PerformanceTracker.js is now ~2948 lines. Splitting PerfSection + each *Subsection into /pages/performance/<Name>.js modules is overdue.",
+    "PerfSection lazy-mount uses hasOpened+hidden which is correct, but sibling-state across siblings is reset on every parent re-render (e.g. month change). Confirm UX expectation that switching month/plan re-collapses everything and forces a fresh first-open fetch.",
+    "Spec compliance gap: per-account default state (line 1609) is the only deviation from the iteration-161 brief; everything else aligns."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only iteration)", "frontend": "7/8 acceptance criteria PASS — only the per-account default-collapse rule fails."},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "None — used existing seed and existing saved_record (so data auto-loaded without needing to click Generate).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Single line fix in PerformanceTracker.js:1609. Re-test by logging in, navigating to /performance (data auto-loads from saved record — no need to pick a plan + click Generate), confirm case_targets section is open by default but NO [data-testid^='case-account-detail-'] element exists until you click a [data-testid^='case-account-']:not([data-testid*='detail']) row. Other 5 sections must remain not-in-DOM until first toggle. Lazy-mount preservation can be re-verified by clicking sampling_trials toggle → wait for sampling-trials-subsection → toggle off → toggle on → confirm only ONE network request (or two if the existing dup persists) for /api/performance/sampling-trials, none on the second open.",
+  "rca of the issue": "Default-open bug on Case Targets per-account rows: the code at PerformanceTracker.js:1609 uses negation logic (`expanded[acc.account_id] !== false`) to compute openness. The state map `expanded` initialises empty (`useState({})`), so for every account_id the lookup returns `undefined`, and `undefined !== false` is `true`. Therefore every account row paints expanded on first render and the SKU detail sub-table is visible. Spec mandates collapsed-by-default. Mitigation: invert the logic to `expanded[acc.account_id] === true` so undefined => collapsed; the existing toggle handler `setExpanded(p => ({ ...p, [acc.account_id]: !isOpen }))` will continue to work correctly (first click sets true => open; next click sets false => collapsed)."
+}
