@@ -52,6 +52,7 @@ from .personal_calendar import router as personal_calendar_router
 from .marketing_requests import router as marketing_requests_router, public_router as marketing_requests_public_router
 from .master_request_types import router as master_request_types_router
 from .user_preferences import router as user_preferences_router
+from .knowledge_base import router as knowledge_base_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -155,5 +156,8 @@ routes_router.include_router(master_request_types_router, prefix="/master-reques
 
 # Per-user preferences (home widget order, etc.)
 routes_router.include_router(user_preferences_router, tags=["User Preferences"])
+
+# Knowledge Base — "Ask Nyla" (admin uploads docs, all users can ask questions)
+routes_router.include_router(knowledge_base_router, tags=["Knowledge Base"])
 
 __all__ = ['routes_router']
