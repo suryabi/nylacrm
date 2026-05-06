@@ -204,6 +204,7 @@ async def list_invoices(
             'total_gross': sum((inv.get('gross_invoice_value') or inv.get('grand_total') or 0) for inv in all_invoices_for_summary),
             'total_net': sum((inv.get('net_invoice_value') or (inv.get('gross_invoice_value') or inv.get('grand_total') or 0) - (inv.get('credit_note_value') or 0)) for inv in all_invoices_for_summary),
             'total_credit': sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices_for_summary),
+            'total_outstanding': sum(inv.get('outstanding', 0) or 0 for inv in all_invoices_for_summary),
         }
         
         logger.info(f"[INVOICES] Listed {len(invoices)} invoices (page {page}/{pages}, total {total})")

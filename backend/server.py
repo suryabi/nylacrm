@@ -5407,30 +5407,6 @@ async def get_lead_invoices(lead_id: str, current_user: dict = Depends(get_curre
         'invoices': invoices
     }
 
-@api_router.get("/invoices")
-async def get_all_invoices(
-    status: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 50,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get all invoices with optional filtering"""
-    query = {}
-    if status:
-        query['status'] = status
-    
-    invoices = await get_tdb().invoices.find(
-        query,
-        {'_id': 0}
-    ).sort('received_at', -1).skip(skip).limit(limit).to_list(limit)
-    
-    total = await get_tdb().invoices.count_documents(query)
-    
-    return {
-        'total': total,
-        'invoices': invoices
-    }
-
 @api_router.get("/invoices/unmatched")
 async def get_unmatched_invoices(current_user: dict = Depends(get_current_user)):
     """Get invoices that couldn't be matched to a lead"""

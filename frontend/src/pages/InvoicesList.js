@@ -66,7 +66,7 @@ export default function InvoicesList() {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState({ total_gross: 0, total_net: 0 });
+  const [summary, setSummary] = useState({ total_gross: 0, total_net: 0, total_credit: 0, total_outstanding: 0 });
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -142,7 +142,7 @@ export default function InvoicesList() {
       setInvoices(response.data.invoices || []);
       setTotalPages(response.data.pages || 1);
       setTotalCount(response.data.total || 0);
-      setSummary(response.data.summary || { total_gross: 0, total_net: 0 });
+      setSummary(response.data.summary || { total_gross: 0, total_net: 0, total_credit: 0, total_outstanding: 0 });
       setSelectedInvoices([]);
       setSelectAll(false);
     } catch (error) {
@@ -302,7 +302,7 @@ export default function InvoicesList() {
             <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
             <span className="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-200">Invoice Summary</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <div className="p-3 sm:p-4 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800">
               <div className="flex items-center gap-2 mb-1">
                 <FileText className="h-4 w-4 text-blue-500" />
@@ -330,6 +330,13 @@ export default function InvoicesList() {
                 <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">Net Value</span>
               </div>
               <p className="text-xl sm:text-2xl font-bold text-purple-700 dark:text-purple-300">{formatCurrency(summary.total_net)}</p>
+            </div>
+            <div className="p-3 sm:p-4 rounded-xl bg-rose-50 dark:bg-rose-900/30 border border-rose-100 dark:border-rose-800">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="h-4 w-4 text-rose-500" />
+                <span className="text-xs text-rose-600 dark:text-rose-400 font-medium">Outstanding</span>
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-rose-700 dark:text-rose-300">{formatCurrency(summary.total_outstanding || 0)}</p>
             </div>
           </div>
         </Card>
@@ -596,6 +603,11 @@ export default function InvoicesList() {
                         Net {getSortIcon('net_invoice_value')}
                       </div>
                     </TableHead>
+                    <TableHead className="text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" onClick={() => handleSort('outstanding')}>
+                      <div className="flex items-center justify-end font-semibold">
+                        Outstanding {getSortIcon('outstanding')}
+                      </div>
+                    </TableHead>
                     <TableHead>
                       <div className="font-semibold">Status</div>
                     </TableHead>
@@ -642,6 +654,9 @@ export default function InvoicesList() {
                       </TableCell>
                       <TableCell className="text-right font-semibold text-purple-700 dark:text-purple-300">
                         {formatCurrency(invoice.net_invoice_value)}
+                      </TableCell>
+                      <TableCell className={`text-right font-semibold ${(invoice.outstanding || 0) > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {formatCurrency(invoice.outstanding || 0)}
                       </TableCell>
                       <TableCell>
                         <Badge 

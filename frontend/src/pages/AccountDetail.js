@@ -43,40 +43,61 @@ const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 function InvoiceCard({ invoice }) {
   const [expanded, setExpanded] = React.useState(false);
   const hasLineItems = invoice.items && invoice.items.length > 0;
-  const totalBottles = hasLineItems 
+  const totalBottles = hasLineItems
     ? invoice.items.reduce((sum, item) => sum + (item.bottles || item.quantity || 0), 0)
     : (invoice.total_bottles || 0);
 
+  // Resolve invoice-level financial fields (handle multiple field names from external + internal payloads)
+  const grossValue = invoice.gross_invoice_value ?? invoice.gross_amount ?? invoice.grand_total ?? 0;
+  const creditValue = invoice.credit_note_value ?? invoice.credit_note ?? 0;
+  const netValue = invoice.net_invoice_value ?? invoice.net_amount ?? (grossValue - creditValue);
+  const outstandingValue = invoice.outstanding ?? 0;
+  const invoiceNo = invoice.invoice_no || invoice.invoice_number || invoice.id || '-';
+  const invoiceDate = invoice.invoice_date || invoice.invoiceDate || '';
+
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border rounded-lg overflow-hidden" data-testid={`account-invoice-${invoiceNo}`}>
       {/* Invoice Header - Clickable */}
-      <div 
-        className={`flex items-center justify-between p-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors ${hasLineItems ? '' : 'cursor-default'}`}
+      <div
+        className={`flex flex-wrap items-center gap-3 p-3 bg-muted/30 ${hasLineItems ? 'cursor-pointer hover:bg-muted/50' : 'cursor-default'} transition-colors`}
         onClick={() => hasLineItems && setExpanded(!expanded)}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-[180px]">
           {hasLineItems && (
             <span className="text-muted-foreground">
               {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             </span>
           )}
           <div>
-            <p className="font-semibold text-primary">{invoice.invoice_number}</p>
-            <p className="text-xs text-muted-foreground">{invoice.invoice_date}</p>
+            <p className="font-semibold text-primary">{invoiceNo}</p>
+            <p className="text-xs text-muted-foreground">{invoiceDate}</p>
           </div>
         </div>
-        <div className="flex items-center gap-6 text-sm">
-          {totalBottles > 0 && (
-            <div className="flex items-center gap-1.5 text-muted-foreground">
-              <Package className="h-4 w-4" />
-              <span>{totalBottles.toLocaleString()} bottles</span>
-            </div>
-          )}
-          <div className="text-right">
-            <p className="font-semibold text-green-600">₹{Math.round(invoice.gross_amount || 0).toLocaleString()}</p>
-            {invoice.gross_margin_percent > 0 && (
-              <p className="text-xs text-muted-foreground">Margin: {invoice.gross_margin_percent}%</p>
-            )}
+
+        {totalBottles > 0 && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Package className="h-3.5 w-3.5" />
+            <span>{totalBottles.toLocaleString()} bottles</span>
+          </div>
+        )}
+
+        {/* Financials grid — Gross / Credit Note / Net / Outstanding */}
+        <div className="ml-auto grid grid-cols-2 sm:grid-cols-4 gap-x-5 gap-y-1 text-right text-xs">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Gross</p>
+            <p className="font-semibold text-slate-700 tabular-nums">₹{Math.round(grossValue).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Credit Note</p>
+            <p className="font-semibold text-amber-600 tabular-nums">₹{Math.round(creditValue).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Net</p>
+            <p className="font-bold text-purple-700 tabular-nums">₹{Math.round(netValue).toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-slate-400">Outstanding</p>
+            <p className={`font-bold tabular-nums ${outstandingValue > 0 ? 'text-rose-600' : 'text-slate-400'}`}>₹{Math.round(outstandingValue).toLocaleString()}</p>
           </div>
         </div>
       </div>
@@ -89,9 +110,6 @@ function InvoiceCard({ invoice }) {
               <tr>
                 <th className="text-left py-2 px-3 font-medium text-xs text-muted-foreground">SKU</th>
                 <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Bottles</th>
-                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Price/Bottle</th>
-                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">COGS</th>
-                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Logistics</th>
                 <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Line Total</th>
               </tr>
             </thead>
@@ -103,9 +121,6 @@ function InvoiceCard({ invoice }) {
                     {item.sku_code && <p className="text-xs text-muted-foreground">{item.sku_code}</p>}
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums">{(item.bottles || item.quantity || 0).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right tabular-nums">₹{(item.price_per_bottle || item.unit_price || 0).toFixed(2)}</td>
-                  <td className="py-2 px-3 text-right tabular-nums text-red-600">₹{(item.cogs_total || 0).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right tabular-nums text-orange-600">₹{(item.logistics_total || 0).toLocaleString()}</td>
                   <td className="py-2 px-3 text-right font-medium tabular-nums">₹{Math.round(item.line_total || item.total || 0).toLocaleString()}</td>
                 </tr>
               ))}
@@ -114,38 +129,10 @@ function InvoiceCard({ invoice }) {
               <tr>
                 <td className="py-2 px-3 font-semibold">Total</td>
                 <td className="py-2 px-3 text-right font-semibold tabular-nums">{totalBottles.toLocaleString()}</td>
-                <td className="py-2 px-3"></td>
-                <td className="py-2 px-3 text-right font-semibold text-red-600 tabular-nums">₹{Math.round(invoice.total_cogs || 0).toLocaleString()}</td>
-                <td className="py-2 px-3 text-right font-semibold text-orange-600 tabular-nums">₹{Math.round(invoice.total_logistics || 0).toLocaleString()}</td>
-                <td className="py-2 px-3 text-right font-semibold text-green-600 tabular-nums">₹{Math.round(invoice.gross_amount || 0).toLocaleString()}</td>
+                <td className="py-2 px-3 text-right font-semibold text-green-600 tabular-nums">₹{Math.round(grossValue).toLocaleString()}</td>
               </tr>
             </tfoot>
           </table>
-          
-          {/* Margin Summary */}
-          <div className="p-3 bg-slate-100 border-t">
-            <p className="text-xs font-semibold text-slate-600 mb-2">MARGIN SUMMARY</p>
-            <div className="grid grid-cols-4 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-slate-500">Revenue</p>
-                <p className="font-semibold">₹{Math.round(invoice.gross_amount || 0).toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">COGS</p>
-                <p className="font-semibold text-red-600">-₹{Math.round(invoice.total_cogs || 0).toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Logistics</p>
-                <p className="font-semibold text-orange-600">-₹{Math.round(invoice.total_logistics || 0).toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Gross Margin</p>
-                <p className={`font-semibold ${(invoice.gross_margin || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ₹{Math.round(invoice.gross_margin || 0).toLocaleString()} ({invoice.gross_margin_percent || 0}%)
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       )}
     </div>
@@ -1220,18 +1207,22 @@ ${googleMapsLink}`;
               </div>
             ) : invoiceData && invoiceData.invoices?.length > 0 ? (
               <>
-                <div className="grid grid-cols-3 gap-3 mb-5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                     <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
-                    <p className="text-lg font-bold text-green-700">₹{(invoiceData.total_amount / 100000).toFixed(2)}L</p>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
-                    <p className="text-lg font-bold text-blue-700">₹{(invoiceData.net_amount / 100000).toFixed(2)}L</p>
+                    <p className="text-lg font-bold text-green-700 tabular-nums">₹{((invoiceData.total_amount || 0) / 100000).toFixed(2)}L</p>
                   </div>
                   <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
                     <p className="text-xs text-amber-600 font-medium mb-1">CREDIT NOTES</p>
-                    <p className="text-lg font-bold text-amber-700">₹{((invoiceData.credit_amount || 0) / 100000).toFixed(2)}L</p>
+                    <p className="text-lg font-bold text-amber-700 tabular-nums">₹{((invoiceData.credit_amount || 0) / 100000).toFixed(2)}L</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                    <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
+                    <p className="text-lg font-bold text-blue-700 tabular-nums">₹{((invoiceData.net_amount || 0) / 100000).toFixed(2)}L</p>
+                  </div>
+                  <div className="bg-rose-50 rounded-lg p-4 border border-rose-100">
+                    <p className="text-xs text-rose-600 font-medium mb-1">OUTSTANDING</p>
+                    <p className={`text-lg font-bold tabular-nums ${(invoiceData.outstanding || 0) > 0 ? 'text-rose-700' : 'text-slate-500'}`}>₹{((invoiceData.outstanding || 0) / 100000).toFixed(2)}L</p>
                   </div>
                 </div>
                 <div className="space-y-3">

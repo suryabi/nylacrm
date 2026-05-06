@@ -420,6 +420,7 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     total_gross = sum(inv.get('gross_invoice_value', 0) for inv in invoices)
     total_net = sum(inv.get('net_invoice_value', 0) for inv in invoices)
     total_credit = sum(inv.get('credit_note_value', 0) for inv in invoices)
+    total_outstanding = sum(inv.get('outstanding', 0) or 0 for inv in invoices)
     
     return {
         'invoices': invoices,
@@ -427,6 +428,7 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
             'total_gross': total_gross,
             'total_net': total_net,
             'total_credit': total_credit,
+            'total_outstanding': total_outstanding,
             'invoice_count': len(invoices)
         }
     }
