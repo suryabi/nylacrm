@@ -5,6 +5,17 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Lead → Account Conversion — Idempotent (no more duplicate accounts) (2026-02-07)
+- [x] User reported: "When the user hits 'Convert to Account' multiple times, multiple accounts are getting created."
+- [x] **Backend** `/app/backend/server.py` `POST /api/accounts/convert-lead`:
+  - **Guard #1 — Already converted**: if the lead has `converted_to_account: True` OR `account_id` set, look up the existing account by `account_id` / `lead_id` / payload `lead_id` and return it (with `already_existed: True`) instead of erroring with HTTP 400.
+  - **Guard #2 — Atomic claim (race protection)**: before generating the account, do an atomic `update_one({id: leadId, converted_to_account: {$ne: True}}, {$set: {converted_to_account: True}})`. Only one concurrent request gets `matched_count == 1`; others get 0 and instead poll for the existing account (5 retries × 200 ms) and return it.
+  - **Self-healing**: the account_id link on the lead is now written **after** the account doc is successfully inserted (was: written together). If the insert fails, the conversion claim is rolled back so the user can retry without being permanently stuck.
+- [x] **Verification**:
+  - 3 sequential converts on a fresh "won" lead → response 1 returns the new account_id; responses 2 & 3 return the same account_id with `already_existed: True`. Final Mongo `accounts` count = 1 (cleanup verified).
+  - 5 parallel converts via httpx → 4 responses with `already_existed: True`, 1 with `already_existed: None`; **final Mongo count = 1**. Lint clean.
+
+
 ### Bottle Preview — Accept all common image formats (2026-02-07)
 - [x] User reported: "other than SVG, PNG and JPG, uploads in bottle preview module are failing."
 - [x] **Backend** `/app/backend/routes/bottle_preview.py` `POST /bottle-preview/upload-logo`:

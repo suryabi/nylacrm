@@ -5631,19 +5631,39 @@ async def generate_account_id(account_name: str, city: str) -> str:
 
 @api_router.post("/accounts/convert-lead")
 async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depends(get_current_user)):
-    """Convert a won lead to an account"""
+    """Convert a won lead to an account.
+
+    Idempotent: if the lead has already been converted (or another concurrent
+    request is converting it right now), the existing account is returned
+    instead of creating a duplicate.
+    """
     lead = await get_tdb().leads.find_one({'id': data.lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
-    
+
     # Check if lead is won
     if lead.get('status') not in ['won', 'closed_won']:
         raise HTTPException(status_code=400, detail='Only won leads can be converted to accounts')
-    
-    # Check if already converted
-    if lead.get('converted_to_account'):
-        raise HTTPException(status_code=400, detail='Lead already converted to account')
-    
+
+    # IDEMPOTENCY GUARD #1: lead already marked converted → return existing account
+    async def _existing_account_for_lead() -> Optional[dict]:
+        """Find the account previously created for this lead, by either link."""
+        existing = None
+        if lead.get('account_id'):
+            existing = await get_tdb().accounts.find_one({'account_id': lead['account_id']}, {'_id': 0})
+        if not existing and lead.get('lead_id'):
+            existing = await get_tdb().accounts.find_one({'lead_id': lead['lead_id']}, {'_id': 0})
+        if not existing:
+            existing = await get_tdb().accounts.find_one({'lead_id': data.lead_id}, {'_id': 0})
+        return existing
+
+    if lead.get('converted_to_account') or lead.get('account_id'):
+        existing = await _existing_account_for_lead()
+        if existing:
+            existing['already_existed'] = True
+            return existing
+        # Flag was set but no account found — clear and recreate (rare, self-healing)
+
     # Validate proposed SKU pricing exists
     proposed_pricing = lead.get('proposed_sku_pricing', [])
     if not proposed_pricing or len(proposed_pricing) == 0:
@@ -5668,7 +5688,26 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
                 status_code=400,
                 detail=f'SKU "{sku_name}" has an invalid price. Price must be greater than 0.'
             )
-    
+
+    # IDEMPOTENCY GUARD #2 (race protection): atomically claim the conversion.
+    # Only the first concurrent request will get matched_count == 1; all other
+    # parallel requests find an account already linked and return it.
+    claim = await get_tdb().leads.update_one(
+        {'id': data.lead_id, 'converted_to_account': {'$ne': True}},
+        {'$set': {'converted_to_account': True, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    if claim.matched_count == 0:
+        # Another request beat us to the conversion — return its account
+        # (give the writer a beat to insert the doc, then read)
+        import asyncio as _asyncio
+        for _ in range(5):
+            existing = await _existing_account_for_lead()
+            if existing:
+                existing['already_existed'] = True
+                return existing
+            await _asyncio.sleep(0.2)
+        raise HTTPException(status_code=409, detail='Lead is already being converted. Please refresh the page.')
+
     # Generate account ID
     account_name = lead.get('company') or lead.get('name', 'Unknown')
     city = lead.get('city', 'Unknown')
@@ -5712,19 +5751,23 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     doc['category'] = lead.get('category')
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
-    
-    await get_tdb().accounts.insert_one(doc)
-    
-    # Update lead to mark as converted
+
+    try:
+        await get_tdb().accounts.insert_one(doc)
+    except Exception as e:
+        # Rollback the conversion claim so the user can retry, then surface the error
+        await get_tdb().leads.update_one(
+            {'id': data.lead_id},
+            {'$set': {'converted_to_account': False}, '$unset': {'account_id': ''}}
+        )
+        raise HTTPException(status_code=500, detail=f'Failed to create account: {e}')
+
+    # Persist the account_id link on the lead now that the doc is safely inserted
     await get_tdb().leads.update_one(
         {'id': data.lead_id},
-        {'$set': {
-            'converted_to_account': True,
-            'account_id': account_id,
-            'updated_at': datetime.now(timezone.utc).isoformat()
-        }}
+        {'$set': {'account_id': account_id, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     return account
 
 @api_router.get("/accounts", response_model=PaginatedAccountsResponse)
