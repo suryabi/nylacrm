@@ -222,7 +222,8 @@ export default function SKUPerformance() {
                     <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">SKU</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Achieved</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Units Sold</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Leads</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">% of Units</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">No. of Accounts</th>
                     <th className="text-center py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Trend</th>
                   </tr>
                 </thead>
@@ -231,8 +232,9 @@ export default function SKUPerformance() {
                     <tr key={idx} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="py-4 px-5 font-medium text-slate-800 dark:text-white">{row.sku}</td>
                       <td className="py-4 px-5 text-right font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.achieved_revenue)}</td>
-                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300">{row.units_sold?.toLocaleString() || 0}</td>
-                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300">{row.leads_count || 0}</td>
+                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300 tabular-nums">{row.units_sold?.toLocaleString() || 0}</td>
+                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300 tabular-nums">{(row.units_pct ?? 0).toFixed(1)}%</td>
+                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300 tabular-nums">{row.accounts_count ?? row.leads_count ?? 0}</td>
                       <td className="py-4 px-5 text-center">
                         {row.achieved_revenue > 0 ? <TrendingUp className="h-5 w-5 text-emerald-500 mx-auto" /> : <TrendingDown className="h-5 w-5 text-red-500 mx-auto" />}
                       </td>

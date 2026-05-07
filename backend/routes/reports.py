@@ -296,17 +296,25 @@ async def get_sku_performance(
             disc = disc / 100.0  # safeguard for badly stored fractions
         return qty * rate * max(0.0, 1.0 - disc / 100.0)
 
-    # ─── Tally achieved revenue + units per SKU from invoice line items ───
+    # ─── Tally achieved revenue + units + distinct accounts per SKU from invoice line items ───
     sku_invoice_revenue = {}
     sku_invoice_units = {}
+    sku_invoice_accounts = {}  # SKU → set of account identifiers
     for inv in invoices:
         items = inv.get('items') or inv.get('line_items') or []
+        # Stable account identifier (prefer human code → uuid → name)
+        inv_acc = (inv.get('account_id') or inv.get('account_uuid')
+                   or inv.get('account_id_from_mq')
+                   or (inv.get('account_name') or '').strip().lower()
+                   or None)
         for item in items:
             name = _resolve_sku_name(item)
             if not name:
                 continue
             sku_invoice_revenue[name] = sku_invoice_revenue.get(name, 0) + _line_value(item)
             sku_invoice_units[name] = sku_invoice_units.get(name, 0) + _parse_num(item.get('quantity'))
+            if inv_acc:
+                sku_invoice_accounts.setdefault(name, set()).add(inv_acc)
     
     # Count leads per SKU
     sku_leads_count = {}
@@ -343,6 +351,7 @@ async def get_sku_performance(
 
         achieved = sku_invoice_revenue.get(sku_name, 0)
         units = sku_invoice_units.get(sku_name, 0) or target_info.get('target_units', 0)
+        accounts_count = len(sku_invoice_accounts.get(sku_name, set()))
 
         achievement_pct = int((achieved / target_revenue * 100)) if target_revenue > 0 else 0
 
@@ -351,13 +360,20 @@ async def get_sku_performance(
             'target_revenue': target_revenue,
             'achieved_revenue': round(achieved, 2),
             'units_sold': int(units),
-            'leads_count': sku_leads_count.get(sku_name, 0),
+            'units_pct': 0,  # filled in after total is known
+            'accounts_count': accounts_count,
+            'leads_count': sku_leads_count.get(sku_name, 0),  # kept for backwards compatibility
             'achievement_pct': min(achievement_pct, 200)
         })
 
         total_target += target_revenue
         total_achieved += achieved
         total_units += units
+
+    # Backfill units_pct now that we have total_units
+    if total_units > 0:
+        for row in skus_data:
+            row['units_pct'] = round((row['units_sold'] / total_units) * 100, 1)
     
     avg_achievement = int(total_achieved / total_target * 100) if total_target > 0 else 0
     
