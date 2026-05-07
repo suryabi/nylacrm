@@ -9,8 +9,40 @@ import { toast } from 'sonner';
 import {
   Sparkles, X, Send, Loader2, ThumbsUp, ThumbsDown, BookOpen, RefreshCw, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
+
+// Brand-styled markdown renderer for Nyla's assistant messages.
+// Headers and bold inline labels pick up the violet→fuchsia brand gradient.
+const NYLA_MD_COMPONENTS = {
+  h1: ({ children }) => (
+    <h1 className="text-base font-bold mt-3 mb-1.5 bg-gradient-to-r from-violet-700 to-fuchsia-600 bg-clip-text text-transparent">{children}</h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="text-sm font-bold mt-3 mb-1.5 text-violet-700 dark:text-violet-300">{children}</h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="text-sm font-semibold mt-2.5 mb-1 text-fuchsia-700 dark:text-fuchsia-300">{children}</h3>
+  ),
+  strong: ({ children }) => (
+    <strong className="font-semibold text-violet-700 dark:text-violet-300">{children}</strong>
+  ),
+  ul: ({ children }) => <ul className="list-disc pl-5 space-y-1 my-1.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1 my-1.5">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  p: ({ children }) => <p className="my-1.5 leading-relaxed">{children}</p>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-violet-700 dark:text-violet-300 underline underline-offset-2 hover:text-fuchsia-600">{children}</a>
+  ),
+  code: ({ inline, children }) => inline
+    ? <code className="px-1 py-0.5 rounded bg-violet-50 dark:bg-violet-900/40 text-violet-800 dark:text-violet-200 text-[12px] font-mono">{children}</code>
+    : <code className="block px-2 py-1.5 rounded bg-slate-100 dark:bg-slate-900 text-[12px] font-mono whitespace-pre-wrap">{children}</code>,
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-violet-300 pl-3 italic text-slate-600 dark:text-slate-300 my-1.5">{children}</blockquote>
+  ),
+};
 
 const NYLA_GREETING = `Hi! I'm Nyla, your AI sales assistant. Ask me anything about our products, pricing, processes, or playbooks — I'll answer using our company's knowledge base with citations.`;
 
@@ -180,14 +212,22 @@ export default function AskNyla() {
 
           {messages.map((m, idx) => (
             <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap ${
+              <div className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-sm ${
                 m.role === 'user'
-                  ? 'bg-violet-600 text-white rounded-tr-sm'
+                  ? 'bg-violet-600 text-white rounded-tr-sm whitespace-pre-wrap'
                   : m.error
-                    ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 rounded-tl-sm'
+                    ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 rounded-tl-sm whitespace-pre-wrap'
                     : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-tl-sm shadow-sm'
               }`}>
-                <div className="leading-relaxed">{m.content}</div>
+                {m.role === 'assistant' && !m.error ? (
+                  <div className="leading-relaxed nyla-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={NYLA_MD_COMPONENTS}>
+                      {m.content || ''}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="leading-relaxed">{m.content}</div>
+                )}
                 {m.role === 'assistant' && m.citations && m.citations.length > 0 && (
                   <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 space-y-1">
                     <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">

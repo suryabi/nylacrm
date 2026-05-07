@@ -299,15 +299,78 @@ async def delete_document(doc_id: str, current_user: dict = Depends(get_current_
 # ════════════════════════════════════════════════════════════════════
 # Ask Nyla — chat endpoint
 # ════════════════════════════════════════════════════════════════════
-ASK_NYLA_SYSTEM_PROMPT = """You are Nyla, a helpful AI sales assistant for the team. You answer questions strictly based on the company's knowledge base documents provided in the user's first message.
+ASK_NYLA_SYSTEM_PROMPT = """You are Nyla, a warm, concise AI sales assistant for the team. You answer questions strictly based on the company's knowledge base documents provided in the user's first message.
 
 RULES:
 1. Always cite the source document title in your answer using the format [Doc N] where N is the document number provided.
 2. If the answer is NOT in the provided documents, say "I couldn't find this in our knowledge base. You may want to check with a senior team member or update the knowledge base." — DO NOT make up information.
-3. Be concise, conversational, and sales-rep friendly. Use bullet points for lists. Bold key numbers.
+3. Be concise, conversational, and sales-rep friendly.
 4. When pricing or specifications are involved, quote them exactly as they appear in the source.
 5. If the user asks a follow-up question, use prior context but stay grounded in the documents.
+
+FORMATTING (very important — the UI renders Markdown):
+- Use `## ` for section headers and `### ` for sub-section headers (these will appear bold + brand-coloured in the UI).
+- Use `- ` for bullet lists; use `**bold**` only for the *key term* at the start of a bullet (e.g. `**Air-Sourced Water**: ...`).
+- Keep paragraphs short (2-3 sentences max). Don't wrap entire bullets in bold.
+- Inline citations like `[Doc 2]` go at the end of the relevant fact, never inside bold text.
 """
+
+
+# Small-talk patterns — answered without hitting the RAG pipeline so we don't
+# waste tokens or surface random doc snippets when the user just says "hi".
+_SMALLTALK_PATTERNS = (
+    r"^\s*(hi|hii+|hey+|hello+|yo|hola|namaste|namaskar)\b[\s!.,?]*$",
+    r"^\s*(good\s+)?(morning|afternoon|evening|day|night)[\s!.,?]*$",
+    r"^\s*how\s+are\s+(you|u|ya)(\s+doing)?[\s?!.,]*$",
+    r"^\s*(what's\s+up|whats\s+up|sup|wassup|wsp)[\s?!.,]*$",
+    r"^\s*(thanks|thank\s+you|thx|ty|thankyou)[\s?!.,]*$",
+    r"^\s*(bye|goodbye|see\s+you|cya)[\s?!.,]*$",
+    r"^\s*(who\s+are\s+you|what\s+can\s+you\s+do|help|what\s+do\s+you\s+do)[\s?!.,]*$",
+    r"^\s*(ok|okay|cool|nice|great|awesome|got\s+it)[\s?!.,]*$",
+)
+
+
+def _smalltalk_reply(question: str, user_name: str | None = None) -> str | None:
+    """Return a canned, friendly reply for greetings/small-talk. None if not smalltalk."""
+    import re
+    q = (question or "").lower().strip()
+    if not q or len(q) > 60:
+        return None
+    name_part = f", {user_name.split()[0]}" if user_name else ""
+    for pat in _SMALLTALK_PATTERNS:
+        if re.match(pat, q):
+            if "how are you" in q or "how r u" in q:
+                return (
+                    f"Doing great, thanks for asking{name_part}! 👋\n\n"
+                    "I'm ready to help with anything from our knowledge base — pricing, product specs, "
+                    "objection handling, sustainability talking points, you name it.\n\n"
+                    "What would you like to know?"
+                )
+            if any(w in q for w in ("thanks", "thank you", "thx", "ty")):
+                return "You're welcome! Happy to help — ask me anything else whenever you need."
+            if any(w in q for w in ("bye", "goodbye", "see you", "cya")):
+                return "Catch you later! 👋 I'll be right here when you need me."
+            if "what's up" in q or "whats up" in q or "sup" in q or "wassup" in q or "wsp" in q:
+                return f"Hey{name_part}! 👋 Ready to dig into our knowledge base — what would you like to ask?"
+            if "who are you" in q or "what can you do" in q or q in ("help",) or "what do you do" in q:
+                return (
+                    "## I'm Nyla 👋\n\n"
+                    "Your AI sales assistant, grounded in this company's knowledge base. I can help with:\n\n"
+                    "- **Product details** — specs, SKUs, pricing\n"
+                    "- **Sales playbooks** — objection handling, talking points\n"
+                    "- **Sustainability story** — air-water sourcing, eco operations\n"
+                    "- **Process & policy** — warranties, returns, escalation paths\n\n"
+                    "Every answer comes with [Doc N] citations so you can verify the source. What would you like to know?"
+                )
+            if any(w in q for w in ("ok", "okay", "cool", "nice", "great", "awesome", "got it")):
+                return "👍 Let me know if there's anything else you'd like to explore."
+            # Default greeting (hi / hello / good morning / etc.)
+            return (
+                f"Hi{name_part}! 👋 I'm Nyla, your AI sales assistant.\n\n"
+                "Ask me anything about our products, pricing, processes, or sustainability story — "
+                "I'll answer using our knowledge base with citations."
+            )
+    return None
 
 
 def _build_context(docs: List[dict]) -> tuple[str, List[dict]]:
@@ -340,6 +403,32 @@ async def ask_nyla(payload: AskPayload, current_user: dict = Depends(get_current
     if not question:
         raise HTTPException(status_code=400, detail="Question is empty")
 
+    session_id = payload.session_id or str(uuid.uuid4())
+
+    # Fast-path: greetings / small-talk — answer without RAG so we don't
+    # surface random doc snippets to "hi" or "how are you".
+    canned = _smalltalk_reply(question, current_user.get("name"))
+    if canned is not None:
+        msg_id = str(uuid.uuid4())
+        await db.kb_messages.insert_one({
+            "id": msg_id,
+            "tenant_id": tenant_id,
+            "user_id": current_user.get("id"),
+            "user_name": current_user.get("name"),
+            "session_id": session_id,
+            "question": question,
+            "response": canned,
+            "citation_count": 0,
+            "smalltalk": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        return {
+            "id": msg_id,
+            "session_id": session_id,
+            "answer": canned,
+            "citations": [],
+        }
+
     # Pull all documents for this tenant
     docs = await db.kb_documents.find(
         {"tenant_id": tenant_id},
@@ -364,8 +453,6 @@ async def ask_nyla(payload: AskPayload, current_user: dict = Depends(get_current
         "Answer concisely using only the knowledge base above. Cite source documents inline as [Doc N].",
     ]
     user_prompt = "\n".join(user_prompt_parts)
-
-    session_id = payload.session_id or str(uuid.uuid4())
 
     # Call LLM via emergentintegrations
     api_key = os.environ.get("EMERGENT_LLM_KEY")

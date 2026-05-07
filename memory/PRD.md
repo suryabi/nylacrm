@@ -5,6 +5,21 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Ask Nyla — Markdown formatting + Smalltalk fast-path (2026-02-07)
+- [x] User reported: "responses from Ask Nyla AI assistant are not formatted properly. Make the section headers/sub-titles bold and brand-coloured. The assistant should also respond properly to generic messages like 'Hi', 'How are you doing' without sending random responses."
+- [x] **Backend** `/app/backend/routes/knowledge_base.py`:
+  - System prompt updated with explicit Markdown formatting rules: use `## ` / `### ` for headers, only **bold the key term at the start of a bullet** (not whole sentences), keep paragraphs short, citations `[Doc N]` go at the end of facts and never inside bold text.
+  - Added `_smalltalk_reply(question, user_name)` with regex patterns covering greetings (hi/hello/hey/hola/namaste/good morning), wellbeing checks (how are you/doing), thanks, goodbyes, identity questions (who are you/what can you do/help), and acknowledgements (ok/cool/got it). Returns canned, friendly Markdown replies (some include 👋 emoji) — no LLM call, no RAG, no random doc snippets.
+  - `POST /api/kb/ask`: smalltalk check now runs **before** the RAG pipeline. Smalltalk responses are still persisted with `smalltalk: True` flag and zero citations.
+- [x] **Frontend** `/app/frontend/src/components/widgets/AskNyla.jsx`:
+  - Added `react-markdown` + `remark-gfm` dependencies.
+  - Defined `NYLA_MD_COMPONENTS` styled to brand: `<h1>` violet→fuchsia gradient, `<h2>` violet, `<h3>` fuchsia, `<strong>` violet bold, lists/blockquote/code styled in brand palette, links open in new tab.
+  - Assistant messages (when not error) now render through `<ReactMarkdown remarkPlugins={[remarkGfm]} components={NYLA_MD_COMPONENTS} />`. User messages and error bubbles still use `whitespace-pre-wrap`.
+- [x] **Verification**:
+  - Curl tests: `hi` / `Hi!` / `How are you doing?` / `thanks` / `who are you` → 0 citations, friendly canned response. `what is air-sourced water` → 3 citations, real KB markdown answer.
+  - Live screenshot: smalltalk shows clean bubble; KB query renders with violet `Sustainability at Nyla` `<h2>`, violet bold bullet labels (Air-Sourced Water, Zero Water Waste Production, etc.), `[Doc N]` citations rendered as plain text inline, Sources strip at the bottom. No raw `##` or `**` characters visible. Lint clean (Python + JS).
+
+
 ### COGS — Excluded `outbound_logistics_cost` from total COGS (2026-02-07)
 - [x] User asked: "COGS should not consider outbound logistics cost."
 - [x] **Backend** `/app/backend/server.py` — both COGS calculation paths updated:
