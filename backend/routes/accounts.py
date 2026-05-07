@@ -277,11 +277,14 @@ async def get_accounts_stats(
     
     total = await tdb.accounts.count_documents(query)
     
-    # Count by type
-    tier1 = await tdb.accounts.count_documents({**query, 'account_type': 'Tier 1'})
-    tier2 = await tdb.accounts.count_documents({**query, 'account_type': 'Tier 2'})
-    tier3 = await tdb.accounts.count_documents({**query, 'account_type': 'Tier 3'})
-    
+    # Count by lead_type (B2B / Retail / Individual)
+    b2b = await tdb.accounts.count_documents({**query, 'lead_type': 'B2B'})
+    retail = await tdb.accounts.count_documents({**query, 'lead_type': 'Retail'})
+    individual = await tdb.accounts.count_documents({**query, 'lead_type': 'Individual'})
+    # Accounts without lead_type default to B2B (matches frontend display fallback)
+    b2b_no_type = await tdb.accounts.count_documents({**query, 'lead_type': {'$in': [None, '']}})
+    b2b_total = b2b + b2b_no_type
+
     # Top categories - aggregate with tenant filter
     pipeline = [
         {'$group': {'_id': '$category', 'count': {'$sum': 1}}},
@@ -289,10 +292,15 @@ async def get_accounts_stats(
         {'$limit': 5}
     ]
     categories = await tdb.accounts.aggregate(pipeline).to_list(5)
-    
+
     return {
         'total': total,
-        'by_type': {'tier1': tier1, 'tier2': tier2, 'tier3': tier3},
+        'total_accounts': total,
+        'by_lead_type': {
+            'B2B': b2b_total,
+            'Retail': retail,
+            'Individual': individual,
+        },
         'top_categories': categories
     }
 

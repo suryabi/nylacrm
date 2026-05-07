@@ -5836,13 +5836,16 @@ async def get_accounts_stats(
     # Total accounts
     total_accounts = await get_tdb().accounts.count_documents(query)
     
-    # Accounts by type
-    type_pipeline = [
+    # Accounts by lead_type (B2B / Retail / Individual)
+    lead_type_pipeline = [
         {'$match': query},
-        {'$group': {'_id': '$account_type', 'count': {'$sum': 1}}}
+        {'$group': {'_id': '$lead_type', 'count': {'$sum': 1}}}
     ]
-    type_results = await get_tdb().accounts.aggregate(type_pipeline).to_list(10)
-    by_type = {r['_id'] or 'Unassigned': r['count'] for r in type_results}
+    lt_results = await get_tdb().accounts.aggregate(lead_type_pipeline).to_list(10)
+    by_lead_type = {'B2B': 0, 'Retail': 0, 'Individual': 0}
+    for r in lt_results:
+        key = r['_id'] or 'B2B'  # default unset → B2B (matches frontend display)
+        by_lead_type[key] = by_lead_type.get(key, 0) + r['count']
     
     # Accounts by category (directly from accounts collection)
     category_pipeline = [
@@ -5867,7 +5870,7 @@ async def get_accounts_stats(
     
     return {
         'total_accounts': total_accounts,
-        'by_type': by_type,
+        'by_lead_type': by_lead_type,
         'by_category': by_category
     }
 

@@ -325,6 +325,7 @@ export default function AddEditLead() {
                 <SelectContent>
                   <SelectItem value="B2B">B2B</SelectItem>
                   <SelectItem value="Retail">Retail</SelectItem>
+                  <SelectItem value="Individual">Individual</SelectItem>
                 </SelectContent>
               </Select>
             </div>

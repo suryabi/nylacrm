@@ -62,6 +62,7 @@ export default function AccountsList() {
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
+  const [accountTypeFilter, setAccountTypeFilter] = useState('all');
   
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -123,12 +124,13 @@ export default function AccountsList() {
       if (territoryFilter !== 'all') params.append('territory', territoryFilter);
       if (stateFilter !== 'all') params.append('state', stateFilter);
       if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (accountTypeFilter !== 'all') params.append('lead_type', accountTypeFilter);
       
       const response = await axios.get(`${API_URL}/accounts?${params}`, { headers: { Authorization: `Bearer ${token}` }, withCredentials: true });
       setAccounts(response.data.data || []); setTotalCount(response.data.total || 0); setTotalPages(response.data.total_pages || 1);
     } catch { toast.error('Failed to load accounts'); setAccounts([]); }
     finally { setLoading(false); }
-  }, [currentPage, searchTerm, territoryFilter, stateFilter, cityFilter]);
+  }, [currentPage, searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -145,7 +147,7 @@ export default function AccountsList() {
   useEffect(() => { const t = setTimeout(() => fetchAccounts(), 300); return () => clearTimeout(t); }, [fetchAccounts]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
-  const handleResetFilters = () => { setTerritoryFilter('all'); setStateFilter('all'); setCityFilter('all'); setSearchTerm(''); setCurrentPage(1); };
+  const handleResetFilters = () => { setTerritoryFilter('all'); setStateFilter('all'); setCityFilter('all'); setAccountTypeFilter('all'); setSearchTerm(''); setCurrentPage(1); };
 
   const allTerritoryNames = masterTerritories.map(t => t.name);
   const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'National Sales Head'].includes(user?.role) ? ['All Territories', ...allTerritoryNames] : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
@@ -154,9 +156,9 @@ export default function AccountsList() {
 
   const statCards = [
     { label: 'Total', value: stats.total_accounts || 0, sub: 'accounts', icon: Building2, colorIndex: 0 /* indigo */ },
-    { label: 'Tier 1', value: stats.by_type?.['Tier 1'] || 0, sub: 'premium', icon: Award, colorIndex: 1 /* emerald */ },
-    { label: 'Tier 2', value: stats.by_type?.['Tier 2'] || 0, sub: 'standard', icon: Layers, colorIndex: 3 /* sky */ },
-    { label: 'Tier 3', value: stats.by_type?.['Tier 3'] || 0, sub: 'basic', icon: Package, colorIndex: 5 /* violet */ },
+    { label: 'B2B', value: stats.by_lead_type?.['B2B'] || 0, sub: 'business', icon: Layers, colorIndex: 3 /* sky */ },
+    { label: 'Retail', value: stats.by_lead_type?.['Retail'] || 0, sub: 'retail', icon: Package, colorIndex: 5 /* violet */ },
+    { label: 'Individual', value: stats.by_lead_type?.['Individual'] || 0, sub: 'individual', icon: User, colorIndex: 1 /* emerald */ },
   ];
 
   return (
@@ -187,7 +189,8 @@ export default function AccountsList() {
             searchTerm, 
             territoryFilter !== 'all', 
             stateFilter !== 'all', 
-            cityFilter !== 'all'
+            cityFilter !== 'all', 
+            accountTypeFilter !== 'all'
           ].filter(Boolean).length}
           onReset={handleResetFilters}
           className="mb-6"
@@ -241,6 +244,20 @@ export default function AccountsList() {
                   {availableCities.map(c => (
                     <SelectItem key={c} value={c === 'All Cities' ? 'all' : c} className="rounded-lg">{c}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+            
+            <FilterItem label="Lead Type" icon={Layers}>
+              <Select value={accountTypeFilter} onValueChange={(v) => { setAccountTypeFilter(v); setCurrentPage(1); }}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="account-lead-type-filter">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="all" className="rounded-lg">All</SelectItem>
+                  <SelectItem value="B2B" className="rounded-lg">B2B</SelectItem>
+                  <SelectItem value="Retail" className="rounded-lg">Retail</SelectItem>
+                  <SelectItem value="Individual" className="rounded-lg">Individual</SelectItem>
                 </SelectContent>
               </Select>
             </FilterItem>
@@ -317,7 +334,7 @@ export default function AccountsList() {
               <div ref={logoGridRef} className="flex flex-wrap gap-3 p-3 bg-white dark:bg-slate-900">
                 {accounts.map((account, idx) => (
                   <div key={account.id || idx} onClick={() => {
-                    saveFilters({ searchTerm, territoryFilter, stateFilter, cityFilter });
+                    saveFilters({ searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter });
                     navigateTo(`/accounts/${account.account_id}`, { label: account.account_name || 'Account Details' });
                   }} className="group cursor-pointer">
                     <div className="relative rounded-lg overflow-hidden bg-white border border-gray-200 hover:border-primary/50 transition-all duration-200 hover:shadow-lg" style={{ width: '132px', height: '132px' }}>
@@ -344,6 +361,7 @@ export default function AccountsList() {
                   <thead>
                     <tr className="border-b-2 border-amber-100 dark:border-amber-900/30 bg-gradient-to-r from-amber-50/80 to-orange-50/50 dark:from-amber-900/20 dark:to-orange-900/10">
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Lead Type</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Contact</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Location</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account Age</th>
@@ -360,7 +378,7 @@ export default function AccountsList() {
                         key={account.id || idx} 
                         className="group hover:bg-gradient-to-r hover:from-amber-50/50 hover:to-orange-50/30 dark:hover:from-amber-900/10 dark:hover:to-orange-900/5 transition-all duration-200 cursor-pointer" 
                         onClick={() => {
-                          saveFilters({ searchTerm, territoryFilter, stateFilter, cityFilter });
+                          saveFilters({ searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter });
                           navigateTo(`/accounts/${account.account_id}`, { label: account.account_name || 'Account Details' });
                         }} 
                         data-testid={`account-row-${account.account_id}`}
@@ -376,6 +394,25 @@ export default function AccountsList() {
                               {account.category && <Badge variant="outline" className="mt-1.5 text-xs border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">{account.category}</Badge>}
                             </div>
                           </div>
+                        </td>
+                        <td className="py-5 px-5">
+                          {(() => {
+                            const lt = account.lead_type || 'B2B';
+                            const colorMap = {
+                              'B2B': 'bg-sky-50 text-sky-700 border-sky-300',
+                              'Retail': 'bg-violet-50 text-violet-700 border-violet-300',
+                              'Individual': 'bg-emerald-50 text-emerald-700 border-emerald-300',
+                            };
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`font-medium px-3 py-1 ${colorMap[lt] || colorMap['B2B']}`}
+                                data-testid={`account-row-lead-type-${account.account_id}`}
+                              >
+                                {lt}
+                              </Badge>
+                            );
+                          })()}
                         </td>
                         <td className="py-5 px-5">
                           <div className="space-y-1">
