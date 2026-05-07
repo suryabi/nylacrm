@@ -228,10 +228,11 @@ export default function AccountDetail() {
   const [invoiceLineItems, setInvoiceLineItems] = useState([{ sku_name: '', bottles: 0, price_per_bottle: 0 }]);
   const [invoiceNotes, setInvoiceNotes] = useState('');
   
-  // Invoice pagination and filter state
+  // Invoice list state — fixed at 5 latest items; default time period = This Month.
+  // Account metrics inside the section are computed across the full filtered set on the backend.
   const [invoicePage, setInvoicePage] = useState(1);
-  const [invoiceLimit, setInvoiceLimit] = useState(5);
-  const [invoiceTimeFilter, setInvoiceTimeFilter] = useState('lifetime');
+  const invoiceLimit = 5;
+  const [invoiceTimeFilter, setInvoiceTimeFilter] = useState('this_month');
   const [invoiceTotalPages, setInvoiceTotalPages] = useState(0);
   const [invoiceTotalCount, setInvoiceTotalCount] = useState(0);
 
@@ -1229,7 +1230,7 @@ ${googleMapsLink}`;
               </div>
             ) : invoiceData && invoiceData.invoices?.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
                   <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                     <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
                     <p className="text-lg font-bold text-green-700 tabular-nums">₹{((invoiceData.total_amount || 0) / 100000).toFixed(2)}L</p>
@@ -1246,58 +1247,56 @@ ${googleMapsLink}`;
                     <p className="text-xs text-rose-600 font-medium mb-1">OUTSTANDING</p>
                     <p className={`text-lg font-bold tabular-nums ${(invoiceData.outstanding || 0) > 0 ? 'text-rose-700' : 'text-slate-500'}`}>₹{((invoiceData.outstanding || 0) / 100000).toFixed(2)}L</p>
                   </div>
+                  {(() => {
+                    const s = invoiceData.summary || {};
+                    const pct = Number(s.return_pct || 0);
+                    const delivered = s.bottles_delivered ?? 0;
+                    const returned = s.bottles_returned ?? 0;
+                    const tone = pct >= 10
+                      ? 'bg-rose-50 border-rose-100 text-rose-700'
+                      : pct >= 5
+                        ? 'bg-amber-50 border-amber-100 text-amber-700'
+                        : 'bg-emerald-50 border-emerald-100 text-emerald-700';
+                    return (
+                      <div className={`rounded-lg p-4 border ${tone}`} data-testid="account-return-pct-tile">
+                        <p className="text-xs font-medium mb-1 opacity-80">RETURN BOTTLES %</p>
+                        <p className="text-lg font-bold tabular-nums">{pct.toFixed(2)}%</p>
+                        <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">{returned.toLocaleString()} / {delivered.toLocaleString()} bottles</p>
+                      </div>
+                    );
+                  })()}
                 </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 italic" data-testid="invoice-summary-note">
+                  Showing the latest 5 invoices for this period. Metrics above include all invoices in the selected time window.
+                </p>
                 <div className="space-y-3">
-                  {invoiceData.invoices.map((inv, idx) => (
+                  {invoiceData.invoices.slice(0, 5).map((inv, idx) => (
                     <InvoiceCard key={idx} invoice={inv} />
                   ))}
                 </div>
-                
-                {/* Pagination Controls */}
-                {invoiceTotalPages > 0 && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>Show</span>
-                      <Select value={invoiceLimit.toString()} onValueChange={(val) => { setInvoiceLimit(parseInt(val)); setInvoicePage(1); }}>
-                        <SelectTrigger className="w-[70px] h-8" data-testid="invoice-page-size">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="5">5</SelectItem>
-                          <SelectItem value="10">10</SelectItem>
-                          <SelectItem value="15">15</SelectItem>
-                          <SelectItem value="20">20</SelectItem>
-                          <SelectItem value="25">25</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <span>per page</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">
-                        Page {invoicePage} of {invoiceTotalPages}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setInvoicePage(prev => Math.max(1, prev - 1))}
-                        disabled={invoicePage <= 1}
-                        data-testid="invoice-prev-page"
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setInvoicePage(prev => Math.min(invoiceTotalPages, prev + 1))}
-                        disabled={invoicePage >= invoiceTotalPages}
-                        data-testid="invoice-next-page"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+
+                {/* "View all" deep-link to the Invoices List filtered by this account */}
+                <div className="flex items-center justify-between gap-3 mt-5 pt-4 border-t">
+                  <p className="text-xs text-slate-500" data-testid="invoice-summary-count-note">
+                    {invoiceTotalCount > 5
+                      ? `Showing 5 of ${invoiceTotalCount} invoices in this period`
+                      : `Showing ${invoiceTotalCount} of ${invoiceTotalCount} invoices in this period`}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      if (account?.account_name) params.append('account_name', account.account_name);
+                      params.append('time_filter', invoiceTimeFilter);
+                      navigateTo(`/invoices?${params.toString()}`, { label: 'Invoices' });
+                    }}
+                    data-testid="view-all-invoices-btn"
+                  >
+                    View all invoices
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
               </>
             ) : (
               <div className="text-center py-8">

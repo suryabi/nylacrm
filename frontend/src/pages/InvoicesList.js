@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -64,6 +65,8 @@ const STATUS_OPTIONS = [
 export default function InvoicesList() {
   const { navigateTo } = useNavigation();
   const { user } = useAuth();
+  const location = useLocation();
+  const initialQS = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ total_gross: 0, total_net: 0, total_credit: 0, total_outstanding: 0 });
@@ -93,16 +96,24 @@ export default function InvoicesList() {
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState('table');
   
-  // Filters
+  // Filters — prefill from URL query string when coming from Account detail "View all" deep-link
   const [searchQuery, setSearchQuery] = useState('');
   const [territory, setTerritory] = useState('all');
   const [state, setState] = useState('all');
   const [city, setCity] = useState('all');
-  const [accountName, setAccountName] = useState('');
+  const [accountName, setAccountName] = useState(initialQS.get('account_name') || '');
   const [status, setStatus] = useState('all');
-  const [timeFilter, setTimeFilter] = useState('lifetime');
+  const [timeFilter, setTimeFilter] = useState(initialQS.get('time_filter') || 'lifetime');
   const [sortBy, setSortBy] = useState('invoice_date');
   const [sortOrder, setSortOrder] = useState('desc');
+  
+  // Open the filters panel automatically if a deep-linked filter was applied
+  useEffect(() => {
+    if (initialQS.get('account_name') || initialQS.get('time_filter')) {
+      setShowFilters(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   // Master locations for filters
   const { 

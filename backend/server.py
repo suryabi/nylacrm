@@ -6249,14 +6249,64 @@ async def get_account_invoices(
     invoices = await get_tdb().invoices.find(query, {'_id': 0}).sort('invoice_date', -1).skip(skip).limit(limit).to_list(limit)
     logger.info(f"[INVOICE_FETCH] Found {len(invoices)} invoices for account: {account_id} (page {page}/{total_pages}, total {total_count})")
     
-    # Get ALL invoices for totals calculation (without pagination)
-    all_invoices = await get_tdb().invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1, 'grand_total': 1, 'total_amount': 1, 'paid_amount': 1}).to_list(10000)
+    # Get ALL invoices for totals + bottle metrics (without pagination)
+    all_invoices = await get_tdb().invoices.find(
+        query,
+        {'_id': 0, 'gross_invoice_value': 1, 'net_invoice_value': 1, 'credit_note_value': 1,
+         'outstanding': 1, 'grand_total': 1, 'total_amount': 1, 'paid_amount': 1, 'items': 1, 'line_items': 1}
+    ).to_list(10000)
     
     # Calculate totals - support both old and new field names
     total_amount = sum(inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))) or 0 for inv in all_invoices)
     net_amount = sum(inv.get('net_invoice_value', inv.get('paid_amount', 0)) or 0 for inv in all_invoices)
     credit_amount = sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices)
     outstanding = sum(inv.get('outstanding', 0) or 0 for inv in all_invoices)
+
+    # Bottles delivered across the time window
+    bottles_delivered = 0
+    for inv in all_invoices:
+        for it in (inv.get('items') or inv.get('line_items') or []):
+            try:
+                bottles_delivered += float(it.get('quantity') or it.get('bottles') or 0)
+            except (TypeError, ValueError):
+                pass
+
+    # Bottles returned via customer_returns for this account in the same window.
+    # customer_returns store account_id either as the UUID or the human account_id;
+    # query both to cover legacy records.
+    return_query: dict = {}
+    return_or = []
+    if account_uuid:
+        return_or.append({'account_id': account_uuid})
+    if acc_id and acc_id != account_uuid:
+        return_or.append({'account_id': acc_id})
+    if return_or:
+        return_query['$or'] = return_or
+    if time_filter and time_filter != 'lifetime':
+        from datetime import timedelta as _td
+        _now = datetime.now(timezone.utc)
+        _ranges = {
+            'this_week': (_now - _td(days=_now.weekday()), _now),
+            'last_week': (_now - _td(days=_now.weekday() + 7), _now - _td(days=_now.weekday())),
+            'this_month': (_now.replace(day=1), _now),
+            'last_month': ((_now.replace(day=1) - _td(days=1)).replace(day=1), _now.replace(day=1) - _td(days=1)),
+            'last_3_months': (_now - _td(days=90), _now),
+            'last_6_months': (_now - _td(days=180), _now),
+            'this_quarter': (_now.replace(month=((_now.month - 1) // 3) * 3 + 1, day=1), _now),
+        }
+        if time_filter in _ranges:
+            _start, _end = _ranges[time_filter]
+            return_query['return_date'] = {'$gte': _start.strftime('%Y-%m-%d'), '$lte': _end.strftime('%Y-%m-%d')}
+    cust_returns = await get_tdb().customer_returns.find(return_query, {'_id': 0, 'items': 1}).to_list(2000)
+    bottles_returned = 0
+    for r in cust_returns:
+        for it in (r.get('items') or []):
+            try:
+                bottles_returned += float(it.get('quantity') or 0)
+            except (TypeError, ValueError):
+                pass
+
+    return_pct = round((bottles_returned / bottles_delivered) * 100, 2) if bottles_delivered > 0 else 0.0
     
     # Transform invoices to consistent format for frontend
     formatted_invoices = []
@@ -6289,7 +6339,18 @@ async def get_account_invoices(
         'total': total_count,
         'page': page,
         'limit': limit,
-        'pages': total_pages
+        'pages': total_pages,
+        'time_filter': time_filter,
+        'summary': {
+            'total_gross': round(total_amount, 2),
+            'total_net': round(net_amount, 2),
+            'total_credit': round(credit_amount, 2),
+            'total_outstanding': round(outstanding, 2),
+            'invoice_count': total_count,
+            'bottles_delivered': int(bottles_delivered),
+            'bottles_returned': int(bottles_returned),
+            'return_pct': return_pct,
+        },
     }
 
 class InvoiceLineItemCreate(BaseModel):

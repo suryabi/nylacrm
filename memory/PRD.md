@@ -5,6 +5,29 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Account Detail — Invoice Summary section overhaul (2026-02-07)
+- [x] User asked: "show invoice summary as a second section, only last 5 invoices, with View all → invoices list filtered by account; metrics still honor the time period; default time = This Month; add Return Bottle %."
+- [x] **Backend** `GET /api/accounts/{id}/invoices` (active impl in `/app/backend/server.py` ~line 6174 — duplicate stub in `routes/accounts.py` left untouched):
+  - Pagination still returns only `limit` (default 5) invoices, but financial **summary is now computed across ALL invoices in the time window**, not just the page.
+  - Added `bottles_delivered` (sum of `quantity`/`bottles` across line items) and `bottles_returned` (sum of `quantity` from `customer_returns` for this account in the same window) + `return_pct` = round(returned/delivered × 100, 2).
+  - Customer-returns lookup tries both UUID and human `account_id` (legacy data uses both shapes).
+  - Response now includes both legacy keys (`total_amount`, `credit_amount`, `net_amount`, `outstanding`) AND a structured `summary{ total_gross, total_net, total_credit, total_outstanding, invoice_count, bottles_delivered, bottles_returned, return_pct }`.
+- [x] **Frontend AccountDetail** (`/app/frontend/src/pages/AccountDetail.js`):
+  - Default `invoiceTimeFilter` changed `lifetime` → `this_month`.
+  - `invoiceLimit` locked to 5 (no more page-size selector).
+  - Metric tiles row expanded from 4 → 5 cols, adding **RETURN BOTTLES %** with `N / M bottles` subtitle and color-coded tone (green ≤5%, amber 5-10%, rose >10%). data-testid `account-return-pct-tile`.
+  - Italic note below tiles: *"Showing the latest 5 invoices for this period. Metrics above include all invoices in the selected time window."*
+  - Replaced pagination footer with a single-row footer: count message ("Showing 5 of N invoices in this period") + outline button **View all invoices →** that deep-links to `/invoices?account_name={name}&time_filter={filter}`. data-testid `view-all-invoices-btn`.
+- [x] **Frontend InvoicesList** (`/app/frontend/src/pages/InvoicesList.js`):
+  - Added `useLocation` + `URLSearchParams` to prefill `accountName` and `timeFilter` state from URL query string on mount.
+  - Auto-expands the Filters panel when a deep-linked query param is present so the user can see what's filtered.
+- [x] **Verification**:
+  - Curl `/api/accounts/{uuid}/invoices?time_filter=lifetime` for Patni Plaza → 3 invoices, summary `delivered=588, returned=166, return_pct=28.23%`. `this_month` → 0/0 (correct — no Mar/Apr-month invoices for this account in current pod data; today is May 7, 2026).
+  - Live AccountDetail screenshot: 5-tile row with rose `28.23%` (166/588 bottles) tile, 5 invoices shown, italic note, "View all invoices" button.
+  - Click View all → URL `/invoices?account_name=Patni+Plaza&time_filter=lifetime`, only 3 Patni Plaza rows shown, Filters panel auto-opened with the chip pre-filled, breadcrumb "Patni Plaza > Invoices".
+  - Lint clean (Python + JS).
+
+
 ### Ask Nyla — Markdown formatting + Smalltalk fast-path (2026-02-07)
 - [x] User reported: "responses from Ask Nyla AI assistant are not formatted properly. Make the section headers/sub-titles bold and brand-coloured. The assistant should also respond properly to generic messages like 'Hi', 'How are you doing' without sending random responses."
 - [x] **Backend** `/app/backend/routes/knowledge_base.py`:
