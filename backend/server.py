@@ -2266,18 +2266,20 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
         data['master_sku_id'] = master_id_by_sku.get(sku_name)
         # Recompute total_cogs / derived fields based on overlaid values
         try:
+            # COGS = master-managed components only (primary/secondary/manufacturing + custom).
+            # Outbound logistics is NOT part of COGS — it's added post-margin into landing price.
             total_cogs = 0.0
             for k in master_managed_keys:
                 if k in {'primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost'}:
                     total_cogs += float(data.get(k) or 0)
                 else:
                     total_cogs += float((data.get('custom_components') or {}).get(k) or 0)
-            # System columns always-on
-            total_cogs += float(data.get('outbound_logistics_cost') or 0)
             margin_pct = float(data.get('gross_margin') or 0)
             dist_pct = float(data.get('distribution_cost') or 0)
+            outbound_logistics = float(data.get('outbound_logistics_cost') or 0)
             gross_margin_rupees = total_cogs * (margin_pct / 100)
-            base_cost = total_cogs + gross_margin_rupees
+            # Logistics is added after margin (it's a passthrough, not a cost-of-goods)
+            base_cost = total_cogs + gross_margin_rupees + outbound_logistics
             if dist_pct >= 100:
                 landing = 0
             elif dist_pct > 0:
@@ -2390,7 +2392,8 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
                     return True
                 return active_keys.get(key) == unit
 
-            # Total COGS = sum of all active ₹ components (legacy + custom)
+            # Total COGS = sum of all active ₹ master-managed components (legacy + custom).
+            # Outbound logistics is NOT part of COGS — added post-margin into landing price below.
             total_cogs = 0.0
             if _on('primary_packaging_cost', 'rupee'):
                 total_cogs += float(primary or 0)
@@ -2398,8 +2401,6 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
                 total_cogs += float(secondary or 0)
             if _on('manufacturing_variable_cost', 'rupee'):
                 total_cogs += float(manufacturing or 0)
-            if _on('outbound_logistics_cost', 'rupee'):
-                total_cogs += float(logistics or 0)
             for k, v in cc.items():
                 if active_keys.get(k) == 'rupee':
                     try:
@@ -2410,7 +2411,9 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
             eff_margin = float(margin or 0) if _on('gross_margin', 'percent') else 0.0
             gross_margin_rupees = total_cogs * (eff_margin / 100)
             ex_factory = total_cogs + gross_margin_rupees
-            base_cost = total_cogs + gross_margin_rupees
+            # Logistics is a passthrough cost added on top of COGS+margin (not part of COGS)
+            outbound_logistics = float(logistics or 0) if _on('outbound_logistics_cost', 'rupee') else 0.0
+            base_cost = total_cogs + gross_margin_rupees + outbound_logistics
 
             eff_dist = float(distribution or 0) if _on('distribution_cost', 'percent') else 0.0
             if eff_dist >= 100:

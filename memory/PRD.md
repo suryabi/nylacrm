@@ -5,6 +5,19 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### COGS — Excluded `outbound_logistics_cost` from total COGS (2026-02-07)
+- [x] User asked: "COGS should not consider outbound logistics cost."
+- [x] **Backend** `/app/backend/server.py` — both COGS calculation paths updated:
+  - `GET /api/cogs/{city}` (the master-overlay path, ~line 2267): `total_cogs` now sums only the master-managed components (primary + secondary + manufacturing + custom rupee components). Logistics is added back into `base_cost` after the gross-margin step.
+  - `PUT /api/cogs/{sku_id}` (~line 2393): same change — logistics removed from `total_cogs` accumulator, retained as a passthrough that's added to `base_cost` only when `_on('outbound_logistics_cost', 'rupee')` is active.
+  - Net effect: gross margin is now calculated on production-cost only (it should not be earned on a logistics passthrough), but the landing price still recovers logistics. `ex_factory_price` continues to mean COGS + margin (no logistics).
+- [x] **Verification**: Curl PUT on `Nyla – 660 ml / Gold` (Kolkata) with `outbound_logistics_cost=15`, `gross_margin=20%`, `distribution_cost=10%`:
+  - `total_cogs = 72.8` (51 primary + 13 manufacturing + 8.8 custom — logistics 15 excluded ✅)
+  - `base_cost = 102.36` (72.8 × 1.20 + 15 logistics ✅)
+  - `minimum_landing_price = 113.73` (102.36 / 0.90 ✅)
+  - Original logistics value restored after test.
+
+
 ### Customer Returns Module — Tenant-wide listing across Sales, Distribution & Production sidebars (2026-02-07)
 - [x] User asked: "Create a module for listing return bottles from customers… visible in Sales, Distribution and Production sidebar… same shape as Invoices, with multiple line items per return."
 - [x] **Backend** new file `/app/backend/routes/customer_returns_list.py` with two endpoints (mounted under `/api/customer-returns`):
