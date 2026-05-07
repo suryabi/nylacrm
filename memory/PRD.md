@@ -5,6 +5,15 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Invoices — Delete option restricted to CEO + Admin (2026-02-07)
+- [x] User asked for a UI option to delete invoices, restricted to CEO and Admin only.
+- [x] **UI was already wired** in `/app/frontend/src/pages/InvoicesList.js` (row checkboxes + bulk red "Delete (N)" button + confirm dialog). Tightened `canDelete` allowed-roles from `['ceo','system admin','admin','director']` → `['ceo','system admin','admin']`. Director can no longer delete.
+- [x] **Backend** `/app/backend/routes/invoices.py`: same allowed-roles list tightened on both `DELETE /invoices/{invoice_id}` and bulk `DELETE /invoices`. Error message updated to "Only CEO and Admin can delete invoices".
+- [x] **Bug fix**: bulk-delete used the root `db.invoices` instead of tenant-scoped `tdb.invoices` — switched to `tdb.invoices.delete_many(...)` for proper multi-tenant isolation. Removed unused `get_db` import.
+- [x] **Verification**: Live screenshot at `/invoices` shows row checkboxes + red "Delete (2)" button after selecting two rows for the System Admin (CEO) user. Lint clean.
+- [x] **Browser console script** (delete ALL invoices in the current tenant) provided to user; uses paginated GET + bulk DELETE in 100-id chunks against `/api/invoices`.
+
+
 ### Invoices API — Accept partner-supplied `lineTotal` per item & display on UI (2026-02-07)
 - [x] User asked to support a `lineTotal` field per item in the external `/invoices` request body, persist it, and surface it on the invoice line-item UI.
 - [x] **Backend** `/app/backend/services/external_invoices_service.py`:

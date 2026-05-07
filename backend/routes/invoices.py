@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["invoices"])
 
 # Import dependencies
-from database import get_tenant_db, get_db
+from database import get_tenant_db
 from deps import get_current_user
 
 def get_tdb():
@@ -231,16 +231,16 @@ async def delete_invoice(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Delete an invoice. Only CEO and System Admin can delete invoices.
+    Delete an invoice. Only CEO and Admin can delete invoices.
     """
     # Check user role
     user_role = current_user.get('role', '').lower()
-    allowed_roles = ['ceo', 'system admin', 'admin', 'director']
+    allowed_roles = ['ceo', 'system admin', 'admin']
     
     if not any(role in user_role for role in allowed_roles):
         raise HTTPException(
             status_code=403, 
-            detail='Only CEO and System Admin can delete invoices'
+            detail='Only CEO and Admin can delete invoices'
         )
     
     tdb = get_tdb()
@@ -303,23 +303,22 @@ async def bulk_delete_invoices(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Bulk delete invoices. Only CEO and System Admin can delete invoices.
+    Bulk delete invoices. Only CEO and Admin can delete invoices.
     """
     # Check user role
     user_role = current_user.get('role', '').lower()
-    allowed_roles = ['ceo', 'system admin', 'admin', 'director']
+    allowed_roles = ['ceo', 'system admin', 'admin']
     
     if not any(role in user_role for role in allowed_roles):
         raise HTTPException(
             status_code=403, 
-            detail='Only CEO and System Admin can delete invoices'
+            detail='Only CEO and Admin can delete invoices'
         )
     
     if not invoice_ids:
         raise HTTPException(status_code=400, detail='No invoice IDs provided')
     
     tdb = get_tdb()
-    db = get_db()
     
     # Get all invoices to be deleted
     invoices = await tdb.invoices.find({
@@ -340,8 +339,8 @@ async def bulk_delete_invoices(
         if inv.get('account_id'):
             account_ids.add(inv['account_id'])
     
-    # Delete invoices
-    result = await db.invoices.delete_many({
+    # Delete invoices (tenant-scoped)
+    result = await tdb.invoices.delete_many({
         '$or': [
             {'id': {'$in': invoice_ids}},
             {'invoice_no': {'$in': invoice_ids}}

@@ -112,8 +112,8 @@ export default function InvoicesList() {
     ? getCityNamesByStateName(state) 
     : cities.map(c => c.name);
   
-  // Check if user can delete invoices
-  const canDelete = user && ['ceo', 'system admin', 'admin', 'director'].some(
+  // Check if user can delete invoices — restricted to CEO and Admin only
+  const canDelete = user && ['ceo', 'system admin', 'admin'].some(
     role => user.role?.toLowerCase().includes(role)
   );
 
