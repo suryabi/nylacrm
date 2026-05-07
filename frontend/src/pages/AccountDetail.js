@@ -783,19 +783,6 @@ ${googleMapsLink}`;
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-semibold">{account.account_name}</h1>
-            {account.lead_type && (
-              <Badge
-                variant="outline"
-                className={
-                  account.lead_type === 'Retail'
-                    ? 'bg-violet-50 text-violet-700 border-violet-300'
-                    : 'bg-sky-50 text-sky-700 border-sky-300'
-                }
-                data-testid="account-lead-type-badge"
-              >
-                {account.lead_type}
-              </Badge>
-            )}
           </div>
           <p className="text-sm font-mono text-muted-foreground mt-1" data-testid="account-unique-id">
             ID: {account.account_id}
@@ -868,18 +855,6 @@ ${googleMapsLink}`;
                     onChange={(e) => setAccountName(e.target.value)}
                     data-testid="edit-account-name"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label>Lead Type *</Label>
-                  <Select value={leadType} onValueChange={setLeadType}>
-                    <SelectTrigger data-testid="edit-lead-type">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="B2B">B2B</SelectItem>
-                      <SelectItem value="Retail">Retail</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Contact Name</Label>
@@ -977,10 +952,6 @@ ${googleMapsLink}`;
                 <div>
                   <p className="text-sm text-muted-foreground">Account Name</p>
                   <p className="font-medium">{account.account_name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Lead Type</p>
-                  <p className="font-medium" data-testid="account-lead-type-display">{account.lead_type || 'B2B'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Include in GOP Metrics</p>
