@@ -24,7 +24,6 @@ from .tenant_registration import router as tenant_registration_router
 from .platform_admin import router as platform_admin_router
 from .roles import router as roles_router
 from .designations import router as designations_router
-from .ai_assistant import router as ai_assistant_router
 from .scoring import router as scoring_router
 from .invoices import router as invoices_router
 from .distributors import router as distributors_router
@@ -72,9 +71,6 @@ routes_router.include_router(designations_router, prefix="/designations", tags=[
 
 # Requests routes are at root level (leave-requests, travel-requests, etc.)
 routes_router.include_router(requests_router, tags=["Requests"])
-
-# AI Assistant
-routes_router.include_router(ai_assistant_router, prefix="/ai", tags=["AI Assistant"])
 
 # Lead Scoring Model
 routes_router.include_router(scoring_router, prefix="/scoring", tags=["Lead Scoring"])

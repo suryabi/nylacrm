@@ -7,7 +7,6 @@ import { useNavigation } from '../context/NavigationContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
-import AISalesAssistant from '../components/AISalesAssistant';
 import AskNyla from '../components/widgets/AskNyla';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
@@ -599,9 +598,6 @@ export default function DashboardLayout({ children }) {
         </main>
       </div>
       
-      {/* AI Sales Assistant - Collapsible Side Panel */}
-      <AISalesAssistant />
-
       {/* Ask Nyla - Knowledge Base floating chat assistant */}
       <AskNyla />
     </div>
