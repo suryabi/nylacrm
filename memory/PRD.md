@@ -5,6 +5,24 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Invoices — Persist `lastPaymentDate` / `lastPaymentAmount` / `outstanding` to the parent account (2026-02-07)
+- [x] User asked the partner-supplied `lastPaymentDate`, `lastPaymentAmount` (and the existing `outstanding`) to be processed and stored against the **account**, then surfaced both on the AccountDetail Financial Summary card and on the Accounts overview list.
+- [x] **Backend** `/app/backend/services/external_invoices_service.py`:
+  - `ExternalInvoicePayload`: added `lastPaymentDate: Optional[str] = None` and `lastPaymentAmount: Optional[Any] = None`.
+  - `_build_invoice_doc()`: stamps `last_payment_date` / `last_payment_amount` on the invoice document for audit.
+  - New helper `_refresh_account_financials(account_uuid)` re-derives account state from all of its invoices: sets `outstanding_balance` from the **latest** invoice (sorted by `invoice_date` desc), picks the most recent payment amount/date across every invoice, and recomputes total gross/net/credit/invoice_count. Called from both `create_external_invoice` and `update_external_invoice`.
+  - Account doc fields written: `outstanding_balance`, `last_payment_amount`, `last_payment_date`, `total_gross_invoice_value`, `total_net_invoice_value`, `total_credit_note_value`, `invoice_count`, `last_invoice_no`, `last_invoice_date`, `updated_at`.
+- [x] **Frontend AccountDetail** (`/app/frontend/src/pages/AccountDetail.js`): no UI change needed — the Financial Summary card already binds to `account.outstanding_balance`, `account.last_payment_amount`, `account.last_payment_date`. Now correctly populated by backend.
+- [x] **Frontend AccountsList** (`/app/frontend/src/pages/AccountsList.js`):
+  - Added `formatCurrency` helper (₹ with K/L/Cr compact).
+  - New `Financials` column (between Sales Contact and Actions) showing two rows: **Outstanding** (rose-coloured when > 0) and **Last Pay** (amount · date). Test ID: `account-row-financials-{account_id}`.
+- [x] **Verification**:
+  - Curl `PUT /api/accounts/PATN-KOL-A26-001/invoices/RINV-009814` with the user's exact payload → invoice doc shows `outstanding 124842.7`, `last_payment_date 2026-04-05`, `last_payment_amount 35061.8`. Account fetch → `outstanding_balance: 394195` (from the latest invoice INV-008527 dated 2026-04-11), `last_payment_amount: 35061.8`, `last_payment_date: 2026-04-05`, `invoice_count: 3`.
+  - Live screenshot AccountDetail Financial Summary: Outstanding ₹394,195 / Last Payment ₹35,061.8 / Apr 5, 2026.
+  - Live screenshot AccountsList: Patni Plaza row shows OUTSTANDING ₹3.94L · LAST PAY ₹35,062 · 05 Apr 2026.
+  - Lint clean (Python + JS).
+
+
 ### Invoices List — Expandable line items per row (2026-02-07)
 - [x] User asked: keep existing Invoices List table as-is, but add an expand option per row to reveal line items (SKU, Crates × capacity/crate, Bottles, Line Total + Total row), matching the AccountDetail invoice card.
 - [x] **Frontend** `/app/frontend/src/pages/InvoicesList.js`:

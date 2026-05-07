@@ -38,6 +38,14 @@ function formatDate(dateStr) {
   catch { return '-'; }
 }
 
+function formatCurrency(value) {
+  if (!value) return '₹0';
+  const num = Math.round(value);
+  if (num >= 10000000) return '₹' + (num / 10000000).toFixed(2) + 'Cr';
+  if (num >= 100000) return '₹' + (num / 100000).toFixed(2) + 'L';
+  return '₹' + num.toLocaleString('en-IN');
+}
+
 function calculateAccountAge(createdAt) {
   if (!createdAt) return '-';
   try {
@@ -367,6 +375,7 @@ export default function AccountsList() {
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account Age</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Onboarded</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Sales Contact</th>
+                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Financials</th>
                       {isAdmin && (
                         <th className="text-center py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Actions</th>
                       )}
@@ -470,6 +479,24 @@ export default function AccountsList() {
                           ) : (
                             <span className="text-slate-400">-</span>
                           )}
+                        </td>
+                        <td className="py-5 px-5" data-testid={`account-row-financials-${account.account_id}`}>
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] uppercase tracking-wide text-slate-400">Outstanding</span>
+                              <span className={`text-sm font-semibold tabular-nums ${(account.outstanding_balance || 0) > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                                {formatCurrency(account.outstanding_balance || 0)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] uppercase tracking-wide text-slate-400">Last Pay</span>
+                              <span className="text-xs font-medium text-slate-700 dark:text-slate-300 tabular-nums">
+                                {formatCurrency(account.last_payment_amount || 0)}
+                              </span>
+                              <span className="text-xs text-slate-400">·</span>
+                              <span className="text-xs text-slate-500">{formatDate(account.last_payment_date)}</span>
+                            </div>
+                          </div>
                         </td>
                         {isAdmin && (
                           <td className="py-5 px-5 text-center">

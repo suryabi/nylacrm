@@ -40,6 +40,8 @@ class ExternalInvoicePayload(BaseModel):
     tenant_id: Optional[str] = None
     invoiceDate: str
     creditNoteValue: Optional[Any] = None
+    lastPaymentDate: Optional[str] = None
+    lastPaymentAmount: Optional[Any] = None
     items: List[ExternalInvoiceItem] = []
 
 
@@ -154,6 +156,8 @@ def _build_invoice_doc(
         'net_invoice_value': _to_float(payload.netInvoiceValue),
         'credit_note_value': _to_float(payload.creditNoteValue),
         'outstanding': _to_float(payload.outstanding),
+        'last_payment_date': payload.lastPaymentDate,
+        'last_payment_amount': _to_float(payload.lastPaymentAmount) if payload.lastPaymentAmount is not None else None,
         'account_id': account.get('account_id'),
         'account_uuid': account.get('id'),
         'account_name': account.get('account_name'),
@@ -170,6 +174,64 @@ def _build_invoice_doc(
         base['created_at'] = now
         base['created_by'] = user_id
     return base
+
+
+async def _refresh_account_financials(account_uuid: str) -> dict:
+    """
+    Re-derive an account's running financial state from its invoices.
+
+    For each account we keep:
+      - outstanding_balance: outstanding from the latest invoice (sorted by invoice_date desc)
+      - last_payment_amount / last_payment_date: most recent payment seen across
+        any invoice (preferring the largest payment_date, falling back to invoice_date when missing)
+      - total_gross_invoice_value / total_net_invoice_value / total_credit_note_value
+      - invoice_count
+    """
+    tdb = get_tenant_db()
+    invoices = await tdb.invoices.find(
+        {'$or': [{'account_uuid': account_uuid}, {'account_id': account_uuid}]},
+        {'_id': 0}
+    ).to_list(10000)
+
+    if not invoices:
+        return {}
+
+    # Sort by invoice_date desc (string ISO YYYY-MM-DD lex compare works)
+    invoices_sorted = sorted(
+        invoices,
+        key=lambda i: (i.get('invoice_date') or ''),
+        reverse=True,
+    )
+    latest = invoices_sorted[0]
+
+    # Pick the most recent payment across all invoices
+    last_pay_amt, last_pay_date = 0.0, None
+    for inv in invoices:
+        d = inv.get('last_payment_date')
+        amt = inv.get('last_payment_amount')
+        if d and (last_pay_date is None or d > last_pay_date):
+            last_pay_date = d
+            last_pay_amt = float(amt or 0)
+
+    update_doc = {
+        'outstanding_balance': float(latest.get('outstanding') or 0),
+        'total_gross_invoice_value': sum(float(i.get('gross_invoice_value') or 0) for i in invoices),
+        'total_net_invoice_value': sum(float(i.get('net_invoice_value') or 0) for i in invoices),
+        'total_credit_note_value': sum(float(i.get('credit_note_value') or 0) for i in invoices),
+        'invoice_count': len(invoices),
+        'last_invoice_no': latest.get('invoice_no'),
+        'last_invoice_date': latest.get('invoice_date'),
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+    }
+    if last_pay_date:
+        update_doc['last_payment_amount'] = last_pay_amt
+        update_doc['last_payment_date'] = last_pay_date
+
+    await tdb.accounts.update_one(
+        {'$or': [{'id': account_uuid}, {'account_id': account_uuid}]},
+        {'$set': update_doc},
+    )
+    return update_doc
 
 
 async def create_external_invoice(account_id_param: str, raw_payload: dict, user_id: Optional[str]) -> dict:
@@ -200,6 +262,9 @@ async def create_external_invoice(account_id_param: str, raw_payload: dict, user
     doc['line_items_net_total'] = lines_net
 
     await tdb.invoices.insert_one(dict(doc))
+
+    # Refresh account-level rollups (outstanding_balance, last_payment, totals)
+    await _refresh_account_financials(account.get('id'))
 
     response = {k: v for k, v in doc.items() if k != '_id'}
     response['unmatched_external_item_ids'] = unmatched
@@ -244,6 +309,9 @@ async def update_external_invoice(account_id_param: str, invoice_no: str, raw_pa
         {'$or': [{'id': invoice_no}, {'invoice_no': invoice_no}]},
         {'$set': doc}
     )
+
+    # Refresh account-level rollups (outstanding_balance, last_payment, totals)
+    await _refresh_account_financials(account.get('id'))
 
     response = {k: v for k, v in doc.items() if k != '_id'}
     response['unmatched_external_item_ids'] = unmatched
