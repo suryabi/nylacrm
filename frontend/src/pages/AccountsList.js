@@ -385,7 +385,6 @@ export default function AccountsList() {
                   <thead>
                     <tr className="border-b-2 border-amber-100 dark:border-amber-900/30 bg-gradient-to-r from-amber-50/80 to-orange-50/50 dark:from-amber-900/20 dark:to-orange-900/10">
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account</th>
-                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Lead Type</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Contact</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Location</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Sales Contact</th>
@@ -414,28 +413,28 @@ export default function AccountsList() {
                             <div>
                               <p className="font-semibold text-slate-800 dark:text-white group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">{account.account_name}</p>
                               <p className="text-xs text-slate-400 dark:text-slate-500 font-mono">{account.account_id}</p>
-                              {account.category && <Badge variant="outline" className="mt-1.5 text-xs border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">{account.category}</Badge>}
+                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                {(() => {
+                                  const lt = account.lead_type || 'B2B';
+                                  const colorMap = {
+                                    'B2B': 'bg-sky-50 text-sky-700 border-sky-300',
+                                    'Retail': 'bg-violet-50 text-violet-700 border-violet-300',
+                                    'Individual': 'bg-emerald-50 text-emerald-700 border-emerald-300',
+                                  };
+                                  return (
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-xs font-medium ${colorMap[lt] || colorMap['B2B']}`}
+                                      data-testid={`account-row-lead-type-${account.account_id}`}
+                                    >
+                                      {lt}
+                                    </Badge>
+                                  );
+                                })()}
+                                {account.category && <Badge variant="outline" className="text-xs border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">{account.category}</Badge>}
+                              </div>
                             </div>
                           </div>
-                        </td>
-                        <td className="py-5 px-5">
-                          {(() => {
-                            const lt = account.lead_type || 'B2B';
-                            const colorMap = {
-                              'B2B': 'bg-sky-50 text-sky-700 border-sky-300',
-                              'Retail': 'bg-violet-50 text-violet-700 border-violet-300',
-                              'Individual': 'bg-emerald-50 text-emerald-700 border-emerald-300',
-                            };
-                            return (
-                              <Badge
-                                variant="outline"
-                                className={`font-medium px-3 py-1 ${colorMap[lt] || colorMap['B2B']}`}
-                                data-testid={`account-row-lead-type-${account.account_id}`}
-                              >
-                                {lt}
-                              </Badge>
-                            );
-                          })()}
                         </td>
                         <td className="py-5 px-5">
                           <div className="space-y-1">
