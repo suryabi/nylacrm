@@ -7,6 +7,16 @@ from datetime import datetime, timezone
 import httpx
 import uuid
 import base64
+import io
+
+from PIL import Image, ImageOps
+
+# Register HEIF/HEIC opener so PIL can decode iPhone photos and similar formats.
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except Exception:  # pragma: no cover — plugin optional at runtime
+    pass
 
 from database import db, get_tenant_db
 from deps import get_current_user
@@ -53,55 +63,79 @@ async def proxy_bottle_image(url: str, current_user: dict = Depends(get_current_
 
 @router.post("/bottle-preview/upload-logo")
 async def upload_customer_logo(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    """Upload customer logo for bottle preview"""
-    
-    # Validate file type
-    allowed_types = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml']
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail='Only PNG, JPG, and SVG files are allowed')
-    
-    # Read file
+    """Upload a customer logo for the bottle preview.
+
+    Accepts any image format Pillow can decode (PNG, JPG/JPEG, SVG passthrough,
+    WebP, GIF, BMP, TIFF, HEIC/HEIF, AVIF, ICO, …). Vector SVGs are stored as-is
+    (base64); raster images are normalised to RGB PNG and downscaled to 1000px
+    width max. File-size cap: 15 MB.
+    """
     contents = await file.read()
-    
-    # Convert to base64 for frontend
-    if file.content_type == 'image/svg+xml':
-        # SVG - return as is
-        logo_data = f'data:image/svg+xml;base64,{base64.b64encode(contents).decode()}'
-    else:
-        # PNG/JPG - process with PIL
-        try:
-            img = Image.open(io.BytesIO(contents))
-            
-            # Convert to RGB if needed
-            if img.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                if img.mode == 'RGBA':
-                    background.paste(img, mask=img.split()[-1])
-                else:
-                    background.paste(img)
-                img = background
-            
-            # Resize if too large (max 1000px width)
-            max_width = 1000
-            if img.width > max_width:
-                ratio = max_width / img.width
-                new_height = int(img.height * ratio)
-                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Convert to base64
-            buffer = io.BytesIO()
-            img.save(buffer, format='PNG', optimize=True, quality=95)
-            img_str = base64.b64encode(buffer.getvalue()).decode()
-            logo_data = f'data:image/png;base64,{img_str}'
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f'Failed to process image: {str(e)}')
-    
+    if not contents:
+        raise HTTPException(status_code=400, detail='Uploaded file is empty')
+
+    MAX_BYTES = 15 * 1024 * 1024  # 15 MB
+    if len(contents) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail='Image is larger than 15 MB. Please upload a smaller file.')
+
+    content_type = (file.content_type or '').lower()
+    filename_lc = (file.filename or '').lower()
+
+    # Vector SVG passthrough — return base64 data URL so the canvas overlay can render it.
+    if content_type == 'image/svg+xml' or filename_lc.endswith('.svg'):
+        return {
+            'logo_data': f'data:image/svg+xml;base64,{base64.b64encode(contents).decode()}',
+            'file_name': file.filename,
+            'content_type': 'image/svg+xml',
+        }
+
+    # Raster: try to decode with PIL. Format is detected from the file bytes,
+    # so we don't depend on a strict content-type whitelist anymore.
+    try:
+        img = Image.open(io.BytesIO(contents))
+        img.load()  # force decode so we catch corrupt/unsupported files here
+        # Apply EXIF orientation (matters for HEIC/iPhone photos)
+        img = ImageOps.exif_transpose(img)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Couldn't read this image ({type(e).__name__}). "
+                "Please upload an image file (PNG, JPG, SVG, WebP, GIF, BMP, TIFF, HEIC/HEIF, or AVIF)."
+            ),
+        )
+
+    try:
+        # Flatten transparency onto white so the logo composites cleanly on bottles.
+        if img.mode in ('RGBA', 'LA', 'P'):
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            if img.mode == 'P':
+                img = img.convert('RGBA')
+            if img.mode == 'RGBA':
+                background.paste(img, mask=img.split()[-1])
+            else:
+                background.paste(img.convert('RGBA'), mask=img.convert('RGBA').split()[-1])
+            img = background
+        elif img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        # Cap width at 1000px to keep the data URL light.
+        max_width = 1000
+        if img.width > max_width:
+            ratio = max_width / img.width
+            img = img.resize((max_width, int(img.height * ratio)), Image.Resampling.LANCZOS)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG', optimize=True)
+        logo_data = f'data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}'
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f'Failed to process image: {e}')
+
     return {
         'logo_data': logo_data,
         'file_name': file.filename,
-        'content_type': file.content_type
+        'content_type': 'image/png',  # we always return PNG to the frontend
+        'original_content_type': content_type or None,
     }
 
 @router.post("/bottle-preview/save")

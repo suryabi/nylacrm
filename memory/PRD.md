@@ -5,6 +5,24 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Bottle Preview — Accept all common image formats (2026-02-07)
+- [x] User reported: "other than SVG, PNG and JPG, uploads in bottle preview module are failing."
+- [x] **Backend** `/app/backend/routes/bottle_preview.py` `POST /bottle-preview/upload-logo`:
+  - Replaced the strict `image/png|jpeg|jpg|svg+xml` content-type whitelist with PIL-based decode. Any image PIL can open is accepted (PNG, JPG/JPEG, WebP, GIF, BMP, TIFF, HEIC/HEIF, AVIF, ICO, …); SVG passthrough preserved.
+  - Added `import pillow_heif; pillow_heif.register_heif_opener()` (graceful fallback if plugin missing) so iPhone HEIC photos decode.
+  - Apply `ImageOps.exif_transpose()` so HEIC/iPhone shots respect their orientation tag.
+  - Increased file-size cap 5 MB → 15 MB. Empty-file guard added. Error messages now name the failing format.
+  - Response keeps `content_type='image/png'` (we always normalise to PNG) plus a new `original_content_type` for audit.
+  - Added `pillow-heif==1.3.0` to `requirements.txt`.
+- [x] **Frontend** `/app/frontend/src/pages/BottlePreview.js`:
+  - Hidden `<input type="file">` `accept` widened from `image/png,image/jpeg,image/jpg,image/svg+xml` → `image/*,.heic,.heif,.avif`.
+  - Client-side validation now falls back to filename extension when `file.type` is empty (Safari does this for HEIC/AVIF), so valid uploads aren't blocked before they reach the server.
+  - Bumped client size cap to 15 MB to match backend.
+  - Failure toast now shows the backend `detail` message instead of a generic "Failed to upload logo".
+  - Updated the user-facing error toast to list all supported formats.
+- [x] **Verification**: Generated test logos in 5 previously-failing formats (WebP, GIF, BMP, TIFF, HEIC) and POSTed each to `/api/bottle-preview/upload-logo` with a CEO/Admin token → all returned HTTP 200 with `content_type=image/png` and a non-empty `logo_data` data URL. PNG/JPG/SVG flows unchanged. Lint clean (Python + JS).
+
+
 ### Account Detail — Invoice Summary section overhaul (2026-02-07)
 - [x] User asked: "show invoice summary as a second section, only last 5 invoices, with View all → invoices list filtered by account; metrics still honor the time period; default time = This Month; add Return Bottle %."
 - [x] **Backend** `GET /api/accounts/{id}/invoices` (active impl in `/app/backend/server.py` ~line 6174 — duplicate stub in `routes/accounts.py` left untouched):
