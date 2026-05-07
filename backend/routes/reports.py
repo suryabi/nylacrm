@@ -217,7 +217,7 @@ async def get_sku_performance(
         target_query['resource_id'] = resource_id
     
     sku_targets = await db.sku_targets.find(target_query, {'_id': 0}).to_list(500)
-    
+
     # Build SKU target map
     sku_target_map = {}
     for t in sku_targets:
@@ -226,34 +226,87 @@ async def get_sku_performance(
             sku_target_map[sku_name] = {'target_revenue': 0, 'target_units': 0}
         sku_target_map[sku_name]['target_revenue'] += t.get('target_revenue', 0)
         sku_target_map[sku_name]['target_units'] += t.get('target_units', 0)
-    
-    # Get leads with interested SKUs
+
+    # ─── Build SKU master map: external_sku_id → display sku_name ───
+    sku_masters = await get_tdb().master_skus.find({}, {'_id': 0}).to_list(200)
+    ext_to_name = {}
+    all_known_skus = set()
+    for m in sku_masters:
+        name = m.get('sku_name') or m.get('sku') or m.get('name')
+        if not name:
+            continue
+        all_known_skus.add(name)
+        for k in ('external_sku_id', 'sku', 'sku_name'):
+            v = m.get(k)
+            if v:
+                ext_to_name[str(v).strip()] = name
+
+    # Get leads with interested SKUs (used as a fallback signal)
     leads_with_skus = await get_tdb().leads.find(
         {**lead_query, 'interested_skus': {'$exists': True, '$ne': []}},
         {'_id': 0, 'interested_skus': 1, 'invoice_value': 1, 'status': 1, 'id': 1}
     ).to_list(1000)
-    
-    # Get invoices for revenue calculation
+
+    # ─── Get invoices in window (filter on invoice_date, not created_at) ───
     invoice_query = {}
-    if start_date:
-        invoice_query['created_at'] = {'$gte': start_date.isoformat(), '$lte': end_date.isoformat()}
+    if time_filter != 'lifetime':
+        start_str = start_date.date().isoformat() if hasattr(start_date, 'date') else start_date.isoformat()[:10]
+        end_str = end_date.date().isoformat() if hasattr(end_date, 'date') else end_date.isoformat()[:10]
+        invoice_query['invoice_date'] = {'$gte': start_str, '$lte': end_str}
     if resource_id:
         invoice_query['created_by'] = resource_id
-    
-    invoices = await get_tdb().invoices.find(invoice_query, {'_id': 0, 'total_amount': 1, 'items': 1}).to_list(500)
-    
-    # Calculate achieved revenue by SKU from invoices
+
+    invoices = await get_tdb().invoices.find(invoice_query, {'_id': 0}).to_list(20000)
+
+    def _parse_num(v):
+        if v is None:
+            return 0.0
+        try:
+            return float(str(v).replace('%', '').replace(',', '').strip())
+        except Exception:
+            return 0.0
+
+    def _resolve_sku_name(item):
+        # Try enriched fields first, then external IDs
+        for k in ('sku_name', 'sku'):
+            v = item.get(k)
+            if v:
+                return v
+        for k in ('external_sku_id', 'external_item_id', 'itemId', 'item_id', 'sku_id'):
+            v = item.get(k)
+            if v and str(v).strip() in ext_to_name:
+                return ext_to_name[str(v).strip()]
+        # Fallback: surface the raw external code so admins can fix mappings
+        for k in ('external_sku_id', 'external_item_id', 'itemId', 'item_id'):
+            v = item.get(k)
+            if v:
+                return f"[Unmapped: {v}]"
+        return None
+
+    def _line_value(item):
+        # Prefer enriched net_amount → gross_amount; fall back to qty*rate*(1-disc%)
+        if item.get('net_amount') is not None:
+            return _parse_num(item.get('net_amount'))
+        if item.get('gross_amount') is not None:
+            return _parse_num(item.get('gross_amount'))
+        qty = _parse_num(item.get('quantity'))
+        rate = _parse_num(item.get('rate'))
+        disc = _parse_num(item.get('discount_percent') or item.get('discount'))
+        if disc > 100:
+            disc = disc / 100.0  # safeguard for badly stored fractions
+        return qty * rate * max(0.0, 1.0 - disc / 100.0)
+
+    # ─── Tally achieved revenue + units per SKU from invoice line items ───
     sku_invoice_revenue = {}
+    sku_invoice_units = {}
     for inv in invoices:
-        items = inv.get('items', [])
-        total = inv.get('total_amount', 0)
-        if items:
-            per_item = total / len(items) if len(items) > 0 else 0
-            for item in items:
-                sku_name = item.get('sku', item.get('name', 'Unknown'))
-                if sku_name not in sku_invoice_revenue:
-                    sku_invoice_revenue[sku_name] = 0
-                sku_invoice_revenue[sku_name] += per_item
+        items = inv.get('items') or inv.get('line_items') or []
+        for item in items:
+            name = _resolve_sku_name(item)
+            if not name:
+                continue
+            sku_invoice_revenue[name] = sku_invoice_revenue.get(name, 0) + _line_value(item)
+            sku_invoice_units[name] = sku_invoice_units.get(name, 0) + _parse_num(item.get('quantity'))
     
     # Count leads per SKU
     sku_leads_count = {}
@@ -271,47 +324,37 @@ async def get_sku_performance(
                 # Even if no invoice value, count as sold
                 sku_units[sku_name] += 10  # Default units per won deal
     
-    # Build SKU performance data
+    # Build SKU performance data — list = master SKUs ∪ any SKUs found in invoices/targets
     skus_data = []
     if sku and sku != 'all':
         sku_list = [sku]
     else:
-        sku_list = SKU_OPTIONS
-    
+        sku_list = sorted(all_known_skus | set(sku_invoice_revenue.keys()) | set(sku_target_map.keys()))
+        if not sku_list:
+            sku_list = SKU_OPTIONS
+
     total_target = 0
     total_achieved = 0
     total_units = 0
-    
+
     for sku_name in sku_list:
         target_info = sku_target_map.get(sku_name, {})
         target_revenue = target_info.get('target_revenue', 0)
-        
-        # If no target set, estimate based on overall
-        if target_revenue == 0:
-            target_revenue = 100000 + (hash(sku_name) % 400000)  # Random but consistent
-        
-        # Get achieved from invoices or estimate
+
         achieved = sku_invoice_revenue.get(sku_name, 0)
-        if achieved == 0:
-            # Estimate from leads count
-            leads_count = sku_leads_count.get(sku_name, 0)
-            achieved = leads_count * 15000  # Avg revenue per lead
-        
-        units = sku_units.get(sku_name, 0)
-        if units == 0:
-            units = int(achieved / 150)  # Rough estimate
-        
+        units = sku_invoice_units.get(sku_name, 0) or target_info.get('target_units', 0)
+
         achievement_pct = int((achieved / target_revenue * 100)) if target_revenue > 0 else 0
-        
+
         skus_data.append({
             'sku': sku_name,
             'target_revenue': target_revenue,
-            'achieved_revenue': achieved,
-            'units_sold': units,
+            'achieved_revenue': round(achieved, 2),
+            'units_sold': int(units),
             'leads_count': sku_leads_count.get(sku_name, 0),
-            'achievement_pct': min(achievement_pct, 200)  # Cap at 200%
+            'achievement_pct': min(achievement_pct, 200)
         })
-        
+
         total_target += target_revenue
         total_achieved += achieved
         total_units += units
@@ -404,9 +447,9 @@ async def get_resource_performance(
     
     leads = await get_tdb().leads.find(
         lead_date_query,
-        {'_id': 0, 'assigned_to': 1, 'status': 1, 'invoice_value': 1, 'estimated_value': 1}
+        {'_id': 0, 'assigned_to': 1, 'status': 1, 'invoice_value': 1, 'estimated_value': 1, 'id': 1, 'account_id': 1}
     ).to_list(5000)
-    
+
     user_leads = {}
     for lead in leads:
         uid = lead.get('assigned_to')
@@ -415,7 +458,48 @@ async def get_resource_performance(
         user_leads[uid]['count'] += 1
         if lead.get('status') in ['closed_won', 'won']:
             user_leads[uid]['won'] += 1
-            user_leads[uid]['revenue'] += lead.get('invoice_value') or lead.get('estimated_value') or 0
+            # leave 'revenue' alone — we now drive revenue from invoices below
+
+    # ─── Pull invoice revenue per resource (matched via account → assigned_to) ───
+    invoice_query = {}
+    if time_filter != 'lifetime':
+        start_str = start_date.date().isoformat() if hasattr(start_date, 'date') else start_date.isoformat()[:10]
+        end_str = end_date.date().isoformat() if hasattr(end_date, 'date') else end_date.isoformat()[:10]
+        invoice_query['invoice_date'] = {'$gte': start_str, '$lte': end_str}
+
+    all_invoices = await get_tdb().invoices.find(invoice_query, {'_id': 0}).to_list(20000)
+
+    # Build account_code → owner (assigned_to) map (lifetime accounts, not date-filtered)
+    all_accounts = await get_tdb().accounts.find({}, {'_id': 0, 'account_id': 1, 'id': 1, 'account_name': 1, 'assigned_to': 1, 'lead_id': 1}).to_list(2000)
+    code_to_owner = {a.get('account_id'): a.get('assigned_to') for a in all_accounts if a.get('account_id') and a.get('assigned_to')}
+    uuid_to_owner = {a.get('id'): a.get('assigned_to') for a in all_accounts if a.get('id') and a.get('assigned_to')}
+    name_to_owner = {(a.get('account_name') or '').strip().lower(): a.get('assigned_to') for a in all_accounts if a.get('account_name') and a.get('assigned_to')}
+
+    def _gross(inv):
+        return inv.get('gross_invoice_value') or inv.get('gross_amount') or inv.get('grand_total') or inv.get('total_amount') or 0
+    def _net(inv):
+        v = inv.get('net_invoice_value') or inv.get('net_amount')
+        return v if v is not None else (_gross(inv) - (inv.get('credit_note_value') or inv.get('credit_note') or 0))
+
+    user_invoice_revenue = {}
+    user_invoice_count = {}
+    for inv in all_invoices:
+        # 1) Direct created_by on invoice
+        owner = inv.get('created_by')
+        # 2) Account-id match
+        if not owner:
+            inv_acc = inv.get('account_id') or inv.get('account_uuid') or inv.get('account_id_from_mq')
+            if inv_acc:
+                owner = code_to_owner.get(inv_acc) or uuid_to_owner.get(inv_acc)
+        # 3) Account-name match
+        if not owner:
+            nm = (inv.get('account_name') or '').strip().lower()
+            if nm:
+                owner = name_to_owner.get(nm)
+        if not owner:
+            continue
+        user_invoice_revenue[owner] = user_invoice_revenue.get(owner, 0) + _net(inv)
+        user_invoice_count[owner] = user_invoice_count.get(owner, 0) + 1
     
     # Build resource performance data
     resources_data = []
@@ -447,21 +531,20 @@ async def get_resource_performance(
         # Get activity data
         activity_data = user_activities.get(uid, {'calls': 0, 'visits': 0, 'total': 0})
         
-        # Calculate achieved revenue
-        achieved = lead_data['revenue']
-        if achieved == 0:
-            # Estimate from leads
-            achieved = lead_data['count'] * 25000  # Avg revenue per lead
-        
+        # Calculate achieved revenue — driven by invoices (matched via account ownership)
+        achieved = user_invoice_revenue.get(uid, 0)
+        invoices_for_user = user_invoice_count.get(uid, 0)
+
         achievement_pct = int((achieved / target * 100)) if target > 0 else 0
-        
+
         resources_data.append({
             'id': uid,
             'name': user.get('name', 'Unknown'),
             'role': user.get('role', ''),
             'territory': user.get('territory', ''),
             'target_revenue': target,
-            'achieved_revenue': achieved,
+            'achieved_revenue': round(achieved, 2),
+            'invoices_count': invoices_for_user,
             'leads_count': lead_data['count'],
             'won_deals': lead_data['won'],
             'visits': activity_data['visits'],
