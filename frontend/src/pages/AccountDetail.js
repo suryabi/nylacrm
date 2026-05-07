@@ -1252,16 +1252,19 @@ ${googleMapsLink}`;
                     const pct = Number(s.return_pct || 0);
                     const delivered = s.bottles_delivered ?? 0;
                     const returned = s.bottles_returned ?? 0;
-                    const tone = pct >= 10
-                      ? 'bg-rose-50 border-rose-100 text-rose-700'
-                      : pct >= 5
+                    // Higher = better (more empty bottles recycled). Invert tone vs damage metrics.
+                    const tone = pct >= 50
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                      : pct >= 25
                         ? 'bg-amber-50 border-amber-100 text-amber-700'
-                        : 'bg-emerald-50 border-emerald-100 text-emerald-700';
+                        : 'bg-rose-50 border-rose-100 text-rose-700';
                     return (
                       <div className={`rounded-lg p-4 border ${tone}`} data-testid="account-return-pct-tile">
                         <p className="text-xs font-medium mb-1 opacity-80">RETURN BOTTLES %</p>
                         <p className="text-lg font-bold tabular-nums">{pct.toFixed(2)}%</p>
-                        <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">{returned.toLocaleString()} / {delivered.toLocaleString()} bottles</p>
+                        <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">
+                          {returned.toLocaleString()} / {delivered.toLocaleString()} empty bottles returned for reuse
+                        </p>
                       </div>
                     );
                   })()}
