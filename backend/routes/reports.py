@@ -515,56 +515,64 @@ async def get_account_performance(
     
     # Fetch all accounts matching filters
     accounts = await get_tdb().accounts.find(account_query, {'_id': 0}).to_list(500)
-    
-    # Build invoice date query
-    invoice_date_query = {}
+
+    # Build invoice date query — use invoice_date (the actual document date), not created_at (import time)
+    invoice_query = {}
     if time_filter != 'lifetime':
-        invoice_date_query = {
-            'created_at': {
-                '$gte': start_date.isoformat(),
-                '$lte': end_date.isoformat()
-            }
-        }
-    
+        # invoice_date is stored as YYYY-MM-DD strings; date-string lex comparison works
+        start_str = start_date.date().isoformat() if hasattr(start_date, 'date') else start_date.isoformat()[:10]
+        end_str = end_date.date().isoformat() if hasattr(end_date, 'date') else end_date.isoformat()[:10]
+        invoice_query['invoice_date'] = {'$gte': start_str, '$lte': end_str}
+
     # Get all invoices within time range
-    all_invoices = await get_tdb().invoices.find(invoice_date_query, {'_id': 0}).to_list(5000)
-    
-    # Calculate total revenue for contribution percentage
-    total_gross_all = sum(inv.get('gross_amount', inv.get('total_amount', 0)) for inv in all_invoices)
-    
+    all_invoices = await get_tdb().invoices.find(invoice_query, {'_id': 0}).to_list(20000)
+
+    # ─── Helpers to read invoice fields (handle both internal + external payload shapes) ───
+    def _gross(inv):
+        return inv.get('gross_invoice_value') or inv.get('gross_amount') or inv.get('grand_total') or inv.get('total_amount') or 0
+    def _net(inv):
+        v = inv.get('net_invoice_value') or inv.get('net_amount')
+        if v is not None:
+            return v
+        # Fallback: gross - credit
+        return (_gross(inv)) - (inv.get('credit_note_value') or inv.get('credit_note') or 0)
+    def _credit(inv):
+        return inv.get('credit_note_value') or inv.get('credit_note') or inv.get('bottle_credit') or 0
+    def _outstanding(inv):
+        return inv.get('outstanding') or 0
+
+    # Build lookup: account_code (human id like PATN-KOL-A26-001) → account
+    accounts_by_code = {a.get('account_id'): a for a in accounts if a.get('account_id')}
+    accounts_by_uuid = {a.get('id'): a for a in accounts if a.get('id')}
+    accounts_by_name = {(a.get('account_name') or '').strip().lower(): a for a in accounts if a.get('account_name')}
+
     # Aggregate invoice data by account
     account_invoices = {}
     for inv in all_invoices:
-        # Match by lead_id or customer name
-        lead_id = inv.get('lead_id')
-        customer_name = inv.get('customer_name', '').lower()
-        
-        for acc in accounts:
-            acc_lead_id = acc.get('lead_id')
-            acc_name = acc.get('account_name', '').lower()
-            
-            # Match invoice to account
-            if (lead_id and acc_lead_id and lead_id == acc_lead_id) or \
-               (customer_name and acc_name and (customer_name in acc_name or acc_name in customer_name)):
-                acc_id = acc.get('account_id')
-                if acc_id not in account_invoices:
-                    account_invoices[acc_id] = {
-                        'gross_total': 0,
-                        'net_total': 0,
-                        'bottle_credit': 0,
-                        'invoice_count': 0
-                    }
-                
-                gross = inv.get('gross_amount', inv.get('total_amount', 0))
-                net = inv.get('net_amount', inv.get('total_amount', 0))
-                credit = inv.get('bottle_credit', 0)
-                
-                account_invoices[acc_id]['gross_total'] += gross
-                account_invoices[acc_id]['net_total'] += net
-                account_invoices[acc_id]['bottle_credit'] += credit
-                account_invoices[acc_id]['invoice_count'] += 1
-                break
-    
+        acc = None
+        # 1) Match invoice.account_id against account.account_id (human code) or .id (uuid)
+        inv_acc_field = inv.get('account_id') or inv.get('account_uuid') or inv.get('account_id_from_mq')
+        if inv_acc_field:
+            acc = accounts_by_code.get(inv_acc_field) or accounts_by_uuid.get(inv_acc_field)
+        # 2) Fall back to account_name exact match (case-insensitive)
+        if not acc:
+            inv_name = (inv.get('account_name') or inv.get('customer_name') or '').strip().lower()
+            if inv_name:
+                acc = accounts_by_name.get(inv_name)
+        if not acc:
+            continue
+
+        acc_id = acc.get('account_id') or acc.get('id')
+        bucket = account_invoices.setdefault(acc_id, {
+            'gross_total': 0, 'net_total': 0, 'credit_total': 0,
+            'outstanding_total': 0, 'invoice_count': 0,
+        })
+        bucket['gross_total'] += _gross(inv)
+        bucket['net_total'] += _net(inv)
+        bucket['credit_total'] += _credit(inv)
+        bucket['outstanding_total'] += _outstanding(inv)
+        bucket['invoice_count'] += 1
+
     # Build performance data
     accounts_data = []
     summary_gross = 0
@@ -572,24 +580,21 @@ async def get_account_performance(
     summary_bottle_credit = 0
     summary_outstanding = 0
     summary_overdue = 0
-    
+
     # Calculate filtered total gross for accurate contribution %
-    filtered_total_gross = 0
+    filtered_total_gross = sum(b['gross_total'] for b in account_invoices.values())
+
     for acc in accounts:
-        acc_id = acc.get('account_id')
-        inv_data = account_invoices.get(acc_id, {'gross_total': 0})
-        filtered_total_gross += inv_data['gross_total']
-    
-    for acc in accounts:
-        acc_id = acc.get('account_id')
+        acc_id = acc.get('account_id') or acc.get('id')
         inv_data = account_invoices.get(acc_id, {
             'gross_total': 0,
             'net_total': 0,
-            'bottle_credit': 0,
-            'invoice_count': 0
+            'credit_total': 0,
+            'outstanding_total': 0,
+            'invoice_count': 0,
         })
-        
-        # Calculate contribution percentage (based on filtered accounts' total, not all invoices)
+
+        # Calculate contribution percentage (based on filtered accounts' total)
         contribution_pct = 0
         if filtered_total_gross > 0:
             contribution_pct = round((inv_data['gross_total'] / filtered_total_gross) * 100, 2)
@@ -598,17 +603,17 @@ async def get_account_performance(
         average_order = 0
         if inv_data['invoice_count'] > 0:
             average_order = round(inv_data['gross_total'] / inv_data['invoice_count'], 2)
-        
-        # Get financial data from account
-        outstanding = acc.get('outstanding_balance', 0)
+
+        # Outstanding/overdue derived from invoices (more reliable than account-level fields)
+        outstanding = inv_data.get('outstanding_total', 0) or acc.get('outstanding_balance', 0)
         overdue = acc.get('overdue_amount', 0)
         last_payment = acc.get('last_payment_amount', 0)
         last_payment_date = acc.get('last_payment_date', '')
-        
-        # Calculate bottle credit from SKU pricing if not in invoices
+
+        # Bottle credit: prefer the invoice-derived credit-note total; fall back to SKU pricing config
         sku_pricing = acc.get('sku_pricing', [])
         estimated_bottle_credit = sum(sku.get('return_bottle_credit', 0) for sku in sku_pricing)
-        bottle_credit = inv_data['bottle_credit'] if inv_data['bottle_credit'] > 0 else estimated_bottle_credit
+        bottle_credit = inv_data['credit_total'] if inv_data['credit_total'] > 0 else estimated_bottle_credit
         
         accounts_data.append({
             'account_id': acc_id,
