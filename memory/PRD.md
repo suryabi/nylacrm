@@ -5,6 +5,23 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Account Performance — Migrated legacy "Tier 1/2/3" to Lead Type B2B/Retail/Individual (2026-02-07)
+- [x] User-reported: Account Performance table still showed "Type" column with `Tier 1`/`Tier 2` values even after Accounts List was migrated to Lead Type. The standardisation work was incomplete in this report.
+- [x] **Backend** `/app/backend/routes/reports.py` `/reports/account-performance`:
+  - Filter param renamed `account_type` → `lead_type`. When `lead_type=B2B`, the query treats accounts with missing/empty `lead_type` as B2B (matches Accounts List default fallback).
+  - Response field renamed `account_type` → `lead_type` with default `'B2B'` for legacy accounts that have no value yet.
+- [x] **Frontend** `/app/frontend/src/pages/AccountPerformance.js`:
+  - `ACCOUNT_TYPES` constant + `accountTypeColors` map replaced with `LEAD_TYPES = ['B2B', 'Retail', 'Individual']` and matching `leadTypeColors` (sky / violet / emerald, aligned with Accounts List).
+  - Filter label "Account Type" → "Lead Type" (data-testid `lead-type-filter`).
+  - Table column header "Type" → "Lead Type".
+  - Badge renders `row.lead_type || 'B2B'`; data-testid `lead-type-badge-{account_id}`.
+  - State variable `accountTypeFilter` → `leadTypeFilter`; URL param `account_type` → `lead_type`.
+- [x] **Verification**:
+  - Backend curl: `?lead_type=B2B` → 6 accounts, `?lead_type=Retail` → 1 account, `?lead_type=Individual` → 0; all rows return `lead_type` field.
+  - Live screenshot at `/account-performance`: Lead Type column shows B2B / Retail badges, no Tier text anywhere on page; "Lead Type" filter and table header rendered correctly.
+  - JS lint clean.
+
+
 ### Performance Tracker — Pipeline Metrics overlap fix + compact-number tile values (2026-05-05)
 - [x] User-reported: pipeline status table rows showed values colliding (e.g. "3 ₹1,69,200" / "42 ₹1,69,200" with no spacing between Leads count and ₹ Value). Bottom Coverage Ratio / Total Pipeline Value were cramped in a 2-col grid that overlapped on narrower widths. And summary tiles risked overlap once revenue numbers grew bigger than ₹0.
 - [x] **Pipeline status table**: explicit column widths (`w-[64px]` Leads, padding-left on Value column), `whitespace-nowrap` + `tabular-nums` on numeric cells, status cell wraps label in `flex min-w-0 truncate` so long status names don't push the layout. Removed redundant `ChevronRight` icon collision with status text.

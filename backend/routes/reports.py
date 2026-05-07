@@ -592,7 +592,7 @@ async def get_account_performance(
     territory: Optional[str] = None,
     state: Optional[str] = None,
     city: Optional[str] = None,
-    account_type: Optional[str] = None,
+    lead_type: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -609,8 +609,16 @@ async def get_account_performance(
         account_query['state'] = state
     if city:
         account_query['city'] = city
-    if account_type:
-        account_query['account_type'] = account_type
+    if lead_type:
+        # Treat accounts with missing/empty lead_type as 'B2B' (matches Accounts List default)
+        if lead_type == 'B2B':
+            account_query['$or'] = [
+                {'lead_type': 'B2B'},
+                {'lead_type': {'$in': [None, '']}},
+                {'lead_type': {'$exists': False}},
+            ]
+        else:
+            account_query['lead_type'] = lead_type
     
     # Fetch all accounts matching filters
     accounts = await get_tdb().accounts.find(account_query, {'_id': 0}).to_list(500)
@@ -717,7 +725,7 @@ async def get_account_performance(
         accounts_data.append({
             'account_id': acc_id,
             'account_name': acc.get('account_name', 'Unknown'),
-            'account_type': acc.get('account_type', ''),
+            'lead_type': acc.get('lead_type') or 'B2B',
             'territory': acc.get('territory', ''),
             'state': acc.get('state', ''),
             'city': acc.get('city', ''),

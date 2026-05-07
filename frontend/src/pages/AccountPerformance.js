@@ -37,12 +37,12 @@ const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' }
 ];
 
-const ACCOUNT_TYPES = ['Tier 1', 'Tier 2', 'Tier 3'];
+const LEAD_TYPES = ['B2B', 'Retail', 'Individual'];
 
-const accountTypeColors = {
-  'Tier 1': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300',
-  'Tier 2': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
-  'Tier 3': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+const leadTypeColors = {
+  'B2B': 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300',
+  'Retail': 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300',
+  'Individual': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300',
 };
 
 function formatCurrency(value) {
@@ -73,9 +73,9 @@ export default function AccountPerformance() {
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
-  const [accountTypeFilter, setAccountTypeFilter] = useState('all');
+  const [leadTypeFilter, setLeadTypeFilter] = useState('all');
 
-  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, accountTypeFilter]);
+  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -86,7 +86,7 @@ export default function AccountPerformance() {
       if (territoryFilter !== 'all') params.append('territory', territoryFilter);
       if (stateFilter !== 'all') params.append('state', stateFilter);
       if (cityFilter !== 'all') params.append('city', cityFilter);
-      if (accountTypeFilter !== 'all') params.append('account_type', accountTypeFilter);
+      if (leadTypeFilter !== 'all') params.append('lead_type', leadTypeFilter);
       
       const res = await axios.get(`${API_URL}/reports/account-performance?${params}`, { 
         headers: { Authorization: `Bearer ${token}` },
@@ -104,7 +104,7 @@ export default function AccountPerformance() {
     setTerritoryFilter('all');
     setStateFilter('all');
     setCityFilter('all');
-    setAccountTypeFilter('all');
+    setLeadTypeFilter('all');
   };
 
   const allTerritoryNames = masterTerritories.map(t => t.name);
@@ -149,7 +149,7 @@ export default function AccountPerformance() {
             territoryFilter !== 'all', 
             stateFilter !== 'all', 
             cityFilter !== 'all', 
-            accountTypeFilter !== 'all'
+            leadTypeFilter !== 'all'
           ].filter(Boolean).length}
           onReset={handleResetFilters}
           className="mb-6"
@@ -207,14 +207,14 @@ export default function AccountPerformance() {
               </Select>
             </FilterItem>
             
-            <FilterItem label="Account Type" icon={Layers}>
-              <Select value={accountTypeFilter} onValueChange={setAccountTypeFilter}>
-                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="account-type-filter">
+            <FilterItem label="Lead Type" icon={Layers}>
+              <Select value={leadTypeFilter} onValueChange={setLeadTypeFilter}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="lead-type-filter">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="all" className="rounded-lg">All Types</SelectItem>
-                  {ACCOUNT_TYPES.map(t => (
+                  {LEAD_TYPES.map(t => (
                     <SelectItem key={t} value={t} className="rounded-lg">{t}</SelectItem>
                   ))}
                 </SelectContent>
@@ -263,7 +263,7 @@ export default function AccountPerformance() {
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
                     <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Account</th>
-                    <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Type</th>
+                    <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Lead Type</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Invoice Value</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Avg Order</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Bottle Credit</th>
@@ -289,11 +289,12 @@ export default function AccountPerformance() {
                         </div>
                       </td>
                       <td className="py-4 px-4">
-                        {row.account_type ? (
-                          <Badge className={accountTypeColors[row.account_type] || 'bg-slate-100 dark:bg-slate-800'}>{row.account_type}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
+                        {(() => {
+                          const lt = row.lead_type || 'B2B';
+                          return (
+                            <Badge className={leadTypeColors[lt] || leadTypeColors['B2B']} data-testid={`lead-type-badge-${row.account_id}`}>{lt}</Badge>
+                          );
+                        })()}
                       </td>
                       <td className="py-4 px-5 text-right">
                         <div>
