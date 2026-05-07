@@ -1066,6 +1066,138 @@ ${googleMapsLink}`;
             )}
           </Card>
 
+          {/* Invoice Summary — second section, right after Account Information */}
+          <Card className="p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Invoice Summary
+                {invoiceTotalCount > 0 && (
+                  <Badge variant="outline" className="ml-2">{invoiceTotalCount} Total</Badge>
+                )}
+              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Time Filter */}
+                <Select value={invoiceTimeFilter} onValueChange={(val) => { setInvoiceTimeFilter(val); setInvoicePage(1); }}>
+                  <SelectTrigger className="w-[140px] h-8 text-sm" data-testid="invoice-time-filter">
+                    <SelectValue placeholder="Time Period" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="this_week">This Week</SelectItem>
+                    <SelectItem value="last_week">Last Week</SelectItem>
+                    <SelectItem value="this_month">This Month</SelectItem>
+                    <SelectItem value="last_month">Last Month</SelectItem>
+                    <SelectItem value="last_3_months">Last 3 Months</SelectItem>
+                    <SelectItem value="last_6_months">Last 6 Months</SelectItem>
+                    <SelectItem value="this_quarter">This Quarter</SelectItem>
+                    <SelectItem value="lifetime">Lifetime</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  size="sm"
+                  onClick={() => setShowCreateInvoice(true)}
+                  data-testid="create-invoice-btn"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Create Invoice
+                </Button>
+              </div>
+            </div>
+            {loadingInvoices ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : invoiceData && invoiceData.invoices?.length > 0 ? (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                    <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
+                    <p className="text-lg font-bold text-green-700 tabular-nums">₹{((invoiceData.total_amount || 0) / 100000).toFixed(2)}L</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                    <p className="text-xs text-amber-600 font-medium mb-1">CREDIT NOTES</p>
+                    <p className="text-lg font-bold text-amber-700 tabular-nums">₹{((invoiceData.credit_amount || 0) / 100000).toFixed(2)}L</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                    <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
+                    <p className="text-lg font-bold text-blue-700 tabular-nums">₹{((invoiceData.net_amount || 0) / 100000).toFixed(2)}L</p>
+                  </div>
+                  <div className="bg-rose-50 rounded-lg p-4 border border-rose-100">
+                    <p className="text-xs text-rose-600 font-medium mb-1">OUTSTANDING</p>
+                    <p className={`text-lg font-bold tabular-nums ${(invoiceData.outstanding || 0) > 0 ? 'text-rose-700' : 'text-slate-500'}`}>₹{((invoiceData.outstanding || 0) / 100000).toFixed(2)}L</p>
+                  </div>
+                  {(() => {
+                    const s = invoiceData.summary || {};
+                    const pct = Number(s.return_pct || 0);
+                    const delivered = s.bottles_delivered ?? 0;
+                    const returned = s.bottles_returned ?? 0;
+                    // Higher = better (more empty bottles recycled). Invert tone vs damage metrics.
+                    const tone = pct >= 50
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                      : pct >= 25
+                        ? 'bg-amber-50 border-amber-100 text-amber-700'
+                        : 'bg-rose-50 border-rose-100 text-rose-700';
+                    return (
+                      <div className={`rounded-lg p-4 border ${tone}`} data-testid="account-return-pct-tile">
+                        <p className="text-xs font-medium mb-1 opacity-80">RETURN BOTTLES %</p>
+                        <p className="text-lg font-bold tabular-nums">{pct.toFixed(2)}%</p>
+                        <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">
+                          {returned.toLocaleString()} / {delivered.toLocaleString()} empty bottles returned for reuse
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 italic" data-testid="invoice-summary-note">
+                  Showing the latest 5 invoices for this period. Metrics above include all invoices in the selected time window.
+                </p>
+                <div className="space-y-3">
+                  {invoiceData.invoices.slice(0, 5).map((inv, idx) => (
+                    <InvoiceCard key={idx} invoice={inv} />
+                  ))}
+                </div>
+
+                {/* "View all" deep-link to the Invoices List filtered by this account */}
+                <div className="flex items-center justify-between gap-3 mt-5 pt-4 border-t">
+                  <p className="text-xs text-slate-500" data-testid="invoice-summary-count-note">
+                    {invoiceTotalCount > 5
+                      ? `Showing 5 of ${invoiceTotalCount} invoices in this period`
+                      : `Showing ${invoiceTotalCount} of ${invoiceTotalCount} invoices in this period`}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const params = new URLSearchParams();
+                      if (account?.account_name) params.append('account_name', account.account_name);
+                      params.append('time_filter', invoiceTimeFilter);
+                      navigateTo(`/invoices?${params.toString()}`, { label: 'Invoices' });
+                    }}
+                    data-testid="view-all-invoices-btn"
+                  >
+                    View all invoices
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                <p className="text-muted-foreground mb-2">No invoices found for {invoiceTimeFilter === 'lifetime' ? 'this account' : invoiceTimeFilter.replace('_', ' ')}</p>
+                {invoiceTimeFilter !== 'lifetime' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInvoiceTimeFilter('lifetime')}
+                    className="mt-2"
+                  >
+                    View All Time
+                  </Button>
+                )}
+              </div>
+            )}
+          </Card>
+
           {/* Location */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -1183,138 +1315,6 @@ ${googleMapsLink}`;
                     ))}
                   </tbody>
                 </table>
-              </div>
-            )}
-          </Card>
-
-          {/* Invoices */}
-          <Card className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                Invoice Summary
-                {invoiceTotalCount > 0 && (
-                  <Badge variant="outline" className="ml-2">{invoiceTotalCount} Total</Badge>
-                )}
-              </h2>
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Time Filter */}
-                <Select value={invoiceTimeFilter} onValueChange={(val) => { setInvoiceTimeFilter(val); setInvoicePage(1); }}>
-                  <SelectTrigger className="w-[140px] h-8 text-sm" data-testid="invoice-time-filter">
-                    <SelectValue placeholder="Time Period" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="this_week">This Week</SelectItem>
-                    <SelectItem value="last_week">Last Week</SelectItem>
-                    <SelectItem value="this_month">This Month</SelectItem>
-                    <SelectItem value="last_month">Last Month</SelectItem>
-                    <SelectItem value="last_3_months">Last 3 Months</SelectItem>
-                    <SelectItem value="last_6_months">Last 6 Months</SelectItem>
-                    <SelectItem value="this_quarter">This Quarter</SelectItem>
-                    <SelectItem value="lifetime">Lifetime</SelectItem>
-                  </SelectContent>
-                </Select>
-                
-                <Button 
-                  size="sm" 
-                  onClick={() => setShowCreateInvoice(true)}
-                  data-testid="create-invoice-btn"
-                >
-                  <Plus className="h-4 w-4 mr-1" /> Create Invoice
-                </Button>
-              </div>
-            </div>
-            {loadingInvoices ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : invoiceData && invoiceData.invoices?.length > 0 ? (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                    <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
-                    <p className="text-lg font-bold text-green-700 tabular-nums">₹{((invoiceData.total_amount || 0) / 100000).toFixed(2)}L</p>
-                  </div>
-                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
-                    <p className="text-xs text-amber-600 font-medium mb-1">CREDIT NOTES</p>
-                    <p className="text-lg font-bold text-amber-700 tabular-nums">₹{((invoiceData.credit_amount || 0) / 100000).toFixed(2)}L</p>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
-                    <p className="text-lg font-bold text-blue-700 tabular-nums">₹{((invoiceData.net_amount || 0) / 100000).toFixed(2)}L</p>
-                  </div>
-                  <div className="bg-rose-50 rounded-lg p-4 border border-rose-100">
-                    <p className="text-xs text-rose-600 font-medium mb-1">OUTSTANDING</p>
-                    <p className={`text-lg font-bold tabular-nums ${(invoiceData.outstanding || 0) > 0 ? 'text-rose-700' : 'text-slate-500'}`}>₹{((invoiceData.outstanding || 0) / 100000).toFixed(2)}L</p>
-                  </div>
-                  {(() => {
-                    const s = invoiceData.summary || {};
-                    const pct = Number(s.return_pct || 0);
-                    const delivered = s.bottles_delivered ?? 0;
-                    const returned = s.bottles_returned ?? 0;
-                    // Higher = better (more empty bottles recycled). Invert tone vs damage metrics.
-                    const tone = pct >= 50
-                      ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                      : pct >= 25
-                        ? 'bg-amber-50 border-amber-100 text-amber-700'
-                        : 'bg-rose-50 border-rose-100 text-rose-700';
-                    return (
-                      <div className={`rounded-lg p-4 border ${tone}`} data-testid="account-return-pct-tile">
-                        <p className="text-xs font-medium mb-1 opacity-80">RETURN BOTTLES %</p>
-                        <p className="text-lg font-bold tabular-nums">{pct.toFixed(2)}%</p>
-                        <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">
-                          {returned.toLocaleString()} / {delivered.toLocaleString()} empty bottles returned for reuse
-                        </p>
-                      </div>
-                    );
-                  })()}
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 italic" data-testid="invoice-summary-note">
-                  Showing the latest 5 invoices for this period. Metrics above include all invoices in the selected time window.
-                </p>
-                <div className="space-y-3">
-                  {invoiceData.invoices.slice(0, 5).map((inv, idx) => (
-                    <InvoiceCard key={idx} invoice={inv} />
-                  ))}
-                </div>
-
-                {/* "View all" deep-link to the Invoices List filtered by this account */}
-                <div className="flex items-center justify-between gap-3 mt-5 pt-4 border-t">
-                  <p className="text-xs text-slate-500" data-testid="invoice-summary-count-note">
-                    {invoiceTotalCount > 5
-                      ? `Showing 5 of ${invoiceTotalCount} invoices in this period`
-                      : `Showing ${invoiceTotalCount} of ${invoiceTotalCount} invoices in this period`}
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const params = new URLSearchParams();
-                      if (account?.account_name) params.append('account_name', account.account_name);
-                      params.append('time_filter', invoiceTimeFilter);
-                      navigateTo(`/invoices?${params.toString()}`, { label: 'Invoices' });
-                    }}
-                    data-testid="view-all-invoices-btn"
-                  >
-                    View all invoices
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-8">
-                <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-muted-foreground mb-2">No invoices found for {invoiceTimeFilter === 'lifetime' ? 'this account' : invoiceTimeFilter.replace('_', ' ')}</p>
-                {invoiceTimeFilter !== 'lifetime' && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setInvoiceTimeFilter('lifetime')}
-                    className="mt-2"
-                  >
-                    View All Time
-                  </Button>
-                )}
               </div>
             )}
           </Card>
