@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Building2, Filter, Loader2, TrendingUp, AlertTriangle, Calendar, ShoppingCart, DollarSign, CreditCard, Receipt, Wallet, AlertCircle, MapPin, Layers } from 'lucide-react';
+import { Building2, Filter, Loader2, TrendingUp, AlertTriangle, Calendar, ShoppingCart, DollarSign, CreditCard, Receipt, Wallet, AlertCircle, MapPin, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -74,6 +74,13 @@ export default function AccountPerformance() {
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [leadTypeFilter, setLeadTypeFilter] = useState('all');
+
+  // Pagination (client-side — backend returns the full filtered set; usually 50-500 rows max)
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Reset to page 1 whenever any filter changes
+  useEffect(() => { setPage(1); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter]);
 
   useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter]);
 
@@ -274,7 +281,7 @@ export default function AccountPerformance() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.accounts.map((row, idx) => (
+                  {data.accounts.slice((page - 1) * pageSize, page * pageSize).map((row, idx) => (
                     <tr 
                       key={row.account_id || idx} 
                       className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
@@ -347,6 +354,56 @@ export default function AccountPerformance() {
               </table>
             </div>
           )}
+
+          {/* Pagination footer */}
+          {!loading && (data.accounts?.length || 0) > 0 && (() => {
+            const total = data.accounts.length;
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+            const startIdx = (page - 1) * pageSize;
+            const endIdx = Math.min(page * pageSize, total);
+            return (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>Show</span>
+                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                    <SelectTrigger className="w-[80px] h-8" data-testid="account-perf-page-size">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span>per page · showing {startIdx + 1}–{endIdx} of {total}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    data-testid="account-perf-prev-page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 tabular-nums">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    data-testid="account-perf-next-page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </Card>
 
         {/* Info Note */}
