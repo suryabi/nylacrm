@@ -5,6 +5,22 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### COGS — Excluded outbound logistics from client-side compute too (2026-02-07)
+- [x] User reported: "Total COGS in production is still calculated considering outbound logistics."
+- [x] Root cause: the **earlier server-side fix** only updated `GET /api/cogs/{city}` and `PUT /api/cogs/{sku_id}`. The COGS Calculator page also runs **3 client-side computations** that were still adding logistics into `totalCOGS`:
+  1. `computeDerived()` (used for live render of derived columns)
+  2. `updateField()` (real-time recalculation while editing a row)
+  3. The reverse calculator (when the user enters an Actual Landing price)
+- [x] **Frontend** `/app/frontend/src/pages/COGSCalculator.js` — all three paths updated:
+  - `totalCOGS` now sums only primary + secondary + manufacturing + custom rupee components.
+  - `baseCost = totalCOGS + grossMarginRupees + outbound_logistics` (logistics added post-margin as a passthrough).
+  - Reverse calculator: `grossMarginRupees = baseCost − totalCOGS − logistics` (subtracts the passthrough so the derived margin% is accurate against production cost only).
+- [x] **Verification**:
+  - Math check with user's screenshot SKU (31.5 + 13 + 3 + 2.5 + 2.5 = **52.50** → was showing 59.03 with logistics 6.53).
+  - Live screenshot of Bengaluru COGS Calculator: every row's Total COGS now matches sum-of-components without logistics. Lint clean.
+  - Pricing chain after fix: `total_cogs → ex_factory = total_cogs × (1 + margin%) → base_cost = ex_factory + logistics → landing = base_cost / (1 − distribution%)`.
+
+
 ### Lead → Account Conversion — Idempotent (no more duplicate accounts) (2026-02-07)
 - [x] User reported: "When the user hits 'Convert to Account' multiple times, multiple accounts are getting created."
 - [x] **Backend** `/app/backend/server.py` `POST /api/accounts/convert-lead`:

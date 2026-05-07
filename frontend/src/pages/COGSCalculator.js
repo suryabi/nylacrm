@@ -230,8 +230,8 @@ export default function COGSCalculator() {
     let totalCOGS =
       (isShown('primary_packaging_cost')     ? primary       : 0) +
       (isShown('secondary_packaging_cost')   ? secondary     : 0) +
-      (isShown('manufacturing_variable_cost')? manufacturing : 0) +
-      (isShown('outbound_logistics_cost')    ? logistics     : 0);
+      (isShown('manufacturing_variable_cost')? manufacturing : 0);
+    // Outbound logistics is NOT part of COGS — it's added post-margin into baseCost below.
 
     // Add custom (non-legacy) ₹ components from row.custom_components
     customRupeeComponents.forEach((c) => {
@@ -242,7 +242,9 @@ export default function COGSCalculator() {
     const effMargin = isShown('gross_margin') ? marginPct : 0;
     const grossMarginRupees = totalCOGS * (effMargin / 100);
     const exFactory = totalCOGS + grossMarginRupees;
-    const baseCost  = totalCOGS + grossMarginRupees;
+    // Logistics is a passthrough cost added on top of COGS+margin (not part of COGS)
+    const effLogistics = isShown('outbound_logistics_cost') ? logistics : 0;
+    const baseCost  = totalCOGS + grossMarginRupees + effLogistics;
 
     const effDist = isShown('distribution_cost') ? distPct : 0;
     let landingPrice;
@@ -313,12 +315,12 @@ export default function COGSCalculator() {
     const logistics = parseFloat(row.outbound_logistics_cost) || 0;
     const distributionPercent = parseFloat(row.distribution_cost) || 0;
 
-    // Total COGS = sum of all active ₹ columns (master-driven)
+    // Total COGS = sum of all active ₹ columns (master-driven).
+    // Outbound logistics is NOT part of COGS — added post-margin into base cost below.
     let totalCOGS =
       (isShown('primary_packaging_cost') ? primary : 0) +
       (isShown('secondary_packaging_cost') ? secondary : 0) +
-      (isShown('manufacturing_variable_cost') ? manufacturing : 0) +
-      (isShown('outbound_logistics_cost') ? logistics : 0);
+      (isShown('manufacturing_variable_cost') ? manufacturing : 0);
     customRupeeComponents.forEach((c) => {
       const v = parseFloat(row.custom_components?.[c.key]);
       if (!Number.isNaN(v)) totalCOGS += v;
@@ -331,8 +333,9 @@ export default function COGSCalculator() {
     // Ex-Factory Price
     const exFactory = totalCOGS + grossMarginRupees;
 
-    // Base Cost = Total COGS + Gross Margin (₹). Logistics is already inside COGS.
-    const baseCost = totalCOGS + grossMarginRupees;
+    // Base Cost = Total COGS + Gross Margin (₹) + Outbound Logistics (passthrough, not part of COGS)
+    const effLogistics = isShown('outbound_logistics_cost') ? logistics : 0;
+    const baseCost = totalCOGS + grossMarginRupees + effLogistics;
 
     // Minimum Landing Price: Min Landing = Base Cost / (1 − Distribution %)
     const effDistribution = isShown('distribution_cost') ? distributionPercent : 0;
@@ -405,21 +408,21 @@ export default function COGSCalculator() {
     const logistics = parseFloat(row.outbound_logistics_cost) || 0;
     const distributionPercent = parseFloat(row.distribution_cost) || 0;
 
-    // Total COGS = sum of all active ₹ columns (master-driven)
+    // Total COGS = sum of all active ₹ columns (master-driven).
+    // Outbound logistics is NOT part of COGS — it's a passthrough on top of base cost.
     let totalCOGS =
       (isShown('primary_packaging_cost') ? primary : 0) +
       (isShown('secondary_packaging_cost') ? secondary : 0) +
-      (isShown('manufacturing_variable_cost') ? manufacturing : 0) +
-      (isShown('outbound_logistics_cost') ? logistics : 0);
+      (isShown('manufacturing_variable_cost') ? manufacturing : 0);
     customRupeeComponents.forEach((c) => {
       const v = parseFloat(row.custom_components?.[c.key]);
       if (!Number.isNaN(v)) totalCOGS += v;
     });
 
-    // Reverse calculate: Given Actual Landing Price, find required Gross Margin %
-    // Base Cost = Actual Landing × (1 - Distribution %)
-    // Base Cost = Total COGS + Gross Margin (₹)
-    // → Gross Margin (₹) = Base Cost - Total COGS
+    // Reverse calculate: Given Actual Landing Price, find required Gross Margin %.
+    //   Base Cost = Actual Landing × (1 − Distribution %)
+    //   Base Cost = Total COGS + Gross Margin (₹) + Outbound Logistics
+    //   → Gross Margin (₹) = Base Cost − Total COGS − Logistics
     const effDistribution = isShown('distribution_cost') ? distributionPercent : 0;
     let baseCost;
     if (effDistribution >= 100) {
@@ -430,7 +433,8 @@ export default function COGSCalculator() {
       baseCost = actualLanding;
     }
 
-    const grossMarginRupees = baseCost - totalCOGS;
+    const effLogistics = isShown('outbound_logistics_cost') ? logistics : 0;
+    const grossMarginRupees = baseCost - totalCOGS - effLogistics;
 
     // Calculate new gross margin percentage
     let newGrossMarginPercent = 0;
