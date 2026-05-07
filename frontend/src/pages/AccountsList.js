@@ -388,8 +388,6 @@ export default function AccountsList() {
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Lead Type</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Contact</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Location</th>
-                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Account Age</th>
-                      <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Onboarded</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Sales Contact</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Financials</th>
                       {isAdmin && (
@@ -467,21 +465,6 @@ export default function AccountsList() {
                               <p className="font-medium text-slate-700 dark:text-slate-300">{account.city}</p>
                               <p className="text-xs text-slate-500">{account.state}</p>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-5 px-5">
-                          <div className="flex items-center gap-2">
-                            <div className={`px-3 py-1.5 rounded-lg ${calculateAccountAge(account.created_at) === 'New' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                              <span className={`text-sm font-semibold ${calculateAccountAge(account.created_at) === 'New' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                                {calculateAccountAge(account.created_at)}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-5 px-5">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                            <span className="text-sm text-slate-600 dark:text-slate-400">{formatDate(account.created_at)}</span>
                           </div>
                         </td>
                         <td className="py-5 px-5">
