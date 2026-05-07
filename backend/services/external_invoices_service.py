@@ -25,6 +25,8 @@ class ExternalInvoiceItem(BaseModel):
     rate: Any
     discount: Optional[Any] = None
     lineTotal: Optional[Any] = None  # Partner-supplied total for this line; if absent, computed from qty * rate * (1 - discount%)
+    crates: Optional[Any] = None  # Partner-supplied crate count
+    crateCapacity: Optional[Any] = None  # Bottles per crate
     batchNumber: Optional[str] = None
     expiryDate: Optional[str] = None
 
@@ -116,6 +118,8 @@ async def _resolve_items(items: List[ExternalInvoiceItem]) -> Tuple[List[dict], 
             'sku_name': sku.get('sku_name') if sku else None,
             'external_sku_id': sku.get('external_sku_id') if sku else it.itemId,
             'quantity': qty,
+            'crates': _to_float(it.crates) if it.crates is not None else None,
+            'crate_capacity': _to_float(it.crateCapacity) if it.crateCapacity is not None else None,
             'rate': rate,
             'discount_percent': discount_pct,
             'gross_amount': round(gross, 2),

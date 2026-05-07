@@ -109,25 +109,46 @@ function InvoiceCard({ invoice }) {
             <thead className="bg-slate-50">
               <tr>
                 <th className="text-left py-2 px-3 font-medium text-xs text-muted-foreground">SKU</th>
+                <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Crates</th>
                 <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Bottles</th>
                 <th className="text-right py-2 px-3 font-medium text-xs text-muted-foreground">Line Total</th>
               </tr>
             </thead>
             <tbody>
-              {invoice.items.map((item, idx) => (
+              {invoice.items.map((item, idx) => {
+                const crates = item.crates ?? item.crateCount ?? null;
+                const cap = item.crate_capacity ?? item.crateCapacity ?? null;
+                return (
                 <tr key={idx} className="border-t border-slate-100 hover:bg-slate-50/50">
                   <td className="py-2 px-3">
                     <p className="font-medium">{item.sku_name || item.sku || 'N/A'}</p>
                     {item.sku_code && <p className="text-xs text-muted-foreground">{item.sku_code}</p>}
                   </td>
+                  <td className="py-2 px-3 text-right tabular-nums">
+                    {crates != null ? (
+                      <div>
+                        <p>{Number(crates).toLocaleString()}</p>
+                        {cap != null && <p className="text-[10px] text-muted-foreground">× {Number(cap)}/crate</p>}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </td>
                   <td className="py-2 px-3 text-right tabular-nums">{(item.bottles || item.quantity || 0).toLocaleString()}</td>
                   <td className="py-2 px-3 text-right font-medium tabular-nums">₹{Math.round(item.lineTotal ?? item.line_total ?? item.net_amount ?? item.total ?? 0).toLocaleString()}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
             <tfoot className="bg-slate-50 border-t">
               <tr>
                 <td className="py-2 px-3 font-semibold">Total</td>
+                <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                  {(() => {
+                    const totalCrates = invoice.items.reduce((s, it) => s + Number(it.crates ?? it.crateCount ?? 0), 0);
+                    return totalCrates > 0 ? totalCrates.toLocaleString() : '-';
+                  })()}
+                </td>
                 <td className="py-2 px-3 text-right font-semibold tabular-nums">{totalBottles.toLocaleString()}</td>
                 <td className="py-2 px-3 text-right font-semibold text-green-600 tabular-nums">₹{Math.round(grossValue).toLocaleString()}</td>
               </tr>

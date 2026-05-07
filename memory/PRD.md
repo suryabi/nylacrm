@@ -5,6 +5,18 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Invoices — Display `crates` per item from external partner payload (2026-02-07)
+- [x] User asked to display the partner-supplied `crates` count per line item on the invoice UI.
+- [x] **Backend** `/app/backend/services/external_invoices_service.py`:
+  - `ExternalInvoiceItem` model: added `crates: Optional[Any] = None` and `crateCapacity: Optional[Any] = None` (both optional → backwards compatible).
+  - `_resolve_items()`: persists them as `crates` and `crate_capacity` on the stored item (snake_case for DB/internal consistency); `None` when partner omits.
+- [x] **Frontend** `/app/frontend/src/pages/AccountDetail.js` (`InvoiceCard` line-items table):
+  - Added a new "Crates" column between SKU and Bottles. Reads `item.crates ?? item.crateCount` and falls back to `-` when missing.
+  - When `crate_capacity` (or `crateCapacity`) is also present, shows a small subtitle `× N/crate` so users see the unit math at a glance.
+  - Footer "Total" row now sums crates across line items (or shows `-` if no item has crate data).
+- [x] **Verification**: Curl POST with the user's exact partner payload (`B330: 6×24, A660: 14×12, B660: 20×12`) → response stored `crates`/`crate_capacity` per item. Live screenshot of expanded invoice card on Patni Plaza shows: B330 row "6 × 24/crate" / 144 bottles / ₹6,943, A660 row "14 × 12/crate" / 168 bottles / ₹19,170, B660 row "20 × 12/crate" / 240 bottles / ₹24,910, total crates 40 / 552 bottles / ₹51,023. Lint clean.
+
+
 ### Invoices — Delete option restricted to CEO + Admin (2026-02-07)
 - [x] User asked for a UI option to delete invoices, restricted to CEO and Admin only.
 - [x] **UI was already wired** in `/app/frontend/src/pages/InvoicesList.js` (row checkboxes + bulk red "Delete (N)" button + confirm dialog). Tightened `canDelete` allowed-roles from `['ceo','system admin','admin','director']` → `['ceo','system admin','admin']`. Director can no longer delete.
