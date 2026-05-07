@@ -5,6 +5,18 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Invoices List — Expandable line items per row (2026-02-07)
+- [x] User asked: keep existing Invoices List table as-is, but add an expand option per row to reveal line items (SKU, Crates × capacity/crate, Bottles, Line Total + Total row), matching the AccountDetail invoice card.
+- [x] **Frontend** `/app/frontend/src/pages/InvoicesList.js`:
+  - Added a leading `w-10` column (header is empty; cell shows a `ChevronRight` → `ChevronDown` toggle button) before the existing checkbox/Invoice# columns. No other column moved or removed.
+  - New `expandedRows` `Set<string>` state with `toggleExpanded(key)` keyed by `invoice.id || invoice.invoice_no`.
+  - Each row is wrapped in `<React.Fragment>`; when expanded a sub-`TableRow` with `colSpan={canDelete ? 10 : 9}` renders the line-items table (SKU / Crates / Bottles / Line Total + footer "Total" row that sums Crates, Bottles, and shows invoice gross).
+  - Expand button only appears when `invoice.items?.length > 0` so non-external/legacy invoices stay collapsed.
+  - Row-level navigate-to-account click handler is unchanged; expand button uses `onClick={(e) => e.stopPropagation()}` → expanding never navigates away.
+  - Imports added: `ChevronDown`, `Package`. data-testids added: `expand-invoice-{id}`, `line-items-{id}`.
+- [x] **Verification**: Live screenshot at `/invoices` shows chevron column on every row; clicking the expand on `INV-CRATES-TEST-1` reveals the matching layout with B330 (6 × 24/crate / 144 / ₹6,943), A660 (14 × 12/crate / 168 / ₹19,170), B660 (20 × 12/crate / 240 / ₹24,910), Total 40 / 552 / ₹51,023. JS lint clean.
+
+
 ### Invoices — Display `crates` per item from external partner payload (2026-02-07)
 - [x] User asked to display the partner-supplied `crates` count per line item on the invoice UI.
 - [x] **Backend** `/app/backend/services/external_invoices_service.py`:

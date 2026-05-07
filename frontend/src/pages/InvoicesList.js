@@ -13,7 +13,7 @@ import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
 import { 
-  Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, 
+  Search, Trash2, ChevronLeft, ChevronRight, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Package,
   LayoutGrid, List, Filter, Loader2, RotateCcw, FileText, DollarSign, 
   Building2, Calendar, CheckCircle, XCircle
 } from 'lucide-react';
@@ -78,6 +78,16 @@ export default function InvoicesList() {
   const [selectedInvoices, setSelectedInvoices] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Expandable line-items state — keyed by invoice id/no
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const toggleExpanded = (key) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   
   // View modes
   const [showFilters, setShowFilters] = useState(false);
@@ -562,6 +572,7 @@ export default function InvoicesList() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50 dark:bg-slate-800/50">
+                    <TableHead className="w-10" />
                     {canDelete && (
                       <TableHead className="w-10">
                         <Checkbox
@@ -617,9 +628,21 @@ export default function InvoicesList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => (
+                  {invoices.map((invoice) => {
+                    const rowKey = invoice.id || invoice.invoice_no;
+                    const items = Array.isArray(invoice.items) ? invoice.items : [];
+                    const hasLineItems = items.length > 0;
+                    const isExpanded = expandedRows.has(rowKey);
+                    const totalBottlesExp = hasLineItems
+                      ? items.reduce((s, it) => s + Number(it.bottles ?? it.quantity ?? 0), 0)
+                      : 0;
+                    const totalCratesExp = hasLineItems
+                      ? items.reduce((s, it) => s + Number(it.crates ?? it.crateCount ?? 0), 0)
+                      : 0;
+                    const colSpan = canDelete ? 10 : 9;
+                    return (
+                      <React.Fragment key={rowKey}>
                     <TableRow 
-                      key={invoice.id || invoice.invoice_no}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
                       onClick={() => {
                         if (invoice.account_id) {
@@ -627,6 +650,22 @@ export default function InvoicesList() {
                         }
                       }}
                     >
+                      <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
+                        {hasLineItems ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => toggleExpanded(rowKey)}
+                            data-testid={`expand-invoice-${rowKey}`}
+                            aria-label={isExpanded ? 'Collapse line items' : 'Expand line items'}
+                          >
+                            {isExpanded
+                              ? <ChevronDown className="h-4 w-4" />
+                              : <ChevronRight className="h-4 w-4" />}
+                          </Button>
+                        ) : null}
+                      </TableCell>
                       {canDelete && (
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <Checkbox
@@ -676,7 +715,69 @@ export default function InvoicesList() {
                         {[invoice.account_city, invoice.account_state].filter(Boolean).join(', ') || '-'}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    {isExpanded && hasLineItems && (
+                      <TableRow className="bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-50/40 dark:hover:bg-slate-800/20">
+                        <TableCell colSpan={colSpan} className="p-0">
+                          <div className="p-4" data-testid={`line-items-${rowKey}`}>
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="text-xs text-muted-foreground">
+                                  <th className="text-left py-2 px-3 font-medium">SKU</th>
+                                  <th className="text-right py-2 px-3 font-medium">Crates</th>
+                                  <th className="text-right py-2 px-3 font-medium">Bottles</th>
+                                  <th className="text-right py-2 px-3 font-medium">Line Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {items.map((item, idx) => {
+                                  const crates = item.crates ?? item.crateCount ?? null;
+                                  const cap = item.crate_capacity ?? item.crateCapacity ?? null;
+                                  return (
+                                    <tr key={idx} className="border-t border-slate-100 dark:border-slate-800">
+                                      <td className="py-2 px-3">
+                                        <p className="font-medium">{item.sku_name || item.sku || 'N/A'}</p>
+                                        {item.sku_code && <p className="text-xs text-muted-foreground">{item.sku_code}</p>}
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums">
+                                        {crates != null ? (
+                                          <div>
+                                            <p>{Number(crates).toLocaleString()}</p>
+                                            {cap != null && <p className="text-[10px] text-muted-foreground">× {Number(cap)}/crate</p>}
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground">-</span>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums">{(item.bottles || item.quantity || 0).toLocaleString()}</td>
+                                      <td className="py-2 px-3 text-right font-medium tabular-nums">
+                                        ₹{Math.round(item.lineTotal ?? item.line_total ?? item.net_amount ?? item.total ?? 0).toLocaleString()}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot className="border-t border-slate-200 dark:border-slate-700">
+                                <tr>
+                                  <td className="py-2 px-3 font-semibold">Total</td>
+                                  <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                                    {totalCratesExp > 0 ? totalCratesExp.toLocaleString() : '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                                    {totalBottlesExp.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-semibold text-green-600 tabular-nums">
+                                    ₹{Math.round(invoice.gross_invoice_value || 0).toLocaleString()}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                      </React.Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
