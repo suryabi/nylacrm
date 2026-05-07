@@ -46,6 +46,22 @@ function formatCurrency(value) {
   return '₹' + num.toLocaleString('en-IN');
 }
 
+// Days-since-last-payment badge config (green <30, amber 30-45, red >45)
+function daysSince(dateStr) {
+  if (!dateStr) return null;
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d)) return null;
+    return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  } catch { return null; }
+}
+function lastPaymentBadgeStyle(days) {
+  if (days == null) return null;
+  if (days <= 30) return 'bg-emerald-100 text-emerald-700 border-emerald-300';
+  if (days <= 45) return 'bg-amber-100 text-amber-700 border-amber-300';
+  return 'bg-rose-100 text-rose-700 border-rose-300';
+}
+
 function calculateAccountAge(createdAt) {
   if (!createdAt) return '-';
   try {
@@ -488,13 +504,28 @@ export default function AccountsList() {
                                 {formatCurrency(account.outstanding_balance || 0)}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-[10px] uppercase tracking-wide text-slate-400">Last Pay</span>
                               <span className="text-xs font-medium text-slate-700 dark:text-slate-300 tabular-nums">
                                 {formatCurrency(account.last_payment_amount || 0)}
                               </span>
                               <span className="text-xs text-slate-400">·</span>
                               <span className="text-xs text-slate-500">{formatDate(account.last_payment_date)}</span>
+                              {(() => {
+                                const days = daysSince(account.last_payment_date);
+                                const cls = lastPaymentBadgeStyle(days);
+                                if (days == null || !cls) return null;
+                                return (
+                                  <Badge
+                                    variant="outline"
+                                    className={`text-[10px] px-1.5 py-0 ${cls}`}
+                                    data-testid={`account-row-last-pay-badge-${account.account_id}`}
+                                    title={`${days} days since last payment`}
+                                  >
+                                    {days}d
+                                  </Badge>
+                                );
+                              })()}
                             </div>
                           </div>
                         </td>

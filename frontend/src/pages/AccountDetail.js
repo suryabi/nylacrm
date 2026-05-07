@@ -1392,12 +1392,35 @@ ${googleMapsLink}`;
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-blue-600">Date</p>
-                  <p className="text-sm font-semibold text-blue-800">
-                    {account?.last_payment_date 
-                      ? format(new Date(account.last_payment_date), 'MMM d, yyyy')
-                      : 'No payment yet'
-                    }
-                  </p>
+                  <div className="flex items-center justify-end gap-2">
+                    <p className="text-sm font-semibold text-blue-800">
+                      {account?.last_payment_date 
+                        ? format(new Date(account.last_payment_date), 'MMM d, yyyy')
+                        : 'No payment yet'
+                      }
+                    </p>
+                    {(() => {
+                      if (!account?.last_payment_date) return null;
+                      const d = new Date(account.last_payment_date);
+                      if (isNaN(d)) return null;
+                      const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+                      const cls = days <= 30
+                        ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                        : days <= 45
+                          ? 'bg-amber-100 text-amber-700 border-amber-300'
+                          : 'bg-rose-100 text-rose-700 border-rose-300';
+                      return (
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] px-1.5 py-0 ${cls}`}
+                          data-testid="last-payment-days-badge"
+                          title={`${days} days since last payment`}
+                        >
+                          {days}d
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                 </div>
               </div>
             </div>

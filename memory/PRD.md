@@ -5,6 +5,13 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Financials — "Days since last payment" badge (2026-02-07)
+- [x] User asked to add a small `Nd` badge next to the Last Payment date — green ≤30, amber 30-45, red >45.
+- [x] **AccountsList** (`/app/frontend/src/pages/AccountsList.js`): added `daysSince()` + `lastPaymentBadgeStyle()` helpers and rendered a `Badge variant="outline"` after the Last Pay date in the Financials column. Hidden when no `last_payment_date`. data-testid `account-row-last-pay-badge-{account_id}`, `title="N days since last payment"`.
+- [x] **AccountDetail** (`/app/frontend/src/pages/AccountDetail.js`): same logic inlined in the Last Payment block of Financial Summary, rendered next to the formatted date. data-testid `last-payment-days-badge`.
+- [x] **Verification**: live screenshot of Patni Plaza (last payment 5 Apr 2026, today is 7 May 2026 → 32 days) shows the amber `32d` badge on both screens. Lint clean.
+
+
 ### Invoices — Persist `lastPaymentDate` / `lastPaymentAmount` / `outstanding` to the parent account (2026-02-07)
 - [x] User asked the partner-supplied `lastPaymentDate`, `lastPaymentAmount` (and the existing `outstanding`) to be processed and stored against the **account**, then surfaced both on the AccountDetail Financial Summary card and on the Accounts overview list.
 - [x] **Backend** `/app/backend/services/external_invoices_service.py`:
