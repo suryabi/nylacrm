@@ -121,7 +121,7 @@ function InvoiceCard({ invoice }) {
                     {item.sku_code && <p className="text-xs text-muted-foreground">{item.sku_code}</p>}
                   </td>
                   <td className="py-2 px-3 text-right tabular-nums">{(item.bottles || item.quantity || 0).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right font-medium tabular-nums">₹{Math.round(item.line_total || item.total || 0).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-medium tabular-nums">₹{Math.round(item.lineTotal ?? item.line_total ?? item.net_amount ?? item.total ?? 0).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

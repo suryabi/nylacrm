@@ -24,6 +24,7 @@ class ExternalInvoiceItem(BaseModel):
     quantity: float
     rate: Any
     discount: Optional[Any] = None
+    lineTotal: Optional[Any] = None  # Partner-supplied total for this line; if absent, computed from qty * rate * (1 - discount%)
     batchNumber: Optional[str] = None
     expiryDate: Optional[str] = None
 
@@ -106,7 +107,9 @@ async def _resolve_items(items: List[ExternalInvoiceItem]) -> Tuple[List[dict], 
         gross = qty * rate
         discount_amt = gross * (discount_pct / 100.0)
         net = gross - discount_amt
-        line_total_sum += net
+        # Prefer partner-supplied lineTotal; fall back to computed net
+        line_total = _to_float(it.lineTotal) if it.lineTotal is not None else net
+        line_total_sum += line_total
         resolved.append({
             'external_item_id': it.itemId,
             'sku_id': sku.get('id') if sku else None,
@@ -118,6 +121,7 @@ async def _resolve_items(items: List[ExternalInvoiceItem]) -> Tuple[List[dict], 
             'gross_amount': round(gross, 2),
             'discount_amount': round(discount_amt, 2),
             'net_amount': round(net, 2),
+            'line_total': round(line_total, 2),
             'batch_number': it.batchNumber,
             'expiry_date': it.expiryDate,
             'matched': sku is not None,

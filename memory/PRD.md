@@ -5,6 +5,20 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Invoices API — Accept partner-supplied `lineTotal` per item & display on UI (2026-02-07)
+- [x] User asked to support a `lineTotal` field per item in the external `/invoices` request body, persist it, and surface it on the invoice line-item UI.
+- [x] **Backend** `/app/backend/services/external_invoices_service.py`:
+  - `ExternalInvoiceItem` Pydantic model: added `lineTotal: Optional[Any] = None`.
+  - `_resolve_items()`: when `lineTotal` is present in the payload, it is stored as `line_total` on the persisted item and used in the running `line_items_net_total` sum. When absent, it falls back to the computed `qty * rate * (1 - discount%)` so legacy partner integrations continue to work unchanged.
+  - `net_amount` is still computed and stored (for transparency / audit), but `line_total` is now the source of truth for what the partner intends to display.
+- [x] **Frontend** `/app/frontend/src/pages/AccountDetail.js` (line-items table inside `InvoiceCard`): line-total cell now reads `item.lineTotal ?? item.line_total ?? item.net_amount ?? item.total ?? 0` so partner camelCase, internal snake_case and legacy formats all render correctly.
+- [x] **Verification**:
+  - Backend curl `POST /api/accounts/PATN-KOL-A26-001/invoices` with `items[].lineTotal=3950` and another `items[].lineTotal=950` → response shows `line_total: 3950 / 950` (partner values), `net_amount: 4000 / 900` (computed).
+  - Backward-compat curl (without `lineTotal`) → `line_total == net_amount` (computed fallback).
+  - Live screenshot of expanded `LINETOTAL-TEST` invoice card on Patni Plaza account page: "Line Total" column renders ₹3,950 and ₹950 exactly as supplied by the partner.
+  - Python + JS lint clean.
+
+
 ### Account Performance — Migrated legacy "Tier 1/2/3" to Lead Type B2B/Retail/Individual (2026-02-07)
 - [x] User-reported: Account Performance table still showed "Type" column with `Tier 1`/`Tier 2` values even after Accounts List was migrated to Lead Type. The standardisation work was incomplete in this report.
 - [x] **Backend** `/app/backend/routes/reports.py` `/reports/account-performance`:
