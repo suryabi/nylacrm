@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
+import { useTenantConfig } from '../../context/TenantConfigContext';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
@@ -21,6 +22,7 @@ const SUGGESTED_QUESTIONS = [
 
 export default function AskNyla() {
   const { user } = useAuth();
+  const { isModuleEnabled, hasRolePermission } = useTenantConfig();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]); // {role, content, id?, citations?}
   const [input, setInput] = useState('');
@@ -83,6 +85,9 @@ export default function AskNyla() {
   };
 
   if (!user) return null;
+  // Gated by tenant module toggle + per-role view permission
+  if (!isModuleEnabled('ask_nyla')) return null;
+  if (!hasRolePermission('ask_nyla')) return null;
 
   const PANEL_WIDTH = 440; // px
 

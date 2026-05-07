@@ -17,7 +17,7 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
@@ -152,6 +152,14 @@ const MODULE_CONFIG = {
       { key: 'marketing_masters', label: 'Marketing Masters', icon: Settings, description: 'Categories, platforms & events' },
       { key: 'master_request_types', label: 'Marketing Request Types', icon: Tag, description: 'Catalog of types Sales can raise (Neck Tag, Standee, Video, …)', href: '/admin/marketing-request-types' },
       { key: 'meeting_minutes', label: 'Meeting Minutes', icon: ClipboardList, description: 'Record meeting notes & action items' },
+    ]
+  },
+  ai_knowledge: {
+    title: 'AI & Knowledge',
+    description: 'AI assistant and knowledge base management',
+    modules: [
+      { key: 'knowledge_base', label: 'Knowledge Base', icon: BookOpen, description: 'Admin-managed library of docs, FAQs, and URLs powering Ask Nyla' },
+      { key: 'ask_nyla', label: 'Ask Nyla', icon: Sparkles, description: 'Floating AI chat assistant grounded in your knowledge base' },
     ]
   }
 };
