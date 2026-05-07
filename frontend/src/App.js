@@ -71,6 +71,7 @@ import AdminSkuMigrate from './pages/AdminSkuMigrate';
 import AccountDetail from './pages/AccountDetail';
 import AccountPerformance from './pages/AccountPerformance';
 import InvoicesList from './pages/InvoicesList';
+import CustomerReturnsList from './pages/CustomerReturnsList';
 import TransportationCostCalculator from './pages/TransportationCostCalculator';
 import SKUManagement from './pages/SKUManagement';
 import PackagingTypes from './pages/PackagingTypes';
@@ -254,6 +255,7 @@ function AppRouter() {
           <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
           <Route path="/accounts/:id" element={<ProtectedRoute moduleKey="accounts"><AccountDetail /></ProtectedRoute>} />
           <Route path="/invoices" element={<ProtectedRoute moduleKey="invoices"><InvoicesList /></ProtectedRoute>} />
+          <Route path="/customer-returns" element={<ProtectedRoute moduleKey="customer_returns"><CustomerReturnsList /></ProtectedRoute>} />
           <Route path="/account-performance" element={<ProtectedRoute moduleKey="report_account_performance"><AccountPerformance /></ProtectedRoute>} />
           <Route path="/transportation-calculator" element={<ProtectedRoute moduleKey="transport_calculator"><TransportationCostCalculator /></ProtectedRoute>} />
           <Route path="/sku-management" element={<ProtectedRoute moduleKey="sku_management"><SKUManagement /></ProtectedRoute>} />

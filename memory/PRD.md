@@ -5,6 +5,32 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Customer Returns Module — Tenant-wide listing across Sales, Distribution & Production sidebars (2026-02-07)
+- [x] User asked: "Create a module for listing return bottles from customers… visible in Sales, Distribution and Production sidebar… same shape as Invoices, with multiple line items per return."
+- [x] **Backend** new file `/app/backend/routes/customer_returns_list.py` with two endpoints (mounted under `/api/customer-returns`):
+  - `GET /api/customer-returns` — paginated tenant-wide list (filters: `search`, `status`, `distributor_id`, `account_id`, `from_date`, `to_date`, `page`, `limit`). Enriches each return with `distributor_name` via a single bulk lookup. Returns `{returns, total, page, pages, summary: {total_returns, total_quantity, total_credit}}`.
+  - `GET /api/customer-returns/distributors` — light list `{id, name}[]` for the filter dropdown.
+  - Mounted in `/app/backend/routes/__init__.py` after the existing per-distributor router.
+- [x] **Frontend** new page `/app/frontend/src/pages/CustomerReturnsList.js`:
+  - Header + 3 summary tiles (Returns count, Bottles Returned, Total Credit).
+  - Filters: search, status (`pending` / `approved` / `credit_issued` / `cancelled`), distributor.
+  - Table columns: Return # · Date · Account · Distributor · Bottles · Credit · Status. Status badges color-coded.
+  - **Expandable per row** (chevron toggle, `event.stopPropagation`) reveals a sub-table: SKU, Reason, Crates × cap, Bottles, Credit/Unit, Total Credit + Total footer.
+  - Row click navigates to the parent distributor page (only when not clicking the expand chevron).
+  - Pagination footer.
+  - data-testids: `customer-returns-page`, `expand-return-{id}`, `return-line-items-{id}`, `search-returns-input`, `status-filter`, `distributor-filter`.
+- [x] **Routing** `App.js`: new `<Route path="/customer-returns" moduleKey="customer_returns" />`.
+- [x] **Sidebars** `/app/frontend/src/layouts/DashboardLayout.js`:
+  - Sales `Core` group → Customer Returns added right after Invoices (Sales/Admin/Director roles).
+  - Distribution `Distribution` group → Customer Returns added right after Distributors (incl. `Distributor` and `Distributor Manager` roles so DMs can navigate there from their own distributor module).
+  - Production `Production` group → Customer Returns added right after Inventory (Production roles).
+  - Imported `PackageOpen` icon from `lucide-react`.
+- [x] **Verification**:
+  - Curl `GET /api/customer-returns?page=1&limit=10` → 5 returns, summary `{total_quantity: 167, total_credit: 22725.0}`.
+  - Live screenshot Sales module `/customer-returns` → page renders with summary tiles, table of 5 returns, expanded RET-2026-0005 shows Damaged Stock Return / 100 bottles / ₹200/unit / ₹20,000 total.
+  - Live screenshot Distribution module shows Customer Returns under Distributors. Production module shows Customer Returns under Inventory. JS + Python lint clean.
+
+
 ### Financials — "Days since last payment" badge (2026-02-07)
 - [x] User asked to add a small `Nd` badge next to the Last Payment date — green ≤30, amber 30-45, red >45.
 - [x] **AccountsList** (`/app/frontend/src/pages/AccountsList.js`): added `daysSince()` + `lastPaymentBadgeStyle()` helpers and rendered a `Badge variant="outline"` after the Last Pay date in the Financials column. Hidden when no `last_payment_date`. data-testid `account-row-last-pay-badge-{account_id}`, `title="N days since last payment"`.
