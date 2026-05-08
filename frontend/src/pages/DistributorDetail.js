@@ -2805,7 +2805,7 @@ export default function DistributorDetail() {
                   <div className="border rounded-lg p-4 bg-blue-50/40 space-y-2" data-testid="delivery-customer-summary">
                     <h4 className="font-semibold text-sm mb-2 text-blue-800">Customer Summary</h4>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Customer Billing Amount:</span>
+                      <span className="text-muted-foreground">Customer Order Value:</span>
                       <span className="font-medium">₹{custBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     {hasCN && (
@@ -2893,7 +2893,7 @@ export default function DistributorDetail() {
                         <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Pricing</p>
 
                         <div className="flex justify-between text-sm" data-testid="row-billed-to-customer">
-                          <span className="text-slate-600">Billed to Customer</span>
+                          <span className="text-slate-600">Customer Order Value</span>
                           <span className="font-medium text-slate-900">{fmt(totalCustomerPrice)}</span>
                         </div>
                         <div className="flex justify-between text-sm" data-testid="row-margin-on-sale">
