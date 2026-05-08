@@ -5,6 +5,16 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Return Reasons — Factory Return dropdown shows ALL configured reasons per side (2026-02-08)
+- [x] User reported: "values are coming now but they are not coming the Return Reasons configuration set up in Tenant settings". Specifically, when source = Warehouse, the dropdown should show all reasons configured for **Distributor**; when source = Customer Return, it should show all reasons configured for **Customer**.
+- [x] Root cause: `DeliveriesTab.jsx` was (a) hardcoding `applies_to=distributor` on the API call regardless of source, and (b) over-filtering the result by a hardcoded category list (`expired`, `damaged`, `empty_reusable`), which dropped any reason in the `promotional` category (e.g., FOC/Promotional Empty Return) and would also drop any future custom reasons.
+- [x] **Fix** `/app/frontend/src/components/distributor/DeliveriesTab.jsx`:
+  - `fetchReturnReasons` now derives `applies_to` from `factoryForm.source` (`customer_return` → `customer`, otherwise → `distributor`). Source toggle re-fetches automatically because the callback's deps now include `factoryForm.source`.
+  - Dropped the hardcoded category filter — `filteredReasons` now equals every reason the API returns for that side.
+- [x] **Backend** `/app/backend/routes/factory_returns.py`: extended `FactoryReturnCreate.reason` regex to also accept `promotional` so reasons in that category submit successfully. Existing business rule "empty_reusable only for customer source" preserved.
+- [x] **Verification**: curl `applies_to=distributor` returns Expired Stock Return, Damaged Stock Return, FOC/Promotional Empty Return (3); `applies_to=customer` returns 4 incl. Empty Bottle Return. Lint clean.
+
+
 ### Return Reasons — Fix dropdown not populating in "New Factory Return" modal (2026-02-07)
 - [x] User reported: Even after editing the master return reasons in Tenant Settings → Returns and ticking the **Distributor** box, the Reason dropdown in the "New Factory Return" popup stayed empty.
 - [x] Root cause: `fetchReturnReasons()` was gated on the `factorySectionOpen` state. The "New Factory Return" modal in `DeliveriesTab.jsx` is opened via a *separate* state — `showFactoryDialog`. Users could open the modal without ever flipping `factorySectionOpen` true → fetch never ran → dropdown empty (showed "No active return reasons configured").

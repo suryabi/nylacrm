@@ -115,12 +115,16 @@ export default function DeliveriesTab({
     return factoryForm.source === 'customer_return' ? s.customer_pending_factory : s.warehouse_available;
   }, [availableStock, factoryForm.source]);
 
-  // Fetch master return reasons (active only)
+  // Fetch master return reasons (active only) — applies_to is driven by source:
+  //   warehouse stock      → reasons configured for "Distributor"
+  //   customer return      → reasons configured for "Customer"
   const fetchReturnReasons = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/return-reasons?is_active=true&applies_to=distributor`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const appliesTo = factoryForm.source === 'customer_return' ? 'customer' : 'distributor';
+      const res = await fetch(
+        `${API_URL}/api/return-reasons?is_active=true&applies_to=${appliesTo}`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
       if (res.ok) {
         const data = await res.json();
         setReturnReasons(data.reasons || []);
@@ -128,21 +132,16 @@ export default function DeliveriesTab({
     } catch (err) {
       console.error('Error fetching return reasons:', err);
     }
-  }, [API_URL, token]);
+  }, [API_URL, token, factoryForm.source]);
 
   useEffect(() => {
     if (factorySectionOpen || showFactoryDialog) fetchReturnReasons();
   }, [factorySectionOpen, showFactoryDialog, fetchReturnReasons]);
 
-  // Filter reasons based on stock source. Backend reason field accepts only
-  // categories: expired | damaged | empty_reusable. We display master reason
-  // labels but submit the underlying category to keep backend contract intact.
-  const filteredReasons = useMemo(() => {
-    const allowed = factoryForm.source === 'customer_return'
-      ? ['empty_reusable', 'expired', 'damaged']
-      : ['expired', 'damaged'];
-    return returnReasons.filter(r => allowed.includes(r.category));
-  }, [returnReasons, factoryForm.source]);
+  // Show every active reason returned by the API for this side. The backend
+  // server-side filter (applies_to) already scopes the list correctly, so the
+  // frontend should not over-filter by category.
+  const filteredReasons = useMemo(() => returnReasons, [returnReasons]);
 
   // Fetch margin matrix SKUs for this distributor (only assigned SKUs)
   const fetchMarginSkus = useCallback(async () => {

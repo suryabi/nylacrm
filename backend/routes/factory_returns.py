@@ -29,7 +29,7 @@ class FactoryReturnItemCreate(BaseModel):
 class FactoryReturnCreate(BaseModel):
     distributor_location_id: str
     source: str = Field(pattern="^(customer_return|warehouse)$")
-    reason: str = Field(pattern="^(expired|damaged|empty_reusable)$")
+    reason: str = Field(pattern="^(expired|damaged|empty_reusable|promotional)$")
     reason_id: Optional[str] = None
     reason_name: Optional[str] = None
     customer_return_id: Optional[str] = None
