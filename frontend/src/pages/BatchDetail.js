@@ -368,6 +368,7 @@ export default function BatchDetail() {
                   batchId={batchId} bottlesPerCrate={batch.bottles_per_crate || 1}
                   rejectionReasons={rejectionReasons} qcTeam={qcTeam} onUpdate={fetchBatch}
                   stageInspections={stageInspections}
+                  costMappings={costMappings} skuCogs={skuCogs} batch={batch}
                 />
               );
             })}
@@ -404,7 +405,7 @@ export default function BatchDetail() {
 
 /* ─── Stage Card with Move & Inspect actions ─── */
 
-function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, rejectionReasons, qcTeam, onUpdate, stageInspections }) {
+function StageCard({ stage, cfg, Icon, bal, isFirst, canReceive, canInspect, sourceLabel, sourceQty, batchId, bottlesPerCrate, rejectionReasons, qcTeam, onUpdate, stageInspections, costMappings = [], skuCogs = {}, batch }) {
   const [showMove, setShowMove] = useState(false);
   const [showInspect, setShowInspect] = useState(false);
   const [editingInspection, setEditingInspection] = useState(null);
