@@ -357,8 +357,8 @@ export default function DeliveriesTab({
     const afterDiscount = tu * (parseFloat(item.unit_price) || 0) * (1 - (parseFloat(item.discount_percent) || 0) / 100);
     return sum + afterDiscount;
   }, 0);
-  const deliveryGstPct = parseFloat(deliveryForm.gst_percent) || 0;
-  const deliveryTotalAmount = deliverySubtotal + deliverySubtotal * (deliveryGstPct / 100);
+  // GST is not applied at this stage — totals are exclusive of GST.
+  const deliveryTotalAmount = deliverySubtotal;
   
   // Calculate net billing amount
   const netBillingAmount = Math.max(0, deliveryTotalAmount - totalCreditToApply);
@@ -860,37 +860,22 @@ export default function DeliveriesTab({
                       })}
                       </div>
                       
-                      {/* Totals: Subtotal → GST → Grand Total */}
+                      {/* Total — exclusive of GST (no GST calc here; settlement happens separately) */}
                       {(() => {
                         const subtotal = deliveryItems.reduce((sum, item) => {
                           const pu = parseInt(item.packaging_units) || 1;
                           const tu = (parseInt(item.quantity) || 0) * pu;
                           return sum + tu * (parseFloat(item.unit_price) || 0) * (1 - ((parseFloat(item.discount_percent) || 0) / 100));
                         }, 0);
-                        const gstPct = parseFloat(deliveryForm.gst_percent) || 0;
-                        const gstAmt = subtotal * (gstPct / 100);
-                        const grandTotal = subtotal + gstAmt;
                         return (
-                          <div className="border-t px-4 py-3 space-y-2">
+                          <div className="border-t px-4 py-3 space-y-1">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">Subtotal</span>
-                              <span className="text-sm font-semibold tabular-nums">₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              <span className="text-base font-bold">Total</span>
+                              <span className="text-lg font-bold tabular-nums" data-testid="delivery-grand-total">
+                                ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
                             </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-muted-foreground">GST</span>
-                                <Input type="number" min="0" max="100" step="0.5" className="h-7 w-16 text-xs"
-                                  value={deliveryForm.gst_percent || ''}
-                                  onChange={(e) => setDeliveryForm(prev => ({ ...prev, gst_percent: e.target.value }))}
-                                  placeholder="%" data-testid="delivery-gst-input" />
-                                <span className="text-xs text-muted-foreground">%</span>
-                              </div>
-                              <span className="text-sm font-semibold tabular-nums">₹{gstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex items-center justify-between pt-2 border-t">
-                              <span className="text-base font-bold">Grand Total</span>
-                              <span className="text-lg font-bold tabular-nums" data-testid="delivery-grand-total">₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                            </div>
+                            <p className="text-[11px] text-muted-foreground italic text-right">All values exclusive of GST</p>
                           </div>
                         );
                       })()}
