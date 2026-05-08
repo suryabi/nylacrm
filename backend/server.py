@@ -6292,18 +6292,29 @@ async def get_account_invoices(
     invoices = await get_tdb().invoices.find(query, {'_id': 0}).sort('invoice_date', -1).skip(skip).limit(limit).to_list(limit)
     logger.info(f"[INVOICE_FETCH] Found {len(invoices)} invoices for account: {account_id} (page {page}/{total_pages}, total {total_count})")
     
-    # Get ALL invoices for totals + bottle metrics (without pagination)
+    # Get ALL invoices for totals + bottle metrics (without pagination).
+    # We also need invoice_date to determine the latest invoice's outstanding.
     all_invoices = await get_tdb().invoices.find(
         query,
         {'_id': 0, 'gross_invoice_value': 1, 'net_invoice_value': 1, 'credit_note_value': 1,
-         'outstanding': 1, 'grand_total': 1, 'total_amount': 1, 'paid_amount': 1, 'items': 1, 'line_items': 1}
+         'outstanding': 1, 'grand_total': 1, 'total_amount': 1, 'paid_amount': 1,
+         'items': 1, 'line_items': 1, 'invoice_date': 1}
     ).to_list(10000)
     
     # Calculate totals - support both old and new field names
     total_amount = sum(inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))) or 0 for inv in all_invoices)
     net_amount = sum(inv.get('net_invoice_value', inv.get('paid_amount', 0)) or 0 for inv in all_invoices)
     credit_amount = sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices)
-    outstanding = sum(inv.get('outstanding', 0) or 0 for inv in all_invoices)
+
+    # Outstanding: take the LATEST invoice's value (NOT a sum across invoices).
+    # This mirrors the contract with the external invoicing system, which sends
+    # the running account outstanding on each invoice — the most recent invoice
+    # is the source of truth.
+    if all_invoices:
+        latest_inv = max(all_invoices, key=lambda i: (i.get('invoice_date') or ''))
+        outstanding = float(latest_inv.get('outstanding') or 0)
+    else:
+        outstanding = 0.0
 
     # Bottles delivered across the time window
     bottles_delivered = 0
@@ -6378,7 +6389,7 @@ async def get_account_invoices(
         'net_amount': net_amount,
         'credit_amount': credit_amount,
         'paid_amount': net_amount,  # For backwards compatibility
-        'outstanding': outstanding if outstanding > 0 else (total_amount - net_amount),
+        'outstanding': outstanding,
         'total': total_count,
         'page': page,
         'limit': limit,
