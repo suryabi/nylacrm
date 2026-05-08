@@ -5,6 +5,31 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Distributor Self-Service Portal — Welcome page + sidebar redesign (2026-02-08)
+- [x] User asked: "We will give access to distributors to login… they verify info (read access) except stock out, where they record all deliveries… Welcome page just like the home page, then take them to their distribution page; bring all the tabs to the left side main menu."
+- [x] **New backend endpoint** `/app/backend/routes/distributor_portal.py` → `GET /api/distributor-portal/home` derives the linked distributor from `current_user.distributor_id` (403 if unlinked) and returns: distributor profile snippet, stock_summary (total units, active SKUs, pending stock-in, pending deliveries, pending return units), financials (outstanding, last payment), last_settlement, and the last 5 deliveries / stock-in shipments / customer returns. Registered in `/app/backend/routes/__init__.py` under `/distributor-portal`.
+- [x] **New page** `/app/frontend/src/pages/DistributorHome.js` — distinct mobile-first portal style: greeting, distributor identity strip, dark CTA card "Record a Delivery", four KPI tiles (Total Stock / Pending Stock-In / Pending Deliveries / Returns to Factory), Account Balance + Last Settlement cards, three recent-activity lists + a deep-link card to "View My Profile". Every interactive element has a `data-testid`.
+- [x] **Sidebar overhaul** `/app/frontend/src/layouts/DashboardLayout.js`:
+  - `buildDistributorUserNavigationGroups(distributorId)` produces a 4-group menu (Overview / Operations / Finance / My Account) with **Home, Stock Dashboard, Stock In, Stock Out (highlighted with amber ring), Customer Returns, Settlements, Billing, My Profile, Commercial** — each item deep-linking into `/distributors/:id?tab=<x>`.
+  - `getNavigationGroups()` calls the dynamic builder for distributor users so the menu is rebuilt on login.
+  - Active-state detection upgraded: items with `?tab=` are matched by both pathname and the current `tab` query param so the right entry highlights.
+  - Auto-redirect logic: distributor users now land on `/distributor-home` (not the detail page); they're scoped to `/distributor-home`, `/distributors/<their id>` and any `?tab=` therein.
+- [x] **Login redirect** `/app/frontend/src/pages/Login.js` — both the post-login navigate and the already-authenticated redirect now route Distributor-role users to `/distributor-home`.
+- [x] **Detail page** `/app/frontend/src/pages/DistributorDetail.js`:
+  - Added `useSearchParams` sync — `activeTab` initial value comes from `?tab=`, and `handleTabChange` writes back to the URL so sidebar deep-links work.
+  - In-page `TabsList` is **hidden for distributor users** (their sidebar IS the tab nav).
+  - `canManage` is now **tab-aware** for distributors: write access only when `activeTab === 'stockout' || 'profile'`. Other tabs render every action gated on `canManage` as read-only.
+  - The page-level "Back to Distributors" arrow is hidden for distributor users; the page-level Edit button only shows on the Profile tab.
+- [x] **Routing** `/app/frontend/src/App.js`: new `/distributor-home` route guarded by `ProtectedRoute`.
+- [x] **Verification** (Playwright):
+  - Login as `john.distributor@test.com` / `nyladist##` → redirects to `/distributor-home`.
+  - KPIs, CTA, sidebar items all present (data-testids confirmed).
+  - Sidebar "Stock Out" → `/distributors/.../?tab=stockout`; in-page TabsList hidden, Edit button hidden.
+  - Sidebar "My Profile" → `?tab=profile`; Edit button visible (distributor can update contact info).
+  - Sidebar "Home" → returns to `/distributor-home`.
+- [x] Lint clean (Python + JS).
+
+
 ### Return Reasons — Factory Return dropdown shows ALL configured reasons per side (2026-02-08)
 - [x] User reported: "values are coming now but they are not coming the Return Reasons configuration set up in Tenant settings". Specifically, when source = Warehouse, the dropdown should show all reasons configured for **Distributor**; when source = Customer Return, it should show all reasons configured for **Customer**.
 - [x] Root cause: `DeliveriesTab.jsx` was (a) hardcoding `applies_to=distributor` on the API call regardless of source, and (b) over-filtering the result by a hardcoded category list (`expired`, `damaged`, `empty_reusable`), which dropped any reason in the `promotional` category (e.g., FOC/Promotional Empty Return) and would also drop any future custom reasons.

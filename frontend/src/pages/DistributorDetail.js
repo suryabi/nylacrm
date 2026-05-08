@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import useMasterLocations from '../hooks/useMasterLocations';
@@ -61,7 +61,22 @@ export default function DistributorDetail() {
   
   const [loading, setLoading] = useState(true);
   const [distributor, setDistributor] = useState(null);
-  const [activeTab, setActiveTab] = useState('stock-dashboard');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'stock-dashboard');
+
+  // Sync ?tab= URL param ↔ activeTab state (so sidebar deep-links work for distributor users)
+  useEffect(() => {
+    const urlTab = searchParams.get('tab');
+    if (urlTab && urlTab !== activeTab) setActiveTab(urlTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleTabChange = useCallback((next) => {
+    setActiveTab(next);
+    const sp = new URLSearchParams(searchParams);
+    sp.set('tab', next);
+    setSearchParams(sp, { replace: true });
+  }, [searchParams, setSearchParams]);
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
@@ -263,9 +278,12 @@ export default function DistributorDetail() {
   
   // Permission checks - Distributor role users have limited permissions
   const isDistributorRole = user?.role === 'Distributor';
+  // Distributor users have write access ONLY on the Stock Out and Profile tabs.
+  // Every other tab is rendered read-only for them.
+  const distributorWritableTab = activeTab === 'stockout' || activeTab === 'profile';
   const canManage = user && (
     ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role) ||
-    isDistributorRole // Distributors can manage their own profile and create deliveries
+    (isDistributorRole && distributorWritableTab)
   );
   const canDelete = user && ['CEO', 'Admin', 'System Admin'].includes(user.role);
   const canApprove = user && ['CEO', 'Director', 'Vice President'].includes(user.role);
@@ -2101,9 +2119,11 @@ export default function DistributorDetail() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/distributors')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          {!isDistributorRole && (
+            <Button variant="ghost" size="sm" onClick={() => navigate('/distributors')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{distributor.distributor_name}</h1>
@@ -2116,9 +2136,9 @@ export default function DistributorDetail() {
           </div>
         </div>
         
-        {canManage && !isEditing && (
+        {canManage && !isEditing && activeTab === 'profile' && (
           <div className="flex items-center gap-2">
-            <Button onClick={() => setIsEditing(true)}>
+            <Button onClick={() => setIsEditing(true)} data-testid="edit-distributor-btn">
               <Edit2 className="h-4 w-4 mr-2" />
               Edit
             </Button>
@@ -2150,7 +2170,8 @@ export default function DistributorDetail() {
       </div>
 
       {/* Tabs - Consolidated Structure */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        {!isDistributorRole && (
         <TabsList className="grid w-full grid-cols-8 h-auto p-1">
           <TabsTrigger value="stock-dashboard" className="flex items-center gap-2 py-2.5" data-testid="stock-dashboard-tab">
             <BarChart3 className="h-4 w-4" />
@@ -2185,6 +2206,7 @@ export default function DistributorDetail() {
             <span className="hidden sm:inline">Billing</span>
           </TabsTrigger>
         </TabsList>
+        )}
 
         {/* Profile Tab: Overview + Coverage + Locations */}
         <TabsContent value="profile" className="space-y-8">
@@ -2462,7 +2484,7 @@ export default function DistributorDetail() {
             viewNoteDetail={viewNoteDetail}
             getNoteStatusBadge={getNoteStatusBadge}
             getSettlementStatusBadge={getSettlementStatusBadge}
-            setActiveTab={setActiveTab}
+            setActiveTab={handleTabChange}
             setDeleteTarget={setDeleteTarget}
             API_URL={API_URL}
             token={token}

@@ -207,15 +207,42 @@ const distributionNavigationGroups = [
   },
 ];
 
-// Distributor User Navigation (simplified for distributor role users)
-const distributorUserNavigationGroups = [
-  {
-    title: 'My Distributor',
-    items: [
-      { name: 'My Profile', href: '/distributors', icon: Building, moduleKey: 'distributors', roles: ['Distributor'] },
-    ]
-  },
-];
+// Distributor User Navigation (full self-service portal menu).
+// Each item deep-links to a tab on the user's own distributor detail page.
+const buildDistributorUserNavigationGroups = (distributorId) => {
+  const tab = (t) => `/distributors/${distributorId}?tab=${t}`;
+  return [
+    {
+      title: 'Overview',
+      items: [
+        { name: 'Home', href: '/distributor-home', icon: Home, roles: ['Distributor'] },
+        { name: 'Stock Dashboard', href: tab('stock-dashboard'), icon: BarChart3, roles: ['Distributor'] },
+      ],
+    },
+    {
+      title: 'Operations',
+      items: [
+        { name: 'Stock In', href: tab('stockin'), icon: Package, roles: ['Distributor'] },
+        { name: 'Stock Out', href: tab('stockout'), icon: Truck, roles: ['Distributor'], highlight: true },
+        { name: 'Customer Returns', href: tab('returns'), icon: PackageOpen, roles: ['Distributor'] },
+      ],
+    },
+    {
+      title: 'Finance',
+      items: [
+        { name: 'Settlements', href: tab('settlements'), icon: Receipt, roles: ['Distributor'] },
+        { name: 'Billing', href: tab('billing'), icon: Calculator, roles: ['Distributor'] },
+      ],
+    },
+    {
+      title: 'My Account',
+      items: [
+        { name: 'My Profile', href: tab('profile'), icon: Building2, roles: ['Distributor'] },
+        { name: 'Commercial', href: tab('commercial'), icon: IndianRupee, roles: ['Distributor'] },
+      ],
+    },
+  ];
+};
 
 // Marketing Context Navigation
 const marketingNavigationGroups = [
@@ -265,20 +292,21 @@ export default function DashboardLayout({ children }) {
   );
   const [collapsedGroups, setCollapsedGroups] = useState({});
 
-  // Redirect Distributor users to their profile page
+  // Redirect Distributor users to their welcome dashboard (or keep them inside their own scope)
   useEffect(() => {
     if (isDistributorUser && getDistributorId) {
-      // Distributor users should always be on their profile page, not sales home
-      const distributorProfilePath = `/distributors/${getDistributorId}`;
-      const allowedPaths = [distributorProfilePath, '/login', '/logout'];
-      
-      // If on any path not related to their distributor, redirect to profile
-      if (!location.pathname.startsWith('/distributors/') && !allowedPaths.includes(location.pathname)) {
-        navigate(distributorProfilePath);
-      }
-      // If on distributors list, redirect to their specific profile
-      else if (location.pathname === '/distributors') {
-        navigate(distributorProfilePath);
+      const ownProfilePrefix = `/distributors/${getDistributorId}`;
+      const allowedPaths = ['/distributor-home', '/login', '/logout'];
+
+      // Allow: welcome page, login/logout, and the distributor's own detail page (with any ?tab=)
+      const isOnOwnDetail = location.pathname === ownProfilePrefix || location.pathname.startsWith(ownProfilePrefix + '/');
+      const isOnAllowed = allowedPaths.includes(location.pathname);
+
+      if (!isOnOwnDetail && !isOnAllowed) {
+        navigate('/distributor-home');
+      } else if (location.pathname === '/distributors') {
+        // Distributors should never see the global list page
+        navigate('/distributor-home');
       }
     }
   }, [isDistributorUser, getDistributorId, location.pathname, navigate]);
@@ -309,9 +337,9 @@ export default function DashboardLayout({ children }) {
 
   // Select navigation groups based on current context and user role
   const getNavigationGroups = () => {
-    // Distributor users get a simplified nav
+    // Distributor users get a dedicated portal nav with their own distributor's tabs as menu items
     if (isDistributorUser) {
-      return distributorUserNavigationGroups;
+      return buildDistributorUserNavigationGroups(getDistributorId);
     }
     
     switch (currentContext) {
@@ -492,7 +520,15 @@ export default function DashboardLayout({ children }) {
                         );
                       }
                       
-                      const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+                      const itemPath = (item.href || '').split('?')[0];
+                      const itemTab = (() => {
+                        const m = (item.href || '').match(/[?&]tab=([^&]+)/);
+                        return m ? decodeURIComponent(m[1]) : null;
+                      })();
+                      const currentTab = new URLSearchParams(location.search).get('tab');
+                      const isActive = itemTab
+                        ? (location.pathname === itemPath && currentTab === itemTab)
+                        : (location.pathname === item.href || location.pathname.startsWith(item.href + '/'));
                       return (
                         <button
                           key={item.name}
@@ -500,8 +536,11 @@ export default function DashboardLayout({ children }) {
                           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                             isActive
                               ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/30'
-                              : 'text-white/80 hover:bg-white/10 hover:text-white'
+                              : item.highlight
+                                ? 'text-white hover:bg-white/10 ring-1 ring-amber-400/40'
+                                : 'text-white/80 hover:bg-white/10 hover:text-white'
                           }`}
+                          data-testid={`sidebar-${(item.name || '').toLowerCase().replace(/\s+/g, '-')}`}
                         >
                           <Icon className="h-4 w-4" />
                           {item.name}

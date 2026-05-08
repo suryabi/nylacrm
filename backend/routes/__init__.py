@@ -53,6 +53,7 @@ from .marketing_requests import router as marketing_requests_router, public_rout
 from .master_request_types import router as master_request_types_router
 from .user_preferences import router as user_preferences_router
 from .knowledge_base import router as knowledge_base_router
+from .distributor_portal import router as distributor_portal_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -159,5 +160,8 @@ routes_router.include_router(user_preferences_router, tags=["User Preferences"])
 
 # Knowledge Base — "Ask Nyla" (admin uploads docs, all users can ask questions)
 routes_router.include_router(knowledge_base_router, tags=["Knowledge Base"])
+
+# Distributor Self-Service Portal (welcome dashboard for Distributor-role users)
+routes_router.include_router(distributor_portal_router, prefix="/distributor-portal", tags=["Distributor Portal"])
 
 __all__ = ['routes_router']
