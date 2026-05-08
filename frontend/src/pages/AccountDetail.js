@@ -754,6 +754,24 @@ ${googleMapsLink}`;
   // Check if user is admin (CEO or Director)
   const isAdmin = user?.role === 'CEO' || user?.role === 'Director';
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteAllInvoicesDialog, setShowDeleteAllInvoicesDialog] = useState(false);
+  const [deletingAllInvoices, setDeletingAllInvoices] = useState(false);
+
+  const handleDeleteAllInvoices = async () => {
+    setDeletingAllInvoices(true);
+    try {
+      const res = await axios.delete(`${API_URL}/accounts/${id}/invoices`, { withCredentials: true });
+      toast.success(`Deleted ${res.data?.count ?? 0} invoice${(res.data?.count || 0) === 1 ? '' : 's'} for this account`);
+      setShowDeleteAllInvoicesDialog(false);
+      // Reload invoices and account so financial rollups refresh
+      fetchInvoices(id);
+      fetchAccount();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete invoices');
+    } finally {
+      setDeletingAllInvoices(false);
+    }
+  };
 
   const handleDeleteAccount = async () => {
     if (!window.confirm(`Are you sure you want to delete account "${account.account_name}"? This action cannot be undone.`)) {
@@ -1101,6 +1119,18 @@ ${googleMapsLink}`;
                 >
                   <Plus className="h-4 w-4 mr-1" /> Create Invoice
                 </Button>
+
+                {(user?.role === 'CEO' || user?.role === 'System Admin') && (invoiceData?.invoices?.length || 0) > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowDeleteAllInvoicesDialog(true)}
+                    data-testid="delete-all-invoices-btn"
+                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" /> Delete All Invoices
+                  </Button>
+                )}
               </div>
             </div>
             {loadingInvoices ? (
@@ -1994,6 +2024,34 @@ ${googleMapsLink}`;
               ) : (
                 <><CheckCircle className="h-4 w-4 mr-2" /> Create Invoice</>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete All Invoices — restricted to CEO / System Admin */}
+      <Dialog open={showDeleteAllInvoicesDialog} onOpenChange={setShowDeleteAllInvoicesDialog}>
+        <DialogContent className="sm:max-w-md" data-testid="delete-all-invoices-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <Trash2 className="h-5 w-5" /> Delete all invoices?
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete <span className="font-semibold">{invoiceData?.invoices?.length || 0}</span> invoice{(invoiceData?.invoices?.length || 0) === 1 ? '' : 's'} for <span className="font-semibold">{account?.account_name}</span>. The account's outstanding balance, invoice totals and last-payment fields will be reset. <span className="font-medium text-red-700">This action cannot be undone.</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => setShowDeleteAllInvoicesDialog(false)} disabled={deletingAllInvoices}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAllInvoices}
+              disabled={deletingAllInvoices}
+              data-testid="confirm-delete-all-invoices"
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deletingAllInvoices ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4 mr-2" /> Delete All</>}
             </Button>
           </DialogFooter>
         </DialogContent>

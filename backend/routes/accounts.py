@@ -442,6 +442,56 @@ async def get_account_invoices(account_id: str, current_user: dict = Depends(get
     }
 
 
+@router.delete("/{account_id}/invoices")
+async def delete_all_account_invoices(account_id: str, current_user: dict = Depends(get_current_user)):
+    """Bulk-delete every invoice for an account. Restricted to CEO and System Admin.
+
+    Also resets the account's invoice-derived rollups (outstanding_balance, totals,
+    invoice_count, last_payment, last_invoice_*) so the UI reflects the cleared state.
+    """
+    role = (current_user.get('role') or '').strip()
+    if role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can delete invoices in bulk')
+
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    # Match invoices either by internal UUID or the external CA lead id (legacy linkage)
+    lead = await tdb.leads.find_one({'id': account.get('lead_id')}, {'_id': 0, 'lead_id': 1})
+    or_clauses = [{'account_id': account_id}, {'account_uuid': account_id}]
+    if lead and lead.get('lead_id'):
+        or_clauses.append({'ca_lead_id': lead['lead_id']})
+
+    deleted = await tdb.invoices.delete_many({'$or': or_clauses})
+
+    # Reset the account's invoice-derived financial rollups
+    await tdb.accounts.update_one(
+        {'id': account_id},
+        {'$set': {
+            'outstanding_balance': 0.0,
+            'total_gross_invoice_value': 0.0,
+            'total_net_invoice_value': 0.0,
+            'total_credit_note_value': 0.0,
+            'invoice_count': 0,
+            'last_invoice_no': None,
+            'last_invoice_date': None,
+            'last_payment_amount': None,
+            'last_payment_date': None,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+
+    return {
+        'deleted': True,
+        'count': deleted.deleted_count,
+        'account_id': account_id,
+    }
+
+
+
+
 @router.post("/{account_id}/invoices")
 async def create_account_invoice(account_id: str, invoice_data: dict, current_user: dict = Depends(get_current_user)):
     """Create an invoice for an account.
