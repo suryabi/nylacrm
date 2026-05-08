@@ -266,60 +266,55 @@ export default function AccountPerformance() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm" data-testid="account-performance-table">
+              <table className="w-full text-sm table-fixed" data-testid="account-performance-table">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Account</th>
-                    <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Lead Type</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Invoice Value</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Avg Order</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Bottle Credit</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Contribution</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Last Payment</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Outstanding</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Overdue</th>
+                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[24%]">Account</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[14%]">Invoice Value</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[12%]">Avg Order</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[10%]">Bottle Credit</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[10%]">Contribution</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[12%]">Last Payment</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[10%]">Outstanding</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[8%]">Overdue</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.accounts.slice((page - 1) * pageSize, page * pageSize).map((row, idx) => (
                     <tr 
                       key={row.account_id || idx} 
-                      className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
+                      className="group border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
                       onClick={() => navigate(`/accounts/${row.account_id}`)}
                       data-testid={`account-row-${row.account_id}`}
                     >
-                      <td className="py-4 px-5">
+                      <td className="py-4 px-5 max-w-0">
+                        <p
+                          className="font-semibold text-slate-800 dark:text-white group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors truncate"
+                          title={row.account_name}
+                        >
+                          {row.account_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate" title={[row.city, row.state].filter(Boolean).join(', ')}>
+                          {[row.city, row.state].filter(Boolean).join(', ') || '—'}
+                        </p>
+                      </td>
+                      <td className="py-4 px-3 text-right">
                         <div>
-                          <p className="font-medium text-primary hover:underline">{row.account_name}</p>
-                          <p className="text-xs text-muted-foreground">{row.city}, {row.state}</p>
-                          <p className="text-xs text-muted-foreground/70 font-mono">{row.account_id}</p>
+                          <p className="font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(row.gross_invoice_total)}</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 tabular-nums">Net: {formatCurrency(row.net_invoice_total)}</p>
                         </div>
                       </td>
-                      <td className="py-4 px-4">
-                        {(() => {
-                          const lt = row.lead_type || 'B2B';
-                          return (
-                            <Badge className={leadTypeColors[lt] || leadTypeColors['B2B']} data-testid={`lead-type-badge-${row.account_id}`}>{lt}</Badge>
-                          );
-                        })()}
-                      </td>
-                      <td className="py-4 px-5 text-right">
-                        <div>
-                          <p className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.gross_invoice_total)}</p>
-                          <p className="text-xs text-blue-600 dark:text-blue-400">Net: {formatCurrency(row.net_invoice_total)}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-5 text-right">
+                      <td className="py-4 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <ShoppingCart className="h-3 w-3 text-indigo-400" />
-                          <span className="font-medium text-indigo-600 dark:text-indigo-400">{formatCurrency(row.average_order_amount)}</span>
+                          <span className="font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">{formatCurrency(row.average_order_amount)}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">{row.invoice_count} orders</p>
                       </td>
-                      <td className="py-4 px-5 text-right text-purple-600 dark:text-purple-400">{formatCurrency(row.bottle_credit)}</td>
-                      <td className="py-4 px-5 text-right">
+                      <td className="py-4 px-3 text-right text-purple-600 dark:text-purple-400 tabular-nums">{formatCurrency(row.bottle_credit)}</td>
+                      <td className="py-4 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <span className={`font-semibold ${
+                          <span className={`font-semibold tabular-nums ${
                             row.contribution_pct >= 10 ? 'text-emerald-600 dark:text-emerald-400' :
                             row.contribution_pct >= 5 ? 'text-blue-600 dark:text-blue-400' :
                             row.contribution_pct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
@@ -327,23 +322,23 @@ export default function AccountPerformance() {
                           {row.contribution_pct >= 10 && <TrendingUp className="h-3 w-3 text-emerald-500" />}
                         </div>
                       </td>
-                      <td className="py-4 px-5 text-right">
+                      <td className="py-4 px-3 text-right">
                         <div>
-                          <p className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(row.last_payment_amount)}</p>
+                          <p className="font-medium text-slate-700 dark:text-slate-300 tabular-nums">{formatCurrency(row.last_payment_amount)}</p>
                           <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
                             <Calendar className="h-3 w-3" />{formatDate(row.last_payment_date)}
                           </p>
                         </div>
                       </td>
-                      <td className="py-4 px-5 text-right">
-                        <span className={row.outstanding_balance > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-green-600 dark:text-green-400'}>
+                      <td className="py-4 px-3 text-right">
+                        <span className={`tabular-nums ${row.outstanding_balance > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-green-600 dark:text-green-400'}`}>
                           {formatCurrency(row.outstanding_balance)}
                         </span>
                       </td>
                       <td className="py-4 px-5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           {row.overdue_amount > 0 && <AlertTriangle className="h-3 w-3 text-red-500" />}
-                          <span className={row.overdue_amount > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-green-600 dark:text-green-400'}>
+                          <span className={`tabular-nums ${row.overdue_amount > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-green-600 dark:text-green-400'}`}>
                             {formatCurrency(row.overdue_amount)}
                           </span>
                         </div>
