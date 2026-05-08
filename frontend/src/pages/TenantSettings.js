@@ -263,6 +263,7 @@ export default function TenantSettings() {
     credit_percentage: null,
     return_to_factory: true,
     requires_inspection: false,
+    applies_to: ['customer', 'distributor'],
     color: '#10B981'
   });
   
@@ -633,6 +634,7 @@ export default function TenantSettings() {
       credit_percentage: null,
       return_to_factory: true,
       requires_inspection: false,
+      applies_to: ['customer', 'distributor'],
       color: '#10B981'
     });
   };
@@ -649,6 +651,9 @@ export default function TenantSettings() {
       credit_percentage: reason.credit_percentage,
       return_to_factory: reason.return_to_factory,
       requires_inspection: reason.requires_inspection,
+      applies_to: Array.isArray(reason.applies_to) && reason.applies_to.length > 0
+        ? reason.applies_to
+        : ['customer'],  // legacy data → customer-only
       color: reason.color || '#10B981'
     });
     setShowReasonDialog(true);
@@ -1528,6 +1533,19 @@ export default function TenantSettings() {
                                 Inspection Required
                               </span>
                             )}
+                            {(() => {
+                              const at = (reason.applies_to && reason.applies_to.length > 0) ? reason.applies_to : ['customer'];
+                              return (
+                                <span className="flex items-center gap-1" data-testid={`reason-applies-${reason.reason_code}`}>
+                                  {at.includes('customer') && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-violet-300 bg-violet-50 text-violet-700">Customer</Badge>
+                                  )}
+                                  {at.includes('distributor') && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 bg-amber-50 text-amber-700">Distributor</Badge>
+                                  )}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -1689,6 +1707,35 @@ export default function TenantSettings() {
                     />
                     <Label className="cursor-pointer">Requires Inspection</Label>
                   </div>
+                </div>
+
+                {/* Applicable to — controls where this reason shows up */}
+                <div className="space-y-2 pt-2 border-t">
+                  <Label className="text-sm">Applicable to</Label>
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Determines whether this reason is selectable when handling Customer returns, Distributor returns, or both.
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    {['customer', 'distributor'].map((target) => (
+                      <label key={target} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={(reasonForm.applies_to || []).includes(target)}
+                          onChange={(e) => {
+                            const current = new Set(reasonForm.applies_to || []);
+                            if (e.target.checked) current.add(target); else current.delete(target);
+                            setReasonForm(prev => ({ ...prev, applies_to: Array.from(current) }));
+                          }}
+                          data-testid={`reason-applies-to-${target}`}
+                        />
+                        <span className="text-sm capitalize">{target}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {(reasonForm.applies_to || []).length === 0 && (
+                    <p className="text-xs text-rose-600">Select at least one — the reason won't appear anywhere otherwise.</p>
+                  )}
                 </div>
               </div>
               <DialogFooter>

@@ -118,7 +118,7 @@ export default function DeliveriesTab({
   // Fetch master return reasons (active only)
   const fetchReturnReasons = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/return-reasons?is_active=true`, {
+      const res = await fetch(`${API_URL}/api/return-reasons?is_active=true&applies_to=distributor`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {

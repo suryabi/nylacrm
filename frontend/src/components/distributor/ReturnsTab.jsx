@@ -96,7 +96,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   // Fetch return reasons
   const fetchReturnReasons = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/return-reasons?is_active=true`, {
+      const response = await axios.get(`${API_URL}/api/return-reasons?is_active=true&applies_to=customer`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setReturnReasons(response.data.reasons || []);

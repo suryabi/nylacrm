@@ -5,6 +5,24 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Return Reasons — `applies_to` (Customer / Distributor) toggle (2026-02-07)
+- [x] User reported: Return Reasons Master only powers Customer Returns; there's no way to mark a reason as applicable to Distributor returns. Need a per-reason toggle and have the relevant flow filter by it.
+- [x] **Backend models** `/app/backend/models/tenant.py`:
+  - `ReturnReason`, `ReturnReasonCreate`, `ReturnReasonUpdate` gained `applies_to: List[str]` (default `['customer','distributor']`). Possible values: `customer`, `distributor`.
+  - `DEFAULT_RETURN_REASONS` updated: EMPTY/EXPIRED/DAMAGED → both, FOC_PROMO → customer only.
+- [x] **Backend route** `/app/backend/routes/return_reasons.py`:
+  - `GET /api/return-reasons` now accepts `?applies_to=customer|distributor`. The `customer` filter also matches **legacy reasons that have no `applies_to` field** (they default to customer-only) so existing data isn't dropped.
+  - List response backfills `applies_to=['customer']` on any reason missing the field, so the frontend can render chips reliably.
+- [x] **Frontend Tenant Settings** `/app/frontend/src/pages/TenantSettings.js`:
+  - New **"Applicable to"** section in the Add/Edit Return Reason modal — two checkboxes (Customer / Distributor) with helper text and a guard that warns if both are unticked. data-testids `reason-applies-to-customer`, `reason-applies-to-distributor`.
+  - Reason cards now show a violet **Customer** badge and/or amber **Distributor** badge in the chips strip. data-testid `reason-applies-{REASON_CODE}`.
+  - Form state defaults seed `applies_to: ['customer','distributor']`; legacy reason edits load with `['customer']` fallback.
+- [x] **Frontend filtering**:
+  - `/app/frontend/src/components/distributor/ReturnsTab.jsx` (Customer Returns tab inside distributor module) now requests `?is_active=true&applies_to=customer`.
+  - `/app/frontend/src/components/distributor/DeliveriesTab.jsx` (factory returns from distributor) now requests `?is_active=true&applies_to=distributor`.
+- [x] **Verification**: curl with `applies_to=customer` → all 4 legacy reasons returned with `applies_to=['customer']` (backfill working); `applies_to=distributor` → 0 returned (matches the bug — admin must now tick the Distributor checkbox per reason). Live screenshot of Tenant Settings → Returns: every reason card now shows the violet Customer chip. Lint clean (Python + JS).
+
+
 ### COGS — Excluded outbound logistics from client-side compute too (2026-02-07)
 - [x] User reported: "Total COGS in production is still calculated considering outbound logistics."
 - [x] Root cause: the **earlier server-side fix** only updated `GET /api/cogs/{city}` and `PUT /api/cogs/{sku_id}`. The COGS Calculator page also runs **3 client-side computations** that were still adding logistics into `totalCOGS`:

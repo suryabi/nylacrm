@@ -451,6 +451,10 @@ class ReturnReason(BaseModel):
     # Factory return configuration
     return_to_factory: bool = True  # Whether this type needs to be returned to factory
     requires_inspection: bool = False  # Whether quality inspection is required
+
+    # Applicability — which return flows can use this reason.
+    # Possible values: 'customer', 'distributor'. Default: both.
+    applies_to: List[str] = Field(default_factory=lambda: ['customer', 'distributor'])
     
     # Status
     is_active: bool = True
@@ -481,6 +485,7 @@ class ReturnReasonCreate(BaseModel):
     credit_percentage: Optional[float] = None
     return_to_factory: bool = True
     requires_inspection: bool = False
+    applies_to: List[str] = Field(default_factory=lambda: ['customer', 'distributor'])
     display_order: int = 0
     color: Optional[str] = None
 
@@ -494,6 +499,7 @@ class ReturnReasonUpdate(BaseModel):
     credit_percentage: Optional[float] = None
     return_to_factory: Optional[bool] = None
     requires_inspection: Optional[bool] = None
+    applies_to: Optional[List[str]] = None
     is_active: Optional[bool] = None
     display_order: Optional[int] = None
     color: Optional[str] = None
@@ -509,6 +515,7 @@ DEFAULT_RETURN_REASONS = [
         "credit_type": "sku_return_credit",
         "return_to_factory": True,
         "requires_inspection": False,
+        "applies_to": ["customer", "distributor"],
         "is_system": True,
         "display_order": 1,
         "color": "#10B981"  # Emerald
@@ -521,6 +528,7 @@ DEFAULT_RETURN_REASONS = [
         "credit_type": "full_price",
         "return_to_factory": True,
         "requires_inspection": True,
+        "applies_to": ["customer", "distributor"],
         "is_system": True,
         "display_order": 2,
         "color": "#F59E0B"  # Amber
@@ -533,6 +541,7 @@ DEFAULT_RETURN_REASONS = [
         "credit_type": "full_price",
         "return_to_factory": True,
         "requires_inspection": True,
+        "applies_to": ["customer", "distributor"],
         "is_system": True,
         "display_order": 3,
         "color": "#EF4444"  # Red
@@ -545,6 +554,7 @@ DEFAULT_RETURN_REASONS = [
         "credit_type": "no_credit",
         "return_to_factory": True,
         "requires_inspection": False,
+        "applies_to": ["customer"],
         "is_system": True,
         "display_order": 4,
         "color": "#6B7280"  # Gray
