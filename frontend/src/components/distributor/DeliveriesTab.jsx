@@ -131,8 +131,8 @@ export default function DeliveriesTab({
   }, [API_URL, token]);
 
   useEffect(() => {
-    if (factorySectionOpen) fetchReturnReasons();
-  }, [factorySectionOpen, fetchReturnReasons]);
+    if (factorySectionOpen || showFactoryDialog) fetchReturnReasons();
+  }, [factorySectionOpen, showFactoryDialog, fetchReturnReasons]);
 
   // Filter reasons based on stock source. Backend reason field accepts only
   // categories: expired | damaged | empty_reusable. We display master reason

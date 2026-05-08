@@ -5,6 +5,13 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Return Reasons — Fix dropdown not populating in "New Factory Return" modal (2026-02-07)
+- [x] User reported: Even after editing the master return reasons in Tenant Settings → Returns and ticking the **Distributor** box, the Reason dropdown in the "New Factory Return" popup stayed empty.
+- [x] Root cause: `fetchReturnReasons()` was gated on the `factorySectionOpen` state. The "New Factory Return" modal in `DeliveriesTab.jsx` is opened via a *separate* state — `showFactoryDialog`. Users could open the modal without ever flipping `factorySectionOpen` true → fetch never ran → dropdown empty (showed "No active return reasons configured").
+- [x] **Fix** `/app/frontend/src/components/distributor/DeliveriesTab.jsx`: the existing `useEffect` now triggers on `factorySectionOpen || showFactoryDialog`, so opening the modal always loads master reasons.
+- [x] **Verification**: API confirmed correct (`/api/return-reasons?is_active=true&applies_to=distributor` returns 3 reasons; with frontend's category filter for `warehouse` source, EXPIRED + DAMAGED reach the dropdown). Lint clean.
+
+
 ### Return Reasons — `applies_to` (Customer / Distributor) toggle (2026-02-07)
 - [x] User reported: Return Reasons Master only powers Customer Returns; there's no way to mark a reason as applicable to Distributor returns. Need a per-reason toggle and have the relevant flow filter by it.
 - [x] **Backend models** `/app/backend/models/tenant.py`:
