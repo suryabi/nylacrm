@@ -176,12 +176,15 @@ def _build_invoice_doc(
     return base
 
 
-async def _refresh_account_financials(account_uuid: str) -> dict:
+async def _refresh_account_financials(account_uuid: str, *, outstanding_override: Optional[float] = None) -> dict:
     """
     Re-derive an account's running financial state from its invoices.
 
     For each account we keep:
-      - outstanding_balance: outstanding from the latest invoice (sorted by invoice_date desc)
+      - outstanding_balance: when `outstanding_override` is provided (the value
+        from the incoming webhook payload) it is written directly. This is the
+        source of truth — we do NOT add to or compute from prior values. When
+        no override is provided, we fall back to the latest invoice's outstanding.
       - last_payment_amount / last_payment_date: most recent payment seen across
         any invoice (preferring the largest payment_date, falling back to invoice_date when missing)
       - total_gross_invoice_value / total_net_invoice_value / total_credit_note_value
@@ -194,6 +197,14 @@ async def _refresh_account_financials(account_uuid: str) -> dict:
     ).to_list(10000)
 
     if not invoices:
+        if outstanding_override is not None:
+            await tdb.accounts.update_one(
+                {'$or': [{'id': account_uuid}, {'account_id': account_uuid}]},
+                {'$set': {
+                    'outstanding_balance': float(outstanding_override),
+                    'updated_at': datetime.now(timezone.utc).isoformat(),
+                }},
+            )
         return {}
 
     # Sort by invoice_date desc (string ISO YYYY-MM-DD lex compare works)
@@ -213,8 +224,14 @@ async def _refresh_account_financials(account_uuid: str) -> dict:
             last_pay_date = d
             last_pay_amt = float(amt or 0)
 
+    # Outstanding balance: webhook payload value wins (direct overwrite, no math).
+    if outstanding_override is not None:
+        outstanding_value = float(outstanding_override)
+    else:
+        outstanding_value = float(latest.get('outstanding') or 0)
+
     update_doc = {
-        'outstanding_balance': float(latest.get('outstanding') or 0),
+        'outstanding_balance': outstanding_value,
         'total_gross_invoice_value': sum(float(i.get('gross_invoice_value') or 0) for i in invoices),
         'total_net_invoice_value': sum(float(i.get('net_invoice_value') or 0) for i in invoices),
         'total_credit_note_value': sum(float(i.get('credit_note_value') or 0) for i in invoices),
@@ -263,8 +280,13 @@ async def create_external_invoice(account_id_param: str, raw_payload: dict, user
 
     await tdb.invoices.insert_one(dict(doc))
 
-    # Refresh account-level rollups (outstanding_balance, last_payment, totals)
-    await _refresh_account_financials(account.get('id'))
+    # Refresh account-level rollups (outstanding_balance, last_payment, totals).
+    # The incoming payload's `outstanding` is the source of truth — it directly
+    # overwrites account.outstanding_balance (no addition / no derivation).
+    await _refresh_account_financials(
+        account.get('id'),
+        outstanding_override=_to_float(payload.outstanding) if payload.outstanding is not None else None,
+    )
 
     response = {k: v for k, v in doc.items() if k != '_id'}
     response['unmatched_external_item_ids'] = unmatched
@@ -310,8 +332,13 @@ async def update_external_invoice(account_id_param: str, invoice_no: str, raw_pa
         {'$set': doc}
     )
 
-    # Refresh account-level rollups (outstanding_balance, last_payment, totals)
-    await _refresh_account_financials(account.get('id'))
+    # Refresh account-level rollups (outstanding_balance, last_payment, totals).
+    # The incoming payload's `outstanding` is the source of truth — it directly
+    # overwrites account.outstanding_balance (no addition / no derivation).
+    await _refresh_account_financials(
+        account.get('id'),
+        outstanding_override=_to_float(payload.outstanding) if payload.outstanding is not None else None,
+    )
 
     response = {k: v for k, v in doc.items() if k != '_id'}
     response['unmatched_external_item_ids'] = unmatched
