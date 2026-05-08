@@ -5,6 +5,14 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Distributor Profile — multi-contact list with optional portal-login provisioning (2026-02-08)
+- [x] User asked: "In distributor profile, add an ability to add multiple contacts and add an option if they need to be enabled to login to the distributor portal."
+- [x] **Backend** new `/app/backend/routes/distributor_contacts.py` — full CRUD on `db.distributor_contacts` collection scoped by tenant_id + distributor_id. When `has_portal_access=true` + email present, `_provision_portal_user` either creates a new Distributor-role user (default password `nyladist##`, `force_password_change=true`) or re-activates / links an existing user. Disabling access deactivates the linked user (keeps audit trail). Includes `POST .../reset-password` to force the default password back. Routes mounted at `/api/distributors/{id}/contacts`.
+- [x] **Frontend** new `/app/frontend/src/components/distributor/ContactsSection.jsx` — list with Primary / Portal Access badges, designation, mobile, email; per-row Edit / Reset-password / Delete actions. "Add Contact" dialog has two grouped checkboxes ("Mark as primary contact" + "Enable login to Distributor Portal") with helper copy explaining the default password and forced first-login change. Embedded in the Profile tab of `DistributorDetail.js` between Basic Information and Operating Coverage.
+- [x] **Verified** end-to-end: backend curl creates → enables portal → finds new Distributor user → disables → deletes; UI screenshot shows dialog, success toast, and contact row with Portal Access badge, mobile, email.
+- [x] Lint clean (Python + JS).
+
+
 ### Distributor Self-Service Portal — Welcome page + sidebar redesign (2026-02-08)
 - [x] User asked: "We will give access to distributors to login… they verify info (read access) except stock out, where they record all deliveries… Welcome page just like the home page, then take them to their distribution page; bring all the tabs to the left side main menu."
 - [x] **New backend endpoint** `/app/backend/routes/distributor_portal.py` → `GET /api/distributor-portal/home` derives the linked distributor from `current_user.distributor_id` (403 if unlinked) and returns: distributor profile snippet, stock_summary (total units, active SKUs, pending stock-in, pending deliveries, pending return units), financials (outstanding, last payment), last_settlement, and the last 5 deliveries / stock-in shipments / customer returns. Registered in `/app/backend/routes/__init__.py` under `/distributor-portal`.

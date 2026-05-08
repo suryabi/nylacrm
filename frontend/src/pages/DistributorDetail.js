@@ -26,6 +26,7 @@ import axios from 'axios';
 
 // Import tab components
 import OverviewTab from '../components/distributor/OverviewTab';
+import ContactsSection from '../components/distributor/ContactsSection';
 import CoverageTab from '../components/distributor/CoverageTab';
 import LocationsTab from '../components/distributor/LocationsTab';
 import MarginsTab from '../components/distributor/MarginsTab';
@@ -2221,6 +2222,18 @@ export default function DistributorDetail() {
               isEditing={isEditing}
               editData={editData}
               setEditData={setEditData}
+            />
+          </div>
+
+          {/* Contacts Section */}
+          <div className="border-t pt-8">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <User className="h-5 w-5 text-muted-foreground" />
+              Contacts
+            </h3>
+            <ContactsSection
+              distributorId={distributor.id}
+              canManage={canManage || isDistributorRole}
             />
           </div>
           
