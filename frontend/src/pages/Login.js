@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap } from 'lucide-react';
+import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap, Factory, Truck, Megaphone, Package, Boxes, ShieldCheck, Sparkles, Receipt } from 'lucide-react';
 import { motion } from 'framer-motion';
 import axios from 'axios';
 
@@ -222,9 +222,9 @@ export default function Login() {
         }} />
 
         <div className="relative z-10 px-16 max-w-lg">
-          {/* Icon cluster illustration */}
+          {/* Icon cluster illustration — covers Sales, Production, Distribution, Marketing */}
           <div className="relative mb-12 flex justify-center">
-            {/* Main card */}
+            {/* Main card — Operations bar chart */}
             <motion.div 
               className="w-56 h-40 bg-white/[0.07] backdrop-blur-sm rounded-2xl border border-white/10 p-5 relative"
               initial={{ opacity: 0, y: 20 }}
@@ -245,12 +245,12 @@ export default function Login() {
                 ))}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Revenue Pipeline</span>
+                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Revenue & Output</span>
                 <span className="text-xs text-emerald-400 font-semibold">+24%</span>
               </div>
             </motion.div>
 
-            {/* Floating metric cards */}
+            {/* Sales — Deals Won (top-right) */}
             <motion.div 
               className="absolute -top-6 -right-4 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -263,39 +263,77 @@ export default function Login() {
                 </div>
                 <div>
                   <div className="text-white text-sm font-bold">127</div>
-                  <div className="text-[9px] text-slate-400 uppercase">Deals Won</div>
+                  <div className="text-[9px] text-slate-400 uppercase tracking-wider">Deals Won</div>
                 </div>
               </div>
             </motion.div>
 
+            {/* Production — Batches Shipped (bottom-left) */}
             <motion.div 
               className="absolute -bottom-5 -left-6 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.6, type: "spring" }}
+              transition={{ delay: 0.55, type: "spring" }}
             >
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                  <Users size={14} className="text-blue-400" />
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                  <Factory size={14} className="text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-white text-sm font-bold">2,840</div>
-                  <div className="text-[9px] text-slate-400 uppercase">Contacts</div>
+                  <div className="text-white text-sm font-bold">38 batches</div>
+                  <div className="text-[9px] text-slate-400 uppercase tracking-wider">QC Passed</div>
                 </div>
               </div>
             </motion.div>
 
+            {/* Distribution — Deliveries today (bottom-right) */}
             <motion.div 
-              className="absolute top-8 -left-10 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-3 py-2"
+              className="absolute -bottom-7 right-2 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.8, type: "spring" }}
+              transition={{ delay: 0.7, type: "spring" }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <Truck size={14} className="text-blue-400" />
+                </div>
+                <div>
+                  <div className="text-white text-sm font-bold">412</div>
+                  <div className="text-[9px] text-slate-400 uppercase tracking-wider">Deliveries / wk</div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Marketing — Campaign reach (top-left) */}
+            <motion.div 
+              className="absolute -top-4 -left-8 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.85, type: "spring" }}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-fuchsia-500/20 flex items-center justify-center">
+                  <Megaphone size={14} className="text-fuchsia-400" />
+                </div>
+                <div>
+                  <div className="text-white text-sm font-bold">2.4k reach</div>
+                  <div className="text-[9px] text-slate-400 uppercase tracking-wider">Campaigns</div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Hit-rate small chip */}
+            <motion.div 
+              className="absolute top-12 -left-12 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-3 py-2"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 1.0, type: "spring" }}
             >
               <div className="flex items-center gap-1.5">
-                <div className="w-6 h-6 rounded-md bg-amber-500/20 flex items-center justify-center">
-                  <Target size={11} className="text-amber-400" />
+                <div className="w-6 h-6 rounded-md bg-cyan-500/20 flex items-center justify-center">
+                  <Target size={11} className="text-cyan-400" />
                 </div>
-                <span className="text-[10px] text-slate-300 font-medium">94% hit</span>
+                <span className="text-[10px] text-slate-300 font-medium">94% on-time</span>
               </div>
             </motion.div>
           </div>
@@ -308,14 +346,14 @@ export default function Login() {
             transition={{ delay: 0.3, duration: 0.6 }}
           >
             <h2 className="text-3xl font-bold text-white tracking-tight leading-tight">
-              Your Sales,<br />Supercharged.
+              From Lead to Bottle.<br />One Platform.
             </h2>
             <p className="text-slate-400 mt-4 text-sm leading-relaxed max-w-sm mx-auto">
-              Track leads, manage pipelines, close deals faster. Everything your team needs to grow revenue — in one place.
+              Run Sales, Production, Distribution and Marketing in one place — pipelines, QC batches, distributor stock and campaigns, all wired together.
             </p>
           </motion.div>
 
-          {/* Feature pills */}
+          {/* Feature pills — one per module + a cross-cutting capability */}
           <motion.div 
             className="flex flex-wrap justify-center gap-2 mt-8"
             initial={{ opacity: 0 }}
@@ -323,13 +361,15 @@ export default function Login() {
             transition={{ delay: 0.6, duration: 0.6 }}
           >
             {[
-              { icon: BarChart3, label: 'Analytics' },
-              { icon: Users, label: 'Team CRM' },
-              { icon: PieChart, label: 'Reports' },
-              { icon: Zap, label: 'Automation' },
-            ].map(({ icon: Icon, label }, i) => (
+              { icon: BarChart3, label: 'Sales Pipeline', tint: 'text-emerald-400' },
+              { icon: Factory, label: 'Production QC', tint: 'text-amber-400' },
+              { icon: Truck, label: 'Distribution', tint: 'text-blue-400' },
+              { icon: Megaphone, label: 'Marketing', tint: 'text-fuchsia-400' },
+              { icon: Receipt, label: 'Settlements', tint: 'text-violet-400' },
+              { icon: Sparkles, label: 'Ask Nyla AI', tint: 'text-cyan-400' },
+            ].map(({ icon: Icon, label, tint }) => (
               <span key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[11px] text-slate-300 font-medium">
-                <Icon size={11} className="text-blue-400" /> {label}
+                <Icon size={11} className={tint} /> {label}
               </span>
             ))}
           </motion.div>

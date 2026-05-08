@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { BarChart3, Users, TrendingUp } from 'lucide-react';
+import { BarChart3, Factory, Truck, Megaphone } from 'lucide-react';
 
 export default function SplashScreen() {
   const navigate = useNavigate();
@@ -79,20 +79,28 @@ export default function SplashScreen() {
               <BarChart3 size={44} className="text-white" strokeWidth={1.5} />
             </div>
             <motion.div 
-              className="absolute -top-3 -right-3 w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg"
+              className="absolute -top-3 -right-3 w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center shadow-lg"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.6, type: "spring" }}
             >
-              <TrendingUp size={18} className="text-white" />
+              <Factory size={18} className="text-white" />
             </motion.div>
             <motion.div 
-              className="absolute -bottom-2 -left-3 w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center shadow-lg"
+              className="absolute -bottom-2 -left-3 w-9 h-9 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ delay: 0.8, type: "spring" }}
             >
-              <Users size={16} className="text-white" />
+              <Truck size={16} className="text-white" />
+            </motion.div>
+            <motion.div 
+              className="absolute -top-2 -left-3 w-9 h-9 rounded-xl bg-fuchsia-500 flex items-center justify-center shadow-lg"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 1.0, type: "spring" }}
+            >
+              <Megaphone size={15} className="text-white" />
             </motion.div>
           </motion.div>
 
@@ -102,7 +110,7 @@ export default function SplashScreen() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.8 }}
           >
-            Sales CRM
+            Operations Hub
           </motion.h1>
           <motion.p 
             className="text-sm text-slate-400 mt-2 font-medium tracking-wide" 
@@ -111,7 +119,7 @@ export default function SplashScreen() {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6, duration: 0.8 }}
           >
-            Manage. Track. Grow.
+            Sales · Production · Distribution · Marketing
           </motion.p>
           
           {/* Loading indicator */}
