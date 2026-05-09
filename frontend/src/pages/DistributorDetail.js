@@ -3140,30 +3140,46 @@ export default function DistributorDetail() {
                     <div className={`rounded-lg px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 ${isCB ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'}`}>
                       {isCB ? 'No Upfront Margin — Post-Sale Adjustment' : 'Margin Applied Upfront'}
                     </div>
-                    <div className="grid grid-cols-4 gap-4">
-                      <div className="bg-muted/30 rounded-lg p-4 text-center">
-                        <div className="text-sm text-muted-foreground">Customer Billing</div>
-                        <div className="text-xl font-bold">₹{billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+
+                    {/* Same 5-number flow as the Settlements summary card and the deliveries view */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Customer Order Value</div>
+                        <div className="text-lg font-bold text-slate-900 tabular-nums mt-1">₹{billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">across deliveries</div>
                       </div>
-                      <div className="bg-blue-50 rounded-lg p-4 text-center">
-                        <div className="text-sm text-muted-foreground">Distributor Margin</div>
-                        <div className="text-xl font-bold text-blue-600">₹{earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-blue-400">{isCB ? 'retained from settlement' : 'embedded in transfer price'}</div>
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-blue-600 font-medium">Distributor Margin</div>
+                        <div className="text-lg font-bold text-blue-700 tabular-nums mt-1">₹{earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-blue-500/80 mt-0.5">earned by distributor</div>
                       </div>
-                      <div className="bg-amber-50 rounded-lg p-4 text-center">
-                        <div className="text-sm text-muted-foreground">Factory's Due</div>
-                        <div className="text-xl font-bold text-amber-700">₹{factoryDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-amber-400">Billing − Margin</div>
+                      <div className="bg-rose-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-rose-600 font-medium">Credit Notes</div>
+                        <div className="text-lg font-bold text-rose-700 tabular-nums mt-1">{cnVal > 0 ? '−' : ''}₹{cnVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-rose-500/80 mt-0.5">paid by dist to customer</div>
                       </div>
-                      <div className={`rounded-lg p-4 text-center ${netPayout >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                        <div className="text-sm text-muted-foreground">Net Settlement</div>
-                        <div className={`text-xl font-bold ${netPayout >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {netPayout >= 0 ? '+' : '−'}₹{Math.abs(netPayout).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </div>
-                        <div className={`text-[10px] ${netPayout >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {netPayout >= 0 ? 'Payable to Distributor' : 'Distributor owes Factory'}
-                        </div>
+                      <div className="bg-emerald-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-emerald-600 font-medium">Factory Return Credit</div>
+                        <div className="text-lg font-bold text-emerald-700 tabular-nums mt-1">{frVal > 0 ? '+' : ''}₹{frVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-emerald-500/80 mt-0.5">stock returned to supplier</div>
                       </div>
+                      {(() => {
+                        const settled = Math.abs(netPayout) < 0.01;
+                        const distOwes = netPayout < 0;
+                        const cls = settled ? 'bg-slate-100 border-slate-200' : distOwes ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300';
+                        const valCls = settled ? 'text-slate-500' : distOwes ? 'text-amber-700' : 'text-emerald-700';
+                        return (
+                          <div className={`rounded-lg p-3 border-2 ${cls}`}>
+                            <div className="text-[10px] uppercase tracking-wider text-slate-600 font-medium">Net Settlement</div>
+                            <div className={`text-lg font-bold tabular-nums mt-1 ${valCls}`}>
+                              {settled ? '₹0.00' : `${distOwes ? '−' : '+'}₹${Math.abs(netPayout).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                            </div>
+                            <div className={`text-[10px] mt-0.5 ${valCls}`}>
+                              {settled ? 'Settled' : distOwes ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -3171,7 +3187,10 @@ export default function DistributorDetail() {
 
               {/* Delivery Items */}
               <div className="border rounded-lg">
-                <div className="bg-muted/50 p-3 font-medium text-sm border-b">Included Deliveries</div>
+                <div className="bg-muted/50 p-3 font-medium text-sm border-b flex items-center justify-between">
+                  <span>Included Deliveries</span>
+                  <span className="text-[11px] text-muted-foreground font-normal">Same column meaning as Stock Out → Deliveries</span>
+                </div>
                 <div className="max-h-64 overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/30 sticky top-0">
@@ -3179,28 +3198,28 @@ export default function DistributorDetail() {
                         <th className="text-left p-2">Delivery #</th>
                         <th className="text-left p-2">Date</th>
                         <th className="text-right p-2">Qty</th>
-                        <th className="text-right p-2">Customer Billing</th>
-                        <th className="text-right p-2">Dist Margin</th>
-                        <th className="text-right p-2">Factory Due</th>
-                        <th className="text-right p-2">Adj to Factory</th>
+                        <th className="text-right p-2">Customer Order Value</th>
+                        <th className="text-right p-2 text-blue-700">Distributor Margin</th>
+                        <th className="text-right p-2">Net Settlement</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(selectedSettlement.items || []).map((item, idx) => {
                         const itemBilling = item.total_billing_value || item.total_amount || 0;
                         const itemEarnings = item.distributor_earnings || 0;
-                        const itemFactoryDue = itemBilling - itemEarnings;
                         const itemAdj = item.adjustment_dist_to_factory || item.factory_distributor_adjustment || 0;
+                        const itemNet = -itemAdj; // distributor-perspective: positive = supplier owes dist
+                        const settled = Math.abs(itemNet) < 0.01;
+                        const distOwes = itemNet < 0;
                         return (
                           <tr key={idx} className="border-t">
                             <td className="p-2">{item.delivery_number}</td>
                             <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
-                            <td className="p-2 text-right">{item.total_quantity || 0}</td>
-                            <td className="p-2 text-right">₹{itemBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right text-blue-600">₹{itemEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right text-amber-700">₹{itemFactoryDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-2 text-right font-medium ${itemAdj > 0 ? 'text-red-600' : itemAdj < 0 ? 'text-green-600' : 'text-slate-400'}`}>
-                              {itemAdj > 0 ? '' : itemAdj < 0 ? '-' : ''}₹{Math.abs(itemAdj).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            <td className="p-2 text-right tabular-nums">{item.total_quantity || 0}</td>
+                            <td className="p-2 text-right tabular-nums">₹{itemBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-blue-600 tabular-nums font-medium">₹{itemEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right font-medium tabular-nums ${settled ? 'text-slate-400' : distOwes ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {settled ? '₹0.00' : `${distOwes ? '−' : '+'}₹${Math.abs(itemNet).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
                             </td>
                           </tr>
                         );
