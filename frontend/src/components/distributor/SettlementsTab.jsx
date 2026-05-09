@@ -96,20 +96,23 @@ export default function SettlementsTab({
       acc[aid] = {
         account_id: aid, account_name: s.account_name || 'Unknown',
         settlements: [],
-        totals: { billing: 0, earnings: 0, factory_adj: 0, cn_issued: 0, fr_credit: 0, final_payout: 0 }
+        totals: { billing: 0, earnings: 0, factory_adj: 0, credit_applied: 0, fr_credit: 0, net_settlement: 0 }
       };
     }
     acc[aid].settlements.push(s);
     const factAdj = s.factory_distributor_adjustment || 0;
-    const cnIssued = s.total_credit_notes_issued || s.credit_notes_applied || 0;
+    // Use credit_notes_applied (the credit deducted at delivery time) — mirrors popup's stockout_totals.credit_applied
+    const creditApplied = s.credit_notes_applied || s.total_credit_notes_applied || 0;
     const frCredit = s.total_factory_return_credit || 0;
     acc[aid].totals.billing += s.total_billing_value || 0;
     acc[aid].totals.earnings += s.distributor_earnings || 0;
     acc[aid].totals.factory_adj += factAdj;
-    acc[aid].totals.cn_issued += cnIssued;
+    acc[aid].totals.credit_applied += creditApplied;
     acc[aid].totals.fr_credit += frCredit;
-    // Recalculate: Net = -(Adj to Factory) + CN + FR (margin already in transfer pricing)
-    acc[aid].totals.final_payout += -(factAdj) + cnIssued + frCredit;
+    // SAME formula & sign convention as Settlement Detail popup:
+    //   net_settlement = factory_adj − credit_applied − factory_return_credit
+    //   positive ⇒ Distributor pays Supplier; negative ⇒ Supplier pays Distributor
+    acc[aid].totals.net_settlement += factAdj - creditApplied - frCredit;
     return acc;
   }, {});
   const settlementGroups = Object.values(settlementsByAccount);
@@ -117,19 +120,19 @@ export default function SettlementsTab({
     billing: a.billing + g.totals.billing,
     earnings: a.earnings + g.totals.earnings,
     factory_adj: a.factory_adj + g.totals.factory_adj,
-    cn_issued: a.cn_issued + g.totals.cn_issued,
+    credit_applied: a.credit_applied + g.totals.credit_applied,
     fr_credit: a.fr_credit + g.totals.fr_credit,
-    final_payout: a.final_payout + g.totals.final_payout
-  }), { billing: 0, earnings: 0, factory_adj: 0, cn_issued: 0, fr_credit: 0, final_payout: 0 });
+    net_settlement: a.net_settlement + g.totals.net_settlement
+  }), { billing: 0, earnings: 0, factory_adj: 0, credit_applied: 0, fr_credit: 0, net_settlement: 0 });
 
   const downloadExcel = async () => {
     setDownloading(true);
     try {
       const rows = settlements.map(s => {
-        const cn = s.total_credit_notes_issued || s.credit_notes_applied || 0;
+        const credit = s.credit_notes_applied || s.total_credit_notes_applied || 0;
         const fr = s.total_factory_return_credit || 0;
         const adj = s.factory_distributor_adjustment || 0;
-        const net = -(adj) + cn + fr;
+        const net = adj - credit - fr;
         return {
           'Settlement #': s.settlement_number,
           'Month': s.settlement_month ? MONTHS.find(m => m.value === s.settlement_month)?.label : '-',
@@ -138,10 +141,10 @@ export default function SettlementsTab({
           'Deliveries': s.total_deliveries || 0,
           'Customer Order Value': s.total_billing_value || 0,
           'Distributor Margin': s.distributor_earnings || 0,
-          'Credit Notes (paid by dist)': cn,
+          'Credit Notes Applied': credit,
           'Factory Return Credit': fr,
           'Net Settlement': net,
-          'Direction': Math.abs(net) < 0.01 ? 'Settled' : (net < 0 ? 'Distributor pays Supplier' : 'Supplier pays Distributor'),
+          'Direction': Math.abs(net) < 0.01 ? 'Settled' : (net > 0 ? 'Distributor pays Supplier' : 'Supplier pays Distributor'),
           'Status': s.status,
         };
       });
@@ -162,7 +165,7 @@ export default function SettlementsTab({
         <div className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-lg">Monthly Settlements</CardTitle>
-            <CardDescription>Customer Order Value − Margin − Credit Notes + Factory Returns = Net Settlement (same flow as Deliveries)</CardDescription>
+            <CardDescription>Factory↔Distributor Adjustment − Credit Notes Applied − Factory Return Credit = Net Settlement (matches Settlement Detail popup)</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={downloadExcel} disabled={downloading || !settlements.length} data-testid="download-settlements-btn">
@@ -235,17 +238,19 @@ export default function SettlementsTab({
                       <p className="text-xs text-slate-400 uppercase tracking-wider font-medium mb-2">Net Settlement Calculation</p>
                       <div className="flex items-center gap-2 flex-wrap text-sm">
                         <span className="bg-amber-600/20 text-amber-300 px-2 py-1 rounded font-mono">Adj to Factory ₹{fmt(Math.abs(totalFactoryAdj))}</span>
-                        <Plus className="h-3 w-3 text-emerald-400 flex-shrink-0" />
-                        <span className="bg-emerald-600/20 text-emerald-300 px-2 py-1 rounded font-mono">Credit Notes ₹{fmt(previewSummary.total_credit_note_amount)}</span>
-                        <Plus className="h-3 w-3 text-purple-400 flex-shrink-0" />
-                        <span className="bg-purple-600/20 text-purple-300 px-2 py-1 rounded font-mono">Factory Returns ₹{fmt(previewSummary.total_factory_return_amount)}</span>
+                        <span className="text-slate-500 mx-1">−</span>
+                        <span className="bg-rose-600/20 text-rose-300 px-2 py-1 rounded font-mono">Credit Notes ₹{fmt(previewSummary.total_credit_note_amount)}</span>
+                        <span className="text-slate-500 mx-1">−</span>
+                        <span className="bg-emerald-600/20 text-emerald-300 px-2 py-1 rounded font-mono">Factory Returns ₹{fmt(previewSummary.total_factory_return_amount)}</span>
                         <span className="text-slate-500 mx-1">=</span>
                         {(() => {
-                          const netPayout = -Math.abs(totalFactoryAdj) + (previewSummary.total_credit_note_amount || 0) + (previewSummary.total_factory_return_amount || 0);
+                          const netSettlement = Math.abs(totalFactoryAdj) - (previewSummary.total_credit_note_amount || 0) - (previewSummary.total_factory_return_amount || 0);
+                          const distPays = netSettlement > 0;
+                          const settled = Math.abs(netSettlement) < 0.01;
                           return (
-                            <span className={`px-3 py-1 rounded font-bold font-mono ${netPayout >= 0 ? 'bg-emerald-600/20 text-emerald-300' : 'bg-red-600/20 text-red-300'}`}>
-                              {netPayout >= 0 ? `+₹${fmt(netPayout)}` : `-₹${fmt(Math.abs(netPayout))}`}
-                              <span className="text-[10px] ml-1.5 opacity-70">{netPayout >= 0 ? '(to Dist)' : '(Dist owes)'}</span>
+                            <span className={`px-3 py-1 rounded font-bold font-mono ${settled ? 'bg-slate-600/30 text-slate-200' : distPays ? 'bg-amber-600/20 text-amber-300' : 'bg-emerald-600/20 text-emerald-300'}`}>
+                              {settled ? '₹0.00' : `${distPays ? '+' : '−'}₹${fmt(Math.abs(netSettlement))}`}
+                              <span className="text-[10px] ml-1.5 opacity-70">{settled ? '(settled)' : distPays ? '(Dist pays)' : '(to Dist)'}</span>
                             </span>
                           );
                         })()}
@@ -435,8 +440,8 @@ export default function SettlementsTab({
                 </div>
                 <div>
                   <p className="text-[10px] text-rose-400 uppercase tracking-wider">Credit Notes</p>
-                  <p className="text-lg font-bold text-rose-300">−₹{fmt(grandTotals.cn_issued)}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">paid by dist to customer</p>
+                  <p className="text-lg font-bold text-rose-300">−₹{fmt(grandTotals.credit_applied)}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">applied to deliveries</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-emerald-400 uppercase tracking-wider">Factory Return Credit</p>
@@ -446,7 +451,7 @@ export default function SettlementsTab({
                 <div className="border-l border-slate-700 pl-4">
                   <p className="text-[10px] text-white/60 uppercase tracking-wider">Net Settlement</p>
                   {(() => {
-                    const net = grandTotals.final_payout;
+                    const net = grandTotals.net_settlement;
                     if (Math.abs(net) < 0.01) {
                       return (
                         <>
@@ -455,14 +460,14 @@ export default function SettlementsTab({
                         </>
                       );
                     }
-                    const distOwes = net < 0;
+                    const distPays = net > 0;
                     return (
                       <>
-                        <p className={`text-xl font-bold ${distOwes ? 'text-amber-300' : 'text-emerald-300'}`}>
-                          {distOwes ? '−' : '+'}₹{fmt(Math.abs(net))}
+                        <p className={`text-xl font-bold ${distPays ? 'text-amber-300' : 'text-emerald-300'}`}>
+                          {distPays ? '+' : '−'}₹{fmt(Math.abs(net))}
                         </p>
                         <p className="text-[10px] text-slate-400 mt-0.5">
-                          {distOwes ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
+                          {distPays ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
                         </p>
                       </>
                     );
@@ -487,17 +492,17 @@ export default function SettlementsTab({
                   <div className="flex items-center gap-5 text-right">
                     <div><p className="text-[10px] text-slate-400 uppercase">Cust. Order</p><p className="text-sm font-medium">₹{fmt(group.totals.billing)}</p></div>
                     <div><p className="text-[10px] text-blue-500 uppercase">Margin</p><p className="text-sm font-semibold text-blue-600">₹{fmt(group.totals.earnings)}</p></div>
-                    <div><p className="text-[10px] text-rose-500 uppercase">Credit Notes</p><p className="text-sm font-semibold text-rose-600">−₹{fmt(group.totals.cn_issued)}</p></div>
+                    <div><p className="text-[10px] text-rose-500 uppercase">Credit Notes</p><p className="text-sm font-semibold text-rose-600">−₹{fmt(group.totals.credit_applied)}</p></div>
                     <div><p className="text-[10px] text-emerald-500 uppercase">Factory Ret.</p><p className="text-sm font-semibold text-emerald-600">+₹{fmt(group.totals.fr_credit)}</p></div>
                     <div className="border-l pl-4">
                       <p className="text-[10px] text-slate-400 uppercase">Net Settlement</p>
                       {(() => {
-                        const net = group.totals.final_payout;
+                        const net = group.totals.net_settlement;
                         if (Math.abs(net) < 0.01) return <p className="text-sm font-bold text-slate-500">₹0.00</p>;
-                        const distOwes = net < 0;
+                        const distPays = net > 0;
                         return (
-                          <p className={`text-sm font-bold ${distOwes ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {distOwes ? '−' : '+'}₹{fmt(Math.abs(net))}
+                          <p className={`text-sm font-bold ${distPays ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {distPays ? '+' : '−'}₹{fmt(Math.abs(net))}
                           </p>
                         );
                       })()}
@@ -523,21 +528,21 @@ export default function SettlementsTab({
                       </tr></thead>
                       <tbody>
                         {group.settlements.map((s, i) => {
-                          const cnVal = s.total_credit_notes_issued || s.credit_notes_applied || 0;
+                          const credit = s.credit_notes_applied || s.total_credit_notes_applied || 0;
                           const frVal = s.total_factory_return_credit || 0;
                           const adjVal = s.factory_distributor_adjustment || 0;
-                          const net = -(adjVal) + cnVal + frVal;
-                          const distOwes = net < 0;
+                          const net = adjVal - credit - frVal;
+                          const distPays = net > 0;
                           return (
                             <tr key={s.id} className={`border-t hover:bg-slate-50 cursor-pointer ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`} onClick={() => viewSettlementDetail(s.id)}>
                               <td className="p-3"><button className="font-medium text-blue-600 hover:underline" onClick={(e) => { e.stopPropagation(); viewSettlementDetail(s.id); }}>{s.settlement_number}</button></td>
                               <td className="p-3 text-slate-600">{MONTHS.find(m => m.value === s.settlement_month)?.label} {s.settlement_year}</td>
                               <td className="p-3 text-right tabular-nums">₹{fmt(s.total_billing_value)}</td>
                               <td className="p-3 text-right text-blue-600 font-medium tabular-nums">₹{fmt(s.distributor_earnings)}</td>
-                              <td className={`p-3 text-right font-medium tabular-nums ${cnVal > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{cnVal > 0 ? '−' : ''}₹{fmt(cnVal)}</td>
+                              <td className={`p-3 text-right font-medium tabular-nums ${credit > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{credit > 0 ? '−' : ''}₹{fmt(credit)}</td>
                               <td className={`p-3 text-right font-medium tabular-nums ${frVal > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{frVal > 0 ? '+' : ''}₹{fmt(frVal)}</td>
-                              <td className={`p-3 text-right font-bold tabular-nums ${Math.abs(net) < 0.01 ? 'text-slate-400' : distOwes ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                {Math.abs(net) < 0.01 ? '₹0.00' : `${distOwes ? '−' : '+'}₹${fmt(Math.abs(net))}`}
+                              <td className={`p-3 text-right font-bold tabular-nums ${Math.abs(net) < 0.01 ? 'text-slate-400' : distPays ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {Math.abs(net) < 0.01 ? '₹0.00' : `${distPays ? '+' : '−'}₹${fmt(Math.abs(net))}`}
                               </td>
                               <td className="p-3 text-center">{getSettlementStatusBadge(s.status)}</td>
                               <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>

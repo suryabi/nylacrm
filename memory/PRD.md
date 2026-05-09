@@ -5,6 +5,12 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Settlements Tab — sign-convention unified with popup (2026-02-09)
+- [x] User flagged: "Net Settlement on the popup is +₹4,611, on the parent page it shows the opposite sign — fix the bug." Root cause: the parent `SettlementsTab.jsx` was using the OLD formula `final_payout = -(factory_adj) + cn_issued + fr_credit` (negative = "Distributor pays Supplier"), while the new popup uses `net_settlement = factory_adj − credit_applied − fr_credit` (positive = "Distributor pays Supplier"). Same magnitude, opposite sign + opposite labels.
+- [x] **Fix** `/app/frontend/src/components/distributor/SettlementsTab.jsx` — adopted the popup's formula and sign convention everywhere: grand-total tile, account-group row tile, per-settlement table row, settlement-preview "Net Settlement Calculation" formula box, and Excel export. Now uses `credit_notes_applied` (= popup's `credit_applied`) instead of `total_credit_notes_issued`. Updated CardDescription to: "Factory↔Distributor Adjustment − Credit Notes Applied − Factory Return Credit = Net Settlement (matches Settlement Detail popup)".
+- [x] **Verified** via screenshot: STL-2026-0014 shows **+₹975.00 (Distributor pays Supplier)** in BOTH the parent table row AND the Settlement Detail popup tile. Lint clean.
+
+
 ### Settlement Detail — explicit Net Settlement math ladder (2026-02-09)
 - [x] User asked: "Under the deliveries section… add a row for credit notes deducted from Net Billable, then a Net Billable summary row, then 'Already billed at transfer price', then a NET SETTLEMENT summary row — currently the user has no clue how Net Settlement is arrived because we never show what was already billed."
 - [x] **Backend** `/app/backend/routes/distributors.py` — `_compute_delivery_stockout_view` now also returns `billed_at_transfer` (= Σ qty × transfer_price) per delivery, plus `stockout_totals.billed_at_transfer`.
