@@ -125,20 +125,26 @@ export default function SettlementsTab({
   const downloadExcel = async () => {
     setDownloading(true);
     try {
-      const rows = settlements.map(s => ({
-        'Settlement #': s.settlement_number,
-        'Month': s.settlement_month ? MONTHS.find(m => m.value === s.settlement_month)?.label : '-',
-        'Year': s.settlement_year || '-',
-        'Account': s.account_name || '-',
-        'Deliveries': s.total_deliveries || 0,
-        'Customer Billing': s.total_billing_value || 0,
-        'Dist Earnings': s.distributor_earnings || 0,
-        'Price Adj (Dist->Factory)': s.factory_distributor_adjustment || 0,
-        'Credit Notes': s.total_credit_notes_issued || s.credit_notes_applied || 0,
-        'Factory Returns': s.total_factory_return_credit || 0,
-        'Net Payout': -(s.factory_distributor_adjustment || 0) + (s.total_credit_notes_issued || s.credit_notes_applied || 0) + (s.total_factory_return_credit || 0),
-        'Status': s.status
-      }));
+      const rows = settlements.map(s => {
+        const cn = s.total_credit_notes_issued || s.credit_notes_applied || 0;
+        const fr = s.total_factory_return_credit || 0;
+        const adj = s.factory_distributor_adjustment || 0;
+        const net = -(adj) + cn + fr;
+        return {
+          'Settlement #': s.settlement_number,
+          'Month': s.settlement_month ? MONTHS.find(m => m.value === s.settlement_month)?.label : '-',
+          'Year': s.settlement_year || '-',
+          'Account': s.account_name || '-',
+          'Deliveries': s.total_deliveries || 0,
+          'Customer Order Value': s.total_billing_value || 0,
+          'Distributor Margin': s.distributor_earnings || 0,
+          'Credit Notes (paid by dist)': cn,
+          'Factory Return Credit': fr,
+          'Net Settlement': net,
+          'Direction': Math.abs(net) < 0.01 ? 'Settled' : (net < 0 ? 'Distributor pays Supplier' : 'Supplier pays Distributor'),
+          'Status': s.status,
+        };
+      });
       if (!rows.length) return;
       const h = Object.keys(rows[0]);
       const csv = [h.join(','), ...rows.map(r => h.map(k => { const v = r[k]; return typeof v === 'string' && (v.includes(',') || v.includes('"')) ? `"${v.replace(/"/g, '""')}"` : v; }).join(','))].join('\n');
@@ -156,7 +162,7 @@ export default function SettlementsTab({
         <div className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-lg">Monthly Settlements</CardTitle>
-            <CardDescription>Deliveries + Credit Notes + Factory Returns = Net Payout</CardDescription>
+            <CardDescription>Customer Order Value − Margin − Credit Notes + Factory Returns = Net Settlement (same flow as Deliveries)</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={downloadExcel} disabled={downloading || !settlements.length} data-testid="download-settlements-btn">
@@ -405,40 +411,61 @@ export default function SettlementsTab({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* === GRAND TOTAL PAYOUT FLOW === */}
+            {/* === GRAND TOTAL — clean linear flow that mirrors the deliveries view === */}
             <div className="border rounded-xl p-5 bg-gradient-to-r from-slate-900 to-slate-800 text-white" data-testid="settlement-grand-totals">
               <div className="flex items-center justify-between mb-4">
-                <p className="text-sm text-slate-400 font-medium uppercase tracking-wider">Settlement Summary ({settlements.length} settlements)</p>
-                <p className="text-xs text-slate-500">Net Settlement = -(Adj to Factory) + Credit Notes + Factory Returns</p>
+                <p className="text-sm text-slate-400 font-medium uppercase tracking-wider">
+                  Settlement Summary ({settlements.length} settlement{settlements.length === 1 ? '' : 's'})
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Same flow as Deliveries → aggregated across all selected settlements.
+                </p>
               </div>
-              <div className="grid grid-cols-6 gap-3">
-                <div className="text-center">
-                  <p className="text-xs text-slate-400">Customer Billing</p>
-                  <p className="text-lg font-bold text-slate-200">₹{fmt(grandTotals.billing)}</p>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">Customer Order Value</p>
+                  <p className="text-lg font-bold text-slate-100">₹{fmt(grandTotals.billing)}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">across all deliveries</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-xs text-blue-400">Dist Earnings</p>
+                <div>
+                  <p className="text-[10px] text-blue-400 uppercase tracking-wider">Distributor Margin</p>
                   <p className="text-lg font-bold text-blue-300">₹{fmt(grandTotals.earnings)}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">earned by distributor</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-xs text-amber-400">Price Adj (D→F)</p>
-                  <p className="text-lg font-bold text-amber-300">{grandTotals.factory_adj > 0 ? '-' : ''}₹{fmt(Math.abs(grandTotals.factory_adj))}</p>
+                <div>
+                  <p className="text-[10px] text-rose-400 uppercase tracking-wider">Credit Notes</p>
+                  <p className="text-lg font-bold text-rose-300">−₹{fmt(grandTotals.cn_issued)}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">paid by dist to customer</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-xs text-emerald-400">Credit Notes</p>
-                  <p className="text-lg font-bold text-emerald-300">+₹{fmt(grandTotals.cn_issued)}</p>
+                <div>
+                  <p className="text-[10px] text-emerald-400 uppercase tracking-wider">Factory Return Credit</p>
+                  <p className="text-lg font-bold text-emerald-300">+₹{fmt(grandTotals.fr_credit)}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">stock returned to supplier</p>
                 </div>
-                <div className="text-center">
-                  <p className="text-xs text-purple-400">Factory Returns</p>
-                  <p className="text-lg font-bold text-purple-300">+₹{fmt(grandTotals.fr_credit)}</p>
-                </div>
-                <div className="text-center border-l border-slate-700 pl-3">
-                  <p className="text-xs text-white/60">Net Settlement</p>
+                <div className="border-l border-slate-700 pl-4">
+                  <p className="text-[10px] text-white/60 uppercase tracking-wider">Net Settlement</p>
                   {(() => {
-                    const netVal = -(grandTotals.factory_adj) + grandTotals.cn_issued + grandTotals.fr_credit;
-                    return <p className={`text-xl font-bold ${netVal >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
-                      {netVal >= 0 ? '+' : '-'}₹{fmt(Math.abs(netVal))}
-                    </p>;
+                    const net = grandTotals.final_payout;
+                    if (Math.abs(net) < 0.01) {
+                      return (
+                        <>
+                          <p className="text-xl font-bold text-slate-300">₹0.00</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">settled</p>
+                        </>
+                      );
+                    }
+                    const distOwes = net < 0;
+                    return (
+                      <>
+                        <p className={`text-xl font-bold ${distOwes ? 'text-amber-300' : 'text-emerald-300'}`}>
+                          {distOwes ? '−' : '+'}₹{fmt(Math.abs(net))}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {distOwes ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
+                        </p>
+                      </>
+                    );
                   })()}
                 </div>
               </div>
@@ -454,15 +481,27 @@ export default function SettlementsTab({
                     </div>
                     <div>
                       <p className="font-semibold text-sm">{group.account_name}</p>
-                      <p className="text-xs text-slate-400">{group.settlements.length} settlement(s)</p>
+                      <p className="text-xs text-slate-400">{group.settlements.length} settlement{group.settlements.length === 1 ? '' : 's'}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-5 text-right">
-                    <div><p className="text-[10px] text-slate-400 uppercase">Earnings</p><p className="text-sm font-semibold text-blue-600">₹{fmt(group.totals.earnings)}</p></div>
-                    <div><p className="text-[10px] text-slate-400 uppercase">Price Adj</p><p className="text-sm font-semibold text-amber-600">{group.totals.factory_adj > 0 ? '-' : ''}₹{fmt(Math.abs(group.totals.factory_adj))}</p></div>
-                    <div><p className="text-[10px] text-slate-400 uppercase">Credit Notes</p><p className="text-sm font-semibold text-emerald-600">+₹{fmt(group.totals.cn_issued)}</p></div>
-                    <div><p className="text-[10px] text-slate-400 uppercase">Factory Ret.</p><p className="text-sm font-semibold text-purple-600">+₹{fmt(group.totals.fr_credit)}</p></div>
-                    <div className="border-l pl-4"><p className="text-[10px] text-slate-400 uppercase">Net Payout</p><p className="text-sm font-bold">₹{fmt(group.totals.final_payout)}</p></div>
+                    <div><p className="text-[10px] text-slate-400 uppercase">Cust. Order</p><p className="text-sm font-medium">₹{fmt(group.totals.billing)}</p></div>
+                    <div><p className="text-[10px] text-blue-500 uppercase">Margin</p><p className="text-sm font-semibold text-blue-600">₹{fmt(group.totals.earnings)}</p></div>
+                    <div><p className="text-[10px] text-rose-500 uppercase">Credit Notes</p><p className="text-sm font-semibold text-rose-600">−₹{fmt(group.totals.cn_issued)}</p></div>
+                    <div><p className="text-[10px] text-emerald-500 uppercase">Factory Ret.</p><p className="text-sm font-semibold text-emerald-600">+₹{fmt(group.totals.fr_credit)}</p></div>
+                    <div className="border-l pl-4">
+                      <p className="text-[10px] text-slate-400 uppercase">Net Settlement</p>
+                      {(() => {
+                        const net = group.totals.final_payout;
+                        if (Math.abs(net) < 0.01) return <p className="text-sm font-bold text-slate-500">₹0.00</p>;
+                        const distOwes = net < 0;
+                        return (
+                          <p className={`text-sm font-bold ${distOwes ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {distOwes ? '−' : '+'}₹{fmt(Math.abs(net))}
+                          </p>
+                        );
+                      })()}
+                    </div>
                     <div className={`w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center transition-transform ${expandedIds[group.account_id] ? 'rotate-180' : ''}`}>
                       <ArrowDown className="h-4 w-4 text-slate-500" />
                     </div>
@@ -474,12 +513,11 @@ export default function SettlementsTab({
                       <thead><tr className="bg-slate-50 text-xs text-slate-500 uppercase">
                         <th className="text-left p-3">Settlement #</th>
                         <th className="text-left p-3">Period</th>
-                        <th className="text-right p-3">Billing</th>
-                        <th className="text-right p-3 text-blue-600">Earnings</th>
-                        <th className="text-right p-3 text-amber-600">Price Adj</th>
-                        <th className="text-right p-3 text-emerald-600">Credit Notes</th>
-                        <th className="text-right p-3 text-purple-600">Factory Ret.</th>
-                        <th className="text-right p-3 font-bold">Net Payout</th>
+                        <th className="text-right p-3">Customer Order Value</th>
+                        <th className="text-right p-3 text-blue-600">Margin</th>
+                        <th className="text-right p-3 text-rose-600">Credit Notes</th>
+                        <th className="text-right p-3 text-emerald-600">Factory Ret.</th>
+                        <th className="text-right p-3 font-bold">Net Settlement</th>
                         <th className="text-center p-3">Status</th>
                         <th className="text-center p-3">Actions</th>
                       </tr></thead>
@@ -488,16 +526,19 @@ export default function SettlementsTab({
                           const cnVal = s.total_credit_notes_issued || s.credit_notes_applied || 0;
                           const frVal = s.total_factory_return_credit || 0;
                           const adjVal = s.factory_distributor_adjustment || 0;
+                          const net = -(adjVal) + cnVal + frVal;
+                          const distOwes = net < 0;
                           return (
                             <tr key={s.id} className={`border-t hover:bg-slate-50 cursor-pointer ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`} onClick={() => viewSettlementDetail(s.id)}>
                               <td className="p-3"><button className="font-medium text-blue-600 hover:underline" onClick={(e) => { e.stopPropagation(); viewSettlementDetail(s.id); }}>{s.settlement_number}</button></td>
                               <td className="p-3 text-slate-600">{MONTHS.find(m => m.value === s.settlement_month)?.label} {s.settlement_year}</td>
-                              <td className="p-3 text-right">₹{fmt(s.total_billing_value)}</td>
-                              <td className="p-3 text-right text-blue-600 font-medium">₹{fmt(s.distributor_earnings)}</td>
-                              <td className={`p-3 text-right font-medium ${adjVal > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{adjVal > 0 ? '-' : ''}₹{fmt(Math.abs(adjVal))}</td>
-                              <td className={`p-3 text-right font-medium ${cnVal > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{cnVal > 0 ? '+' : ''}₹{fmt(cnVal)}</td>
-                              <td className={`p-3 text-right font-medium ${frVal > 0 ? 'text-purple-600' : 'text-slate-400'}`}>{frVal > 0 ? '+' : ''}₹{fmt(frVal)}</td>
-                              <td className="p-3 text-right font-bold">₹{fmt(-(adjVal) + cnVal + frVal)}</td>
+                              <td className="p-3 text-right tabular-nums">₹{fmt(s.total_billing_value)}</td>
+                              <td className="p-3 text-right text-blue-600 font-medium tabular-nums">₹{fmt(s.distributor_earnings)}</td>
+                              <td className={`p-3 text-right font-medium tabular-nums ${cnVal > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{cnVal > 0 ? '−' : ''}₹{fmt(cnVal)}</td>
+                              <td className={`p-3 text-right font-medium tabular-nums ${frVal > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{frVal > 0 ? '+' : ''}₹{fmt(frVal)}</td>
+                              <td className={`p-3 text-right font-bold tabular-nums ${Math.abs(net) < 0.01 ? 'text-slate-400' : distOwes ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {Math.abs(net) < 0.01 ? '₹0.00' : `${distOwes ? '−' : '+'}₹${fmt(Math.abs(net))}`}
+                              </td>
                               <td className="p-3 text-center">{getSettlementStatusBadge(s.status)}</td>
                               <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex justify-center gap-1">
