@@ -4060,6 +4060,7 @@ def _compute_delivery_stockout_view(delivery: dict, delivery_items: list) -> dic
     customer_order_value = 0.0     # sum(qty × customer_price × (1 - disc%))
     distributor_margin = 0.0       # sum(qty × customer_price × commission%)
     actual_billable = 0.0          # sum(qty × customer_price × (1 - commission%))
+    billed_at_transfer = 0.0       # sum(qty × transfer_price)  ← what dist was already billed
 
     for it in delivery_items or []:
         qty = it.get('quantity') or 0
@@ -4070,12 +4071,14 @@ def _compute_delivery_stockout_view(delivery: dict, delivery_items: list) -> dic
             or it.get('margin_percent')
             or 0
         )
+        transfer_price = it.get('transfer_price') or 0
         gross = qty * customer_price
         customer_order_value += gross * (1 - disc_pct / 100)
         distributor_margin += gross * (commission_pct / 100)
         if customer_price > 0:
             new_transfer = customer_price * (1 - commission_pct / 100)
             actual_billable += qty * new_transfer
+        billed_at_transfer += qty * transfer_price
 
     credit_applied = float(delivery.get('total_credit_applied') or 0)
     net_billable = actual_billable - credit_applied
@@ -4086,6 +4089,7 @@ def _compute_delivery_stockout_view(delivery: dict, delivery_items: list) -> dic
         "actual_billable": round(actual_billable, 2),
         "credit_applied": round(credit_applied, 2),
         "net_billable": round(net_billable, 2),
+        "billed_at_transfer": round(billed_at_transfer, 2),
         "applied_credit_notes": delivery.get('applied_credit_notes') or [],
     }
 
@@ -4155,6 +4159,7 @@ async def get_settlement(
         "actual_billable": round(sum(i.get('actual_billable', 0) for i in items), 2),
         "credit_applied": round(sum(i.get('credit_applied', 0) for i in items), 2),
         "net_billable": round(sum(i.get('net_billable', 0) for i in items), 2),
+        "billed_at_transfer": round(sum(i.get('billed_at_transfer', 0) for i in items), 2),
     }
 
     return settlement

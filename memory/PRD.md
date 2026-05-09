@@ -5,6 +5,19 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Settlement Detail — explicit Net Settlement math ladder (2026-02-09)
+- [x] User asked: "Under the deliveries section… add a row for credit notes deducted from Net Billable, then a Net Billable summary row, then 'Already billed at transfer price', then a NET SETTLEMENT summary row — currently the user has no clue how Net Settlement is arrived because we never show what was already billed."
+- [x] **Backend** `/app/backend/routes/distributors.py` — `_compute_delivery_stockout_view` now also returns `billed_at_transfer` (= Σ qty × transfer_price) per delivery, plus `stockout_totals.billed_at_transfer`.
+- [x] **Frontend** `/app/frontend/src/pages/DistributorDetail.js` — Settlement Detail "Included Deliveries" table now shows below the per-delivery rows + Total row a 4-row math ladder:
+  1. `settlement-row-credit-deduction` — "Less: Credit Notes deducted from Actual Billable"
+  2. `settlement-row-net-billable` — "Net Billable (after Credit Notes)"
+  3. `settlement-row-billed-at-transfer` — "Less: Already Billed to Distributor (Transfer Price)"
+  4. `settlement-row-factory-return` (only if > 0) — "Less: Factory Return Credit"
+  5. `settlement-row-net-settlement` — final NET SETTLEMENT highlighted in amber/emerald.
+- [x] **Top tile** "Net Settlement" recalculated: `net_billable − billed_at_transfer − factory_return_credit` (positive = Distributor pays Supplier; negative = Supplier pays Distributor).
+- [x] **Verified** end-to-end: STL-2026-0014 / DEL-2026-0016 → COV ₹2,000 / Margin ₹50 / Credit ₹0 / Net Billable ₹1,950 / Billed at Transfer ₹975 / **NET SETTLEMENT +₹975 (Distributor pays Supplier)**. Lint clean.
+
+
 ### Settlement Detail = Stock Out (single source of truth) (2026-02-09)
 - [x] User reported: "For each delivery the NET settlement is already calculated at the stock out. So, in the settlement screen, it has to work with the same settlement numbers, not different."
 - [x] **Backend** `/app/backend/routes/distributors.py` — added `_compute_delivery_stockout_view(delivery, items)` that mirrors the exact DeliveriesTab.jsx math (COV = Σ qty×customer_price×(1−disc%); Margin = Σ qty×customer_price×commission%; Actual Billable = COV − Margin; Net Billable = Actual Billable − total_credit_applied). `GET /api/distributors/{did}/settlements/{sid}` now enriches every settlement item with `customer_order_value`, `distributor_margin`, `actual_billable`, `credit_applied`, `net_billable`, `applied_credit_notes` and returns a top-level `stockout_totals` aggregate.

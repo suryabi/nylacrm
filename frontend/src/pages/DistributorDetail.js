@@ -3087,14 +3087,17 @@ export default function DistributorDetail() {
                   actual_billable: items.reduce((s, it) => s + (it.actual_billable || 0), 0),
                   credit_applied: items.reduce((s, it) => s + (it.credit_applied || 0), 0),
                   net_billable: items.reduce((s, it) => s + (it.net_billable || 0), 0),
+                  billed_at_transfer: items.reduce((s, it) => s + (it.billed_at_transfer || 0), 0),
                 };
                 const cov = totals.customer_order_value || 0;
                 const margin = totals.distributor_margin || 0;
                 const credit = totals.credit_applied || 0;
                 const netBillable = totals.net_billable || 0;
+                const billedAtTransfer = totals.billed_at_transfer || 0;
                 const frVal = selectedSettlement.total_factory_return_credit || 0;
-                // Final cash flow = Net Billable owed by distributor − Factory Return Credit owed back
-                const finalDue = netBillable - frVal;
+                // Net Settlement = (what dist owes factory after sale) − (what was already billed) − (factory return credit owed back)
+                // Positive ⇒ Distributor pays Supplier. Negative ⇒ Supplier pays Distributor.
+                const finalDue = netBillable - billedAtTransfer - frVal;
 
                 return (
                   <div className="space-y-4">
@@ -3189,22 +3192,63 @@ export default function DistributorDetail() {
                           distributor_margin: items.reduce((s, it) => s + (it.distributor_margin || 0), 0),
                           credit_applied: items.reduce((s, it) => s + (it.credit_applied || 0), 0),
                           net_billable: items.reduce((s, it) => s + (it.net_billable || 0), 0),
+                          billed_at_transfer: items.reduce((s, it) => s + (it.billed_at_transfer || 0), 0),
                         };
+                        const credit = totals.credit_applied || 0;
+                        const netBillable = totals.net_billable || 0;
+                        const billedAtTransfer = totals.billed_at_transfer || 0;
+                        const frVal = selectedSettlement.total_factory_return_credit || 0;
+                        const netSettlement = netBillable - billedAtTransfer - frVal;
+                        const distPays = netSettlement > 0;
+                        const settled = Math.abs(netSettlement) < 0.01;
                         return (
-                          <tr className="bg-slate-50 border-t-2 font-semibold" data-testid="settlement-deliveries-totals">
-                            <td colSpan={3} className="p-2 text-right">Total</td>
-                            <td className="p-2 text-right tabular-nums">₹{(totals.customer_order_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right text-blue-700 tabular-nums">₹{(totals.distributor_margin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-2 text-right tabular-nums ${(totals.credit_applied || 0) > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{(totals.credit_applied || 0) > 0 ? '−' : ''}₹{(totals.credit_applied || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right tabular-nums text-slate-900">₹{(totals.net_billable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          </tr>
+                          <>
+                            <tr className="bg-slate-50 border-t-2 font-semibold" data-testid="settlement-deliveries-totals">
+                              <td colSpan={3} className="p-2 text-right">Total</td>
+                              <td className="p-2 text-right tabular-nums">₹{(totals.customer_order_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className="p-2 text-right text-blue-700 tabular-nums">₹{(totals.distributor_margin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className={`p-2 text-right tabular-nums ${credit > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className="p-2 text-right tabular-nums text-slate-900">₹{netBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+
+                            {/* Math ladder — explicit breakdown of how Net Settlement is arrived */}
+                            <tr className="border-t" data-testid="settlement-row-credit-deduction">
+                              <td colSpan={6} className="p-2 text-right text-slate-600">Less: Credit Notes deducted from Actual Billable</td>
+                              <td className={`p-2 text-right tabular-nums ${credit > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr className="bg-slate-50/60 font-semibold" data-testid="settlement-row-net-billable">
+                              <td colSpan={6} className="p-2 text-right text-slate-700">Net Billable (after Credit Notes)</td>
+                              <td className="p-2 text-right tabular-nums text-slate-900">₹{netBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr className="border-t" data-testid="settlement-row-billed-at-transfer">
+                              <td colSpan={6} className="p-2 text-right text-slate-600">Less: Already Billed to Distributor (Transfer Price)</td>
+                              <td className={`p-2 text-right tabular-nums ${billedAtTransfer > 0 ? 'text-indigo-700' : 'text-slate-400'}`}>{billedAtTransfer > 0 ? '−' : ''}₹{billedAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            {frVal > 0 && (
+                              <tr className="border-t" data-testid="settlement-row-factory-return">
+                                <td colSpan={6} className="p-2 text-right text-slate-600">Less: Factory Return Credit</td>
+                                <td className="p-2 text-right tabular-nums text-emerald-700">−₹{frVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              </tr>
+                            )}
+                            <tr className={`border-t-2 ${settled ? 'bg-slate-100' : distPays ? 'bg-amber-50' : 'bg-emerald-50'}`} data-testid="settlement-row-net-settlement">
+                              <td colSpan={6} className="p-2 text-right font-bold uppercase tracking-wider text-xs">
+                                Net Settlement
+                                <span className="block text-[10px] font-normal normal-case text-slate-500 mt-0.5">
+                                  {settled ? 'Settled' : distPays ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
+                                </span>
+                              </td>
+                              <td className={`p-2 text-right tabular-nums font-bold text-base ${settled ? 'text-slate-500' : distPays ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                {settled ? '₹0.00' : `${distPays ? '+' : '−'}₹${Math.abs(netSettlement).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                              </td>
+                            </tr>
+                          </>
                         );
                       })()}
                     </tfoot>
                   </table>
                 </div>
                 <div className="px-3 py-2 bg-slate-50 border-t text-[11px] text-muted-foreground">
-                  Net Billable per delivery is the exact value calculated at Stock Out (Actual Billable − Credit Note). The top tile shows their sum, less any Factory Return Credit.
+                  <strong>How Net Settlement is calculated:</strong> Customer Order Value − Distributor Margin = Actual Billable. Less Credit Notes = Net Billable. Less Already Billed to Distributor (Transfer Price) and Factory Return Credit = Net Settlement.
                 </div>
               </div>
 
