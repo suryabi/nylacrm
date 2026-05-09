@@ -170,8 +170,8 @@ export default function DeliveriesTab({
   }, [distributor?.id, API_URL, token]);
   
   useEffect(() => {
-    if (factorySectionOpen) fetchMarginSkus();
-  }, [factorySectionOpen, fetchMarginSkus]);
+    if (factorySectionOpen || showFactoryDialog) fetchMarginSkus();
+  }, [factorySectionOpen, showFactoryDialog, fetchMarginSkus]);
   
   // Fetch factory returns
   const fetchFactoryReturns = useCallback(async () => {
