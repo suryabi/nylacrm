@@ -2695,6 +2695,17 @@ export default function DistributorDetail() {
                     <span className="ml-2 font-medium">{selectedDelivery.vehicle_number}</span>
                   </div>
                 )}
+                {(selectedDelivery.total_credit_applied || 0) > 0 && (
+                  <div className="sm:col-span-2 mt-1 inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-rose-50 border border-rose-200 self-start" data-testid="delivery-credit-note-applied">
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-rose-700">Credit Note applied</span>
+                    <span className="text-sm font-semibold text-rose-700">
+                      − ₹{Number(selectedDelivery.total_credit_applied).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    {selectedDelivery.credit_note_number && (
+                      <span className="text-[11px] text-rose-600/80">· {selectedDelivery.credit_note_number}</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Detailed Items Table */}
@@ -2707,7 +2718,7 @@ export default function DistributorDetail() {
                       <th className="text-right p-2 font-medium text-blue-700">Base Price</th>
                       <th className="text-right p-2 font-medium text-blue-700">Billed to Dist</th>
                       <th className="text-right p-2 font-medium text-emerald-700">Cust. Price</th>
-                      <th className="text-right p-2 font-medium text-emerald-700">Actual Billable</th>
+                      <th className="text-right p-2 font-medium text-emerald-700">Customer Order Value</th>
                     </tr>
                   </thead>
                   <tbody>
