@@ -90,58 +90,65 @@ export default function SettlementsTab({
   const totalFactoryAdj = accountGroups.reduce((s, g) => s + g.factory_adj, 0);
 
   // --- Settlement list grouping ---
+  // Each settlement is enriched server-side with `stockout_totals` derived from
+  // the actual delivery items (single source of truth shared with the popup).
+  // We compute `net_settlement` here using the SAME formula the popup uses:
+  //   net_settlement = net_billable − billed_at_transfer − factory_return_credit
+  //   positive ⇒ Distributor pays Supplier; negative ⇒ Supplier pays Distributor.
+  const settlementNet = (s) => {
+    const t = s.stockout_totals || {};
+    const netBillable = t.net_billable || 0;
+    const billedAtTransfer = t.billed_at_transfer || 0;
+    const fr = s.total_factory_return_credit || 0;
+    return netBillable - billedAtTransfer - fr;
+  };
   const settlementsByAccount = settlements.reduce((acc, s) => {
     const aid = s.account_id || 'unknown';
     if (!acc[aid]) {
       acc[aid] = {
         account_id: aid, account_name: s.account_name || 'Unknown',
         settlements: [],
-        totals: { billing: 0, earnings: 0, factory_adj: 0, credit_applied: 0, fr_credit: 0, net_settlement: 0 }
+        totals: { billing: 0, earnings: 0, credit_applied: 0, fr_credit: 0, net_settlement: 0 }
       };
     }
     acc[aid].settlements.push(s);
-    const factAdj = s.factory_distributor_adjustment || 0;
-    // Use credit_notes_applied (the credit deducted at delivery time) — mirrors popup's stockout_totals.credit_applied
-    const creditApplied = s.credit_notes_applied || s.total_credit_notes_applied || 0;
+    const t = s.stockout_totals || {};
+    const credit = t.credit_applied || 0;
     const frCredit = s.total_factory_return_credit || 0;
-    acc[aid].totals.billing += s.total_billing_value || 0;
-    acc[aid].totals.earnings += s.distributor_earnings || 0;
-    acc[aid].totals.factory_adj += factAdj;
-    acc[aid].totals.credit_applied += creditApplied;
+    acc[aid].totals.billing += t.customer_order_value || 0;
+    acc[aid].totals.earnings += t.distributor_margin || 0;
+    acc[aid].totals.credit_applied += credit;
     acc[aid].totals.fr_credit += frCredit;
-    // SAME formula & sign convention as Settlement Detail popup:
-    //   net_settlement = factory_adj − credit_applied − factory_return_credit
-    //   positive ⇒ Distributor pays Supplier; negative ⇒ Supplier pays Distributor
-    acc[aid].totals.net_settlement += factAdj - creditApplied - frCredit;
+    acc[aid].totals.net_settlement += settlementNet(s);
     return acc;
   }, {});
   const settlementGroups = Object.values(settlementsByAccount);
   const grandTotals = settlementGroups.reduce((a, g) => ({
     billing: a.billing + g.totals.billing,
     earnings: a.earnings + g.totals.earnings,
-    factory_adj: a.factory_adj + g.totals.factory_adj,
     credit_applied: a.credit_applied + g.totals.credit_applied,
     fr_credit: a.fr_credit + g.totals.fr_credit,
     net_settlement: a.net_settlement + g.totals.net_settlement
-  }), { billing: 0, earnings: 0, factory_adj: 0, credit_applied: 0, fr_credit: 0, net_settlement: 0 });
+  }), { billing: 0, earnings: 0, credit_applied: 0, fr_credit: 0, net_settlement: 0 });
 
   const downloadExcel = async () => {
     setDownloading(true);
     try {
       const rows = settlements.map(s => {
-        const credit = s.credit_notes_applied || s.total_credit_notes_applied || 0;
+        const t = s.stockout_totals || {};
+        const credit = t.credit_applied || 0;
         const fr = s.total_factory_return_credit || 0;
-        const adj = s.factory_distributor_adjustment || 0;
-        const net = adj - credit - fr;
+        const net = settlementNet(s);
         return {
           'Settlement #': s.settlement_number,
           'Month': s.settlement_month ? MONTHS.find(m => m.value === s.settlement_month)?.label : '-',
           'Year': s.settlement_year || '-',
           'Account': s.account_name || '-',
           'Deliveries': s.total_deliveries || 0,
-          'Customer Order Value': s.total_billing_value || 0,
-          'Distributor Margin': s.distributor_earnings || 0,
+          'Customer Order Value': t.customer_order_value || 0,
+          'Distributor Margin': t.distributor_margin || 0,
           'Credit Notes Applied': credit,
+          'Already Billed at Transfer': t.billed_at_transfer || 0,
           'Factory Return Credit': fr,
           'Net Settlement': net,
           'Direction': Math.abs(net) < 0.01 ? 'Settled' : (net > 0 ? 'Distributor pays Supplier' : 'Supplier pays Distributor'),
@@ -528,17 +535,19 @@ export default function SettlementsTab({
                       </tr></thead>
                       <tbody>
                         {group.settlements.map((s, i) => {
-                          const credit = s.credit_notes_applied || s.total_credit_notes_applied || 0;
+                          const t = s.stockout_totals || {};
+                          const cov = t.customer_order_value || 0;
+                          const margin = t.distributor_margin || 0;
+                          const credit = t.credit_applied || 0;
                           const frVal = s.total_factory_return_credit || 0;
-                          const adjVal = s.factory_distributor_adjustment || 0;
-                          const net = adjVal - credit - frVal;
+                          const net = settlementNet(s);
                           const distPays = net > 0;
                           return (
                             <tr key={s.id} className={`border-t hover:bg-slate-50 cursor-pointer ${i % 2 === 1 ? 'bg-slate-50/40' : ''}`} onClick={() => viewSettlementDetail(s.id)}>
                               <td className="p-3"><button className="font-medium text-blue-600 hover:underline" onClick={(e) => { e.stopPropagation(); viewSettlementDetail(s.id); }}>{s.settlement_number}</button></td>
                               <td className="p-3 text-slate-600">{MONTHS.find(m => m.value === s.settlement_month)?.label} {s.settlement_year}</td>
-                              <td className="p-3 text-right tabular-nums">₹{fmt(s.total_billing_value)}</td>
-                              <td className="p-3 text-right text-blue-600 font-medium tabular-nums">₹{fmt(s.distributor_earnings)}</td>
+                              <td className="p-3 text-right tabular-nums">₹{fmt(cov)}</td>
+                              <td className="p-3 text-right text-blue-600 font-medium tabular-nums">₹{fmt(margin)}</td>
                               <td className={`p-3 text-right font-medium tabular-nums ${credit > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{credit > 0 ? '−' : ''}₹{fmt(credit)}</td>
                               <td className={`p-3 text-right font-medium tabular-nums ${frVal > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{frVal > 0 ? '+' : ''}₹{fmt(frVal)}</td>
                               <td className={`p-3 text-right font-bold tabular-nums ${Math.abs(net) < 0.01 ? 'text-slate-400' : distPays ? 'text-amber-600' : 'text-emerald-600'}`}>

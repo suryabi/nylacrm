@@ -4039,7 +4039,11 @@ async def list_distributor_settlements(
         query,
         {"_id": 0}
     ).sort([("settlement_year", -1), ("settlement_month", -1), ("created_at", -1)]).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
-    
+
+    # Enrich each settlement with stockout_totals so the parent page uses the
+    # SAME math as the Settlement Detail popup (single source of truth).
+    await _enrich_settlements_with_stockout_totals(tenant_id, settlements)
+
     return {
         "settlements": settlements,
         "total": total,
@@ -4094,6 +4098,63 @@ def _compute_delivery_stockout_view(delivery: dict, delivery_items: list) -> dic
     }
 
 
+async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: list) -> list:
+    """Enrich a list of settlement docs in-place with `items` (each enriched with
+    the per-delivery stockout view) and `stockout_totals`. Single source of truth
+    shared between list and detail endpoints so the parent Settlements page and
+    the popup never drift.
+    """
+    if not settlements:
+        return settlements
+
+    settlement_ids = [s['id'] for s in settlements if s.get('id')]
+    items_by_settlement: dict[str, list] = {}
+    all_items = await db.distributor_settlement_items.find(
+        {"settlement_id": {"$in": settlement_ids}, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).sort("delivery_date", 1).to_list(5000)
+    for it in all_items:
+        items_by_settlement.setdefault(it['settlement_id'], []).append(it)
+
+    delivery_ids = list({it['delivery_id'] for it in all_items if it.get('delivery_id')})
+    delivery_map: dict[str, dict] = {}
+    delivery_items_map: dict[str, list] = {}
+    if delivery_ids:
+        deliveries = await db.distributor_deliveries.find(
+            {"tenant_id": tenant_id, "id": {"$in": delivery_ids}},
+            {"_id": 0}
+        ).to_list(len(delivery_ids))
+        for d in deliveries:
+            delivery_map[d['id']] = d
+        di_rows = await db.distributor_delivery_items.find(
+            {"tenant_id": tenant_id, "delivery_id": {"$in": delivery_ids}},
+            {"_id": 0}
+        ).to_list(20000)
+        for di in di_rows:
+            delivery_items_map.setdefault(di['delivery_id'], []).append(di)
+
+    for s in settlements:
+        items = items_by_settlement.get(s['id'], [])
+        for it in items:
+            d = delivery_map.get(it.get('delivery_id'))
+            if not d:
+                continue
+            view = _compute_delivery_stockout_view(d, delivery_items_map.get(d['id'], []))
+            it.update(view)
+            it['delivery_status'] = d.get('status')
+        s['items'] = items
+        s['stockout_totals'] = {
+            "customer_order_value": round(sum(i.get('customer_order_value', 0) for i in items), 2),
+            "distributor_margin": round(sum(i.get('distributor_margin', 0) for i in items), 2),
+            "actual_billable": round(sum(i.get('actual_billable', 0) for i in items), 2),
+            "credit_applied": round(sum(i.get('credit_applied', 0) for i in items), 2),
+            "net_billable": round(sum(i.get('net_billable', 0) for i in items), 2),
+            "billed_at_transfer": round(sum(i.get('billed_at_transfer', 0) for i in items), 2),
+        }
+
+    return settlements
+
+
 @router.get("/{distributor_id}/settlements/{settlement_id}")
 async def get_settlement(
     distributor_id: str,
@@ -4116,52 +4177,8 @@ async def get_settlement(
     
     if not settlement:
         raise HTTPException(status_code=404, detail="Settlement not found")
-    
-    # Get settlement items (deliveries)
-    items = await db.distributor_settlement_items.find(
-        {"settlement_id": settlement_id, "tenant_id": tenant_id},
-        {"_id": 0}
-    ).sort("delivery_date", 1).to_list(500)
 
-    # Enrich each settlement item with the EXACT delivery-time numbers
-    delivery_ids = [it.get('delivery_id') for it in items if it.get('delivery_id')]
-    delivery_map = {}
-    if delivery_ids:
-        deliveries = await db.distributor_deliveries.find(
-            {"tenant_id": tenant_id, "id": {"$in": delivery_ids}},
-            {"_id": 0}
-        ).to_list(len(delivery_ids))
-        for d in deliveries:
-            delivery_map[d['id']] = d
-
-        all_items = await db.distributor_delivery_items.find(
-            {"tenant_id": tenant_id, "delivery_id": {"$in": delivery_ids}},
-            {"_id": 0}
-        ).to_list(5000)
-        items_by_delivery = {}
-        for di in all_items:
-            items_by_delivery.setdefault(di['delivery_id'], []).append(di)
-
-        for it in items:
-            d = delivery_map.get(it.get('delivery_id'))
-            if not d:
-                continue
-            view = _compute_delivery_stockout_view(d, items_by_delivery.get(d['id'], []))
-            it.update(view)
-            it['delivery_status'] = d.get('status')
-
-    settlement['items'] = items
-
-    # Aggregate the delivery-time numbers so the top tile uses the same source
-    settlement['stockout_totals'] = {
-        "customer_order_value": round(sum(i.get('customer_order_value', 0) for i in items), 2),
-        "distributor_margin": round(sum(i.get('distributor_margin', 0) for i in items), 2),
-        "actual_billable": round(sum(i.get('actual_billable', 0) for i in items), 2),
-        "credit_applied": round(sum(i.get('credit_applied', 0) for i in items), 2),
-        "net_billable": round(sum(i.get('net_billable', 0) for i in items), 2),
-        "billed_at_transfer": round(sum(i.get('billed_at_transfer', 0) for i in items), 2),
-    }
-
+    await _enrich_settlements_with_stockout_totals(tenant_id, [settlement])
     return settlement
 
 
