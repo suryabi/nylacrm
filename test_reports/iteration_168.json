@@ -1,0 +1,54 @@
+{
+  "summary": "Regression-tested the Settlement Detail enrichment + linked Distributor Portal/Contacts/Account-invoice areas from the prior fork. Backend pytest: 10 passed, 1 skipped (webhook outstanding overwrite — explicit external-key test path skipped, see note). Frontend Playwright smoke on the Settlement Detail dialog passed end-to-end: dialog opened from Settlements tab → STL-2026-0014 (Patni Plaza), and the 5 tiles (settlement-cov ₹2,000.00, settlement-margin ₹50.00, settlement-credit ₹0.00, settlement-factory-return ₹0.00, settlement-net-tile +₹1,950.00) plus settlement-deliveries-table row settlement-delivery-row-DEL-2026-0016 (10 qty / ₹2,000.00 / ₹50.00 / ₹0.00 / ₹1,950.00) render directly from the enriched API fields with NO client recalculation, and the per-row numbers EXACTLY match the Stock Out / Deliveries-tab math (COV = 10×200×(1-0%) = 2000; Margin = 10×200×2.5% = 50; Actual = 1950; Net = Actual - 0 credit = 1950). One CRITICAL backend regression discovered (unrelated to the enrichment fix): GET /api/accounts (paginated list) returns HTTP 500 due to Pydantic ValidationError on PaginatedAccountsResponse.data[*].last_payment_amount when the DB value is None.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/accounts",
+        "issue": "Returns 500 Internal Server Error. Backend log shows: `pydantic_core._pydantic_core.ValidationError: 1 validation error for PaginatedAccountsResponse data.0.last_payment_amount Input should be a valid number [type=float_type, input_value=None, input_type=NoneType]` (raised from server.py:5858 in get_accounts). Make `last_payment_amount: Optional[float] = None` on the AccountListItem model (or coerce None→0.0 in serialization) so existing DB rows without a payment value don't blow up the entire list.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_settlement_enrichment.py",
+    "/app/test_reports/pytest/iter168.xml"
+  ],
+  "verified_acceptance_criteria": [
+    "GET /api/distributors/{did}/settlements/{sid} returns enriched stockout_totals {customer_order_value, distributor_margin, actual_billable, credit_applied, net_billable} AND items[*] with the same five per-delivery fields. (test_get_settlement_returns_enriched_fields)",
+    "items[*] per-delivery numbers EXACTLY match GET /api/distributors/{did}/deliveries/{delivery_id} when recomputed via DeliveriesTab formula (COV=Σ qty×customer_selling_price×(1-disc%); Margin=Σ qty×customer_selling_price×commission%; Actual=COV-Margin; Net=Actual-total_credit_applied). (test_settlement_per_delivery_matches_delivery_endpoint)",
+    "GET /api/distributors/{did}/settlements list still works (200, valid shape).",
+    "Distributor portal login (john.distributor@test.com / nyladist##) returns session_token + distributor_id; GET /api/distributor-portal/home returns valid payload; portal user can read their own /deliveries; cross-distributor access to a foreign distributor (LIVE_DISTRIBUTOR_ID) is correctly restricted (returned 200 with own-data filter or denied — not exposing foreign rows).",
+    "Distributor Contacts: GET returns {contacts:[], total:N}; POST creates a contact; PUT updates designation+is_primary; the change is visible on subsequent GET; DELETE returns 200/204.",
+    "Account read endpoints (GET /api/accounts/{id}, GET /api/accounts/{id}/invoices) work for known account feaaaec8-fbd3-4c78-9b88-5dabc9ba2630 even though list endpoint /api/accounts is 500.",
+    "Frontend Settlement Detail dialog: opening STL-2026-0014 from Distributor Detail → Settlements tab (after expanding Patni Plaza group) renders all 5 tile data-testids (settlement-cov, settlement-margin, settlement-credit, settlement-factory-return, settlement-net-tile) and settlement-deliveries-table with row settlement-delivery-row-DEL-2026-0016 showing the same 2000/50/0/1950 numbers as the API and matching the Stock Out math."
+  ],
+  "action_items": [
+    "FIX CRITICAL: GET /api/accounts 500 — make AccountListItem.last_payment_amount Optional[float] (or coerce None→0.0). This blocks the Accounts list page entirely; we worked around it by hitting GET /api/accounts/{id} directly.",
+    "(Optional) Provide an explicit unauthenticated webhook URL or document the API-key header so the external-invoices outstanding-overwrite path can be exercised in regression suite. Currently the only callable path is POST /api/accounts/{account_id}/invoices with the external-system payload, which still requires the admin Bearer token in this environment."
+  ],
+  "critical_code_review_comments": [
+    "PaginatedAccountsResponse model field types are too strict — a single legacy row with last_payment_amount=NULL in Mongo crashes the entire list endpoint. Use Optional[float] = None or add a @validator coercing None→0.0. Same defensive fix should be audited across other List* response models in server.py to prevent similar one-row-poisons-the-page failures.",
+    "DistributorContacts list endpoint returns {contacts, total} (dict) while many other list endpoints in this codebase return a bare array. The frontend mostly handles both, but it's an inconsistency worth normalising.",
+    "Settlement enrichment helper _compute_delivery_stockout_view in routes/distributors.py duplicates math that already exists in calculate_delivery_item_amounts (~line 2820) and DeliveriesTab.jsx (~1140-1280). Three sources of truth for the same formula = future drift risk. Consider extracting a single backend function reused by both delivery-create and settlement-enrich, and have the frontend simply render the server-computed values (which is now the case, ✓).",
+    "DistributorDetail.js is large (>3400 lines) — viewSettlementDetail and the Settlement Detail Dialog (~1820 + ~3042-3275) are good candidates to extract into a SettlementDetailDialog.jsx subcomponent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_settlement_enrichment.py (new — regression suite)"
+  ],
+  "success_rate": {
+    "backend": "10/11 passed, 1 skipped (91%)",
+    "frontend": "1/1 critical flow passed (100%)"
+  },
+  "test_credentials": "Admin: admin@nylaairwater.earth / test123. Distributor portal: john.distributor@test.com / nyladist##. Tenant: nyla-air-water. Login response includes session_token + distributor_id (for portal users).",
+  "seed_data_creation": "test_create_update_delete_contact created+updated+deleted a TEST_Contact_<uuid> on distributor 3b92cc38-092e-4666-b0b5-c9dd70f50ac3. Final DELETE returned 2xx; GET list afterwards still showed the contact (count moved 0→1 in raw DB inspection mid-test) — investigate whether DELETE soft-deletes vs. hard-deletes; not blocking, but worth a one-line audit.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Live test fixtures used: distributor 3b92cc38-092e-4666-b0b5-c9dd70f50ac3 (Cost Card Testing / DIST-0018) → settlement ad06de27-4b65-40ee-8976-6c33c4d138d9 (STL-2026-0014, account Patni Plaza) → delivery 7957dab1-fa39-41a3-8310-84442ee376dd (DEL-2026-0016). Account id with usable invoices: feaaaec8-fbd3-4c78-9b88-5dabc9ba2630. Settlements tab UI groups settlements by account → must click the account row (e.g. Patni Plaza) to expand before the STL-... buttons become visible. data-testid pattern for delivery row inside the dialog: settlement-delivery-row-{delivery_number} (NOT delivery_id). The /api/accounts list 500 makes it impossible to bulk-list accounts via UI/API right now — workaround in tests: GET /api/accounts/{known_id} directly.",
+  "rca of the issue": "ROOT CAUSE OF /api/accounts 500: backend/server.py:5858 builds PaginatedAccountsResponse(data=accounts, ...) where each row's last_payment_amount is a non-Optional float in the Pydantic model. A row in Mongo has last_payment_amount=null (account that never received a payment) → Pydantic v2 raises float_type ValidationError and FastAPI surfaces it as 500. REPRO: curl -H 'Authorization: Bearer <admin-token>' $URL/api/accounts → 500 'Internal Server Error'. MITIGATION: change field to Optional[float] = None on AccountListItem (or PaginatedAccountsResponse.data row model), OR add `account['last_payment_amount'] = account.get('last_payment_amount') or 0.0` in get_accounts before Pydantic construction.\n\nSettlement enrichment itself is working correctly: stockout_totals.net_billable = 1950 and items[0].net_billable = 1950, matching DEL-2026-0016 Actual Billable (1950) - credit_applied (0) = 1950, which also matches what Stock Out/DeliveriesTab renders. No drift between Settlement Detail and Stock Out for this delivery."
+}

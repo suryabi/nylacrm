@@ -3078,101 +3078,57 @@ export default function DistributorDetail() {
                 </div>
               </div>
 
-              {/* Summary Cards - Billing Approach Aware */}
+              {/* Summary Cards — driven by stockout_totals (single source of truth) */}
               {(() => {
-                const isCB = distributor?.billing_approach === 'cost_based';
-                const billing = selectedSettlement.total_billing_value || 0;
-                const earnings = selectedSettlement.distributor_earnings || 0;
-                const factoryDue = billing - earnings;
-                
-                // Recalculate: For cost_based, margin_at_transfer = 0; for upfront, use stored value
-                const marginAtTransfer = isCB ? 0 : (selectedSettlement.margin_at_transfer_price || selectedSettlement.total_margin_amount || 0);
-                
-                // Billed at transfer = factoryDue equivalent at base: billing_base - margin_at_transfer (for upfront) or billing_base (for cost_based)
-                // We can derive: adjustment = factoryDue - billedAtTransfer
-                // For upfront: billedAtTransfer = base_total - margin_at_transfer = base_total × (1-m%)
-                // For cost_based: billedAtTransfer = base_total
-                // Since we don't have base_total stored, compute from: billedAtTransfer = factoryDue - adj
-                // But adj is wrong too. So compute: billedAtTransfer = billing - earnings - correctAdj
-                // Circular. Use another approach:
-                // adj = factoryDue - (billing - factoryAdj_stored - earnings)... nope.
-                // 
-                // Best: use (billing - earnings) as factoryDue and stored total_delivery_amount as a proxy
-                // OR just compute adj differently:
-                // For cost_based: adj = factoryDue - (factoryDue - storedAdj + marginAtTransfer)... nope
-                //
-                // Cleanest: recompute from items if available
-                let totalBilledAtTransfer = 0;
                 const items = selectedSettlement.items || [];
-                items.forEach(item => {
-                  const itemBilling = item.total_billing_value || item.total_amount || 0;
-                  const itemEarnings = item.distributor_earnings || 0;
-                  const itemMarginAtTransfer = isCB ? 0 : (item.margin_at_transfer_price || item.margin_amount || 0);
-                  // For upfront: billed = billing_base - margin = (billing_base) × (1-m%)
-                  // margin_at_transfer = billing_base × m%, so billing_base = margin_at_transfer / m% (if we know m%)
-                  // Alternative: billedAtTransfer = itemBilling - itemEarnings - adj (circular)
-                  // Use: billedAtTransfer ≈ factoryDue_on_base = base × (1-m%) for upfront, base for cost_based
-                  // Since base_total ≈ billing - (customer - base) per item... we don't have base.
-                  // 
-                  // Approximate: billedAtTransfer = billing - earnings - adj_stored for upfront
-                  // For cost_based: billedAtTransfer = billing - earnings - adj_stored ... same issue
-                  // 
-                  // Actually from delivery items we have margin_amount which = margin on customer price
-                  // And the delivery total_net_amount ≈ customer billing amount
-                  // Just use: for cost_based, total_transfer_billed = total_base = ??? 
-                  //
-                  // Given we CANNOT derive base from settlement data alone for old records,
-                  // let's display what we CAN correctly derive:
-                  totalBilledAtTransfer += 0; // placeholder
-                });
-                
-                // Since old settlements have wrong stored values and we can't derive base_total,
-                // show the CORRECT net payout formula and let the detail table use recalculated values
-                const storedAdj = selectedSettlement.factory_distributor_adjustment || selectedSettlement.total_dist_to_factory_adjustment || 0;
-                
-                // For net payout recalculation from components
-                const cnVal = selectedSettlement.total_credit_notes_issued || 0;
+                const totals = selectedSettlement.stockout_totals || {
+                  customer_order_value: items.reduce((s, it) => s + (it.customer_order_value || 0), 0),
+                  distributor_margin: items.reduce((s, it) => s + (it.distributor_margin || 0), 0),
+                  actual_billable: items.reduce((s, it) => s + (it.actual_billable || 0), 0),
+                  credit_applied: items.reduce((s, it) => s + (it.credit_applied || 0), 0),
+                  net_billable: items.reduce((s, it) => s + (it.net_billable || 0), 0),
+                };
+                const cov = totals.customer_order_value || 0;
+                const margin = totals.distributor_margin || 0;
+                const credit = totals.credit_applied || 0;
+                const netBillable = totals.net_billable || 0;
                 const frVal = selectedSettlement.total_factory_return_credit || 0;
-                const netPayout = -(storedAdj) + cnVal + frVal;
-                
+                // Final cash flow = Net Billable owed by distributor − Factory Return Credit owed back
+                const finalDue = netBillable - frVal;
+
                 return (
                   <div className="space-y-4">
-                    <div className={`rounded-lg px-3 py-1.5 text-xs font-medium inline-flex items-center gap-1.5 ${isCB ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'}`}>
-                      {isCB ? 'No Upfront Margin — Post-Sale Adjustment' : 'Margin Applied Upfront'}
-                    </div>
-
-                    {/* Same 5-number flow as the Settlements summary card and the deliveries view */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                       <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Customer Order Value</div>
-                        <div className="text-lg font-bold text-slate-900 tabular-nums mt-1">₹{billing.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-lg font-bold text-slate-900 tabular-nums mt-1" data-testid="settlement-cov">₹{cov.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                         <div className="text-[10px] text-slate-400 mt-0.5">across deliveries</div>
                       </div>
                       <div className="bg-blue-50 rounded-lg p-3">
                         <div className="text-[10px] uppercase tracking-wider text-blue-600 font-medium">Distributor Margin</div>
-                        <div className="text-lg font-bold text-blue-700 tabular-nums mt-1">₹{earnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-lg font-bold text-blue-700 tabular-nums mt-1" data-testid="settlement-margin">₹{margin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                         <div className="text-[10px] text-blue-500/80 mt-0.5">earned by distributor</div>
                       </div>
                       <div className="bg-rose-50 rounded-lg p-3">
                         <div className="text-[10px] uppercase tracking-wider text-rose-600 font-medium">Credit Notes</div>
-                        <div className="text-lg font-bold text-rose-700 tabular-nums mt-1">{cnVal > 0 ? '−' : ''}₹{cnVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-rose-500/80 mt-0.5">paid by dist to customer</div>
+                        <div className="text-lg font-bold text-rose-700 tabular-nums mt-1" data-testid="settlement-credit">{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-rose-500/80 mt-0.5">applied to deliveries</div>
                       </div>
                       <div className="bg-emerald-50 rounded-lg p-3">
                         <div className="text-[10px] uppercase tracking-wider text-emerald-600 font-medium">Factory Return Credit</div>
-                        <div className="text-lg font-bold text-emerald-700 tabular-nums mt-1">{frVal > 0 ? '+' : ''}₹{frVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-lg font-bold text-emerald-700 tabular-nums mt-1" data-testid="settlement-factory-return">{frVal > 0 ? '+' : ''}₹{frVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
                         <div className="text-[10px] text-emerald-500/80 mt-0.5">stock returned to supplier</div>
                       </div>
                       {(() => {
-                        const settled = Math.abs(netPayout) < 0.01;
-                        const distOwes = netPayout < 0;
+                        const settled = Math.abs(finalDue) < 0.01;
+                        const distOwes = finalDue > 0;
                         const cls = settled ? 'bg-slate-100 border-slate-200' : distOwes ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300';
                         const valCls = settled ? 'text-slate-500' : distOwes ? 'text-amber-700' : 'text-emerald-700';
                         return (
-                          <div className={`rounded-lg p-3 border-2 ${cls}`}>
+                          <div className={`rounded-lg p-3 border-2 ${cls}`} data-testid="settlement-net-tile">
                             <div className="text-[10px] uppercase tracking-wider text-slate-600 font-medium">Net Settlement</div>
                             <div className={`text-lg font-bold tabular-nums mt-1 ${valCls}`}>
-                              {settled ? '₹0.00' : `${distOwes ? '−' : '+'}₹${Math.abs(netPayout).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                              {settled ? '₹0.00' : `${distOwes ? '+' : '−'}₹${Math.abs(finalDue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
                             </div>
                             <div className={`text-[10px] mt-0.5 ${valCls}`}>
                               {settled ? 'Settled' : distOwes ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
@@ -3192,7 +3148,7 @@ export default function DistributorDetail() {
                   <span className="text-[11px] text-muted-foreground font-normal">Same numbers as Stock Out → Delivery preview</span>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm" data-testid="settlement-deliveries-table">
                     <thead className="bg-muted/30 sticky top-0">
                       <tr>
                         <th className="text-left p-2">Delivery #</th>
@@ -3201,24 +3157,26 @@ export default function DistributorDetail() {
                         <th className="text-right p-2">Customer Order Value</th>
                         <th className="text-right p-2 text-blue-700">Distributor Margin</th>
                         <th className="text-right p-2 text-rose-700">Credit Note</th>
-                        <th className="text-right p-2">Final Billable</th>
+                        <th className="text-right p-2">Net Billable</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(selectedSettlement.items || []).map((item, idx) => {
-                        const itemBilling = item.total_billing_value || item.total_amount || 0;
-                        const itemEarnings = item.distributor_earnings || 0;
-                        const itemCredit = item.credit_applied || item.total_credit_applied || 0;
-                        const finalBillable = itemBilling - itemEarnings - itemCredit;
+                        const cov = item.customer_order_value || 0;
+                        const margin = item.distributor_margin || 0;
+                        const credit = item.credit_applied || 0;
+                        const netBillable = item.net_billable !== undefined
+                          ? item.net_billable
+                          : ((item.actual_billable || 0) - credit);
                         return (
-                          <tr key={idx} className="border-t">
-                            <td className="p-2">{item.delivery_number}</td>
+                          <tr key={idx} className="border-t" data-testid={`settlement-delivery-row-${item.delivery_number}`}>
+                            <td className="p-2 font-medium text-emerald-700">{item.delivery_number}</td>
                             <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
                             <td className="p-2 text-right tabular-nums">{item.total_quantity || 0}</td>
-                            <td className="p-2 text-right tabular-nums">₹{itemBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right text-blue-600 tabular-nums font-medium">₹{itemEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-2 text-right tabular-nums font-medium ${itemCredit > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{itemCredit > 0 ? '−' : ''}₹{itemCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right tabular-nums font-bold text-slate-900">₹{finalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right tabular-nums">₹{cov.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-blue-600 tabular-nums font-medium">₹{margin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right tabular-nums font-medium ${credit > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right tabular-nums font-bold text-slate-900">₹{netBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })}
@@ -3226,17 +3184,19 @@ export default function DistributorDetail() {
                     <tfoot>
                       {(() => {
                         const items = selectedSettlement.items || [];
-                        const sumBilling = items.reduce((s, it) => s + (it.total_billing_value || it.total_amount || 0), 0);
-                        const sumEarnings = items.reduce((s, it) => s + (it.distributor_earnings || 0), 0);
-                        const sumCredit = items.reduce((s, it) => s + (it.credit_applied || it.total_credit_applied || 0), 0);
-                        const sumFinal = sumBilling - sumEarnings - sumCredit;
+                        const totals = selectedSettlement.stockout_totals || {
+                          customer_order_value: items.reduce((s, it) => s + (it.customer_order_value || 0), 0),
+                          distributor_margin: items.reduce((s, it) => s + (it.distributor_margin || 0), 0),
+                          credit_applied: items.reduce((s, it) => s + (it.credit_applied || 0), 0),
+                          net_billable: items.reduce((s, it) => s + (it.net_billable || 0), 0),
+                        };
                         return (
-                          <tr className="bg-slate-50 border-t-2 font-semibold">
+                          <tr className="bg-slate-50 border-t-2 font-semibold" data-testid="settlement-deliveries-totals">
                             <td colSpan={3} className="p-2 text-right">Total</td>
-                            <td className="p-2 text-right tabular-nums">₹{sumBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right text-blue-700 tabular-nums">₹{sumEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-2 text-right tabular-nums ${sumCredit > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{sumCredit > 0 ? '−' : ''}₹{sumCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right tabular-nums text-slate-900">₹{sumFinal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right tabular-nums">₹{(totals.customer_order_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-blue-700 tabular-nums">₹{(totals.distributor_margin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right tabular-nums ${(totals.credit_applied || 0) > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{(totals.credit_applied || 0) > 0 ? '−' : ''}₹{(totals.credit_applied || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right tabular-nums text-slate-900">₹{(totals.net_billable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })()}
@@ -3244,7 +3204,7 @@ export default function DistributorDetail() {
                   </table>
                 </div>
                 <div className="px-3 py-2 bg-slate-50 border-t text-[11px] text-muted-foreground">
-                  Net Settlement (above) = Final Billable − Billed at Transfer + Factory Return Credit. The top tile shows the consolidated Net Settlement using the same numbers stored at delivery time.
+                  Net Billable per delivery is the exact value calculated at Stock Out (Actual Billable − Credit Note). The top tile shows their sum, less any Factory Return Credit.
                 </div>
               </div>
 
