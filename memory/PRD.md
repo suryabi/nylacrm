@@ -5,6 +5,14 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Settlement Detail = Stock Out (single source of truth) (2026-02-09)
+- [x] User reported: "For each delivery the NET settlement is already calculated at the stock out. So, in the settlement screen, it has to work with the same settlement numbers, not different."
+- [x] **Backend** `/app/backend/routes/distributors.py` — added `_compute_delivery_stockout_view(delivery, items)` that mirrors the exact DeliveriesTab.jsx math (COV = Σ qty×customer_price×(1−disc%); Margin = Σ qty×customer_price×commission%; Actual Billable = COV − Margin; Net Billable = Actual Billable − total_credit_applied). `GET /api/distributors/{did}/settlements/{sid}` now enriches every settlement item with `customer_order_value`, `distributor_margin`, `actual_billable`, `credit_applied`, `net_billable`, `applied_credit_notes` and returns a top-level `stockout_totals` aggregate.
+- [x] **Frontend** `/app/frontend/src/pages/DistributorDetail.js` — Settlement Detail dialog 5 tiles (`settlement-cov`, `settlement-margin`, `settlement-credit`, `settlement-factory-return`, `settlement-net-tile`) and `settlement-deliveries-table` now render directly from the enriched API fields with **no client-side recalculation**. Net Settlement tile = `stockout_totals.net_billable − total_factory_return_credit`. Per-row testid: `settlement-delivery-row-{delivery_number}`.
+- [x] **Verified** end-to-end via testing agent (iter 168): STL-2026-0014 / DEL-2026-0016 → COV ₹2,000.00, Margin ₹50.00, Credit ₹0.00, Net Billable ₹1,950.00 — matches Stock Out exactly. Backend pytest 10/11 passed (1 skipped, unrelated webhook auth). Lint clean.
+- [x] **Side fix (CRITICAL regression discovered & fixed)** `/app/backend/server.py` — `Account.last_payment_amount`, `outstanding_balance`, `overdue_amount` made `Optional[float]` so `GET /api/accounts` no longer 500s on legacy rows with `null` payment values.
+
+
 ### Distributor Profile — multi-contact list with optional portal-login provisioning (2026-02-08)
 - [x] User asked: "In distributor profile, add an ability to add multiple contacts and add an option if they need to be enabled to login to the distributor portal."
 - [x] **Backend** new `/app/backend/routes/distributor_contacts.py` — full CRUD on `db.distributor_contacts` collection scoped by tenant_id + distributor_id. When `has_portal_access=true` + email present, `_provision_portal_user` either creates a new Distributor-role user (default password `nyladist##`, `force_password_change=true`) or re-activates / links an existing user. Disabling access deactivates the linked user (keeps audit trail). Includes `POST .../reset-password` to force the default password back. Routes mounted at `/api/distributors/{id}/contacts`.

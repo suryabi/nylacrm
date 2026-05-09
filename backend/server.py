@@ -875,10 +875,10 @@ class Account(BaseModel):
     sku_pricing: List[AccountSKUPricing] = []
     
     # Financial Tracking
-    outstanding_balance: float = 0.0
-    overdue_amount: float = 0.0
+    outstanding_balance: Optional[float] = 0.0
+    overdue_amount: Optional[float] = 0.0
     last_payment_date: Optional[str] = None
-    last_payment_amount: float = 0.0
+    last_payment_amount: Optional[float] = 0.0
     
     # Onboarding tracking
     onboarded_month: Optional[int] = None
