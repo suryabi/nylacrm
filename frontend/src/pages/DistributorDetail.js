@@ -20,7 +20,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -3041,17 +3041,18 @@ export default function DistributorDetail() {
 
       {/* Settlement Detail Dialog */}
       <Dialog open={showSettlementDetail} onOpenChange={setShowSettlementDetail}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-5xl h-[92vh] flex flex-col p-0 gap-0 overflow-hidden" data-testid="settlement-detail-dialog">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
             <DialogTitle className="flex items-center gap-3">
               Settlement {selectedSettlement?.settlement_number}
               {selectedSettlement && getSettlementStatusBadge(selectedSettlement.status)}
             </DialogTitle>
           </DialogHeader>
           {selectedSettlement && (
-            <div className="space-y-4">
-              {/* Settlement Info */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+            <div className="relative flex-1 overflow-y-auto px-6 py-4 settlement-scroll" data-testid="settlement-detail-scroll">
+              <div className="space-y-4 pb-2">
+                {/* Settlement Info */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Month/Year:</span>
                   <div className="font-medium">
@@ -3268,9 +3269,18 @@ export default function DistributorDetail() {
                   Payment Reference: {selectedSettlement.payment_reference}
                 </div>
               )}
-
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-4 border-t">
+              </div>
+              {/* Visual hint that there's more to scroll */}
+              <div className="pointer-events-none sticky bottom-0 left-0 right-0 h-6 -mt-6 bg-gradient-to-t from-white to-transparent" aria-hidden="true" />
+            </div>
+          )}
+          {selectedSettlement && (
+            <div className="shrink-0 border-t bg-slate-50 px-6 py-3 flex items-center justify-between gap-2" data-testid="settlement-detail-actions">
+              <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                <ArrowDown className="h-3 w-3" />
+                Scroll for full math breakdown
+              </div>
+              <div className="flex justify-end gap-2">
                 {selectedSettlement.status === 'draft' && canManage && (
                   <>
                     <Button variant="outline" onClick={() => {
