@@ -3189,7 +3189,7 @@ export default function DistributorDetail() {
               <div className="border rounded-lg">
                 <div className="bg-muted/50 p-3 font-medium text-sm border-b flex items-center justify-between">
                   <span>Included Deliveries</span>
-                  <span className="text-[11px] text-muted-foreground font-normal">Same column meaning as Stock Out → Deliveries</span>
+                  <span className="text-[11px] text-muted-foreground font-normal">Same numbers as Stock Out → Delivery preview</span>
                 </div>
                 <div className="max-h-64 overflow-y-auto">
                   <table className="w-full text-sm">
@@ -3200,17 +3200,16 @@ export default function DistributorDetail() {
                         <th className="text-right p-2">Qty</th>
                         <th className="text-right p-2">Customer Order Value</th>
                         <th className="text-right p-2 text-blue-700">Distributor Margin</th>
-                        <th className="text-right p-2">Net Settlement</th>
+                        <th className="text-right p-2 text-rose-700">Credit Note</th>
+                        <th className="text-right p-2">Final Billable</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(selectedSettlement.items || []).map((item, idx) => {
                         const itemBilling = item.total_billing_value || item.total_amount || 0;
                         const itemEarnings = item.distributor_earnings || 0;
-                        const itemAdj = item.adjustment_dist_to_factory || item.factory_distributor_adjustment || 0;
-                        const itemNet = -itemAdj; // distributor-perspective: positive = supplier owes dist
-                        const settled = Math.abs(itemNet) < 0.01;
-                        const distOwes = itemNet < 0;
+                        const itemCredit = item.credit_applied || item.total_credit_applied || 0;
+                        const finalBillable = itemBilling - itemEarnings - itemCredit;
                         return (
                           <tr key={idx} className="border-t">
                             <td className="p-2">{item.delivery_number}</td>
@@ -3218,14 +3217,34 @@ export default function DistributorDetail() {
                             <td className="p-2 text-right tabular-nums">{item.total_quantity || 0}</td>
                             <td className="p-2 text-right tabular-nums">₹{itemBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td className="p-2 text-right text-blue-600 tabular-nums font-medium">₹{itemEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className={`p-2 text-right font-medium tabular-nums ${settled ? 'text-slate-400' : distOwes ? 'text-amber-600' : 'text-emerald-600'}`}>
-                              {settled ? '₹0.00' : `${distOwes ? '−' : '+'}₹${Math.abs(itemNet).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
-                            </td>
+                            <td className={`p-2 text-right tabular-nums font-medium ${itemCredit > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{itemCredit > 0 ? '−' : ''}₹{itemCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right tabular-nums font-bold text-slate-900">₹{finalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })}
                     </tbody>
+                    <tfoot>
+                      {(() => {
+                        const items = selectedSettlement.items || [];
+                        const sumBilling = items.reduce((s, it) => s + (it.total_billing_value || it.total_amount || 0), 0);
+                        const sumEarnings = items.reduce((s, it) => s + (it.distributor_earnings || 0), 0);
+                        const sumCredit = items.reduce((s, it) => s + (it.credit_applied || it.total_credit_applied || 0), 0);
+                        const sumFinal = sumBilling - sumEarnings - sumCredit;
+                        return (
+                          <tr className="bg-slate-50 border-t-2 font-semibold">
+                            <td colSpan={3} className="p-2 text-right">Total</td>
+                            <td className="p-2 text-right tabular-nums">₹{sumBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-blue-700 tabular-nums">₹{sumEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right tabular-nums ${sumCredit > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{sumCredit > 0 ? '−' : ''}₹{sumCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right tabular-nums text-slate-900">₹{sumFinal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        );
+                      })()}
+                    </tfoot>
                   </table>
+                </div>
+                <div className="px-3 py-2 bg-slate-50 border-t text-[11px] text-muted-foreground">
+                  Net Settlement (above) = Final Billable − Billed at Transfer + Factory Return Credit. The top tile shows the consolidated Net Settlement using the same numbers stored at delivery time.
                 </div>
               </div>
 
