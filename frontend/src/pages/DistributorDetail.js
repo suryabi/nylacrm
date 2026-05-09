@@ -2708,8 +2708,6 @@ export default function DistributorDetail() {
                       <th className="text-right p-2 font-medium text-blue-700">Billed to Dist</th>
                       <th className="text-right p-2 font-medium text-emerald-700">Cust. Price</th>
                       <th className="text-right p-2 font-medium text-emerald-700">Actual Billable</th>
-                      <th className="text-right p-2 font-medium text-amber-700">Adj. (Cust. Price)</th>
-                      <th className="text-right p-2 font-medium text-purple-700">Net Adj. (After Credit)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2723,7 +2721,6 @@ export default function DistributorDetail() {
                       const billedToDist = qty * transferPrice;
                       const newTransferPrice = isCostBased ? customerPrice : (customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0);
                       const actualBillable = qty * newTransferPrice;
-                      const adjustment = actualBillable - billedToDist;
                       return (
                         <tr key={idx} className="border-b">
                           <td className="p-2">
@@ -2735,10 +2732,6 @@ export default function DistributorDetail() {
                           <td className="p-2 text-right text-blue-800 font-medium">₹{billedToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2 text-right text-emerald-700">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2 text-right text-emerald-800 font-medium">₹{actualBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-2 text-right font-semibold ${adjustment > 0 ? 'text-emerald-600' : adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                            {adjustment > 0 ? '+' : ''}₹{adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-2 text-right text-slate-400">—</td>
                         </tr>
                       );
                     })}
@@ -2746,8 +2739,7 @@ export default function DistributorDetail() {
                   <tfoot>
                     {(() => {
                       const items = selectedDelivery.items || [];
-                      const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
-                      let totBilled = 0, totActual = 0, totAdj = 0;
+                      let totBilled = 0, totActual = 0;
                       items.forEach(item => {
                         const qty = item.quantity || 0;
                         const customerPrice = item.customer_selling_price || item.unit_price || 0;
@@ -2758,9 +2750,7 @@ export default function DistributorDetail() {
                         totBilled += qty * transferPrice;
                         const newTP = isCB ? customerPrice : (customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0);
                         totActual += qty * newTP;
-                        totAdj += (qty * newTP) - (qty * transferPrice);
                       });
-                      const netAdj = totAdj - totalCreditApplied;
                       return (
                         <tr className="bg-muted/30 font-semibold">
                           <td colSpan="2" className="p-2 text-right">Total:</td>
@@ -2768,12 +2758,6 @@ export default function DistributorDetail() {
                           <td className="p-2 text-right text-blue-800">₹{totBilled.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2"></td>
                           <td className="p-2 text-right text-emerald-800">₹{totActual.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-2 text-right ${totAdj > 0 ? 'text-emerald-600' : totAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                            {totAdj > 0 ? '+' : ''}₹{totAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className={`p-2 text-right ${netAdj > 0 ? 'text-emerald-600' : netAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                            {netAdj > 0 ? '+' : ''}₹{netAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
                         </tr>
                       );
                     })()}
