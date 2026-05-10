@@ -119,6 +119,29 @@ async def list_customer_returns(
         query,
         {"_id": 0}
     ).sort("created_at", -1).to_list(500)
+
+    # Enrich each return with its current active issuance summary (latest
+    # non-rejected, non-cancelled record). Lets the Returns grid render a
+    # single state-aware "Pay Customer" / "Approve" / "Mark Issued" button
+    # without each row firing its own request.
+    cn_ids = [r.get('credit_note_id') for r in returns if r.get('credit_note_id')]
+    active_by_cn: dict[str, dict] = {}
+    if cn_ids:
+        all_iss = await db.credit_note_issuances.find(
+            {"tenant_id": tenant_id, "credit_note_id": {"$in": cn_ids}},
+            {"_id": 0, "credit_note_id": 1, "id": 1, "status": 1, "amount": 1,
+             "issuance_method": 1, "created_at": 1, "approved_at": 1, "issued_at": 1}
+        ).sort("created_at", -1).to_list(2000)
+        for iss in all_iss:
+            cnid = iss['credit_note_id']
+            if iss.get('status') in ('rejected', 'cancelled'):
+                continue
+            if cnid not in active_by_cn:
+                active_by_cn[cnid] = iss
+
+    for r in returns:
+        cnid = r.get('credit_note_id')
+        r['active_issuance'] = active_by_cn.get(cnid) if cnid else None
     
     # Calculate summary
     total_quantity = sum(r.get('total_quantity', 0) for r in returns)
