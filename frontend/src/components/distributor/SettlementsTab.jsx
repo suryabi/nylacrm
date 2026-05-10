@@ -99,8 +99,9 @@ export default function SettlementsTab({
     const t = s.stockout_totals || {};
     const netBillable = t.net_billable || 0;
     const billedAtTransfer = t.billed_at_transfer || 0;
+    const directCredit = t.direct_credit_issued || 0;
     const fr = s.total_factory_return_credit || 0;
-    return netBillable - billedAtTransfer - fr;
+    return netBillable - billedAtTransfer - directCredit - fr;
   };
   const settlementsByAccount = settlements.reduce((acc, s) => {
     const aid = s.account_id || 'unknown';

@@ -3089,20 +3089,23 @@ export default function DistributorDetail() {
                   credit_applied: items.reduce((s, it) => s + (it.credit_applied || 0), 0),
                   net_billable: items.reduce((s, it) => s + (it.net_billable || 0), 0),
                   billed_at_transfer: items.reduce((s, it) => s + (it.billed_at_transfer || 0), 0),
+                  direct_credit_issued: 0,
                 };
                 const cov = totals.customer_order_value || 0;
                 const margin = totals.distributor_margin || 0;
                 const credit = totals.credit_applied || 0;
                 const netBillable = totals.net_billable || 0;
                 const billedAtTransfer = totals.billed_at_transfer || 0;
+                const directCredit = totals.direct_credit_issued || 0;
                 const frVal = selectedSettlement.total_factory_return_credit || 0;
-                // Net Settlement = (what dist owes factory after sale) − (what was already billed) − (factory return credit owed back)
+                // Net Settlement = (what dist owes factory after sale) − (what was already billed)
+                //                  − (direct credit notes paid out-of-pocket) − (factory return credit owed back)
                 // Positive ⇒ Distributor pays Supplier. Negative ⇒ Supplier pays Distributor.
-                const finalDue = netBillable - billedAtTransfer - frVal;
+                const finalDue = netBillable - billedAtTransfer - directCredit - frVal;
 
                 return (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                       <div className="bg-slate-50 rounded-lg p-3">
                         <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Customer Order Value</div>
                         <div className="text-lg font-bold text-slate-900 tabular-nums mt-1" data-testid="settlement-cov">₹{cov.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
@@ -3114,9 +3117,14 @@ export default function DistributorDetail() {
                         <div className="text-[10px] text-blue-500/80 mt-0.5">earned by distributor</div>
                       </div>
                       <div className="bg-rose-50 rounded-lg p-3">
-                        <div className="text-[10px] uppercase tracking-wider text-rose-600 font-medium">Credit Notes</div>
+                        <div className="text-[10px] uppercase tracking-wider text-rose-600 font-medium">CN Linked to Deliveries</div>
                         <div className="text-lg font-bold text-rose-700 tabular-nums mt-1" data-testid="settlement-credit">{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-rose-500/80 mt-0.5">applied to deliveries</div>
+                        <div className="text-[10px] text-rose-500/80 mt-0.5">already in Net Billable</div>
+                      </div>
+                      <div className="bg-rose-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-rose-600 font-medium">CN Paid Directly</div>
+                        <div className="text-lg font-bold text-rose-700 tabular-nums mt-1" data-testid="settlement-direct-credit">{directCredit > 0 ? '−' : ''}₹{directCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-rose-500/80 mt-0.5">outside any delivery</div>
                       </div>
                       <div className="bg-emerald-50 rounded-lg p-3">
                         <div className="text-[10px] uppercase tracking-wider text-emerald-600 font-medium">Factory Return Credit</div>
@@ -3194,12 +3202,14 @@ export default function DistributorDetail() {
                           credit_applied: items.reduce((s, it) => s + (it.credit_applied || 0), 0),
                           net_billable: items.reduce((s, it) => s + (it.net_billable || 0), 0),
                           billed_at_transfer: items.reduce((s, it) => s + (it.billed_at_transfer || 0), 0),
+                          direct_credit_issued: 0,
                         };
                         const credit = totals.credit_applied || 0;
                         const netBillable = totals.net_billable || 0;
                         const billedAtTransfer = totals.billed_at_transfer || 0;
+                        const directCredit = totals.direct_credit_issued || 0;
                         const frVal = selectedSettlement.total_factory_return_credit || 0;
-                        const netSettlement = netBillable - billedAtTransfer - frVal;
+                        const netSettlement = netBillable - billedAtTransfer - directCredit - frVal;
                         const distPays = netSettlement > 0;
                         const settled = Math.abs(netSettlement) < 0.01;
                         return (
@@ -3212,14 +3222,26 @@ export default function DistributorDetail() {
                               <td className="p-2 text-right tabular-nums text-slate-900">₹{netBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
 
-                            {/* Math ladder — explicit breakdown of how Net Settlement is arrived */}
-                            <tr className="border-t" data-testid="settlement-row-credit-deduction">
-                              <td colSpan={6} className="p-2 text-right text-slate-600">Less: Credit Notes deducted from Actual Billable</td>
-                              <td className={`p-2 text-right tabular-nums ${credit > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            </tr>
-                            <tr className="bg-slate-50/60 font-semibold" data-testid="settlement-row-net-billable">
-                              <td colSpan={6} className="p-2 text-right text-slate-700">Net Billable (after Credit Notes)</td>
+                            {/* Math ladder — explicit breakdown of how Net Settlement is arrived.
+                               The Total row above already includes delivery-linked credit notes
+                               in Net Billable. Below we only show DIRECT (standalone) credit
+                               notes paid to customer outside any delivery so we don't double-deduct. */}
+                            <tr className="bg-slate-50/60 font-semibold border-t" data-testid="settlement-row-net-billable">
+                              <td colSpan={6} className="p-2 text-right text-slate-700">Net Billable (after delivery-linked Credit Notes)</td>
                               <td className="p-2 text-right tabular-nums text-slate-900">₹{netBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr className="border-t" data-testid="settlement-row-direct-credit">
+                              <td colSpan={6} className="p-2 text-right text-slate-600">
+                                <span className="inline-flex items-center gap-1.5">
+                                  Less: Direct Credit Notes Paid (Not Linked to Deliveries)
+                                  <span
+                                    className="cursor-help text-slate-400 text-[10px] border border-slate-300 rounded-full w-4 h-4 inline-flex items-center justify-center"
+                                    title="This amount represents credit notes adjusted directly and not associated with any delivery. Credit notes linked to deliveries are already included in the Net Billable calculation above."
+                                    data-testid="direct-credit-help"
+                                  >?</span>
+                                </span>
+                              </td>
+                              <td className={`p-2 text-right tabular-nums font-medium ${directCredit > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{directCredit > 0 ? '−' : ''}₹{directCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             </tr>
                             <tr className="border-t" data-testid="settlement-row-billed-at-transfer">
                               <td colSpan={6} className="p-2 text-right text-slate-600">Less: Already Billed to Distributor (Transfer Price)</td>
@@ -3249,7 +3271,7 @@ export default function DistributorDetail() {
                   </table>
                 </div>
                 <div className="px-3 py-2 bg-slate-50 border-t text-[11px] text-muted-foreground">
-                  <strong>How Net Settlement is calculated:</strong> Customer Order Value − Distributor Margin = Actual Billable. Less Credit Notes = Net Billable. Less Already Billed to Distributor (Transfer Price) and Factory Return Credit = Net Settlement.
+                  <strong>How Net Settlement is calculated:</strong> Customer Order Value − Distributor Margin = Actual Billable. Less delivery-linked Credit Notes = Net Billable. Less Direct Credit Notes (paid outside deliveries), Less Already Billed at Transfer Price, Less Factory Return Credit = Net Settlement.
                 </div>
               </div>
 

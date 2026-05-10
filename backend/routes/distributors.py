@@ -4143,6 +4143,41 @@ async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: 
             it.update(view)
             it['delivery_status'] = d.get('status')
         s['items'] = items
+
+        # Direct credit notes paid to customer outside any delivery (standalone
+        # issuances) for this account in the settlement period. Distributor paid
+        # the customer out-of-pocket on the factory's behalf, so this reduces
+        # what the distributor owes the factory in the settlement.
+        # Only `issued` (actually handed over) issuances count.
+        direct_credit_amount = 0.0
+        direct_issuances: list[dict] = []
+        if s.get('account_id'):
+            year = s.get('settlement_year')
+            month = s.get('settlement_month')
+            month_match: dict = {
+                "tenant_id": tenant_id,
+                "distributor_id": s['distributor_id'],
+                "account_id": s['account_id'],
+                "status": "issued",
+            }
+            if year and month:
+                # issued_at is stored as YYYY-MM-DD string
+                start = f"{year:04d}-{month:02d}-01"
+                # exclusive upper bound (next month)
+                if month == 12:
+                    end = f"{year + 1:04d}-01-01"
+                else:
+                    end = f"{year:04d}-{month + 1:02d}-01"
+                month_match["issued_at"] = {"$gte": start, "$lt": end}
+            iss_rows = await db.credit_note_issuances.find(
+                month_match,
+                {"_id": 0, "id": 1, "amount": 1, "credit_note_number": 1,
+                 "issuance_method": 1, "issued_at": 1, "reason": 1}
+            ).to_list(500)
+            direct_issuances = iss_rows
+            direct_credit_amount = round(sum(r.get('amount', 0) for r in iss_rows), 2)
+
+        s['direct_credit_issuances'] = direct_issuances
         s['stockout_totals'] = {
             "customer_order_value": round(sum(i.get('customer_order_value', 0) for i in items), 2),
             "distributor_margin": round(sum(i.get('distributor_margin', 0) for i in items), 2),
@@ -4150,6 +4185,7 @@ async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: 
             "credit_applied": round(sum(i.get('credit_applied', 0) for i in items), 2),
             "net_billable": round(sum(i.get('net_billable', 0) for i in items), 2),
             "billed_at_transfer": round(sum(i.get('billed_at_transfer', 0) for i in items), 2),
+            "direct_credit_issued": direct_credit_amount,
         }
 
     return settlements
