@@ -5,6 +5,13 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Bug fix — Return status not flipping to "Credit Issued" after standalone issuance (2026-02-09)
+- [x] User reported RET-2026-0009 still showed "Approved" badge even though its credit note CN-2026-0010 was fully drained via a standalone issuance.
+- [x] Root cause: `_recalculate_credit_note_status` updated the credit note's `applied_amount` / `balance_amount` / `status` correctly but did NOT propagate to the linked `customer_returns.status` — the existing delivery-application path (`apply_credit_note_to_delivery`) had this propagation but it was missing from the new standalone-issuance path.
+- [x] **Fix** `/app/backend/routes/credit_notes.py` — `_recalculate_credit_note_status` now also flips the linked return to `credit_issued` whenever the CN becomes `fully_applied`, and reverts the return to `approved` if the CN is rolled back. Comparison uses the return's current status (not the CN's previous status) so a one-time backfill on legacy data also picks up the change.
+- [x] **Backfill** ran on existing data — 2 affected returns (RET-2026-0008 and RET-2026-0009) flipped from `approved` → `credit_issued` to match their fully-drained credit notes. Verified via API. Lint clean.
+
+
 ### Credit Issuance UX simplified — full balance, single popup, inline (2026-02-09)
 - [x] User feedback: "Too complicated. Don't allow partial credit note payments — entire balance must be issued. And remove the nested popup; use one popup with inline expand/collapse for the approval flow."
 - [x] **Backend** `/app/backend/routes/credit_notes.py` — `CreditIssuanceCreate` no longer accepts an `amount` field. The create endpoint now uses the credit note's current `balance_amount` as the issuance amount (full balance, indivisible). It also blocks duplicate requests if any existing issuance is `pending_approval` or `approved` (one open request at a time per credit note).

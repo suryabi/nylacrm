@@ -65,6 +65,12 @@ async def _recalculate_credit_note_status(tenant_id: str, credit_note_id: str):
     """Recompute applied/balance/status for a credit note based on current
     delivery applications + approved (non-cancelled) standalone issuances.
     Standalone issuances reduce the balance from the moment they are approved.
+
+    Also propagates the status change to the linked customer return so the
+    Returns list shows `credit_issued` once the credit note is fully drained,
+    and reverts to `approved` if the issuance is later cancelled — matching
+    the delivery-application behaviour in apply_credit_note_to_delivery /
+    revert_credit_note_application.
     """
     cn = await db.credit_notes.find_one({"id": credit_note_id, "tenant_id": tenant_id}, {"_id": 0})
     if not cn:
@@ -85,15 +91,59 @@ async def _recalculate_credit_note_status(tenant_id: str, credit_note_id: str):
         status = "fully_applied"
     else:
         status = "partially_applied"
+    now_iso = datetime.now(timezone.utc).isoformat()
     await db.credit_notes.update_one(
         {"id": credit_note_id, "tenant_id": tenant_id},
         {"$set": {
             "applied_amount": total_applied,
             "balance_amount": balance,
             "status": status,
-            "updated_at": datetime.now(timezone.utc).isoformat()
+            "updated_at": now_iso,
         }}
     )
+
+    # Propagate to the linked return: flip to credit_issued when fully drained,
+    # revert to approved if the issuance/application is rolled back. Compares
+    # against the return's current status so a one-time backfill on legacy
+    # data also picks up the change.
+    return_id = cn.get('return_id')
+    if not return_id:
+        return
+    ret = await db.customer_returns.find_one(
+        {"id": return_id, "tenant_id": tenant_id},
+        {"_id": 0, "status": 1}
+    )
+    if not ret:
+        return
+    return_status = ret.get('status')
+    if status == "fully_applied" and return_status not in ("credit_issued", "settled"):
+        await db.customer_returns.update_one(
+            {"id": return_id, "tenant_id": tenant_id},
+            {"$set": {
+                "status": "credit_issued",
+                "credit_note_id": credit_note_id,
+                "credit_note_number": cn.get('credit_note_number'),
+                "credit_issued_at": now_iso,
+                "updated_at": now_iso,
+            }}
+        )
+        logger.info(
+            f"Return {cn.get('return_number')} → credit_issued (CN {cn.get('credit_note_number')} fully applied via issuance/delivery)"
+        )
+    elif status != "fully_applied" and return_status == "credit_issued":
+        await db.customer_returns.update_one(
+            {"id": return_id, "tenant_id": tenant_id},
+            {"$set": {
+                "status": "approved",
+                "credit_issued_to_delivery_id": None,
+                "credit_issued_to_delivery_number": None,
+                "credit_issued_at": None,
+                "updated_at": now_iso,
+            }}
+        )
+        logger.info(
+            f"Return {cn.get('return_number')} reverted to approved (CN {cn.get('credit_note_number')} no longer fully applied)"
+        )
 
 
 @router.post("/{distributor_id}/credit-notes/{credit_note_id}/issuances/upload-attachment")
