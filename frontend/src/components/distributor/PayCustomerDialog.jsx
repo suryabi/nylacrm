@@ -132,7 +132,10 @@ export default function PayCustomerDialog({
       }, { headers });
       toast.success('Submitted for approval');
       onChanged && onChanged();
-      await loadState();
+      // Close after each individual action — the next step is performed by a
+      // different user (CEO/SystemAdmin approves what was just submitted),
+      // so there's no value re-rendering the dialog for the same actor.
+      onOpenChange(false);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Submission failed');
     } finally { setBusy(false); }
@@ -145,7 +148,9 @@ export default function PayCustomerDialog({
       await axios.post(`${baseUrl}/${issuance.id}/${action}`, body || {}, { headers });
       toast.success(msg);
       onChanged && onChanged();
-      await loadState();
+      // Close after each step. Approve → user won't be the one issuing.
+      // Reject / Cancel → flow ends. Mark-Issued → flow completes.
+      onOpenChange(false);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Action failed');
     } finally { setBusy(false); }
@@ -335,7 +340,7 @@ export default function PayCustomerDialog({
             <>
               <Button variant="outline" onClick={() => { setShowReject(false); setRejectReason(''); }}>Back</Button>
               <Button variant="destructive" disabled={!rejectReason.trim() || busy}
-                onClick={() => callAction('reject', { rejection_reason: rejectReason.trim() }, 'Rejected').then(() => { setShowReject(false); setRejectReason(''); })}
+                onClick={() => callAction('reject', { rejection_reason: rejectReason.trim() }, 'Rejected')}
                 data-testid="confirm-reject-btn">
                 Confirm Reject
               </Button>
