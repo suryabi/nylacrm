@@ -114,7 +114,10 @@ export default function SettlementsTab({
     }
     acc[aid].settlements.push(s);
     const t = s.stockout_totals || {};
-    const credit = t.credit_applied || 0;
+    // "Credit Notes" column on parent rows = ALL credit notes paid to customer
+    // (delivery-linked + direct/cash issuances). Same value the Settlement
+    // Detail popup totals up.
+    const credit = (t.credit_applied || 0) + (t.direct_credit_issued || 0);
     const frCredit = s.total_factory_return_credit || 0;
     acc[aid].totals.billing += t.customer_order_value || 0;
     acc[aid].totals.earnings += t.distributor_margin || 0;
@@ -137,7 +140,7 @@ export default function SettlementsTab({
     try {
       const rows = settlements.map(s => {
         const t = s.stockout_totals || {};
-        const credit = t.credit_applied || 0;
+        const credit = (t.credit_applied || 0) + (t.direct_credit_issued || 0);
         const fr = s.total_factory_return_credit || 0;
         const net = settlementNet(s);
         return {
@@ -148,7 +151,7 @@ export default function SettlementsTab({
           'Deliveries': s.total_deliveries || 0,
           'Customer Order Value': t.customer_order_value || 0,
           'Distributor Margin': t.distributor_margin || 0,
-          'Credit Notes Applied': credit,
+          'Credit Notes (Linked + Direct)': credit,
           'Already Billed at Transfer': t.billed_at_transfer || 0,
           'Factory Return Credit': fr,
           'Net Settlement': net,
@@ -173,7 +176,7 @@ export default function SettlementsTab({
         <div className="flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-lg">Monthly Settlements</CardTitle>
-            <CardDescription>Factory↔Distributor Adjustment − Credit Notes Applied − Factory Return Credit = Net Settlement (matches Settlement Detail popup)</CardDescription>
+            <CardDescription>Customer Order Value − Distributor Margin − Credit Notes (Linked + Direct) − Already Billed at Transfer − Factory Return Credit = Net Settlement</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={downloadExcel} disabled={downloading || !settlements.length} data-testid="download-settlements-btn">
@@ -449,7 +452,7 @@ export default function SettlementsTab({
                 <div>
                   <p className="text-[10px] text-rose-400 uppercase tracking-wider">Credit Notes</p>
                   <p className="text-lg font-bold text-rose-300">−₹{fmt(grandTotals.credit_applied)}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">applied to deliveries</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">linked + direct issuances</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-emerald-400 uppercase tracking-wider">Factory Return Credit</p>
@@ -539,7 +542,8 @@ export default function SettlementsTab({
                           const t = s.stockout_totals || {};
                           const cov = t.customer_order_value || 0;
                           const margin = t.distributor_margin || 0;
-                          const credit = t.credit_applied || 0;
+                          // Total credits paid to customer = delivery-linked + direct cash
+                          const credit = (t.credit_applied || 0) + (t.direct_credit_issued || 0);
                           const frVal = s.total_factory_return_credit || 0;
                           const net = settlementNet(s);
                           const distPays = net > 0;
