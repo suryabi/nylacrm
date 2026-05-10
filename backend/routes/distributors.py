@@ -4364,6 +4364,10 @@ async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: 
         # the customer out-of-pocket on the factory's behalf, so this reduces
         # what the distributor owes the factory in the settlement.
         # Only `issued` (actually handed over) issuances count.
+        # IMPORTANT: exclude issuances whose parent credit note is linked to a
+        # customer return (return_id present). Those credit notes are ALREADY
+        # accounted for via the delivery's `credit_applied` field, so counting
+        # them here too would double-deduct the same credit.
         direct_credit_amount = 0.0
         direct_issuances: list[dict] = []
         if s.get('account_id'):
@@ -4374,6 +4378,12 @@ async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: 
                 "distributor_id": s['distributor_id'],
                 "account_id": s['account_id'],
                 "status": "issued",
+                # Standalone issuances only — return-linked CNs are counted
+                # in credit_applied via the delivery, never here.
+                "$or": [
+                    {"return_id": None},
+                    {"return_id": {"$exists": False}},
+                ],
             }
             if year and month:
                 # issued_at is stored as YYYY-MM-DD string
