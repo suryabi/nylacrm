@@ -883,31 +883,57 @@ export default function DeliveriesTab({
                   )}
                 </div>
 
-                {/* Credit Notes Section */}
-                {selectedDeliveryAccount && deliveryItems.length > 0 && (
-                  <div className="space-y-3 border-t pt-4">
+                {/* Credit Notes Section — shown as soon as an account is selected so
+                   the user always sees, before adding any line item, whether credit
+                   notes are available for offset. */}
+                {selectedDeliveryAccount && (
+                  <div className="space-y-3 border-t pt-4" data-testid="credit-notes-section">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <CreditCard className="h-5 w-5 text-emerald-600" />
                         <Label className="text-base font-semibold">Apply Credit Notes</Label>
                       </div>
-                      {availableCreditNotes.length > 0 && (
-                        <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
-                          {availableCreditNotes.length} credit note{availableCreditNotes.length !== 1 ? 's' : ''} available
-                        </Badge>
+                      {!loadingCreditNotes && (
+                        availableCreditNotes.length > 0 ? (
+                          <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50" data-testid="credit-notes-available-badge">
+                            {availableCreditNotes.length} available · ₹{availableCreditNotes.reduce((s, cn) => s + (cn.balance_amount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-slate-500 border-slate-300 bg-slate-50" data-testid="credit-notes-none-badge">
+                            None available
+                          </Badge>
+                        )
                       )}
                     </div>
                     
                     {loadingCreditNotes ? (
                       <div className="flex items-center justify-center py-4">
                         <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-                        <span className="ml-2 text-sm text-muted-foreground">Loading credit notes...</span>
+                        <span className="ml-2 text-sm text-muted-foreground">Loading credit notes for {selectedDeliveryAccount.account_name}…</span>
                       </div>
                     ) : availableCreditNotes.length === 0 ? (
-                      <div className="text-center py-4 text-muted-foreground border rounded-md bg-muted/20">
-                        <Receipt className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No credit notes available for this account</p>
-                        <p className="text-xs mt-1">Credit notes are generated when customer returns are confirmed</p>
+                      <div className="border rounded-md bg-slate-50 px-4 py-3 flex items-start gap-3" data-testid="credit-notes-empty-banner">
+                        <Receipt className="h-5 w-5 text-slate-400 shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-slate-700">
+                            No credit notes available for {selectedDeliveryAccount.account_name}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Nothing to offset against this delivery. Credit notes are generated when a customer return is confirmed for this account.
+                          </p>
+                        </div>
+                      </div>
+                    ) : deliveryItems.length === 0 ? (
+                      <div className="border rounded-md bg-emerald-50/50 border-emerald-200 px-4 py-3 flex items-start gap-3" data-testid="credit-notes-pending-items-banner">
+                        <Receipt className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-emerald-800">
+                            {availableCreditNotes.length} credit note{availableCreditNotes.length !== 1 ? 's' : ''} can be applied to this delivery — total ₹{availableCreditNotes.reduce((s, cn) => s + (cn.balance_amount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} available.
+                          </p>
+                          <p className="text-xs text-emerald-700/80 mt-0.5">
+                            Add at least one line item above to start applying them against the customer billing.
+                          </p>
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-2">
