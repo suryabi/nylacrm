@@ -279,9 +279,9 @@ export default function DistributorDetail() {
   
   // Permission checks - Distributor role users have limited permissions
   const isDistributorRole = user?.role === 'Distributor';
-  // Distributor users have write access ONLY on the Stock Out and Profile tabs.
+  // Distributor users have write access on the Stock Out, Returns and Profile tabs.
   // Every other tab is rendered read-only for them.
-  const distributorWritableTab = activeTab === 'stockout' || activeTab === 'profile';
+  const distributorWritableTab = activeTab === 'stockout' || activeTab === 'profile' || activeTab === 'returns';
   const canManage = user && (
     ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role) ||
     (isDistributorRole && distributorWritableTab)
