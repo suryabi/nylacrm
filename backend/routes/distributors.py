@@ -6672,7 +6672,54 @@ async def get_monthly_reconciliation_data(
         {"_id": 0, "id": 1, "note_number": 1, "note_type": 1, "amount": 1, "status": 1, "created_at": 1}
     ).sort("created_at", -1).to_list(100)
     
-    # Calculate totals for unreconciled settlements only
+    # ===== Single source of truth: enrich with stockout_totals (same data the
+    # Settlements tab + popup use) so Billing & Settlements ALWAYS show the same Net.
+    await _enrich_settlements_with_stockout_totals(tenant_id, unreconciled_settlements)
+    await _enrich_settlements_with_stockout_totals(tenant_id, reconciled_settlements)
+
+    def _net_settlement(s: dict) -> float:
+        """Mirror of the per-settlement Net Settlement formula used in
+        SettlementsTab.jsx so the two tabs cannot drift.
+            net_settlement = net_billable − billed_at_transfer − direct_credit_issued − factory_return_credit
+        Positive ⇒ Distributor pays Supplier (Debit Note).
+        Negative ⇒ Supplier pays Distributor (Credit Note).
+        """
+        t = s.get('stockout_totals') or {}
+        net_billable = t.get('net_billable') or 0
+        billed_at_transfer = t.get('billed_at_transfer') or 0
+        direct_credit = t.get('direct_credit_issued') or 0
+        fr_credit = s.get('total_factory_return_credit') or 0
+        return net_billable - billed_at_transfer - direct_credit - fr_credit
+
+    def _aggregate_stockout(settlements_list: list) -> dict:
+        agg = {
+            "customer_order_value": 0.0,
+            "distributor_margin": 0.0,
+            "actual_billable": 0.0,
+            "credit_applied": 0.0,
+            "net_billable": 0.0,
+            "billed_at_transfer": 0.0,
+            "direct_credit_issued": 0.0,
+            "factory_return_credit": 0.0,
+            "net_settlement": 0.0,
+        }
+        for s in settlements_list:
+            t = s.get('stockout_totals') or {}
+            agg["customer_order_value"] += t.get('customer_order_value') or 0
+            agg["distributor_margin"] += t.get('distributor_margin') or 0
+            agg["actual_billable"] += t.get('actual_billable') or 0
+            agg["credit_applied"] += t.get('credit_applied') or 0
+            agg["net_billable"] += t.get('net_billable') or 0
+            agg["billed_at_transfer"] += t.get('billed_at_transfer') or 0
+            agg["direct_credit_issued"] += t.get('direct_credit_issued') or 0
+            agg["factory_return_credit"] += s.get('total_factory_return_credit') or 0
+            agg["net_settlement"] += _net_settlement(s)
+        return {k: round(v, 2) for k, v in agg.items()}
+
+    stockout_unreconciled = _aggregate_stockout(unreconciled_settlements)
+    stockout_reconciled = _aggregate_stockout(reconciled_settlements)
+
+    # Calculate totals for unreconciled settlements only (legacy fields kept for compatibility)
     total_billing = sum(s.get('total_billing_value', 0) for s in unreconciled_settlements)
     total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
     total_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in unreconciled_settlements)
@@ -6772,14 +6819,15 @@ async def get_monthly_reconciliation_data(
                 "deliveries": 0
             })
     
-    # === ENTRY 2: Monthly Settlement (All Adjustments → Debit/Credit Note) ===
-    # Selling price adjustments (when customer price ≠ base price)
-    settlement_selling_price_adj = total_factory_adj
-    # Credit notes (customer return reimbursements) + factory returns (warehouse stock return credit)
-    settlement_credits = total_credit_notes + total_factory_return_credit
-    # Net: positive = distributor owes more (debit note), negative = factory owes (credit note)
-    net_adjustment_amount = settlement_selling_price_adj - settlement_credits
+    # === ENTRY 2: Monthly Settlement (= Sum of Net Settlement from Settlements tab) ===
+    # We use the stockout-driven Net Settlement so Billing tab can never diverge
+    # from Settlements tab. Positive ⇒ Debit Note (Distributor owes Supplier),
+    # negative ⇒ Credit Note (Supplier owes Distributor).
+    net_adjustment_amount = stockout_unreconciled["net_settlement"]
     settlement_note_type = "debit" if net_adjustment_amount > 0 else "credit" if net_adjustment_amount < 0 else "none"
+    # Legacy (kept so older clients still render something sensible)
+    settlement_selling_price_adj = total_factory_adj
+    settlement_credits = total_credit_notes + total_factory_return_credit
     
     # === Calculate totals for already reconciled ===
     reconciled_at_tp = sum(s.get('total_at_transfer_price', 0) for s in reconciled_settlements)
@@ -6854,9 +6902,9 @@ async def get_monthly_reconciliation_data(
                     "label": wr['label'], "amount": 0, "deliveries": 0
                 })
     
-    # Reconciled Entry 2 adjustment details
+    # Reconciled Entry 2: same stockout-driven Net Settlement
     reconciled_selling_price_adj = reconciled_factory_adj
-    reconciled_net_adj = reconciled_selling_price_adj - reconciled_credit_notes - reconciled_factory_return_credit
+    reconciled_net_adj = stockout_reconciled["net_settlement"]
     reconciled_note_type = "debit" if reconciled_net_adj > 0 else "credit" if reconciled_net_adj < 0 else "none"
     
     return {
@@ -6873,11 +6921,14 @@ async def get_monthly_reconciliation_data(
         # Entry 1: Billing at margin matrix transfer price
         "total_at_transfer_price": round(total_at_transfer_price, 2),
         "weekly_billing": weekly_billing,
-        # Entry 2: Settlement adjustments
+        # Entry 2: Settlement adjustments (stockout-driven, single source of truth)
         "settlement_selling_price_adj": round(settlement_selling_price_adj, 2),
         "settlement_credits": round(settlement_credits, 2),
         "net_adjustment_amount": round(net_adjustment_amount, 2),
         "settlement_note_type": settlement_note_type,
+        # NEW: stockout-driven aggregates (same source as Settlements tab)
+        "stockout_aggregate": stockout_unreconciled,
+        "stockout_aggregate_reconciled": stockout_reconciled,
         # Reconciled - full Two-Entry data
         "reconciled_at_transfer_price": round(reconciled_at_tp, 2),
         "reconciled_weekly_billing": reconciled_weekly_billing,
@@ -6939,10 +6990,19 @@ async def generate_monthly_note(
     if total_at_transfer_price == 0 and total_billing > 0:
         total_at_transfer_price = total_billing - total_earnings - total_factory_adj
     
-    # Entry 2: All adjustments → Debit/Credit Note
+    # Entry 2: Net = stockout-driven Net Settlement (same as Settlements tab)
+    await _enrich_settlements_with_stockout_totals(tenant_id, settlements)
+    net_adjustment_amount = 0.0
+    for s in settlements:
+        t = s.get('stockout_totals') or {}
+        net_billable = t.get('net_billable') or 0
+        billed_at_transfer = t.get('billed_at_transfer') or 0
+        direct_credit = t.get('direct_credit_issued') or 0
+        fr_credit = s.get('total_factory_return_credit') or 0
+        net_adjustment_amount += (net_billable - billed_at_transfer - direct_credit - fr_credit)
+    net_adjustment_amount = round(net_adjustment_amount, 2)
     settlement_selling_price_adj = total_factory_adj
     settlement_credits = total_credit_notes + total_factory_return_credit
-    net_adjustment_amount = settlement_selling_price_adj - settlement_credits
     
     if net_adjustment_amount == 0:
         raise HTTPException(status_code=400, detail="Net adjustment is zero - no note required")
