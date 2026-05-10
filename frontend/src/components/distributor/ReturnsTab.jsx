@@ -1292,12 +1292,10 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <th className="text-left p-3 font-medium">Reason</th>
                         <th className="text-right p-3 font-medium">Credit/Unit</th>
                         <th className="text-right p-3 font-medium">Total Credit</th>
-                        <th className="text-center p-3 font-medium">Factory</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(selectedReturn.items || []).map((item, idx) => {
-                        const catInfo = CATEGORY_COLORS[item.reason_category] || CATEGORY_COLORS.promotional;
                         return (
                           <tr key={item.id || idx} className="border-t">
                             <td className="p-3">
@@ -1316,23 +1314,6 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                             </td>
                             <td className="p-3 text-right">₹{(item.credit_per_unit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td className="p-3 text-right font-medium text-emerald-600">₹{(item.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-center">
-                              {item.return_to_factory ? (
-                                item.returned_to_factory ? (
-                                  <Badge className="bg-emerald-100 text-emerald-700">
-                                    <Check className="h-3 w-3 mr-1" />
-                                    Returned
-                                  </Badge>
-                                ) : (
-                                  <Badge className="bg-amber-100 text-amber-700">
-                                    <Truck className="h-3 w-3 mr-1" />
-                                    Pending
-                                  </Badge>
-                                )
-                              ) : (
-                                <Badge variant="outline">N/A</Badge>
-                              )}
-                            </td>
                           </tr>
                         );
                       })}
@@ -1345,7 +1326,6 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <td className="p-3 text-right font-bold text-emerald-600">
                           ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="p-3"></td>
                       </tr>
                     </tfoot>
                   </table>
