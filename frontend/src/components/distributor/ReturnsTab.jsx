@@ -278,7 +278,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
     setItemForm({ sku_id: '', quantity: 1, reason_id: '', unit_price: '' });
   };
 
-  // Approve return
+  // Approve return — close the Detail dialog and refresh the grid; user
+  // doesn't need to see the approved state in the same dialog they just acted in.
   const approveReturn = async (returnId) => {
     try {
       await axios.post(
@@ -287,10 +288,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success('Return approved');
+      setShowDetailDialog(false);
       fetchReturns();
-      if (selectedReturn?.id === returnId) {
-        viewReturnDetail(returnId);
-      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to approve return');
     }
@@ -982,12 +981,6 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       Approve Return
                     </Button>
                   </>
-                )}
-                {canDelete && selectedReturn.status !== 'draft' && (
-                  <Button variant="destructive" onClick={() => deleteReturn(selectedReturn.id)} data-testid="delete-return-detail-btn">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Return
-                  </Button>
                 )}
               </DialogFooter>
             </>
