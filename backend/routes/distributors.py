@@ -44,6 +44,52 @@ def is_distributor_admin(user: dict) -> bool:
     return user.get('role') in ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head']
 
 
+# Common Indian city name aliases (old/anglicized names <-> official local names).
+# Used to normalize city comparisons between accounts and distributor operating coverage,
+# so that an account in "Bangalore" can be assigned to a distributor servicing "Bengaluru".
+CITY_ALIASES = {
+    "bangalore": "bengaluru",
+    "bengaluru": "bengaluru",
+    "bombay": "mumbai",
+    "mumbai": "mumbai",
+    "madras": "chennai",
+    "chennai": "chennai",
+    "calcutta": "kolkata",
+    "kolkata": "kolkata",
+    "poona": "pune",
+    "pune": "pune",
+    "trivandrum": "thiruvananthapuram",
+    "thiruvananthapuram": "thiruvananthapuram",
+    "cochin": "kochi",
+    "kochi": "kochi",
+    "baroda": "vadodara",
+    "vadodara": "vadodara",
+    "mysore": "mysuru",
+    "mysuru": "mysuru",
+    "mangalore": "mangaluru",
+    "mangaluru": "mangaluru",
+    "belgaum": "belagavi",
+    "belagavi": "belagavi",
+    "gurgaon": "gurugram",
+    "gurugram": "gurugram",
+    "allahabad": "prayagraj",
+    "prayagraj": "prayagraj",
+}
+
+
+def normalize_city(city: str) -> str:
+    """Normalize a city name for alias-aware comparison."""
+    if not city:
+        return ""
+    key = city.strip().lower()
+    return CITY_ALIASES.get(key, key)
+
+
+def cities_match(city_a: str, city_b: str) -> bool:
+    """Compare two city names treating common aliases (e.g. Bangalore/Bengaluru) as equivalent."""
+    return normalize_city(city_a) == normalize_city(city_b)
+
+
 def is_delete_authorized(user: dict) -> bool:
     """Check if user can delete distributors/warehouses (CEO and System Admin only)"""
     return user.get('role') in ['CEO', 'System Admin']
@@ -1443,21 +1489,35 @@ async def create_account_assignment(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    # Validate account's city matches servicing city
+    # Validate account's city matches servicing city (alias-aware: Bangalore <-> Bengaluru, etc.)
     account_city = account.get('city', '')
-    if account_city and data.servicing_city and account_city.lower() != data.servicing_city.lower():
+    if account_city and data.servicing_city and not cities_match(account_city, data.servicing_city):
         raise HTTPException(
             status_code=400,
             detail=f"Account is located in '{account_city}' but servicing city is '{data.servicing_city}'. Account can only be assigned to distributors serving its city."
         )
-    
-    # Validate city is in distributor's operating coverage
-    coverage = await db.distributor_operating_coverage.find_one({
-        "tenant_id": tenant_id,
-        "distributor_id": distributor_id,
-        "city": data.servicing_city,
-        "status": "active"
-    })
+
+    # Validate city is in distributor's operating coverage (alias-aware)
+    normalized_servicing = normalize_city(data.servicing_city)
+    coverage = None
+    if normalized_servicing:
+        # Try exact match first (case-insensitive)
+        coverage = await db.distributor_operating_coverage.find_one({
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "city": {"$regex": f"^{data.servicing_city}$", "$options": "i"},
+            "status": "active"
+        })
+        if not coverage:
+            # Fallback: scan all active coverage rows for this distributor and alias-match
+            async for cov in db.distributor_operating_coverage.find({
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "status": "active"
+            }):
+                if normalize_city(cov.get('city', '')) == normalized_servicing:
+                    coverage = cov
+                    break
     if not coverage:
         raise HTTPException(
             status_code=400,
@@ -1475,23 +1535,24 @@ async def create_account_assignment(
         if not location:
             raise HTTPException(status_code=400, detail="Invalid distributor location")
     
-    # Check for existing primary assignment for same account + city
+    # Check for existing primary assignment for same account + city (alias-aware)
     if data.is_primary:
-        existing_primary = await db.account_distributor_assignments.find_one({
+        existing_primaries = db.account_distributor_assignments.find({
             "tenant_id": tenant_id,
             "account_id": data.account_id,
-            "servicing_city": data.servicing_city,
             "is_primary": True,
             "status": "active"
         })
-        if existing_primary and existing_primary.get('distributor_id') != distributor_id:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Account already has a primary distributor for {data.servicing_city}. Remove or change existing assignment first."
-            )
+        async for existing_primary in existing_primaries:
+            if cities_match(existing_primary.get('servicing_city', ''), data.servicing_city) \
+               and existing_primary.get('distributor_id') != distributor_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Account already has a primary distributor for {data.servicing_city}. Remove or change existing assignment first."
+                )
     
     # Get names for denormalization
-    account_name = data.account_name or account.get('company') or account.get('name')
+    account_name = data.account_name or account.get('account_name') or account.get('company') or account.get('name')
     distributor_name = data.distributor_name or distributor.get('distributor_name')
     location_name = data.distributor_location_name
     if data.distributor_location_id and not location_name:
@@ -1712,16 +1773,30 @@ async def search_assignable_accounts_for_distributor(
     
     if not covered_cities:
         return {"accounts": [], "message": "Distributor has no operating coverage configured. Please add coverage first."}
-    
-    # Search accounts only in covered cities
+
+    # Expand covered cities with their aliases so e.g. "Bengaluru" coverage also matches accounts in "Bangalore"
+    expanded_cities = set()
+    for city in covered_cities:
+        expanded_cities.add(city)
+        normalized = normalize_city(city)
+        for alias_key, alias_canonical in CITY_ALIASES.items():
+            if alias_canonical == normalized:
+                expanded_cities.add(alias_key.title())
+                expanded_cities.add(alias_key)
+    # Build case-insensitive city match
+    city_regex_list = [{"city": {"$regex": f"^{c}$", "$options": "i"}} for c in expanded_cities]
+
+    # Search accounts only in covered cities (alias-aware)
     query = {
         "tenant_id": tenant_id,
-        "city": {"$in": covered_cities},
-        "$or": [
-            {"account_name": {"$regex": q, "$options": "i"}},
-            {"contact_name": {"$regex": q, "$options": "i"}},
-            {"account_id": {"$regex": q, "$options": "i"}},
-            {"city": {"$regex": q, "$options": "i"}}
+        "$and": [
+            {"$or": city_regex_list},
+            {"$or": [
+                {"account_name": {"$regex": q, "$options": "i"}},
+                {"contact_name": {"$regex": q, "$options": "i"}},
+                {"account_id": {"$regex": q, "$options": "i"}},
+                {"city": {"$regex": q, "$options": "i"}}
+            ]}
         ]
     }
     
