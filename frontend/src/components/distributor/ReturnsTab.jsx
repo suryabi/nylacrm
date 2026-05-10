@@ -14,6 +14,7 @@ import {
   Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard
 } from 'lucide-react';
 import axios from 'axios';
+import CreditIssuanceDialog from './CreditIssuanceDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -36,7 +37,7 @@ const STATUS_BADGES = {
 };
 
 export default function ReturnsTab({ distributorId, accounts = [], skus = [], canManage = false, canDelete = false }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [returns, setReturns] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -54,6 +55,36 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Credit issuance dialog state — for issuing credit directly to customer
+  // (independent of any delivery), gated by approval workflow.
+  const [issuanceDialogOpen, setIssuanceDialogOpen] = useState(false);
+  const [issuanceCreditNote, setIssuanceCreditNote] = useState(null);
+
+  // Approve role (CEO / System Admin) — matches backend ISSUANCE_APPROVER_ROLES
+  const userRole = (user?.role || '').toLowerCase();
+  const canApproveIssuance = ['ceo', 'system admin', 'admin'].includes(userRole);
+
+  const openIssuanceDialog = useCallback(async () => {
+    if (!selectedReturn?.credit_note_id) return;
+    try {
+      // Fetch fresh credit note doc to get current balance
+      const r = await axios.get(
+        `${API_URL}/api/distributors/${distributorId}/credit-notes`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const list = r.data.credit_notes || r.data.items || [];
+      const cn = list.find((c) => c.id === selectedReturn.credit_note_id);
+      if (!cn) {
+        toast.error('Credit note no longer available');
+        return;
+      }
+      setIssuanceCreditNote(cn);
+      setIssuanceDialogOpen(true);
+    } catch (e) {
+      toast.error('Failed to load credit note details');
+    }
+  }, [selectedReturn, distributorId, token]);
   
   // Create form
   const [createForm, setCreateForm] = useState({
@@ -861,6 +892,26 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         </span>
                       </div>
                     )}
+                    {/* Secondary action: issue credit directly to customer
+                       (no delivery linkage). Hidden behind a small button so
+                       it stays out of the way for the common case. */}
+                    {selectedReturn.credit_note_id && (
+                      <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
+                        <p className="text-[11px] text-emerald-700/80">
+                          Need to give this credit to the customer outside a delivery? Use a standalone issuance — requires approval.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                          onClick={openIssuanceDialog}
+                          data-testid="open-credit-issuance-btn"
+                        >
+                          <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                          Issue Credit to Customer
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -969,6 +1020,15 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
           )}
         </DialogContent>
       </Dialog>
+
+      <CreditIssuanceDialog
+        open={issuanceDialogOpen}
+        onOpenChange={(v) => { setIssuanceDialogOpen(v); if (!v) setIssuanceCreditNote(null); }}
+        distributorId={distributorId}
+        creditNote={issuanceCreditNote}
+        canApprove={canApproveIssuance}
+        onChanged={() => { /* future: refresh credit-note balance shown elsewhere */ }}
+      />
     </Card>
   );
 }

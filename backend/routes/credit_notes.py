@@ -8,13 +8,359 @@ from datetime import datetime, timezone
 import uuid
 import logging
 
+from pydantic import BaseModel, Field
+from fastapi import UploadFile, File, Form
+from fastapi.responses import Response
+
 from database import db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.credit_note import CreditNote, CreditNoteApplication
+from utils.object_storage import put_object, get_object
 
 router = APIRouter(tags=["Credit Notes"])
 logger = logging.getLogger(__name__)
+
+
+# ==========================================
+# Standalone Credit Issuance to Customer
+# (independent of any delivery)
+# ==========================================
+
+ISSUANCE_APPROVER_ROLES = {'ceo', 'system admin', 'admin'}
+
+
+class CreditIssuanceCreate(BaseModel):
+    amount: float = Field(..., gt=0)
+    reason: str = Field(..., min_length=1)
+    issuance_method: str = Field(..., min_length=1)  # cash | bank_transfer | store_credit | cheque | other
+    reference: Optional[str] = None
+    attachment_path: Optional[str] = None
+    attachment_filename: Optional[str] = None
+
+
+class CreditIssuanceReject(BaseModel):
+    rejection_reason: str = Field(..., min_length=1)
+
+
+class CreditIssuanceMarkIssued(BaseModel):
+    issued_to: Optional[str] = None
+    issuance_date: Optional[str] = None  # YYYY-MM-DD; defaults to today
+
+
+def _is_issuance_approver(user: dict) -> bool:
+    return (user.get('role') or '').strip().lower() in ISSUANCE_APPROVER_ROLES
+
+
+async def _get_credit_note_or_404(tenant_id: str, distributor_id: str, credit_note_id: str) -> dict:
+    cn = await db.credit_notes.find_one(
+        {"id": credit_note_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    if not cn:
+        raise HTTPException(status_code=404, detail="Credit note not found")
+    return cn
+
+
+async def _recalculate_credit_note_status(tenant_id: str, credit_note_id: str):
+    """Recompute applied/balance/status for a credit note based on current
+    delivery applications + approved (non-cancelled) standalone issuances.
+    Standalone issuances reduce the balance from the moment they are approved.
+    """
+    cn = await db.credit_notes.find_one({"id": credit_note_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not cn:
+        return
+    delivery_applied = sum(app.get('amount_applied', 0) for app in (cn.get('applications') or []))
+    issuances = await db.credit_note_issuances.find(
+        {"tenant_id": tenant_id, "credit_note_id": credit_note_id,
+         "status": {"$in": ["approved", "issued"]}},
+        {"_id": 0, "amount": 1}
+    ).to_list(500)
+    issuance_applied = sum(i.get('amount', 0) for i in issuances)
+    total_applied = round(delivery_applied + issuance_applied, 2)
+    original = cn.get('original_amount', 0) or 0
+    balance = round(max(0, original - total_applied), 2)
+    if total_applied <= 0:
+        status = "pending"
+    elif balance <= 0.001:
+        status = "fully_applied"
+    else:
+        status = "partially_applied"
+    await db.credit_notes.update_one(
+        {"id": credit_note_id, "tenant_id": tenant_id},
+        {"$set": {
+            "applied_amount": total_applied,
+            "balance_amount": balance,
+            "status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+
+
+@router.post("/{distributor_id}/credit-notes/{credit_note_id}/issuances/upload-attachment")
+async def upload_issuance_attachment(
+    distributor_id: str,
+    credit_note_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload an optional attachment for a credit-note issuance request."""
+    tenant_id = get_current_tenant_id()
+    cn = await _get_credit_note_or_404(tenant_id, distributor_id, credit_note_id)
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Attachment too large (max 10 MB)")
+    safe_name = (file.filename or "attachment").replace("/", "_").replace("\\", "_")
+    storage_path = (
+        f"nyla-crm/credit-note-issuances/{distributor_id}/{credit_note_id}/"
+        f"{uuid.uuid4()}-{safe_name}"
+    )
+    put_object(storage_path, contents, file.content_type or "application/octet-stream")
+    logger.info(
+        f"Uploaded issuance attachment for CN {cn.get('credit_note_number')} "
+        f"({len(contents)} bytes) by {current_user['email']}"
+    )
+    return {
+        "attachment_path": storage_path,
+        "attachment_filename": safe_name,
+        "size": len(contents)
+    }
+
+
+@router.get("/{distributor_id}/credit-notes/{credit_note_id}/issuances/{issuance_id}/attachment")
+async def download_issuance_attachment(
+    distributor_id: str,
+    credit_note_id: str,
+    issuance_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    tenant_id = get_current_tenant_id()
+    issuance = await db.credit_note_issuances.find_one(
+        {"id": issuance_id, "tenant_id": tenant_id,
+         "distributor_id": distributor_id, "credit_note_id": credit_note_id},
+        {"_id": 0}
+    )
+    if not issuance or not issuance.get("attachment_path"):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    content, content_type = get_object(issuance["attachment_path"])
+    headers = {
+        "Content-Disposition": f'attachment; filename="{issuance.get("attachment_filename") or "attachment"}"'
+    }
+    return Response(content=content, media_type=content_type, headers=headers)
+
+
+@router.get("/{distributor_id}/credit-notes/{credit_note_id}/issuances")
+async def list_credit_issuances(
+    distributor_id: str,
+    credit_note_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    tenant_id = get_current_tenant_id()
+    await _get_credit_note_or_404(tenant_id, distributor_id, credit_note_id)
+    issuances = await db.credit_note_issuances.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id,
+         "credit_note_id": credit_note_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(500)
+    return {"issuances": issuances, "total": len(issuances)}
+
+
+@router.post("/{distributor_id}/credit-notes/{credit_note_id}/issuances")
+async def create_credit_issuance(
+    distributor_id: str,
+    credit_note_id: str,
+    data: CreditIssuanceCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Submit a request to issue credit directly to the customer
+    (standalone, not tied to a delivery). Goes to approval queue."""
+    tenant_id = get_current_tenant_id()
+    cn = await _get_credit_note_or_404(tenant_id, distributor_id, credit_note_id)
+
+    if cn.get('status') == 'cancelled':
+        raise HTTPException(status_code=400, detail="Credit note is cancelled")
+
+    # Pending issuances (not yet rejected/cancelled) also reserve balance optimistically
+    pending = await db.credit_note_issuances.find(
+        {"tenant_id": tenant_id, "credit_note_id": credit_note_id,
+         "status": {"$in": ["pending_approval"]}},
+        {"_id": 0, "amount": 1}
+    ).to_list(500)
+    pending_total = sum(p.get('amount', 0) for p in pending)
+    available = (cn.get('balance_amount') or 0) - pending_total
+    if data.amount > available + 0.001:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Amount ₹{data.amount:.2f} exceeds available balance ₹{available:.2f} "
+                f"(pending issuance requests: ₹{pending_total:.2f})"
+            )
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    issuance = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "credit_note_id": credit_note_id,
+        "credit_note_number": cn.get('credit_note_number'),
+        "return_id": cn.get('return_id'),
+        "return_number": cn.get('return_number'),
+        "account_id": cn.get('account_id'),
+        "account_name": cn.get('account_name'),
+        "amount": round(data.amount, 2),
+        "reason": data.reason,
+        "issuance_method": data.issuance_method,
+        "reference": data.reference,
+        "attachment_path": data.attachment_path,
+        "attachment_filename": data.attachment_filename,
+        "status": "pending_approval",
+        "rejection_reason": None,
+        "approved_by": None, "approved_by_name": None, "approved_at": None,
+        "issued_to": None, "issued_at": None, "issued_by": None, "issued_by_name": None,
+        "created_at": now,
+        "updated_at": now,
+        "created_by": current_user.get('id'),
+        "created_by_name": current_user.get('name', current_user.get('email')),
+    }
+    await db.credit_note_issuances.insert_one(issuance)
+    issuance.pop('_id', None)
+    logger.info(
+        f"Submitted credit issuance ₹{data.amount} on CN {cn.get('credit_note_number')} "
+        f"by {current_user['email']} ({data.issuance_method})"
+    )
+    return issuance
+
+
+async def _get_issuance_or_404(tenant_id: str, distributor_id: str, credit_note_id: str, issuance_id: str) -> dict:
+    issuance = await db.credit_note_issuances.find_one(
+        {"id": issuance_id, "tenant_id": tenant_id,
+         "distributor_id": distributor_id, "credit_note_id": credit_note_id},
+        {"_id": 0}
+    )
+    if not issuance:
+        raise HTTPException(status_code=404, detail="Issuance not found")
+    return issuance
+
+
+@router.post("/{distributor_id}/credit-notes/{credit_note_id}/issuances/{issuance_id}/approve")
+async def approve_credit_issuance(
+    distributor_id: str,
+    credit_note_id: str,
+    issuance_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    if not _is_issuance_approver(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO / System Admin can approve credit issuances")
+    tenant_id = get_current_tenant_id()
+    issuance = await _get_issuance_or_404(tenant_id, distributor_id, credit_note_id, issuance_id)
+    if issuance.get('status') != 'pending_approval':
+        raise HTTPException(status_code=400, detail=f"Issuance is in '{issuance.get('status')}' state")
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.credit_note_issuances.update_one(
+        {"id": issuance_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "approved",
+            "approved_by": current_user.get('id'),
+            "approved_by_name": current_user.get('name', current_user.get('email')),
+            "approved_at": now,
+            "updated_at": now,
+        }}
+    )
+    await _recalculate_credit_note_status(tenant_id, credit_note_id)
+    logger.info(
+        f"Approved credit issuance {issuance_id} (₹{issuance.get('amount')}) by {current_user['email']}"
+    )
+    return {"status": "approved"}
+
+
+@router.post("/{distributor_id}/credit-notes/{credit_note_id}/issuances/{issuance_id}/reject")
+async def reject_credit_issuance(
+    distributor_id: str,
+    credit_note_id: str,
+    issuance_id: str,
+    data: CreditIssuanceReject,
+    current_user: dict = Depends(get_current_user)
+):
+    if not _is_issuance_approver(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO / System Admin can reject credit issuances")
+    tenant_id = get_current_tenant_id()
+    issuance = await _get_issuance_or_404(tenant_id, distributor_id, credit_note_id, issuance_id)
+    if issuance.get('status') != 'pending_approval':
+        raise HTTPException(status_code=400, detail=f"Issuance is in '{issuance.get('status')}' state")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.credit_note_issuances.update_one(
+        {"id": issuance_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "rejected",
+            "rejection_reason": data.rejection_reason,
+            "approved_by": current_user.get('id'),
+            "approved_by_name": current_user.get('name', current_user.get('email')),
+            "approved_at": now,
+            "updated_at": now,
+        }}
+    )
+    logger.info(f"Rejected credit issuance {issuance_id} by {current_user['email']}: {data.rejection_reason}")
+    return {"status": "rejected"}
+
+
+@router.post("/{distributor_id}/credit-notes/{credit_note_id}/issuances/{issuance_id}/mark-issued")
+async def mark_credit_issuance_issued(
+    distributor_id: str,
+    credit_note_id: str,
+    issuance_id: str,
+    data: CreditIssuanceMarkIssued,
+    current_user: dict = Depends(get_current_user)
+):
+    """Records the actual physical handover of the credit to the customer.
+    Approval must already have occurred. Balance reduction happens at approval,
+    so this is purely an audit/handover record."""
+    tenant_id = get_current_tenant_id()
+    issuance = await _get_issuance_or_404(tenant_id, distributor_id, credit_note_id, issuance_id)
+    if issuance.get('status') != 'approved':
+        raise HTTPException(status_code=400, detail="Issuance must be approved before being marked as issued")
+    now = datetime.now(timezone.utc).isoformat()
+    issuance_date = data.issuance_date or datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    await db.credit_note_issuances.update_one(
+        {"id": issuance_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "issued",
+            "issued_to": data.issued_to,
+            "issued_at": issuance_date,
+            "issued_by": current_user.get('id'),
+            "issued_by_name": current_user.get('name', current_user.get('email')),
+            "updated_at": now,
+        }}
+    )
+    logger.info(f"Marked credit issuance {issuance_id} as issued on {issuance_date} by {current_user['email']}")
+    return {"status": "issued", "issued_at": issuance_date}
+
+
+@router.post("/{distributor_id}/credit-notes/{credit_note_id}/issuances/{issuance_id}/cancel")
+async def cancel_credit_issuance(
+    distributor_id: str,
+    credit_note_id: str,
+    issuance_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Cancel a pending issuance. Creator or CEO/System Admin only."""
+    tenant_id = get_current_tenant_id()
+    issuance = await _get_issuance_or_404(tenant_id, distributor_id, credit_note_id, issuance_id)
+    if issuance.get('status') not in ('pending_approval', 'approved'):
+        raise HTTPException(status_code=400, detail=f"Cannot cancel issuance in '{issuance.get('status')}' state")
+    is_creator = (issuance.get('created_by') == current_user.get('id'))
+    if not (_is_issuance_approver(current_user) or is_creator):
+        raise HTTPException(status_code=403, detail="Only the creator or CEO / System Admin can cancel")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.credit_note_issuances.update_one(
+        {"id": issuance_id, "tenant_id": tenant_id},
+        {"$set": {"status": "cancelled", "updated_at": now}}
+    )
+    # If was approved, restoring the balance is automatic via recompute
+    await _recalculate_credit_note_status(tenant_id, credit_note_id)
+    logger.info(f"Cancelled credit issuance {issuance_id} by {current_user['email']}")
+    return {"status": "cancelled"}
 
 
 async def generate_credit_note_number(tenant_id: str) -> str:

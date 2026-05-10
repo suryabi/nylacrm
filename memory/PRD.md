@@ -5,6 +5,21 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Standalone Credit Issuance to Customer (return-linked, delivery-independent) (2026-02-09)
+- [x] User requirement: "Credit notes are tied to a return but today can only be drawn down by applying to a delivery. Need a way to issue credit directly to the customer (cash refund / bank transfer / store credit / cheque) — independent of any delivery, with reason + approval."
+- [x] **Backend** `/app/backend/routes/credit_notes.py` — added a new `credit_note_issuances` collection + 7 endpoints under `/api/distributors/{did}/credit-notes/{cnid}/issuances`:
+  - `POST /` create (status `pending_approval`, validates available balance net of pending requests)
+  - `GET /` list issuances for a credit note
+  - `POST /{iid}/approve` (CEO / System Admin only) — recomputes credit-note `applied_amount` / `balance_amount` / `status` to include approved standalone issuances alongside delivery applications
+  - `POST /{iid}/reject` (CEO / System Admin only, requires `rejection_reason`)
+  - `POST /{iid}/mark-issued` (creator or approver) — records actual handover date + `issued_to`
+  - `POST /{iid}/cancel` (creator or approver, only `pending_approval` / `approved` states) — restores balance via recompute
+  - `POST /{cnid}/issuances/upload-attachment` (multipart) + `GET /{iid}/attachment` — optional supporting document via Emergent Object Storage
+- [x] **Frontend** new component `/app/frontend/src/components/distributor/CreditIssuanceDialog.jsx` — full lifecycle UI: balance tiles, issuance history, "+ New Issuance" form (amount / method / reason / reference / attachment), inline Approve / Reject (with reason) / Mark-Issued (date + issued_to) / Cancel actions gated by role.
+- [x] **Frontend** wired into `ReturnsTab.jsx` Return Detail dialog as a **secondary** outline button "Issue Credit to Customer" inside the existing emerald Credit Note Issued block (kept low-prominence per user — the common path is still delivery application).
+- [x] **Verified** end-to-end via curl: CN-2026-0006 → submit ₹50 → approve → balance ₹20,000 → ₹19,950 → mark-issued → cancel correctly blocked once issued. Lint clean. Smoke screenshot confirms both dialogs render correctly with audit trail.
+
+
 ### Settlements parent ↔ popup math drift fixed at the data layer (2026-02-09)
 - [x] User reported (after sign fix): "Numbers still mismatch — popup shows ₹4,611 but parent shows ~₹4,971." Root cause: parent was reading STORED fields (`settlement.factory_distributor_adjustment`) computed at settlement-creation time using a derived `transfer_price = base × (1−commission%)`, while popup uses the actually-stored `item.transfer_price` from each delivery item. For cost-based billing (where `transfer_price = base_price` directly), the two formulas drift by `qty × commission% × base`.
 - [x] **Fix backend** `/app/backend/routes/distributors.py` — extracted `_enrich_settlements_with_stockout_totals(tenant_id, settlements)` and now both `GET /api/distributors/{did}/settlements` (list) and `GET .../{sid}` (detail) call it. Each settlement returned by the list endpoint is enriched with the same `items[*]` per-delivery view AND `stockout_totals` aggregate that the popup uses → SINGLE SOURCE OF TRUTH at the data layer (not just at the formula layer).
