@@ -4364,10 +4364,15 @@ async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: 
         # the customer out-of-pocket on the factory's behalf, so this reduces
         # what the distributor owes the factory in the settlement.
         # Only `issued` (actually handed over) issuances count.
-        # IMPORTANT: exclude issuances whose parent credit note is linked to a
-        # customer return (return_id present). Those credit notes are ALREADY
-        # accounted for via the delivery's `credit_applied` field, so counting
-        # them here too would double-deduct the same credit.
+        #
+        # IMPORTANT (no-double-count): a single Credit Note can be drained via
+        # TWO independent channels — (a) applied to a delivery, contributing to
+        # `delivery.total_credit_applied` (which we already sum into
+        # `credit_applied`) and (b) paid as cash via an issuance row. To avoid
+        # counting the same money twice, per CN we cap the issuance contribution
+        # at `max(0, original_amount − delivery_applied)`. Truly-standalone CNs
+        # (no return_id) are unaffected by this cap, since they have no
+        # delivery applications by construction.
         direct_credit_amount = 0.0
         direct_issuances: list[dict] = []
         if s.get('account_id'):
@@ -4378,12 +4383,6 @@ async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: 
                 "distributor_id": s['distributor_id'],
                 "account_id": s['account_id'],
                 "status": "issued",
-                # Standalone issuances only — return-linked CNs are counted
-                # in credit_applied via the delivery, never here.
-                "$or": [
-                    {"return_id": None},
-                    {"return_id": {"$exists": False}},
-                ],
             }
             if year and month:
                 # issued_at is stored as YYYY-MM-DD string
@@ -4396,11 +4395,64 @@ async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: 
                 month_match["issued_at"] = {"$gte": start, "$lt": end}
             iss_rows = await db.credit_note_issuances.find(
                 month_match,
-                {"_id": 0, "id": 1, "amount": 1, "credit_note_number": 1,
-                 "issuance_method": 1, "issued_at": 1, "reason": 1}
+                {"_id": 0, "id": 1, "amount": 1, "credit_note_id": 1,
+                 "credit_note_number": 1, "issuance_method": 1, "issued_at": 1,
+                 "reason": 1, "return_id": 1}
             ).to_list(500)
-            direct_issuances = iss_rows
-            direct_credit_amount = round(sum(r.get('amount', 0) for r in iss_rows), 2)
+
+            # Group by CN so we can apply the per-CN cap once.
+            cn_ids = list({r.get('credit_note_id') for r in iss_rows if r.get('credit_note_id')})
+            cn_meta: dict = {}
+            if cn_ids:
+                async for cn in db.credit_notes.find(
+                    {"id": {"$in": cn_ids}, "tenant_id": tenant_id},
+                    {"_id": 0, "id": 1, "original_amount": 1, "amount": 1, "applications": 1}
+                ):
+                    delivery_applied = sum(
+                        (app or {}).get('amount_applied', 0)
+                        for app in (cn.get('applications') or [])
+                    )
+                    original = cn.get('original_amount') or cn.get('amount') or 0
+                    cn_meta[cn['id']] = {
+                        "original": float(original),
+                        "delivery_applied": float(delivery_applied),
+                        "remaining_capacity": max(0.0, float(original) - float(delivery_applied)),
+                    }
+
+            # Sum issuance amount per CN, then cap at remaining_capacity.
+            issuance_sum_by_cn: dict = {}
+            for r in iss_rows:
+                cid = r.get('credit_note_id')
+                if not cid:
+                    continue
+                issuance_sum_by_cn[cid] = issuance_sum_by_cn.get(cid, 0.0) + float(r.get('amount') or 0)
+
+            kept_iss_ids: set = set()
+            running_per_cn: dict = {}
+            for r in iss_rows:
+                cid = r.get('credit_note_id')
+                amount = float(r.get('amount') or 0)
+                if not cid or amount <= 0:
+                    continue
+                meta = cn_meta.get(cid)
+                if not meta:
+                    # No parent CN found (orphan issuance) — count as-is.
+                    direct_credit_amount += amount
+                    kept_iss_ids.add(r.get('id'))
+                    continue
+                cap = meta["remaining_capacity"]
+                used = running_per_cn.get(cid, 0.0)
+                allowed = max(0.0, min(amount, cap - used))
+                if allowed > 0:
+                    direct_credit_amount += allowed
+                    running_per_cn[cid] = used + allowed
+                    kept_iss_ids.add(r.get('id'))
+
+            direct_credit_amount = round(direct_credit_amount, 2)
+            # Surface only the issuances that actually contributed (so the UI
+            # popup reflects what was counted, not what was filtered out as
+            # already-covered-by-delivery).
+            direct_issuances = [r for r in iss_rows if r.get('id') in kept_iss_ids]
 
         s['direct_credit_issuances'] = direct_issuances
         s['stockout_totals'] = {
