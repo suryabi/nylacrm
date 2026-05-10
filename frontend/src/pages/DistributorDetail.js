@@ -3041,7 +3041,7 @@ export default function DistributorDetail() {
 
       {/* Settlement Detail Dialog */}
       <Dialog open={showSettlementDetail} onOpenChange={setShowSettlementDetail}>
-        <DialogContent className="max-w-5xl h-[92vh] flex flex-col p-0 gap-0 overflow-hidden" data-testid="settlement-detail-dialog">
+        <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden" data-testid="settlement-detail-dialog">
           <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
             <DialogTitle className="flex items-center gap-3">
               Settlement {selectedSettlement?.settlement_number}
@@ -3151,9 +3151,9 @@ export default function DistributorDetail() {
                   <span>Included Deliveries</span>
                   <span className="text-[11px] text-muted-foreground font-normal">Same numbers as Stock Out → Delivery preview</span>
                 </div>
-                <div className="max-h-64 overflow-y-auto">
+                <div>
                   <table className="w-full text-sm" data-testid="settlement-deliveries-table">
-                    <thead className="bg-muted/30 sticky top-0">
+                    <thead className="bg-muted/30">
                       <tr>
                         <th className="text-left p-2">Delivery #</th>
                         <th className="text-left p-2">Date</th>
@@ -3275,11 +3275,7 @@ export default function DistributorDetail() {
             </div>
           )}
           {selectedSettlement && (
-            <div className="shrink-0 border-t bg-slate-50 px-6 py-3 flex items-center justify-between gap-2" data-testid="settlement-detail-actions">
-              <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                <ArrowDown className="h-3 w-3" />
-                Scroll for full math breakdown
-              </div>
+            <div className="shrink-0 border-t bg-slate-50 px-6 py-3 flex items-center justify-end gap-2" data-testid="settlement-detail-actions">
               <div className="flex justify-end gap-2">
                 {selectedSettlement.status === 'draft' && canManage && (
                   <>
