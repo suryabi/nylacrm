@@ -30,7 +30,7 @@ const CATEGORY_COLORS = {
 // Status badges
 const STATUS_BADGES = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
-  approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Approved' },
+  approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Credit Note Created' },
   credit_issued: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Credit Issued' },
   processed: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Processed' },
   settled: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Settled' },
@@ -492,7 +492,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="approved">Credit Note Created</SelectItem>
               <SelectItem value="credit_issued">Credit Issued</SelectItem>
               <SelectItem value="processed">Processed</SelectItem>
               <SelectItem value="settled">Settled</SelectItem>
@@ -976,9 +976,9 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       <X className="h-4 w-4 mr-2" />
                       Cancel Return
                     </Button>
-                    <Button onClick={() => approveReturn(selectedReturn.id)}>
+                    <Button onClick={() => approveReturn(selectedReturn.id)} data-testid="create-credit-note-btn">
                       <Check className="h-4 w-4 mr-2" />
-                      Approve Return
+                      Create Credit Note
                     </Button>
                   </>
                 )}

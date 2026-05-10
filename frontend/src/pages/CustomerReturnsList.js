@@ -189,7 +189,7 @@ export default function CustomerReturnsList() {
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="approved">Credit Note Created</SelectItem>
               <SelectItem value="credit_issued">Credit Issued</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
