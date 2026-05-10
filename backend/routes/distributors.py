@@ -559,6 +559,146 @@ async def cleanup_orphaned_distributor_data(current_user: dict = Depends(get_cur
     return {"message": "Orphaned distributor data cleaned up", "deleted_counts": results}
 
 
+@router.post("/admin/wipe-transactional-data")
+async def wipe_distributor_transactional_data(
+    payload: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Wipe ALL distributor transactional data for the current tenant.
+
+    Wipes (per tenant):
+      • distributor_deliveries + distributor_delivery_items   (Stock Out)
+      • distributor_settlements + distributor_settlement_items (Settlements)
+      • distributor_debit_credit_notes + distributor_reconciliations + items (Billing)
+      • customer_returns + credit_notes + credit_note_issuances (Returns)
+      • distributor_factory_returns                            (Factory Returns)
+
+    Keeps untouched:
+      • distributor_shipments + items (Stock In)
+      • distributors, locations, coverage, margin_matrix, billing_config, contacts
+      • account_distributor_assignments
+      • accounts, leads, invoices, master data, etc.
+
+    After deletion `distributor_stock` is rebuilt from delivered shipments so
+    on-hand quantities reflect a clean baseline (everything received, nothing
+    dispatched or returned).
+
+    Guards:
+      • CEO / System Admin only
+      • Body must contain {"confirm": "DELETE_TRANSACTIONS"} to avoid accidents
+    """
+    if not is_delete_authorized(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can run this operation")
+
+    if (payload or {}).get("confirm") != "DELETE_TRANSACTIONS":
+        raise HTTPException(
+            status_code=400,
+            detail='Missing or invalid confirm token. Provide {"confirm": "DELETE_TRANSACTIONS"} to proceed.'
+        )
+
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    deleted: dict = {}
+
+    targets = [
+        # Stock Out
+        ("distributor_deliveries", db.distributor_deliveries),
+        ("distributor_delivery_items", db.distributor_delivery_items),
+        # Settlements
+        ("distributor_settlements", db.distributor_settlements),
+        ("distributor_settlement_items", db.distributor_settlement_items),
+        # Billing & Reconciliation
+        ("distributor_debit_credit_notes", db.distributor_debit_credit_notes),
+        ("distributor_reconciliations", db.distributor_reconciliations),
+        ("distributor_reconciliation_items", db.distributor_reconciliation_items),
+        # Returns + linked credits
+        ("customer_returns", db.customer_returns),
+        ("credit_notes", db.credit_notes),
+        ("credit_note_issuances", db.credit_note_issuances),
+        # Factory Returns
+        ("distributor_factory_returns", db.distributor_factory_returns),
+    ]
+
+    for coll_name, collection in targets:
+        try:
+            res = await collection.delete_many({"tenant_id": tenant_id})
+            deleted[coll_name] = res.deleted_count
+        except Exception as e:
+            logger.error(f"wipe-transactional: failed to delete {coll_name}: {e}")
+            deleted[coll_name] = f"error: {e}"
+
+    # Rebuild distributor_stock from delivered shipments so on-hand reflects
+    # "everything received, nothing dispatched/returned".
+    stock_rebuilt = 0
+    try:
+        # Collect aggregate qty per (distributor_id, location_id, sku_id) from
+        # delivered shipments only.
+        delivered_shipments = await db.distributor_shipments.find(
+            {"tenant_id": tenant_id, "status": "delivered"},
+            {"_id": 0, "id": 1, "distributor_id": 1, "distributor_location_id": 1,
+             "distributor_name": 1, "distributor_location_name": 1}
+        ).to_list(10000)
+        ship_meta = {s['id']: s for s in delivered_shipments}
+        ship_ids = list(ship_meta.keys())
+
+        # Wipe existing stock for the tenant first
+        sres = await db.distributor_stock.delete_many({"tenant_id": tenant_id})
+        deleted["distributor_stock"] = sres.deleted_count
+
+        if ship_ids:
+            items = await db.distributor_shipment_items.find(
+                {"tenant_id": tenant_id, "shipment_id": {"$in": ship_ids}},
+                {"_id": 0}
+            ).to_list(50000)
+            agg: dict = {}
+            for it in items:
+                s = ship_meta.get(it.get('shipment_id')) or {}
+                key = (
+                    s.get('distributor_id'),
+                    s.get('distributor_location_id'),
+                    it.get('sku_id'),
+                )
+                if not all(key):
+                    continue
+                row = agg.setdefault(key, {
+                    "tenant_id": tenant_id,
+                    "distributor_id": key[0],
+                    "distributor_location_id": key[1],
+                    "sku_id": key[2],
+                    "sku_name": it.get('sku_name'),
+                    "sku_code": it.get('sku_code'),
+                    "distributor_name": s.get('distributor_name'),
+                    "location_name": s.get('distributor_location_name'),
+                    "quantity": 0,
+                    "id": str(uuid.uuid4()),
+                    "created_at": now,
+                    "updated_at": now,
+                })
+                row["quantity"] += it.get('quantity', 0) or 0
+            if agg:
+                await db.distributor_stock.insert_many(list(agg.values()))
+                stock_rebuilt = len(agg)
+    except Exception as e:
+        logger.error(f"wipe-transactional: stock rebuild failed: {e}")
+        deleted["distributor_stock_rebuild_error"] = str(e)
+
+    deleted["distributor_stock_rows_rebuilt"] = stock_rebuilt
+
+    logger.warning(
+        f"WIPE distributor transactional data — tenant={tenant_id} "
+        f"by {current_user.get('email')} (role={current_user.get('role')}) "
+        f"results={deleted}"
+    )
+
+    return {
+        "message": "Distributor transactional data wiped. Stock rebuilt from delivered shipments.",
+        "tenant_id": tenant_id,
+        "deleted_counts": deleted,
+        "executed_by": current_user.get('email'),
+        "executed_at": now,
+    }
+
+
 
 # ============ Operating Coverage CRUD ============
 
