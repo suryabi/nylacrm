@@ -101,6 +101,10 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
     }
   }, [distributorId, token]);
 
+  // Tracks if any issuance state-change happened in this dialog session, so
+  // we know to refresh the parent Returns table when the dialog closes.
+  const [issuanceDirty, setIssuanceDirty] = useState(false);
+
   const toggleIssuancePanel = useCallback(async () => {
     if (!selectedReturn?.credit_note_id) return;
     const next = !issuancePanelOpen;
@@ -175,6 +179,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
         showForm: false, reason: '', issuance_method: 'cash', reference: '',
         attachment_path: '', attachment_filename: '', uploading: false, submitting: false,
       });
+      setIssuanceDirty(true);
       await fetchIssuanceData(selectedReturn.credit_note_id);
     } catch (err) {
       setIssuanceForm((f) => ({ ...f, submitting: false }));
@@ -190,6 +195,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
         headers: { Authorization: `Bearer ${token}` },
       });
       toast.success(successMsg);
+      setIssuanceDirty(true);
       await fetchIssuanceData(selectedReturn.credit_note_id);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Action failed');
@@ -947,7 +953,16 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
       </Dialog>
 
       {/* Return Detail Dialog */}
-      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+      <Dialog open={showDetailDialog} onOpenChange={(open) => {
+        setShowDetailDialog(open);
+        // When closing after any issuance state change, refresh the parent
+        // Returns list so the row's status badge (e.g. "Approved" → "Credit Issued")
+        // reflects the new state without manual refresh.
+        if (!open && issuanceDirty) {
+          fetchReturns();
+          setIssuanceDirty(false);
+        }
+      }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           {selectedReturn && (
             <>
@@ -1016,8 +1031,9 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       </div>
                     )}
                     {/* Standalone credit issuance — expand inline (no nested dialog).
-                       Issues the entire remaining balance in one go (no partials). */}
-                    {selectedReturn.credit_note_id && (
+                       Issues the entire remaining balance in one go (no partials).
+                       Hidden once the return is `credit_issued` (nothing left to issue). */}
+                    {selectedReturn.credit_note_id && selectedReturn.status !== 'credit_issued' && selectedReturn.status !== 'settled' && (
                       <div className="mt-3 pt-3 border-t border-emerald-200">
                         <button
                           type="button"
