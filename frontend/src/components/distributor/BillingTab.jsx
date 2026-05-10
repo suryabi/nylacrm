@@ -144,13 +144,15 @@ export default function BillingTab({
 
   const settlementTotals = allSettlements.reduce((acc, s) => {
     const t = s.stockout_totals || {};
+    acc.customer_order_value += t.customer_order_value || 0;
+    acc.distributor_margin += t.distributor_margin || 0;
     acc.actual_billable += t.actual_billable || 0;
     acc.credits += (t.credit_applied || 0) + (t.direct_credit_issued || 0);
     acc.billed_at_transfer += t.billed_at_transfer || 0;
     acc.factory_returns += s.total_factory_return_credit || 0;
     acc.net += settlementNet(s);
     return acc;
-  }, { actual_billable: 0, credits: 0, billed_at_transfer: 0, factory_returns: 0, net: 0 });
+  }, { customer_order_value: 0, distributor_margin: 0, actual_billable: 0, credits: 0, billed_at_transfer: 0, factory_returns: 0, net: 0 });
 
   const netSettlement = monthlyData?.net_adjustment_amount || 0;
   const noteType = monthlyData?.settlement_note_type || 'none';
@@ -340,7 +342,9 @@ export default function BillingTab({
                     <th className="text-left px-4 py-2.5 font-semibold">Settlement #</th>
                     <th className="text-left px-4 py-2.5 font-semibold">Customer</th>
                     <th className="text-right px-4 py-2.5 font-semibold w-20">Deliveries</th>
-                    <th className="text-right px-4 py-2.5 font-semibold">Actual Billable</th>
+                    <th className="text-right px-4 py-2.5 font-semibold">Customer Order Value</th>
+                    <th className="text-right px-4 py-2.5 font-semibold">Distributor Margin</th>
+                    <th className="text-right px-4 py-2.5 font-semibold border-l border-slate-300 bg-slate-200/40">Actual Billable</th>
                     <th className="text-right px-4 py-2.5 font-semibold">Credits</th>
                     <th className="text-right px-4 py-2.5 font-semibold">Billed at Transfer</th>
                     <th className="text-right px-4 py-2.5 font-semibold">Factory Returns</th>
@@ -351,6 +355,8 @@ export default function BillingTab({
                 <tbody className="divide-y divide-slate-100">
                   {allSettlements.map((s, idx) => {
                     const t = s.stockout_totals || {};
+                    const cov = t.customer_order_value || 0;
+                    const margin = t.distributor_margin || 0;
                     const ab = t.actual_billable || 0;
                     const credits = (t.credit_applied || 0) + (t.direct_credit_issued || 0);
                     const bat = t.billed_at_transfer || 0;
@@ -361,7 +367,9 @@ export default function BillingTab({
                         <td className="px-4 py-2.5 text-slate-900 font-medium tabular-nums">{s.settlement_number || '—'}</td>
                         <td className="px-4 py-2.5 text-slate-700">{s.account_name || '—'}</td>
                         <td className="px-4 py-2.5 text-right text-slate-700 tabular-nums">{s.total_deliveries || 0}</td>
-                        <td className="px-4 py-2.5 text-right text-slate-700 tabular-nums">{fmt(ab)}</td>
+                        <td className="px-4 py-2.5 text-right text-slate-700 tabular-nums">{fmt(cov)}</td>
+                        <td className="px-4 py-2.5 text-right text-blue-700 tabular-nums">{margin > 0 ? `(${fmt(margin)})` : fmt(0)}</td>
+                        <td className="px-4 py-2.5 text-right text-slate-900 font-medium tabular-nums border-l border-slate-200 bg-slate-50/60">{fmt(ab)}</td>
                         <td className="px-4 py-2.5 text-right text-emerald-700 tabular-nums">{credits > 0 ? `(${fmt(credits)})` : fmt(0)}</td>
                         <td className="px-4 py-2.5 text-right text-slate-700 tabular-nums">{bat > 0 ? `(${fmt(bat)})` : fmt(0)}</td>
                         <td className="px-4 py-2.5 text-right text-slate-700 tabular-nums">{fr > 0 ? `(${fmt(fr)})` : fmt(0)}</td>
@@ -380,7 +388,9 @@ export default function BillingTab({
                   <tr className="bg-slate-800 text-white font-semibold border-t-2 border-slate-900" data-testid="settlement-summary-row">
                     <td className="px-4 py-3 text-[11px] uppercase tracking-wider" colSpan={2}>Total</td>
                     <td className="px-4 py-3 text-right tabular-nums">{allSettlements.reduce((a, s) => a + (s.total_deliveries || 0), 0)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{fmt(settlementTotals.actual_billable)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{fmt(settlementTotals.customer_order_value)}</td>
+                    <td className="px-4 py-3 text-right text-blue-300 tabular-nums">{settlementTotals.distributor_margin > 0 ? `(${fmt(settlementTotals.distributor_margin)})` : fmt(0)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums border-l border-slate-600 bg-slate-900/60">{fmt(settlementTotals.actual_billable)}</td>
                     <td className="px-4 py-3 text-right text-emerald-300 tabular-nums">{settlementTotals.credits > 0 ? `(${fmt(settlementTotals.credits)})` : fmt(0)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{settlementTotals.billed_at_transfer > 0 ? `(${fmt(settlementTotals.billed_at_transfer)})` : fmt(0)}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{settlementTotals.factory_returns > 0 ? `(${fmt(settlementTotals.factory_returns)})` : fmt(0)}</td>
