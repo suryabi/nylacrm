@@ -1092,24 +1092,24 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                                                 </button>
                                               )}
                                             </div>
-                                            <div className="flex flex-col gap-1 shrink-0">
+                                            <div className="flex flex-row gap-1.5 shrink-0 self-start">
                                               {iss.status === 'pending_approval' && canApproveIssuance && !isRejecting && (
                                                 <>
-                                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 h-6 text-[11px] px-2" onClick={() => issuanceAction(iss.id, 'approve', null, 'Issuance approved')} data-testid="approve-issuance-btn">
+                                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-[11px] px-2.5" onClick={() => issuanceAction(iss.id, 'approve', null, 'Issuance approved')} data-testid="approve-issuance-btn">
                                                     <Check className="h-3 w-3 mr-1" /> Approve
                                                   </Button>
-                                                  <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setRejectingId({ id: iss.id, reason: '' })} data-testid="reject-issuance-btn">
+                                                  <Button size="sm" variant="outline" className="h-7 text-[11px] px-2.5" onClick={() => setRejectingId({ id: iss.id, reason: '' })} data-testid="reject-issuance-btn">
                                                     <X className="h-3 w-3 mr-1" /> Reject
                                                   </Button>
                                                 </>
                                               )}
                                               {iss.status === 'approved' && (canApproveIssuance || isCreator) && !isMarking && (
-                                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-6 text-[11px] px-2" onClick={() => setIssuingId({ id: iss.id, issued_to: '', issuance_date: new Date().toISOString().split('T')[0] })} data-testid="mark-issued-btn">
+                                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-[11px] px-2.5" onClick={() => setIssuingId({ id: iss.id, issued_to: '', issuance_date: new Date().toISOString().split('T')[0] })} data-testid="mark-issued-btn">
                                                   <Send className="h-3 w-3 mr-1" /> Mark Issued
                                                 </Button>
                                               )}
-                                              {(iss.status === 'pending_approval' || iss.status === 'approved') && (canApproveIssuance || isCreator) && (
-                                                <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-rose-600 hover:bg-rose-50" onClick={() => issuanceAction(iss.id, 'cancel', null, 'Issuance cancelled')} data-testid="cancel-issuance-btn">
+                                              {(iss.status === 'pending_approval' || iss.status === 'approved') && (canApproveIssuance || isCreator) && !isRejecting && !isMarking && (
+                                                <Button size="sm" variant="outline" className="h-7 text-[11px] px-2.5 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700" onClick={() => issuanceAction(iss.id, 'cancel', null, 'Issuance cancelled')} data-testid="cancel-issuance-btn">
                                                   <Trash2 className="h-3 w-3 mr-1" /> Cancel
                                                 </Button>
                                               )}
