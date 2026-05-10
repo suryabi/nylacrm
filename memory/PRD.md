@@ -5,6 +5,13 @@
 - **Backend**: FastAPI (Python)
 - **Database**: MongoDB
 
+### Credit Issuance UX simplified — full balance, single popup, inline (2026-02-09)
+- [x] User feedback: "Too complicated. Don't allow partial credit note payments — entire balance must be issued. And remove the nested popup; use one popup with inline expand/collapse for the approval flow."
+- [x] **Backend** `/app/backend/routes/credit_notes.py` — `CreditIssuanceCreate` no longer accepts an `amount` field. The create endpoint now uses the credit note's current `balance_amount` as the issuance amount (full balance, indivisible). It also blocks duplicate requests if any existing issuance is `pending_approval` or `approved` (one open request at a time per credit note).
+- [x] **Frontend** removed `/app/frontend/src/components/distributor/CreditIssuanceDialog.jsx` (deleted). The entire flow now renders **inline** inside the existing Return Detail dialog — no nested popup. Expand/collapse toggle on the "Issue Credit to Customer" header reveals the panel; available balance shown in a single banner; issuance history rendered as compact cards with inline Approve / Reject (with reason) / Mark Issued (issued_to + date) / Cancel actions; "+ New Issuance Request" reveals an inline form that is shown only when there is no open request and balance > 0. Form fields collapsed to: Method (required) / Reference / Reason (required) / Attachment — no amount input.
+- [x] **Verified** via screenshots: collapsed and expanded states render cleanly within the single Return Detail dialog. Lint clean.
+
+
 ### Standalone Credit Issuance to Customer (return-linked, delivery-independent) (2026-02-09)
 - [x] User requirement: "Credit notes are tied to a return but today can only be drawn down by applying to a delivery. Need a way to issue credit directly to the customer (cash refund / bank transfer / store credit / cheque) — independent of any delivery, with reason + approval."
 - [x] **Backend** `/app/backend/routes/credit_notes.py` — added a new `credit_note_issuances` collection + 7 endpoints under `/api/distributors/{did}/credit-notes/{cnid}/issuances`:

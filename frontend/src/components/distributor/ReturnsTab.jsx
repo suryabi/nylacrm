@@ -11,10 +11,10 @@ import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
 import {
   RotateCcw, Plus, Download, RefreshCw, Search, Calendar, Trash2,
-  Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard
+  Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard,
+  ChevronDown, ChevronUp, Paperclip, Send, AlertTriangle
 } from 'lucide-react';
 import axios from 'axios';
-import CreditIssuanceDialog from './CreditIssuanceDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -56,35 +56,158 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Credit issuance dialog state — for issuing credit directly to customer
-  // (independent of any delivery), gated by approval workflow.
-  const [issuanceDialogOpen, setIssuanceDialogOpen] = useState(false);
+  // Credit issuance — inline expand/collapse panel inside Return Detail
+  // (no nested dialogs). Issues the ENTIRE remaining credit balance in one go.
+  const [issuancePanelOpen, setIssuancePanelOpen] = useState(false);
   const [issuanceCreditNote, setIssuanceCreditNote] = useState(null);
+  const [issuances, setIssuances] = useState([]);
+  const [loadingIssuances, setLoadingIssuances] = useState(false);
+  const [issuanceForm, setIssuanceForm] = useState({
+    showForm: false,
+    reason: '',
+    issuance_method: 'cash',
+    reference: '',
+    attachment_path: '',
+    attachment_filename: '',
+    uploading: false,
+    submitting: false,
+  });
+  const [rejectingId, setRejectingId] = useState(null); // { id, reason }
+  const [issuingId, setIssuingId] = useState(null);     // { id, issued_to, issuance_date }
 
   // Approve role (CEO / System Admin) — matches backend ISSUANCE_APPROVER_ROLES
   const userRole = (user?.role || '').toLowerCase();
   const canApproveIssuance = ['ceo', 'system admin', 'admin'].includes(userRole);
 
-  const openIssuanceDialog = useCallback(async () => {
-    if (!selectedReturn?.credit_note_id) return;
+  const fetchIssuanceData = useCallback(async (creditNoteId) => {
+    if (!creditNoteId) return;
+    setLoadingIssuances(true);
     try {
-      // Fetch fresh credit note doc to get current balance
-      const r = await axios.get(
-        `${API_URL}/api/distributors/${distributorId}/credit-notes`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const list = r.data.credit_notes || r.data.items || [];
-      const cn = list.find((c) => c.id === selectedReturn.credit_note_id);
-      if (!cn) {
-        toast.error('Credit note no longer available');
-        return;
-      }
-      setIssuanceCreditNote(cn);
-      setIssuanceDialogOpen(true);
+      const [cnRes, issRes] = await Promise.all([
+        axios.get(`${API_URL}/api/distributors/${distributorId}/credit-notes`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        axios.get(`${API_URL}/api/distributors/${distributorId}/credit-notes/${creditNoteId}/issuances`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+      const list = cnRes.data.credit_notes || cnRes.data.items || [];
+      setIssuanceCreditNote(list.find((c) => c.id === creditNoteId) || null);
+      setIssuances(issRes.data.issuances || []);
     } catch (e) {
-      toast.error('Failed to load credit note details');
+      toast.error('Failed to load issuance details');
+    } finally {
+      setLoadingIssuances(false);
     }
-  }, [selectedReturn, distributorId, token]);
+  }, [distributorId, token]);
+
+  const toggleIssuancePanel = useCallback(async () => {
+    if (!selectedReturn?.credit_note_id) return;
+    const next = !issuancePanelOpen;
+    setIssuancePanelOpen(next);
+    if (next) {
+      await fetchIssuanceData(selectedReturn.credit_note_id);
+    } else {
+      setIssuanceForm((f) => ({ ...f, showForm: false }));
+      setRejectingId(null);
+      setIssuingId(null);
+    }
+  }, [issuancePanelOpen, selectedReturn, fetchIssuanceData]);
+
+  // Reset issuance panel state whenever the active return changes / dialog closes
+  useEffect(() => {
+    setIssuancePanelOpen(false);
+    setIssuanceCreditNote(null);
+    setIssuances([]);
+    setIssuanceForm({
+      showForm: false, reason: '', issuance_method: 'cash', reference: '',
+      attachment_path: '', attachment_filename: '', uploading: false, submitting: false,
+    });
+    setRejectingId(null);
+    setIssuingId(null);
+  }, [selectedReturn?.id, showDetailDialog]);
+
+  const issuanceBaseUrl = useCallback(() => {
+    if (!selectedReturn?.credit_note_id) return null;
+    return `${API_URL}/api/distributors/${distributorId}/credit-notes/${selectedReturn.credit_note_id}/issuances`;
+  }, [selectedReturn, distributorId]);
+
+  const handleIssuanceUpload = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return toast.error('File too large (max 10 MB)');
+    const url = issuanceBaseUrl();
+    if (!url) return;
+    const data = new FormData();
+    data.append('file', file);
+    setIssuanceForm((f) => ({ ...f, uploading: true }));
+    try {
+      const r = await axios.post(`${url}/upload-attachment`, data, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' },
+      });
+      setIssuanceForm((f) => ({
+        ...f, uploading: false,
+        attachment_path: r.data.attachment_path,
+        attachment_filename: r.data.attachment_filename,
+      }));
+      toast.success('Attachment uploaded');
+    } catch (err) {
+      setIssuanceForm((f) => ({ ...f, uploading: false }));
+      toast.error(err.response?.data?.detail || 'Upload failed');
+    }
+  };
+
+  const submitIssuance = async () => {
+    const url = issuanceBaseUrl();
+    if (!url) return;
+    if (!issuanceForm.reason.trim()) return toast.error('Reason is required');
+    setIssuanceForm((f) => ({ ...f, submitting: true }));
+    try {
+      await axios.post(url, {
+        reason: issuanceForm.reason.trim(),
+        issuance_method: issuanceForm.issuance_method,
+        reference: issuanceForm.reference || null,
+        attachment_path: issuanceForm.attachment_path || null,
+        attachment_filename: issuanceForm.attachment_filename || null,
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success('Credit issuance submitted for approval');
+      setIssuanceForm({
+        showForm: false, reason: '', issuance_method: 'cash', reference: '',
+        attachment_path: '', attachment_filename: '', uploading: false, submitting: false,
+      });
+      await fetchIssuanceData(selectedReturn.credit_note_id);
+    } catch (err) {
+      setIssuanceForm((f) => ({ ...f, submitting: false }));
+      toast.error(err.response?.data?.detail || 'Submission failed');
+    }
+  };
+
+  const issuanceAction = async (issuanceId, action, body, successMsg) => {
+    const url = issuanceBaseUrl();
+    if (!url) return;
+    try {
+      await axios.post(`${url}/${issuanceId}/${action}`, body || {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success(successMsg);
+      await fetchIssuanceData(selectedReturn.credit_note_id);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Action failed');
+    }
+  };
+
+  const downloadIssuanceAttachment = (issuanceId, filename) => {
+    const url = issuanceBaseUrl();
+    if (!url) return;
+    axios.get(`${url}/${issuanceId}/attachment`, {
+      headers: { Authorization: `Bearer ${token}` }, responseType: 'blob',
+    }).then((r) => {
+      const objUrl = URL.createObjectURL(r.data);
+      const a = document.createElement('a');
+      a.href = objUrl; a.download = filename || 'attachment'; a.click();
+      URL.revokeObjectURL(objUrl);
+    }).catch(() => toast.error('Failed to download attachment'));
+  };
   
   // Create form
   const [createForm, setCreateForm] = useState({
@@ -892,24 +1015,252 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         </span>
                       </div>
                     )}
-                    {/* Secondary action: issue credit directly to customer
-                       (no delivery linkage). Hidden behind a small button so
-                       it stays out of the way for the common case. */}
+                    {/* Standalone credit issuance — expand inline (no nested dialog).
+                       Issues the entire remaining balance in one go (no partials). */}
                     {selectedReturn.credit_note_id && (
-                      <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
-                        <p className="text-[11px] text-emerald-700/80">
-                          Need to give this credit to the customer outside a delivery? Use a standalone issuance — requires approval.
-                        </p>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                          onClick={openIssuanceDialog}
-                          data-testid="open-credit-issuance-btn"
+                      <div className="mt-3 pt-3 border-t border-emerald-200">
+                        <button
+                          type="button"
+                          onClick={toggleIssuancePanel}
+                          className="w-full flex items-center justify-between gap-3 text-left hover:bg-emerald-100/60 -mx-1 px-2 py-1 rounded transition-colors"
+                          data-testid="toggle-credit-issuance-panel"
                         >
-                          <CreditCard className="h-3.5 w-3.5 mr-1.5" />
-                          Issue Credit to Customer
-                        </Button>
+                          <div>
+                            <p className="text-sm font-medium text-emerald-800">Issue Credit to Customer</p>
+                            <p className="text-[11px] text-emerald-700/80">
+                              Hand over the full remaining balance to the customer outside a delivery — requires CEO / System Admin approval.
+                            </p>
+                          </div>
+                          {issuancePanelOpen
+                            ? <ChevronUp className="h-4 w-4 text-emerald-700 shrink-0" />
+                            : <ChevronDown className="h-4 w-4 text-emerald-700 shrink-0" />}
+                        </button>
+
+                        {issuancePanelOpen && (
+                          <div className="mt-3 space-y-3" data-testid="credit-issuance-panel">
+                            {/* Balance line */}
+                            <div className="flex items-center justify-between text-xs px-3 py-2 rounded bg-white border border-emerald-200">
+                              <span className="text-emerald-700">Available balance to issue</span>
+                              <span className="font-bold tabular-nums text-emerald-800" data-testid="issuance-balance">
+                                ₹{(issuanceCreditNote?.balance_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            {loadingIssuances ? (
+                              <div className="flex items-center text-xs text-muted-foreground py-2">
+                                <RefreshCw className="h-3 w-3 animate-spin mr-2" /> Loading…
+                              </div>
+                            ) : (
+                              <>
+                                {/* Issuance history */}
+                                {issuances.length > 0 && (
+                                  <div className="space-y-2" data-testid="issuance-history">
+                                    {issuances.map((iss) => {
+                                      const STATUS = {
+                                        pending_approval: { label: 'Pending Approval', cls: 'bg-amber-100 text-amber-700 border-amber-300' },
+                                        approved: { label: 'Approved · Awaiting Issue', cls: 'bg-blue-100 text-blue-700 border-blue-300' },
+                                        issued: { label: 'Issued to Customer', cls: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+                                        rejected: { label: 'Rejected', cls: 'bg-rose-100 text-rose-700 border-rose-300' },
+                                        cancelled: { label: 'Cancelled', cls: 'bg-slate-100 text-slate-600 border-slate-300' },
+                                      };
+                                      const sb = STATUS[iss.status] || STATUS.pending_approval;
+                                      const isCreator = iss.created_by === user?.id;
+                                      const isRejecting = rejectingId?.id === iss.id;
+                                      const isMarking = issuingId?.id === iss.id;
+                                      return (
+                                        <div key={iss.id} className="rounded-md border bg-white p-3 space-y-2" data-testid={`issuance-row-${iss.id}`}>
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-bold text-sm tabular-nums">₹{(iss.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                                <Badge variant="outline" className={`${sb.cls} text-[10px]`}>{sb.label}</Badge>
+                                                <span className="text-[10px] text-muted-foreground capitalize">via {iss.issuance_method?.replace('_', ' ')}</span>
+                                                {iss.reference && <span className="text-[10px] text-muted-foreground">· Ref: {iss.reference}</span>}
+                                              </div>
+                                              <p className="text-xs text-slate-700 mt-1">{iss.reason}</p>
+                                              <div className="text-[10px] text-muted-foreground mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                                                <span>By {iss.created_by_name} on {new Date(iss.created_at).toLocaleDateString()}</span>
+                                                {iss.approved_by_name && <span>· {iss.status === 'rejected' ? 'Rejected' : 'Approved'} by {iss.approved_by_name}</span>}
+                                                {iss.issued_at && <span>· Issued {iss.issued_at}{iss.issued_to ? ` to ${iss.issued_to}` : ''}</span>}
+                                              </div>
+                                              {iss.rejection_reason && (
+                                                <p className="text-[10px] text-rose-700 bg-rose-50 px-2 py-1 rounded mt-1">Rejection: {iss.rejection_reason}</p>
+                                              )}
+                                              {iss.attachment_filename && (
+                                                <button onClick={() => downloadIssuanceAttachment(iss.id, iss.attachment_filename)} className="text-[10px] text-blue-600 hover:underline inline-flex items-center gap-1 mt-1" data-testid="download-attachment-btn">
+                                                  <Paperclip className="h-3 w-3" /> {iss.attachment_filename}
+                                                </button>
+                                              )}
+                                            </div>
+                                            <div className="flex flex-col gap-1 shrink-0">
+                                              {iss.status === 'pending_approval' && canApproveIssuance && !isRejecting && (
+                                                <>
+                                                  <Button size="sm" className="bg-green-600 hover:bg-green-700 h-6 text-[11px] px-2" onClick={() => issuanceAction(iss.id, 'approve', null, 'Issuance approved')} data-testid="approve-issuance-btn">
+                                                    <Check className="h-3 w-3 mr-1" /> Approve
+                                                  </Button>
+                                                  <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setRejectingId({ id: iss.id, reason: '' })} data-testid="reject-issuance-btn">
+                                                    <X className="h-3 w-3 mr-1" /> Reject
+                                                  </Button>
+                                                </>
+                                              )}
+                                              {iss.status === 'approved' && (canApproveIssuance || isCreator) && !isMarking && (
+                                                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-6 text-[11px] px-2" onClick={() => setIssuingId({ id: iss.id, issued_to: '', issuance_date: new Date().toISOString().split('T')[0] })} data-testid="mark-issued-btn">
+                                                  <Send className="h-3 w-3 mr-1" /> Mark Issued
+                                                </Button>
+                                              )}
+                                              {(iss.status === 'pending_approval' || iss.status === 'approved') && (canApproveIssuance || isCreator) && (
+                                                <Button size="sm" variant="ghost" className="h-6 text-[11px] px-2 text-rose-600 hover:bg-rose-50" onClick={() => issuanceAction(iss.id, 'cancel', null, 'Issuance cancelled')} data-testid="cancel-issuance-btn">
+                                                  <Trash2 className="h-3 w-3 mr-1" /> Cancel
+                                                </Button>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          {/* Inline reject reason */}
+                                          {isRejecting && (
+                                            <div className="border rounded-md p-2 bg-rose-50 border-rose-200 space-y-2" data-testid="reject-form">
+                                              <p className="text-[11px] font-semibold flex items-center gap-1.5 text-rose-700"><AlertTriangle className="h-3 w-3" /> Reason for rejection</p>
+                                              <Textarea
+                                                value={rejectingId.reason}
+                                                onChange={(e) => setRejectingId({ ...rejectingId, reason: e.target.value })}
+                                                rows={2} placeholder="Required" className="text-xs"
+                                                data-testid="reject-reason-input"
+                                              />
+                                              <div className="flex justify-end gap-1.5">
+                                                <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setRejectingId(null)}>Cancel</Button>
+                                                <Button size="sm" variant="destructive" className="h-6 text-[11px] px-2"
+                                                  disabled={!rejectingId.reason.trim()}
+                                                  onClick={async () => {
+                                                    await issuanceAction(iss.id, 'reject', { rejection_reason: rejectingId.reason.trim() }, 'Issuance rejected');
+                                                    setRejectingId(null);
+                                                  }}
+                                                  data-testid="confirm-reject-btn">Reject</Button>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Inline mark-issued */}
+                                          {isMarking && (
+                                            <div className="border rounded-md p-2 bg-emerald-50 border-emerald-200 space-y-2" data-testid="mark-issued-form">
+                                              <p className="text-[11px] font-semibold flex items-center gap-1.5 text-emerald-700"><Send className="h-3 w-3" /> Record handover</p>
+                                              <div className="grid grid-cols-2 gap-2">
+                                                <Input className="h-7 text-xs" placeholder="Issued to (optional)" value={issuingId.issued_to} onChange={(e) => setIssuingId({ ...issuingId, issued_to: e.target.value })} data-testid="issued-to-input" />
+                                                <Input type="date" className="h-7 text-xs" value={issuingId.issuance_date} onChange={(e) => setIssuingId({ ...issuingId, issuance_date: e.target.value })} data-testid="issuance-date-input" />
+                                              </div>
+                                              <div className="flex justify-end gap-1.5">
+                                                <Button size="sm" variant="outline" className="h-6 text-[11px] px-2" onClick={() => setIssuingId(null)}>Cancel</Button>
+                                                <Button size="sm" className="h-6 text-[11px] px-2 bg-emerald-600 hover:bg-emerald-700"
+                                                  onClick={async () => {
+                                                    await issuanceAction(iss.id, 'mark-issued', {
+                                                      issued_to: issuingId.issued_to || null,
+                                                      issuance_date: issuingId.issuance_date || null,
+                                                    }, 'Recorded as issued');
+                                                    setIssuingId(null);
+                                                  }}
+                                                  data-testid="confirm-mark-issued-btn">Mark Issued</Button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* New issuance — only shown if no open request and balance available */}
+                                {(() => {
+                                  const hasOpen = issuances.some((i) => ['pending_approval', 'approved'].includes(i.status));
+                                  const balance = issuanceCreditNote?.balance_amount || 0;
+                                  if (hasOpen) {
+                                    return (
+                                      <p className="text-[11px] text-muted-foreground italic px-1" data-testid="issuance-blocked-note">
+                                        A request is already in progress for this credit note. Resolve it before submitting another.
+                                      </p>
+                                    );
+                                  }
+                                  if (balance <= 0.001) {
+                                    return (
+                                      <p className="text-[11px] text-muted-foreground italic px-1" data-testid="no-balance-note">
+                                        No balance remaining on this credit note.
+                                      </p>
+                                    );
+                                  }
+                                  if (!issuanceForm.showForm) {
+                                    return (
+                                      <Button size="sm" variant="outline" className="text-emerald-700 border-emerald-300 hover:bg-emerald-100 h-7 text-[11px]"
+                                        onClick={() => setIssuanceForm((f) => ({ ...f, showForm: true }))}
+                                        data-testid="new-issuance-btn">
+                                        <Plus className="h-3 w-3 mr-1" /> New Issuance Request
+                                      </Button>
+                                    );
+                                  }
+                                  return (
+                                    <div className="border rounded-md p-3 bg-white space-y-2" data-testid="issuance-form">
+                                      <p className="text-xs font-semibold flex items-center gap-1.5">
+                                        <Plus className="h-3 w-3" /> New Issuance Request — full balance ₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                      </p>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <Label className="text-[11px]">Issuance Method<span className="text-rose-500">*</span></Label>
+                                          <Select value={issuanceForm.issuance_method} onValueChange={(v) => setIssuanceForm({ ...issuanceForm, issuance_method: v })}>
+                                            <SelectTrigger className="h-8 text-xs" data-testid="issuance-method-select"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="cash">Cash</SelectItem>
+                                              <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                              <SelectItem value="cheque">Cheque</SelectItem>
+                                              <SelectItem value="store_credit">Store Credit</SelectItem>
+                                              <SelectItem value="other">Other</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                        <div>
+                                          <Label className="text-[11px]">Reference (optional)</Label>
+                                          <Input className="h-8 text-xs" placeholder="Cheque #, UTR, Slip ID…"
+                                            value={issuanceForm.reference}
+                                            onChange={(e) => setIssuanceForm({ ...issuanceForm, reference: e.target.value })}
+                                            data-testid="issuance-reference-input" />
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <Label className="text-[11px]">Reason<span className="text-rose-500">*</span></Label>
+                                        <Textarea rows={2} className="text-xs"
+                                          placeholder="Why is this credit being given to the customer outside a delivery?"
+                                          value={issuanceForm.reason}
+                                          onChange={(e) => setIssuanceForm({ ...issuanceForm, reason: e.target.value })}
+                                          data-testid="issuance-reason-input" />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Label className="text-[11px]">Attachment (optional)</Label>
+                                        <input id="issuance-file-input" type="file" className="hidden" onChange={handleIssuanceUpload} accept="image/*,.pdf" />
+                                        <Button type="button" size="sm" variant="outline" className="h-7 text-[11px]"
+                                          onClick={() => document.getElementById('issuance-file-input')?.click()}
+                                          disabled={issuanceForm.uploading}
+                                          data-testid="issuance-upload-btn">
+                                          <Paperclip className="h-3 w-3 mr-1" />
+                                          {issuanceForm.uploading ? 'Uploading…' : (issuanceForm.attachment_filename ? 'Replace' : 'Upload')}
+                                        </Button>
+                                        {issuanceForm.attachment_filename && (
+                                          <span className="text-[11px] text-slate-600 truncate" title={issuanceForm.attachment_filename}>{issuanceForm.attachment_filename}</span>
+                                        )}
+                                      </div>
+                                      <div className="flex justify-end gap-1.5">
+                                        <Button size="sm" variant="outline" className="h-7 text-[11px]"
+                                          onClick={() => setIssuanceForm({ ...issuanceForm, showForm: false, reason: '', reference: '', attachment_path: '', attachment_filename: '' })}
+                                          disabled={issuanceForm.submitting}>Cancel</Button>
+                                        <Button size="sm" className="h-7 text-[11px]"
+                                          onClick={submitIssuance}
+                                          disabled={issuanceForm.submitting}
+                                          data-testid="submit-issuance-btn">
+                                          {issuanceForm.submitting ? 'Submitting…' : 'Submit for Approval'}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1020,15 +1371,6 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
           )}
         </DialogContent>
       </Dialog>
-
-      <CreditIssuanceDialog
-        open={issuanceDialogOpen}
-        onOpenChange={(v) => { setIssuanceDialogOpen(v); if (!v) setIssuanceCreditNote(null); }}
-        distributorId={distributorId}
-        creditNote={issuanceCreditNote}
-        canApprove={canApproveIssuance}
-        onChanged={() => { /* future: refresh credit-note balance shown elsewhere */ }}
-      />
     </Card>
   );
 }

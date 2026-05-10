@@ -31,7 +31,6 @@ ISSUANCE_APPROVER_ROLES = {'ceo', 'system admin', 'admin'}
 
 
 class CreditIssuanceCreate(BaseModel):
-    amount: float = Field(..., gt=0)
     reason: str = Field(..., min_length=1)
     issuance_method: str = Field(..., min_length=1)  # cash | bank_transfer | store_credit | cheque | other
     reference: Optional[str] = None
@@ -173,29 +172,29 @@ async def create_credit_issuance(
     current_user: dict = Depends(get_current_user)
 ):
     """Submit a request to issue credit directly to the customer
-    (standalone, not tied to a delivery). Goes to approval queue."""
+    (standalone, not tied to a delivery). The ENTIRE current balance is issued
+    in one go — partial issuances are not supported. Goes to approval queue."""
     tenant_id = get_current_tenant_id()
     cn = await _get_credit_note_or_404(tenant_id, distributor_id, credit_note_id)
 
     if cn.get('status') == 'cancelled':
         raise HTTPException(status_code=400, detail="Credit note is cancelled")
 
-    # Pending issuances (not yet rejected/cancelled) also reserve balance optimistically
-    pending = await db.credit_note_issuances.find(
+    # Block duplicate requests if there is already one pending or approved
+    open_issuance = await db.credit_note_issuances.find_one(
         {"tenant_id": tenant_id, "credit_note_id": credit_note_id,
-         "status": {"$in": ["pending_approval"]}},
-        {"_id": 0, "amount": 1}
-    ).to_list(500)
-    pending_total = sum(p.get('amount', 0) for p in pending)
-    available = (cn.get('balance_amount') or 0) - pending_total
-    if data.amount > available + 0.001:
+         "status": {"$in": ["pending_approval", "approved"]}},
+        {"_id": 0, "id": 1, "status": 1}
+    )
+    if open_issuance:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"Amount ₹{data.amount:.2f} exceeds available balance ₹{available:.2f} "
-                f"(pending issuance requests: ₹{pending_total:.2f})"
-            )
+            detail=f"An issuance is already {open_issuance['status'].replace('_', ' ')} for this credit note"
         )
+
+    balance = float(cn.get('balance_amount') or 0)
+    if balance <= 0.001:
+        raise HTTPException(status_code=400, detail="Credit note has no balance available to issue")
 
     now = datetime.now(timezone.utc).isoformat()
     issuance = {
@@ -208,7 +207,7 @@ async def create_credit_issuance(
         "return_number": cn.get('return_number'),
         "account_id": cn.get('account_id'),
         "account_name": cn.get('account_name'),
-        "amount": round(data.amount, 2),
+        "amount": round(balance, 2),
         "reason": data.reason,
         "issuance_method": data.issuance_method,
         "reference": data.reference,
@@ -226,7 +225,7 @@ async def create_credit_issuance(
     await db.credit_note_issuances.insert_one(issuance)
     issuance.pop('_id', None)
     logger.info(
-        f"Submitted credit issuance ₹{data.amount} on CN {cn.get('credit_note_number')} "
+        f"Submitted full-balance credit issuance ₹{balance} on CN {cn.get('credit_note_number')} "
         f"by {current_user['email']} ({data.issuance_method})"
     )
     return issuance
