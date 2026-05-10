@@ -2204,7 +2204,7 @@ export default function DistributorDetail() {
           </TabsTrigger>
           <TabsTrigger value="billing" className="flex items-center gap-2 py-2.5" data-testid="billing-tab">
             <Calculator className="h-4 w-4" />
-            <span className="hidden sm:inline">Billing</span>
+            <span className="hidden sm:inline">Reconciliation</span>
           </TabsTrigger>
         </TabsList>
         )}

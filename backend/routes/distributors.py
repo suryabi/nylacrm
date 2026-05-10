@@ -6859,6 +6859,51 @@ async def get_monthly_reconciliation_data(
     stockout_unreconciled = _aggregate_stockout(unreconciled_settlements)
     stockout_reconciled = _aggregate_stockout(reconciled_settlements)
 
+    # ===== Customer-wise reconciliation rollup (across both unreconciled + reconciled
+    # settlements for the selected month). One row per Customer (account_id).
+    def _build_customer_recon(all_settlements: list) -> tuple[list, dict]:
+        by_account: dict = {}
+        for s in all_settlements:
+            aid = s.get('account_id') or 'unknown'
+            t = s.get('stockout_totals') or {}
+            row = by_account.setdefault(aid, {
+                "account_id": aid,
+                "account_name": s.get('account_name') or 'Unknown',
+                "delivery_count": 0,
+                "customer_order_value": 0.0,
+                "credit_notes_paid": 0.0,
+                "customer_invoice_value": 0.0,
+                "transfer_price_value": 0.0,
+            })
+            row["delivery_count"] += int(s.get('total_deliveries') or 0)
+            row["customer_order_value"] += t.get('customer_order_value') or 0
+            row["credit_notes_paid"] += (t.get('credit_applied') or 0) + (t.get('direct_credit_issued') or 0)
+            row["transfer_price_value"] += t.get('billed_at_transfer') or 0
+        rows = []
+        totals = {"delivery_count": 0, "customer_order_value": 0.0,
+                  "credit_notes_paid": 0.0, "customer_invoice_value": 0.0,
+                  "transfer_price_value": 0.0}
+        for r in by_account.values():
+            r["customer_invoice_value"] = round(r["customer_order_value"] - r["credit_notes_paid"], 2)
+            r["customer_order_value"] = round(r["customer_order_value"], 2)
+            r["credit_notes_paid"] = round(r["credit_notes_paid"], 2)
+            r["transfer_price_value"] = round(r["transfer_price_value"], 2)
+            rows.append(r)
+            totals["delivery_count"] += r["delivery_count"]
+            totals["customer_order_value"] += r["customer_order_value"]
+            totals["credit_notes_paid"] += r["credit_notes_paid"]
+            totals["customer_invoice_value"] += r["customer_invoice_value"]
+            totals["transfer_price_value"] += r["transfer_price_value"]
+        rows.sort(key=lambda x: x["account_name"].lower())
+        for k, v in list(totals.items()):
+            if isinstance(v, float):
+                totals[k] = round(v, 2)
+        return rows, totals
+
+    customer_recon_rows, customer_recon_totals = _build_customer_recon(
+        unreconciled_settlements + reconciled_settlements
+    )
+
     # Calculate totals for unreconciled settlements only (legacy fields kept for compatibility)
     total_billing = sum(s.get('total_billing_value', 0) for s in unreconciled_settlements)
     total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
@@ -7069,6 +7114,9 @@ async def get_monthly_reconciliation_data(
         # NEW: stockout-driven aggregates (same source as Settlements tab)
         "stockout_aggregate": stockout_unreconciled,
         "stockout_aggregate_reconciled": stockout_reconciled,
+        # NEW: customer-wise reconciliation rollup (across both reconciled + unreconciled)
+        "customer_reconciliation": customer_recon_rows,
+        "customer_reconciliation_totals": customer_recon_totals,
         # Reconciled - full Two-Entry data
         "reconciled_at_transfer_price": round(reconciled_at_tp, 2),
         "reconciled_weekly_billing": reconciled_weekly_billing,

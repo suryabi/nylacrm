@@ -231,7 +231,7 @@ const buildDistributorUserNavigationGroups = (distributorId) => {
       title: 'Finance',
       items: [
         { name: 'Settlements', href: tab('settlements'), icon: Receipt, roles: ['Distributor'] },
-        { name: 'Billing', href: tab('billing'), icon: Calculator, roles: ['Distributor'] },
+        { name: 'Reconciliation', href: tab('billing'), icon: Calculator, roles: ['Distributor'] },
       ],
     },
     {
