@@ -31,6 +31,7 @@ const CATEGORY_COLORS = {
 const STATUS_BADGES = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
   approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Credit Note Created' },
+  direct_payment_approved: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Direct Payment Approved' },
   credit_issued: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Credit Issued' },
   processed: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Processed' },
   settled: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Settled' },
@@ -493,6 +494,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="approved">Credit Note Created</SelectItem>
+              <SelectItem value="direct_payment_approved">Direct Payment Approved</SelectItem>
               <SelectItem value="credit_issued">Credit Issued</SelectItem>
               <SelectItem value="processed">Processed</SelectItem>
               <SelectItem value="settled">Settled</SelectItem>

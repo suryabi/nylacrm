@@ -102,10 +102,11 @@ async def _recalculate_credit_note_status(tenant_id: str, credit_note_id: str):
         }}
     )
 
-    # Propagate to the linked return: flip to credit_issued when fully drained,
-    # revert to approved if the issuance/application is rolled back. Compares
-    # against the return's current status so a one-time backfill on legacy
-    # data also picks up the change.
+    # Propagate to the linked return:
+    #   - fully_applied with all issuances "issued"  → credit_issued (final)
+    #   - fully_applied with some issuance still in "approved" but not yet
+    #     handed over → direct_payment_approved (intermediate)
+    #   - rolled back (less than fully_applied) → revert to approved
     return_id = cn.get('return_id')
     if not return_id:
         return
@@ -116,21 +117,38 @@ async def _recalculate_credit_note_status(tenant_id: str, credit_note_id: str):
     if not ret:
         return
     return_status = ret.get('status')
-    if status == "fully_applied" and return_status not in ("credit_issued", "settled"):
-        await db.customer_returns.update_one(
-            {"id": return_id, "tenant_id": tenant_id},
-            {"$set": {
-                "status": "credit_issued",
+
+    # Are any approved-but-not-issued issuances still pending physical handover?
+    has_unissued_approved = await db.credit_note_issuances.find_one(
+        {"tenant_id": tenant_id, "credit_note_id": credit_note_id, "status": "approved"},
+        {"_id": 0, "id": 1}
+    ) is not None
+
+    if status == "fully_applied":
+        # All credit committed. Decide between direct_payment_approved vs credit_issued.
+        target_status = "direct_payment_approved" if has_unissued_approved else "credit_issued"
+        if return_status != target_status and return_status not in ("settled",):
+            update_set: dict = {
+                "status": target_status,
                 "credit_note_id": credit_note_id,
                 "credit_note_number": cn.get('credit_note_number'),
-                "credit_issued_at": now_iso,
                 "updated_at": now_iso,
-            }}
-        )
-        logger.info(
-            f"Return {cn.get('return_number')} → credit_issued (CN {cn.get('credit_note_number')} fully applied via issuance/delivery)"
-        )
-    elif status != "fully_applied" and return_status == "credit_issued":
+            }
+            if target_status == "credit_issued":
+                update_set["credit_issued_at"] = now_iso
+            else:
+                # entering intermediate state — clear any previously-set issued timestamp
+                update_set["credit_issued_at"] = None
+            await db.customer_returns.update_one(
+                {"id": return_id, "tenant_id": tenant_id},
+                {"$set": update_set},
+            )
+            logger.info(
+                f"Return {cn.get('return_number')} → {target_status} "
+                f"(CN {cn.get('credit_note_number')} fully applied)"
+            )
+    elif return_status in ("credit_issued", "direct_payment_approved"):
+        # CN no longer fully applied — revert
         await db.customer_returns.update_one(
             {"id": return_id, "tenant_id": tenant_id},
             {"$set": {
@@ -382,6 +400,9 @@ async def mark_credit_issuance_issued(
             "updated_at": now,
         }}
     )
+    # Recalculate so the linked return transitions from direct_payment_approved
+    # → credit_issued now that the physical handover is recorded.
+    await _recalculate_credit_note_status(tenant_id, credit_note_id)
     logger.info(f"Marked credit issuance {issuance_id} as issued on {issuance_date} by {current_user['email']}")
     return {"status": "issued", "issued_at": issuance_date}
 
