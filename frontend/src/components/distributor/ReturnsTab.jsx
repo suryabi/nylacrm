@@ -31,7 +31,7 @@ const CATEGORY_COLORS = {
 const STATUS_BADGES = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
   approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Credit Note Created' },
-  direct_payment_approved: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Direct Payment Approved' },
+  direct_payment_approved: { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300', label: 'Direct Payment Approved' },
   credit_issued: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Credit Issued' },
   processed: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Processed' },
   settled: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Settled' },
@@ -586,7 +586,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         </div>
                       </td>
                       <td className="p-4 text-center">
-                        <Badge className={`${statusInfo.bg} ${statusInfo.text}`}>{statusInfo.label}</Badge>
+                        <Badge className={`${statusInfo.bg} ${statusInfo.text} font-semibold whitespace-nowrap border ${statusInfo.border || 'border-transparent'}`}>{statusInfo.label}</Badge>
                       </td>
                       <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
