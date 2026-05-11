@@ -10,12 +10,34 @@ from reportlab.lib.units import inch, mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 from reportlab.graphics.shapes import Drawing, Line
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from io import BytesIO
 from datetime import datetime
 import logging
+import os
 import requests
 
 logger = logging.getLogger(__name__)
+
+# Register a Unicode-capable font so the Indian Rupee symbol (₹, U+20B9) and
+# other glyphs render correctly. Helvetica (the default Type-1 font in
+# reportlab) does not include the Rupee glyph and renders it as a black box.
+# FreeSans / FreeSansBold ship with most Linux distributions (gnu-freefont) and
+# include the Rupee glyph. If for any reason the file is not found we fall
+# back to Helvetica so the PDF still generates (with the box artefact).
+_REGULAR_FONT = "Helvetica"
+_BOLD_FONT = "Helvetica-Bold"
+try:
+    _free_sans = "/usr/share/fonts/truetype/freefont/FreeSans.ttf"
+    _free_sans_bold = "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"
+    if os.path.exists(_free_sans) and os.path.exists(_free_sans_bold):
+        pdfmetrics.registerFont(TTFont("FreeSans", _free_sans))
+        pdfmetrics.registerFont(TTFont("FreeSans-Bold", _free_sans_bold))
+        _REGULAR_FONT = "FreeSans"
+        _BOLD_FONT = "FreeSans-Bold"
+except Exception as _font_err:  # pragma: no cover - defensive
+    logger.warning(f"Could not register FreeSans for PDF: {_font_err}. Rupee symbol may not render.")
 
 # Month names for display
 MONTH_NAMES = {
@@ -76,6 +98,11 @@ def generate_debit_credit_note_pdf(
     
     # Styles
     styles = getSampleStyleSheet()
+    # Force Unicode-capable font on the built-in styles so the Rupee glyph (₹)
+    # renders inside any Paragraph that inherits from Normal/Heading.
+    styles['Normal'].fontName = _REGULAR_FONT
+    styles['Heading1'].fontName = _BOLD_FONT
+    styles['Heading2'].fontName = _BOLD_FONT
     
     title_style = ParagraphStyle(
         'Title',
@@ -170,7 +197,7 @@ def generate_debit_credit_note_pdf(
     if company_logo:
         header_left = company_logo
     else:
-        header_left = Paragraph(f"<b>{company_name}</b>", ParagraphStyle('CompanyName', parent=styles['Normal'], fontSize=14, fontName='Helvetica-Bold'))
+        header_left = Paragraph(f"<b>{company_name}</b>", ParagraphStyle('CompanyName', parent=styles['Normal'], fontSize=14, fontName=_BOLD_FONT))
     
     company_info_text = f"""
     <b>{company_name}</b><br/>
@@ -182,6 +209,7 @@ def generate_debit_credit_note_pdf(
     header_data = [[header_left, Paragraph(company_info_text.strip(), normal_style)]]
     header_table = Table(header_data, colWidths=[100, 400])
     header_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (0, 0), 'LEFT'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -221,8 +249,9 @@ def generate_debit_credit_note_pdf(
     
     note_table = Table(note_details_data, colWidths=[80, 150, 120, 130])
     note_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+        ('FONTNAME', (0, 0), (0, -1), _BOLD_FONT),
+        ('FONTNAME', (2, 0), (2, -1), _BOLD_FONT),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F9FAFB')),
@@ -254,8 +283,9 @@ def generate_debit_credit_note_pdf(
     
     dist_table = Table(dist_data, colWidths=[55, 220, 50, 155])
     dist_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+        ('FONTNAME', (0, 0), (0, -1), _BOLD_FONT),
+        ('FONTNAME', (2, 0), (2, -1), _BOLD_FONT),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
         ('SPAN', (1, 2), (3, 2)),
@@ -292,9 +322,10 @@ def generate_debit_credit_note_pdf(
         
         settlement_table = Table(settlement_data, colWidths=[20, 65, 90, 45, 75, 65, 70, 65])
         settlement_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#065F46')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), _BOLD_FONT),
             ('FONTSIZE', (0, 0), (-1, 0), 7),
             ('FONTSIZE', (0, 1), (-1, -1), 7),
             ('ALIGN', (0, 0), (0, -1), 'CENTER'),
@@ -327,10 +358,11 @@ def generate_debit_credit_note_pdf(
     
     summary_table = Table(summary_data, colWidths=[350, 130])
     summary_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#065F46')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), _BOLD_FONT),
+        ('FONTNAME', (0, -1), (-1, -1), _BOLD_FONT),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
@@ -374,6 +406,7 @@ def generate_debit_credit_note_pdf(
     
     sig_table = Table(sig_data, colWidths=[160, 160, 160])
     sig_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
         ('TOPPADDING', (0, 0), (-1, -1), 30),
@@ -433,6 +466,11 @@ def generate_customer_invoice_pdf(
     
     # Styles
     styles = getSampleStyleSheet()
+    # Force Unicode-capable font on the built-in styles so the Rupee glyph (₹)
+    # renders inside any Paragraph that inherits from Normal/Heading.
+    styles['Normal'].fontName = _REGULAR_FONT
+    styles['Heading1'].fontName = _BOLD_FONT
+    styles['Heading2'].fontName = _BOLD_FONT
     
     title_style = ParagraphStyle(
         'InvoiceTitle',
@@ -509,7 +547,7 @@ def generate_customer_invoice_pdf(
     if company_logo:
         header_left = company_logo
     else:
-        header_left = Paragraph(f"<b>{company_name}</b>", ParagraphStyle('CompanyName', parent=styles['Normal'], fontSize=14, fontName='Helvetica-Bold'))
+        header_left = Paragraph(f"<b>{company_name}</b>", ParagraphStyle('CompanyName', parent=styles['Normal'], fontSize=14, fontName=_BOLD_FONT))
     
     company_info_text = f"""
     <b>{company_name}</b><br/>
@@ -521,6 +559,7 @@ def generate_customer_invoice_pdf(
     header_data = [[header_left, Paragraph(company_info_text.strip(), normal_style)]]
     header_table = Table(header_data, colWidths=[100, 400])
     header_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('ALIGN', (0, 0), (0, 0), 'LEFT'),
         ('LEFTPADDING', (0, 0), (-1, -1), 0),
@@ -558,8 +597,9 @@ def generate_customer_invoice_pdf(
     
     invoice_table = Table(invoice_details_data, colWidths=[80, 150, 80, 170])
     invoice_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+        ('FONTNAME', (0, 0), (0, -1), _BOLD_FONT),
+        ('FONTNAME', (2, 0), (2, -1), _BOLD_FONT),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
         ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F9FAFB')),
@@ -590,7 +630,8 @@ def generate_customer_invoice_pdf(
     
     customer_table = Table(customer_info, colWidths=[70, 410])
     customer_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+        ('FONTNAME', (0, 0), (0, -1), _BOLD_FONT),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -624,9 +665,10 @@ def generate_customer_invoice_pdf(
     
     items_table = Table(item_rows, colWidths=[25, 200, 60, 40, 80, 90])
     items_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#065F46')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), _BOLD_FONT),
         ('FONTSIZE', (0, 0), (-1, 0), 8),
         ('FONTSIZE', (0, 1), (-1, -1), 8),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
@@ -661,10 +703,11 @@ def generate_customer_invoice_pdf(
     
     summary_table = Table(summary_data, colWidths=[350, 130])
     summary_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#065F46')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, 0), _BOLD_FONT),
+        ('FONTNAME', (0, -1), (-1, -1), _BOLD_FONT),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
@@ -691,7 +734,8 @@ def generate_customer_invoice_pdf(
         
         bank_table = Table(bank_info, colWidths=[100, 380])
         bank_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+            ('FONTNAME', (0, 0), (0, -1), _BOLD_FONT),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F9FAFB')),
@@ -727,6 +771,7 @@ def generate_customer_invoice_pdf(
     
     sig_table = Table(sig_data, colWidths=[240, 240])
     sig_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
         ('TOPPADDING', (0, 0), (-1, -1), 30),
