@@ -573,15 +573,20 @@ async def wipe_distributor_transactional_data(
       • customer_returns + credit_notes + credit_note_issuances (Returns)
       • distributor_factory_returns                            (Factory Returns)
 
+    Optionally wipes when payload includes `"include_stock_in": true`:
+      • distributor_shipments + distributor_shipment_items     (Stock In)
+      • distributor_stock                                       (current on-hand)
+
     Keeps untouched:
-      • distributor_shipments + items (Stock In)
+      • distributor_shipments + items (Stock In) — unless include_stock_in is true
       • distributors, locations, coverage, margin_matrix, billing_config, contacts
       • account_distributor_assignments
       • accounts, leads, invoices, master data, etc.
 
     After deletion `distributor_stock` is rebuilt from delivered shipments so
     on-hand quantities reflect a clean baseline (everything received, nothing
-    dispatched or returned).
+    dispatched or returned). When `include_stock_in` is true, stock is left
+    fully empty since no shipments remain.
 
     Guards:
       • CEO / System Admin only
@@ -595,6 +600,8 @@ async def wipe_distributor_transactional_data(
             status_code=400,
             detail='Missing or invalid confirm token. Provide {"confirm": "DELETE_TRANSACTIONS"} to proceed.'
         )
+
+    include_stock_in = bool((payload or {}).get("include_stock_in"))
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -618,6 +625,12 @@ async def wipe_distributor_transactional_data(
         # Factory Returns
         ("distributor_factory_returns", db.distributor_factory_returns),
     ]
+    if include_stock_in:
+        targets.extend([
+            # Stock In
+            ("distributor_shipments", db.distributor_shipments),
+            ("distributor_shipment_items", db.distributor_shipment_items),
+        ])
 
     for coll_name, collection in targets:
         try:
@@ -629,55 +642,61 @@ async def wipe_distributor_transactional_data(
 
     # Rebuild distributor_stock from delivered shipments so on-hand reflects
     # "everything received, nothing dispatched/returned".
+    # If Stock In was also wiped, simply zero out stock (no shipments left to rebuild from).
     stock_rebuilt = 0
     try:
-        # Collect aggregate qty per (distributor_id, location_id, sku_id) from
-        # delivered shipments only.
-        delivered_shipments = await db.distributor_shipments.find(
-            {"tenant_id": tenant_id, "status": "delivered"},
-            {"_id": 0, "id": 1, "distributor_id": 1, "distributor_location_id": 1,
-             "distributor_name": 1, "distributor_location_name": 1}
-        ).to_list(10000)
-        ship_meta = {s['id']: s for s in delivered_shipments}
-        ship_ids = list(ship_meta.keys())
+        if include_stock_in:
+            sres = await db.distributor_stock.delete_many({"tenant_id": tenant_id})
+            deleted["distributor_stock"] = sres.deleted_count
+            stock_rebuilt = 0
+        else:
+            # Collect aggregate qty per (distributor_id, location_id, sku_id) from
+            # delivered shipments only.
+            delivered_shipments = await db.distributor_shipments.find(
+                {"tenant_id": tenant_id, "status": "delivered"},
+                {"_id": 0, "id": 1, "distributor_id": 1, "distributor_location_id": 1,
+                 "distributor_name": 1, "distributor_location_name": 1}
+            ).to_list(10000)
+            ship_meta = {s['id']: s for s in delivered_shipments}
+            ship_ids = list(ship_meta.keys())
 
-        # Wipe existing stock for the tenant first
-        sres = await db.distributor_stock.delete_many({"tenant_id": tenant_id})
-        deleted["distributor_stock"] = sres.deleted_count
+            # Wipe existing stock for the tenant first
+            sres = await db.distributor_stock.delete_many({"tenant_id": tenant_id})
+            deleted["distributor_stock"] = sres.deleted_count
 
-        if ship_ids:
-            items = await db.distributor_shipment_items.find(
-                {"tenant_id": tenant_id, "shipment_id": {"$in": ship_ids}},
-                {"_id": 0}
-            ).to_list(50000)
-            agg: dict = {}
-            for it in items:
-                s = ship_meta.get(it.get('shipment_id')) or {}
-                key = (
-                    s.get('distributor_id'),
-                    s.get('distributor_location_id'),
-                    it.get('sku_id'),
-                )
-                if not all(key):
-                    continue
-                row = agg.setdefault(key, {
-                    "tenant_id": tenant_id,
-                    "distributor_id": key[0],
-                    "distributor_location_id": key[1],
-                    "sku_id": key[2],
-                    "sku_name": it.get('sku_name'),
-                    "sku_code": it.get('sku_code'),
-                    "distributor_name": s.get('distributor_name'),
-                    "location_name": s.get('distributor_location_name'),
-                    "quantity": 0,
-                    "id": str(uuid.uuid4()),
-                    "created_at": now,
-                    "updated_at": now,
-                })
-                row["quantity"] += it.get('quantity', 0) or 0
-            if agg:
-                await db.distributor_stock.insert_many(list(agg.values()))
-                stock_rebuilt = len(agg)
+            if ship_ids:
+                items = await db.distributor_shipment_items.find(
+                    {"tenant_id": tenant_id, "shipment_id": {"$in": ship_ids}},
+                    {"_id": 0}
+                ).to_list(50000)
+                agg: dict = {}
+                for it in items:
+                    s = ship_meta.get(it.get('shipment_id')) or {}
+                    key = (
+                        s.get('distributor_id'),
+                        s.get('distributor_location_id'),
+                        it.get('sku_id'),
+                    )
+                    if not all(key):
+                        continue
+                    row = agg.setdefault(key, {
+                        "tenant_id": tenant_id,
+                        "distributor_id": key[0],
+                        "distributor_location_id": key[1],
+                        "sku_id": key[2],
+                        "sku_name": it.get('sku_name'),
+                        "sku_code": it.get('sku_code'),
+                        "distributor_name": s.get('distributor_name'),
+                        "location_name": s.get('distributor_location_name'),
+                        "quantity": 0,
+                        "id": str(uuid.uuid4()),
+                        "created_at": now,
+                        "updated_at": now,
+                    })
+                    row["quantity"] += it.get('quantity', 0) or 0
+                if agg:
+                    await db.distributor_stock.insert_many(list(agg.values()))
+                    stock_rebuilt = len(agg)
     except Exception as e:
         logger.error(f"wipe-transactional: stock rebuild failed: {e}")
         deleted["distributor_stock_rebuild_error"] = str(e)
