@@ -55,6 +55,7 @@ from .user_preferences import router as user_preferences_router
 from .knowledge_base import router as knowledge_base_router
 from .distributor_portal import router as distributor_portal_router
 from .distributor_contacts import router as distributor_contacts_router
+from .zoho_books import router as zoho_books_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -167,5 +168,8 @@ routes_router.include_router(distributor_portal_router, prefix="/distributor-por
 
 # Distributor Multi-Contact CRUD (with optional portal-access provisioning)
 routes_router.include_router(distributor_contacts_router, prefix="/distributors", tags=["Distributor Contacts"])
+
+# Zoho Books integration (OAuth, SKU mapping, invoice push)
+routes_router.include_router(zoho_books_router, tags=["Zoho Books"])
 
 __all__ = ['routes_router']

@@ -2,7 +2,7 @@
 Distributor Management Routes
 CRUD operations for distributors, operating coverage, and locations
 """
-from fastapi import APIRouter, HTTPException, Depends, Query, Response
+from fastapi import APIRouter, HTTPException, Depends, Query, Response, BackgroundTasks
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 import logging
@@ -4177,6 +4177,7 @@ async def update_delivery(
 async def confirm_delivery(
     distributor_id: str,
     delivery_id: str,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
     """Confirm a draft delivery"""
@@ -4208,7 +4209,14 @@ async def confirm_delivery(
     )
     
     logger.info(f"Delivery {delivery['delivery_number']} confirmed by {current_user['email']}")
-    
+
+    # Auto-push to Zoho Books (no-op if integration not configured/connected for this tenant)
+    try:
+        from services.zoho_service import sync_delivery_to_zoho
+        background_tasks.add_task(sync_delivery_to_zoho, tenant_id, distributor_id, delivery_id)
+    except Exception as e:
+        logger.warning(f"Failed to schedule Zoho sync for delivery {delivery_id}: {e}")
+
     return {"message": f"Delivery {delivery['delivery_number']} confirmed", "status": "confirmed"}
 
 

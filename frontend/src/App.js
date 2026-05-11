@@ -103,6 +103,7 @@ import MasterContactCategories from './pages/MasterContactCategories';
 import ContactsList from './pages/ContactsList';
 import TenantSettings from './pages/TenantSettings';
 import ApiKeysPage from './pages/ApiKeysPage';
+import ZohoIntegration from './pages/ZohoIntegration';
 import PlatformAdmin from './pages/PlatformAdmin';
 import KnowledgeBase from './pages/KnowledgeBase';
 import LeadScoringModel from './pages/LeadScoringModel';
@@ -311,6 +312,7 @@ function AppRouter() {
           <Route path="/contacts" element={<ProtectedRoute moduleKey="contacts"><ContactsList /></ProtectedRoute>} />
           <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
           <Route path="/settings/api-keys" element={<ProtectedRoute><ApiKeysPage /></ProtectedRoute>} />
+          <Route path="/settings/integrations/zoho" element={<ProtectedRoute><ZohoIntegration /></ProtectedRoute>} />
           <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
           <Route path="/knowledge-base" element={<ProtectedRoute moduleKey="knowledge_base"><KnowledgeBase /></ProtectedRoute>} />
           <Route path="/lead-scoring-model" element={<ProtectedRoute moduleKey="lead_scoring"><LeadScoringModel /></ProtectedRoute>} />

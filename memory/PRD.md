@@ -22,7 +22,22 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 
 ## Recent Implementations
 
-### 2026-02-11 (this session)
+### 2026-02-11 (this session — later)
+- **Zoho Books OAuth integration (scaffolding)** — India DC. Per-tenant connection model; CEO/Admin/System Admin only can manage.
+  - Backend service `services/zoho_service.py`: Fernet-encrypted token storage, OAuth flow (auth URL, code↔token exchange, refresh, revoke), org listing, contact upsert, invoice creation, rate-limit aware HTTP client with 429 Retry-After + exponential back-off, background sync orchestrator (3 attempts: 0s/4s/16s).
+  - Backend routes `routes/zoho_books.py`:
+    - `GET /api/zoho/config-status` & `GET /api/zoho/status`
+    - `GET /api/zoho/oauth/initiate` (CSRF state, 15 min TTL) and `GET /api/zoho/oauth/callback` (single-use state)
+    - `DELETE /api/zoho/disconnect` (revokes + clears creds)
+    - `GET|PUT|DELETE /api/zoho/sku-mappings/{sku_id}` and `GET /api/zoho/items` (Zoho item search proxy)
+    - `GET /api/zoho/sync-status`, `POST /api/zoho/sync/delivery/{distributor_id}/{delivery_id}` (manual retry)
+  - Hook in `routes/distributors.py`: `confirm_delivery` now schedules a `BackgroundTask` to push the invoice to Zoho (no-op when integration is not configured/connected for the tenant).
+  - Frontend `pages/ZohoIntegration.js` at `/settings/integrations/zoho`: 3 tabs — Connection (connect/disconnect + org info), SKU Mapping (table with Zoho item picker dialog with search), Sync Status (summary cards + filterable history + retry button).
+  - Sidebar: new "Zoho Books" entry under Admin (gated to CEO/Admin/System Admin).
+  - Env placeholders added: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_ACCOUNTS_URL`, `ZOHO_API_BASE_URL`, `ZOHO_ENCRYPTION_KEY`.
+  - Status: **scaffolding complete** — user needs to register OAuth client at https://api-console.zoho.in/ and paste `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` into `backend/.env` before the connect button works.
+
+### 2026-02-11 (this session — earlier)
 - **Stock-In Receipt Acknowledgement Flow** — Distributors can now review incoming shipments, acknowledge actual quantity received per SKU, and submit any discrepancy back to the supplier for approval.
   - New shipment status: `discrepancy_pending`
   - New per-item fields: `received_quantity`, `discrepancy_remark`, `acknowledged_at`, `acknowledged_by`
