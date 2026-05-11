@@ -1959,6 +1959,7 @@ SHIPMENT_STATUSES = {
     "in_transit": "In Transit - On the way to distributor",
     "delivered": "Delivered - Received by distributor",
     "partially_delivered": "Partially Delivered - Some items received",
+    "discrepancy_pending": "Discrepancy - Awaiting supplier approval",
     "cancelled": "Cancelled"
 }
 
@@ -2625,6 +2626,347 @@ async def mark_shipment_delivered(
     
     logger.info(f"Shipment {shipment['shipment_number']} delivered by {current_user['email']}")
     
+
+
+# ============ Stock-In Receipt Acknowledgement Flow ============
+# Workflow:
+#   1) Admin dispatches shipment (status: in_transit)
+#   2) Distributor reviews & acknowledges actual received quantity per item
+#        - If all received qty == sent qty -> status: delivered (stock added)
+#        - If any discrepancy             -> status: discrepancy_pending
+#   3) Supplier admin reviews discrepancy and either approves or rejects:
+#        - approve  -> shipment item quantity becomes received_quantity, status: delivered,
+#                      stock added at received qty, factory stock refunded the delta
+#        - reject   -> received_quantity cleared, status back to in_transit; distributor re-acknowledges
+
+
+def _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, qty_field, now):
+    """Helper: upsert distributor stock for delivered items using given quantity field."""
+    return [
+        db.distributor_stock.update_one(
+            {
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "distributor_location_id": shipment.get('distributor_location_id'),
+                "sku_id": item.get('sku_id')
+            },
+            {
+                "$inc": {"quantity": int(item.get(qty_field, 0) or 0)},
+                "$set": {
+                    "sku_name": item.get('sku_name'),
+                    "sku_code": item.get('sku_code'),
+                    "distributor_name": shipment.get('distributor_name'),
+                    "location_name": shipment.get('distributor_location_name'),
+                    "updated_at": now
+                },
+                "$setOnInsert": {
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tenant_id,
+                    "distributor_id": distributor_id,
+                    "distributor_location_id": shipment.get('distributor_location_id'),
+                    "sku_id": item.get('sku_id'),
+                    "created_at": now
+                }
+            },
+            upsert=True
+        )
+        for item in items
+    ]
+
+
+@router.post("/{distributor_id}/shipments/{shipment_id}/acknowledge")
+async def acknowledge_shipment_receipt(
+    distributor_id: str,
+    shipment_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Distributor acknowledges receipt of a shipment, entering actual received qty per item.
+
+    payload = {
+       "items": [{"item_id": "...", "received_quantity": 10, "discrepancy_remark": "..."}],
+       "acknowledgement_note": "Optional overall note"
+    }
+
+    - If all received qty == sent qty -> shipment marked delivered, stock added
+    - If any discrepancy -> shipment marked discrepancy_pending for supplier review
+    """
+    tenant_id = get_current_tenant_id()
+
+    # Allow either the supplier-admin (override) or the distributor owner
+    if is_distributor_user(current_user):
+        if current_user.get('distributor_id') != distributor_id:
+            raise HTTPException(status_code=403, detail="You can only acknowledge your own shipments")
+    elif not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Not authorised to acknowledge shipments")
+
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+
+    if shipment.get('status') not in ['confirmed', 'in_transit', 'partially_delivered']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Shipment cannot be acknowledged in status '{shipment.get('status')}'"
+        )
+
+    received_items = payload.get('items') or []
+    if not received_items:
+        raise HTTPException(status_code=400, detail="Received items required")
+
+    # Load existing items keyed by id
+    db_items = await db.distributor_shipment_items.find(
+        {"shipment_id": shipment_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).to_list(500)
+    items_by_id = {it['id']: it for it in db_items}
+
+    # Validate & determine if there is any discrepancy
+    has_discrepancy = False
+    parsed = []  # (item_doc, received_qty, remark)
+    for entry in received_items:
+        item_id = entry.get('item_id')
+        if not item_id or item_id not in items_by_id:
+            raise HTTPException(status_code=400, detail=f"Unknown shipment item: {item_id}")
+        received_qty = int(entry.get('received_quantity', 0) or 0)
+        if received_qty < 0:
+            raise HTTPException(status_code=400, detail="Received quantity must be >= 0")
+        sent_qty = int(items_by_id[item_id].get('quantity', 0) or 0)
+        if received_qty > sent_qty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Received qty ({received_qty}) cannot exceed sent qty ({sent_qty}) for {items_by_id[item_id].get('sku_name', item_id)}"
+            )
+        if received_qty != sent_qty:
+            has_discrepancy = True
+        parsed.append((items_by_id[item_id], received_qty, (entry.get('discrepancy_remark') or '').strip()))
+
+    # Persist received quantities on each item
+    now = datetime.now(timezone.utc).isoformat()
+    for item_doc, received_qty, remark in parsed:
+        await db.distributor_shipment_items.update_one(
+            {"id": item_doc['id'], "tenant_id": tenant_id},
+            {"$set": {
+                "received_quantity": received_qty,
+                "discrepancy_remark": remark or None,
+                "acknowledged_at": now,
+                "acknowledged_by": current_user.get('id')
+            }}
+        )
+
+    new_status = 'discrepancy_pending' if has_discrepancy else 'delivered'
+    update_data = {
+        "status": new_status,
+        "acknowledged_at": now,
+        "acknowledged_by": current_user.get('id'),
+        "acknowledgement_note": payload.get('acknowledgement_note'),
+        "has_discrepancy": has_discrepancy,
+        "updated_at": now,
+    }
+    if not has_discrepancy:
+        update_data["actual_delivery_date"] = now[:10]
+        update_data["delivered_at"] = now
+        update_data["delivered_by"] = current_user.get('id')
+
+    await db.distributor_shipments.update_one(
+        {"id": shipment_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+
+    # If no discrepancy, add stock immediately
+    if not has_discrepancy:
+        refreshed_items = await db.distributor_shipment_items.find(
+            {"shipment_id": shipment_id, "tenant_id": tenant_id},
+            {"_id": 0}
+        ).to_list(500)
+        for op in _apply_stock_on_delivery(tenant_id, distributor_id, shipment, refreshed_items, 'received_quantity', now):
+            await op
+
+    logger.info(
+        f"Shipment {shipment['shipment_number']} acknowledged by {current_user['email']} - "
+        f"status={new_status}, discrepancy={has_discrepancy}"
+    )
+
+    return {
+        "message": (
+            f"Receipt acknowledged. Shipment marked {'delivered' if not has_discrepancy else 'pending supplier approval due to discrepancy'}."
+        ),
+        "status": new_status,
+        "has_discrepancy": has_discrepancy,
+    }
+
+
+@router.post("/{distributor_id}/shipments/{shipment_id}/approve-receipt")
+async def approve_shipment_receipt(
+    distributor_id: str,
+    shipment_id: str,
+    payload: Optional[dict] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Supplier admin approves a discrepancy-acknowledged shipment.
+    The received_quantity becomes final. Stock added to distributor at received_qty.
+    Factory warehouse stock refunded for the (sent - received) delta.
+    """
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    if shipment.get('status') != 'discrepancy_pending':
+        raise HTTPException(status_code=400, detail="Only shipments in 'discrepancy_pending' status can be approved")
+
+    now = datetime.now(timezone.utc).isoformat()
+    items = await db.distributor_shipment_items.find(
+        {"shipment_id": shipment_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).to_list(500)
+
+    # Refund factory stock for the under-received delta
+    source_warehouse_id = shipment.get('source_warehouse_id')
+    if source_warehouse_id:
+        tdb = get_tenant_db()
+        for it in items:
+            sent_qty = int(it.get('quantity', 0) or 0)
+            recv_qty = int(it.get('received_quantity', sent_qty) or 0)
+            delta = sent_qty - recv_qty
+            if delta > 0:
+                await tdb.factory_warehouse_stock.update_one(
+                    {
+                        "tenant_id": tenant_id,
+                        "warehouse_location_id": source_warehouse_id,
+                        "sku_id": it["sku_id"]
+                    },
+                    {"$inc": {"quantity": delta}, "$set": {"updated_at": now}}
+                )
+
+    # Lock in received_quantity as the final quantity on items (and recompute amounts)
+    new_total_qty = 0
+    new_total_gross = 0.0
+    new_total_discount = 0.0
+    new_total_taxable = 0.0
+    for it in items:
+        recv_qty = int(it.get('received_quantity', it.get('quantity', 0)) or 0)
+        unit_price = float(it.get('unit_price') or 0)
+        discount_percent = float(it.get('discount_percent') or 0)
+        gross = recv_qty * unit_price
+        discount_amount = gross * (discount_percent / 100.0)
+        taxable = gross - discount_amount
+        await db.distributor_shipment_items.update_one(
+            {"id": it['id'], "tenant_id": tenant_id},
+            {"$set": {
+                "original_sent_quantity": it.get('original_sent_quantity', int(it.get('quantity', 0) or 0)),
+                "quantity": recv_qty,
+                "gross_amount": round(gross, 2),
+                "discount_amount": round(discount_amount, 2),
+                "taxable_amount": round(taxable, 2),
+                # tax_amount/net_amount re-computed at shipment-level GST below
+                "updated_at": now,
+            }}
+        )
+        new_total_qty += recv_qty
+        new_total_gross += gross
+        new_total_discount += discount_amount
+        new_total_taxable += taxable
+
+    gst_percent = float(shipment.get('gst_percent') or 0)
+    new_tax_amount = new_total_taxable * (gst_percent / 100.0)
+    new_net_amount = new_total_taxable + new_tax_amount
+
+    update_data = {
+        "status": "delivered",
+        "actual_delivery_date": now[:10],
+        "delivered_at": now,
+        "delivered_by": current_user.get('id'),
+        "discrepancy_approved_at": now,
+        "discrepancy_approved_by": current_user.get('id'),
+        "discrepancy_approval_note": (payload or {}).get('note'),
+        "total_quantity": new_total_qty,
+        "total_gross_amount": round(new_total_gross, 2),
+        "total_discount_amount": round(new_total_discount, 2),
+        "total_tax_amount": round(new_tax_amount, 2),
+        "total_net_amount": round(new_net_amount, 2),
+        "updated_at": now,
+    }
+    await db.distributor_shipments.update_one(
+        {"id": shipment_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+
+    # Add stock to distributor at received quantity
+    for op in _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, 'received_quantity', now):
+        await op
+
+    logger.info(f"Shipment {shipment['shipment_number']} discrepancy approved by {current_user['email']}")
+
+    return {
+        "message": f"Shipment {shipment['shipment_number']} approved. Quantities reconciled.",
+        "status": "delivered",
+    }
+
+
+@router.post("/{distributor_id}/shipments/{shipment_id}/reject-receipt")
+async def reject_shipment_receipt(
+    distributor_id: str,
+    shipment_id: str,
+    payload: Optional[dict] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Supplier admin rejects a discrepancy submission, asking distributor to re-verify.
+    Resets received_quantity and reverts status to in_transit.
+    """
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    if shipment.get('status') != 'discrepancy_pending':
+        raise HTTPException(status_code=400, detail="Only shipments in 'discrepancy_pending' status can be rejected")
+
+    now = datetime.now(timezone.utc).isoformat()
+    reason = ((payload or {}).get('reason') or '').strip()
+
+    await db.distributor_shipment_items.update_many(
+        {"shipment_id": shipment_id, "tenant_id": tenant_id},
+        {"$unset": {"received_quantity": "", "discrepancy_remark": "", "acknowledged_at": "", "acknowledged_by": ""}}
+    )
+    await db.distributor_shipments.update_one(
+        {"id": shipment_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "in_transit",
+            "discrepancy_rejected_at": now,
+            "discrepancy_rejected_by": current_user.get('id'),
+            "discrepancy_rejection_reason": reason or None,
+            "acknowledged_at": None,
+            "acknowledged_by": None,
+            "has_discrepancy": False,
+            "updated_at": now,
+        }}
+    )
+
+    logger.info(f"Shipment {shipment['shipment_number']} discrepancy rejected by {current_user['email']}: {reason}")
+
+    return {
+        "message": f"Shipment {shipment['shipment_number']} sent back to distributor for re-verification.",
+        "status": "in_transit",
+        "rejection_reason": reason,
+    }
+
+
     return {"message": f"Shipment {shipment['shipment_number']} delivered", "status": "delivered"}
 
 

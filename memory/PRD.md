@@ -22,7 +22,23 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 
 ## Recent Implementations
 
-### 2026-02-04 (this session)
+### 2026-02-11 (this session)
+- **Stock-In Receipt Acknowledgement Flow** — Distributors can now review incoming shipments, acknowledge actual quantity received per SKU, and submit any discrepancy back to the supplier for approval.
+  - New shipment status: `discrepancy_pending`
+  - New per-item fields: `received_quantity`, `discrepancy_remark`, `acknowledged_at`, `acknowledged_by`
+  - New endpoints in `routes/distributors.py`:
+    - `POST /api/distributors/{distributor_id}/shipments/{shipment_id}/acknowledge` (distributor; admin fallback) — full match → delivered + stock added; any mismatch → `discrepancy_pending`
+    - `POST /api/distributors/{distributor_id}/shipments/{shipment_id}/approve-receipt` (supplier admin) — locks in received qty, factory stock refunded for the delta, distributor stock added at received qty
+    - `POST /api/distributors/{distributor_id}/shipments/{shipment_id}/reject-receipt` (supplier admin) — clears received qty, reverts status to `in_transit` for re-verification
+  - Frontend (`DistributorDetail.js`):
+    - "Acknowledge Receipt" button on `confirmed`/`in_transit`/`partially_delivered` shipments
+    - New Acknowledge Receipt dialog with per-SKU Sent/Received/Δ + Discrepancy Remark inputs, "Mark all received in full" shortcut, smart submit button (green / amber)
+    - Discrepancy review panel in supplier admin's shipment detail (Approve / Reject with reason)
+    - Status badge updated for `discrepancy_pending`
+    - Items table shows Received qty + delta + distributor remark inline
+  - Regression: `backend/tests/test_shipment_acknowledge.py` — 6 tests passing (full receipt, discrepancy→approve, discrepancy→reject, validation: exceed sent qty, double-acknowledge, approve-without-pending).
+
+### 2026-02-04
 - **Account-to-distributor assignment alias-aware fix** — Bangalore/Bengaluru, Mumbai/Bombay, etc.
   - Added `CITY_ALIASES` map + `cities_match()` helper in `routes/distributors.py`.
   - Fixed `create_account_assignment`, primary-assignment dedupe, `search-assignable-accounts`.

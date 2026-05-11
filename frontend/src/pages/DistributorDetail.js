@@ -187,6 +187,14 @@ export default function DistributorDetail() {
   }, [defaultGstPercent]);
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [showShipmentDetail, setShowShipmentDetail] = useState(false);
+  // Receipt acknowledgement dialog state
+  const [showAcknowledgeDialog, setShowAcknowledgeDialog] = useState(false);
+  const [acknowledgeItems, setAcknowledgeItems] = useState([]);  // [{item_id, sku_name, sent_quantity, received_quantity, discrepancy_remark}]
+  const [acknowledgementNote, setAcknowledgementNote] = useState('');
+  const [acknowledging, setAcknowledging] = useState(false);
+  // Supplier-side discrepancy review dialog
+  const [discrepancyReviewNote, setDiscrepancyReviewNote] = useState('');
+  const [reviewingDiscrepancy, setReviewingDiscrepancy] = useState(false);
   const [factoryWarehouses, setFactoryWarehouses] = useState([]);
   const [warehouseStock, setWarehouseStock] = useState([]); // stock for selected source warehouse
   
@@ -1401,6 +1409,117 @@ export default function DistributorDetail() {
     }
   };
 
+  // -------- Receipt Acknowledgement --------
+  const openAcknowledgeDialog = () => {
+    if (!selectedShipment?.items?.length) {
+      toast.error('No items to acknowledge on this shipment.');
+      return;
+    }
+    setAcknowledgeItems((selectedShipment.items || []).map(it => ({
+      item_id: it.id,
+      sku_name: it.sku_name || it.sku_id,
+      sent_quantity: it.quantity,
+      received_quantity: it.quantity,
+      discrepancy_remark: ''
+    })));
+    setAcknowledgementNote('');
+    setShowAcknowledgeDialog(true);
+  };
+
+  const updateAcknowledgeItem = (itemId, field, value) => {
+    setAcknowledgeItems(prev => prev.map(it => it.item_id === itemId ? { ...it, [field]: value } : it));
+  };
+
+  const setAllReceivedFull = () => {
+    setAcknowledgeItems(prev => prev.map(it => ({ ...it, received_quantity: it.sent_quantity, discrepancy_remark: '' })));
+  };
+
+  const hasAckDiscrepancy = acknowledgeItems.some(it => Number(it.received_quantity) !== Number(it.sent_quantity));
+
+  const submitAcknowledgement = async () => {
+    // Validate
+    for (const it of acknowledgeItems) {
+      const recv = Number(it.received_quantity);
+      if (Number.isNaN(recv) || recv < 0) {
+        toast.error(`Invalid received quantity for ${it.sku_name}`);
+        return;
+      }
+      if (recv > Number(it.sent_quantity)) {
+        toast.error(`Received qty cannot exceed sent qty for ${it.sku_name}`);
+        return;
+      }
+      if (recv !== Number(it.sent_quantity) && !(it.discrepancy_remark || '').trim()) {
+        toast.error(`Please add a remark for the discrepancy on ${it.sku_name}`);
+        return;
+      }
+    }
+    try {
+      setAcknowledging(true);
+      const resp = await axios.post(
+        `${API_URL}/api/distributors/${id}/shipments/${selectedShipment.id}/acknowledge`,
+        {
+          items: acknowledgeItems.map(it => ({
+            item_id: it.item_id,
+            received_quantity: Number(it.received_quantity),
+            discrepancy_remark: it.discrepancy_remark || null
+          })),
+          acknowledgement_note: acknowledgementNote || null
+        },
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success(resp.data?.message || 'Receipt acknowledged');
+      setShowAcknowledgeDialog(false);
+      setShowShipmentDetail(false);
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to acknowledge receipt');
+    } finally {
+      setAcknowledging(false);
+    }
+  };
+
+  const approveDiscrepancy = async (shipmentId) => {
+    try {
+      setReviewingDiscrepancy(true);
+      await axios.post(
+        `${API_URL}/api/distributors/${id}/shipments/${shipmentId}/approve-receipt`,
+        { note: discrepancyReviewNote || null },
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success('Discrepancy approved. Shipment marked delivered.');
+      setShowShipmentDetail(false);
+      setDiscrepancyReviewNote('');
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to approve');
+    } finally {
+      setReviewingDiscrepancy(false);
+    }
+  };
+
+  const rejectDiscrepancy = async (shipmentId) => {
+    if (!(discrepancyReviewNote || '').trim()) {
+      toast.error('Please provide a reason for rejection.');
+      return;
+    }
+    try {
+      setReviewingDiscrepancy(true);
+      await axios.post(
+        `${API_URL}/api/distributors/${id}/shipments/${shipmentId}/reject-receipt`,
+        { reason: discrepancyReviewNote },
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success('Sent back to distributor for re-verification.');
+      setShowShipmentDetail(false);
+      setDiscrepancyReviewNote('');
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reject');
+    } finally {
+      setReviewingDiscrepancy(false);
+    }
+  };
+
   const handleCancelShipment = async (shipmentId) => {
     try {
       await axios.post(`${API_URL}/api/distributors/${id}/shipments/${shipmentId}/cancel`, {}, {
@@ -1452,6 +1571,7 @@ export default function DistributorDetail() {
       in_transit: { label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
       delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
       partially_delivered: { label: 'Partial', color: 'bg-orange-100 text-orange-800' },
+      discrepancy_pending: { label: 'Discrepancy — Awaiting Approval', color: 'bg-amber-100 text-amber-900' },
       cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
     };
     const config = statusConfig[status] || statusConfig.draft;
@@ -2569,17 +2689,38 @@ export default function DistributorDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedShipment.items || []).map((item, idx) => (
-                      <tr key={idx} className={`border-b ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                    {(selectedShipment.items || []).map((item, idx) => {
+                      const showReceived = ['discrepancy_pending', 'delivered'].includes(selectedShipment.status) && item.received_quantity != null;
+                      const hasDelta = showReceived && Number(item.received_quantity) !== Number(item.quantity);
+                      return (
+                      <React.Fragment key={idx}>
+                      <tr className={`border-b ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
                         <td className="p-2.5">{item.sku_name || item.sku_id}</td>
-                        <td className="p-2.5 text-right tabular-nums">{item.quantity}</td>
+                        <td className="p-2.5 text-right tabular-nums">
+                          {item.quantity}
+                          {showReceived && (
+                            <div className={`text-[11px] mt-0.5 ${hasDelta ? 'text-amber-700 font-semibold' : 'text-emerald-700'}`}>
+                              Recv: {item.received_quantity}
+                              {hasDelta && <span className="ml-1">(Δ {Number(item.received_quantity) - Number(item.quantity)})</span>}
+                            </div>
+                          )}
+                        </td>
                         <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.base_price ? `₹${Number(item.base_price).toFixed(2)}` : '-'}</td>
                         <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.distributor_margin != null ? `${item.distributor_margin}%` : '-'}</td>
                         <td className="p-2.5 text-right tabular-nums font-medium">{item.unit_price ? `₹${Number(item.unit_price).toFixed(2)}` : '-'}</td>
                         <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.discount_percent ? `${item.discount_percent}%` : '-'}</td>
                         <td className="p-2.5 text-right tabular-nums font-medium">₹{(item.net_amount || item.gross_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
-                    ))}
+                      {hasDelta && item.discrepancy_remark && (
+                        <tr className="bg-amber-50/50 border-b">
+                          <td colSpan="7" className="px-3 py-1.5 text-xs text-amber-800">
+                            <span className="font-semibold">Distributor remark:</span> {item.discrepancy_remark}
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     {(selectedShipment.total_discount_amount || 0) > 0 && (
@@ -2616,10 +2757,64 @@ export default function DistributorDetail() {
                   : 'Cost-based pricing. Margin applied at the time of reconciliation based on customer sell-through.'}
               </div>
 
+              {/* Discrepancy review panel (admin) */}
+              {selectedShipment.status === 'discrepancy_pending' && (
+                <div className="border border-amber-300 rounded-lg bg-amber-50/60 p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Distributor reported a discrepancy</p>
+                      <p className="text-xs text-amber-800/80">
+                        Review the received quantities above. Approve to lock in the received qty (factory stock will be refunded for the under-delivered units),
+                        or reject to send it back to the distributor for re-verification.
+                      </p>
+                    </div>
+                  </div>
+                  {selectedShipment.acknowledgement_note && (
+                    <div className="text-xs text-amber-900 bg-white/60 rounded p-2 border border-amber-200">
+                      <span className="font-semibold">Distributor note:</span> {selectedShipment.acknowledgement_note}
+                    </div>
+                  )}
+                  {!isDistributorRole && (
+                    <>
+                      <Textarea
+                        rows={2}
+                        placeholder="Optional approval note / required reason if rejecting…"
+                        value={discrepancyReviewNote}
+                        onChange={(e) => setDiscrepancyReviewNote(e.target.value)}
+                        data-testid="discrepancy-review-note"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => rejectDiscrepancy(selectedShipment.id)}
+                          disabled={reviewingDiscrepancy}
+                          data-testid="reject-discrepancy-btn"
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Reject & Re-verify
+                        </Button>
+                        <Button
+                          onClick={() => approveDiscrepancy(selectedShipment.id)}
+                          disabled={reviewingDiscrepancy}
+                          className="bg-emerald-600 hover:bg-emerald-700"
+                          data-testid="approve-discrepancy-btn"
+                        >
+                          <Check className="h-4 w-4 mr-2" />
+                          Approve Reconciled Qty
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                  {isDistributorRole && (
+                    <p className="text-xs text-amber-800 italic">Awaiting supplier approval. We'll update you once they review.</p>
+                  )}
+                </div>
+              )}
+
               {/* Actions */}
-              {canManage && (
+              {(canManage || isDistributorRole) && (
                 <div className="flex justify-end gap-2 pt-4 border-t">
-                  {selectedShipment.status === 'draft' && (
+                  {selectedShipment.status === 'draft' && !isDistributorRole && (
                     <>
                       <Button variant="outline" onClick={() => handleCancelShipment(selectedShipment.id)}>
                         Cancel Shipment
@@ -2630,7 +2825,7 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
-                  {selectedShipment.status === 'confirmed' && (
+                  {selectedShipment.status === 'confirmed' && !isDistributorRole && (
                     <>
                       <Button variant="outline" onClick={() => handleCancelShipment(selectedShipment.id)}>
                         Cancel
@@ -2641,10 +2836,15 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
+                  {/* Acknowledge Receipt (distributor + admin fallback) on confirmed / in_transit */}
                   {['confirmed', 'in_transit', 'partially_delivered'].includes(selectedShipment.status) && (
-                    <Button onClick={() => handleDeliverShipment(selectedShipment.id)} className="bg-green-600 hover:bg-green-700">
+                    <Button
+                      onClick={openAcknowledgeDialog}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      data-testid="acknowledge-receipt-btn"
+                    >
                       <Check className="h-4 w-4 mr-2" />
-                      Mark Delivered
+                      Acknowledge Receipt
                     </Button>
                   )}
                 </div>
@@ -2653,6 +2853,102 @@ export default function DistributorDetail() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Acknowledge Receipt Dialog */}
+      <Dialog open={showAcknowledgeDialog} onOpenChange={setShowAcknowledgeDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="acknowledge-receipt-dialog">
+          <DialogHeader>
+            <DialogTitle>Acknowledge Receipt — {selectedShipment?.shipment_number}</DialogTitle>
+            <DialogDescription>
+              Verify what physically arrived. Edit the "Received" column if it differs from what was sent.
+              {' '}A discrepancy will be sent to the supplier for approval; matching quantities mark the shipment as delivered immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-end">
+              <Button variant="outline" size="sm" onClick={setAllReceivedFull} data-testid="reset-received-full">
+                <Check className="h-4 w-4 mr-1.5" />
+                Mark all received in full
+              </Button>
+            </div>
+            <div className="border rounded-md overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-2.5 font-medium">SKU</th>
+                    <th className="text-right p-2.5 font-medium w-20">Sent</th>
+                    <th className="text-right p-2.5 font-medium w-28">Received</th>
+                    <th className="text-right p-2.5 font-medium w-20">Δ</th>
+                    <th className="text-left p-2.5 font-medium">Discrepancy Remark</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {acknowledgeItems.map((it, idx) => {
+                    const delta = Number(it.received_quantity) - Number(it.sent_quantity);
+                    const isDiff = delta !== 0;
+                    return (
+                      <tr key={it.item_id} className={`border-b ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                        <td className="p-2.5">{it.sku_name}</td>
+                        <td className="p-2.5 text-right tabular-nums font-medium">{it.sent_quantity}</td>
+                        <td className="p-2.5 text-right">
+                          <Input
+                            type="number"
+                            min="0"
+                            max={it.sent_quantity}
+                            value={it.received_quantity}
+                            onChange={(e) => updateAcknowledgeItem(it.item_id, 'received_quantity', e.target.value)}
+                            className={`h-9 text-right tabular-nums ${isDiff ? 'border-amber-400' : ''}`}
+                            data-testid={`ack-qty-${idx}`}
+                          />
+                        </td>
+                        <td className={`p-2.5 text-right tabular-nums font-semibold ${isDiff ? 'text-amber-700' : 'text-muted-foreground'}`}>
+                          {isDiff ? delta : '—'}
+                        </td>
+                        <td className="p-2.5">
+                          <Input
+                            placeholder={isDiff ? 'Required: reason for shortage' : 'Optional'}
+                            value={it.discrepancy_remark}
+                            onChange={(e) => updateAcknowledgeItem(it.item_id, 'discrepancy_remark', e.target.value)}
+                            className={`h-9 ${isDiff && !it.discrepancy_remark ? 'border-red-300' : ''}`}
+                            data-testid={`ack-remark-${idx}`}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Overall note (optional)</Label>
+              <Textarea
+                rows={2}
+                placeholder="Any general remarks about this receipt…"
+                value={acknowledgementNote}
+                onChange={(e) => setAcknowledgementNote(e.target.value)}
+                data-testid="ack-overall-note"
+              />
+            </div>
+            {hasAckDiscrepancy && (
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+                Discrepancies detected. Submitting will send this shipment to the supplier for approval before stock is added.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAcknowledgeDialog(false)} disabled={acknowledging}>Cancel</Button>
+            <Button
+              onClick={submitAcknowledgement}
+              disabled={acknowledging || acknowledgeItems.length === 0}
+              className={hasAckDiscrepancy ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'}
+              data-testid="submit-acknowledgement-btn"
+            >
+              {acknowledging ? 'Submitting…' : (hasAckDiscrepancy ? 'Submit for Supplier Approval' : 'Confirm Full Receipt')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Delivery Detail Dialog */}
       <Dialog open={showDeliveryDetail} onOpenChange={setShowDeliveryDetail}>
