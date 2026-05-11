@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { AppContextProvider } from './context/AppContextContext';
+import { AppContextProvider, useAppContext } from './context/AppContextContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { TenantConfigProvider, useTenantConfig } from './context/TenantConfigContext';
 import { Toaster } from './components/ui/sonner';
@@ -132,9 +132,10 @@ function ActivityTrackerWrapper({ children }) {
   return children;
 }
 
-function ProtectedRoute({ children, moduleKey }) {
+function ProtectedRoute({ children, moduleKey, appModule }) {
   const { user, loading } = useAuth();
   const { isModuleEnabled, loading: configLoading } = useTenantConfig();
+  const { canAccessSales, canAccessProduction, canAccessDistribution, canAccessMarketing } = useAppContext();
   const location = useLocation();
 
   if (loading || configLoading) {
@@ -170,6 +171,44 @@ function ProtectedRoute({ children, moduleKey }) {
         </div>
       </DashboardLayout>
     );
+  }
+
+  // Cross-module access guard: pages tagged with an `appModule` are only
+  // reachable when the user's department/role grants access to that module.
+  // Prevents e.g. a Regional Sales Manager (Sales dept) from URL-jumping
+  // into Distribution pages.
+  if (appModule) {
+    const allowed = {
+      sales: canAccessSales,
+      production: canAccessProduction,
+      distribution: canAccessDistribution,
+      marketing: canAccessMarketing,
+    }[appModule];
+    if (!allowed) {
+      return (
+        <DashboardLayout>
+          <div className="min-h-[60vh] flex items-center justify-center">
+            <div className="text-center p-8 max-w-md">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+                <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-foreground mb-2">Access Denied</h2>
+              <p className="text-muted-foreground mb-4">
+                You don't have permission to view this page. Contact your administrator if you believe this is a mistake.
+              </p>
+              <button
+                onClick={() => window.history.back()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                Go Back
+              </button>
+            </div>
+          </div>
+        </DashboardLayout>
+      );
+    }
   }
 
   return (
@@ -293,11 +332,11 @@ function AppRouter() {
           
           {/* Distribution Module Routes */}
           <Route path="/distributor-home" element={<ProtectedRoute><DistributorHome /></ProtectedRoute>} />
-          <Route path="/distributors" element={<ProtectedRoute moduleKey="distributors"><DistributorList /></ProtectedRoute>} />
-          <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
-          <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors"><DistributorDetail /></ProtectedRoute>} />
-          <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors"><StockDashboard /></ProtectedRoute>} />
-          <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors"><CostCards /></ProtectedRoute>} />
+          <Route path="/distributors" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorList /></ProtectedRoute>} />
+          <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
+          <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
+          <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockDashboard /></ProtectedRoute>} />
+          <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><CostCards /></ProtectedRoute>} />
           
           {/* Task Management */}
           <Route path="/tasks" element={<ProtectedRoute><TaskManagement /></ProtectedRoute>} />

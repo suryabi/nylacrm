@@ -275,7 +275,7 @@ export default function DashboardLayout({ children }) {
   const { currentContext, switchContext, canAccessMultipleModules, getAccessibleModules, modules, isDistributorUser, getDistributorId } = useAppContext();
   const { theme, toggleTheme } = useTheme();
   const { navigateTo } = useNavigation();
-  const { isModuleEnabled, hasRolePermission, branding } = useTenantConfig();
+  const { isModuleEnabled, hasRolePermission, rolePermissions, branding } = useTenantConfig();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -356,13 +356,35 @@ export default function DashboardLayout({ children }) {
   
   const navigationGroups = getNavigationGroups();
 
-  // Filter dashboard submenu based on role AND module configuration
-  const filteredDashboardSubmenu = dashboardSubmenu.filter(item => {
-    const moduleEnabled = !item.moduleKey || isModuleEnabled(item.moduleKey);
-    const roleHasPermission = !item.moduleKey || hasRolePermission(item.moduleKey);
-    const hardcodedRoleAllowed = !item.roles || item.roles.includes(user?.role);
-    return moduleEnabled && (roleHasPermission || hardcodedRoleAllowed);
-  });
+  /**
+   * Decide whether a nav item is visible to the current user.
+   * Precedence (top wins):
+   *  1. Tenant has disabled the module entirely → hidden.
+   *  2. The Permissions UI has an explicit entry for this moduleKey →
+   *     respect `view` strictly (true ⇒ allow, false ⇒ deny). The hardcoded
+   *     role list on the item is intentionally ignored in this case, so a
+   *     custom role configured via the UI can be granted access to items it
+   *     was not originally listed for, and an explicit deny cannot be
+   *     bypassed by the hardcoded list.
+   *  3. No explicit permission entry → fall back to the hardcoded role list.
+   */
+  const canSeeItem = (item) => {
+    if (!item.moduleKey) {
+      // No moduleKey ⇒ availability is purely role-based.
+      return !item.roles || item.roles.includes(user?.role);
+    }
+    if (!isModuleEnabled(item.moduleKey)) return false;
+    const modulePerms = rolePermissions ? rolePermissions[item.moduleKey] : undefined;
+    if (modulePerms !== undefined) {
+      // Permissions UI has spoken about this module — respect strictly.
+      return modulePerms?.view === true;
+    }
+    // No explicit entry — fall back to hardcoded role list (or allow if not set).
+    return !item.roles || item.roles.includes(user?.role);
+  };
+
+  // Filter dashboard submenu
+  const filteredDashboardSubmenu = dashboardSubmenu.filter(canSeeItem);
   
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
     location.pathname === '/target-sku' || location.pathname === '/target-resource' ||
@@ -372,26 +394,14 @@ export default function DashboardLayout({ children }) {
   // Check if user is platform admin
   const isPlatformAdmin = user && PLATFORM_ADMIN_EMAILS.includes(user.email?.toLowerCase());
 
-  // Filter navigation groups based on user role AND module configuration
-  // If item has no roles array, it's available to all users
-  // If item has no moduleKey, it's always available
-  // If item has isPlatformAdminOnly, only show to platform admins
+  // Filter navigation groups using the same canSeeItem precedence
+  // (module enabled → explicit permission entry → hardcoded role fallback).
+  // Platform-admin-only items are layered on top.
   const filteredGroups = navigationGroups.map(group => ({
     ...group,
     items: group.items.filter(item => {
-      // Platform admin only items
-      if (item.isPlatformAdminOnly) {
-        return isPlatformAdmin;
-      }
-      // Check if module is enabled for tenant
-      const moduleEnabled = !item.moduleKey || isModuleEnabled(item.moduleKey);
-      // Check if user's role has permission (from Role Management)
-      const roleHasPermission = !item.moduleKey || hasRolePermission(item.moduleKey);
-      // Fallback to hardcoded roles if needed
-      const hardcodedRoleAllowed = !item.roles || item.roles.includes(user?.role);
-      
-      // Module must be enabled AND (role has permission OR hardcoded role allowed)
-      return moduleEnabled && (roleHasPermission || hardcodedRoleAllowed);
+      if (item.isPlatformAdminOnly) return isPlatformAdmin;
+      return canSeeItem(item);
     })
   })).filter(group => group.items.length > 0);
 

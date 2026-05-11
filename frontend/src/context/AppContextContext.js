@@ -34,8 +34,8 @@ export function AppContextProvider({ children }) {
     if (depts.includes('both') || depts.includes('all')) return true;
     if (moduleId === 'sales' && (depts.includes('sales') || depts.length === 0)) return true;
     if (moduleId === 'production' && depts.includes('production')) return true;
-    if (moduleId === 'distribution' && (depts.includes('distribution') || depts.includes('sales'))) return true;
-    if (moduleId === 'marketing' && (depts.includes('marketing') || depts.includes('both') || depts.includes('all'))) return true;
+    if (moduleId === 'distribution' && depts.includes('distribution')) return true;
+    if (moduleId === 'marketing' && depts.includes('marketing')) return true;
     return false;
   };
   
