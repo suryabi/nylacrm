@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
@@ -85,6 +86,38 @@ export default function OverviewTab({
                 <label htmlFor="edit_is_self_managed" className="text-sm font-medium text-slate-700 cursor-pointer">
                   Self Managed (Not Third Party)
                 </label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_billing_address">Billing Address</Label>
+                <Textarea
+                  id="edit_billing_address"
+                  rows={3}
+                  placeholder="Street, City, State, PIN"
+                  value={editData.billing_address || ''}
+                  onChange={(e) => setEditData(prev => ({ ...prev, billing_address: e.target.value }))}
+                  data-testid="edit-billing-address"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_registered_address">Registered Address</Label>
+                <Textarea
+                  id="edit_registered_address"
+                  rows={3}
+                  placeholder="Same as billing or different"
+                  value={editData.registered_address || ''}
+                  onChange={(e) => setEditData(prev => ({ ...prev, registered_address: e.target.value }))}
+                  data-testid="edit-registered-address"
+                />
+                {editData.billing_address && editData.billing_address !== editData.registered_address && (
+                  <button
+                    type="button"
+                    onClick={() => setEditData(prev => ({ ...prev, registered_address: prev.billing_address }))}
+                    className="text-xs text-blue-600 hover:underline"
+                    data-testid="copy-billing-to-registered"
+                  >
+                    Same as billing address
+                  </button>
+                )}
               </div>
             </>
           ) : (
