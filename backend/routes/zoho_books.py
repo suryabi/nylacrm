@@ -82,7 +82,7 @@ async def initiate_oauth(request: Request, current_user: dict = Depends(get_curr
 
     tenant_id = get_current_tenant_id()
     state = secrets.token_urlsafe(32)
-    redirect_uri = zoho.get_redirect_uri(str(request.base_url))
+    redirect_uri = zoho.get_redirect_uri(request)
 
     now = datetime.now(timezone.utc)
     await db.zoho_oauth_state.insert_one({
@@ -111,8 +111,12 @@ async def oauth_callback(
     this endpoint without our session cookie context guarantees — but `state` is single-use
     and tied to a specific tenant/user.
     """
-    # Where to send the user back in the SPA
-    base = str(request.base_url).rstrip("/")
+    # Where to send the user back in the SPA — derive from forwarded headers
+    # so we go back to the public-facing URL, not the internal cluster URL.
+    headers = request.headers or {}
+    fproto = (headers.get("x-forwarded-proto") or "https").split(",")[0].strip()
+    fhost = (headers.get("x-forwarded-host") or headers.get("host") or "").split(",")[0].strip()
+    base = f"{fproto}://{fhost}" if fhost else str(request.base_url).rstrip("/")
     success_redirect = f"{base}/settings/integrations/zoho?status=success"
     failure_redirect = f"{base}/settings/integrations/zoho?status=error"
 

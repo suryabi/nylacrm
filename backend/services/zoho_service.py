@@ -65,13 +65,31 @@ def is_zoho_configured() -> bool:
     return bool(cfg["client_id"] and cfg["client_secret"])
 
 
-def get_redirect_uri(request_base_url: str) -> str:
-    """Compute the OAuth callback URI from the incoming request's base URL.
+def get_redirect_uri(request) -> str:
+    """Compute the OAuth callback URI from the incoming request.
 
-    This keeps preview / production environments working without env juggling.
-    The redirect_uri must be registered in the Zoho API Console.
+    Honours `X-Forwarded-Proto` / `X-Forwarded-Host` set by the Kubernetes ingress
+    so the URL matches the *public* preview/production URL the user registered with
+    Zoho — not the internal cluster URL FastAPI sees.
+
+    Falls back to env var `ZOHO_REDIRECT_URI` if set (escape hatch for overrides).
     """
-    return f"{request_base_url.rstrip('/')}/api/zoho/oauth/callback"
+    override = os.environ.get("ZOHO_REDIRECT_URI", "").strip()
+    if override:
+        return override
+
+    # Prefer forwarded headers (set by Emergent ingress)
+    headers = getattr(request, "headers", {}) or {}
+    forwarded_proto = (headers.get("x-forwarded-proto") or "").split(",")[0].strip()
+    forwarded_host = (headers.get("x-forwarded-host") or headers.get("host") or "").split(",")[0].strip()
+
+    if forwarded_host:
+        scheme = forwarded_proto or "https"
+        return f"{scheme}://{forwarded_host}/api/zoho/oauth/callback"
+
+    # Last resort: FastAPI's base_url (internal cluster URL — only used in dev/local)
+    base = str(request.base_url).rstrip("/")
+    return f"{base}/api/zoho/oauth/callback"
 
 
 # ---------- encryption ----------
