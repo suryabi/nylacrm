@@ -258,7 +258,7 @@ export default function PayCustomerDialog({
             {issuance && status === 'pending_approval' && (
               <div className="space-y-2" data-testid="pending-state">
                 <div className="rounded-md border bg-amber-50 border-amber-200 p-3 space-y-1">
-                  <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-amber-700" /><span className="font-semibold text-amber-800">Awaiting CEO / System Admin approval</span></div>
+                  <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-amber-700" /><span className="font-semibold text-amber-800">Awaiting Approval</span></div>
                   <p className="text-sm text-slate-700"><span className="font-medium capitalize">via {issuance.issuance_method?.replace('_', ' ')}</span>{issuance.reference ? ` · Ref: ${issuance.reference}` : ''}</p>
                   <p className="text-sm text-slate-700">{issuance.reason}</p>
                   <p className="text-[11px] text-muted-foreground">Submitted by {issuance.created_by_name} on {new Date(issuance.created_at).toLocaleDateString()}</p>
