@@ -70,7 +70,7 @@ export default function DeliveriesTab({
   
   // Collapsible section state
   const [custSectionOpen, setCustSectionOpen] = useState(true);
-  const [factorySectionOpen, setFactorySectionOpen] = useState(false);
+  const [factorySectionOpen, setFactorySectionOpen] = useState(true);
   
   // Factory returns state
   const [factoryReturns, setFactoryReturns] = useState([]);
