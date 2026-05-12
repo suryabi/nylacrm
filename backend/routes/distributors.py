@@ -6859,6 +6859,17 @@ async def get_stock_dashboard(
         if sid not in stock_in_by_sku:
             stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'), "qty": 0}
         stock_in_by_sku[sid]["qty"] += si.get('quantity', 0)
+
+    # === 1c. MANUAL STOCK ENTRIES (self-managed distributors) ===
+    manual_entries = await db.distributor_manual_stock_entries.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "confirmed"},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+    ).to_list(10000)
+    for me in manual_entries:
+        sid = me.get('sku_id', '')
+        if sid not in stock_in_by_sku:
+            stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": me.get('sku_name', 'Unknown'), "qty": 0}
+        stock_in_by_sku[sid]["qty"] += me.get('quantity', 0)
     
     # === 1b. FACTORY WAREHOUSE STOCK (from production transfers) ===
     tdb = get_tenant_db()
