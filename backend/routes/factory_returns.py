@@ -47,6 +47,15 @@ def is_distributor_admin(user: dict) -> bool:
     return role in ['ceo', 'admin', 'coo', 'distribution_manager', 'distribution_admin']
 
 
+def can_manage_distributor_data(user: dict, distributor_id: str) -> bool:
+    """Allow admins OR a distributor user operating on their own org."""
+    if is_distributor_admin(user):
+        return True
+    if (user.get('role') or '') == 'Distributor' and user.get('distributor_id') == distributor_id:
+        return True
+    return False
+
+
 async def generate_factory_return_number(tenant_id: str) -> str:
     year = datetime.now().year
     latest = await db.distributor_factory_returns.find_one(
@@ -267,8 +276,8 @@ async def create_factory_return(
     data: FactoryReturnCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -426,8 +435,8 @@ async def confirm_factory_return(
     current_user: dict = Depends(get_current_user)
 ):
     """Confirm factory return - deducts stock from warehouse"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -482,8 +491,8 @@ async def receive_factory_return(
     current_user: dict = Depends(get_current_user)
 ):
     """Mark factory return as received by factory"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -523,8 +532,8 @@ async def cancel_factory_return(
     current_user: dict = Depends(get_current_user)
 ):
     """Cancel a factory return - restores stock if was confirmed"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -579,8 +588,8 @@ async def delete_factory_return(
     return_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     user_role = current_user.get('role', '').lower()
