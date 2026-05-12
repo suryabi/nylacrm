@@ -218,7 +218,6 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                   <th className="text-right p-3">
                     <span className="text-teal-600">Wkly Avg</span>
                   </th>
-                  <th className="text-right p-3">Days Left</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,19 +268,10 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                           {sku.weekly_avg_deliveries > 0 ? fmt(sku.weekly_avg_deliveries) : '-'}
                           {sku.weeks_analyzed > 0 && <span className="text-[10px] text-slate-400 ml-1">/{sku.weeks_analyzed}w</span>}
                         </td>
-                        <td className="p-3 text-right">
-                          {sku.days_of_stock !== null ? (
-                            <Badge className={`text-xs ${sku.days_of_stock <= 7 ? 'bg-red-100 text-red-700' : sku.days_of_stock <= 14 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                              {sku.days_of_stock}d
-                            </Badge>
-                          ) : (
-                            <span className="text-slate-300">-</span>
-                          )}
-                        </td>
                       </tr>
                       {isExpanded && hasReturns && (
                         <tr>
-                          <td colSpan={10} className="p-0">
+                          <td colSpan={9} className="p-0">
                             <div className="bg-slate-50/80 border-b px-6 py-3">
                               <div className="grid grid-cols-2 gap-6">
                                 {/* Customer Returns Breakdown */}
@@ -343,7 +333,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                 })}
                 {skus.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={9} className="text-center py-8 text-muted-foreground">
                       No stock data available for this distributor
                     </td>
                   </tr>
@@ -360,7 +350,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <td className="p-3 text-right text-teal-700">{fmt(t.factory_warehouse_stock)}</td>
                     <td className="p-3 text-right text-indigo-800 text-base">{fmt(t.stock_at_hand)}</td>
                     <td className="p-3 text-right">{pct(t.pct_stock_at_hand)}</td>
-                    <td className="p-3 text-right" colSpan={2}></td>
+                    <td className="p-3 text-right"></td>
                   </tr>
                 </tfoot>
               )}
