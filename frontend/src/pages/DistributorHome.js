@@ -8,6 +8,7 @@ import {
   Building2, MapPin, ArrowUpRight, PackagePlus, AlertCircle, IndianRupee
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import PageHelp from '../components/PageHelp';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -140,8 +141,9 @@ export default function DistributorHome() {
         <p className="text-xs uppercase tracking-[0.18em] text-slate-400 font-medium">
           {Greeting()}
         </p>
-        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight">
-          Hi {user?.name?.split(' ')[0] || 'there'},
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+          <span>Hi {user?.name?.split(' ')[0] || 'there'},</span>
+          <PageHelp pageKey="home" />
         </h1>
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <Building2 className="h-3.5 w-3.5" />

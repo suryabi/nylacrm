@@ -37,6 +37,7 @@ import ReturnsTab from '../components/distributor/ReturnsTab';
 import SettlementsTab from '../components/distributor/SettlementsTab';
 import BillingTab from '../components/distributor/BillingTab';
 import StockDashboardTab from '../components/distributor/StockDashboardTab';
+import PageHelp from '../components/PageHelp';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
 
 import Breadcrumbs from '../components/Breadcrumbs';
@@ -2250,6 +2251,8 @@ export default function DistributorDetail() {
               <h1 className="text-2xl font-bold">{distributor.distributor_name}</h1>
               <Badge variant="outline">{distributor.distributor_code}</Badge>
               {getStatusBadge(distributor.status)}
+              {/* Distributor-only contextual help — content swaps with the active tab */}
+              <PageHelp pageKey={activeTab} />
             </div>
             {distributor.legal_entity_name && (
               <p className="text-muted-foreground">{distributor.legal_entity_name}</p>
