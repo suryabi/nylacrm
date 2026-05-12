@@ -2726,10 +2726,10 @@ async def acknowledge_shipment_receipt(
     if not shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
 
-    if shipment.get('status') not in ['confirmed', 'in_transit', 'partially_delivered']:
+    if shipment.get('status') not in ['in_transit', 'partially_delivered']:
         raise HTTPException(
             status_code=400,
-            detail=f"Shipment cannot be acknowledged in status '{shipment.get('status')}'"
+            detail=f"Shipment cannot be acknowledged in status '{shipment.get('status')}' — it must be dispatched (in_transit) first."
         )
 
     received_items = payload.get('items') or []

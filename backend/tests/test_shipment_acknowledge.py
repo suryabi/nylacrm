@@ -246,3 +246,40 @@ class TestValidationGuards:
             json={}
         )
         assert r.status_code == 400
+
+    def test_cannot_acknowledge_confirmed_shipment(self, admin_session, distributor_data, skus_list):
+        """A confirmed (but not yet dispatched) shipment must reject acknowledgement —
+        Mark Dispatched must be done first."""
+        # Create shipment + confirm (but DO NOT dispatch)
+        location = (distributor_data.get('locations') or [{}])[0]
+        sku = skus_list[0]
+        r = admin_session.post(
+            f"{BASE_URL}/api/distributors/{TEST_DISTRIBUTOR_ID}/shipments",
+            json={
+                "distributor_id": TEST_DISTRIBUTOR_ID,
+                "distributor_location_id": location['id'],
+                "shipment_date": "2026-02-15",
+                "items": [{
+                    "sku_id": sku.get('id'),
+                    "sku_name": sku.get('name') or sku.get('sku_name'),
+                    "quantity": 3,
+                    "unit_price": 50.0,
+                }],
+            }
+        )
+        if r.status_code != 200:
+            pytest.skip(f"create failed: {r.text}")
+        ship = r.json()
+        sid = ship['id']
+        c = admin_session.post(f"{BASE_URL}/api/distributors/{TEST_DISTRIBUTOR_ID}/shipments/{sid}/confirm")
+        if c.status_code != 200:
+            pytest.skip(f"confirm failed (factory stock issue): {c.text}")
+
+        # Acknowledge attempt while status is 'confirmed' should be rejected
+        items = (admin_session.get(f"{BASE_URL}/api/distributors/{TEST_DISTRIBUTOR_ID}/shipments/{sid}")).json().get('items', [])
+        ack = admin_session.post(
+            f"{BASE_URL}/api/distributors/{TEST_DISTRIBUTOR_ID}/shipments/{sid}/acknowledge",
+            json={"items": [{"item_id": items[0]['id'], "received_quantity": items[0]['quantity']}]}
+        )
+        assert ack.status_code == 400
+        assert "dispatched" in ack.text.lower() or "in_transit" in ack.text.lower() or "status" in ack.text.lower()

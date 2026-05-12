@@ -2836,8 +2836,8 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
-                  {/* Acknowledge Receipt (distributor + admin fallback) on confirmed / in_transit */}
-                  {['confirmed', 'in_transit', 'partially_delivered'].includes(selectedShipment.status) && (
+                  {/* Acknowledge Receipt — available only after the shipment has been dispatched (in_transit / partial). */}
+                  {['in_transit', 'partially_delivered'].includes(selectedShipment.status) && (
                     <Button
                       onClick={openAcknowledgeDialog}
                       className="bg-emerald-600 hover:bg-emerald-700"
