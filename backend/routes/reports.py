@@ -1,14 +1,16 @@
 """
 Reports module - Target allocation and performance reports (SKU, Resource, Account).
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+import logging
 
 from database import db, get_tenant_db
 from deps import get_current_user
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def get_tdb():
@@ -768,4 +770,223 @@ async def get_account_performance(
             'average_order_amount': overall_avg_order,
             'total_revenue_base': filtered_total_gross  # For context on contribution calc
         }
+    }
+
+
+# ============================================================
+# Admin: Cleanup non-master SKUs from SKU performance sources
+# ============================================================
+@router.post("/admin/cleanup-non-master-skus")
+async def cleanup_non_master_skus(
+    payload: dict,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove references to SKUs that are not present in the master_skus
+    catalog from the data sources feeding the SKU Performance report.
+
+    Sources cleaned:
+      • sku_targets              (delete entries whose `sku` is non-master)
+      • leads.interested_skus[]  (pull non-master entries from the array)
+      • invoices.items[] / line_items[]
+                                  (pull line items whose resolved SKU is
+                                   non-master — invoice totals/headers are
+                                   left untouched)
+
+    Body:
+      {"confirm": "CLEANUP_SKUS", "dry_run": true|false}
+
+    Permissions: CEO or System Admin only.
+    """
+    if (current_user or {}).get('role') not in ['CEO', 'System Admin']:
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can run this operation")
+
+    if (payload or {}).get('confirm') != 'CLEANUP_SKUS':
+        raise HTTPException(
+            status_code=400,
+            detail='Missing or invalid confirm token. Provide {"confirm": "CLEANUP_SKUS"} to proceed.'
+        )
+
+    dry_run = bool((payload or {}).get('dry_run', True))
+    tdb = get_tdb()
+
+    # --- Build the universe of "valid" SKU identifiers from master_skus ---
+    sku_masters = await tdb.master_skus.find({}, {'_id': 0}).to_list(500)
+    valid_ids: set = set()
+    valid_names: set = set()
+    for m in sku_masters:
+        for k in ('id', 'sku_id', 'external_sku_id', 'sku', 'sku_code'):
+            v = m.get(k)
+            if v is not None and str(v).strip():
+                valid_ids.add(str(v).strip())
+        for k in ('sku_name', 'sku', 'name'):
+            v = m.get(k)
+            if v is not None and str(v).strip():
+                valid_names.add(str(v).strip())
+
+    valid_all = valid_ids | valid_names
+
+    def _is_master(val) -> bool:
+        if val is None:
+            return False
+        s = str(val).strip()
+        return bool(s) and s in valid_all
+
+    # --- 1) sku_targets: delete docs whose `sku` is non-master ---
+    sku_targets_docs = await tdb.sku_targets.find({}, {'_id': 0}).to_list(5000)
+    bad_target_skus: dict = {}
+    bad_target_count = 0
+    for t in sku_targets_docs:
+        sku_val = t.get('sku') or t.get('sku_name') or t.get('sku_id')
+        if not _is_master(sku_val):
+            key = str(sku_val) if sku_val is not None else '<missing>'
+            bad_target_skus[key] = bad_target_skus.get(key, 0) + 1
+            bad_target_count += 1
+
+    if not dry_run and bad_target_count:
+        # Build deletion filter: targets whose sku field is NOT in valid_all.
+        # We delete in two passes to handle both `sku` and `sku_name` keys.
+        await tdb.sku_targets.delete_many({
+            '$and': [
+                {'$or': [
+                    {'sku': {'$exists': True}},
+                    {'sku_name': {'$exists': True}},
+                    {'sku_id': {'$exists': True}},
+                ]},
+                {'sku': {'$nin': list(valid_all)}},
+                {'sku_name': {'$nin': list(valid_all)}},
+                {'sku_id': {'$nin': list(valid_all)}},
+            ]
+        })
+
+    # --- 2) leads.interested_skus[]: pull non-master entries ---
+    leads_cursor = tdb.leads.find(
+        {'interested_skus': {'$exists': True, '$ne': []}},
+        {'_id': 0, 'id': 1, 'interested_skus': 1}
+    )
+    leads_changed = 0
+    leads_entries_removed = 0
+    bad_lead_skus: dict = {}
+    lead_updates = []  # (lead_id, new_array)
+    async for lead in leads_cursor:
+        current = lead.get('interested_skus') or []
+        kept = []
+        removed_here = 0
+        for entry in current:
+            ok = False
+            ident = None
+            if isinstance(entry, dict):
+                for k in ('sku_id', 'id', 'sku', 'sku_name', 'name'):
+                    if entry.get(k):
+                        ident = entry.get(k)
+                        if _is_master(ident):
+                            ok = True
+                            break
+            else:
+                ident = entry
+                ok = _is_master(entry)
+            if ok:
+                kept.append(entry)
+            else:
+                removed_here += 1
+                key = str(ident) if ident is not None else '<missing>'
+                bad_lead_skus[key] = bad_lead_skus.get(key, 0) + 1
+        if removed_here:
+            leads_changed += 1
+            leads_entries_removed += removed_here
+            lead_updates.append((lead.get('id'), kept))
+
+    if not dry_run and lead_updates:
+        for lead_id, new_arr in lead_updates:
+            try:
+                await tdb.leads.update_one(
+                    {'id': lead_id},
+                    {'$set': {'interested_skus': new_arr}}
+                )
+            except Exception as e:
+                logger.error(f"cleanup-non-master-skus: failed to update lead {lead_id}: {e}")
+
+    # --- 3) invoices.items[] / line_items[]: pull non-master line items ---
+    invoices_changed = 0
+    invoice_items_removed = 0
+    bad_invoice_skus: dict = {}
+
+    def _resolve(item: dict):
+        # Resolve a line item to an identifier for matching.
+        for k in ('sku_name', 'sku', 'sku_code', 'external_sku_id',
+                  'external_item_id', 'itemId', 'item_id', 'sku_id', 'id'):
+            v = item.get(k)
+            if v is not None and str(v).strip():
+                return str(v).strip()
+        return None
+
+    inv_cursor = tdb.invoices.find(
+        {'$or': [
+            {'items': {'$exists': True, '$ne': []}},
+            {'line_items': {'$exists': True, '$ne': []}},
+        ]},
+        {'_id': 0, 'id': 1, 'invoice_no': 1, 'items': 1, 'line_items': 1}
+    )
+    async for inv in inv_cursor:
+        update_set = {}
+        for key in ('items', 'line_items'):
+            arr = inv.get(key)
+            if not arr:
+                continue
+            kept = []
+            removed = 0
+            for item in arr:
+                if not isinstance(item, dict):
+                    kept.append(item)
+                    continue
+                # Determine "is master" by checking every plausible identifier.
+                hit = False
+                tried_any = False
+                for k in ('sku_id', 'id', 'external_sku_id', 'external_item_id',
+                          'itemId', 'item_id', 'sku_code', 'sku', 'sku_name', 'name'):
+                    v = item.get(k)
+                    if v is None or not str(v).strip():
+                        continue
+                    tried_any = True
+                    if _is_master(v):
+                        hit = True
+                        break
+                if hit or not tried_any:
+                    # If the line carries no SKU identifier at all, keep it.
+                    kept.append(item)
+                else:
+                    removed += 1
+                    ident = _resolve(item) or '<missing>'
+                    bad_invoice_skus[ident] = bad_invoice_skus.get(ident, 0) + 1
+            if removed:
+                invoice_items_removed += removed
+                update_set[key] = kept
+        if update_set:
+            invoices_changed += 1
+            if not dry_run:
+                try:
+                    await tdb.invoices.update_one(
+                        {'id': inv.get('id')},
+                        {'$set': update_set}
+                    )
+                except Exception as e:
+                    logger.error(f"cleanup-non-master-skus: failed to update invoice {inv.get('id')}: {e}")
+
+    return {
+        'dry_run': dry_run,
+        'master_sku_count': len(sku_masters),
+        'sku_targets': {
+            'non_master_rows': bad_target_count,
+            'non_master_sku_breakdown': bad_target_skus,
+            'deleted': 0 if dry_run else bad_target_count,
+        },
+        'leads_interested_skus': {
+            'leads_affected': leads_changed,
+            'entries_removed': leads_entries_removed,
+            'non_master_sku_breakdown': bad_lead_skus,
+        },
+        'invoices': {
+            'invoices_affected': invoices_changed,
+            'line_items_removed': invoice_items_removed,
+            'non_master_sku_breakdown': bad_invoice_skus,
+        },
     }
