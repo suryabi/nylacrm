@@ -200,6 +200,15 @@ export default function DeliveriesTab({
   
   // Get distributor locations from distributor object
   const distributorLocations = distributor?.locations || [];
+
+  // Auto-select the warehouse location when there's only one — applies to both the
+  // delivery form and the factory-return form so the user doesn't have to pick.
+  useEffect(() => {
+    if (distributorLocations.length !== 1) return;
+    const onlyLocId = distributorLocations[0].id;
+    setFactoryForm(f => f.distributor_location_id ? f : { ...f, distributor_location_id: onlyLocId });
+    setDeliveryForm(f => f.distributor_location_id ? f : { ...f, distributor_location_id: onlyLocId });
+  }, [distributorLocations]);
   
   // Auto-select first matching reason when source changes or master loads
   useEffect(() => {
@@ -237,7 +246,8 @@ export default function DeliveriesTab({
       });
       if (res.ok) {
         setShowFactoryDialog(false);
-        setFactoryForm({ distributor_location_id: '', reason: 'expired', reason_id: '', reason_name: '', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
+        const onlyLoc = distributorLocations.length === 1 ? distributorLocations[0].id : '';
+        setFactoryForm({ distributor_location_id: onlyLoc, reason: 'expired', reason_id: '', reason_name: '', source: 'warehouse', customer_return_id: '', return_date: new Date().toISOString().split('T')[0], remarks: '' });
         setFactoryItems([{ sku_id: '', quantity: 1 }]);
         fetchFactoryReturns();
         fetchAvailableStock();

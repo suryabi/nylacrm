@@ -328,6 +328,16 @@ export default function DistributorDetail() {
     fetchDistributor();
   }, [fetchDistributor]);
 
+  // Auto-select the distributor location when there's only one — saves an extra click
+  // for every Stock In / Stock Out / Factory Return form.
+  useEffect(() => {
+    const locations = distributor?.locations || [];
+    if (locations.length !== 1) return;
+    const onlyLocId = locations[0].id;
+    setShipmentForm(prev => prev.distributor_location_id ? prev : { ...prev, distributor_location_id: onlyLocId });
+    setDeliveryForm(prev => prev.distributor_location_id ? prev : { ...prev, distributor_location_id: onlyLocId });
+  }, [distributor]);
+
   // Fetch margins when tab changes to margins
   const fetchMargins = useCallback(async () => {
     try {
@@ -458,10 +468,10 @@ export default function DistributorDetail() {
       }).then(res => {
         const whs = res.data.warehouses || [];
         setFactoryWarehouses(whs);
-        // Default to first default warehouse
-        const defaultWh = whs.find(w => w.is_default);
-        if (defaultWh && !shipmentForm.source_warehouse_id) {
-          setShipmentForm(prev => ({ ...prev, source_warehouse_id: defaultWh.id }));
+        // Auto-select: single warehouse wins; else the one marked as default
+        const autoPick = whs.length === 1 ? whs[0] : whs.find(w => w.is_default);
+        if (autoPick && !shipmentForm.source_warehouse_id) {
+          setShipmentForm(prev => ({ ...prev, source_warehouse_id: autoPick.id }));
         }
       }).catch(() => {});
     }
@@ -1259,9 +1269,14 @@ export default function DistributorDetail() {
   };
 
   const resetShipmentForm = () => {
+    // Preserve auto-selected single warehouse / single location so the user doesn't lose them on reset
+    const onlyLoc = (distributor?.locations || []).length === 1 ? distributor.locations[0].id : '';
+    const onlyFactoryWh = factoryWarehouses.length === 1
+      ? factoryWarehouses[0].id
+      : (factoryWarehouses.find(w => w.is_default)?.id || '');
     setShipmentForm({
-      distributor_location_id: '',
-      source_warehouse_id: '',
+      distributor_location_id: onlyLoc,
+      source_warehouse_id: onlyFactoryWh,
       shipment_date: new Date().toISOString().split('T')[0],
       expected_delivery_date: '',
       reference_number: '',
@@ -1655,8 +1670,9 @@ export default function DistributorDetail() {
   };
 
   const resetDeliveryForm = () => {
+    const onlyLoc = (distributor?.locations || []).length === 1 ? distributor.locations[0].id : '';
     setDeliveryForm({
-      distributor_location_id: '',
+      distributor_location_id: onlyLoc,
       account_id: '',
       delivery_date: new Date().toISOString().split('T')[0],
       reference_number: '',
