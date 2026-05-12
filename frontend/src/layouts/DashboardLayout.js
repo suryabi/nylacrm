@@ -8,6 +8,7 @@ import { useTenantConfig } from '../context/TenantConfigContext';
 import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import AskNyla from '../components/widgets/AskNyla';
+import DistributorChatButton from '../components/DistributorChatButton';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
   LayoutDashboard, Users, Building2, Store,
@@ -654,6 +655,8 @@ export default function DashboardLayout({ children }) {
       
       {/* Ask Nyla - Knowledge Base floating chat assistant */}
       <AskNyla />
+      {/* Distributor ↔ Supplier chat — auto-hides for non-distributor / non-supplier roles */}
+      <DistributorChatButton />
     </div>
   );
 }

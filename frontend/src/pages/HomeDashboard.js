@@ -25,6 +25,7 @@ import {
   NewMeetingDialog,
   MeetingDetailDialog
 } from '../components/widgets';
+import DistributorMessagesCard from '../components/DistributorMessagesCard';
 // Quote widgets temporarily disabled - uncomment to re-enable
 // import WaterQuoteWidget from '../components/widgets/WaterQuoteWidget';
 // import SalesQuoteWidget from '../components/widgets/SalesQuoteWidget';
@@ -354,6 +355,11 @@ export default function HomeDashboard() {
           {/* Task Metrics - Bento Grid Row 1 */}
           <section className="mb-6 sm:mb-8">
             <TaskMetricsWidget />
+          </section>
+
+          {/* Distributor messages alert (suppliers only — auto-hides for others) */}
+          <section className="mb-6 sm:mb-8">
+            <DistributorMessagesCard />
           </section>
 
           {/* Reorderable widgets — order saved per user */}
