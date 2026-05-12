@@ -100,6 +100,15 @@ def is_distributor_user(user: dict) -> bool:
     return user.get('role') == 'Distributor'
 
 
+def can_manage_distributor_data(user: dict, distributor_id: str) -> bool:
+    """True if user is an admin OR a distributor user operating on their own org."""
+    if is_distributor_admin(user):
+        return True
+    if is_distributor_user(user) and user.get('distributor_id') == distributor_id:
+        return True
+    return False
+
+
 def get_user_distributor_id(user: dict) -> Optional[str]:
     """Get distributor_id for a distributor user"""
     if is_distributor_user(user):
@@ -3802,8 +3811,8 @@ async def create_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new delivery to an account"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -4046,8 +4055,8 @@ async def apply_credit_notes_to_delivery(
     """Apply credit notes to a delivery"""
     from routes.credit_notes import apply_credit_note_to_delivery
     
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -4128,8 +4137,8 @@ async def update_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a delivery"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -4181,8 +4190,8 @@ async def confirm_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Confirm a draft delivery"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -4229,8 +4238,8 @@ async def complete_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Mark delivery as completed - deducts from distributor stock"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -4295,8 +4304,8 @@ async def delete_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete a delivery - CEO/Admin can delete any status, others only draft"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     user_role = current_user.get('role', '').lower()
@@ -4337,8 +4346,8 @@ async def cancel_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Cancel a delivery"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
