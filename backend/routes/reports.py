@@ -813,15 +813,25 @@ async def cleanup_non_master_skus(
     sku_masters = await tdb.master_skus.find({}, {'_id': 0}).to_list(500)
     valid_ids: set = set()
     valid_names: set = set()
+    # Map any valid identifier → canonical display name, so the "kept"
+    # breakdown groups under the human-readable SKU name.
+    ident_to_name: dict = {}
     for m in sku_masters:
+        display = (m.get('sku_name') or m.get('sku') or m.get('name') or '').strip()
         for k in ('id', 'sku_id', 'external_sku_id', 'sku', 'sku_code'):
             v = m.get(k)
             if v is not None and str(v).strip():
-                valid_ids.add(str(v).strip())
+                key = str(v).strip()
+                valid_ids.add(key)
+                if display:
+                    ident_to_name[key] = display
         for k in ('sku_name', 'sku', 'name'):
             v = m.get(k)
             if v is not None and str(v).strip():
-                valid_names.add(str(v).strip())
+                key = str(v).strip()
+                valid_names.add(key)
+                if display:
+                    ident_to_name[key] = display
 
     valid_all = valid_ids | valid_names
 
@@ -831,13 +841,23 @@ async def cleanup_non_master_skus(
         s = str(val).strip()
         return bool(s) and s in valid_all
 
+    def _canonical(val) -> str:
+        s = '' if val is None else str(val).strip()
+        return ident_to_name.get(s, s)
+
     # --- 1) sku_targets: delete docs whose `sku` is non-master ---
     sku_targets_docs = await tdb.sku_targets.find({}, {'_id': 0}).to_list(5000)
     bad_target_skus: dict = {}
+    kept_target_skus: dict = {}
     bad_target_count = 0
+    kept_target_count = 0
     for t in sku_targets_docs:
         sku_val = t.get('sku') or t.get('sku_name') or t.get('sku_id')
-        if not _is_master(sku_val):
+        if _is_master(sku_val):
+            key = _canonical(sku_val) or '<missing>'
+            kept_target_skus[key] = kept_target_skus.get(key, 0) + 1
+            kept_target_count += 1
+        else:
             key = str(sku_val) if sku_val is not None else '<missing>'
             bad_target_skus[key] = bad_target_skus.get(key, 0) + 1
             bad_target_count += 1
@@ -865,7 +885,9 @@ async def cleanup_non_master_skus(
     )
     leads_changed = 0
     leads_entries_removed = 0
+    leads_entries_kept = 0
     bad_lead_skus: dict = {}
+    kept_lead_skus: dict = {}
     lead_updates = []  # (lead_id, new_array)
     async for lead in leads_cursor:
         current = lead.get('interested_skus') or []
@@ -886,6 +908,9 @@ async def cleanup_non_master_skus(
                 ok = _is_master(entry)
             if ok:
                 kept.append(entry)
+                leads_entries_kept += 1
+                k_key = _canonical(ident) or '<missing>'
+                kept_lead_skus[k_key] = kept_lead_skus.get(k_key, 0) + 1
             else:
                 removed_here += 1
                 key = str(ident) if ident is not None else '<missing>'
@@ -908,7 +933,9 @@ async def cleanup_non_master_skus(
     # --- 3) invoices.items[] / line_items[]: pull non-master line items ---
     invoices_changed = 0
     invoice_items_removed = 0
+    invoice_items_kept = 0
     bad_invoice_skus: dict = {}
+    kept_invoice_skus: dict = {}
 
     def _resolve(item: dict):
         # Resolve a line item to an identifier for matching.
@@ -941,6 +968,7 @@ async def cleanup_non_master_skus(
                 # Determine "is master" by checking every plausible identifier.
                 hit = False
                 tried_any = False
+                matched_ident = None
                 for k in ('sku_id', 'id', 'external_sku_id', 'external_item_id',
                           'itemId', 'item_id', 'sku_code', 'sku', 'sku_name', 'name'):
                     v = item.get(k)
@@ -949,10 +977,15 @@ async def cleanup_non_master_skus(
                     tried_any = True
                     if _is_master(v):
                         hit = True
+                        matched_ident = v
                         break
                 if hit or not tried_any:
                     # If the line carries no SKU identifier at all, keep it.
                     kept.append(item)
+                    if hit:
+                        invoice_items_kept += 1
+                        k_key = _canonical(matched_ident) or '<missing>'
+                        kept_invoice_skus[k_key] = kept_invoice_skus.get(k_key, 0) + 1
                 else:
                     removed += 1
                     ident = _resolve(item) or '<missing>'
@@ -974,19 +1007,26 @@ async def cleanup_non_master_skus(
     return {
         'dry_run': dry_run,
         'master_sku_count': len(sku_masters),
+        'master_sku_names': sorted({_canonical(n) for n in valid_names if _canonical(n)}),
         'sku_targets': {
             'non_master_rows': bad_target_count,
             'non_master_sku_breakdown': bad_target_skus,
+            'kept_rows': kept_target_count,
+            'kept_sku_breakdown': kept_target_skus,
             'deleted': 0 if dry_run else bad_target_count,
         },
         'leads_interested_skus': {
             'leads_affected': leads_changed,
             'entries_removed': leads_entries_removed,
             'non_master_sku_breakdown': bad_lead_skus,
+            'entries_kept': leads_entries_kept,
+            'kept_sku_breakdown': kept_lead_skus,
         },
         'invoices': {
             'invoices_affected': invoices_changed,
             'line_items_removed': invoice_items_removed,
             'non_master_sku_breakdown': bad_invoice_skus,
+            'line_items_kept': invoice_items_kept,
+            'kept_sku_breakdown': kept_invoice_skus,
         },
     }
