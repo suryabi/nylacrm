@@ -15,7 +15,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -224,6 +224,7 @@ const buildDistributorUserNavigationGroups = (distributorId) => {
       title: 'Operations',
       items: [
         { name: 'Stock In', href: tab('stockin'), icon: Package, roles: ['Distributor'] },
+        { name: 'Stock Entry', href: tab('stock-entry'), icon: PackagePlus, roles: ['Distributor'] },
         { name: 'Stock Out', href: tab('stockout'), icon: Truck, roles: ['Distributor'], highlight: true },
         { name: 'Customer Returns', href: tab('returns'), icon: PackageOpen, roles: ['Distributor'] },
       ],

@@ -20,7 +20,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, PackagePlus
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -37,6 +37,7 @@ import ReturnsTab from '../components/distributor/ReturnsTab';
 import SettlementsTab from '../components/distributor/SettlementsTab';
 import BillingTab from '../components/distributor/BillingTab';
 import StockDashboardTab from '../components/distributor/StockDashboardTab';
+import StockEntriesTab from '../components/distributor/StockEntriesTab';
 import PageHelp from '../components/PageHelp';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
 
@@ -2312,7 +2313,7 @@ export default function DistributorDetail() {
       {/* Tabs - Consolidated Structure */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         {!isDistributorRole && (
-        <TabsList className="grid w-full grid-cols-8 h-auto p-1">
+        <TabsList className={`grid w-full ${distributor?.is_self_managed ? 'grid-cols-9' : 'grid-cols-8'} h-auto p-1`}>
           <TabsTrigger value="stock-dashboard" className="flex items-center gap-2 py-2.5" data-testid="stock-dashboard-tab">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Stock</span>
@@ -2329,6 +2330,12 @@ export default function DistributorDetail() {
             <Package className="h-4 w-4" />
             <span className="hidden sm:inline">Stock In</span>
           </TabsTrigger>
+          {distributor?.is_self_managed && (
+            <TabsTrigger value="stock-entry" className="flex items-center gap-2 py-2.5" data-testid="stock-entry-tab">
+              <PackagePlus className="h-4 w-4" />
+              <span className="hidden sm:inline">Stock Entry</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="stockout" className="flex items-center gap-2 py-2.5" data-testid="stockout-tab">
             <Truck className="h-4 w-4" />
             <span className="hidden sm:inline">Stock Out</span>
@@ -2523,6 +2530,20 @@ export default function DistributorDetail() {
             setDeleteTarget={setDeleteTarget}
             getShipmentStatusBadge={getShipmentStatusBadge}
           />
+        </TabsContent>
+
+        {/* Stock Entry Tab (self-managed distributors only) */}
+        <TabsContent value="stock-entry" className="space-y-4">
+          {distributor?.is_self_managed ? (
+            <StockEntriesTab distributorId={id} skus={skus} />
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                Manual stock entry is only available for <strong>self-managed</strong> distributors.
+                Stock for this distributor flows in through factory shipments — see the <strong>Stock In</strong> tab.
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Stock Out Tab */}

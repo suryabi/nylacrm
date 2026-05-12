@@ -72,6 +72,43 @@ export const distributorPageHelp = {
     ],
   },
 
+  'stock-entry': {
+    title: 'Stock Entry (Manual)',
+    subtitle: 'Add stock to your warehouse manually — for self-managed distributors',
+    purpose:
+      'Self-managed distributors procure or produce their own stock instead of receiving factory shipments. Use this page to record every batch of stock added to your default warehouse, with an optional batch number for traceability.',
+    sections: [
+      {
+        heading: 'How to add stock',
+        bullets: [
+          '1. Click the green **+ Add Stock** button (top-right).',
+          '2. Pick the **SKU** from the dropdown.',
+          '3. Enter the **Quantity** (must be > 0).',
+          '4. Set the **Entry Date** (defaults to today).',
+          '5. **Batch Number** is optional — fill it in if you track batches for compliance.',
+          '6. Add **Remarks** for context (vendor name, PO ref, etc.).',
+          '7. Click **Save as Draft** — the entry is saved but stock is NOT yet added to on-hand.',
+        ],
+      },
+      {
+        heading: 'Confirm to add stock',
+        bullets: [
+          'Drafts can be edited or deleted freely.',
+          'When you\'re sure the entry is correct, click **Confirm** on the row.',
+          'On confirm, the quantity is added to your **default warehouse** on-hand stock.',
+        ],
+      },
+      {
+        heading: 'Made a mistake?',
+        bullets: [
+          '**Draft entries** can be **edited** or **deleted**.',
+          '**Confirmed entries** can only be **Cancelled** — cancelling will reverse the stock add automatically.',
+          'If the stock has already been delivered out, cancel will fail (on-hand cannot go negative). Contact your Distribution Manager in that case.',
+        ],
+      },
+    ],
+  },
+
   'stockin': {
     title: 'Stock In (Factory → Distributor)',
     subtitle: 'Receive and acknowledge shipments from the factory',
