@@ -3555,7 +3555,7 @@ async def list_all_deliveries(
     deliveries = await db.distributor_deliveries.find(
         query,
         {"_id": 0}
-    ).sort("delivery_date", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    ).sort([("delivery_date", -1), ("created_at", -1)]).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     
     return {
         "deliveries": deliveries,
@@ -3678,7 +3678,7 @@ async def list_distributor_deliveries(
     deliveries = await db.distributor_deliveries.find(
         query,
         {"_id": 0}
-    ).sort("delivery_date", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    ).sort([("delivery_date", -1), ("created_at", -1)]).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     
     # Fetch items for each delivery
     for delivery in deliveries:
