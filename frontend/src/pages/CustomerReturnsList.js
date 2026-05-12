@@ -39,9 +39,25 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 const STATUS_STYLES = {
   pending: 'bg-amber-100 text-amber-700 border-amber-300',
+  draft: 'bg-amber-100 text-amber-700 border-amber-300',
   approved: 'bg-blue-100 text-blue-700 border-blue-300',
+  direct_payment_approved: 'bg-blue-100 text-blue-700 border-blue-300',
   credit_issued: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  processed: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+  settled: 'bg-emerald-100 text-emerald-700 border-emerald-300',
   cancelled: 'bg-slate-100 text-slate-600 border-slate-300',
+};
+
+// Status -> human-readable label. Kept in sync with the distributor portal's Returns tab.
+const STATUS_LABELS = {
+  draft: 'Draft',
+  pending: 'Pending',
+  approved: 'Credit Note Created',
+  direct_payment_approved: 'Direct Payment Approved',
+  credit_issued: 'Credit Issued',
+  processed: 'Processed',
+  settled: 'Settled',
+  cancelled: 'Cancelled',
 };
 
 const formatCurrency = (val) => {
@@ -188,9 +204,13 @@ export default function CustomerReturnsList() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="approved">Credit Note Created</SelectItem>
+              <SelectItem value="direct_payment_approved">Direct Payment Approved</SelectItem>
               <SelectItem value="credit_issued">Credit Issued</SelectItem>
+              <SelectItem value="processed">Processed</SelectItem>
+              <SelectItem value="settled">Settled</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
@@ -288,7 +308,7 @@ export default function CustomerReturnsList() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={STATUS_STYLES[status] || 'bg-slate-100 text-slate-700 border-slate-300'}>
-                          {String(status).replace(/_/g, ' ')}
+                          {STATUS_LABELS[status] || String(status).replace(/_/g, ' ')}
                         </Badge>
                       </TableCell>
                     </TableRow>
