@@ -20,7 +20,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, PackagePlus
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, PackagePlus, ExternalLink
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -3322,19 +3322,41 @@ export default function DistributorDetail() {
 
               {/* Actions */}
               <div className="flex justify-between items-center pt-4 border-t">
-                {/* Invoice Download - Available for delivered/confirmed deliveries */}
-                <div>
+                {/* Invoice — link to Zoho Books when available, otherwise fall back to local GST PDF */}
+                <div className="flex gap-2">
                   {(selectedDelivery.status === 'delivered' || selectedDelivery.status === 'confirmed') && (
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleDownloadCustomerInvoice(selectedDelivery.id)}
-                      disabled={downloadingInvoice}
-                      className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                      data-testid="download-customer-invoice-btn"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      {downloadingInvoice ? 'Generating...' : 'Download Invoice (GST)'}
-                    </Button>
+                    selectedDelivery.zoho_invoice_url ? (
+                      <a
+                        href={selectedDelivery.zoho_invoice_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        data-testid="view-zoho-invoice-btn"
+                      >
+                        <Button
+                          variant="outline"
+                          className="text-violet-700 border-violet-300 hover:bg-violet-50"
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          View Invoice in Zoho
+                          {selectedDelivery.zoho_invoice_number && (
+                            <span className="ml-2 text-xs text-violet-500">
+                              ({selectedDelivery.zoho_invoice_number})
+                            </span>
+                          )}
+                        </Button>
+                      </a>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleDownloadCustomerInvoice(selectedDelivery.id)}
+                        disabled={downloadingInvoice}
+                        className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                        data-testid="download-customer-invoice-btn"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        {downloadingInvoice ? 'Generating...' : 'Download Invoice (GST)'}
+                      </Button>
+                    )
                   )}
                 </div>
                 

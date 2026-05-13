@@ -375,11 +375,19 @@ async def _zoho_request(
 # ---------- Contact upsert ----------
 
 async def upsert_contact(tenant_id: str, account: dict) -> str:
-    """Find-or-create a Zoho contact for a Nyla account. Returns the Zoho contact_id."""
+    """Find-or-create a Zoho contact for a Nyla account. Returns the Zoho contact_id.
+
+    Lookup order:
+      1) by email (when account has one)
+      2) by exact contact_name (case-insensitive on Zoho's side)
+    Falls through to create only if neither match.
+    """
     email = (account.get("email") or "").strip()
-    name = account.get("account_name") or account.get("name") or "Unnamed Customer"
+    name = (account.get("account_name") or account.get("name") or "Unnamed Customer").strip()
 
     existing = None
+
+    # 1) Try email
     if email:
         try:
             search = await _zoho_request("GET", "/books/v3/contacts", tenant_id=tenant_id, params={"email": email})
@@ -387,6 +395,26 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
             existing = contacts[0] if contacts else None
         except ZohoApiError as e:
             logger.warning(f"Zoho contact lookup by email failed: {e}")
+
+    # 2) Fallback: by exact contact_name (Zoho enforces unique name per org)
+    if not existing and name:
+        try:
+            search = await _zoho_request(
+                "GET", "/books/v3/contacts", tenant_id=tenant_id,
+                params={"contact_name": name},
+            )
+            contacts = search.get("contacts", [])
+            # Exact-match (Zoho contact_name filter is a contains-like search)
+            for c in contacts:
+                if (c.get("contact_name") or "").strip().lower() == name.lower():
+                    existing = c
+                    break
+            if not existing and contacts:
+                # If only one result, accept it; otherwise abandon to avoid mis-linking
+                if len(contacts) == 1:
+                    existing = contacts[0]
+        except ZohoApiError as e:
+            logger.warning(f"Zoho contact lookup by name failed: {e}")
 
     payload = {
         "contact_name": name,
@@ -432,14 +460,22 @@ async def get_zoho_item_id(tenant_id: str, our_sku_id: str) -> str:
         {"tenant_id": tenant_id, "our_sku_id": our_sku_id}, {"_id": 0}
     )
     if not mapping or not mapping.get("zoho_item_id"):
-        raise RuntimeError(
-            f"SKU {our_sku_id} is not mapped to a Zoho item. "
+        # Look up the SKU name for a clearer error
+        sku = await db.master_skus.find_one({"id": our_sku_id}, {"_id": 0, "sku_name": 1, "sku": 1, "name": 1})
+        sku_label = (sku or {}).get("sku_name") or (sku or {}).get("sku") or (sku or {}).get("name") or our_sku_id
+        raise MissingZohoMappingError(
+            f"SKU '{sku_label}' is not mapped to a Zoho item. "
             "Please add a mapping in Settings → Integrations → Zoho Books → SKU Mapping."
         )
     return mapping["zoho_item_id"]
 
 
 # ---------- Invoice creation ----------
+
+class MissingZohoMappingError(RuntimeError):
+    """Raised when a delivery item references a SKU that has no Zoho item
+    mapping yet. This is a config issue — retries won't help."""
+
 
 class MissingAgreedPriceError(RuntimeError):
     """Raised when the account has no agreed `sku_pricing` for one or more SKUs
@@ -733,6 +769,14 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
             last_error = str(e)
             logger.warning(
                 f"Zoho push aborted (no agreed price) for delivery "
+                f"{delivery.get('delivery_number')}: {e}"
+            )
+            break
+        except MissingZohoMappingError as e:
+            # Don't retry: missing SKU mapping is a configuration issue.
+            last_error = str(e)
+            logger.warning(
+                f"Zoho push aborted (no SKU mapping) for delivery "
                 f"{delivery.get('delivery_number')}: {e}"
             )
             break
