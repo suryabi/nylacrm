@@ -129,11 +129,19 @@ def build_authorize_url(state: str, redirect_uri: str) -> str:
     return f"{cfg['accounts_url']}/oauth/v2/auth?{qs}"
 
 
-async def exchange_code_for_tokens(code: str, redirect_uri: str) -> dict:
+async def exchange_code_for_tokens(code: str, redirect_uri: str, accounts_url: Optional[str] = None) -> dict:
+    """Exchange an authorization code for tokens.
+
+    `accounts_url` overrides the default accounts URL. Zoho's OAuth callback
+    includes `accounts-server` and/or `location` query parameters indicating
+    the data centre the user actually consented on (e.g. .in, .com, .eu, .au).
+    We must hit /token on THAT DC or Zoho returns `invalid_code`.
+    """
     cfg = get_zoho_config()
+    base = (accounts_url or cfg["accounts_url"]).rstrip("/")
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
-            f"{cfg['accounts_url']}/oauth/v2/token",
+            f"{base}/oauth/v2/token",
             params={
                 "grant_type": "authorization_code",
                 "client_id": cfg["client_id"],
@@ -143,18 +151,22 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> dict:
             },
         )
     if resp.status_code != 200:
-        raise RuntimeError(f"Zoho token exchange failed ({resp.status_code}): {resp.text}")
+        raise RuntimeError(f"Zoho token exchange failed ({resp.status_code}) at {base}: {resp.text}")
     data = resp.json()
     if "access_token" not in data:
+        logger.error(
+            f"Zoho /token returned no access_token. accounts_url={base} redirect_uri={redirect_uri} response={data}"
+        )
         raise RuntimeError(f"Zoho did not return access_token: {data}")
     return data
 
 
-async def refresh_access_token(refresh_token: str) -> dict:
+async def refresh_access_token(refresh_token: str, accounts_url: Optional[str] = None) -> dict:
     cfg = get_zoho_config()
+    base = (accounts_url or cfg["accounts_url"]).rstrip("/")
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
-            f"{cfg['accounts_url']}/oauth/v2/token",
+            f"{base}/oauth/v2/token",
             params={
                 "grant_type": "refresh_token",
                 "client_id": cfg["client_id"],
@@ -163,7 +175,7 @@ async def refresh_access_token(refresh_token: str) -> dict:
             },
         )
     if resp.status_code != 200:
-        raise RuntimeError(f"Zoho token refresh failed ({resp.status_code}): {resp.text}")
+        raise RuntimeError(f"Zoho token refresh failed ({resp.status_code}) at {base}: {resp.text}")
     return resp.json()
 
 
@@ -181,16 +193,17 @@ async def revoke_refresh_token(refresh_token: str) -> bool:
         return False
 
 
-async def fetch_organizations(access_token: str) -> list[dict]:
+async def fetch_organizations(access_token: str, api_base_url: Optional[str] = None) -> list[dict]:
     """Returns the list of Zoho Books organizations the access token can see."""
     cfg = get_zoho_config()
+    base = (api_base_url or cfg["api_base_url"]).rstrip("/")
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
-            f"{cfg['api_base_url']}/books/v3/organizations",
+            f"{base}/books/v3/organizations",
             headers={"Authorization": f"Zoho-oauthtoken {access_token}"},
         )
     if resp.status_code != 200:
-        raise RuntimeError(f"Failed to list Zoho organizations: {resp.text}")
+        raise RuntimeError(f"Failed to list Zoho organizations at {base}: {resp.text}")
     return resp.json().get("organizations", [])
 
 
@@ -203,6 +216,8 @@ async def store_credentials(
     organization_id: str,
     organization_name: Optional[str],
     user_email: Optional[str],
+    accounts_url: Optional[str] = None,
+    api_base_url: Optional[str] = None,
 ) -> None:
     now = datetime.now(timezone.utc)
     expires_in = int(token_response.get("expires_in", 3600))
@@ -218,6 +233,10 @@ async def store_credentials(
         "is_active": True,
         "zoho_datacenter": "in",
     }
+    if accounts_url:
+        update["accounts_url"] = accounts_url
+    if api_base_url:
+        update["api_base_url"] = api_base_url
     if token_response.get("refresh_token"):
         update["refresh_token"] = encrypt_token(token_response["refresh_token"])
     await db.zoho_credentials.update_one(
@@ -257,7 +276,7 @@ async def get_valid_access_token(tenant_id: str) -> str:
         raise RuntimeError("Zoho refresh token missing; please reconnect Zoho Books")
 
     refresh = decrypt_token(creds["refresh_token"])
-    token_response = await refresh_access_token(refresh)
+    token_response = await refresh_access_token(refresh, accounts_url=creds.get("accounts_url"))
     new_access = token_response["access_token"]
     new_expiry = datetime.now(timezone.utc) + timedelta(seconds=int(token_response.get("expires_in", 3600)))
     await db.zoho_credentials.update_one(
@@ -293,11 +312,11 @@ async def _zoho_request(
 ) -> dict:
     """Authenticated request with exponential backoff + 429 Retry-After handling."""
     cfg = get_zoho_config()
-    url = f"{cfg['api_base_url']}{path}"
-
     creds = await get_credentials(tenant_id)
     if not creds:
         raise RuntimeError("Zoho Books is not connected for this tenant")
+    api_base = (creds.get("api_base_url") or cfg["api_base_url"]).rstrip("/")
+    url = f"{api_base}{path}"
 
     # Ensure organization_id is on every request
     params = dict(params or {})

@@ -106,10 +106,16 @@ async def oauth_callback(
     code: Optional[str] = Query(None),
     state: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
+    location: Optional[str] = Query(None),
+    accounts_server: Optional[str] = Query(None, alias="accounts-server"),
 ):
     """OAuth callback. We use the state lookup (not get_current_user) because Zoho hits
     this endpoint without our session cookie context guarantees — but `state` is single-use
     and tied to a specific tenant/user.
+
+    Zoho appends `?location=in&accounts-server=https://accounts.zoho.in` (or .com / .eu / .au
+    depending on which DC the user actually authenticated against). We must exchange the
+    code on THAT DC; hitting the wrong DC returns `invalid_code`.
     """
     # Where to send the user back in the SPA — derive from forwarded headers
     # so we go back to the public-facing URL, not the internal cluster URL.
@@ -138,9 +144,40 @@ async def oauth_callback(
     tenant_id = state_doc["tenant_id"]
     redirect_uri = state_doc["redirect_uri"]
 
+    # Resolve the data centre Zoho actually issued the code on.
+    # Prefer the explicit `accounts-server` URL Zoho sends; fall back to the
+    # `location` short code (in / us / eu / au / jp / ca / sa); finally fall
+    # back to what's configured in env.
+    DC_MAP = {
+        "in": "https://accounts.zoho.in",
+        "us": "https://accounts.zoho.com",
+        "eu": "https://accounts.zoho.eu",
+        "au": "https://accounts.zoho.com.au",
+        "jp": "https://accounts.zoho.jp",
+        "ca": "https://accounts.zohocloud.ca",
+        "sa": "https://accounts.zoho.sa",
+        "uk": "https://accounts.zoho.uk",
+    }
+    accounts_url = None
+    if accounts_server:
+        accounts_url = accounts_server.rstrip("/")
+    elif location and location.lower() in DC_MAP:
+        accounts_url = DC_MAP[location.lower()]
+
     try:
-        token_response = await zoho.exchange_code_for_tokens(code, redirect_uri)
-        organizations = await zoho.fetch_organizations(token_response["access_token"])
+        token_response = await zoho.exchange_code_for_tokens(code, redirect_uri, accounts_url=accounts_url)
+        # Determine API base from the accounts URL (zoho.in -> zohoapis.in, zoho.com -> zohoapis.com, ...)
+        api_base_url = None
+        if accounts_url:
+            api_base_url = (
+                accounts_url
+                .replace("https://accounts.", "https://www.zohoapis.")
+                .replace("zohocloud.ca", "zohocloud.ca")  # ca uses zohocloud
+            )
+            # Special case: ca uses www.zohoapis.ca via zohocloud
+            if "zohocloud.ca" in accounts_url:
+                api_base_url = "https://www.zohoapis.ca"
+        organizations = await zoho.fetch_organizations(token_response["access_token"], api_base_url=api_base_url)
         if not organizations:
             return RedirectResponse(f"{failure_redirect}&message=no_organizations", status_code=302)
         org = organizations[0]
@@ -150,12 +187,14 @@ async def oauth_callback(
             organization_id=str(org.get("organization_id")),
             organization_name=org.get("name"),
             user_email=state_doc.get("user_email"),
+            accounts_url=accounts_url,
+            api_base_url=api_base_url,
         )
     except Exception as e:
         logger.error(f"Zoho OAuth callback failed for tenant {tenant_id}: {e}")
         return RedirectResponse(f"{failure_redirect}&message={str(e)[:200]}", status_code=302)
 
-    logger.info(f"Zoho Books connected for tenant {tenant_id} by {state_doc.get('user_email')}")
+    logger.info(f"Zoho Books connected for tenant {tenant_id} by {state_doc.get('user_email')} (dc={accounts_url})")
     return RedirectResponse(success_redirect, status_code=302)
 
 
