@@ -509,6 +509,90 @@ def _zoho_books_url(zoho_invoice_id: str, creds: dict) -> Optional[str]:
     return f"https://{books_domain}/#/invoices/{zoho_invoice_id}"
 
 
+async def _ensure_mirror_invoice(
+    *,
+    tenant_id: str,
+    delivery: dict,
+    items: list[dict],
+    account: dict,
+    zoho_invoice_id: str,
+    zoho_invoice_number: Optional[str],
+    zoho_invoice_url: Optional[str],
+) -> None:
+    """Upsert a row into the `invoices` collection so the Zoho invoice appears
+    on the Account → Invoices view. Idempotent on (tenant_id, source_id).
+    """
+    account_uuid = account.get("id") or account.get("account_uuid")
+    if not account_uuid:
+        logger.warning(
+            f"_ensure_mirror_invoice: no account_uuid for delivery {delivery.get('id')}; skipping mirror"
+        )
+        return
+
+    # Use account.sku_pricing to compute the mirror line items (same source as Zoho)
+    agreed_prices: dict[str, float] = {}
+    for p in (account.get("sku_pricing") or []):
+        sku_key = (p.get("sku") or p.get("sku_name") or "").strip().lower()
+        if sku_key:
+            try:
+                agreed_prices[sku_key] = float(p.get("price_per_unit") or 0)
+            except (TypeError, ValueError):
+                pass
+
+    items_list = []
+    for it in items:
+        name = (it.get("sku_name") or it.get("sku_code") or "").strip()
+        qty = float(it.get("quantity", 0) or 0)
+        rate = agreed_prices.get(name.lower(), float(it.get("unit_price") or 0))
+        net = qty * rate
+        items_list.append({
+            "sku_name": name,
+            "quantity": qty,
+            "bottles": qty,
+            "rate": rate,
+            "net_amount": net,
+            "line_total": net,
+        })
+    gross_total = sum(i["net_amount"] for i in items_list)
+    creds = await get_credentials(tenant_id) or {}
+    now = datetime.now(timezone.utc).isoformat()
+    invoice_doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "account_id": account_uuid,
+        "account_name": account.get("account_name") or account.get("name"),
+        "invoice_no": zoho_invoice_number,
+        "invoice_number": zoho_invoice_number,
+        "invoice_date": (delivery.get("delivery_date") or now)[:10],
+        "gross_invoice_value": gross_total,
+        "net_invoice_value": gross_total,
+        "outstanding": 0.0,
+        "items": items_list,
+        "source": "zoho_books",
+        "source_type": "distributor_delivery",
+        "source_id": delivery.get("id"),
+        "distributor_id": delivery.get("distributor_id"),
+        "zoho_invoice_id": zoho_invoice_id,
+        "zoho_invoice_number": zoho_invoice_number,
+        "zoho_invoice_url": zoho_invoice_url,
+        "zoho_organization_id": creds.get("organization_id"),
+        "updated_at": now,
+    }
+    try:
+        await db.invoices.update_one(
+            {"tenant_id": tenant_id, "source_type": "distributor_delivery",
+             "source_id": delivery.get("id")},
+            {"$set": invoice_doc, "$setOnInsert": {"created_at": now}},
+            upsert=True,
+        )
+        logger.info(
+            f"Mirrored Zoho invoice {zoho_invoice_number} into account "
+            f"{account.get('account_name')} (delivery {delivery.get('delivery_number')})"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to mirror Zoho invoice into invoices collection: {e}")
+
+
 async def create_invoice_for_delivery(
     *, tenant_id: str, delivery: dict, items: list[dict], account: dict
 ) -> dict:
@@ -527,6 +611,31 @@ async def create_invoice_for_delivery(
     """
     if not is_zoho_configured():
         raise RuntimeError("Zoho Books integration is not configured (ZOHO_CLIENT_ID missing).")
+
+    # ── Idempotency: if this delivery was already pushed successfully,
+    # don't re-create the Zoho invoice. Just (re)ensure the mirror in the
+    # `invoices` collection exists. This safely handles retries when the
+    # mirror failed/was-missing the first time.
+    existing_mapping = await db.zoho_invoice_mappings.find_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_delivery",
+         "source_id": delivery.get("id"), "status": "synced"},
+        {"_id": 0},
+    )
+    if existing_mapping and existing_mapping.get("zoho_invoice_id"):
+        logger.info(
+            f"Zoho mapping already synced for delivery {delivery.get('delivery_number')}; "
+            f"skipping Zoho create and ensuring mirror invoice exists."
+        )
+        await _ensure_mirror_invoice(
+            tenant_id=tenant_id,
+            delivery=delivery,
+            items=items,
+            account=account,
+            zoho_invoice_id=existing_mapping["zoho_invoice_id"],
+            zoho_invoice_number=existing_mapping.get("zoho_invoice_number"),
+            zoho_invoice_url=existing_mapping.get("zoho_invoice_url"),
+        )
+        return existing_mapping
 
     # 1. Upsert contact
     customer_id = await upsert_contact(tenant_id, account)
@@ -606,52 +715,16 @@ async def create_invoice_for_delivery(
 
     # 5. Mirror the invoice into the `invoices` collection so it shows up on
     #    the Account → Invoices listing, with a link back to Zoho Books.
+    await _ensure_mirror_invoice(
+        tenant_id=tenant_id,
+        delivery=delivery,
+        items=items,
+        account=account,
+        zoho_invoice_id=zoho_invoice_id,
+        zoho_invoice_number=zoho_invoice_number,
+        zoho_invoice_url=zoho_invoice_url,
+    )
     account_uuid = account.get("id") or account.get("account_uuid")
-    if account_uuid:
-        items_list = []
-        for li in line_items:
-            net = float(li["quantity"]) * float(li["rate"])
-            items_list.append({
-                "sku_name": li["name"],
-                "quantity": li["quantity"],
-                "bottles": li["quantity"],          # accountdetail UI reads `bottles`
-                "rate": li["rate"],
-                "net_amount": net,
-                "line_total": net,
-            })
-        gross_total = float(invoice.get("total") or sum(i["net_amount"] for i in items_list))
-        invoice_doc = {
-            "id": str(uuid.uuid4()),
-            "tenant_id": tenant_id,
-            "account_id": account_uuid,
-            "account_name": account.get("account_name") or account.get("name"),
-            "invoice_no": zoho_invoice_number,
-            "invoice_number": zoho_invoice_number,
-            "invoice_date": invoice_payload["date"],
-            "gross_invoice_value": gross_total,
-            "net_invoice_value": gross_total,
-            "outstanding": float(invoice.get("balance") or 0.0),
-            "items": items_list,
-            "source": "zoho_books",
-            "source_type": "distributor_delivery",
-            "source_id": delivery.get("id"),
-            "distributor_id": delivery.get("distributor_id"),
-            "zoho_invoice_id": zoho_invoice_id,
-            "zoho_invoice_number": zoho_invoice_number,
-            "zoho_invoice_url": zoho_invoice_url,
-            "zoho_organization_id": creds.get("organization_id"),
-            "created_at": now,
-            "updated_at": now,
-        }
-        # Upsert by source so a retry / re-push doesn't duplicate the row
-        try:
-            await db.invoices.update_one(
-                {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery.get("id")},
-                {"$set": invoice_doc, "$setOnInsert": {"created_at": now}},
-                upsert=True,
-            )
-        except Exception as e:
-            logger.warning(f"Failed to mirror Zoho invoice into invoices collection: {e}")
 
     # 6. Persist canonical mapping (used by Sync Status panel)
     mapping_doc = {
