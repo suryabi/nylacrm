@@ -230,6 +230,7 @@ export default function AccountDetail() {
     delivery_address_updated: false,
     sku_prices_correct: false,
     delivery_contact_updated: false,
+    logo_uploaded: false,
   });
   // Live activation-status from backend (auto-validated against data)
   const [activationStatus, setActivationStatus] = useState({
@@ -237,6 +238,7 @@ export default function AccountDetail() {
     delivery_address_updated: false,
     sku_prices_correct: false,
     delivery_contact_updated: false,
+    logo_uploaded: false,
   });
 
   // Customer's Delivery & Accounting section
@@ -972,6 +974,7 @@ ${googleMapsLink}`;
       delivery_address_updated: false,
       sku_prices_correct: false,
       delivery_contact_updated: false,
+      logo_uploaded: false,
     });
     setActivateDialogOpen(true);
     // Re-fetch fresh activation status for the auto-validation badges
@@ -2585,6 +2588,7 @@ ${googleMapsLink}`;
               { key: 'delivery_address_updated', label: 'Delivery address is updated', helper: 'Line 1, city, state and PIN required (auto-validated).' },
               { key: 'sku_prices_correct', label: 'SKU prices are correct', helper: 'At least one row in SKU Pricing (auto-validated).' },
               { key: 'delivery_contact_updated', label: 'Delivery contact details are updated', helper: 'Contact name AND phone required (auto-validated).' },
+              { key: 'logo_uploaded', label: 'Account logo is uploaded', helper: 'Upload the customer logo on the account header (auto-validated).' },
             ].map((item) => {
               const ok = !!activationStatus[item.key];
               return (

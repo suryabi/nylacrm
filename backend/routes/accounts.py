@@ -692,6 +692,7 @@ class ActivationChecklist(BaseModel):
     delivery_address_updated: bool
     sku_prices_correct: bool
     delivery_contact_updated: bool
+    logo_uploaded: bool
 
 
 async def _is_user_in_management_chain(tdb, user_id: str, target_user_id: str, max_depth: int = 8) -> bool:
@@ -739,6 +740,7 @@ async def get_activation_status(
             'delivery_contact_updated': bool(
                 account.get('delivery_contact_name') and account.get('delivery_contact_phone')
             ),
+            'logo_uploaded': bool((account.get('logo') or '').strip()),
         },
     }
 
@@ -760,8 +762,9 @@ async def activate_account(
         checklist.delivery_address_updated,
         checklist.sku_prices_correct,
         checklist.delivery_contact_updated,
+        checklist.logo_uploaded,
     ]):
-        raise HTTPException(status_code=400, detail='All four checklist items must be confirmed before activation.')
+        raise HTTPException(status_code=400, detail='All five checklist items must be confirmed before activation.')
 
     tdb = get_tdb()
     account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
@@ -795,6 +798,8 @@ async def activate_account(
     sku_pricing = account.get('sku_pricing') or []
     if not sku_pricing:
         failures.append('No SKU pricing configured. Add agreed prices under SKU Pricing.')
+    if not (account.get('logo') or '').strip():
+        failures.append('Account logo is not uploaded. Upload a logo on the account page.')
     if failures:
         raise HTTPException(status_code=400, detail=' '.join(failures))
 
