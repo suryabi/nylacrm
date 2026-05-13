@@ -272,11 +272,12 @@ export default function AccountDetail() {
   const [invoiceLineItems, setInvoiceLineItems] = useState([{ sku_name: '', bottles: 0, price_per_bottle: 0 }]);
   const [invoiceNotes, setInvoiceNotes] = useState('');
   
-  // Invoice list state — fixed at 5 latest items; default time period = This Month.
+  // Invoice list state — fixed at 5 latest items; locked to "This Month" on Account page.
+  // For wider time windows, users navigate to the dedicated Invoices page.
   // Account metrics inside the section are computed across the full filtered set on the backend.
   const [invoicePage, setInvoicePage] = useState(1);
   const invoiceLimit = 5;
-  const [invoiceTimeFilter, setInvoiceTimeFilter] = useState('this_month');
+  const invoiceTimeFilter = 'this_month'; // locked on Account page; full filter lives on /invoices
   const [invoiceTotalPages, setInvoiceTotalPages] = useState(0);
   const [invoiceTotalCount, setInvoiceTotalCount] = useState(0);
 
@@ -671,12 +672,12 @@ ${googleMapsLink}`;
     }
   };
   
-  // Refetch invoices when pagination or filter changes
+  // Refetch invoices when pagination changes (time filter locked to "this_month" on Account page)
   useEffect(() => {
     if (id) {
       fetchInvoices(id, invoicePage, invoiceLimit, invoiceTimeFilter);
     }
-  }, [invoicePage, invoiceLimit, invoiceTimeFilter]);
+  }, [invoicePage, invoiceLimit]);
 
   // Invoice creation functions
   const handleAddInvoiceLineItem = () => {
@@ -1374,28 +1375,12 @@ ${googleMapsLink}`;
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
                 Invoice Summary
+                <Badge variant="secondary" className="ml-2 text-xs font-medium">This Month</Badge>
                 {invoiceTotalCount > 0 && (
-                  <Badge variant="outline" className="ml-2">{invoiceTotalCount} Total</Badge>
+                  <Badge variant="outline" className="ml-1">{invoiceTotalCount} Total</Badge>
                 )}
               </h2>
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Time Filter */}
-                <Select value={invoiceTimeFilter} onValueChange={(val) => { setInvoiceTimeFilter(val); setInvoicePage(1); }}>
-                  <SelectTrigger className="w-[140px] h-8 text-sm" data-testid="invoice-time-filter">
-                    <SelectValue placeholder="Time Period" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="this_week">This Week</SelectItem>
-                    <SelectItem value="last_week">Last Week</SelectItem>
-                    <SelectItem value="this_month">This Month</SelectItem>
-                    <SelectItem value="last_month">Last Month</SelectItem>
-                    <SelectItem value="last_3_months">Last 3 Months</SelectItem>
-                    <SelectItem value="last_6_months">Last 6 Months</SelectItem>
-                    <SelectItem value="this_quarter">This Quarter</SelectItem>
-                    <SelectItem value="lifetime">Lifetime</SelectItem>
-                  </SelectContent>
-                </Select>
-
                 <Button
                   size="sm"
                   onClick={() => setShowCreateInvoice(true)}
@@ -1463,7 +1448,7 @@ ${googleMapsLink}`;
                   })()}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 italic" data-testid="invoice-summary-note">
-                  Showing the latest 5 invoices for this period. Metrics above include all invoices in the selected time window.
+                  Showing the latest 5 invoices for this month. Metrics above include all invoices in the current month.
                 </p>
                 <div className="space-y-3">
                   {invoiceData.invoices.slice(0, 5).map((inv, idx) => (
@@ -1475,8 +1460,8 @@ ${googleMapsLink}`;
                 <div className="flex items-center justify-between gap-3 mt-5 pt-4 border-t">
                   <p className="text-xs text-slate-500" data-testid="invoice-summary-count-note">
                     {invoiceTotalCount > 5
-                      ? `Showing 5 of ${invoiceTotalCount} invoices in this period`
-                      : `Showing ${invoiceTotalCount} of ${invoiceTotalCount} invoices in this period`}
+                      ? `Showing 5 of ${invoiceTotalCount} invoices this month`
+                      : `Showing ${invoiceTotalCount} of ${invoiceTotalCount} invoices this month`}
                   </p>
                   <Button
                     variant="outline"
@@ -1484,7 +1469,6 @@ ${googleMapsLink}`;
                     onClick={() => {
                       const params = new URLSearchParams();
                       if (account?.account_name) params.append('account_name', account.account_name);
-                      params.append('time_filter', invoiceTimeFilter);
                       navigateTo(`/invoices?${params.toString()}`, { label: 'Invoices' });
                     }}
                     data-testid="view-all-invoices-btn"
@@ -1497,17 +1481,20 @@ ${googleMapsLink}`;
             ) : (
               <div className="text-center py-8">
                 <FileText className="h-12 w-12 text-slate-300 mx-auto mb-3" />
-                <p className="text-muted-foreground mb-2">No invoices found for {invoiceTimeFilter === 'lifetime' ? 'this account' : invoiceTimeFilter.replace('_', ' ')}</p>
-                {invoiceTimeFilter !== 'lifetime' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setInvoiceTimeFilter('lifetime')}
-                    className="mt-2"
-                  >
-                    View All Time
-                  </Button>
-                )}
+                <p className="text-muted-foreground mb-2">No invoices found for this month</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const params = new URLSearchParams();
+                    if (account?.account_name) params.append('account_name', account.account_name);
+                    navigateTo(`/invoices?${params.toString()}`, { label: 'Invoices' });
+                  }}
+                  className="mt-2"
+                  data-testid="view-all-invoices-empty-btn"
+                >
+                  View all invoices
+                </Button>
               </div>
             )}
           </Card>
@@ -1646,101 +1633,177 @@ ${googleMapsLink}`;
 
         {/* Right Column - Financial Summary & Delivery */}
         <div className="space-y-6">
-          {/* Enhanced Financial Summary */}
-          <Card className="p-6 bg-gradient-to-br from-slate-50 to-white border-slate-200" data-testid="financial-summary-card">
-            <h2 className="text-lg font-semibold mb-5 flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-primary" />
-              Financial Summary
-            </h2>
-            
-            {/* Total Order Value - Highlighted */}
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-4 mb-5 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-emerald-100 text-sm font-medium">Total Order Value</p>
-                  <p className="text-2xl font-bold mt-1">
-                    ₹{(invoiceData?.total_amount || account?.total_order_value || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="bg-white/20 rounded-full p-3">
-                  <TrendingUp className="h-6 w-6" />
-                </div>
-              </div>
-            </div>
+          {/* ═══════════════════════════════════════════════════════════
+              Financial Summary — corporate, executive-finance aesthetic.
+              Single navy-slate accent for the hero metric; status-aware
+              colours (slate / amber / rose) on the secondary KPIs; subdued
+              "since last payment" recency band at the foot of the card.
+              ═══════════════════════════════════════════════════════════ */}
+          {(() => {
+            const fmtINR = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+            const totalOrder = invoiceData?.total_amount || account?.total_order_value || 0;
+            const outstanding = account?.outstanding_balance || 0;
+            const overdue = account?.overdue_amount || 0;
+            const lastPmt = account?.last_payment_amount || 0;
+            const lastDate = account?.last_payment_date ? new Date(account.last_payment_date) : null;
+            let daysSince = null;
+            if (lastDate && !isNaN(lastDate)) {
+              daysSince = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
+            }
+            const recencyTone =
+              daysSince === null
+                ? { bar: 'bg-slate-300', text: 'text-slate-500', label: 'No payment yet' }
+                : daysSince <= 30
+                ? { bar: 'bg-emerald-500', text: 'text-emerald-700', label: `${daysSince}d since last payment` }
+                : daysSince <= 45
+                ? { bar: 'bg-amber-500', text: 'text-amber-700', label: `${daysSince}d since last payment` }
+                : { bar: 'bg-rose-500', text: 'text-rose-700', label: `${daysSince}d since last payment` };
 
-            {/* Financial Metrics Grid */}
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              {/* Outstanding Balance */}
-              <div className={`p-3 rounded-xl ${account?.outstanding_balance > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-green-50 border border-green-200'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <CreditCard className={`h-4 w-4 ${account?.outstanding_balance > 0 ? 'text-amber-600' : 'text-green-600'}`} />
-                  <span className="text-xs font-medium text-muted-foreground">Outstanding</span>
-                </div>
-                <p className={`text-lg font-bold ${account?.outstanding_balance > 0 ? 'text-amber-700' : 'text-green-700'}`}>
-                  ₹{(account?.outstanding_balance || 0).toLocaleString()}
-                </p>
-              </div>
+            return (
+              <Card
+                className="relative overflow-hidden border-slate-200 bg-white shadow-sm"
+                data-testid="financial-summary-card"
+              >
+                {/* subtle top accent bar — corporate header treatment */}
+                <div className="h-1 w-full bg-gradient-to-r from-slate-700 via-slate-600 to-slate-500" />
 
-              {/* Overdue Amount */}
-              <div className={`p-3 rounded-xl ${account?.overdue_amount > 0 ? 'bg-red-50 border border-red-200' : 'bg-green-50 border border-green-200'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className={`h-4 w-4 ${account?.overdue_amount > 0 ? 'text-red-600' : 'text-green-600'}`} />
-                  <span className="text-xs font-medium text-muted-foreground">Overdue</span>
-                </div>
-                <p className={`text-lg font-bold ${account?.overdue_amount > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                  ₹{(account?.overdue_amount || 0).toLocaleString()}
-                </p>
-              </div>
-            </div>
+                <div className="p-6">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-md bg-slate-900 text-white flex items-center justify-center">
+                        <TrendingUp className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h2 className="text-[15px] font-semibold tracking-tight text-slate-900 leading-tight">
+                          Financial Summary
+                        </h2>
+                        <p className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
+                          Account ledger
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-            {/* Last Payment Info */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Calendar className="h-4 w-4 text-blue-600" />
-                <span className="text-sm font-semibold text-blue-800">Last Payment</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-xs text-blue-600">Amount</p>
-                  <p className="text-xl font-bold text-blue-800">
-                    ₹{(account?.last_payment_amount || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-blue-600">Date</p>
-                  <div className="flex items-center justify-end gap-2">
-                    <p className="text-sm font-semibold text-blue-800">
-                      {account?.last_payment_date 
-                        ? format(new Date(account.last_payment_date), 'MMM d, yyyy')
-                        : 'No payment yet'
-                      }
-                    </p>
-                    {(() => {
-                      if (!account?.last_payment_date) return null;
-                      const d = new Date(account.last_payment_date);
-                      if (isNaN(d)) return null;
-                      const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
-                      const cls = days <= 30
-                        ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                        : days <= 45
-                          ? 'bg-amber-100 text-amber-700 border-amber-300'
-                          : 'bg-rose-100 text-rose-700 border-rose-300';
-                      return (
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] px-1.5 py-0 ${cls}`}
-                          data-testid="last-payment-days-badge"
-                          title={`${days} days since last payment`}
-                        >
-                          {days}d
-                        </Badge>
-                      );
-                    })()}
+                  {/* Hero metric — Total Order Value */}
+                  <div className="rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 mb-5">
+                    <div className="flex items-start justify-between">
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-[0.12em] font-semibold text-slate-500 mb-1">
+                          Total Order Value
+                        </p>
+                        <p className="text-[28px] font-bold tracking-tight text-slate-900 leading-none tabular-nums">
+                          {fmtINR(totalOrder)}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-1.5">
+                          Cumulative invoiced amount
+                        </p>
+                      </div>
+                      <div className="shrink-0 h-10 w-10 rounded-full bg-slate-900/5 border border-slate-200 flex items-center justify-center">
+                        <DollarSign className="h-5 w-5 text-slate-700" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Secondary KPIs — Outstanding & Overdue */}
+                  <div className="grid grid-cols-2 gap-3 mb-5">
+                    <div
+                      className={`rounded-lg border p-3 transition-colors ${
+                        outstanding > 0
+                          ? 'border-amber-200 bg-amber-50/60'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                      data-testid="kpi-outstanding"
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
+                          Outstanding
+                        </p>
+                        <CreditCard
+                          className={`h-3.5 w-3.5 ${
+                            outstanding > 0 ? 'text-amber-600' : 'text-slate-400'
+                          }`}
+                        />
+                      </div>
+                      <p
+                        className={`text-[18px] font-bold tracking-tight tabular-nums ${
+                          outstanding > 0 ? 'text-amber-800' : 'text-slate-700'
+                        }`}
+                      >
+                        {fmtINR(outstanding)}
+                      </p>
+                    </div>
+
+                    <div
+                      className={`rounded-lg border p-3 transition-colors ${
+                        overdue > 0
+                          ? 'border-rose-200 bg-rose-50/60'
+                          : 'border-slate-200 bg-white'
+                      }`}
+                      data-testid="kpi-overdue"
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">
+                          Overdue
+                        </p>
+                        <AlertTriangle
+                          className={`h-3.5 w-3.5 ${
+                            overdue > 0 ? 'text-rose-600' : 'text-slate-400'
+                          }`}
+                        />
+                      </div>
+                      <p
+                        className={`text-[18px] font-bold tracking-tight tabular-nums ${
+                          overdue > 0 ? 'text-rose-800' : 'text-slate-700'
+                        }`}
+                      >
+                        {fmtINR(overdue)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Last Payment band — subdued, professional */}
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/60 overflow-hidden">
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                          <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                            Last Payment
+                          </span>
+                        </div>
+                        <span className={`text-[10px] font-semibold ${recencyTone.text}`}>
+                          {recencyTone.label}
+                        </span>
+                      </div>
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+                            Amount
+                          </p>
+                          <p className="text-[20px] font-bold tracking-tight text-slate-900 tabular-nums leading-tight">
+                            {fmtINR(lastPmt)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+                            Date
+                          </p>
+                          <p className="text-sm font-semibold text-slate-700">
+                            {lastDate && !isNaN(lastDate)
+                              ? format(lastDate, 'dd MMM yyyy')
+                              : '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Recency indicator strip */}
+                    <div className={`h-[3px] w-full ${recencyTone.bar}`} />
                   </div>
                 </div>
-              </div>
-            </div>
-          </Card>
+              </Card>
+            );
+          })()}
 
           {/* ═══════════════════════════════════════════════════════════
               Customer's Delivery & Accounting

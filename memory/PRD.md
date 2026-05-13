@@ -22,6 +22,14 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 
 ## Recent Implementations
 
+### 2026-02-13 (this session)
+- **Account page Invoice Summary locked to "This Month"** (`frontend/src/pages/AccountDetail.js`)
+  - Removed the time-period dropdown from the Account page Invoice Summary card.
+  - The card now always renders only the current month's invoices (latest 5) and a "This Month" pill in the header.
+  - Empty state and "View all invoices" CTA navigate to `/invoices?account_name=<name>` (without any time_filter) so users get the full history on the dedicated Invoices page.
+
+
+
 ### 2026-02-11 (this session — later)
 - **Zoho Books OAuth integration (scaffolding)** — India DC. Per-tenant connection model; CEO/Admin/System Admin only can manage.
   - Backend service `services/zoho_service.py`: Fernet-encrypted token storage, OAuth flow (auth URL, code↔token exchange, refresh, revoke), org listing, contact upsert, invoice creation, rate-limit aware HTTP client with 429 Retry-After + exponential back-off, background sync orchestrator (3 attempts: 0s/4s/16s).
