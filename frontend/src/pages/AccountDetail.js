@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -245,6 +245,8 @@ export default function AccountDetail() {
   const [savingContact, setSavingContact] = useState(false);
   const [gstUploading, setGstUploading] = useState(false);
   const gstFileInputRef = useRef(null);
+  // True when delivery address card is in edit/form mode; false when displayed as visiting card
+  const [editingDeliveryAddress, setEditingDeliveryAddress] = useState(false);
   
   // Delivery Address state
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -434,11 +436,38 @@ export default function AccountDetail() {
         delivery_address: deliveryAddress
       });
       toast.success('Delivery address saved successfully');
+      setEditingDeliveryAddress(false);
       fetchAccount(); // Refresh account data
     } catch (error) {
       toast.error('Failed to save delivery address');
     } finally {
       setSavingAddress(false);
+    }
+  };
+
+  // Build Google Maps URL (prefers lat/lng, falls back to text address)
+  const buildMapsUrl = (addr) => {
+    if (!addr || !addr.address_line1) return null;
+    if (addr.lat && addr.lng) {
+      return `https://www.google.com/maps/?q=${addr.lat},${addr.lng}`;
+    }
+    return `https://www.google.com/maps/place/${encodeURIComponent(
+      [addr.address_line1, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ') + ', India'
+    )}`;
+  };
+
+  // Copy ONLY the Google Maps link (used by the icon button on the saved-address card)
+  const handleCopyMapsLink = async () => {
+    const url = buildMapsUrl(deliveryAddress);
+    if (!url) {
+      toast.error('No delivery address set');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Google Maps link copied');
+    } catch {
+      toast.error('Could not copy to clipboard');
     }
   };
 
@@ -1839,210 +1868,244 @@ ${googleMapsLink}`;
 
             {/* ── 2) Delivery Address ── */}
             <div className="rounded-xl border border-border bg-secondary/20 p-4 mb-5" data-testid="delivery-address-card">
-              <div className="flex items-center gap-2 mb-3">
-                <Truck className="h-4 w-4 text-blue-600" />
-                <span className="font-semibold text-sm">Delivery Address</span>
-                {(deliveryAddress.lat && deliveryAddress.lng) && (
-                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
-                    GPS locked
-                  </Badge>
-                )}
-              </div>
-            
-            {/* Google Powered Address Search */}
-            <div className="relative mb-4" ref={addressSearchRef}>
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-sm font-medium">Search Address</Label>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span>Powered by</span>
-                  <span className="font-semibold text-[#4285F4]">G</span>
-                  <span className="font-semibold text-[#EA4335]">o</span>
-                  <span className="font-semibold text-[#FBBC05]">o</span>
-                  <span className="font-semibold text-[#4285F4]">g</span>
-                  <span className="font-semibold text-[#34A853]">l</span>
-                  <span className="font-semibold text-[#EA4335]">e</span>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-blue-600" />
+                  <span className="font-semibold text-sm">Delivery Address</span>
+                  {(deliveryAddress.lat && deliveryAddress.lng) && (
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                      GPS locked
+                    </Badge>
+                  )}
                 </div>
-              </div>
-              
-              {/* City context badge */}
-              {account?.city && (
-                <div className="mb-2">
-                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                    <MapPin className="h-3 w-3 mr-1" />
-                    Searching in {account.city}, {account.state}
-                  </Badge>
-                </div>
-              )}
-              
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
-                <Input
-                  type="text"
-                  placeholder={`Search address in ${account?.city || 'your city'}...`}
-                  value={addressSearchQuery}
-                  onChange={(e) => handleAddressSearch(e.target.value)}
-                  className="pl-10 pr-10 border-blue-200 focus:border-blue-400 focus:ring-blue-400/20"
-                  data-testid="address-search-input"
-                />
-                {isSearchingAddress ? (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-500" />
-                ) : (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <svg width="16" height="16" viewBox="0 0 24 24" className="text-muted-foreground">
-                      <path fill="#4285F4" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-                      <circle fill="white" cx="12" cy="9" r="2.5"/>
-                    </svg>
-                  </div>
-                )}
-              </div>
-              
-              {/* Suggestions Dropdown */}
-              {addressSuggestions.length > 0 && (
-                <div className="absolute z-20 w-full mt-1 bg-white border border-blue-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                  {addressSuggestions.map((suggestion, idx) => (
+                {/* Edit / Copy actions visible only when card view is active */}
+                {!editingDeliveryAddress && account?.delivery_address?.address_line1 && (
+                  <div className="flex items-center gap-1">
                     <button
-                      key={suggestion.place_id}
-                      className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start gap-3 ${idx !== addressSuggestions.length - 1 ? 'border-b border-gray-100' : ''}`}
-                      onClick={() => handleSelectAddress(suggestion.place_id, suggestion.description)}
-                      data-testid={`address-suggestion-${suggestion.place_id}`}
+                      type="button"
+                      onClick={handleCopyMapsLink}
+                      className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+                      title="Copy Google Maps location link"
+                      data-testid="copy-maps-link-btn"
                     >
-                      <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{suggestion.structured_formatting?.main_text}</p>
-                        <p className="text-xs text-muted-foreground">{suggestion.structured_formatting?.secondary_text}</p>
-                      </div>
+                      <Copy className="h-4 w-4" />
                     </button>
-                  ))}
-                  <div className="px-4 py-2 bg-gray-50 text-xs text-muted-foreground flex items-center justify-end gap-1">
-                    <span>Powered by</span>
-                    <svg width="50" height="16" viewBox="0 0 50 16">
-                      <text x="0" y="12" fontSize="10" fontWeight="500">
-                        <tspan fill="#4285F4">G</tspan>
-                        <tspan fill="#EA4335">o</tspan>
-                        <tspan fill="#FBBC05">o</tspan>
-                        <tspan fill="#4285F4">g</tspan>
-                        <tspan fill="#34A853">l</tspan>
-                        <tspan fill="#EA4335">e</tspan>
-                      </text>
-                    </svg>
+                    <a
+                      href={buildMapsUrl(deliveryAddress)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+                      title="Open in Google Maps"
+                      data-testid="open-maps-btn"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDeliveryAddress(true)}
+                      className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+                      title="Edit delivery address"
+                      data-testid="edit-delivery-address-btn"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── VISITING-CARD VIEW (when address saved & not editing) ── */}
+              {!editingDeliveryAddress && account?.delivery_address?.address_line1 ? (
+                <div className="rounded-lg bg-white border border-blue-200 p-4 shadow-sm">
+                  <div className="space-y-1">
+                    <p className="text-[15px] font-semibold text-foreground leading-snug">
+                      {account.delivery_address.address_line1}
+                    </p>
+                    {account.delivery_address.address_line2 && (
+                      <p className="text-sm text-foreground leading-snug">
+                        {account.delivery_address.address_line2}
+                      </p>
+                    )}
+                    <p className="text-sm text-foreground leading-snug">
+                      {[
+                        account.delivery_address.city,
+                        account.delivery_address.state,
+                        account.delivery_address.pincode,
+                      ].filter(Boolean).join(', ')}
+                    </p>
+                    {account.delivery_address.landmark && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Landmark: {account.delivery_address.landmark}
+                      </p>
+                    )}
+                    {(account.delivery_address.lat && account.delivery_address.lng) && (
+                      <div className="mt-2 pt-2 border-t border-dashed border-blue-100">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">
+                          GPS coordinates
+                        </p>
+                        <p className="text-xs font-mono text-blue-700">
+                          {Number(account.delivery_address.lat).toFixed(6)}, {Number(account.delivery_address.lng).toFixed(6)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
+              ) : (
+                <>
+                  {/* ── FORM VIEW (initial setup or Edit clicked) ── */}
+                  <div className="relative mb-4" ref={addressSearchRef}>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-sm font-medium">Search Address</Label>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <span>Powered by</span>
+                        <span className="font-semibold text-[#4285F4]">G</span>
+                        <span className="font-semibold text-[#EA4335]">o</span>
+                        <span className="font-semibold text-[#FBBC05]">o</span>
+                        <span className="font-semibold text-[#4285F4]">g</span>
+                        <span className="font-semibold text-[#34A853]">l</span>
+                        <span className="font-semibold text-[#EA4335]">e</span>
+                      </div>
+                    </div>
 
-            {/* Address Fields */}
-            <div className="space-y-4 pt-2 border-t">
-              <p className="text-xs text-muted-foreground">Address fields will auto-populate when you select from search</p>
-              <div>
-                <Label className="text-xs text-muted-foreground">Address Line 1</Label>
-                <Input
-                  value={deliveryAddress.address_line1}
-                  onChange={(e) => setDeliveryAddress({...deliveryAddress, address_line1: e.target.value})}
-                  placeholder="Street address"
-                  data-testid="address-line1-input"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Address Line 2</Label>
-                <Input
-                  value={deliveryAddress.address_line2}
-                  onChange={(e) => setDeliveryAddress({...deliveryAddress, address_line2: e.target.value})}
-                  placeholder="Area, Locality"
-                  data-testid="address-line2-input"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-muted-foreground">City</Label>
-                  <Input
-                    value={deliveryAddress.city}
-                    onChange={(e) => setDeliveryAddress({...deliveryAddress, city: e.target.value})}
-                    placeholder="City"
-                    data-testid="address-city-input"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">State</Label>
-                  <Input
-                    value={deliveryAddress.state}
-                    onChange={(e) => setDeliveryAddress({...deliveryAddress, state: e.target.value})}
-                    placeholder="State"
-                    data-testid="address-state-input"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Pincode</Label>
-                  <Input
-                    value={deliveryAddress.pincode}
-                    onChange={(e) => setDeliveryAddress({...deliveryAddress, pincode: e.target.value})}
-                    placeholder="Pincode"
-                    data-testid="address-pincode-input"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Landmark</Label>
-                  <Input
-                    value={deliveryAddress.landmark}
-                    onChange={(e) => setDeliveryAddress({...deliveryAddress, landmark: e.target.value})}
-                    placeholder="Landmark"
-                    data-testid="address-landmark-input"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2 mt-4">
-              <Button
-                onClick={handleSaveDeliveryAddress}
-                className="flex-1"
-                disabled={savingAddress || !deliveryAddress.address_line1}
-                data-testid="save-delivery-address-btn"
-              >
-                {savingAddress ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
-                ) : (
-                  <><Save className="h-4 w-4 mr-2" /> Save</>
-                )}
-              </Button>
-              <Button
-                onClick={handleCopyDeliveryAddress}
-                variant="outline"
-                disabled={!deliveryAddress.address_line1}
-                data-testid="copy-delivery-address-btn"
-                title="Copy outlet name, address & Google Maps link"
-              >
-                <Copy className="h-4 w-4 mr-2" /> Copy
-              </Button>
-            </div>
-            
-            {/* Google Maps Link Preview */}
-            {deliveryAddress.address_line1 && (
-              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <a
-                  href={
-                    deliveryAddress.lat && deliveryAddress.lng
-                      ? `https://www.google.com/maps/?q=${deliveryAddress.lat},${deliveryAddress.lng}`
-                      : `https://www.google.com/maps/place/${encodeURIComponent([deliveryAddress.address_line1, deliveryAddress.city, deliveryAddress.state, deliveryAddress.pincode].filter(Boolean).join(', ') + ', India')}`
-                  }
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-800"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span>
-                    Open in Google Maps
-                    {deliveryAddress.lat && deliveryAddress.lng && (
-                      <span className="ml-2 text-xs text-blue-600 font-mono">
-                        ({Number(deliveryAddress.lat).toFixed(5)}, {Number(deliveryAddress.lng).toFixed(5)})
-                      </span>
+                    {account?.city && (
+                      <div className="mb-2">
+                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          Searching in {account.city}, {account.state}
+                        </Badge>
+                      </div>
                     )}
-                  </span>
-                </a>
-              </div>
-            )}
+
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-500" />
+                      <Input
+                        type="text"
+                        placeholder={`Search address in ${account?.city || 'your city'}...`}
+                        value={addressSearchQuery}
+                        onChange={(e) => handleAddressSearch(e.target.value)}
+                        className="pl-10 pr-10 border-blue-200 focus:border-blue-400 focus:ring-blue-400/20"
+                        data-testid="address-search-input"
+                      />
+                      {isSearchingAddress ? (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-blue-500" />
+                      ) : (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+
+                    {addressSuggestions.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-blue-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                        {addressSuggestions.map((suggestion, idx) => (
+                          <button
+                            key={suggestion.place_id}
+                            className={`w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors flex items-start gap-3 ${idx !== addressSuggestions.length - 1 ? 'border-b border-gray-100' : ''}`}
+                            onClick={() => handleSelectAddress(suggestion.place_id, suggestion.description)}
+                            data-testid={`address-suggestion-${suggestion.place_id}`}
+                          >
+                            <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{suggestion.structured_formatting?.main_text}</p>
+                              <p className="text-xs text-muted-foreground">{suggestion.structured_formatting?.secondary_text}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4 pt-2 border-t">
+                    <p className="text-xs text-muted-foreground">Address fields will auto-populate when you select from search</p>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Address Line 1</Label>
+                      <Input
+                        value={deliveryAddress.address_line1}
+                        onChange={(e) => setDeliveryAddress({...deliveryAddress, address_line1: e.target.value})}
+                        placeholder="Street address"
+                        data-testid="address-line1-input"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Address Line 2</Label>
+                      <Input
+                        value={deliveryAddress.address_line2}
+                        onChange={(e) => setDeliveryAddress({...deliveryAddress, address_line2: e.target.value})}
+                        placeholder="Area, Locality"
+                        data-testid="address-line2-input"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">City</Label>
+                        <Input
+                          value={deliveryAddress.city}
+                          onChange={(e) => setDeliveryAddress({...deliveryAddress, city: e.target.value})}
+                          placeholder="City"
+                          data-testid="address-city-input"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">State</Label>
+                        <Input
+                          value={deliveryAddress.state}
+                          onChange={(e) => setDeliveryAddress({...deliveryAddress, state: e.target.value})}
+                          placeholder="State"
+                          data-testid="address-state-input"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Pincode</Label>
+                        <Input
+                          value={deliveryAddress.pincode}
+                          onChange={(e) => setDeliveryAddress({...deliveryAddress, pincode: e.target.value})}
+                          placeholder="Pincode"
+                          data-testid="address-pincode-input"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Landmark</Label>
+                        <Input
+                          value={deliveryAddress.landmark}
+                          onChange={(e) => setDeliveryAddress({...deliveryAddress, landmark: e.target.value})}
+                          placeholder="Landmark"
+                          data-testid="address-landmark-input"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-4">
+                    <Button
+                      onClick={handleSaveDeliveryAddress}
+                      className="flex-1"
+                      disabled={savingAddress || !deliveryAddress.address_line1}
+                      data-testid="save-delivery-address-btn"
+                    >
+                      {savingAddress ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                      ) : (
+                        <><Save className="h-4 w-4 mr-2" /> Save</>
+                      )}
+                    </Button>
+                    {account?.delivery_address?.address_line1 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          // Cancel edit — restore from saved address
+                          setDeliveryAddress(account.delivery_address);
+                          setEditingDeliveryAddress(false);
+                        }}
+                        disabled={savingAddress}
+                        data-testid="cancel-delivery-address-edit-btn"
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* ── 3) Delivery Contact ── */}
