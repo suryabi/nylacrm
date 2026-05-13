@@ -23,10 +23,13 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 ## Recent Implementations
 
 ### 2026-02-13 (this session)
-- **Account page Invoice Summary locked to "This Month"** (`frontend/src/pages/AccountDetail.js`)
+- **Account page Invoice Summary locked to "This Month" + MoM delta** (`frontend/src/pages/AccountDetail.js`)
   - Removed the time-period dropdown from the Account page Invoice Summary card.
   - The card now always renders only the current month's invoices (latest 5) and a "This Month" pill in the header.
+  - Added **Month-over-Month delta indicators** under Gross Value and Net Value tiles (e.g., "+12.3% vs last month") with green/rose color + TrendingUp/Down icons. Falls back to "No data last month" when previous month had no invoices.
+  - `fetchInvoices` now fetches this-month and last-month summaries in parallel via `Promise.all` for the MoM comparison.
   - Empty state and "View all invoices" CTA navigate to `/invoices?account_name=<name>` (without any time_filter) so users get the full history on the dedicated Invoices page.
+
 
 
 

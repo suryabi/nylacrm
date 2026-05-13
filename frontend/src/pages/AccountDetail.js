@@ -14,7 +14,7 @@ import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
-  DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search, Copy, ExternalLink,
+  DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, TrendingDown, Minus, Truck, Search, Copy, ExternalLink,
   Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -197,6 +197,7 @@ export default function AccountDetail() {
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
+  const [lastMonthSummary, setLastMonthSummary] = useState(null); // for Month-over-Month delta
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [users, setUsers] = useState([]);
   const [masterSkus, setMasterSkus] = useState([]);
@@ -659,11 +660,19 @@ ${googleMapsLink}`;
     console.log('[INVOICE_FETCH] Starting fetch for account:', accountId, 'page:', page, 'limit:', limit, 'timeFilter:', timeFilter);
     setLoadingInvoices(true);
     try {
-      const response = await accountsAPI.getInvoices(accountId, { page, limit, time_filter: timeFilter });
+      // Fetch current period and last month (for MoM delta) in parallel.
+      // last_month payload is only used for summary totals, so request a tiny page.
+      const [response, lastMonthResp] = await Promise.all([
+        accountsAPI.getInvoices(accountId, { page, limit, time_filter: timeFilter }),
+        timeFilter === 'this_month'
+          ? accountsAPI.getInvoices(accountId, { page: 1, limit: 1, time_filter: 'last_month' }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
       console.log('[INVOICE_FETCH] Response:', response.data);
       setInvoiceData(response.data);
       setInvoiceTotalPages(response.data.pages || 0);
       setInvoiceTotalCount(response.data.total || 0);
+      setLastMonthSummary(lastMonthResp?.data || null);
     } catch (error) {
       console.error('[INVOICE_FETCH] Error fetching invoices:', error);
       console.log('No invoice data available');
@@ -1409,41 +1418,82 @@ ${googleMapsLink}`;
             ) : invoiceData && invoiceData.invoices?.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
-                  <div className="bg-green-50 rounded-lg p-4 border border-green-100">
-                    <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
-                    <p className="text-lg font-bold text-green-700 tabular-nums">₹{((invoiceData.total_amount || 0) / 100000).toFixed(2)}L</p>
-                  </div>
-                  <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
-                    <p className="text-xs text-amber-600 font-medium mb-1">CREDIT NOTES</p>
-                    <p className="text-lg font-bold text-amber-700 tabular-nums">₹{((invoiceData.credit_amount || 0) / 100000).toFixed(2)}L</p>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
-                    <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
-                    <p className="text-lg font-bold text-blue-700 tabular-nums">₹{((invoiceData.net_amount || 0) / 100000).toFixed(2)}L</p>
-                  </div>
-                  <div className="bg-rose-50 rounded-lg p-4 border border-rose-100">
-                    <p className="text-xs text-rose-600 font-medium mb-1">OUTSTANDING</p>
-                    <p className={`text-lg font-bold tabular-nums ${(invoiceData.outstanding || 0) > 0 ? 'text-rose-700' : 'text-slate-500'}`}>₹{((invoiceData.outstanding || 0) / 100000).toFixed(2)}L</p>
-                  </div>
                   {(() => {
-                    const s = invoiceData.summary || {};
-                    const pct = Number(s.return_pct || 0);
-                    const delivered = s.bottles_delivered ?? 0;
-                    const returned = s.bottles_returned ?? 0;
-                    // Higher = better (more empty bottles recycled). Invert tone vs damage metrics.
-                    const tone = pct >= 50
-                      ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
-                      : pct >= 25
-                        ? 'bg-amber-50 border-amber-100 text-amber-700'
-                        : 'bg-rose-50 border-rose-100 text-rose-700';
-                    return (
-                      <div className={`rounded-lg p-4 border ${tone}`} data-testid="account-return-pct-tile">
-                        <p className="text-xs font-medium mb-1 opacity-80">RETURN BOTTLES %</p>
-                        <p className="text-lg font-bold tabular-nums">{pct.toFixed(2)}%</p>
-                        <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">
-                          {returned.toLocaleString()} / {delivered.toLocaleString()} empty bottles returned for reuse
+                    // Compute Month-over-Month deltas for Gross and Net.
+                    // Returns null when last month had no invoices (to avoid 0→∞ noise).
+                    const lm = lastMonthSummary || {};
+                    const computeDelta = (currentVal, prevVal) => {
+                      const cur = Number(currentVal || 0);
+                      const prev = Number(prevVal || 0);
+                      if (prev <= 0) return null;
+                      const pct = ((cur - prev) / prev) * 100;
+                      return { pct, prev };
+                    };
+                    const grossMoM = computeDelta(invoiceData.total_amount, lm.total_amount);
+                    const netMoM = computeDelta(invoiceData.net_amount, lm.net_amount);
+                    const MoMBadge = ({ delta, testId }) => {
+                      if (!delta) {
+                        return (
+                          <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1 tabular-nums" data-testid={testId}>
+                            <Minus className="h-2.5 w-2.5" />
+                            No data last month
+                          </p>
+                        );
+                      }
+                      const up = delta.pct > 0.05;
+                      const down = delta.pct < -0.05;
+                      const cls = up ? 'text-emerald-600' : down ? 'text-rose-600' : 'text-slate-500';
+                      const Icon = up ? TrendingUp : down ? TrendingDown : Minus;
+                      const sign = delta.pct > 0 ? '+' : '';
+                      return (
+                        <p className={`text-[10px] mt-1 flex items-center gap-1 font-medium tabular-nums ${cls}`} data-testid={testId}>
+                          <Icon className="h-2.5 w-2.5" />
+                          {sign}{delta.pct.toFixed(1)}% vs last month
                         </p>
-                      </div>
+                      );
+                    };
+                    return (
+                      <>
+                        <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                          <p className="text-xs text-green-600 font-medium mb-1">GROSS VALUE</p>
+                          <p className="text-lg font-bold text-green-700 tabular-nums">₹{((invoiceData.total_amount || 0) / 100000).toFixed(2)}L</p>
+                          <MoMBadge delta={grossMoM} testId="mom-delta-gross" />
+                        </div>
+                        <div className="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                          <p className="text-xs text-amber-600 font-medium mb-1">CREDIT NOTES</p>
+                          <p className="text-lg font-bold text-amber-700 tabular-nums">₹{((invoiceData.credit_amount || 0) / 100000).toFixed(2)}L</p>
+                        </div>
+                        <div className="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                          <p className="text-xs text-blue-600 font-medium mb-1">NET VALUE</p>
+                          <p className="text-lg font-bold text-blue-700 tabular-nums">₹{((invoiceData.net_amount || 0) / 100000).toFixed(2)}L</p>
+                          <MoMBadge delta={netMoM} testId="mom-delta-net" />
+                        </div>
+                        <div className="bg-rose-50 rounded-lg p-4 border border-rose-100">
+                          <p className="text-xs text-rose-600 font-medium mb-1">OUTSTANDING</p>
+                          <p className={`text-lg font-bold tabular-nums ${(invoiceData.outstanding || 0) > 0 ? 'text-rose-700' : 'text-slate-500'}`}>₹{((invoiceData.outstanding || 0) / 100000).toFixed(2)}L</p>
+                        </div>
+                        {(() => {
+                          const s = invoiceData.summary || {};
+                          const pct = Number(s.return_pct || 0);
+                          const delivered = s.bottles_delivered ?? 0;
+                          const returned = s.bottles_returned ?? 0;
+                          // Higher = better (more empty bottles recycled). Invert tone vs damage metrics.
+                          const tone = pct >= 50
+                            ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                            : pct >= 25
+                              ? 'bg-amber-50 border-amber-100 text-amber-700'
+                              : 'bg-rose-50 border-rose-100 text-rose-700';
+                          return (
+                            <div className={`rounded-lg p-4 border ${tone}`} data-testid="account-return-pct-tile">
+                              <p className="text-xs font-medium mb-1 opacity-80">RETURN BOTTLES %</p>
+                              <p className="text-lg font-bold tabular-nums">{pct.toFixed(2)}%</p>
+                              <p className="text-[10px] opacity-70 mt-0.5 tabular-nums">
+                                {returned.toLocaleString()} / {delivered.toLocaleString()} empty bottles returned for reuse
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </>
                     );
                   })()}
                 </div>
