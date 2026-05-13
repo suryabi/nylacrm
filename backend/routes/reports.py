@@ -230,14 +230,20 @@ async def get_sku_performance(
         sku_target_map[sku_name]['target_units'] += t.get('target_units', 0)
 
     # ─── Build SKU master map: external_sku_id → display sku_name ───
-    sku_masters = await get_tdb().master_skus.find({}, {'_id': 0}).to_list(200)
+    # Only ACTIVE master SKUs are surfaced as "known" so the report matches
+    # the SKU Management screen. Inactive (soft-deleted) SKUs are still kept
+    # in `ext_to_name` so historic invoice line items can resolve, but they
+    # won't add empty rows to the displayed list.
+    sku_masters = await get_tdb().master_skus.find({}, {'_id': 0}).to_list(500)
     ext_to_name = {}
     all_known_skus = set()
     for m in sku_masters:
         name = m.get('sku_name') or m.get('sku') or m.get('name')
         if not name:
             continue
-        all_known_skus.add(name)
+        is_active = m.get('is_active', True)
+        if is_active:
+            all_known_skus.add(name)
         for k in ('external_sku_id', 'sku', 'sku_name'):
             v = m.get(k)
             if v:
@@ -334,12 +340,15 @@ async def get_sku_performance(
                 # Even if no invoice value, count as sold
                 sku_units[sku_name] += 10  # Default units per won deal
     
-    # Build SKU performance data — list = master SKUs ∪ any SKUs found in invoices/targets
+    # Build SKU performance data — list = ACTIVE master SKUs ∪ any SKUs
+    # found in invoices/targets. Blank/whitespace-only names are dropped
+    # so the report never renders an empty SKU row.
     skus_data = []
     if sku and sku != 'all':
         sku_list = [sku]
     else:
-        sku_list = sorted(all_known_skus | set(sku_invoice_revenue.keys()) | set(sku_target_map.keys()))
+        raw = all_known_skus | set(sku_invoice_revenue.keys()) | set(sku_target_map.keys())
+        sku_list = sorted(s for s in raw if s and str(s).strip())
         if not sku_list:
             sku_list = SKU_OPTIONS
 
