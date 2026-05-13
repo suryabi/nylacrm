@@ -429,17 +429,50 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
             "phone": account.get("contact_number") or account.get("phone") or "",
             "is_primary_contact": True,
         }]
-    if account.get("gstin"):
-        payload["gst_no"] = account["gstin"]
+    if account.get("gstin") or account.get("gst_number"):
+        payload["gst_no"] = account.get("gstin") or account.get("gst_number")
         payload["gst_treatment"] = "business_gst"
-    if account.get("delivery_address") or account.get("billing_address"):
-        payload["billing_address"] = {
-            "address": account.get("billing_address") or account.get("delivery_address") or "",
-            "city": account.get("city") or "",
-            "state": account.get("state") or "",
-            "zip": account.get("postal_code") or "",
+
+    # ── Flatten our nested address dicts into Zoho's flat schema ──
+    # Zoho's `billing_address` / `shipping_address` expect string fields:
+    #   {address, street2, city, state, zip, country}
+    # Our internal model stores dicts: {address_line1, address_line2, city, state, pincode}.
+    def _zoho_addr(src) -> Optional[dict]:
+        if not src:
+            return None
+        if isinstance(src, str):
+            return {"address": src, "country": "India"}
+        if not isinstance(src, dict):
+            return None
+        # Some legacy rows store the address as a JSON-stringified blob.
+        # Defensive parse so we don't store the JSON literally.
+        line1 = (src.get("address_line1") or src.get("line1") or "").strip()
+        line2 = (src.get("address_line2") or src.get("line2") or "").strip()
+        city = (src.get("city") or "").strip()
+        state = (src.get("state") or "").strip()
+        zipc = (src.get("pincode") or src.get("zip") or src.get("postal_code") or "").strip()
+        # Compose a clean "address" line (Zoho line 1 is free text)
+        addr = ", ".join([p for p in (line1, src.get("landmark")) if p]).strip() or line1
+        if not (addr or city or state or zipc):
+            return None
+        return {
+            "address": addr or city,
+            "street2": line2 or "",
+            "city": city,
+            "state": state,
+            "zip": zipc,
             "country": "India",
         }
+
+    billing = _zoho_addr(account.get("billing_address"))
+    delivery = _zoho_addr(account.get("delivery_address"))
+    if billing:
+        payload["billing_address"] = billing
+    elif delivery:
+        # If we don't have a separate billing address, use the delivery address.
+        payload["billing_address"] = delivery
+    if delivery:
+        payload["shipping_address"] = delivery
 
     if existing:
         contact_id = existing["contact_id"]
