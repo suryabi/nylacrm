@@ -72,6 +72,20 @@ function InvoiceCard({ invoice }) {
           <div>
             <p className="font-semibold text-primary">{invoiceNo}</p>
             <p className="text-xs text-muted-foreground">{invoiceDate}</p>
+            {invoice.zoho_invoice_url && (
+              <a
+                href={invoice.zoho_invoice_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center gap-1 mt-1 text-[11px] font-medium text-violet-600 hover:text-violet-800 hover:underline"
+                data-testid={`view-zoho-invoice-${invoiceNo}`}
+                title="Open this invoice in Zoho Books"
+              >
+                <ExternalLink className="h-3 w-3" />
+                View in Zoho Books
+              </a>
+            )}
           </div>
         </div>
 

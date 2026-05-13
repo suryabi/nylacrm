@@ -21,6 +21,7 @@ import asyncio
 import logging
 import os
 import secrets
+import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -440,10 +441,51 @@ async def get_zoho_item_id(tenant_id: str, our_sku_id: str) -> str:
 
 # ---------- Invoice creation ----------
 
+class MissingAgreedPriceError(RuntimeError):
+    """Raised when the account has no agreed `sku_pricing` for one or more SKUs
+    on the delivery. The Zoho invoice MUST use customer-agreed pricing, not the
+    Zoho catalog rate, so we refuse to push when pricing is unknown."""
+
+
+def _zoho_books_url(zoho_invoice_id: str, creds: dict) -> Optional[str]:
+    """Construct the admin-facing Zoho Books URL for an invoice based on the
+    tenant's connected data centre.
+    """
+    if not zoho_invoice_id:
+        return None
+    org_id = (creds or {}).get("organization_id")
+    accts = (creds or {}).get("accounts_url") or ""
+    books_domain = "books.zoho.com"
+    if "zoho.in" in accts:
+        books_domain = "books.zoho.in"
+    elif "zoho.eu" in accts:
+        books_domain = "books.zoho.eu"
+    elif "zoho.com.au" in accts:
+        books_domain = "books.zoho.com.au"
+    elif "zoho.jp" in accts:
+        books_domain = "books.zoho.jp"
+    elif "zohocloud.ca" in accts:
+        books_domain = "books.zoho.ca"
+    elif "zoho.sa" in accts:
+        books_domain = "books.zoho.sa"
+    if org_id:
+        return f"https://{books_domain}/app/{org_id}#/invoices/{zoho_invoice_id}"
+    return f"https://{books_domain}/#/invoices/{zoho_invoice_id}"
+
+
 async def create_invoice_for_delivery(
     *, tenant_id: str, delivery: dict, items: list[dict], account: dict
 ) -> dict:
-    """Push a Nyla distributor delivery as a Zoho Books invoice.
+    """Push a Nyla distributor delivery as a Zoho Books invoice using the
+    customer-agreed prices from `account.sku_pricing`. Fails fast (no push)
+    if any SKU on the delivery has no agreed price on the account.
+
+    On success:
+      • Creates the invoice in Zoho Books (rate = account.sku_pricing.price_per_unit)
+      • Stores the Zoho identifiers + share URL on the delivery doc
+      • Mirrors a row into the `invoices` collection so the invoice shows up
+        under Account → Invoices (with a `zoho_invoice_url` to "View in Zoho")
+      • Persists the canonical mapping in `zoho_invoice_mappings`
 
     Returns the persisted mapping document.
     """
@@ -453,18 +495,45 @@ async def create_invoice_for_delivery(
     # 1. Upsert contact
     customer_id = await upsert_contact(tenant_id, account)
 
-    # 2. Build line items (each Nyla item -> Zoho item_id via mapping)
-    line_items = []
+    # 2. Build agreed-price lookup from account.sku_pricing (case-insensitive on name)
+    agreed_prices: dict[str, float] = {}
+    for p in (account.get("sku_pricing") or []):
+        sku_key = (p.get("sku") or p.get("sku_name") or "").strip().lower()
+        if not sku_key:
+            continue
+        try:
+            agreed_prices[sku_key] = float(p.get("price_per_unit") or p.get("agreed_price") or 0)
+        except (TypeError, ValueError):
+            agreed_prices[sku_key] = 0.0
+
+    # 3. Build line items using ONLY the account-agreed price
+    missing_skus: list[str] = []
+    line_items: list[dict] = []
     for it in items:
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
+        sku_name = (it.get("sku_name") or it.get("sku_code") or "").strip()
+        key = sku_name.lower()
+        agreed = agreed_prices.get(key)
+        if agreed is None or agreed <= 0:
+            if sku_name and sku_name not in missing_skus:
+                missing_skus.append(sku_name)
+            continue
+        qty = float(it.get("quantity", 0) or 0)
         line_items.append({
             "item_id": zoho_item_id,
-            "name": it.get("sku_name") or it.get("sku_code"),
-            "quantity": float(it.get("quantity", 0) or 0),
-            "rate": float(it.get("unit_price", 0) or 0),
+            "name": sku_name,
+            "quantity": qty,
+            "rate": agreed,
             "discount": float(it.get("discount_percent", 0) or 0),
             "discount_type": "entity_level",
         })
+
+    if missing_skus:
+        raise MissingAgreedPriceError(
+            "No agreed price configured on the account for SKU(s): "
+            + ", ".join(missing_skus)
+            + ". Add pricing under Account → SKU Pricing before this delivery can be pushed to Zoho."
+        )
 
     invoice_payload = {
         "customer_id": customer_id,
@@ -477,17 +546,89 @@ async def create_invoice_for_delivery(
     result = await _zoho_request("POST", "/books/v3/invoices", tenant_id=tenant_id, json=invoice_payload)
     invoice = result.get("invoice") or {}
 
-    # 3. Persist mapping
+    zoho_invoice_id = invoice.get("invoice_id")
+    zoho_invoice_number = invoice.get("invoice_number")
+    creds = await get_credentials(tenant_id) or {}
+    # Prefer Zoho's customer-share URL if returned; else build admin URL
+    zoho_invoice_url = invoice.get("invoice_url") or _zoho_books_url(zoho_invoice_id, creds)
+
     now = datetime.now(timezone.utc).isoformat()
+
+    # 4. Stamp Zoho identifiers on the source delivery (visible on Deliveries detail)
+    try:
+        await db.distributor_deliveries.update_one(
+            {"id": delivery.get("id"), "tenant_id": tenant_id},
+            {"$set": {
+                "zoho_invoice_id": zoho_invoice_id,
+                "zoho_invoice_number": zoho_invoice_number,
+                "zoho_invoice_url": zoho_invoice_url,
+                "zoho_synced_at": now,
+            }}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to stamp Zoho ids on delivery {delivery.get('id')}: {e}")
+
+    # 5. Mirror the invoice into the `invoices` collection so it shows up on
+    #    the Account → Invoices listing, with a link back to Zoho Books.
+    account_uuid = account.get("id") or account.get("account_uuid")
+    if account_uuid:
+        items_list = []
+        for li in line_items:
+            net = float(li["quantity"]) * float(li["rate"])
+            items_list.append({
+                "sku_name": li["name"],
+                "quantity": li["quantity"],
+                "bottles": li["quantity"],          # accountdetail UI reads `bottles`
+                "rate": li["rate"],
+                "net_amount": net,
+                "line_total": net,
+            })
+        gross_total = float(invoice.get("total") or sum(i["net_amount"] for i in items_list))
+        invoice_doc = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "account_id": account_uuid,
+            "account_name": account.get("account_name") or account.get("name"),
+            "invoice_no": zoho_invoice_number,
+            "invoice_number": zoho_invoice_number,
+            "invoice_date": invoice_payload["date"],
+            "gross_invoice_value": gross_total,
+            "net_invoice_value": gross_total,
+            "outstanding": float(invoice.get("balance") or 0.0),
+            "items": items_list,
+            "source": "zoho_books",
+            "source_type": "distributor_delivery",
+            "source_id": delivery.get("id"),
+            "distributor_id": delivery.get("distributor_id"),
+            "zoho_invoice_id": zoho_invoice_id,
+            "zoho_invoice_number": zoho_invoice_number,
+            "zoho_invoice_url": zoho_invoice_url,
+            "zoho_organization_id": creds.get("organization_id"),
+            "created_at": now,
+            "updated_at": now,
+        }
+        # Upsert by source so a retry / re-push doesn't duplicate the row
+        try:
+            await db.invoices.update_one(
+                {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery.get("id")},
+                {"$set": invoice_doc, "$setOnInsert": {"created_at": now}},
+                upsert=True,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to mirror Zoho invoice into invoices collection: {e}")
+
+    # 6. Persist canonical mapping (used by Sync Status panel)
     mapping_doc = {
         "tenant_id": tenant_id,
         "source_type": "distributor_delivery",
         "source_id": delivery.get("id"),
         "source_reference": delivery.get("delivery_number"),
         "distributor_id": delivery.get("distributor_id"),
-        "zoho_invoice_id": invoice.get("invoice_id"),
-        "zoho_invoice_number": invoice.get("invoice_number"),
+        "zoho_invoice_id": zoho_invoice_id,
+        "zoho_invoice_number": zoho_invoice_number,
+        "zoho_invoice_url": zoho_invoice_url,
         "zoho_customer_id": customer_id,
+        "account_id": account_uuid,
         "status": "synced",
         "synced_at": now,
         "error": None,
@@ -567,6 +708,14 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
             )
             logger.info(f"Zoho invoice created for delivery {delivery.get('delivery_number')} (attempt {attempt})")
             return
+        except MissingAgreedPriceError as e:
+            # Don't retry: missing price is a configuration issue, not transient.
+            last_error = str(e)
+            logger.warning(
+                f"Zoho push aborted (no agreed price) for delivery "
+                f"{delivery.get('delivery_number')}: {e}"
+            )
+            break
         except Exception as e:
             last_error = str(e)
             logger.warning(
