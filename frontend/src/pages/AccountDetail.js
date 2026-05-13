@@ -231,6 +231,20 @@ export default function AccountDetail() {
     sku_prices_correct: false,
     delivery_contact_updated: false,
   });
+  // Live activation-status from backend (auto-validated against data)
+  const [activationStatus, setActivationStatus] = useState({
+    gst_updated: false,
+    delivery_address_updated: false,
+    sku_prices_correct: false,
+    delivery_contact_updated: false,
+  });
+
+  // Customer's Delivery & Accounting section
+  const [deliveryContactName, setDeliveryContactName] = useState('');
+  const [deliveryContactPhone, setDeliveryContactPhone] = useState('');
+  const [savingContact, setSavingContact] = useState(false);
+  const [gstUploading, setGstUploading] = useState(false);
+  const gstFileInputRef = useRef(null);
   
   // Delivery Address state
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -317,17 +331,51 @@ export default function AccountDetail() {
 
   // Handle address selection from suggestions
   const handleSelectAddress = async (placeId, description) => {
-    // Parse the address from the description
-    // The description typically contains the full formatted address
+    setAddressSuggestions([]);
+    setAddressSearchQuery(description);
+
+    // Try fetching structured place details (incl. lat/lng) from the backend
+    let placeDetails = null;
+    try {
+      const resp = await axios.get(`${API_URL}/accounts/places/details`, {
+        params: { place_id: placeId },
+        withCredentials: true,
+      });
+      placeDetails = resp.data;
+    } catch (err) {
+      // fall through to description-based parsing
+    }
+
+    if (placeDetails && placeDetails.address) {
+      const a = placeDetails.address;
+      const newAddress = {
+        address_line1: a.address_line1 || description.split(',')[0]?.trim() || '',
+        address_line2: a.address_line2 || '',
+        city: a.city || account?.city || '',
+        state: a.state || account?.state || '',
+        pincode: a.pincode || '',
+        landmark: '',
+        lat: placeDetails.lat ?? null,
+        lng: placeDetails.lng ?? null,
+        formatted_address: placeDetails.formatted_address || description,
+      };
+      setDeliveryAddress(newAddress);
+      toast.success('Address selected — lat/lng captured');
+      return;
+    }
+
+    // Fallback: description-only parse (no lat/lng)
     const parts = description.split(',').map(p => p.trim());
-    
     let newAddress = {
       address_line1: description,
       address_line2: '',
       city: account?.city || '',
       state: account?.state || '',
       pincode: '',
-      landmark: ''
+      landmark: '',
+      lat: null,
+      lng: null,
+      formatted_address: description,
     };
 
     // Try to extract city, state, pincode from description
@@ -391,6 +439,61 @@ export default function AccountDetail() {
       toast.error('Failed to save delivery address');
     } finally {
       setSavingAddress(false);
+    }
+  };
+
+  // ── Customer's Delivery & Accounting handlers ──
+  const handleGstFilePick = () => {
+    if (gstFileInputRef.current) gstFileInputRef.current.click();
+  };
+
+  const handleGstUpload = async (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error('File too large (max 8MB)');
+      return;
+    }
+    setGstUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { data } = await axios.post(
+        `${API_URL}/accounts/${id}/gst-certificate`,
+        formData,
+        { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      toast.success(data.message || 'GST certificate parsed and saved.');
+      fetchAccount();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'GST parsing failed.');
+    } finally {
+      setGstUploading(false);
+      if (gstFileInputRef.current) gstFileInputRef.current.value = '';
+    }
+  };
+
+  const handleSaveDeliveryContact = async () => {
+    if (!deliveryContactName.trim() || !deliveryContactPhone.trim()) {
+      toast.error('Both delivery contact name and phone are required.');
+      return;
+    }
+    setSavingContact(true);
+    try {
+      await axios.patch(
+        `${API_URL}/accounts/${id}/delivery-info`,
+        {
+          delivery_contact_name: deliveryContactName.trim(),
+          delivery_contact_phone: deliveryContactPhone.trim(),
+        },
+        { withCredentials: true }
+      );
+      toast.success('Delivery contact saved.');
+      fetchAccount();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to save delivery contact.');
+    } finally {
+      setSavingContact(false);
     }
   };
 
@@ -492,7 +595,22 @@ ${googleMapsLink}`;
         setDeliveryAddress(data.delivery_address);
         setAddressSearchQuery(data.delivery_address.address_line1 || '');
       }
-      
+
+      // Load Customer's Delivery & Accounting fields
+      setDeliveryContactName(data.delivery_contact_name || '');
+      setDeliveryContactPhone(data.delivery_contact_phone || '');
+
+      // Fetch activation status (auto-validated)
+      try {
+        const statusResp = await axios.get(
+          `${API_URL}/accounts/${id}/activation-status`,
+          { withCredentials: true }
+        );
+        setActivationStatus(statusResp.data.checks || {});
+      } catch {
+        // non-fatal
+      }
+
       // Fetch invoices and contract
       console.log('[ACCOUNT_DETAIL] Fetching invoices for id:', id);
       fetchInvoices(id);
@@ -818,7 +936,7 @@ ${googleMapsLink}`;
   };
 
   // ── Account activation: sales-checklist + Zoho customer sync ──
-  const handleOpenActivateDialog = () => {
+  const handleOpenActivateDialog = async () => {
     // Reset checks every time it opens
     setActivationChecks({
       gst_updated: false,
@@ -827,6 +945,16 @@ ${googleMapsLink}`;
       delivery_contact_updated: false,
     });
     setActivateDialogOpen(true);
+    // Re-fetch fresh activation status for the auto-validation badges
+    try {
+      const resp = await axios.get(
+        `${API_URL}/accounts/${id}/activation-status`,
+        { withCredentials: true }
+      );
+      setActivationStatus(resp.data.checks || {});
+    } catch {
+      // silent
+    }
   };
 
   const allChecksDone = Object.values(activationChecks).every(Boolean);
@@ -1582,12 +1710,144 @@ ${googleMapsLink}`;
             </div>
           </Card>
 
-          {/* Delivery Address Section */}
-          <Card className="p-6" data-testid="delivery-address-card">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Truck className="h-5 w-5 text-primary" />
-              Delivery Address
-            </h2>
+          {/* ═══════════════════════════════════════════════════════════
+              Customer's Delivery & Accounting
+              -----------------------------------------------------------
+              Three subsections grouped under one header:
+              1. GST certificate (upload + AI-parsed visiting card)
+              2. Delivery address (Google Places + lat/lng capture)
+              3. Delivery contact (name + phone)
+              ═══════════════════════════════════════════════════════════ */}
+          <Card className="p-6" data-testid="delivery-accounting-section">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <FileCheck className="h-5 w-5 text-violet-600" />
+                Customer's Delivery & Accounting
+              </h2>
+              <span className="text-xs text-muted-foreground">
+                Used during account activation & invoicing
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-5">
+              Upload the GST certificate to auto-populate billing details, set the
+              delivery address (with location coordinates), and capture the on-ground
+              delivery contact.
+            </p>
+
+            {/* ── 1) GST Certificate ── */}
+            <div className="rounded-xl border border-border bg-secondary/20 p-4 mb-5" data-testid="gst-card">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-violet-600" />
+                  <span className="font-semibold text-sm">GST Certificate</span>
+                  {account?.gst_number && (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                      Parsed
+                    </Badge>
+                  )}
+                </div>
+                <input
+                  ref={gstFileInputRef}
+                  type="file"
+                  accept="application/pdf,image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={handleGstUpload}
+                  data-testid="gst-file-input"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleGstFilePick}
+                  disabled={gstUploading}
+                  data-testid="gst-upload-btn"
+                >
+                  {gstUploading ? (
+                    <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Parsing…</>
+                  ) : account?.gst_number ? (
+                    <><Upload className="h-3.5 w-3.5 mr-1.5" /> Re-upload</>
+                  ) : (
+                    <><Upload className="h-3.5 w-3.5 mr-1.5" /> Upload GST Certificate</>
+                  )}
+                </Button>
+              </div>
+
+              {account?.gst_number ? (
+                <div className="rounded-lg bg-white border border-violet-200 p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <p className="text-[15px] font-semibold text-foreground leading-snug">
+                        {account.gst_legal_name || account.account_name}
+                      </p>
+                      {account.gst_trade_name && account.gst_trade_name !== account.gst_legal_name && (
+                        <p className="text-xs text-muted-foreground">
+                          Trade name: {account.gst_trade_name}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Badge className="bg-violet-50 text-violet-800 border border-violet-200 font-mono text-[11px]">
+                          GSTIN&nbsp;{account.gst_number}
+                        </Badge>
+                        {account.pan_number && (
+                          <Badge className="bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[11px]">
+                            PAN&nbsp;{account.pan_number}
+                          </Badge>
+                        )}
+                        {account.gst_registration_date && (
+                          <span className="text-[11px] text-muted-foreground">
+                            Registered: {account.gst_registration_date}
+                          </span>
+                        )}
+                      </div>
+                      {account.billing_address && (
+                        <div className="mt-2 pt-2 border-t border-dashed border-violet-100">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">
+                            Billing Address
+                          </p>
+                          <p className="text-sm text-foreground leading-relaxed">
+                            {[
+                              account.billing_address.address_line1,
+                              account.billing_address.address_line2,
+                              account.billing_address.city,
+                              account.billing_address.state,
+                              account.billing_address.pincode,
+                            ].filter(Boolean).join(', ')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    {account.gst_certificate_url && (
+                      <a
+                        href={`${API_URL}${account.gst_certificate_url}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 text-violet-600 hover:text-violet-800"
+                        title="View uploaded certificate"
+                        data-testid="view-gst-cert-link"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  No GST certificate uploaded yet. PDF/PNG/JPG, max 8MB. AI will read the
+                  GSTIN, PAN, legal & trade name, and billing address automatically.
+                </p>
+              )}
+            </div>
+
+            {/* ── 2) Delivery Address ── */}
+            <div className="rounded-xl border border-border bg-secondary/20 p-4 mb-5" data-testid="delivery-address-card">
+              <div className="flex items-center gap-2 mb-3">
+                <Truck className="h-4 w-4 text-blue-600" />
+                <span className="font-semibold text-sm">Delivery Address</span>
+                {(deliveryAddress.lat && deliveryAddress.lng) && (
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
+                    GPS locked
+                  </Badge>
+                )}
+              </div>
             
             {/* Google Powered Address Search */}
             <div className="relative mb-4" ref={addressSearchRef}>
@@ -1762,16 +2022,75 @@ ${googleMapsLink}`;
             {deliveryAddress.address_line1 && (
               <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <a
-                  href={`https://www.google.com/maps/place/${encodeURIComponent([deliveryAddress.address_line1, deliveryAddress.city, deliveryAddress.state, deliveryAddress.pincode].filter(Boolean).join(', ') + ', India')}`}
+                  href={
+                    deliveryAddress.lat && deliveryAddress.lng
+                      ? `https://www.google.com/maps/?q=${deliveryAddress.lat},${deliveryAddress.lng}`
+                      : `https://www.google.com/maps/place/${encodeURIComponent([deliveryAddress.address_line1, deliveryAddress.city, deliveryAddress.state, deliveryAddress.pincode].filter(Boolean).join(', ') + ', India')}`
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-sm text-blue-700 hover:text-blue-800"
                 >
                   <ExternalLink className="h-4 w-4" />
-                  <span>Open in Google Maps</span>
+                  <span>
+                    Open in Google Maps
+                    {deliveryAddress.lat && deliveryAddress.lng && (
+                      <span className="ml-2 text-xs text-blue-600 font-mono">
+                        ({Number(deliveryAddress.lat).toFixed(5)}, {Number(deliveryAddress.lng).toFixed(5)})
+                      </span>
+                    )}
+                  </span>
                 </a>
               </div>
             )}
+            </div>
+
+            {/* ── 3) Delivery Contact ── */}
+            <div className="rounded-xl border border-border bg-secondary/20 p-4" data-testid="delivery-contact-card">
+              <div className="flex items-center gap-2 mb-3">
+                <Phone className="h-4 w-4 text-emerald-600" />
+                <span className="font-semibold text-sm">Delivery Contact</span>
+                {account?.delivery_contact_name && account?.delivery_contact_phone && (
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                    Set
+                  </Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Contact Name *</Label>
+                  <Input
+                    value={deliveryContactName}
+                    onChange={(e) => setDeliveryContactName(e.target.value)}
+                    placeholder="e.g. Mr. Raj Kumar"
+                    data-testid="delivery-contact-name-input"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Contact Phone *</Label>
+                  <Input
+                    value={deliveryContactPhone}
+                    onChange={(e) => setDeliveryContactPhone(e.target.value)}
+                    placeholder="+91-9876543210"
+                    data-testid="delivery-contact-phone-input"
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button
+                  size="sm"
+                  onClick={handleSaveDeliveryContact}
+                  disabled={savingContact || !deliveryContactName.trim() || !deliveryContactPhone.trim()}
+                  data-testid="save-delivery-contact-btn"
+                >
+                  {savingContact ? (
+                    <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving…</>
+                  ) : (
+                    <><Save className="h-3.5 w-3.5 mr-1.5" /> Save Contact</>
+                  )}
+                </Button>
+              </div>
+            </div>
           </Card>
 
           {/* Account Details */}
@@ -2199,30 +2518,54 @@ ${googleMapsLink}`;
 
           <div className="space-y-3 py-2">
             {[
-              { key: 'gst_updated', label: 'GST is updated' },
-              { key: 'delivery_address_updated', label: 'Delivery address is updated' },
-              { key: 'sku_prices_correct', label: 'SKU prices are correct' },
-              { key: 'delivery_contact_updated', label: 'Delivery contact details are updated' },
-            ].map((item) => (
-              <label
-                key={item.key}
-                className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 cursor-pointer hover:bg-secondary/40 transition-colors"
-                data-testid={`activation-check-${item.key}`}
-              >
-                <Checkbox
-                  checked={activationChecks[item.key]}
-                  onCheckedChange={(checked) =>
-                    setActivationChecks((prev) => ({ ...prev, [item.key]: !!checked }))
-                  }
-                />
-                <span className="text-sm font-medium">{item.label}</span>
-              </label>
-            ))}
+              { key: 'gst_updated', label: 'GST is updated', helper: 'GSTIN must be present on the account (auto-validated).' },
+              { key: 'delivery_address_updated', label: 'Delivery address is updated', helper: 'Line 1, city, state and PIN required (auto-validated).' },
+              { key: 'sku_prices_correct', label: 'SKU prices are correct', helper: 'At least one row in SKU Pricing (auto-validated).' },
+              { key: 'delivery_contact_updated', label: 'Delivery contact details are updated', helper: 'Contact name AND phone required (auto-validated).' },
+            ].map((item) => {
+              const ok = !!activationStatus[item.key];
+              return (
+                <label
+                  key={item.key}
+                  className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                    ok
+                      ? 'border-emerald-200 bg-emerald-50 cursor-pointer hover:bg-emerald-100/60'
+                      : 'border-amber-200 bg-amber-50/60 cursor-not-allowed opacity-90'
+                  }`}
+                  data-testid={`activation-check-${item.key}`}
+                >
+                  <Checkbox
+                    checked={activationChecks[item.key]}
+                    disabled={!ok}
+                    onCheckedChange={(checked) =>
+                      setActivationChecks((prev) => ({ ...prev, [item.key]: !!checked }))
+                    }
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{item.label}</span>
+                      {ok ? (
+                        <Badge variant="outline" className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-300">
+                          <CheckCircle className="h-2.5 w-2.5 mr-1" /> Verified
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                          <AlertTriangle className="h-2.5 w-2.5 mr-1" /> Missing
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{item.helper}</p>
+                  </div>
+                </label>
+              );
+            })}
           </div>
 
-          {!allChecksDone && (
+          {!Object.values(activationStatus).every(Boolean) && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-              All four items must be confirmed before this account can be activated.
+              One or more onboarding items aren't filled in yet. Complete them on the account page — these checks
+              cannot be ticked manually until the data exists.
             </p>
           )}
 

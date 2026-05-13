@@ -40,6 +40,17 @@ class DeliveryAddress(BaseModel):
     state: Optional[str] = None
     pincode: Optional[str] = None
     landmark: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
+
+
+class BillingAddress(BaseModel):
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
 
 
 class Account(BaseModel):
@@ -84,6 +95,15 @@ class AccountUpdate(BaseModel):
     delivery_address: Optional[DeliveryAddress] = None
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
+    # ── Customer's Delivery & Accounting section ──
+    delivery_contact_name: Optional[str] = None
+    delivery_contact_phone: Optional[str] = None
+    billing_address: Optional[BillingAddress] = None
+    pan_number: Optional[str] = None
+    gst_legal_name: Optional[str] = None
+    gst_trade_name: Optional[str] = None
+    gst_registration_date: Optional[str] = None
+    gst_certificate_url: Optional[str] = None
 
 
 class PaginatedAccountsResponse(BaseModel):
@@ -688,6 +708,35 @@ async def _is_user_in_management_chain(tdb, user_id: str, target_user_id: str, m
     return False
 
 
+@router.get("/{account_id}/activation-status")
+async def get_activation_status(
+    account_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Returns which of the 4 onboarding checks currently pass for this
+    account, so the activation modal can render them as auto-validated."""
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    da = account.get('delivery_address') or {}
+    sku_pricing = account.get('sku_pricing') or []
+    return {
+        'is_active': account.get('status') == 'active',
+        'checks': {
+            'gst_updated': bool((account.get('gst_number') or '').strip()),
+            'delivery_address_updated': bool(
+                da.get('address_line1') and da.get('city') and da.get('state') and da.get('pincode')
+            ),
+            'sku_prices_correct': len(sku_pricing) > 0,
+            'delivery_contact_updated': bool(
+                account.get('delivery_contact_name') and account.get('delivery_contact_phone')
+            ),
+        },
+    }
+
+
 @router.post("/{account_id}/activate")
 async def activate_account(
     account_id: str,
@@ -696,22 +745,10 @@ async def activate_account(
 ):
     """Activate a freshly-converted account.
 
-    Flow:
-      1. Permission: only the assigned salesperson, anyone in their upward
-         management chain, CEO, Admin, or System Admin can activate.
-      2. All four checklist items MUST be True (frontend gates the button too).
-      3. Account MUST have at least one SKU configured under `sku_pricing`.
-      4. Every SKU in `sku_pricing` MUST be mapped under Settings → Integrations
-         → Zoho Books → SKU Mapping.
-      5. Upsert the customer in Zoho Books (uses the account's existing
-         contact / GST / address details).
-      6. Mark account `status='active'` with `activated_at` / `activated_by`
-         + persist `zoho_contact_id` on the account doc.
-
-    Idempotent: re-activating an already-active account is allowed and will
-    just re-sync the contact to Zoho.
+    The 4 checklist items are AUTO-VALIDATED against the account state — even if
+    a privileged user sends `true` for everything, we re-verify the underlying
+    data before activating.
     """
-    # All four checklist items must be true (defensive — UI also enforces this)
     if not all([
         checklist.gst_updated,
         checklist.delivery_address_updated,
@@ -740,13 +777,20 @@ async def activate_account(
             detail='Only the assigned salesperson, their managers, CEO or Admin can activate this account.'
         )
 
-    # ── Validate sku_pricing exists ──
+    # ── Auto-validate the 4 checklist items against actual account data ──
+    failures: list = []
+    if not (account.get('gst_number') or '').strip():
+        failures.append('GST number is missing on the account. Upload the GST certificate first.')
+    da = account.get('delivery_address') or {}
+    if not (da.get('address_line1') and da.get('city') and da.get('state') and da.get('pincode')):
+        failures.append('Delivery address is incomplete (line 1, city, state and PIN are required).')
+    if not (account.get('delivery_contact_name') and account.get('delivery_contact_phone')):
+        failures.append('Delivery contact name and phone are required.')
     sku_pricing = account.get('sku_pricing') or []
     if not sku_pricing:
-        raise HTTPException(
-            status_code=400,
-            detail='No SKU pricing configured on this account. Add agreed prices under SKU Pricing first.'
-        )
+        failures.append('No SKU pricing configured. Add agreed prices under SKU Pricing.')
+    if failures:
+        raise HTTPException(status_code=400, detail=' '.join(failures))
 
     # ── Validate every SKU has a Zoho item mapping ──
     # We accept either an explicit `sku_id` reference on the pricing row or a
@@ -832,3 +876,302 @@ async def activate_account(
         'activated_at': now,
         'activated_by_name': (current_user or {}).get('name'),
     }
+
+
+# ============= GST CERTIFICATE PARSING (Gemini multimodal OCR) =============
+
+import json as _json
+import tempfile
+import os as _os
+from pathlib import Path as _Path
+from utils import object_storage as _objstore
+
+from fastapi.responses import StreamingResponse as _StreamingResponse
+import io as _io
+import logging as _logging
+_logger = _logging.getLogger(__name__)
+
+GST_EXTRACTION_PROMPT = """You are an OCR + structured-data extractor for Indian GST registration certificates.
+
+Read the attached GST certificate (image or PDF) and return ONLY a JSON object — no commentary, no markdown fences — with this exact shape:
+
+{
+  "gst_number": "<15-character GSTIN, uppercase>",
+  "pan_number": "<10-character PAN, uppercase>",
+  "gst_legal_name": "<Legal Name of Business as on the certificate>",
+  "gst_trade_name": "<Trade Name if different, else same as legal name>",
+  "gst_registration_date": "<YYYY-MM-DD if visible, else null>",
+  "billing_address": {
+    "address_line1": "<Building / floor / street>",
+    "address_line2": "<Locality / area, optional>",
+    "city": "<City / town>",
+    "state": "<State name>",
+    "pincode": "<6-digit PIN>"
+  }
+}
+
+Rules:
+- Use null for any field you cannot find with confidence. Never invent values.
+- GSTIN format: 2 digits + 5 letters + 4 digits + 1 letter + 1 char + Z + 1 char.
+- PAN is positions 3-12 of the GSTIN; cross-check if the certificate prints PAN explicitly.
+- Return ONLY the JSON object, nothing else.
+"""
+
+
+def _detect_mime(filename: str, content_type: Optional[str]) -> str:
+    if content_type and content_type != "application/octet-stream":
+        return content_type
+    ext = (_os.path.splitext(filename or "")[1] or "").lower()
+    return {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }.get(ext, "application/octet-stream")
+
+
+async def _parse_gst_with_gemini(file_path: str, mime: str) -> dict:
+    """Call Gemini 2.5 Flash via emergentintegrations to OCR + parse a GST cert."""
+    api_key = _os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="LLM key not configured. Contact admin.")
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"emergentintegrations missing: {e}")
+
+    chat = LlmChat(
+        api_key=api_key,
+        session_id=f"gst-parse-{uuid.uuid4()}",
+        system_message="You extract structured JSON from Indian GST registration certificates. Return only JSON."
+    ).with_model("gemini", "gemini-2.5-flash")
+
+    file_part = FileContentWithMimeType(file_path=file_path, mime_type=mime)
+    msg = UserMessage(text=GST_EXTRACTION_PROMPT, file_contents=[file_part])
+
+    try:
+        response = await chat.send_message(msg)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"AI parsing failed: {e}")
+
+    text = (response or "").strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json\n"):
+            text = text[5:]
+    try:
+        data = _json.loads(text)
+    except _json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI returned unparseable JSON. Try a clearer scan of the GST certificate. ({e})"
+        )
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="AI did not return a JSON object.")
+    return data
+
+
+@router.post("/{account_id}/gst-certificate")
+async def upload_gst_certificate(
+    account_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload a GST certificate, run Gemini OCR to extract structured fields,
+    persist them on the account, and store the file in object storage."""
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0, 'id': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail='Empty file')
+    if len(contents) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail='File too large (max 8MB)')
+
+    mime = _detect_mime(file.filename or "", file.content_type)
+    if mime not in {"application/pdf", "image/png", "image/jpeg", "image/webp"}:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Unsupported file type {mime}. Use PDF, PNG, JPG or WEBP.'
+        )
+
+    suffix = {
+        "application/pdf": ".pdf",
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/webp": ".webp",
+    }.get(mime, "")
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+    try:
+        tmp.write(contents)
+        tmp.flush()
+        tmp.close()
+        parsed = await _parse_gst_with_gemini(tmp.name, mime)
+    finally:
+        try:
+            _Path(tmp.name).unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    storage_path = f"{_objstore.APP_NAME}/gst-certs/{account_id}{suffix}"
+    try:
+        _objstore.put_object(storage_path, contents, mime)
+    except Exception as e:
+        _logger.warning(f"Failed to persist GST cert to object storage: {e}")
+        storage_path = None
+
+    update_doc: dict = {'updated_at': datetime.now(timezone.utc).isoformat()}
+    if parsed.get('gst_number'):
+        update_doc['gst_number'] = str(parsed['gst_number']).upper().strip()
+    if parsed.get('pan_number'):
+        update_doc['pan_number'] = str(parsed['pan_number']).upper().strip()
+    if parsed.get('gst_legal_name'):
+        update_doc['gst_legal_name'] = parsed['gst_legal_name'].strip()
+    if parsed.get('gst_trade_name'):
+        update_doc['gst_trade_name'] = parsed['gst_trade_name'].strip()
+    if parsed.get('gst_registration_date'):
+        update_doc['gst_registration_date'] = parsed['gst_registration_date']
+    if isinstance(parsed.get('billing_address'), dict):
+        ba = parsed['billing_address']
+        update_doc['billing_address'] = {
+            'address_line1': (ba.get('address_line1') or '').strip() or None,
+            'address_line2': (ba.get('address_line2') or '').strip() or None,
+            'city': (ba.get('city') or '').strip() or None,
+            'state': (ba.get('state') or '').strip() or None,
+            'pincode': (ba.get('pincode') or '').strip() or None,
+        }
+    if storage_path:
+        update_doc['gst_certificate_url'] = f"/api/accounts/{account_id}/gst-certificate"
+        update_doc['gst_certificate_path'] = storage_path
+        update_doc['gst_certificate_mime'] = mime
+
+    await tdb.accounts.update_one({'id': account_id}, {'$set': update_doc})
+
+    return {
+        'message': 'GST certificate parsed and saved.',
+        'parsed': parsed,
+        'persisted_fields': {k: v for k, v in update_doc.items() if k != 'updated_at'},
+    }
+
+
+@router.get("/{account_id}/gst-certificate")
+async def download_gst_certificate(
+    account_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Stream the previously-uploaded GST certificate for an account."""
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(
+        {'id': account_id},
+        {'_id': 0, 'gst_certificate_path': 1, 'gst_certificate_mime': 1}
+    )
+    if not account or not account.get('gst_certificate_path'):
+        raise HTTPException(status_code=404, detail='No GST certificate uploaded for this account')
+    try:
+        content, content_type = _objstore.get_object(account['gst_certificate_path'])
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f'Could not retrieve GST certificate: {e}')
+    return _StreamingResponse(
+        _io.BytesIO(content),
+        media_type=account.get('gst_certificate_mime') or content_type,
+        headers={'Content-Disposition': 'inline; filename="gst-certificate"'},
+    )
+
+
+# ============= GOOGLE PLACES — place details (lat/lng) =============
+
+import httpx as _httpx
+
+
+@router.get("/places/details")
+async def get_place_details(
+    place_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Fetch detailed info for a Google Places place_id — primarily lat/lng
+    + structured address components. Used by the Delivery Address picker.
+    """
+    api_key = _os.environ.get('GOOGLE_MAPS_API_KEY')
+    if not api_key:
+        raise HTTPException(status_code=500, detail='Google Maps API key not configured')
+    if not place_id:
+        raise HTTPException(status_code=400, detail='place_id is required')
+
+    url = f"https://places.googleapis.com/v1/places/{place_id}"
+    headers = {
+        'X-Goog-Api-Key': api_key,
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,addressComponents',
+    }
+    async with _httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(url, headers=headers)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Google Places error: {resp.text}")
+    data = resp.json()
+    loc = (data.get('location') or {})
+
+    # Parse address components into our structured shape
+    def _find(comp_types: list, components: list, short: bool = False) -> Optional[str]:
+        for comp in components or []:
+            ctypes = comp.get('types') or []
+            if any(t in comp_types for t in ctypes):
+                return comp.get('shortText' if short else 'longText')
+        return None
+
+    components = data.get('addressComponents') or []
+    city = (
+        _find(['locality'], components)
+        or _find(['administrative_area_level_2'], components)
+        or _find(['sublocality_level_1'], components)
+    )
+    state = _find(['administrative_area_level_1'], components)
+    pincode = _find(['postal_code'], components)
+    line1_parts: list = []
+    for t in ('street_number', 'route', 'premise', 'sublocality_level_2'):
+        v = _find([t], components)
+        if v:
+            line1_parts.append(v)
+    line1 = ', '.join(line1_parts) or None
+
+    return {
+        'place_id': data.get('id') or place_id,
+        'formatted_address': data.get('formattedAddress'),
+        'lat': loc.get('latitude'),
+        'lng': loc.get('longitude'),
+        'address': {
+            'address_line1': line1,
+            'address_line2': _find(['sublocality_level_1', 'neighborhood'], components),
+            'city': city,
+            'state': state,
+            'pincode': pincode,
+        },
+    }
+
+
+@router.patch("/{account_id}/delivery-info")
+async def update_delivery_info(
+    account_id: str,
+    payload: AccountUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Save the Customer's Delivery & Accounting fields: delivery_address
+    (with lat/lng), delivery_contact_name, delivery_contact_phone."""
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0, 'id': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    update_doc: dict = {'updated_at': datetime.now(timezone.utc).isoformat()}
+    data = payload.model_dump(exclude_unset=True)
+    for k in ('delivery_address', 'delivery_contact_name', 'delivery_contact_phone'):
+        if k in data and data[k] is not None:
+            update_doc[k] = data[k]
+
+    if len(update_doc) == 1:
+        raise HTTPException(status_code=400, detail='No delivery fields provided')
+
+    await tdb.accounts.update_one({'id': account_id}, {'$set': update_doc})
+    return {'message': 'Delivery & contact details saved', 'updates': update_doc}
