@@ -25,6 +25,12 @@ def get_tdb():
     """Get tenant-aware database wrapper"""
     return get_tenant_db()
 
+
+def _account_match(account_id: str) -> dict:
+    """Mongo filter that matches either the UUID (`id`) or the human code
+    (`account_id`) — frontend URLs use either depending on the page."""
+    return {'$or': [{'id': account_id}, {'account_id': account_id}]}
+
 # ============= MODELS =============
 
 class AccountSKUPricing(BaseModel):
@@ -329,7 +335,7 @@ async def get_accounts_stats(
 async def get_account(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get a single account by ID"""
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -345,7 +351,7 @@ async def get_account(account_id: str, current_user: dict = Depends(get_current_
 async def update_account(account_id: str, update: AccountUpdate, current_user: dict = Depends(get_current_user)):
     """Update an account"""
     tdb = get_tdb()
-    existing = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    existing = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not existing:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -361,16 +367,16 @@ async def update_account(account_id: str, update: AccountUpdate, current_user: d
     
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await tdb.accounts.update_one({'id': account_id}, {'$set': update_data})
+    await tdb.accounts.update_one(_account_match(account_id), {'$set': update_data})
     
-    return await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    return await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
 
 
 @router.delete("/{account_id}")
 async def delete_account(account_id: str, current_user: dict = Depends(get_current_user)):
     """Delete an account"""
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -381,7 +387,7 @@ async def delete_account(account_id: str, current_user: dict = Depends(get_curre
             {'$set': {'converted_to_account': False, 'account_id': None}}
         )
     
-    await tdb.accounts.delete_one({'id': account_id})
+    await tdb.accounts.delete_one(_account_match(account_id))
     
     return {'message': 'Account deleted successfully'}
 
@@ -392,7 +398,7 @@ async def get_account_sku_pricing(account_id: str, current_user: dict = Depends(
     tdb = get_tdb()
     tenant_id = get_current_tenant_id()
     
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -431,7 +437,7 @@ async def get_account_sku_pricing(account_id: str, current_user: dict = Depends(
 async def get_account_invoices(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get all invoices for an account"""
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -474,7 +480,7 @@ async def delete_all_account_invoices(account_id: str, current_user: dict = Depe
         raise HTTPException(status_code=403, detail='Only CEO and System Admin can delete invoices in bulk')
 
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
 
@@ -524,7 +530,7 @@ async def create_account_invoice(account_id: str, invoice_data: dict, current_us
         return await create_external_invoice(account_id, invoice_data, current_user.get('id'))
 
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -643,7 +649,7 @@ async def upload_account_logo(
 ):
     """Upload a logo for an account"""
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
     
@@ -655,7 +661,7 @@ async def upload_account_logo(
     logo_data = f"data:{logo.content_type};base64,{logo_base64}"
     
     await tdb.accounts.update_one(
-        {'id': account_id},
+        _account_match(account_id),
         {'$set': {'logo': logo_data, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
     
@@ -667,7 +673,7 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
     """Delete an account's logo"""
     tdb = get_tdb()
     result = await tdb.accounts.update_one(
-        {'id': account_id},
+        _account_match(account_id),
         {'$unset': {'logo': ''}, '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
     
@@ -716,7 +722,7 @@ async def get_activation_status(
     """Returns which of the 4 onboarding checks currently pass for this
     account, so the activation modal can render them as auto-validated."""
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
 
@@ -758,7 +764,7 @@ async def activate_account(
         raise HTTPException(status_code=400, detail='All four checklist items must be confirmed before activation.')
 
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
 
@@ -867,7 +873,7 @@ async def activate_account(
         'updated_at': now,
         'activation_checklist': checklist.model_dump(),
     }
-    await tdb.accounts.update_one({'id': account_id}, {'$set': update_doc})
+    await tdb.accounts.update_one(_account_match(account_id), {'$set': update_doc})
 
     return {
         'message': 'Account activated and synced to Zoho Books.',
@@ -982,7 +988,7 @@ async def upload_gst_certificate(
     """Upload a GST certificate, run Gemini OCR to extract structured fields,
     persist them on the account, and store the file in object storage."""
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0, 'id': 1})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'id': 1})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
 
@@ -1049,7 +1055,7 @@ async def upload_gst_certificate(
         update_doc['gst_certificate_path'] = storage_path
         update_doc['gst_certificate_mime'] = mime
 
-    await tdb.accounts.update_one({'id': account_id}, {'$set': update_doc})
+    await tdb.accounts.update_one(_account_match(account_id), {'$set': update_doc})
 
     return {
         'message': 'GST certificate parsed and saved.',
@@ -1066,7 +1072,7 @@ async def download_gst_certificate(
     """Stream the previously-uploaded GST certificate for an account."""
     tdb = get_tdb()
     account = await tdb.accounts.find_one(
-        {'id': account_id},
+        _account_match(account_id),
         {'_id': 0, 'gst_certificate_path': 1, 'gst_certificate_mime': 1}
     )
     if not account or not account.get('gst_certificate_path'):
@@ -1160,7 +1166,7 @@ async def update_delivery_info(
     """Save the Customer's Delivery & Accounting fields: delivery_address
     (with lat/lng), delivery_contact_name, delivery_contact_phone."""
     tdb = get_tdb()
-    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0, 'id': 1})
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'id': 1})
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
 
@@ -1173,5 +1179,5 @@ async def update_delivery_info(
     if len(update_doc) == 1:
         raise HTTPException(status_code=400, detail='No delivery fields provided')
 
-    await tdb.accounts.update_one({'id': account_id}, {'$set': update_doc})
+    await tdb.accounts.update_one(_account_match(account_id), {'$set': update_doc})
     return {'message': 'Delivery & contact details saved', 'updates': update_doc}
