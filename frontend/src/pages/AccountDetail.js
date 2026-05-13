@@ -1155,31 +1155,58 @@ ${googleMapsLink}`;
         </div>
       ) : (
         <div
-          className="relative overflow-hidden rounded-xl border-2 border-violet-300 bg-gradient-to-r from-violet-50 via-fuchsia-50 to-violet-50 p-5 shadow-sm"
+          className="relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
           data-testid="account-activation-banner"
         >
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-violet-600 flex items-center justify-center text-white shadow-md">
-                <Zap className="h-5 w-5" />
+          {/* Left accent rail */}
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-amber-500 via-amber-400 to-amber-500" />
+          {/* Subtle background pattern */}
+          <div
+            className="absolute inset-0 opacity-[0.035] pointer-events-none"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 1px 1px, #0f172a 1px, transparent 0)',
+              backgroundSize: '18px 18px',
+            }}
+          />
+          <div className="relative flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-amber-400 shadow-sm ring-1 ring-slate-800">
+                <AlertTriangle className="h-5 w-5" strokeWidth={2.25} />
               </div>
-              <div>
-                <p className="text-base font-semibold text-violet-900">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 ring-1 ring-inset ring-amber-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    Action Required
+                  </span>
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                    Pending Onboarding
+                  </span>
+                </div>
+                <p className="text-base font-semibold text-slate-900 leading-tight">
                   This account is not yet active
                 </p>
-                <p className="text-sm text-violet-700">
-                  Confirm the onboarding checklist and sync this customer to Zoho Books.
+                <p className="text-sm text-slate-600 max-w-xl leading-snug">
+                  Complete the onboarding checklist to verify GST, delivery address, SKU pricing,
+                  delivery contact, and account logo — then sync this customer to Zoho Books.
                 </p>
               </div>
             </div>
-            <Button
-              onClick={handleOpenActivateDialog}
-              className="bg-violet-600 hover:bg-violet-700 text-white shadow-md whitespace-nowrap"
-              data-testid="activate-account-btn"
-            >
-              <Zap className="h-4 w-4 mr-2" />
-              Activate Account
-            </Button>
+            <div className="flex md:flex-col md:items-end gap-2 md:gap-1.5">
+              <Button
+                onClick={handleOpenActivateDialog}
+                className="bg-slate-900 hover:bg-slate-800 text-white shadow-sm whitespace-nowrap h-10 px-5 font-medium transition-colors"
+                data-testid="activate-account-btn"
+              >
+                <Zap className="h-4 w-4 mr-2 text-amber-400" />
+                Activate Account
+                <ChevronRight className="h-4 w-4 ml-1.5 opacity-70" />
+              </Button>
+              <p className="text-[10px] text-slate-400 hidden md:block">
+                Takes less than a minute
+              </p>
+            </div>
           </div>
         </div>
       )}
