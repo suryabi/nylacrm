@@ -429,9 +429,28 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
             "phone": account.get("contact_number") or account.get("phone") or "",
             "is_primary_contact": True,
         }]
-    if account.get("gstin") or account.get("gst_number"):
-        payload["gst_no"] = account.get("gstin") or account.get("gst_number")
+    # ── GST: number + treatment + place_of_contact ──
+    # Zoho silently downgrades `gst_treatment` to "consumer" (Unregistered)
+    # unless `place_of_contact` (the 2-letter state code) is also sent.
+    # We derive the state code from the GSTIN's first 2 digits — the most
+    # reliable source since it's encoded in the GSTIN itself.
+    GST_STATE_CODE_TO_PLACE = {
+        "01": "JK", "02": "HP", "03": "PB", "04": "CH", "05": "UK", "06": "HR",
+        "07": "DL", "08": "RJ", "09": "UP", "10": "BR", "11": "SK", "12": "AR",
+        "13": "NL", "14": "MN", "15": "MZ", "16": "TR", "17": "ME", "18": "AS",
+        "19": "WB", "20": "JH", "21": "OD", "22": "CG", "23": "MP", "24": "GJ",
+        "25": "DD", "26": "DD", "27": "MH", "28": "AP", "29": "KA", "30": "GA",
+        "31": "LD", "32": "KL", "33": "TN", "34": "PY", "35": "AN", "36": "TS",
+        "37": "AP", "38": "LA", "97": "OT",
+    }
+    gstin = (account.get("gstin") or account.get("gst_number") or "").strip().upper()
+    if gstin:
+        payload["gst_no"] = gstin
         payload["gst_treatment"] = "business_gst"
+        place = GST_STATE_CODE_TO_PLACE.get(gstin[:2])
+        if place:
+            payload["place_of_contact"] = place
+            payload["place_of_contact_with_prefix"] = place
 
     # ── Flatten our nested address dicts into Zoho's flat schema ──
     # Zoho's `billing_address` / `shipping_address` expect string fields:
