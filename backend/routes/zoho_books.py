@@ -177,6 +177,10 @@ async def oauth_callback(
             # Special case: ca uses www.zohoapis.ca via zohocloud
             if "zohocloud.ca" in accounts_url:
                 api_base_url = "https://www.zohoapis.ca"
+        logger.info(
+            f"Zoho OAuth: accounts_url={accounts_url!r} api_base_url={api_base_url!r} "
+            f"location={location!r} accounts_server={accounts_server!r}"
+        )
         organizations = await zoho.fetch_organizations(token_response["access_token"], api_base_url=api_base_url)
         if not organizations:
             return RedirectResponse(f"{failure_redirect}&message=no_organizations", status_code=302)

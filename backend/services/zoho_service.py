@@ -197,9 +197,11 @@ async def fetch_organizations(access_token: str, api_base_url: Optional[str] = N
     """Returns the list of Zoho Books organizations the access token can see."""
     cfg = get_zoho_config()
     base = (api_base_url or cfg["api_base_url"]).rstrip("/")
+    url = f"{base}/books/v3/organizations"
+    logger.info(f"Zoho fetch_organizations: GET {url}")
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
-            f"{base}/books/v3/organizations",
+            url,
             headers={"Authorization": f"Zoho-oauthtoken {access_token}"},
         )
     if resp.status_code != 200:
