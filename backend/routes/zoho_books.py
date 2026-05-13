@@ -149,34 +149,30 @@ async def oauth_callback(
     # `location` short code (in / us / eu / au / jp / ca / sa); finally fall
     # back to what's configured in env.
     DC_MAP = {
-        "in": "https://accounts.zoho.in",
-        "us": "https://accounts.zoho.com",
-        "eu": "https://accounts.zoho.eu",
-        "au": "https://accounts.zoho.com.au",
-        "jp": "https://accounts.zoho.jp",
-        "ca": "https://accounts.zohocloud.ca",
-        "sa": "https://accounts.zoho.sa",
-        "uk": "https://accounts.zoho.uk",
+        "in": ("https://accounts.zoho.in", "https://www.zohoapis.in"),
+        "us": ("https://accounts.zoho.com", "https://www.zohoapis.com"),
+        "eu": ("https://accounts.zoho.eu", "https://www.zohoapis.eu"),
+        "au": ("https://accounts.zoho.com.au", "https://www.zohoapis.com.au"),
+        "jp": ("https://accounts.zoho.jp", "https://www.zohoapis.jp"),
+        "ca": ("https://accounts.zohocloud.ca", "https://www.zohoapis.ca"),
+        "sa": ("https://accounts.zoho.sa", "https://www.zohoapis.sa"),
+        "uk": ("https://accounts.zoho.uk", "https://www.zohoapis.uk"),
     }
+    # Reverse map: accounts URL → api base URL (for `accounts-server` resolution)
+    ACCT_TO_API = {acct: api for (acct, api) in DC_MAP.values()}
+
     accounts_url = None
     if accounts_server:
         accounts_url = accounts_server.rstrip("/")
     elif location and location.lower() in DC_MAP:
-        accounts_url = DC_MAP[location.lower()]
+        accounts_url = DC_MAP[location.lower()][0]
 
     try:
         token_response = await zoho.exchange_code_for_tokens(code, redirect_uri, accounts_url=accounts_url)
-        # Determine API base from the accounts URL (zoho.in -> zohoapis.in, zoho.com -> zohoapis.com, ...)
-        api_base_url = None
-        if accounts_url:
-            api_base_url = (
-                accounts_url
-                .replace("https://accounts.", "https://www.zohoapis.")
-                .replace("zohocloud.ca", "zohocloud.ca")  # ca uses zohocloud
-            )
-            # Special case: ca uses www.zohoapis.ca via zohocloud
-            if "zohocloud.ca" in accounts_url:
-                api_base_url = "https://www.zohoapis.ca"
+        # Resolve the matching API base URL from the accounts URL using the
+        # explicit lookup table (DON'T do naive string replace — `accounts.zoho.com`
+        # → naive replace yields `www.zohoapis.zoho.com` which doesn't resolve).
+        api_base_url = ACCT_TO_API.get(accounts_url) if accounts_url else None
         logger.info(
             f"Zoho OAuth: accounts_url={accounts_url!r} api_base_url={api_base_url!r} "
             f"location={location!r} accounts_server={accounts_server!r}"
