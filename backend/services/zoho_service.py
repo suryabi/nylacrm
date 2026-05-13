@@ -670,7 +670,12 @@ async def record_sync_failure(
 # ---------- Background sync orchestrator (3 retries, exponential backoff) ----------
 
 async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id: str) -> None:
-    """Background task: push a delivery to Zoho with retry. Never raises."""
+    """Background task: push a delivery to Zoho with retry. Never raises.
+
+    Only deliveries dispatched from a **factory warehouse** (`distributor_locations.is_factory == True`)
+    generate Zoho invoices. Deliveries from a distributor's own warehouse are skipped — those
+    are handled by the distributor's own billing flow.
+    """
     if not is_zoho_configured():
         logger.info("Zoho not configured, skipping auto-push")
         return
@@ -684,6 +689,21 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
     )
     if not delivery:
         logger.warning(f"sync_delivery_to_zoho: delivery {delivery_id} not found")
+        return
+
+    # Guard: only factory-warehouse stock-outs are invoiced via Zoho.
+    src_loc_id = delivery.get("distributor_location_id")
+    if not src_loc_id:
+        logger.info(f"sync_delivery_to_zoho: delivery {delivery.get('delivery_number')} has no source location; skipping")
+        return
+    src_loc = await db.distributor_locations.find_one(
+        {"id": src_loc_id, "tenant_id": tenant_id}, {"_id": 0, "is_factory": 1, "location_name": 1}
+    )
+    if not src_loc or not src_loc.get("is_factory"):
+        logger.info(
+            f"sync_delivery_to_zoho: delivery {delivery.get('delivery_number')} dispatched from "
+            f"non-factory warehouse '{(src_loc or {}).get('location_name')}'; skipping Zoho push"
+        )
         return
 
     items = await db.distributor_delivery_items.find(

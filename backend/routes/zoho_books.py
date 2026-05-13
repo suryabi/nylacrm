@@ -345,5 +345,23 @@ async def manual_sync_delivery(
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
 
+    # Hard-block manual pushes from non-factory warehouses too — Zoho invoices
+    # are reserved for factory-warehouse stock-outs only.
+    src_loc_id = delivery.get("distributor_location_id")
+    if src_loc_id:
+        src_loc = await db.distributor_locations.find_one(
+            {"id": src_loc_id, "tenant_id": tenant_id},
+            {"_id": 0, "is_factory": 1, "location_name": 1},
+        )
+        if not src_loc or not src_loc.get("is_factory"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Zoho invoices are only generated for factory warehouse stock-outs. "
+                    f"This delivery was dispatched from '{(src_loc or {}).get('location_name', 'unknown')}', "
+                    f"which is not a factory warehouse."
+                ),
+            )
+
     background_tasks.add_task(zoho.sync_delivery_to_zoho, tenant_id, distributor_id, delivery_id)
     return {"message": "Sync queued; check Sync Status panel in a few seconds."}
