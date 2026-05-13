@@ -655,3 +655,180 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
         raise HTTPException(status_code=404, detail='Account not found')
     
     return {'message': 'Logo deleted successfully'}
+
+
+# ============= ACCOUNT ACTIVATION =============
+
+class ActivationChecklist(BaseModel):
+    """Sales-confirmation checklist that must all be True before an account
+    can be activated and synced to Zoho Books as a customer."""
+    gst_updated: bool
+    delivery_address_updated: bool
+    sku_prices_correct: bool
+    delivery_contact_updated: bool
+
+
+async def _is_user_in_management_chain(tdb, user_id: str, target_user_id: str, max_depth: int = 8) -> bool:
+    """Returns True if `user_id` is anywhere in the upward management chain of
+    `target_user_id` (i.e. target's manager, or manager's manager, etc.).
+    """
+    if not user_id or not target_user_id or user_id == target_user_id:
+        return False
+    current = target_user_id
+    for _ in range(max_depth):
+        u = await tdb.users.find_one({'id': current}, {'_id': 0, 'reports_to': 1})
+        if not u:
+            return False
+        parent = u.get('reports_to')
+        if not parent:
+            return False
+        if parent == user_id:
+            return True
+        current = parent
+    return False
+
+
+@router.post("/{account_id}/activate")
+async def activate_account(
+    account_id: str,
+    checklist: ActivationChecklist,
+    current_user: dict = Depends(get_current_user),
+):
+    """Activate a freshly-converted account.
+
+    Flow:
+      1. Permission: only the assigned salesperson, anyone in their upward
+         management chain, CEO, Admin, or System Admin can activate.
+      2. All four checklist items MUST be True (frontend gates the button too).
+      3. Account MUST have at least one SKU configured under `sku_pricing`.
+      4. Every SKU in `sku_pricing` MUST be mapped under Settings → Integrations
+         → Zoho Books → SKU Mapping.
+      5. Upsert the customer in Zoho Books (uses the account's existing
+         contact / GST / address details).
+      6. Mark account `status='active'` with `activated_at` / `activated_by`
+         + persist `zoho_contact_id` on the account doc.
+
+    Idempotent: re-activating an already-active account is allowed and will
+    just re-sync the contact to Zoho.
+    """
+    # All four checklist items must be true (defensive — UI also enforces this)
+    if not all([
+        checklist.gst_updated,
+        checklist.delivery_address_updated,
+        checklist.sku_prices_correct,
+        checklist.delivery_contact_updated,
+    ]):
+        raise HTTPException(status_code=400, detail='All four checklist items must be confirmed before activation.')
+
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    # ── Permission check ──
+    role = (current_user or {}).get('role') or ''
+    user_id = (current_user or {}).get('id')
+    privileged_roles = {'CEO', 'Admin', 'System Admin'}
+    allowed = (
+        role in privileged_roles
+        or (account.get('assigned_to') and account['assigned_to'] == user_id)
+        or await _is_user_in_management_chain(tdb, user_id, account.get('assigned_to') or '')
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=403,
+            detail='Only the assigned salesperson, their managers, CEO or Admin can activate this account.'
+        )
+
+    # ── Validate sku_pricing exists ──
+    sku_pricing = account.get('sku_pricing') or []
+    if not sku_pricing:
+        raise HTTPException(
+            status_code=400,
+            detail='No SKU pricing configured on this account. Add agreed prices under SKU Pricing first.'
+        )
+
+    # ── Validate every SKU has a Zoho item mapping ──
+    # We accept either an explicit `sku_id` reference on the pricing row or a
+    # name match against master_skus → then look up zoho_sku_mappings.
+    sku_id_set: set = set()
+    name_to_id: dict = {}
+    async for ms in tdb.master_skus.find({}, {'_id': 0, 'id': 1, 'sku_name': 1, 'sku': 1, 'name': 1}):
+        sid = ms.get('id')
+        if sid:
+            for k in ('sku_name', 'sku', 'name'):
+                v = ms.get(k)
+                if v:
+                    name_to_id[str(v).strip().lower()] = sid
+
+    for p in sku_pricing:
+        sid = p.get('sku_id')
+        if not sid:
+            name = (p.get('sku') or p.get('sku_name') or '').strip().lower()
+            sid = name_to_id.get(name)
+        if sid:
+            sku_id_set.add(sid)
+
+    unmapped: list = []
+    for p in sku_pricing:
+        sid = p.get('sku_id')
+        name = p.get('sku') or p.get('sku_name') or ''
+        if not sid:
+            sid = name_to_id.get(name.strip().lower())
+        if not sid:
+            unmapped.append(name)
+            continue
+        mapping = await tdb.zoho_sku_mappings.find_one(
+            {'our_sku_id': sid}, {'_id': 0, 'zoho_item_id': 1}
+        )
+        if not mapping or not mapping.get('zoho_item_id'):
+            unmapped.append(name)
+    if unmapped:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The following SKUs are not mapped to Zoho items: "
+                + ", ".join(sorted(set(unmapped)))
+                + ". Go to Settings → Integrations → Zoho Books → SKU Mapping first."
+            ),
+        )
+
+    # ── Sync to Zoho (upsert contact) ──
+    from services import zoho_service as zoho
+    tenant_id = get_current_tenant_id()
+    if not zoho.is_zoho_configured():
+        raise HTTPException(
+            status_code=400,
+            detail='Zoho Books integration is not configured. Ask an admin to set ZOHO_CLIENT_ID/SECRET.'
+        )
+    creds = await zoho.get_credentials(tenant_id)
+    if not creds:
+        raise HTTPException(
+            status_code=400,
+            detail='Zoho Books is not connected for this tenant. Go to Settings → Integrations → Zoho Books and click Connect.'
+        )
+
+    try:
+        zoho_contact_id = await zoho.upsert_contact(tenant_id, account)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f'Failed to sync customer to Zoho Books: {e}')
+
+    now = datetime.now(timezone.utc).isoformat()
+    update_doc = {
+        'status': 'active',
+        'activated_at': now,
+        'activated_by': user_id,
+        'activated_by_name': (current_user or {}).get('name'),
+        'zoho_contact_id': zoho_contact_id,
+        'updated_at': now,
+        'activation_checklist': checklist.model_dump(),
+    }
+    await tdb.accounts.update_one({'id': account_id}, {'$set': update_doc})
+
+    return {
+        'message': 'Account activated and synced to Zoho Books.',
+        'account_id': account_id,
+        'zoho_contact_id': zoho_contact_id,
+        'activated_at': now,
+        'activated_by_name': (current_user or {}).get('name'),
+    }

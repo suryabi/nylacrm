@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -33,6 +33,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '../components/ui/dialog';
+import { Checkbox } from '../components/ui/checkbox';
 import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
 import AppBreadcrumb from '../components/AppBreadcrumb';
@@ -220,6 +221,16 @@ export default function AccountDetail() {
   const [onboardedMonth, setOnboardedMonth] = useState('');
   const [onboardedYear, setOnboardedYear] = useState('');
   const [includeInGopMetrics, setIncludeInGopMetrics] = useState(true);
+
+  // Account activation state
+  const [activateDialogOpen, setActivateDialogOpen] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [activationChecks, setActivationChecks] = useState({
+    gst_updated: false,
+    delivery_address_updated: false,
+    sku_prices_correct: false,
+    delivery_contact_updated: false,
+  });
   
   // Delivery Address state
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -806,6 +817,39 @@ ${googleMapsLink}`;
     }
   };
 
+  // ── Account activation: sales-checklist + Zoho customer sync ──
+  const handleOpenActivateDialog = () => {
+    // Reset checks every time it opens
+    setActivationChecks({
+      gst_updated: false,
+      delivery_address_updated: false,
+      sku_prices_correct: false,
+      delivery_contact_updated: false,
+    });
+    setActivateDialogOpen(true);
+  };
+
+  const allChecksDone = Object.values(activationChecks).every(Boolean);
+
+  const handleActivateAccount = async () => {
+    if (!allChecksDone) return;
+    setActivating(true);
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/accounts/${id}/activate`,
+        activationChecks,
+        { withCredentials: true }
+      );
+      toast.success(data.message || 'Account activated and synced to Zoho Books.');
+      setActivateDialogOpen(false);
+      fetchAccount();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Activation failed.');
+    } finally {
+      setActivating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -904,6 +948,71 @@ ${googleMapsLink}`;
           </Button>
         )}
       </div>
+
+      {/* ── Account Activation Card ─────────────────────────────────────────────
+          Prominent CTA shown immediately after lead-conversion. Once the
+          salesperson activates (4-checkbox confirmation + Zoho contact sync)
+          this card flips to a green "Activated" chip. */}
+      {account.status === 'active' ? (
+        <div
+          className="flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3"
+          data-testid="account-activated-chip"
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-emerald-900">
+                Account active{account.activated_by_name ? ` — activated by ${account.activated_by_name}` : ''}
+              </p>
+              <p className="text-xs text-emerald-700">
+                {account.activated_at ? `On ${format(new Date(account.activated_at), 'dd MMM yyyy, hh:mm a')}` : 'Synced to Zoho Books'}
+                {account.zoho_contact_id ? ` • Zoho contact: ${account.zoho_contact_id}` : ''}
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+            onClick={handleOpenActivateDialog}
+            data-testid="resync-account-btn"
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            Re-sync to Zoho
+          </Button>
+        </div>
+      ) : (
+        <div
+          className="relative overflow-hidden rounded-xl border-2 border-violet-300 bg-gradient-to-r from-violet-50 via-fuchsia-50 to-violet-50 p-5 shadow-sm"
+          data-testid="account-activation-banner"
+        >
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-violet-600 flex items-center justify-center text-white shadow-md">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-violet-900">
+                  This account is not yet active
+                </p>
+                <p className="text-sm text-violet-700">
+                  Confirm the onboarding checklist and sync this customer to Zoho Books.
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={handleOpenActivateDialog}
+              className="bg-violet-600 hover:bg-violet-700 text-white shadow-md whitespace-nowrap"
+              data-testid="activate-account-btn"
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              Activate Account
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Main Info */}
@@ -2067,6 +2176,76 @@ ${googleMapsLink}`;
               className="bg-red-600 hover:bg-red-700"
             >
               {deletingAllInvoices ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4 mr-2" /> Delete All</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Account Activation Checklist Dialog ── */}
+      <Dialog open={activateDialogOpen} onOpenChange={setActivateDialogOpen}>
+        <DialogContent className="sm:max-w-lg" data-testid="activate-account-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-violet-600" />
+              Activate Account & Sync to Zoho
+            </DialogTitle>
+            <DialogDescription>
+              Confirm the onboarding checklist below. Once all items are verified, this
+              account will be synced to Zoho Books as a customer. Invoices generated
+              from factory-warehouse stock-outs will reference the agreed SKU prices
+              set on this account.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {[
+              { key: 'gst_updated', label: 'GST is updated' },
+              { key: 'delivery_address_updated', label: 'Delivery address is updated' },
+              { key: 'sku_prices_correct', label: 'SKU prices are correct' },
+              { key: 'delivery_contact_updated', label: 'Delivery contact details are updated' },
+            ].map((item) => (
+              <label
+                key={item.key}
+                className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 cursor-pointer hover:bg-secondary/40 transition-colors"
+                data-testid={`activation-check-${item.key}`}
+              >
+                <Checkbox
+                  checked={activationChecks[item.key]}
+                  onCheckedChange={(checked) =>
+                    setActivationChecks((prev) => ({ ...prev, [item.key]: !!checked }))
+                  }
+                />
+                <span className="text-sm font-medium">{item.label}</span>
+              </label>
+            ))}
+          </div>
+
+          {!allChecksDone && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              All four items must be confirmed before this account can be activated.
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setActivateDialogOpen(false)}
+              disabled={activating}
+              data-testid="activation-cancel-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleActivateAccount}
+              disabled={!allChecksDone || activating}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+              data-testid="activation-confirm-btn"
+            >
+              {activating ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Activating…</>
+              ) : (
+                <><Zap className="h-4 w-4 mr-2" /> Activate & Sync</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
