@@ -403,6 +403,39 @@ async def mark_credit_issuance_issued(
     # Recalculate so the linked return transitions from direct_payment_approved
     # → credit_issued now that the physical handover is recorded.
     await _recalculate_credit_note_status(tenant_id, credit_note_id)
+
+    # Record the refund in Zoho Books so the Zoho credit note auto-closes
+    # when its balance reaches 0. Best-effort: don't fail the local flow.
+    try:
+        from services.zoho_service import record_credit_note_refund_in_zoho, is_zoho_configured
+        if is_zoho_configured():
+            cn = await db.credit_notes.find_one(
+                {"id": credit_note_id, "tenant_id": tenant_id},
+                {"_id": 0}
+            )
+            issuance_doc = await db.credit_note_issuances.find_one(
+                {"id": issuance_id, "tenant_id": tenant_id},
+                {"_id": 0}
+            )
+            if cn and issuance_doc:
+                refund = await record_credit_note_refund_in_zoho(
+                    tenant_id=tenant_id, credit_note=cn, issuance=issuance_doc
+                )
+                if refund:
+                    await db.credit_note_issuances.update_one(
+                        {"id": issuance_id, "tenant_id": tenant_id},
+                        {"$set": {
+                            "zoho_refund_id": refund.get("creditnote_refund_id"),
+                            "zoho_refund_date": refund.get("date"),
+                            "zoho_refund_synced_at": now,
+                        }},
+                    )
+    except Exception as zoho_err:
+        logger.warning(
+            f"Failed to record Zoho refund for issuance {issuance_id} "
+            f"on credit note {credit_note_id}: {zoho_err}"
+        )
+
     logger.info(f"Marked credit issuance {issuance_id} as issued on {issuance_date} by {current_user['email']}")
     return {"status": "issued", "issued_at": issuance_date}
 

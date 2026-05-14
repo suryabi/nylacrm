@@ -820,6 +820,26 @@ async def create_invoice_for_delivery(
         {"$set": mapping_doc, "$setOnInsert": {"created_at": now}},
         upsert=True,
     )
+
+    # 7. Apply any credit notes that were attached to this delivery to the
+    #    Zoho invoice we just created. Zoho will auto-close the credit note
+    #    when its balance reaches 0.
+    if delivery.get("applied_credit_notes"):
+        try:
+            zoho_apply_results = await apply_credit_notes_to_zoho_invoice(
+                tenant_id=tenant_id, delivery=delivery, zoho_invoice_id=zoho_invoice_id
+            )
+            if zoho_apply_results:
+                await db.distributor_deliveries.update_one(
+                    {"id": delivery.get("id"), "tenant_id": tenant_id},
+                    {"$set": {"zoho_credit_note_applications": zoho_apply_results}},
+                )
+        except Exception as e:
+            logger.warning(
+                f"Failed applying credit notes to Zoho invoice {zoho_invoice_id} "
+                f"for delivery {delivery.get('delivery_number')}: {e}"
+            )
+
     return mapping_doc
 
 
@@ -977,6 +997,149 @@ async def create_credit_note_for_return(
     )
     return mapping_doc
 
+
+async def apply_credit_notes_to_zoho_invoice(
+    *, tenant_id: str, delivery: dict, zoho_invoice_id: str
+) -> list[dict]:
+    """For every credit note that was applied to a CRM delivery, also apply it
+    against the freshly-created Zoho invoice. Zoho auto-closes a credit note
+    when its remaining balance hits 0.
+
+    Returns a list of {credit_note_id, zoho_creditnote_id, amount, ok, error}.
+    """
+    applied: list[dict] = []
+    apps = delivery.get("applied_credit_notes") or []
+    if not apps or not zoho_invoice_id:
+        return applied
+
+    for entry in apps:
+        local_cn_id = entry.get("credit_note_id")
+        amount = float(entry.get("amount_applied") or 0)
+        if not local_cn_id or amount <= 0:
+            continue
+
+        # Find the Zoho credit-note id we stamped during return → CN sync
+        cn = await db.credit_notes.find_one(
+            {"id": local_cn_id, "tenant_id": tenant_id},
+            {"_id": 0, "zoho_creditnote_id": 1, "credit_note_number": 1},
+        )
+        zcn_id = (cn or {}).get("zoho_creditnote_id")
+        cn_number = (cn or {}).get("credit_note_number")
+        if not zcn_id:
+            logger.warning(
+                f"[zoho] Skipping Zoho apply for credit note {cn_number} "
+                f"on invoice {zoho_invoice_id} — local CN has no zoho_creditnote_id "
+                f"(was the credit-note push to Zoho ever successful?)"
+            )
+            applied.append({
+                "credit_note_id": local_cn_id, "zoho_creditnote_id": None,
+                "amount": amount, "ok": False, "error": "no_zoho_mapping",
+            })
+            continue
+
+        payload = {
+            "invoices": [{
+                "invoice_id": zoho_invoice_id,
+                "amount_applied": round(amount, 2),
+            }]
+        }
+        try:
+            await _zoho_request(
+                "POST",
+                f"/books/v3/creditnotes/{zcn_id}/invoices",
+                tenant_id=tenant_id,
+                json=payload,
+            )
+            logger.info(
+                f"[zoho] Applied ₹{amount} from credit note {cn_number} ({zcn_id}) "
+                f"to invoice {zoho_invoice_id}"
+            )
+            applied.append({
+                "credit_note_id": local_cn_id, "zoho_creditnote_id": zcn_id,
+                "amount": amount, "ok": True, "error": None,
+            })
+        except Exception as e:
+            logger.warning(
+                f"[zoho] Failed applying credit note {cn_number} ({zcn_id}) to "
+                f"invoice {zoho_invoice_id}: {e}"
+            )
+            applied.append({
+                "credit_note_id": local_cn_id, "zoho_creditnote_id": zcn_id,
+                "amount": amount, "ok": False, "error": str(e)[:300],
+            })
+
+    return applied
+
+
+async def record_credit_note_refund_in_zoho(
+    *, tenant_id: str, credit_note: dict, issuance: dict
+) -> Optional[dict]:
+    """Record a refund against a Zoho credit note when the cash/refund was
+    physically issued to the customer. Zoho auto-closes the credit note once
+    its balance hits zero.
+
+    `credit_note` is the local credit_notes row.
+    `issuance` is the credit_note_issuances row (must already be `issued`).
+    """
+    zcn_id = credit_note.get("zoho_creditnote_id")
+    if not zcn_id:
+        logger.info(
+            f"Local credit note {credit_note.get('credit_note_number')} has no "
+            f"zoho_creditnote_id — skipping Zoho refund record."
+        )
+        return None
+
+    amount = float(issuance.get("amount") or 0)
+    if amount <= 0:
+        return None
+
+    # Map our `issuance_method` to Zoho `refund_mode` (case-insensitive).
+    method = (issuance.get("issuance_method") or "cash").strip().lower()
+    refund_mode_map = {
+        "cash": "cash",
+        "bank_transfer": "banktransfer",
+        "bank transfer": "banktransfer",
+        "cheque": "check",
+        "check": "check",
+        "store_credit": "cash",  # closest match in Zoho
+        "other": "cash",
+    }
+    refund_mode = refund_mode_map.get(method, "cash")
+    refund_date = (issuance.get("issued_at")
+                   or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10]
+
+    payload = {
+        "date": refund_date,
+        "amount": round(amount, 2),
+        "refund_mode": refund_mode,
+        "description": (
+            f"Refund against credit note {credit_note.get('credit_note_number')} "
+            f"— issuance {issuance.get('id')}"
+        )[:200],
+    }
+    if issuance.get("reference"):
+        payload["reference_number"] = str(issuance.get("reference"))[:50]
+
+    try:
+        result = await _zoho_request(
+            "POST",
+            f"/books/v3/creditnotes/{zcn_id}/refunds",
+            tenant_id=tenant_id,
+            json=payload,
+        )
+        refund = result.get("creditnote_refund") or {}
+        logger.info(
+            f"[zoho] Recorded ₹{amount} refund on credit note "
+            f"{credit_note.get('credit_note_number')} ({zcn_id}) — "
+            f"zoho_refund_id={refund.get('creditnote_refund_id')}"
+        )
+        return refund
+    except Exception as e:
+        logger.warning(
+            f"[zoho] Failed to record refund on credit note "
+            f"{credit_note.get('credit_note_number')} ({zcn_id}): {e}"
+        )
+        return None
 
 
 async def record_sync_failure(
