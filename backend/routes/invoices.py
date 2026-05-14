@@ -440,3 +440,69 @@ async def get_invoice_summary(
         'total_credit': total_credit,
         'total_outstanding': total_outstanding
     }
+
+
+
+@router.delete("/admin/nuke-all")
+async def nuke_all_invoices(
+    confirm: str = Query(..., description="Must be exactly 'YES-DELETE-ALL-INVOICES' to proceed"),
+    current_user: dict = Depends(get_current_user),
+):
+    """DANGER: Wipes the entire invoices collection for the current tenant.
+    Also resets invoice-derived financial rollups on every account.
+    CEO / System Admin only. Requires explicit confirm token to prevent accidents.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can nuke invoices.')
+
+    if confirm != 'YES-DELETE-ALL-INVOICES':
+        raise HTTPException(
+            status_code=400,
+            detail="Pass ?confirm=YES-DELETE-ALL-INVOICES to confirm this destructive action."
+        )
+
+    tdb = get_tdb()
+
+    # 1. Wipe every invoice in the tenant
+    pre_count = await tdb.invoices.count_documents({})
+    result = await tdb.invoices.delete_many({})
+    deleted_count = result.deleted_count
+
+    # 2. Wipe every Zoho invoice mapping for this tenant so future invoices push fresh
+    try:
+        await tdb.zoho_invoice_mappings.delete_many({'source_type': 'delivery'})
+    except Exception:  # collection may not exist on every tenant
+        pass
+
+    # 3. Reset financial rollups on every account
+    rollup_result = await tdb.accounts.update_many(
+        {},
+        {'$set': {
+            'outstanding_balance': 0.0,
+            'overdue_amount': 0.0,
+            'total_gross_invoice_value': 0.0,
+            'total_net_invoice_value': 0.0,
+            'total_credit_note_value': 0.0,
+            'total_outstanding': 0.0,
+            'invoice_count': 0,
+            'last_invoice_no': None,
+            'last_invoice_date': None,
+            'last_payment_amount': None,
+            'last_payment_date': None,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+
+    logger.warning(
+        f"[INVOICES] NUKE: {deleted_count} invoices deleted "
+        f"(was {pre_count}) by {current_user.get('email')}; "
+        f"rollups reset on {rollup_result.modified_count} accounts."
+    )
+
+    return {
+        'success': True,
+        'deleted_count': deleted_count,
+        'pre_count': pre_count,
+        'accounts_reset': rollup_result.modified_count,
+    }
