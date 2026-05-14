@@ -745,6 +745,26 @@ async def create_invoice_for_delivery(
 
     zoho_invoice_id = invoice.get("invoice_id")
     zoho_invoice_number = invoice.get("invoice_number")
+
+    # Transition the invoice from `draft` → `sent` so it shows up as an open
+    # receivable in Zoho Books immediately (instead of sitting in Drafts).
+    # This does NOT email the customer — it only flips the status server-side.
+    if zoho_invoice_id:
+        try:
+            await _zoho_request(
+                "POST",
+                f"/books/v3/invoices/{zoho_invoice_id}/status/sent",
+                tenant_id=tenant_id,
+            )
+            logger.info(f"[zoho] Invoice {zoho_invoice_number} ({zoho_invoice_id}) marked as sent")
+        except Exception as e:
+            # Don't fail the whole sync if the status flip fails — the invoice
+            # still exists in Zoho as a draft and can be sent manually.
+            logger.warning(
+                f"[zoho] Could not mark invoice {zoho_invoice_number} as sent: {e}. "
+                f"Invoice was created successfully and remains in draft state."
+            )
+
     creds = await get_credentials(tenant_id) or {}
     # Prefer Zoho's customer-share URL if returned; else build admin URL
     zoho_invoice_url = invoice.get("invoice_url") or _zoho_books_url(zoho_invoice_id, creds)
