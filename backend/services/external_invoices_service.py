@@ -269,14 +269,20 @@ async def create_external_invoice(account_id_param: str, raw_payload: dict, user
     account = await _resolve_account(account_id_param)
     tdb = get_tenant_db()
 
+    # Idempotency: if invoice already exists, treat the POST as an upsert and
+    # delegate to the update path. The external system sends the latest values
+    # (including outstanding) on every push — we must always honor the newest
+    # payload without creating duplicates.
     existing = await tdb.invoices.find_one(
         {'$or': [{'id': payload.invoiceNo}, {'invoice_no': payload.invoiceNo}]},
         {'_id': 0, 'id': 1}
     )
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invoice '{payload.invoiceNo}' already exists. Use PUT to update."
+        logger.info(
+            f"[external_invoice {payload.invoiceNo}] already exists — upserting via update path"
+        )
+        return await update_external_invoice(
+            account_id_param, payload.invoiceNo, raw_payload, user_id
         )
 
     items_resolved, unmatched, lines_net = await _resolve_items(payload.items)
