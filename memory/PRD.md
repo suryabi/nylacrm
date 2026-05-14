@@ -23,12 +23,14 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 ## Recent Implementations
 
 ### 2026-02-13 (this session)
-- **Account page Invoice Summary locked to "This Month" + MoM delta** (`frontend/src/pages/AccountDetail.js`)
-  - Removed the time-period dropdown from the Account page Invoice Summary card.
-  - The card now always renders only the current month's invoices (latest 5) and a "This Month" pill in the header.
-  - Added **Month-over-Month delta indicators** under Gross Value and Net Value tiles (e.g., "+12.3% vs last month") with green/rose color + TrendingUp/Down icons. Falls back to "No data last month" when previous month had no invoices.
-  - `fetchInvoices` now fetches this-month and last-month summaries in parallel via `Promise.all` for the MoM comparison.
-  - Empty state and "View all invoices" CTA navigate to `/invoices?account_name=<name>` (without any time_filter) so users get the full history on the dedicated Invoices page.
+- **Corporate UI language extended across Account page** (`frontend/src/pages/AccountDetail.js`)
+  - **Activation banner** redesigned: white card with amber left-rail, slate-900 icon tile, "ACTION REQUIRED" pulsing pill, dark CTA with amber accent. (Replaces violet gradient)
+  - **Activated chip** redesigned: white card with emerald left-rail, slate-900 icon tile with ShieldCheck, "ACTIVE / ZOHO SYNCED" pills, mono Zoho ID, outlined dark CTA.
+  - **Delivery Address visiting card** redesigned: slate-900 mini icon, emerald "GPS Locked" pill, blue left-rail on the visiting-card view, gradient background with watermark MapPin, "SHIP-TO ADDRESS" eyebrow label, mono GPS coords with own icon tile.
+  - **Account page Invoice Summary locked to "This Month"** with **MoM delta indicators** under Gross & Net tiles (TrendingUp/Down + colored pct).
+  - `fetchInvoices` parallelised (`Promise.all`) — fetches current period + last_month for MoM in one round-trip.
+  - Empty state CTA navigates to `/invoices?account_name=<name>` without the time_filter.
+
 
 
 

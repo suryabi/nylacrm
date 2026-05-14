@@ -1125,33 +1125,60 @@ ${googleMapsLink}`;
           this card flips to a green "Activated" chip. */}
       {account.status === 'active' ? (
         <div
-          className="flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3"
+          className="relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
           data-testid="account-activated-chip"
         >
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-              <ShieldCheck className="h-5 w-5" />
+          {/* Left accent rail — emerald signals "all set" */}
+          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-500 via-emerald-400 to-emerald-500" />
+          <div className="absolute inset-0 opacity-[0.035] pointer-events-none"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 1px 1px, #064e3b 1px, transparent 0)',
+              backgroundSize: '18px 18px',
+            }}
+          />
+          <div className="relative flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-emerald-400 shadow-sm ring-1 ring-slate-800">
+                <ShieldCheck className="h-5 w-5" strokeWidth={2.25} />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Active
+                  </span>
+                  {account.zoho_contact_id && (
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
+                      Zoho Synced
+                    </span>
+                  )}
+                </div>
+                <p className="text-base font-semibold text-slate-900 leading-tight">
+                  Account active{account.activated_by_name ? ` — activated by ${account.activated_by_name}` : ''}
+                </p>
+                <p className="text-sm text-slate-600 leading-snug">
+                  {account.activated_at ? `On ${format(new Date(account.activated_at), 'dd MMM yyyy, hh:mm a')}` : 'Synced to Zoho Books'}
+                  {account.zoho_contact_id && (
+                    <>
+                      <span className="mx-1.5 text-slate-300">•</span>
+                      <span className="font-mono text-slate-500">Zoho ID: {account.zoho_contact_id}</span>
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-emerald-900">
-                Account active{account.activated_by_name ? ` — activated by ${account.activated_by_name}` : ''}
-              </p>
-              <p className="text-xs text-emerald-700">
-                {account.activated_at ? `On ${format(new Date(account.activated_at), 'dd MMM yyyy, hh:mm a')}` : 'Synced to Zoho Books'}
-                {account.zoho_contact_id ? ` • Zoho contact: ${account.zoho_contact_id}` : ''}
-              </p>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-slate-300 text-slate-800 hover:bg-slate-50 hover:border-slate-400 h-9 px-4 font-medium whitespace-nowrap"
+              onClick={handleOpenActivateDialog}
+              data-testid="resync-account-btn"
+            >
+              <Zap className="h-4 w-4 mr-2 text-emerald-600" />
+              Re-sync to Zoho
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="border-emerald-300 text-emerald-800 hover:bg-emerald-100"
-            onClick={handleOpenActivateDialog}
-            data-testid="resync-account-btn"
-          >
-            <Zap className="h-4 w-4 mr-2" />
-            Re-sync to Zoho
-          </Button>
         </div>
       ) : (
         <div
@@ -2010,14 +2037,17 @@ ${googleMapsLink}`;
             </div>
 
             {/* ── 2) Delivery Address ── */}
-            <div className="rounded-xl border border-border bg-secondary/20 p-4 mb-5" data-testid="delivery-address-card">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 mb-5 shadow-sm" data-testid="delivery-address-card">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Truck className="h-4 w-4 text-blue-600" />
-                  <span className="font-semibold text-sm">Delivery Address</span>
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-900 text-blue-300 ring-1 ring-slate-800">
+                    <Truck className="h-3.5 w-3.5" strokeWidth={2.25} />
+                  </div>
+                  <span className="font-semibold text-sm text-slate-900">Delivery Address</span>
                   {(deliveryAddress.lat && deliveryAddress.lng) && (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
-                      GPS locked
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 mr-1" />
+                      GPS Locked
                     </Badge>
                   )}
                 </div>
@@ -2027,7 +2057,7 @@ ${googleMapsLink}`;
                     <button
                       type="button"
                       onClick={handleCopyMapsLink}
-                      className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+                      className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
                       title="Copy Google Maps location link"
                       data-testid="copy-maps-link-btn"
                     >
@@ -2037,7 +2067,7 @@ ${googleMapsLink}`;
                       href={buildMapsUrl(deliveryAddress)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+                      className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
                       title="Open in Google Maps"
                       data-testid="open-maps-btn"
                     >
@@ -2046,7 +2076,7 @@ ${googleMapsLink}`;
                     <button
                       type="button"
                       onClick={() => setEditingDeliveryAddress(true)}
-                      className="p-1.5 rounded-md hover:bg-blue-100 text-blue-600 transition-colors"
+                      className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors"
                       title="Edit delivery address"
                       data-testid="edit-delivery-address-btn"
                     >
@@ -2058,17 +2088,25 @@ ${googleMapsLink}`;
 
               {/* ── VISITING-CARD VIEW (when address saved & not editing) ── */}
               {!editingDeliveryAddress && account?.delivery_address?.address_line1 ? (
-                <div className="rounded-lg bg-white border border-blue-200 p-4 shadow-sm">
-                  <div className="space-y-1">
-                    <p className="text-[15px] font-semibold text-foreground leading-snug">
+                <div className="relative overflow-hidden rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 shadow-inner">
+                  {/* Left accent rail */}
+                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-600 via-blue-500 to-blue-600" />
+                  <div className="absolute top-3 right-3 opacity-[0.06] pointer-events-none">
+                    <MapPin className="h-16 w-16 text-slate-900" strokeWidth={1.5} />
+                  </div>
+                  <div className="relative pl-2">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1.5">
+                      Ship-To Address
+                    </p>
+                    <p className="text-[15px] font-semibold text-slate-900 leading-snug">
                       {account.delivery_address.address_line1}
                     </p>
                     {account.delivery_address.address_line2 && (
-                      <p className="text-sm text-foreground leading-snug">
+                      <p className="text-sm text-slate-700 leading-snug">
                         {account.delivery_address.address_line2}
                       </p>
                     )}
-                    <p className="text-sm text-foreground leading-snug">
+                    <p className="text-sm text-slate-700 leading-snug">
                       {[
                         account.delivery_address.city,
                         account.delivery_address.state,
@@ -2076,18 +2114,23 @@ ${googleMapsLink}`;
                       ].filter(Boolean).join(', ')}
                     </p>
                     {account.delivery_address.landmark && (
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-xs text-slate-500 mt-1.5 italic">
                         Landmark: {account.delivery_address.landmark}
                       </p>
                     )}
                     {(account.delivery_address.lat && account.delivery_address.lng) && (
-                      <div className="mt-2 pt-2 border-t border-dashed border-blue-100">
-                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium mb-1">
-                          GPS coordinates
-                        </p>
-                        <p className="text-xs font-mono text-blue-700">
-                          {Number(account.delivery_address.lat).toFixed(6)}, {Number(account.delivery_address.lng).toFixed(6)}
-                        </p>
+                      <div className="mt-3 pt-3 border-t border-slate-200/70 flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-blue-300">
+                          <MapPin className="h-4 w-4" strokeWidth={2.25} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                            GPS Coordinates
+                          </p>
+                          <p className="text-xs font-mono text-slate-700 tabular-nums">
+                            {Number(account.delivery_address.lat).toFixed(6)}, {Number(account.delivery_address.lng).toFixed(6)}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
