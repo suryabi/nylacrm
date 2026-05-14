@@ -823,6 +823,162 @@ async def create_invoice_for_delivery(
     return mapping_doc
 
 
+async def create_credit_note_for_return(
+    *, tenant_id: str, return_doc: dict, account: dict
+) -> dict:
+    """Push a Nyla customer return as a Zoho Books credit note.
+
+    Each return-item line:
+      • item_id  → mapped via zoho_sku_mappings (same as invoice flow)
+      • quantity → number of bottles returned
+      • rate     → account.sku_pricing.return_bottle_credit for that SKU
+                   (NOT the original selling price)
+
+    Returns the canonical mapping doc (also stored in `zoho_invoice_mappings`
+    under source_type='customer_return').
+    """
+    if not is_zoho_configured():
+        raise RuntimeError("Zoho Books integration is not configured (ZOHO_CLIENT_ID missing).")
+
+    # ── Idempotency: if this return was already pushed, return existing mapping ──
+    existing_mapping = await db.zoho_invoice_mappings.find_one(
+        {"tenant_id": tenant_id, "source_type": "customer_return",
+         "source_id": return_doc.get("id"), "status": "synced"},
+        {"_id": 0},
+    )
+    if existing_mapping and existing_mapping.get("zoho_creditnote_id"):
+        logger.info(
+            f"Zoho credit-note already synced for return {return_doc.get('return_number')}; "
+            f"skipping re-create."
+        )
+        return existing_mapping
+
+    # 1. Upsert contact (creates or returns existing Zoho customer)
+    customer_id = await upsert_contact(tenant_id, account)
+
+    # 2. Build the per-SKU credit lookup from account.sku_pricing.return_bottle_credit
+    credit_rates: dict[str, float] = {}
+    for p in (account.get("sku_pricing") or []):
+        sku_key = (p.get("sku") or p.get("sku_name") or "").strip().lower()
+        if not sku_key:
+            continue
+        try:
+            credit_rates[sku_key] = float(p.get("return_bottle_credit") or 0)
+        except (TypeError, ValueError):
+            credit_rates[sku_key] = 0.0
+
+    # 3. Build line items — quantity = bottles returned, rate = configured return credit
+    missing_skus: list[str] = []
+    line_items: list[dict] = []
+    for it in (return_doc.get("items") or []):
+        sku_id = it.get("sku_id")
+        if not sku_id:
+            continue
+        zoho_item_id = await get_zoho_item_id(tenant_id, sku_id)
+        sku_name = (it.get("sku_name") or it.get("sku_code") or "").strip()
+        key = sku_name.lower()
+        # Prefer the rate already saved on the return line; fall back to account config
+        line_rate = float(it.get("credit_per_unit") or it.get("return_credit_per_unit") or 0)
+        if line_rate <= 0:
+            line_rate = credit_rates.get(key, 0.0)
+        if line_rate <= 0:
+            if sku_name and sku_name not in missing_skus:
+                missing_skus.append(sku_name)
+            continue
+        qty = float(it.get("quantity", 0) or 0)
+        if qty <= 0:
+            continue
+        line_items.append({
+            "item_id": zoho_item_id,
+            "name": sku_name,
+            "quantity": qty,
+            "rate": round(line_rate, 2),
+        })
+
+    if missing_skus:
+        raise RuntimeError(
+            "No return-credit configured on the account for SKU(s): "
+            + ", ".join(missing_skus)
+            + ". Add a Bottle Credit under Account → SKU Pricing before this credit note can be pushed to Zoho."
+        )
+    if not line_items:
+        raise RuntimeError("No eligible return-line items to push (zero qty / zero credit).")
+
+    creditnote_payload = {
+        "customer_id": customer_id,
+        "reference_number": return_doc.get("return_number"),
+        "date": (return_doc.get("return_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
+        "line_items": line_items,
+        "notes": f"Generated from Nyla CRM customer return {return_doc.get('return_number')}",
+    }
+
+    result = await _zoho_request(
+        "POST", "/books/v3/creditnotes", tenant_id=tenant_id, json=creditnote_payload
+    )
+    cn = result.get("creditnote") or {}
+    zoho_creditnote_id = cn.get("creditnote_id")
+    zoho_creditnote_number = cn.get("creditnote_number")
+
+    # Transition draft → open so the credit shows up as available in Zoho immediately
+    if zoho_creditnote_id:
+        try:
+            await _zoho_request(
+                "POST",
+                f"/books/v3/creditnotes/{zoho_creditnote_id}/status/open",
+                tenant_id=tenant_id,
+            )
+            logger.info(
+                f"[zoho] Credit-note {zoho_creditnote_number} ({zoho_creditnote_id}) marked as open"
+            )
+        except Exception as e:
+            logger.warning(
+                f"[zoho] Could not mark credit-note {zoho_creditnote_number} as open: {e}. "
+                f"It remains as draft in Zoho."
+            )
+
+    creds = await get_credentials(tenant_id) or {}
+    zoho_creditnote_url = cn.get("creditnote_url") or _zoho_books_url(zoho_creditnote_id, creds)
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Stamp Zoho ids on the return doc so the UI can deep-link
+    try:
+        await db.customer_returns.update_one(
+            {"id": return_doc.get("id"), "tenant_id": tenant_id},
+            {"$set": {
+                "zoho_creditnote_id": zoho_creditnote_id,
+                "zoho_creditnote_number": zoho_creditnote_number,
+                "zoho_creditnote_url": zoho_creditnote_url,
+                "zoho_synced_at": now,
+            }},
+        )
+    except Exception as e:
+        logger.warning(f"Failed to stamp Zoho ids on return {return_doc.get('id')}: {e}")
+
+    mapping_doc = {
+        "tenant_id": tenant_id,
+        "source_type": "customer_return",
+        "source_id": return_doc.get("id"),
+        "source_reference": return_doc.get("return_number"),
+        "distributor_id": return_doc.get("distributor_id"),
+        "zoho_creditnote_id": zoho_creditnote_id,
+        "zoho_creditnote_number": zoho_creditnote_number,
+        "zoho_creditnote_url": zoho_creditnote_url,
+        "zoho_customer_id": customer_id,
+        "account_id": account.get("id"),
+        "status": "synced",
+        "synced_at": now,
+        "error": None,
+        "attempts": 1,
+    }
+    await db.zoho_invoice_mappings.update_one(
+        {"tenant_id": tenant_id, "source_type": "customer_return", "source_id": return_doc.get("id")},
+        {"$set": mapping_doc, "$setOnInsert": {"created_at": now}},
+        upsert=True,
+    )
+    return mapping_doc
+
+
+
 async def record_sync_failure(
     *, tenant_id: str, source_type: str, source_id: str, source_reference: Optional[str],
     distributor_id: Optional[str], error: str, attempts: int

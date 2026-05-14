@@ -504,7 +504,63 @@ async def create_credit_note_from_return(
     )
     
     logger.info(f"Created credit note {credit_note_number} for return {return_doc.get('return_number')} amount ₹{total_credit}")
-    
+
+    # ── Push to Zoho Books (best-effort, non-blocking) ─────────────────────
+    # The local credit note exists regardless; Zoho push failures only log.
+    try:
+        from services.zoho_service import create_credit_note_for_return, is_zoho_configured
+        if is_zoho_configured():
+            account = await db.accounts.find_one(
+                {"$or": [
+                    {"id": return_doc.get("account_id")},
+                    {"account_id": return_doc.get("account_id")},
+                ], "tenant_id": tenant_id},
+                {"_id": 0},
+            )
+            if not account:
+                logger.warning(
+                    f"Account {return_doc.get('account_id')} not found — skipping Zoho credit-note push "
+                    f"for return {return_doc.get('return_number')}"
+                )
+            else:
+                mapping = await create_credit_note_for_return(
+                    tenant_id=tenant_id,
+                    return_doc=return_doc,
+                    account=account,
+                )
+                # Mirror Zoho identifiers onto the local credit_note row
+                await db.credit_notes.update_one(
+                    {"id": credit_note.id, "tenant_id": tenant_id},
+                    {"$set": {
+                        "zoho_creditnote_id": mapping.get("zoho_creditnote_id"),
+                        "zoho_creditnote_number": mapping.get("zoho_creditnote_number"),
+                        "zoho_creditnote_url": mapping.get("zoho_creditnote_url"),
+                        "zoho_synced_at": mapping.get("synced_at"),
+                    }},
+                )
+                logger.info(
+                    f"Pushed credit note {credit_note_number} to Zoho as "
+                    f"{mapping.get('zoho_creditnote_number')}"
+                )
+    except Exception as zoho_err:
+        # Don't block local credit-note creation if Zoho push fails
+        logger.error(
+            f"Failed to push credit note {credit_note_number} to Zoho: {zoho_err}"
+        )
+        try:
+            from services.zoho_service import record_sync_failure
+            await record_sync_failure(
+                tenant_id=tenant_id,
+                source_type="customer_return",
+                source_id=return_doc.get("id"),
+                source_reference=return_doc.get("return_number"),
+                distributor_id=distributor_id,
+                error=str(zoho_err),
+                attempts=1,
+            )
+        except Exception:
+            pass
+
     return credit_note.model_dump()
 
 
