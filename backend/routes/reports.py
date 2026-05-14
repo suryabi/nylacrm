@@ -728,10 +728,9 @@ async def get_account_performance(
         last_payment = acc.get('last_payment_amount', 0)
         last_payment_date = acc.get('last_payment_date', '')
 
-        # Bottle credit: prefer the invoice-derived credit-note total; fall back to SKU pricing config
-        sku_pricing = acc.get('sku_pricing', [])
-        estimated_bottle_credit = sum(sku.get('return_bottle_credit', 0) for sku in sku_pricing)
-        bottle_credit = inv_data['credit_total'] if inv_data['credit_total'] > 0 else estimated_bottle_credit
+        # Bottle credit: strictly the credit-note total from invoices in this period.
+        # No SKU-pricing fallback — that's a config rate, not an actual credit issued.
+        bottle_credit = inv_data['credit_total']
         
         accounts_data.append({
             'account_id': acc_id,
