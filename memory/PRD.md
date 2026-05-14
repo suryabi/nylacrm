@@ -23,6 +23,14 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 ## Recent Implementations
 
 ### 2026-02-13 (this session)
+- **Mobile-responsive AccountDetail.js + LeadDetail.js**
+  - **AccountDetail header** rewrites for mobile: title block wraps with B2B badge inline, Edit/Save/Cancel/Delete buttons drop to a 2nd row with proper sizing (`h-9 sm:h-10`, icon-only Delete on small screens).
+  - All `Card className="p-6"` → `p-4 sm:p-6`; all section `<h2 className="text-lg ...">` → `text-base sm:text-lg` so cards don't waste space on phones.
+  - Invoice Summary metric tiles: `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5` so they ladder instead of overflowing.
+  - SKU Pricing table: `min-w-[440px]` + edge-to-edge horizontal scroll on mobile (`-mx-4 sm:mx-0`).
+  - Location/Account Info grids: collapse to 1-col / 3-col as appropriate; smaller text on mobile.
+  - **Mobile "Show more details" collapsible** added on both pages — hides Account Details / Signed Contract / Account Scoring (AccountDetail) and Lead Scoring / Related Leads (LeadDetail) by default on phones; toggle button (`data-testid="toggle-secondary-mobile-btn"`) with rotating chevron.
+  - LeadDetail outer container gets `pb-24 sm:pb-0` to clear the floating "Ask Nyla" button.
 - **Corporate UI language extended across Account page** (`frontend/src/pages/AccountDetail.js`)
   - **Activation banner** redesigned: white card with amber left-rail, slate-900 icon tile, "ACTION REQUIRED" pulsing pill, dark CTA with amber accent. (Replaces violet gradient)
   - **Activated chip** redesigned: white card with emerald left-rail, slate-900 icon tile with ShieldCheck, "ACTIVE / ZOHO SYNCED" pills, mono Zoho ID, outlined dark CTA.

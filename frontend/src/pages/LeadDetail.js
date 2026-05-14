@@ -95,6 +95,9 @@ export default function LeadDetail() {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   
+  // Mobile: toggle visibility of secondary right-column cards (Lead Scoring, Lead Group, Proposal, Activity Timeline, Lead Details)
+  const [showSecondaryMobile, setShowSecondaryMobile] = useState(false);
+  
   // Check if user is admin (CEO or Director)
   const isAdmin = user?.role === 'CEO' || user?.role === 'Director';
   
@@ -856,7 +859,7 @@ ${userEmail}`;
   const assignedUser = users.find(u => u.id === lead.assigned_to);
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0" data-testid="lead-detail-page">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0 pb-24 sm:pb-0" data-testid="lead-detail-page">
       {/* Breadcrumb */}
       <AppBreadcrumb />
       
@@ -1503,6 +1506,21 @@ ${userEmail}`;
             />
           )}
 
+          {/* ── Mobile: Show more toggle for secondary cards (Lead Score, Related Leads) ── */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSecondaryMobile(s => !s)}
+            className="w-full lg:hidden justify-center gap-2 border-dashed"
+            data-testid="toggle-secondary-mobile-btn"
+          >
+            <svg className={`w-4 h-4 transition-transform ${showSecondaryMobile ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+            {showSecondaryMobile ? 'Hide scoring & related leads' : 'Show lead scoring & related leads'}
+          </Button>
+
+          <div className={`space-y-6 ${showSecondaryMobile ? '' : 'hidden lg:block lg:space-y-6'}`}>
           {/* Lead Scoring Card */}
           <LeadScoringCard
             leadId={lead.id}
@@ -1516,6 +1534,7 @@ ${userEmail}`;
             leadCompany={lead.company}
             brandingColor={branding?.primary_color}
           />
+          </div>{/* /Mobile-collapsible secondary section */}
 
           {/* Log Activity Section - Featured Component */}
           <Card className={`overflow-hidden transition-all duration-300 ${showActivityForm ? 'ring-2 ring-primary/20 shadow-lg' : 'hover:shadow-md'}`}>
@@ -2012,14 +2031,14 @@ ${userEmail}`;
             )}
           </Card>
 
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Activity Timeline</h2>
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Activity Timeline</h2>
             <ActivityTimeline activities={activities} />
           </Card>
 
           {/* Lead Details */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Lead Details</h2>
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Lead Details</h2>
             <div className="space-y-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Source</p>

@@ -202,6 +202,9 @@ export default function AccountDetail() {
   const [users, setUsers] = useState([]);
   const [masterSkus, setMasterSkus] = useState([]);
   
+  // Mobile: toggle visibility of secondary right-column cards (Account Details, Signed Contract, Account Score)
+  const [showSecondaryMobile, setShowSecondaryMobile] = useState(false);
+
   // Contract state
   const [contract, setContract] = useState(null);
   const [loadingContract, setLoadingContract] = useState(false);
@@ -1040,83 +1043,106 @@ ${googleMapsLink}`;
   }
 
   return (
-    <div className="space-y-6" data-testid="account-detail-page">
+    <div className="space-y-4 sm:space-y-6 pb-24 sm:pb-6" data-testid="account-detail-page">
       {/* Breadcrumb */}
       <AppBreadcrumb currentLabel={account?.account_name} />
       
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigateTo('/accounts', { fromSidebar: true })} data-testid="back-button">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-semibold">{account.account_name}</h1>
-            {(() => {
-              const lt = account.lead_type || 'B2B';
-              const cls = {
-                'B2B': 'bg-sky-50 text-sky-700 border-sky-300',
-                'Retail': 'bg-violet-50 text-violet-700 border-violet-300',
-                'Individual': 'bg-emerald-50 text-emerald-700 border-emerald-300',
-              }[lt] || 'bg-sky-50 text-sky-700 border-sky-300';
-              return (
-                <Badge variant="outline" className={cls} data-testid="account-lead-type-badge">
-                  {lt}
-                </Badge>
-              );
-            })()}
-          </div>
-          <p className="text-sm font-mono text-muted-foreground mt-1" data-testid="account-unique-id">
-            ID: {account.account_id}
-          </p>
-          {account.lead_id && (
-            <p className="text-xs text-muted-foreground">
-              Converted from Lead: {account.lead_id}
-            </p>
-          )}
-        </div>
-        <Button
-          onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-          disabled={saving}
-          data-testid="edit-save-button"
-        >
-          {saving ? (
-            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
-          ) : isEditing ? (
-            <><Save className="h-4 w-4 mr-2" /> Save Changes</>
-          ) : (
-            'Edit Account'
-          )}
-        </Button>
-        {isEditing && (
-          <Button variant="outline" onClick={() => {
-            setIsEditing(false);
-            setAccountName(account.account_name || '');
-            setLeadType(account.lead_type || 'B2B');
-            setContactName(account.contact_name || '');
-            setContactNumber(account.contact_number || '');
-            setSkuPricing(account.sku_pricing || []);
-            setOnboardedMonth(account.onboarded_month || '');
-            setOnboardedYear(account.onboarded_year || '');
-          }}>
-            Cancel
-          </Button>
-        )}
-        {isAdmin && !isEditing && (
-          <Button 
-            variant="outline" 
-            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-            onClick={handleDeleteAccount}
-            disabled={deleting}
-            data-testid="delete-account-button"
+      {/* Header — mobile optimized: title block wraps, action buttons drop below on small screens */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigateTo('/accounts', { fromSidebar: true })}
+            data-testid="back-button"
+            className="h-8 w-8 sm:h-10 sm:w-10 shrink-0"
           >
-            {deleting ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting...</>
+            <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold leading-tight break-words">{account.account_name}</h1>
+              {(() => {
+                const lt = account.lead_type || 'B2B';
+                const cls = {
+                  'B2B': 'bg-sky-50 text-sky-700 border-sky-300',
+                  'Retail': 'bg-violet-50 text-violet-700 border-violet-300',
+                  'Individual': 'bg-emerald-50 text-emerald-700 border-emerald-300',
+                }[lt] || 'bg-sky-50 text-sky-700 border-sky-300';
+                return (
+                  <Badge variant="outline" className={`${cls} shrink-0 text-[10px] sm:text-xs`} data-testid="account-lead-type-badge">
+                    {lt}
+                  </Badge>
+                );
+              })()}
+            </div>
+            <p className="text-xs sm:text-sm font-mono text-muted-foreground mt-0.5 sm:mt-1 break-all" data-testid="account-unique-id">
+              ID: {account.account_id}
+            </p>
+            {account.lead_id && (
+              <p className="text-[10px] sm:text-xs text-muted-foreground break-all">
+                Converted from Lead: {account.lead_id}
+              </p>
+            )}
+          </div>
+        </div>
+        {/* Actions: wrap to a second row on mobile */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:shrink-0">
+          <Button
+            onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+            disabled={saving}
+            size="sm"
+            className="flex-1 sm:flex-none h-9 sm:h-10 text-xs sm:text-sm"
+            data-testid="edit-save-button"
+          >
+            {saving ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+            ) : isEditing ? (
+              <><Save className="h-4 w-4 mr-2" /> Save Changes</>
             ) : (
-              <><Trash2 className="h-4 w-4 mr-2" /> Delete Account</>
+              <>
+                <Pencil className="h-3.5 w-3.5 mr-1.5 sm:hidden" />
+                <span className="sm:hidden">Edit</span>
+                <span className="hidden sm:inline">Edit Account</span>
+              </>
             )}
           </Button>
-        )}
+          {isEditing && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none h-9 sm:h-10 text-xs sm:text-sm"
+              onClick={() => {
+                setIsEditing(false);
+                setAccountName(account.account_name || '');
+                setLeadType(account.lead_type || 'B2B');
+                setContactName(account.contact_name || '');
+                setContactNumber(account.contact_number || '');
+                setSkuPricing(account.sku_pricing || []);
+                setOnboardedMonth(account.onboarded_month || '');
+                setOnboardedYear(account.onboarded_year || '');
+              }}
+            >
+              Cancel
+            </Button>
+          )}
+          {isAdmin && !isEditing && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 h-9 sm:h-10 text-xs sm:text-sm shrink-0"
+              onClick={handleDeleteAccount}
+              disabled={deleting}
+              data-testid="delete-account-button"
+            >
+              {deleting ? (
+                <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> <span className="hidden sm:inline">Deleting...</span></>
+              ) : (
+                <><Trash2 className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Delete Account</span></>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* ── Account Activation Card ─────────────────────────────────────────────
@@ -1242,9 +1268,9 @@ ${googleMapsLink}`;
         {/* Left Column - Main Info */}
         <div className="lg:col-span-2 space-y-6">
           {/* Account Information */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+              <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
               Account Information
             </h2>
             {isEditing ? (
@@ -1433,14 +1459,14 @@ ${googleMapsLink}`;
           </Card>
 
           {/* Invoice Summary — second section, right after Account Information */}
-          <Card className="p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
+          <Card className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-5">
+              <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2 flex-wrap">
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 Invoice Summary
-                <Badge variant="secondary" className="ml-2 text-xs font-medium">This Month</Badge>
+                <Badge variant="secondary" className="text-[10px] sm:text-xs font-medium">This Month</Badge>
                 {invoiceTotalCount > 0 && (
-                  <Badge variant="outline" className="ml-1">{invoiceTotalCount} Total</Badge>
+                  <Badge variant="outline" className="text-[10px] sm:text-xs">{invoiceTotalCount} Total</Badge>
                 )}
               </h2>
               <div className="flex items-center gap-2 flex-wrap">
@@ -1471,7 +1497,7 @@ ${googleMapsLink}`;
               </div>
             ) : invoiceData && invoiceData.invoices?.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mb-3">
                   {(() => {
                     // Compute Month-over-Month deltas for Gross and Net.
                     // Returns null when last month had no invoices (to avoid 0→∞ noise).
@@ -1604,31 +1630,31 @@ ${googleMapsLink}`;
           </Card>
 
           {/* Location */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+              <MapPin className="h-4 w-4 sm:h-5 sm:w-5" />
               Location
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3 sm:gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">City</p>
-                <p className="font-medium">{account.city}</p>
+                <p className="text-[11px] sm:text-sm text-muted-foreground">City</p>
+                <p className="font-medium text-sm sm:text-base break-words">{account.city}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">State</p>
-                <p className="font-medium">{account.state}</p>
+                <p className="text-[11px] sm:text-sm text-muted-foreground">State</p>
+                <p className="font-medium text-sm sm:text-base break-words">{account.state}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Territory</p>
-                <p className="font-medium">{account.territory}</p>
+                <p className="text-[11px] sm:text-sm text-muted-foreground">Territory</p>
+                <p className="font-medium text-sm sm:text-base break-words">{account.territory}</p>
               </div>
             </div>
           </Card>
 
           {/* SKU Pricing Grid */}
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">SKU Pricing</h2>
+          <Card className="p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-base sm:text-lg font-semibold">SKU Pricing</h2>
               {isEditing && (
                 <Button size="sm" variant="outline" onClick={handleAddSKU} data-testid="add-sku-btn">
                   <Plus className="h-4 w-4 mr-1" /> Add SKU
@@ -1646,13 +1672,13 @@ ${googleMapsLink}`;
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full" data-testid="sku-pricing-table">
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <table className="w-full min-w-[440px]" data-testid="sku-pricing-table">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left px-3 py-2 text-sm font-medium">SKU</th>
-                      <th className="text-left px-3 py-2 text-sm font-medium">Price/Unit (₹)</th>
-                      <th className="text-left px-3 py-2 text-sm font-medium">Bottle Credit (₹)</th>
+                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium">SKU</th>
+                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Price/Unit (₹)</th>
+                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Bottle Credit (₹)</th>
                       {isEditing && <th className="w-10"></th>}
                     </tr>
                   </thead>
@@ -1917,17 +1943,17 @@ ${googleMapsLink}`;
               2. Delivery address (Google Places + lat/lng capture)
               3. Delivery contact (name + phone)
               ═══════════════════════════════════════════════════════════ */}
-          <Card className="p-6" data-testid="delivery-accounting-section">
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <FileCheck className="h-5 w-5 text-violet-600" />
+          <Card className="p-4 sm:p-6" data-testid="delivery-accounting-section">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+              <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                <FileCheck className="h-4 w-4 sm:h-5 sm:w-5 text-violet-600" />
                 Customer's Delivery & Accounting
               </h2>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[10px] sm:text-xs text-muted-foreground">
                 Used during account activation & invoicing
               </span>
             </div>
-            <p className="text-xs text-muted-foreground mb-5">
+            <p className="text-[11px] sm:text-xs text-muted-foreground mb-4 sm:mb-5">
               Upload the GST certificate to auto-populate billing details, set the
               delivery address (with location coordinates), and capture the on-ground
               delivery contact.
@@ -2342,9 +2368,22 @@ ${googleMapsLink}`;
             </div>
           </Card>
 
+          {/* ── Mobile: Show More toggle for low-priority sections ─────────── */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSecondaryMobile(s => !s)}
+            className="w-full lg:hidden justify-center gap-2 border-dashed"
+            data-testid="toggle-secondary-mobile-btn"
+          >
+            <ChevronDown className={`h-4 w-4 transition-transform ${showSecondaryMobile ? 'rotate-180' : ''}`} />
+            {showSecondaryMobile ? 'Hide additional details' : 'Show more details (Account info, Contract, Scoring)'}
+          </Button>
+
+          <div className={`space-y-6 ${showSecondaryMobile ? '' : 'hidden lg:block lg:space-y-6'}`}>
           {/* Account Details */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Account Details</h2>
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Account Details</h2>
             <div className="space-y-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Assigned To</p>
@@ -2560,6 +2599,7 @@ ${googleMapsLink}`;
             accountId={account?.id || id} 
             accountName={account?.account_name} 
           />
+          </div>{/* /Mobile-collapsible secondary section */}
         </div>
       </div>
 
