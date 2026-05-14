@@ -722,8 +722,11 @@ async def get_account_performance(
         if inv_data['invoice_count'] > 0:
             average_order = round(inv_data['gross_total'] / inv_data['invoice_count'], 2)
 
-        # Outstanding/overdue derived from invoices (more reliable than account-level fields)
-        outstanding = inv_data.get('outstanding_total', 0) or acc.get('outstanding_balance', 0)
+        # Outstanding: ALWAYS use account.outstanding_balance — that's the value the
+        # external system overwrites on each incoming invoice (the running running
+        # balance, even when back-dated invoices arrive). Summing across invoices is
+        # wrong because every invoice carries the same running total.
+        outstanding = float(acc.get('outstanding_balance') or 0)
         overdue = acc.get('overdue_amount', 0)
         last_payment = acc.get('last_payment_amount', 0)
         last_payment_date = acc.get('last_payment_date', '')

@@ -6227,7 +6227,7 @@ async def get_account_invoices(
     
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1}
+        {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1, 'outstanding_balance': 1}
     )
     if not account:
         logger.warning(f"[INVOICE_FETCH] Account not found: {account_id}")
@@ -6306,15 +6306,12 @@ async def get_account_invoices(
     net_amount = sum(inv.get('net_invoice_value', inv.get('paid_amount', 0)) or 0 for inv in all_invoices)
     credit_amount = sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices)
 
-    # Outstanding: take the LATEST invoice's value (NOT a sum across invoices).
-    # This mirrors the contract with the external invoicing system, which sends
-    # the running account outstanding on each invoice — the most recent invoice
-    # is the source of truth.
-    if all_invoices:
-        latest_inv = max(all_invoices, key=lambda i: (i.get('invoice_date') or ''))
-        outstanding = float(latest_inv.get('outstanding') or 0)
-    else:
-        outstanding = 0.0
+    # Outstanding: ALWAYS read from account.outstanding_balance. That's the
+    # running balance the external system overwrites on every incoming invoice
+    # (including back-dated ones). Deriving it from invoice rows would be wrong
+    # — every invoice carries the same running total, so picking "latest by
+    # invoice_date" can return a stale value when back-dated invoices arrive.
+    outstanding = float(account.get('outstanding_balance') or 0)
 
     # Bottles delivered across the time window
     bottles_delivered = 0

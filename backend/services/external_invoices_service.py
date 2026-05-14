@@ -207,10 +207,15 @@ async def _refresh_account_financials(account_uuid: str, *, outstanding_override
             )
         return {}
 
-    # Sort by invoice_date desc (string ISO YYYY-MM-DD lex compare works)
+    # Sort by arrival timestamp desc (received_at preferred, then created_at, then invoice_date).
+    # We MUST NOT sort by invoice_date alone: the external system can back-date an
+    # invoice while still carrying the latest running outstanding — the most
+    # recently *received* invoice is the source of truth for outstanding.
     invoices_sorted = sorted(
         invoices,
-        key=lambda i: (i.get('invoice_date') or ''),
+        key=lambda i: (
+            i.get('received_at') or i.get('created_at') or i.get('invoice_date') or ''
+        ),
         reverse=True,
     )
     latest = invoices_sorted[0]
