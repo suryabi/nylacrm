@@ -999,6 +999,40 @@ ${googleMapsLink}`;
     }
   };
 
+  // Manual override: paste in an existing Zoho contact_id for accounts that are
+  // already in Zoho. Useful when auto-match (by email/name) doesn't find the
+  // right contact. Pass empty string to unlink.
+  const handleEditZohoContactId = async () => {
+    const current = account?.zoho_contact_id || '';
+    const next = window.prompt(
+      `Enter Zoho contact ID for "${account?.account_name}".\n\n` +
+      `Find this in Zoho Books → Contacts → open the contact → copy the long\n` +
+      `number from the URL (e.g. .../#/contacts/2876000000123456).\n\n` +
+      `Leave blank to unlink.`,
+      current
+    );
+    if (next === null) return;  // user cancelled
+    const trimmed = next.trim();
+    if (trimmed === current) return;
+    try {
+      const resp = await axios.patch(
+        `${API_URL}/accounts/${id}/zoho-contact`,
+        { zoho_contact_id: trimmed || null },
+        { withCredentials: true }
+      );
+      toast.success(
+        trimmed
+          ? `Linked to Zoho contact ${resp.data.zoho_contact_id}`
+          : 'Zoho contact unlinked'
+      );
+      // Refresh account data so the badge / ID display updates inline
+      const fresh = await accountsAPI.get(id);
+      setAccount(fresh.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not update Zoho contact ID');
+    }
+  };
+
   const allChecksDone = Object.values(activationChecks).every(Boolean);
 
   const handleActivateAccount = async () => {
@@ -1188,6 +1222,18 @@ ${googleMapsLink}`;
                       <span className="font-mono text-slate-500">Zoho ID: {account.zoho_contact_id}</span>
                     </>
                   )}
+                  {(user?.role === 'CEO' || user?.role === 'System Admin') && (
+                    <button
+                      type="button"
+                      onClick={handleEditZohoContactId}
+                      className="ml-2 inline-flex items-center text-[11px] text-slate-500 hover:text-slate-900 underline-offset-2 hover:underline transition-colors"
+                      data-testid="edit-zoho-contact-id-btn"
+                      title="Manually set or change the Zoho contact ID"
+                    >
+                      <Pencil className="h-3 w-3 mr-1" />
+                      Edit
+                    </button>
+                  )}
                 </p>
               </div>
             </div>
@@ -1241,6 +1287,23 @@ ${googleMapsLink}`;
                   Complete the onboarding checklist to verify GST, delivery address, SKU pricing,
                   and delivery contact — then sync this customer to Zoho Books.
                 </p>
+                {(user?.role === 'CEO' || user?.role === 'System Admin') && (
+                  <p className="text-[11px] text-slate-500 mt-2">
+                    Already in Zoho?{' '}
+                    <button
+                      type="button"
+                      onClick={handleEditZohoContactId}
+                      className="font-medium text-slate-700 hover:text-slate-900 underline underline-offset-2"
+                      data-testid="link-zoho-contact-id-btn"
+                    >
+                      Paste the Zoho contact ID
+                    </button>{' '}
+                    to skip auto-creation.
+                    {account.zoho_contact_id && (
+                      <span className="ml-2 font-mono text-emerald-700">(linked: {account.zoho_contact_id})</span>
+                    )}
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex md:flex-col md:items-end gap-2 md:gap-1.5">

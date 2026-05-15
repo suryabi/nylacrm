@@ -537,6 +537,51 @@ async def purge_account_completely(
     }
 
 
+class ZohoContactIdUpdate(BaseModel):
+    zoho_contact_id: Optional[str] = None  # None / "" clears the link
+
+
+@router.patch("/{account_id}/zoho-contact")
+async def update_zoho_contact_id(
+    account_id: str,
+    payload: ZohoContactIdUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Manually set / clear the Zoho contact_id for an account.
+
+    Use this when the auto-match (by email/name) misses the right Zoho contact —
+    paste the Zoho contact_id directly from the Zoho Books URL or contact details
+    page. Pass `zoho_contact_id: null` (or empty string) to unlink.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can edit the Zoho contact link.')
+
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'id': 1, 'account_name': 1, 'zoho_contact_id': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    new_id = (payload.zoho_contact_id or '').strip() or None
+
+    await tdb.accounts.update_one(
+        {'id': account['id']},
+        {'$set': {
+            'zoho_contact_id': new_id,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+
+    return {
+        'success': True,
+        'account_id': account.get('id'),
+        'account_name': account.get('account_name'),
+        'previous_zoho_contact_id': account.get('zoho_contact_id'),
+        'zoho_contact_id': new_id,
+    }
+
+
+
 @router.get("/{account_id}/sku-pricing")
 async def get_account_sku_pricing(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get SKU pricing for an account"""
