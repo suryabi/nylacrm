@@ -55,48 +55,103 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
         ).to_list(100)
         resource_name = ", ".join(u.get("name", "") for u in users)
         resource_city = ", ".join(sorted(set(u.get("city", "") for u in users if u.get("city"))))
-    
-    # All invoices this month for these resources
-    invoices_this_month = await db.invoices.find(
-        {
-            "tenant_id": tenant_id,
-            "assigned_to": resource_filter,
-            "invoice_date": {"$gte": month_start, "$lt": month_end}
-        },
-        {"_id": 0, "net_invoice_value": 1, "gross_invoice_value": 1, "outstanding": 1, "account_uuid": 1, "account_id": 1, "invoice_date": 1}
-    ).to_list(10000)
-    
-    # All invoices ever (lifetime) for these resources
-    all_invoices = await db.invoices.find(
-        {
-            "tenant_id": tenant_id,
-            "assigned_to": resource_filter,
-        },
-        {"_id": 0, "net_invoice_value": 1, "gross_invoice_value": 1, "account_uuid": 1}
-    ).to_list(50000)
-    
-    revenue_this_month = sum(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0 for inv in invoices_this_month)
-    revenue_lifetime = sum(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0 for inv in all_invoices)
-    achievement_pct = round((revenue_this_month / monthly_target * 100), 1) if monthly_target > 0 else 0
-    
+
     # === B. ACCOUNT METRICS (from accounts collection, NOT leads) ===
-    # All accounts for these resources (lifetime)
+    # Fetch resource's accounts FIRST because invoices don't carry `assigned_to`
+    # (especially externally-pushed ones). We resolve invoices→accounts via
+    # account identifiers (uuid / account_id / lead_id / customer_name).
     all_accounts = await db.accounts.find(
         {
             "tenant_id": tenant_id,
             "assigned_to": resource_filter,
         },
-        {"_id": 0, "id": 1, "account_name": 1, "city": 1, "account_type": 1, "onboarded_month": 1, "onboarded_year": 1, "created_at": 1}
+        {"_id": 0, "id": 1, "account_id": 1, "lead_id": 1, "account_name": 1,
+         "city": 1, "account_type": 1, "onboarded_month": 1, "onboarded_year": 1,
+         "created_at": 1}
     ).to_list(1000)
     
     existing_accounts_count = len(all_accounts)
     
-    # Compute average monthly sales per account from invoices
+    # Build the invoice→account match query from this resource's accounts.
+    # Mirrors the matching used by `GET /api/accounts/{id}/invoices`.
+    acc_uuids = [a["id"] for a in all_accounts if a.get("id")]
+    acc_codes = [a["account_id"] for a in all_accounts if a.get("account_id")]
+    acc_lead_ids = [a["lead_id"] for a in all_accounts if a.get("lead_id")]
+    acc_names = [a["account_name"] for a in all_accounts if a.get("account_name")]
+    
+    inv_or_clauses: list[dict] = []
+    if acc_uuids:
+        inv_or_clauses.append({"account_uuid": {"$in": acc_uuids}})
+        inv_or_clauses.append({"account_id": {"$in": acc_uuids}})
+    if acc_codes:
+        inv_or_clauses.append({"account_id": {"$in": acc_codes}})
+        inv_or_clauses.append({"account_id_from_mq": {"$in": acc_codes}})
+    if acc_lead_ids:
+        inv_or_clauses.append({"ca_lead_id": {"$in": acc_lead_ids}})
+        inv_or_clauses.append({"lead_id": {"$in": acc_lead_ids}})
+    if acc_names:
+        inv_or_clauses.append({"customer_name": {"$in": acc_names}})
+    
+    if inv_or_clauses:
+        invoices_this_month = await db.invoices.find(
+            {
+                "tenant_id": tenant_id,
+                "$or": inv_or_clauses,
+                "invoice_date": {"$gte": month_start, "$lt": month_end},
+            },
+            {"_id": 0, "net_invoice_value": 1, "gross_invoice_value": 1,
+             "outstanding": 1, "account_uuid": 1, "account_id": 1, "invoice_date": 1,
+             "customer_name": 1, "ca_lead_id": 1, "lead_id": 1, "account_id_from_mq": 1}
+        ).to_list(10000)
+        all_invoices = await db.invoices.find(
+            {"tenant_id": tenant_id, "$or": inv_or_clauses},
+            {"_id": 0, "net_invoice_value": 1, "gross_invoice_value": 1,
+             "account_uuid": 1, "account_id": 1, "customer_name": 1,
+             "ca_lead_id": 1, "lead_id": 1, "account_id_from_mq": 1}
+        ).to_list(50000)
+    else:
+        invoices_this_month, all_invoices = [], []
+    
+    revenue_this_month = sum(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0 for inv in invoices_this_month)
+    revenue_lifetime = sum(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0 for inv in all_invoices)
+    achievement_pct = round((revenue_this_month / monthly_target * 100), 1) if monthly_target > 0 else 0
+    
+    # Helper: resolve an invoice doc back to its account UUID for grouping
+    _name_to_uuid = {a["account_name"]: a["id"] for a in all_accounts if a.get("account_name") and a.get("id")}
+    _code_to_uuid = {a["account_id"]: a["id"] for a in all_accounts if a.get("account_id") and a.get("id")}
+    _lead_to_uuid = {a["lead_id"]: a["id"] for a in all_accounts if a.get("lead_id") and a.get("id")}
+
+    def _resolve_inv_account_uuid(inv: dict) -> Optional[str]:
+        for key in ("account_uuid", "account_id"):
+            v = inv.get(key)
+            if not v:
+                continue
+            if v in _code_to_uuid:
+                return _code_to_uuid[v]
+            if v in [a["id"] for a in all_accounts]:
+                return v
+        for key in ("account_id_from_mq",):
+            v = inv.get(key)
+            if v and v in _code_to_uuid:
+                return _code_to_uuid[v]
+        for key in ("ca_lead_id", "lead_id"):
+            v = inv.get(key)
+            if v and v in _lead_to_uuid:
+                return _lead_to_uuid[v]
+        cn = inv.get("customer_name")
+        if cn and cn in _name_to_uuid:
+            return _name_to_uuid[cn]
+        return None
+    
+    # Compute average monthly sales per account from invoices.
+    # Resolve each invoice→account via the resolver (matches uuid/code/lead/name).
     account_avg_sales = {}
     for inv in all_invoices:
-        acc_id = inv.get("account_uuid") or inv.get("account_id")
-        if acc_id:
-            account_avg_sales.setdefault(acc_id, []).append(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0)
+        acc_uuid = _resolve_inv_account_uuid(inv)
+        if acc_uuid:
+            account_avg_sales.setdefault(acc_uuid, []).append(
+                inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0
+            )
     # Average across all invoices for each account
     for acc_id, values in account_avg_sales.items():
         account_avg_sales[acc_id] = round(sum(values) / len(values), 2) if values else 0
@@ -160,10 +215,11 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
     ]
     new_account_ids = set(a.get("id") for a in new_accounts)
     
-    # Revenue from accounts onboarded this month
+    # Revenue from accounts onboarded this month — use the resolver
     revenue_new_accounts = sum(
         inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0
-        for inv in invoices_this_month if inv.get("account_uuid") in new_account_ids
+        for inv in invoices_this_month
+        if _resolve_inv_account_uuid(inv) in new_account_ids
     )
     
     # === C. PIPELINE METRICS (from leads, excluding won/active_customer/not_qualified/lost) ===
