@@ -433,6 +433,50 @@ function SkuMappingPanel({ canManage }) {
 // Template Settings Panel — pick which Zoho PDF template to use when CRM
 // pushes invoices / credit notes to Zoho Books
 // =====================================================================
+function TemplateSelect({ label, value, onChange, templates, testId, disabled }) {
+  const defaultTpl = templates.find(t => t.is_default);
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm font-medium">{label}</Label>
+      <div className="flex gap-2">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+          data-testid={testId}
+        >
+          <option value="">
+            Zoho default{defaultTpl ? ` — ${defaultTpl.template_name}` : ''}
+          </option>
+          {templates.map(t => (
+            <option key={t.template_id} value={t.template_id}>
+              {t.template_name}{t.is_default ? ' (default)' : ''}
+            </option>
+          ))}
+        </select>
+        {value && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onChange('')}
+            disabled={disabled}
+            data-testid={`${testId}-clear`}
+          >
+            Clear
+          </Button>
+        )}
+      </div>
+      {value && (
+        <p className="text-[11px] text-muted-foreground font-mono">
+          template_id: {value}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function TemplateSettingsPanel({ canManage }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -481,50 +525,6 @@ function TemplateSettingsPanel({ canManage }) {
     }
   };
 
-  const TemplateSelect = ({ label, value, onChange, templates, testId }) => {
-    const defaultTpl = templates.find(t => t.is_default);
-    return (
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">{label}</Label>
-        <div className="flex gap-2">
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            disabled={!canManage || saving}
-            className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
-            data-testid={testId}
-          >
-            <option value="">
-              Zoho default{defaultTpl ? ` — ${defaultTpl.template_name}` : ''}
-            </option>
-            {templates.map(t => (
-              <option key={t.template_id} value={t.template_id}>
-                {t.template_name}{t.is_default ? ' (default)' : ''}
-              </option>
-            ))}
-          </select>
-          {value && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onChange('')}
-              disabled={!canManage || saving}
-              data-testid={`${testId}-clear`}
-            >
-              Clear
-            </Button>
-          )}
-        </div>
-        {value && (
-          <p className="text-[11px] text-muted-foreground font-mono">
-            template_id: {value}
-          </p>
-        )}
-      </div>
-    );
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -551,6 +551,7 @@ function TemplateSettingsPanel({ canManage }) {
               onChange={setInvoiceTemplateId}
               templates={invoiceTemplates}
               testId="invoice-template-select"
+              disabled={!canManage || saving}
             />
             <TemplateSelect
               label="Credit-note template"
@@ -558,6 +559,7 @@ function TemplateSettingsPanel({ canManage }) {
               onChange={setCreditnoteTemplateId}
               templates={creditnoteTemplates}
               testId="creditnote-template-select"
+              disabled={!canManage || saving}
             />
             <div className="flex items-center justify-between border-t pt-4">
               <Button

@@ -1,6 +1,11 @@
 import React from 'react';
 import { format, differenceInDays, differenceInHours, differenceInMinutes } from 'date-fns';
-import { Calendar } from 'lucide-react';
+import { Calendar, Trash2 } from 'lucide-react';
+import axios from 'axios';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
+
+const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 // Helper to render description with highlighted status
 const renderDescriptionWithStatus = (description) => {

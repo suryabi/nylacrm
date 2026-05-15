@@ -6834,6 +6834,39 @@ async def get_activities(
 
     return activities
 
+
+@api_router.delete("/activities/{activity_id}")
+async def delete_activity(
+    activity_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a single logged activity. Restricted to CEO / System Admin.
+
+    The activity is removed from the `activities` collection. We don't recompute
+    derived lead-stage metrics here — those are computed on the fly from the
+    remaining activities, so they'll self-correct on the next read.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can delete a logged activity.')
+
+    tdb = get_tdb()
+    activity = await tdb.activities.find_one({'id': activity_id}, {'_id': 0})
+    if not activity:
+        raise HTTPException(status_code=404, detail='Activity not found')
+
+    await tdb.activities.delete_one({'id': activity_id})
+    logger.info(
+        f"Activity {activity_id} (type={activity.get('activity_type')}) on lead "
+        f"{activity.get('lead_id')} deleted by {current_user.get('email')}"
+    )
+    return {
+        'success': True,
+        'activity_id': activity_id,
+        'lead_id': activity.get('lead_id'),
+    }
+
+
 # ============= FOLLOW-UPS ROUTES =============
 
 @api_router.post("/follow-ups", response_model=FollowUp)
@@ -10109,7 +10142,7 @@ else:
 # Regex to allow any subdomain under our known production/preview domains.
 # This covers:
 #   - https://*.emergent.host (Emergent native deployment URLs)
-#   - https://*.emergentagent.com and https://zoho-crm-sync-2.preview.emergentagent.com (preview URLs)
+#   - https://*.emergentagent.com and https://qc-tracker-sync.preview.emergentagent.com (preview URLs)
 #   - https://*.nylaairwater.earth (custom tenant domains)
 #   - https://*.briefingiq.com (external integration partner)
 cors_origin_regex = (
