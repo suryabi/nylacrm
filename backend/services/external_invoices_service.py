@@ -164,6 +164,11 @@ def _build_invoice_doc(
         'tenant_id': tenant_id,
         'items': items_resolved,
         'source': 'external_api',
+        # The account was successfully resolved before this doc was built
+        # (otherwise `_resolve_account` would have raised 404). Stamp
+        # `status='matched'` so the InvoicesList badge shows "Matched"
+        # instead of defaulting to "Unmatched".
+        'status': 'matched',
         'updated_at': now,
         'updated_by': user_id,
     }

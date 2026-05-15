@@ -506,3 +506,63 @@ async def nuke_all_invoices(
         'pre_count': pre_count,
         'accounts_reset': rollup_result.modified_count,
     }
+
+
+
+@router.post("/admin/backfill-match-status")
+async def backfill_invoice_match_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """One-time backfill: stamp `status` on every invoice in the tenant.
+
+    - status='matched'   → invoice has account_uuid or account_id populated
+    - status='unmatched' → no account linkage at all (legacy MQ orphans)
+
+    Idempotent — safe to re-run. CEO / System Admin only.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can run this backfill.')
+
+    tdb = get_tdb()
+
+    # 1. Mark everything that has any account linkage as 'matched'
+    matched_result = await tdb.invoices.update_many(
+        {'$or': [
+            {'account_uuid': {'$exists': True, '$nin': [None, '']}},
+            {'account_id': {'$exists': True, '$nin': [None, '']}},
+        ]},
+        {'$set': {'status': 'matched'}}
+    )
+
+    # 2. Mark everything that has NO account linkage at all as 'unmatched'
+    unmatched_result = await tdb.invoices.update_many(
+        {
+            '$and': [
+                {'$or': [{'account_uuid': None}, {'account_uuid': {'$exists': False}}, {'account_uuid': ''}]},
+                {'$or': [{'account_id': None}, {'account_id': {'$exists': False}}, {'account_id': ''}]},
+            ]
+        },
+        {'$set': {'status': 'unmatched'}}
+    )
+
+    total = await tdb.invoices.count_documents({})
+    matched_count = await tdb.invoices.count_documents({'status': 'matched'})
+    unmatched_count = await tdb.invoices.count_documents({'status': 'unmatched'})
+
+    logger.info(
+        f"[INVOICES] backfill-match-status by {current_user.get('email')}: "
+        f"matched_modified={matched_result.modified_count} "
+        f"unmatched_modified={unmatched_result.modified_count}"
+    )
+
+    return {
+        'success': True,
+        'matched_updated': matched_result.modified_count,
+        'unmatched_updated': unmatched_result.modified_count,
+        'totals': {
+            'total': total,
+            'matched': matched_count,
+            'unmatched': unmatched_count,
+        },
+    }
