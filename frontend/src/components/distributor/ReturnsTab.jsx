@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import {
   RotateCcw, Plus, Download, RefreshCw, Search, Calendar, Trash2,
   Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard,
-  Send, Clock
+  Send, Clock, ExternalLink
 } from 'lucide-react';
 import axios from 'axios';
 import PayCustomerDialog from './PayCustomerDialog';
@@ -569,9 +569,24 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       </td>
                       <td className="p-4 text-center">
                         {ret.credit_note_number ? (
-                          <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
-                            {ret.credit_note_number}
-                          </Badge>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
+                              {ret.credit_note_number}
+                            </Badge>
+                            {ret.zoho_creditnote_url && (
+                              <a
+                                href={ret.zoho_creditnote_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center text-emerald-700 hover:text-emerald-900 transition-colors"
+                                title={`View / download in Zoho Books (${ret.zoho_creditnote_number || ret.credit_note_number})`}
+                                data-testid={`view-zoho-creditnote-${ret.id}`}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                          </div>
                         ) : ret.status === 'approved' ? (
                           <span className="text-xs text-amber-600">Pending</span>
                         ) : (
@@ -893,12 +908,33 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <div>
                           <p className="text-sm font-medium text-emerald-700">Credit Note Issued</p>
                           <p className="text-xs text-emerald-600">{selectedReturn.credit_note_number}</p>
+                          {selectedReturn.zoho_creditnote_number &&
+                            selectedReturn.zoho_creditnote_number !== selectedReturn.credit_note_number && (
+                              <p className="text-[11px] text-emerald-600 font-mono mt-0.5">
+                                Zoho: {selectedReturn.zoho_creditnote_number}
+                              </p>
+                            )}
                         </div>
                       </div>
                       <Badge className="bg-emerald-100 text-emerald-700">
                         ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </Badge>
                     </div>
+                    {selectedReturn.zoho_creditnote_url && (
+                      <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
+                        <span className="text-xs text-emerald-600">Synced to Zoho Books</span>
+                        <a
+                          href={selectedReturn.zoho_creditnote_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 hover:text-emerald-900 transition-colors"
+                          data-testid="view-zoho-creditnote-detail-btn"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          View / download in Zoho
+                        </a>
+                      </div>
+                    )}
                     {selectedReturn.credit_issued_to_delivery_number && (
                       <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
                         <span className="text-xs text-emerald-600">Applied to Delivery:</span>
