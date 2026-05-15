@@ -940,30 +940,110 @@ def _month_bounds(year: int, month: int):
 
 async def _sum_cases_per_sku(tenant_id: str, account_ids, start_iso, end_iso):
     """Aggregate cases (quantity) shipped per (account_id, sku_name) inside the window.
-    Source: distributor_deliveries + distributor_delivery_items."""
-    pipeline = [
-        {"$match": {
+
+    Source: the `invoices` collection (externally-pushed sales data).
+    Falls back to `distributor_deliveries` for tenants that still rely on the
+    CRM's distributor flow.
+
+    Each invoice has an `items[]` array with `{sku_name, quantity, ...}`.
+    Cases = sum of `quantity` per (account, sku) for invoices dated in window.
+    Returns dict keyed by (account_uuid, sku_name).
+    """
+    if not account_ids:
+        return {}
+
+    # Resolve invoices→accounts using the same multi-field matching used
+    # elsewhere (account_uuid / account_id / ca_lead_id / customer_name / etc.).
+    accounts = await db.accounts.find(
+        {"tenant_id": tenant_id, "id": {"$in": list(account_ids)}},
+        {"_id": 0, "id": 1, "account_id": 1, "account_name": 1, "lead_id": 1},
+    ).to_list(2000)
+
+    acc_uuids = [a["id"] for a in accounts if a.get("id")]
+    acc_codes = [a["account_id"] for a in accounts if a.get("account_id")]
+    acc_lead_ids = [a["lead_id"] for a in accounts if a.get("lead_id")]
+    acc_names = [a["account_name"] for a in accounts if a.get("account_name")]
+
+    inv_or: list[dict] = []
+    if acc_uuids:
+        inv_or.append({"account_uuid": {"$in": acc_uuids}})
+        inv_or.append({"account_id": {"$in": acc_uuids}})
+    if acc_codes:
+        inv_or.append({"account_id": {"$in": acc_codes}})
+        inv_or.append({"account_id_from_mq": {"$in": acc_codes}})
+    if acc_lead_ids:
+        inv_or.append({"ca_lead_id": {"$in": acc_lead_ids}})
+        inv_or.append({"lead_id": {"$in": acc_lead_ids}})
+    if acc_names:
+        inv_or.append({"customer_name": {"$in": acc_names}})
+
+    out: dict[tuple, float] = {}
+    if not inv_or:
+        return out
+
+    # invoice_date is stored as 'YYYY-MM-DD' string; start_iso/end_iso come from
+    # _month_bounds() which produces a full ISO timestamp. Strip to YYYY-MM-DD
+    # for correct lex comparison on the date field.
+    start_date = start_iso[:10] if isinstance(start_iso, str) else start_iso
+    end_date = end_iso[:10] if isinstance(end_iso, str) else end_iso
+
+    invoices = await db.invoices.find(
+        {
             "tenant_id": tenant_id,
-            "delivery_date": {"$gte": start_iso, "$lt": end_iso},
-            "account_id": {"$in": account_ids},
-            "status": {"$in": ["delivered", "confirmed", "completed"]},
-        }},
-        {"$lookup": {
-            "from": "distributor_delivery_items",
-            "localField": "id",
-            "foreignField": "delivery_id",
-            "as": "items",
-        }},
-        {"$unwind": "$items"},
-        {"$group": {
-            "_id": {"account_id": "$account_id", "sku": "$items.sku_name"},
-            "cases": {"$sum": "$items.quantity"},
-        }},
-    ]
-    out = {}
-    async for row in db.distributor_deliveries.aggregate(pipeline):
-        key = (row["_id"]["account_id"], row["_id"]["sku"])
-        out[key] = row.get("cases", 0)
+            "$or": inv_or,
+            "invoice_date": {"$gte": start_date, "$lt": end_date},
+        },
+        {"_id": 0, "items": 1, "line_items": 1, "account_uuid": 1, "account_id": 1,
+         "account_id_from_mq": 1, "ca_lead_id": 1, "lead_id": 1, "customer_name": 1},
+    ).to_list(20000)
+
+    # Reverse-lookup maps so we can pin every invoice back to its account UUID
+    name_to_uuid = {a["account_name"]: a["id"] for a in accounts if a.get("account_name") and a.get("id")}
+    code_to_uuid = {a["account_id"]: a["id"] for a in accounts if a.get("account_id") and a.get("id")}
+    lead_to_uuid = {a["lead_id"]: a["id"] for a in accounts if a.get("lead_id") and a.get("id")}
+    uuid_set = set(acc_uuids)
+
+    for inv in invoices:
+        acc_uuid = None
+        for key in ("account_uuid", "account_id"):
+            v = inv.get(key)
+            if v and v in uuid_set:
+                acc_uuid = v
+                break
+            if v and v in code_to_uuid:
+                acc_uuid = code_to_uuid[v]
+                break
+        if not acc_uuid:
+            v = inv.get("account_id_from_mq")
+            if v and v in code_to_uuid:
+                acc_uuid = code_to_uuid[v]
+        if not acc_uuid:
+            for key in ("ca_lead_id", "lead_id"):
+                v = inv.get(key)
+                if v and v in lead_to_uuid:
+                    acc_uuid = lead_to_uuid[v]
+                    break
+        if not acc_uuid:
+            cn = inv.get("customer_name")
+            if cn and cn in name_to_uuid:
+                acc_uuid = name_to_uuid[cn]
+        if not acc_uuid:
+            continue
+
+        for it in (inv.get("items") or inv.get("line_items") or []):
+            sku = it.get("sku_name") or it.get("sku") or it.get("name")
+            if not sku:
+                continue
+            qty = it.get("quantity") or it.get("bottles") or 0
+            try:
+                qty = float(qty)
+            except (TypeError, ValueError):
+                qty = 0
+            if qty <= 0:
+                continue
+            key = (acc_uuid, sku)
+            out[key] = out.get(key, 0) + qty
+
     return out
 
 
@@ -1028,8 +1108,9 @@ async def get_account_case_targets(
         for sp in acc.get("sku_pricing") or []:
             sku = sp.get("sku")
             price = float(sp.get("price_per_unit") or 0)
-            cur_cases = int(current_cases_map.get((acc_id, sku), 0))
-            last_month_cases = int(prev_cases_map.get((acc_id, sku), 0))
+            # qty from invoice items is a float; round and cast for display
+            cur_cases = int(round(float(current_cases_map.get((acc_id, sku), 0))))
+            last_month_cases = int(round(float(prev_cases_map.get((acc_id, sku), 0))))
             ov = override_map.get((acc_id, sku))
             target_cases = int(ov["target_cases"]) if ov else last_month_cases
             cur_val = cur_cases * price
