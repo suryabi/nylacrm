@@ -1609,9 +1609,12 @@ async def account_collections(
     shown in the Account Performance report (gross/net invoice totals, bottle
     credit, contribution %, average order, last payment, outstanding, overdue).
 
-    Filters by account creation date:
-      - mode='new': accounts created BETWEEN period_start AND period_end
-      - mode='existing': accounts created BEFORE period_start
+    Filters by the account's *onboarded* month/year (the real business
+    onboarding period agreed with the customer — NOT the DB record's
+    `created_at`):
+      - mode='new': accounts whose onboarded_year+onboarded_month falls inside
+        [period_start, period_end]
+      - mode='existing': accounts onboarded BEFORE period_start's month
       - mode='all' (default): all accounts assigned to the resource(s)
     """
     tenant_id = get_current_tenant_id()
@@ -1621,13 +1624,51 @@ async def account_collections(
     if rids:
         acc_q["assigned_to"] = {"$in": rids}
 
-    # Date filter on account creation
+    # Date filter on account onboarding.
+    # NOTE: We use the user-entered `onboarded_year` + `onboarded_month` fields
+    # (which represent the *real* business onboarding period agreed with the
+    # customer) — NOT `created_at` (which is just the DB-record creation
+    # timestamp). Many accounts are back-dated when first imported.
+    onboarding_months: Optional[set[tuple[int, int]]] = None
+    existing_cutoff: Optional[tuple[int, int]] = None  # (year, month) exclusive
     if mode == "new" and period_start and period_end:
-        acc_q["created_at"] = {"$gte": period_start, "$lte": f"{period_end}T23:59:59"}
+        try:
+            ys, ms, _ = period_start.split("-")
+            ye, me, _ = period_end.split("-")
+            ys, ms, ye, me = int(ys), int(ms), int(ye), int(me)
+            onboarding_months = set()
+            y, m = ys, ms
+            while (y, m) <= (ye, me):
+                onboarding_months.add((y, m))
+                m += 1
+                if m > 12:
+                    m, y = 1, y + 1
+        except (ValueError, AttributeError):
+            onboarding_months = None
     elif mode == "existing" and period_start:
-        acc_q["created_at"] = {"$lt": period_start}
+        try:
+            ys, ms, _ = period_start.split("-")
+            existing_cutoff = (int(ys), int(ms))
+        except (ValueError, AttributeError):
+            existing_cutoff = None
 
     accounts = await db.accounts.find(acc_q, {"_id": 0}).to_list(2000)
+
+    # Apply onboarded-month/year filter in Python (small dataset, simple math)
+    def _onboarded_pair(a: dict) -> Optional[tuple[int, int]]:
+        oy, om = a.get("onboarded_year"), a.get("onboarded_month")
+        try:
+            return (int(oy), int(om)) if oy and om else None
+        except (TypeError, ValueError):
+            return None
+
+    if mode == "new" and onboarding_months is not None:
+        accounts = [a for a in accounts if _onboarded_pair(a) in onboarding_months]
+    elif mode == "existing" and existing_cutoff is not None:
+        accounts = [
+            a for a in accounts
+            if (p := _onboarded_pair(a)) is not None and p < existing_cutoff
+        ]
 
     start_date, end_date = _collections_time_range(time_filter)
     inv_q = {"tenant_id": tenant_id}
