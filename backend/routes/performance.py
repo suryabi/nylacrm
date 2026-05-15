@@ -1844,37 +1844,76 @@ async def account_collections(
             if (p := _onboarded_pair(a)) is not None and p < existing_cutoff
         ]
 
+    # Build invoice→account multi-field match (same resolver as dashboard/case-targets).
+    # `invoice_date` is YYYY-MM-DD ISO string; range comparisons work lex.
     start_date, end_date = _collections_time_range(time_filter)
     inv_q = {"tenant_id": tenant_id}
     if start_date and end_date:
-        inv_q["created_at"] = {"$gte": start_date.isoformat(), "$lte": end_date.isoformat()}
-    invoices = await db.invoices.find(inv_q, {"_id": 0}).to_list(20000)
+        inv_q["invoice_date"] = {
+            "$gte": start_date.strftime("%Y-%m-%d"),
+            "$lte": end_date.strftime("%Y-%m-%d"),
+        }
 
-    # Aggregate invoice metrics per account (match by lead_id or fuzzy customer_name)
-    inv_agg = {}
+    acc_uuids = [a["id"] for a in accounts if a.get("id")]
+    acc_codes = [a["account_id"] for a in accounts if a.get("account_id")]
+    acc_lead_ids = [a["lead_id"] for a in accounts if a.get("lead_id")]
+    acc_names = [a["account_name"] for a in accounts if a.get("account_name")]
+
+    inv_or: list[dict] = []
+    if acc_uuids:
+        inv_or.append({"account_uuid": {"$in": acc_uuids}})
+        inv_or.append({"account_id": {"$in": acc_uuids}})
+    if acc_codes:
+        inv_or.append({"account_id": {"$in": acc_codes}})
+        inv_or.append({"account_id_from_mq": {"$in": acc_codes}})
+    if acc_lead_ids:
+        inv_or.append({"ca_lead_id": {"$in": acc_lead_ids}})
+        inv_or.append({"lead_id": {"$in": acc_lead_ids}})
+    if acc_names:
+        inv_or.append({"customer_name": {"$in": acc_names}})
+
+    invoices = []
+    if inv_or:
+        inv_q["$or"] = inv_or
+        invoices = await db.invoices.find(inv_q, {"_id": 0}).to_list(20000)
+
+    # Reverse-lookup maps to resolve each invoice back to its account UUID
+    name_to_uuid = {a["account_name"]: a["id"] for a in accounts if a.get("account_name") and a.get("id")}
+    code_to_uuid = {a["account_id"]: a["id"] for a in accounts if a.get("account_id") and a.get("id")}
+    lead_to_uuid = {a["lead_id"]: a["id"] for a in accounts if a.get("lead_id") and a.get("id")}
+    uuid_set = set(acc_uuids)
+
+    def _resolve_inv_acc_uuid(inv: dict) -> Optional[str]:
+        for key in ("account_uuid", "account_id"):
+            v = inv.get(key)
+            if v and v in uuid_set:
+                return v
+            if v and v in code_to_uuid:
+                return code_to_uuid[v]
+        v = inv.get("account_id_from_mq")
+        if v and v in code_to_uuid:
+            return code_to_uuid[v]
+        for key in ("ca_lead_id", "lead_id"):
+            v = inv.get(key)
+            if v and v in lead_to_uuid:
+                return lead_to_uuid[v]
+        cn = inv.get("customer_name")
+        if cn and cn in name_to_uuid:
+            return name_to_uuid[cn]
+        return None
+
+    inv_agg: dict[str, dict] = {}
     for inv in invoices:
-        lead_id = inv.get("lead_id")
-        cust_name = (inv.get("customer_name") or "").lower().strip()
-        for acc in accounts:
-            acc_id = acc.get("account_id") or acc.get("id")
-            if not acc_id:
-                continue
-            acc_lead_id = acc.get("lead_id")
-            acc_name = (acc.get("account_name") or "").lower().strip()
-            matched = False
-            if lead_id and acc_lead_id and lead_id == acc_lead_id:
-                matched = True
-            elif cust_name and acc_name and (cust_name in acc_name or acc_name in cust_name):
-                matched = True
-            if matched:
-                bucket = inv_agg.setdefault(acc_id, {
-                    "gross_total": 0, "net_total": 0, "bottle_credit": 0, "invoice_count": 0,
-                })
-                bucket["gross_total"] += inv.get("gross_amount", inv.get("total_amount", 0)) or 0
-                bucket["net_total"] += inv.get("net_amount", inv.get("total_amount", 0)) or 0
-                bucket["bottle_credit"] += inv.get("bottle_credit", 0) or 0
-                bucket["invoice_count"] += 1
-                break
+        acc_uuid = _resolve_inv_acc_uuid(inv)
+        if not acc_uuid:
+            continue
+        bucket = inv_agg.setdefault(acc_uuid, {
+            "gross_total": 0, "net_total": 0, "bottle_credit": 0, "invoice_count": 0,
+        })
+        bucket["gross_total"] += inv.get("gross_invoice_value") or inv.get("gross_amount") or inv.get("total_amount") or 0
+        bucket["net_total"] += inv.get("net_invoice_value") or inv.get("net_amount") or inv.get("total_amount") or 0
+        bucket["bottle_credit"] += inv.get("credit_note_value") or inv.get("bottle_credit") or 0
+        bucket["invoice_count"] += 1
 
     # Filtered total for contribution %
     filtered_total_gross = sum(b["gross_total"] for b in inv_agg.values()) or 0
@@ -1882,15 +1921,17 @@ async def account_collections(
     rows = []
     summary_gross = summary_net = summary_credit = summary_outstanding = summary_overdue = 0
     for acc in accounts:
-        acc_id = acc.get("account_id") or acc.get("id")
-        if not acc_id:
-            continue
-        agg = inv_agg.get(acc_id, {"gross_total": 0, "net_total": 0, "bottle_credit": 0, "invoice_count": 0})
+        # Key the aggregate by account UUID (consistent with the resolver above).
+        # Fall back to account_id for legacy doc shapes.
+        acc_uuid = acc.get("id")
+        acc_code = acc.get("account_id")
+        agg = inv_agg.get(acc_uuid) or inv_agg.get(acc_code) or {
+            "gross_total": 0, "net_total": 0, "bottle_credit": 0, "invoice_count": 0,
+        }
         contribution_pct = round((agg["gross_total"] / filtered_total_gross * 100), 2) if filtered_total_gross > 0 else 0
         avg_order = round(agg["gross_total"] / agg["invoice_count"], 2) if agg["invoice_count"] > 0 else 0
-        sku_pricing = acc.get("sku_pricing") or []
-        estimated_credit = sum((sku.get("return_bottle_credit") or 0) for sku in sku_pricing)
-        bottle_credit = agg["bottle_credit"] if agg["bottle_credit"] > 0 else estimated_credit
+        # Bottle credit: ONLY from invoices in the period (no static SKU-pricing fallback).
+        bottle_credit = agg["bottle_credit"]
 
         outstanding = acc.get("outstanding_balance", 0) or 0
         overdue = acc.get("overdue_amount", 0) or 0
@@ -1898,7 +1939,7 @@ async def account_collections(
         last_payment_date = acc.get("last_payment_date", "")
 
         rows.append({
-            "account_id": acc_id,
+            "account_id": acc_code or acc_uuid,
             "account_name": acc.get("account_name", "Unknown"),
             "account_type": acc.get("account_type", ""),
             "territory": acc.get("territory", ""),
