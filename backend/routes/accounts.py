@@ -2,7 +2,7 @@
 Accounts routes - Account CRUD, invoices, SKU pricing, contracts
 Multi-tenant aware - all queries automatically filter by tenant_id
 """
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
@@ -390,6 +390,151 @@ async def delete_account(account_id: str, current_user: dict = Depends(get_curre
     await tdb.accounts.delete_one(_account_match(account_id))
     
     return {'message': 'Account deleted successfully'}
+
+
+@router.delete("/{account_id}/purge")
+async def purge_account_completely(
+    account_id: str,
+    confirm: str = Query(..., description="Must equal 'YES-PURGE-ACCOUNT' to proceed"),
+    current_user: dict = Depends(get_current_user),
+):
+    """DANGER: Deep-delete an account AND every record that references it —
+    invoices, deliveries, activities, returns, credit notes, case targets,
+    Zoho mappings, etc. CEO / System Admin only. Requires explicit confirm.
+
+    Returns a dict with per-collection deletion counts so callers can audit.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can purge an account.')
+    if confirm != 'YES-PURGE-ACCOUNT':
+        raise HTTPException(status_code=400, detail="Pass ?confirm=YES-PURGE-ACCOUNT to confirm this destructive action.")
+
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    # Collect every identifier the account can be matched by across other collections
+    acc_uuid = account.get('id')
+    acc_code = account.get('account_id')
+    acc_lead_id = account.get('lead_id')
+    acc_name = account.get('account_name')
+
+    # ── 1. Invoices: match by every possible foreign-key shape used in the system
+    inv_or: list[dict] = []
+    if acc_uuid:
+        inv_or += [{'account_uuid': acc_uuid}, {'account_id': acc_uuid}]
+    if acc_code:
+        inv_or += [{'account_id': acc_code}, {'account_id_from_mq': acc_code}]
+    if acc_lead_id:
+        inv_or += [{'ca_lead_id': acc_lead_id}, {'lead_id': acc_lead_id}]
+    if acc_name:
+        inv_or.append({'customer_name': acc_name})
+    invoices_deleted = 0
+    if inv_or:
+        r = await tdb.invoices.delete_many({'$or': inv_or})
+        invoices_deleted = r.deleted_count
+
+    # ── 2. Distributor deliveries + their line items
+    deliveries_deleted = 0
+    delivery_items_deleted = 0
+    delivery_ids: list[str] = []
+    if acc_uuid:
+        async for d in tdb.distributor_deliveries.find(
+            {'$or': [{'account_id': acc_uuid}, {'account_uuid': acc_uuid}]},
+            {'_id': 0, 'id': 1}
+        ):
+            if d.get('id'):
+                delivery_ids.append(d['id'])
+        if delivery_ids:
+            di = await tdb.distributor_delivery_items.delete_many({'delivery_id': {'$in': delivery_ids}})
+            delivery_items_deleted = di.deleted_count
+        r = await tdb.distributor_deliveries.delete_many(
+            {'$or': [{'account_id': acc_uuid}, {'account_uuid': acc_uuid}]}
+        )
+        deliveries_deleted = r.deleted_count
+
+    # ── 3. Customer returns + linked credit notes & issuances
+    return_ids: list[str] = []
+    credit_note_ids: list[str] = []
+    if acc_uuid:
+        async for ret in tdb.customer_returns.find(
+            {'account_id': acc_uuid}, {'_id': 0, 'id': 1, 'credit_note_id': 1}
+        ):
+            if ret.get('id'):
+                return_ids.append(ret['id'])
+            if ret.get('credit_note_id'):
+                credit_note_ids.append(ret['credit_note_id'])
+    returns_deleted = (await tdb.customer_returns.delete_many({'account_id': acc_uuid})).deleted_count if acc_uuid else 0
+    credit_notes_deleted = 0
+    if credit_note_ids:
+        credit_notes_deleted = (await tdb.credit_notes.delete_many({'id': {'$in': credit_note_ids}})).deleted_count
+        await tdb.credit_note_issuances.delete_many({'credit_note_id': {'$in': credit_note_ids}})
+
+    # ── 4. Zoho mappings for delivery / return / contact (best-effort)
+    zoho_mappings_deleted = 0
+    zoho_or: list[dict] = []
+    if delivery_ids:
+        zoho_or.append({'source_type': 'distributor_delivery', 'source_id': {'$in': delivery_ids}})
+    if return_ids:
+        zoho_or.append({'source_type': 'customer_return', 'source_id': {'$in': return_ids}})
+    if zoho_or:
+        try:
+            r = await tdb.zoho_invoice_mappings.delete_many({'$or': zoho_or})
+            zoho_mappings_deleted = r.deleted_count
+        except Exception:
+            pass
+
+    # ── 5. Account-level config / scoring / case targets
+    case_targets_deleted = (await tdb.account_case_targets.delete_many({'account_id': acc_uuid})).deleted_count if acc_uuid else 0
+
+    # ── 6. Activities (linked via lead_id of the account)
+    activities_deleted = 0
+    if acc_lead_id:
+        activities_deleted = (await tdb.lead_activities.delete_many({'lead_id': acc_lead_id})).deleted_count
+
+    # ── 7. Tasks bound to this account (if any)
+    tasks_deleted = 0
+    task_or: list[dict] = []
+    if acc_uuid:
+        task_or += [{'account_id': acc_uuid}, {'related_account_id': acc_uuid}]
+    if acc_lead_id:
+        task_or += [{'lead_id': acc_lead_id}]
+    if task_or:
+        try:
+            r = await tdb.tasks.delete_many({'$or': task_or})
+            tasks_deleted = r.deleted_count
+        except Exception:
+            pass
+
+    # ── 8. Reset the source lead so the user can re-convert later if needed
+    if acc_lead_id:
+        await tdb.leads.update_one(
+            {'id': acc_lead_id},
+            {'$set': {'converted_to_account': False, 'account_id': None}}
+        )
+
+    # ── 9. Finally — the account itself
+    account_deleted = (await tdb.accounts.delete_one(_account_match(account_id))).deleted_count
+
+    return {
+        'success': True,
+        'account_id': acc_code or acc_uuid,
+        'account_name': acc_name,
+        'deleted': {
+            'account': account_deleted,
+            'invoices': invoices_deleted,
+            'deliveries': deliveries_deleted,
+            'delivery_items': delivery_items_deleted,
+            'customer_returns': returns_deleted,
+            'credit_notes': credit_notes_deleted,
+            'zoho_mappings': zoho_mappings_deleted,
+            'case_targets': case_targets_deleted,
+            'activities': activities_deleted,
+            'tasks': tasks_deleted,
+        },
+    }
 
 
 @router.get("/{account_id}/sku-pricing")
