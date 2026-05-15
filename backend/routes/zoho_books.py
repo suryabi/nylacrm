@@ -365,3 +365,130 @@ async def manual_sync_delivery(
 
     background_tasks.add_task(zoho.sync_delivery_to_zoho, tenant_id, distributor_id, delivery_id)
     return {"message": "Sync queued; check Sync Status panel in a few seconds."}
+
+
+
+@router.post("/zoho/admin/link-existing-contacts")
+async def link_existing_zoho_contacts(
+    overwrite: bool = Query(False, description="Re-resolve even accounts that already have a zoho_contact_id"),
+    dry_run: bool = Query(False, description="Look up matches but don't persist anything"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Sync `zoho_contact_id` onto every CRM account that has a matching contact
+    already in Zoho Books (by email or contact_name). Useful when migrating —
+    avoids creating duplicate Zoho contacts.
+
+    Behaviour per account:
+      • Skip if `zoho_contact_id` already set (unless overwrite=true)
+      • Search Zoho contacts by email, then by contact_name
+      • If a match is found → store the Zoho contact_id locally
+      • If no match → leave the account untouched (no Zoho create)
+
+    CEO / System Admin only.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can run bulk Zoho linkage.')
+
+    from services import zoho_service as zoho
+    if not zoho.is_zoho_configured():
+        raise HTTPException(status_code=400, detail='Zoho integration is not configured for this tenant.')
+
+    tenant_id = current_user.get('tenant_id')
+
+    # Fetch every active account in the tenant
+    q: dict = {'tenant_id': tenant_id, 'status': {'$ne': 'deleted'}}
+    accounts = await db.accounts.find(q, {'_id': 0}).to_list(5000)
+
+    linked: list[dict] = []
+    skipped: list[dict] = []
+    not_found: list[dict] = []
+    errors: list[dict] = []
+
+    for acc in accounts:
+        acc_code = acc.get('account_id') or acc.get('id')
+        acc_name = acc.get('account_name') or ''
+        existing_zoho_id = (acc.get('zoho_contact_id') or '').strip()
+
+        if existing_zoho_id and not overwrite:
+            skipped.append({'account': acc_name, 'reason': 'already_linked', 'zoho_id': existing_zoho_id})
+            continue
+
+        email = (acc.get('email') or '').strip()
+        match = None
+
+        # 1) by email
+        if email:
+            try:
+                search = await zoho._zoho_request(
+                    'GET', '/books/v3/contacts', tenant_id=tenant_id, params={'email': email}
+                )
+                contacts = search.get('contacts', []) or []
+                match = contacts[0] if contacts else None
+            except Exception as e:
+                logger.warning(f"[zoho-link] email lookup failed for {acc_name}: {e}")
+
+        # 2) by exact contact_name
+        if not match and acc_name:
+            try:
+                search = await zoho._zoho_request(
+                    'GET', '/books/v3/contacts', tenant_id=tenant_id,
+                    params={'contact_name': acc_name},
+                )
+                contacts = search.get('contacts', []) or []
+                for c in contacts:
+                    if (c.get('contact_name') or '').strip().lower() == acc_name.strip().lower():
+                        match = c
+                        break
+                if not match and len(contacts) == 1:
+                    match = contacts[0]
+            except Exception as e:
+                errors.append({'account': acc_name, 'error': str(e)[:200]})
+                continue
+
+        if not match:
+            not_found.append({'account': acc_name, 'account_id': acc_code, 'email': email or None})
+            continue
+
+        zoho_contact_id = match.get('contact_id')
+        if not zoho_contact_id:
+            errors.append({'account': acc_name, 'error': 'match_missing_contact_id'})
+            continue
+
+        linked.append({
+            'account': acc_name,
+            'account_id': acc_code,
+            'zoho_contact_id': zoho_contact_id,
+            'zoho_contact_name': match.get('contact_name'),
+            'matched_by': 'email' if email and match.get('email') == email else 'name',
+        })
+
+        if not dry_run:
+            await db.accounts.update_one(
+                {'id': acc.get('id'), 'tenant_id': tenant_id},
+                {'$set': {
+                    'zoho_contact_id': zoho_contact_id,
+                    'updated_at': datetime.now(timezone.utc).isoformat(),
+                }}
+            )
+
+    logger.info(
+        f"[zoho-link] dry_run={dry_run} overwrite={overwrite} by {current_user.get('email')}: "
+        f"linked={len(linked)} skipped={len(skipped)} not_found={len(not_found)} errors={len(errors)}"
+    )
+
+    return {
+        'success': True,
+        'dry_run': dry_run,
+        'overwrite': overwrite,
+        'summary': {
+            'total_accounts': len(accounts),
+            'linked': len(linked),
+            'skipped_already_linked': len(skipped),
+            'not_found_in_zoho': len(not_found),
+            'errors': len(errors),
+        },
+        'linked': linked,
+        'not_found': not_found,
+        'errors': errors,
+    }
