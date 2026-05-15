@@ -22,6 +22,16 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 
 ## Recent Implementations
 
+### 2026-05-15
+- **Field check-in for Sales Reps on Leads** ("I am here" geo-fenced button)
+  - New reusable `LeadDeliveryAddressCard.js` adds a Google Places autocomplete-driven address card on every Lead Detail page (mirrors AccountDetail's delivery card).
+  - `DeliveryAddress` model upgraded with `lat`, `lng`, `formatted_address`, `extra="allow"`.
+  - `LeadUpdate` accepts `delivery_address` and the lead update endpoint persists it.
+  - New `POST /api/leads/{lead_id}/check-in` — captures sales rep's GPS, computes Haversine distance from the lead's saved coordinates, and creates a `visit` activity whose description always includes the distance and time. Off-site visits (outside the tenant's `check_in_radius_meters`) get flagged "(off-site)".
+  - Configurable radius (`TenantSettings.check_in_radius_meters`, default 50m) editable from Tenant Settings ▸ Distribution Settings panel.
+  - Frontend handles geolocation permission errors gracefully (denied / unavailable / timeout) with toast feedback.
+- **Zoho template dropdown bug** — hoisted the inline `TemplateSelect` out of `TemplateSettingsPanel` in `ZohoIntegration.js`; the select was being remounted on every parent re-render, closing the open dropdown instantly. Now stable.
+
 ### 2026-02-13 (this session)
 - **Mobile-responsive AccountDetail.js + LeadDetail.js**
   - **AccountDetail header** rewrites for mobile: title block wraps with B2B badge inline, Edit/Save/Cancel/Delete buttons drop to a 2nd row with proper sizing (`h-9 sm:h-10`, icon-only Delete on small screens).

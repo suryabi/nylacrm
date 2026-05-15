@@ -132,6 +132,9 @@ class TenantSettings(BaseModel):
     # Distribution Module Settings
     default_distributor_gst_percent: float = 18.0  # Default GST % for distributor transactions
 
+    # Sales/Field Settings
+    check_in_radius_meters: int = 50  # Geo-fence radius for "I am here" sales rep check-ins on leads
+
 
 # ============= INDUSTRY PROFILE SYSTEM =============
 

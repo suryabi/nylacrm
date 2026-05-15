@@ -40,6 +40,7 @@ import OpportunityEstimation from '../components/OpportunityEstimation';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import LeadScoringCard from '../components/LeadScoringCard';
 import LeadGroupCard from '../components/LeadGroupCard';
+import LeadDeliveryAddressCard from '../components/LeadDeliveryAddressCard';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1380,6 +1381,13 @@ ${userEmail}`;
               )}
             </div>
           </Card>
+
+          {/* Lead Delivery Address — Google Places autocomplete + I-am-here check-in */}
+          <LeadDeliveryAddressCard
+            lead={lead}
+            onLeadUpdated={fetchData}
+            onActivityLogged={fetchData}
+          />
 
           {/* Current Brand Details */}
           {((lead.current_brands && lead.current_brands.length > 0) || lead.current_water_brand || lead.current_volume || lead.current_landing_price || lead.current_selling_price) && (

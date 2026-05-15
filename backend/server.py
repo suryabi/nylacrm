@@ -9,7 +9,7 @@ import logging
 import urllib.parse
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional, Union, Dict
+from typing import List, Optional, Union, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
@@ -830,6 +830,7 @@ class LeadUpdate(BaseModel):
     onboarded_year: Optional[int] = None
     target_closure_month: Optional[int] = None
     target_closure_year: Optional[int] = None
+    delivery_address: Optional[Dict[str, Any]] = None
 
 # ============= ACCOUNT MODELS =============
 
@@ -892,13 +893,17 @@ class AccountCreate(BaseModel):
     lead_id: str
 
 class DeliveryAddress(BaseModel):
-    """Delivery address for an account"""
+    """Delivery address for an account or lead"""
+    model_config = ConfigDict(extra="allow")
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: Optional[str] = None
     landmark: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
 
 class AccountUpdate(BaseModel):
     account_name: Optional[str] = None
@@ -4974,6 +4979,136 @@ async def update_lead(
         updated_lead['updated_at'] = datetime.fromisoformat(updated_lead['updated_at'])
     
     return updated_lead
+
+
+# ============== LEAD CHECK-IN (Geo-fenced "I am here") ==============
+
+class LeadCheckInPayload(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy: Optional[float] = None  # GPS accuracy in meters as reported by browser
+
+def _haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in meters between two (lat, lng) points."""
+    import math
+    R = 6371000.0  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+@api_router.post("/leads/{lead_id}/check-in")
+async def lead_check_in(
+    lead_id: str,
+    payload: LeadCheckInPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Sales rep "I am here" check-in.
+
+    Computes distance from the lead's saved delivery address and logs a visit
+    activity. Distance is always recorded; an off-site flag is set when the
+    sales rep is outside the tenant's configured geo-fence radius.
+    """
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+
+    delivery = (lead.get('delivery_address') or {})
+    lead_lat = delivery.get('lat')
+    lead_lng = delivery.get('lng')
+    if lead_lat is None or lead_lng is None:
+        raise HTTPException(
+            status_code=400,
+            detail='Lead has no GPS coordinates. Save the lead address from Google search first.'
+        )
+
+    # Compute distance from lead's stored coordinates
+    distance_m = _haversine_meters(
+        float(lead_lat), float(lead_lng),
+        float(payload.latitude), float(payload.longitude),
+    )
+
+    # Resolve tenant radius (default 50m if unset)
+    tenant_id = get_current_tenant_id()
+    tenant = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    radius_m = 50
+    try:
+        radius_m = int(((tenant or {}).get('settings') or {}).get('check_in_radius_meters') or 50)
+    except (TypeError, ValueError):
+        radius_m = 50
+
+    within = distance_m <= radius_m
+    distance_label = f"{distance_m:.0f}m" if distance_m < 1000 else f"{(distance_m/1000):.2f}km"
+    now = datetime.now(timezone.utc)
+
+    # Format time in tenant timezone if available; fall back to UTC ISO
+    timestamp_label = now.strftime('%d %b %Y, %I:%M %p UTC')
+    try:
+        tz_name = ((tenant or {}).get('settings') or {}).get('timezone') or 'Asia/Kolkata'
+        try:
+            from zoneinfo import ZoneInfo
+            local_now = now.astimezone(ZoneInfo(tz_name))
+            timestamp_label = local_now.strftime('%d %b %Y, %I:%M %p')
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    if within:
+        description = (
+            f"Visited this place at {timestamp_label} — {distance_label} from the lead location "
+            f"(within {radius_m}m fence)."
+        )
+    else:
+        description = (
+            f"Visited (off-site) at {timestamp_label} — {distance_label} from the lead location "
+            f"(outside {radius_m}m fence)."
+        )
+
+    activity_doc = {
+        'id': str(uuid.uuid4()),
+        'lead_id': lead_id,
+        'activity_type': 'visit',
+        'description': description,
+        'interaction_method': 'customer_visit',
+        'created_by': current_user['id'],
+        'created_by_name': current_user.get('name') or current_user.get('email') or '',
+        'created_at': now.isoformat(),
+        # Geo-tracking metadata
+        'check_in': {
+            'latitude': float(payload.latitude),
+            'longitude': float(payload.longitude),
+            'accuracy': float(payload.accuracy) if payload.accuracy is not None else None,
+            'distance_m': round(distance_m, 2),
+            'radius_m': radius_m,
+            'within_radius': within,
+            'lead_lat': float(lead_lat),
+            'lead_lng': float(lead_lng),
+        },
+    }
+    await get_tdb().activities.insert_one(activity_doc)
+
+    # Update last contact info on the lead
+    await get_tdb().leads.update_one(
+        {'id': lead_id},
+        {'$set': {
+            'updated_at': now.isoformat(),
+            'last_contacted_date': now.isoformat(),
+            'last_contact_method': 'visit',
+        }}
+    )
+
+    return {
+        'activity_id': activity_doc['id'],
+        'distance_m': round(distance_m, 2),
+        'radius_m': radius_m,
+        'within_radius': within,
+        'description': description,
+    }
+
 
 @api_router.delete("/leads/{lead_id}")
 async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_user)):

@@ -232,7 +232,8 @@ export default function TenantSettings() {
     currency_symbol: '₹',
     date_format: 'DD/MM/YYYY',
     fiscal_year_start: '04-01',
-    default_distributor_gst_percent: 18
+    default_distributor_gst_percent: 18,
+    check_in_radius_meters: 50,
   });
   
   // Auth config for Google Workspace SSO
@@ -1911,6 +1912,28 @@ export default function TenantSettings() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   This GST percentage will be applied to shipments and deliveries in the Distribution module
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Field Check-in Radius
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="5"
+                    max="2000"
+                    step="5"
+                    value={settings.check_in_radius_meters ?? 50}
+                    onChange={(e) => setSettings(prev => ({ ...prev, check_in_radius_meters: parseInt(e.target.value, 10) || 0 }))}
+                    className="max-w-[120px]"
+                    data-testid="input-check-in-radius"
+                  />
+                  <span className="text-muted-foreground">meters</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Sales reps clicking "I am here" on a lead are flagged as off-site when they are farther than this radius from the lead's saved GPS location.
                 </p>
               </div>
             </CardContent>
