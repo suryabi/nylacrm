@@ -875,14 +875,15 @@ export default function PerformanceTracker() {
               },
               next_month_leads: {
                 icon: Calendar,
-                title: `Leads in Pipeline for ${MONTH_NAMES[data.pipeline?.next_month] || 'Next Month'}`,
-                subtitle: 'Active leads with target closure in the upcoming month',
+                title: `Leads in Pipeline for ${data.pipeline?.pipeline_period_label || MONTH_NAMES[data.pipeline?.next_month] || 'Selected Period'}`,
+                subtitle: 'Active leads with target closure in the selected period',
                 render: () => (
                   <NextMonthLeadsSubsection
                     leads={data.pipeline?.next_month_leads_list || []}
                     nextMonth={data.pipeline?.next_month}
                     nextYear={data.pipeline?.next_year}
                     totalPipelineValue={data.pipeline?.next_month_pipeline_value || 0}
+                    periodLabel={data.pipeline?.pipeline_period_label}
                   />
                 ),
               },
@@ -2903,14 +2904,14 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
 // Next Month Leads Subsection — leads with target_closure_month/year matching the month after the selected period
 // ════════════════════════════════════════════════════════════════════
 
-function NextMonthLeadsSubsection({ leads, nextMonth, nextYear, totalPipelineValue }) {
+function NextMonthLeadsSubsection({ leads, nextMonth, nextYear, totalPipelineValue, periodLabel: periodLabelProp }) {
   const navigate = useNavigate();
   const { getStatusLabel, getStatusById } = useLeadStatuses();
   const [search, setSearch] = useState('');
 
   const list = Array.isArray(leads) ? leads : [];
-  const monthLabel = MONTH_NAMES[nextMonth] || 'Next Month';
-  const periodLabel = `${monthLabel} ${nextYear || ''}`.trim();
+  const monthLabel = periodLabelProp || MONTH_NAMES[nextMonth] || 'Selected Period';
+  const periodLabel = periodLabelProp || `${MONTH_NAMES[nextMonth] || ''} ${nextYear || ''}`.trim();
 
   const searchLower = search.trim().toLowerCase();
   const filtered = searchLower

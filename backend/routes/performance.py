@@ -253,15 +253,49 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
     pipeline_total_value = sum(s["value"] for s in pipeline_by_status)
     pipeline_total_count = sum(s["count"] for s in pipeline_by_status)
     
-    # Leads targeting next month (based on target_closure_month/year)
-    next_month = month + 1 if month < 12 else 1
-    next_year = year if month < 12 else year + 1
-    
+    # Leads in pipeline for the SELECTED period (based on target_closure_month/year).
+    # - Plain month/year selection → just that month
+    # - Target plan selected → all months covered by [plan.start_date, plan.end_date]
+    pipeline_months: set[tuple[int, int]] = set()
+    plan_doc = None
+    if plan_id:
+        plan_doc = await db.target_plans_v2.find_one(
+            {"id": plan_id, "tenant_id": tenant_id},
+            {"_id": 0, "start_date": 1, "end_date": 1},
+        )
+    if plan_doc and plan_doc.get("start_date") and plan_doc.get("end_date"):
+        try:
+            sd = datetime.fromisoformat(plan_doc["start_date"][:10])
+            ed = datetime.fromisoformat(plan_doc["end_date"][:10])
+            y, m = sd.year, sd.month
+            while (y, m) <= (ed.year, ed.month):
+                pipeline_months.add((y, m))
+                m += 1
+                if m > 12:
+                    m, y = 1, y + 1
+        except (ValueError, AttributeError):
+            pipeline_months = {(year, month)}
+    if not pipeline_months:
+        pipeline_months = {(year, month)}
+
     next_month_leads = [
         lead for lead in pipeline_leads
-        if lead.get("target_closure_month") == next_month and lead.get("target_closure_year") == next_year
+        if (lead.get("target_closure_year"), lead.get("target_closure_month")) in pipeline_months
     ]
     next_month_pipeline_value = sum(get_pipeline_value(lead) for lead in next_month_leads)
+
+    # Human-readable label for the period the pipeline tile covers
+    sorted_months = sorted(pipeline_months)
+    if len(sorted_months) == 1:
+        py, pm = sorted_months[0]
+        pipeline_period_label = f"{MONTH_NAMES[pm - 1][:3]} {py}"
+    else:
+        sy, sm = sorted_months[0]
+        ey, em = sorted_months[-1]
+        if sy == ey:
+            pipeline_period_label = f"{MONTH_NAMES[sm - 1][:3]}–{MONTH_NAMES[em - 1][:3]} {sy}"
+        else:
+            pipeline_period_label = f"{MONTH_NAMES[sm - 1][:3]} {sy} – {MONTH_NAMES[em - 1][:3]} {ey}"
     
     # === D. OUTSTANDING METRICS ===
     outstanding_invoices = await db.invoices.find(
@@ -356,8 +390,11 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
             "by_status": pipeline_by_status,
             "total_value": round(pipeline_total_value, 2),
             "total_count": pipeline_total_count,
-            "next_month": next_month,
-            "next_year": next_year,
+            # Backward-compat: keep `next_month`/`next_year` fields populated, but they
+            # now reflect the SELECTED period (or the first month of the plan range).
+            "next_month": sorted_months[0][1],
+            "next_year": sorted_months[0][0],
+            "pipeline_period_label": pipeline_period_label,
             "next_month_leads_count": len(next_month_leads),
             "next_month_pipeline_value": round(next_month_pipeline_value, 2),
             "next_month_leads_list": [
