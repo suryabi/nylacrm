@@ -25,6 +25,7 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
 
 from database import db
 from deps import get_current_user
@@ -492,3 +493,99 @@ async def link_existing_zoho_contacts(
         'not_found': not_found,
         'errors': errors,
     }
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# PDF Template settings (per-tenant)
+# ───────────────────────────────────────────────────────────────────────────
+
+class TemplateSettings(BaseModel):
+    invoice_template_id: Optional[str] = None
+    creditnote_template_id: Optional[str] = None
+
+
+@router.get("/zoho/admin/templates")
+async def list_zoho_templates(
+    entity: str = Query("invoice", regex="^(invoice|creditnote)$"),
+    current_user: dict = Depends(get_current_user),
+):
+    """List PDF templates configured in Zoho Books for invoices or credit notes.
+
+    Use this to find the `template_id` you want CRM to apply when pushing.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can manage Zoho template settings.')
+
+    from services import zoho_service as zoho
+    if not zoho.is_zoho_configured():
+        raise HTTPException(status_code=400, detail='Zoho integration is not configured for this tenant.')
+
+    tenant_id = current_user.get('tenant_id')
+    # Zoho API: /books/v3/settings/templates?type=<invoice|creditnote|estimate|...>
+    try:
+        result = await zoho._zoho_request(
+            "GET", "/books/v3/settings/templates",
+            tenant_id=tenant_id,
+            params={"type": entity},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch templates from Zoho: {e}")
+
+    templates = result.get("templates", []) or []
+    # Slim down the response — frontend only needs id + name + is_default flag
+    slim = [
+        {
+            "template_id": t.get("template_id"),
+            "template_name": t.get("template_name"),
+            "template_type": t.get("template_type"),
+            "is_default": bool(t.get("is_default")),
+        }
+        for t in templates
+    ]
+    return {"entity": entity, "templates": slim, "count": len(slim)}
+
+
+@router.get("/zoho/admin/template-settings")
+async def get_template_settings(current_user: dict = Depends(get_current_user)):
+    """Return the currently-configured CRM-side template IDs (or null if unset)."""
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can view Zoho template settings.')
+
+    from services import zoho_service as zoho
+    creds = await zoho.get_credentials(current_user.get('tenant_id')) or {}
+    return {
+        "invoice_template_id": creds.get("invoice_template_id") or None,
+        "creditnote_template_id": creds.get("creditnote_template_id") or None,
+    }
+
+
+@router.put("/zoho/admin/template-settings")
+async def update_template_settings(
+    payload: TemplateSettings,
+    current_user: dict = Depends(get_current_user),
+):
+    """Save the CRM-side override template_id for Zoho invoice and/or credit-note PDF.
+
+    Pass `null` (or omit a field) to clear that override and fall back to Zoho's
+    default template for that entity.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can change Zoho template settings.')
+
+    tenant_id = current_user.get('tenant_id')
+    update_doc = {
+        'invoice_template_id': (payload.invoice_template_id or '').strip() or None,
+        'creditnote_template_id': (payload.creditnote_template_id or '').strip() or None,
+        'template_settings_updated_at': datetime.now(timezone.utc).isoformat(),
+        'template_settings_updated_by': current_user.get('email'),
+    }
+    await db.zoho_credentials.update_one(
+        {'tenant_id': tenant_id},
+        {'$set': update_doc},
+        upsert=True,
+    )
+    return {'success': True, **update_doc}
+

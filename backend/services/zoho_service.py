@@ -740,6 +740,13 @@ async def create_invoice_for_delivery(
         "notes": f"Generated from Nyla CRM delivery {delivery.get('delivery_number')}",
     }
 
+    # Optional: per-tenant Zoho template override for the invoice PDF.
+    # Configured via PUT /api/zoho/admin/template-settings — see zoho_books.py.
+    tenant_creds = await get_credentials(tenant_id) or {}
+    invoice_tmpl = (tenant_creds.get("invoice_template_id") or "").strip()
+    if invoice_tmpl:
+        invoice_payload["template_id"] = invoice_tmpl
+
     result = await _zoho_request("POST", "/books/v3/invoices", tenant_id=tenant_id, json=invoice_payload)
     invoice = result.get("invoice") or {}
 
@@ -931,6 +938,12 @@ async def create_credit_note_for_return(
         "line_items": line_items,
         "notes": f"Generated from Nyla CRM customer return {return_doc.get('return_number')}",
     }
+
+    # Optional: per-tenant Zoho template override for the credit-note PDF.
+    tenant_creds = await get_credentials(tenant_id) or {}
+    cn_tmpl = (tenant_creds.get("creditnote_template_id") or "").strip()
+    if cn_tmpl:
+        creditnote_payload["template_id"] = cn_tmpl
 
     result = await _zoho_request(
         "POST", "/books/v3/creditnotes", tenant_id=tenant_id, json=creditnote_payload
