@@ -9,7 +9,7 @@ import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
-import { Link2, Link2Off, CheckCircle2, AlertCircle, RefreshCw, Search, ExternalLink } from 'lucide-react';
+import { Link2, Link2Off, CheckCircle2, AlertCircle, RefreshCw, Search, ExternalLink, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 
@@ -110,6 +110,7 @@ export default function ZohoIntegration() {
         <TabsList>
           <TabsTrigger value="connection" data-testid="zoho-tab-connection">Connection</TabsTrigger>
           <TabsTrigger value="mapping" disabled={!status?.connected} data-testid="zoho-tab-mapping">SKU Mapping</TabsTrigger>
+          <TabsTrigger value="templates" disabled={!status?.connected} data-testid="zoho-tab-templates">Templates</TabsTrigger>
           <TabsTrigger value="sync" disabled={!status?.connected} data-testid="zoho-tab-sync">Sync Status</TabsTrigger>
         </TabsList>
 
@@ -190,6 +191,11 @@ export default function ZohoIntegration() {
         {/* ====================== SKU Mapping Tab ====================== */}
         <TabsContent value="mapping" className="pt-4">
           <SkuMappingPanel canManage={canManage} />
+        </TabsContent>
+
+        {/* ====================== Templates Tab ====================== */}
+        <TabsContent value="templates" className="pt-4">
+          <TemplateSettingsPanel canManage={canManage} />
         </TabsContent>
 
         {/* ====================== Sync Status Tab ====================== */}
@@ -419,6 +425,168 @@ function SkuMappingPanel({ canManage }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </Card>
+  );
+}
+
+// =====================================================================
+// Template Settings Panel — pick which Zoho PDF template to use when CRM
+// pushes invoices / credit notes to Zoho Books
+// =====================================================================
+function TemplateSettingsPanel({ canManage }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [invoiceTemplates, setInvoiceTemplates] = useState([]);
+  const [creditnoteTemplates, setCreditnoteTemplates] = useState([]);
+  const [invoiceTemplateId, setInvoiceTemplateId] = useState('');
+  const [creditnoteTemplateId, setCreditnoteTemplateId] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [invRes, cnRes, settingsRes] = await Promise.all([
+        axios.get(`${API_URL}/api/zoho/admin/templates`, { headers: headers(), params: { entity: 'invoice' } }),
+        axios.get(`${API_URL}/api/zoho/admin/templates`, { headers: headers(), params: { entity: 'creditnote' } }),
+        axios.get(`${API_URL}/api/zoho/admin/template-settings`, { headers: headers() }),
+      ]);
+      setInvoiceTemplates(invRes.data?.templates || []);
+      setCreditnoteTemplates(cnRes.data?.templates || []);
+      setInvoiceTemplateId(settingsRes.data?.invoice_template_id || '');
+      setCreditnoteTemplateId(settingsRes.data?.creditnote_template_id || '');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not load Zoho templates');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await axios.put(
+        `${API_URL}/api/zoho/admin/template-settings`,
+        {
+          invoice_template_id: invoiceTemplateId || null,
+          creditnote_template_id: creditnoteTemplateId || null,
+        },
+        { headers: headers() },
+      );
+      toast.success('Template settings saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not save template settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const TemplateSelect = ({ label, value, onChange, templates, testId }) => {
+    const defaultTpl = templates.find(t => t.is_default);
+    return (
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">{label}</Label>
+        <div className="flex gap-2">
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={!canManage || saving}
+            className="flex-1 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            data-testid={testId}
+          >
+            <option value="">
+              Zoho default{defaultTpl ? ` — ${defaultTpl.template_name}` : ''}
+            </option>
+            {templates.map(t => (
+              <option key={t.template_id} value={t.template_id}>
+                {t.template_name}{t.is_default ? ' (default)' : ''}
+              </option>
+            ))}
+          </select>
+          {value && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onChange('')}
+              disabled={!canManage || saving}
+              data-testid={`${testId}-clear`}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+        {value && (
+          <p className="text-[11px] text-muted-foreground font-mono">
+            template_id: {value}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5" />
+          PDF Templates
+        </CardTitle>
+        <CardDescription>
+          Pick which PDF template Zoho should apply when CRM creates a new invoice
+          or credit note. Leave a selection on "Zoho default" to use your org's default template.
+          Historical Zoho records keep whatever template they were created with.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-8">
+            <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <>
+            <TemplateSelect
+              label="Invoice template"
+              value={invoiceTemplateId}
+              onChange={setInvoiceTemplateId}
+              templates={invoiceTemplates}
+              testId="invoice-template-select"
+            />
+            <TemplateSelect
+              label="Credit-note template"
+              value={creditnoteTemplateId}
+              onChange={setCreditnoteTemplateId}
+              templates={creditnoteTemplates}
+              testId="creditnote-template-select"
+            />
+            <div className="flex items-center justify-between border-t pt-4">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={load}
+                disabled={loading || saving}
+                data-testid="templates-refresh-btn"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh templates from Zoho
+              </Button>
+              <Button
+                onClick={save}
+                disabled={!canManage || saving}
+                data-testid="save-template-settings-btn"
+              >
+                {saving ? 'Saving…' : 'Save settings'}
+              </Button>
+            </div>
+            {!canManage && (
+              <p className="text-xs text-amber-600">
+                Only CEO / System Admin can change these settings.
+              </p>
+            )}
+          </>
+        )}
+      </CardContent>
     </Card>
   );
 }
