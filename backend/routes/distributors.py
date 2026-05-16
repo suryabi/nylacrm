@@ -1608,7 +1608,8 @@ async def list_distributor_account_assignments(
         async for ad in db.accounts.find(
             {"id": {"$in": account_ids}, "tenant_id": tenant_id},
             {"_id": 0, "id": 1, "gst_number": 1, "pan_number": 1, "billing_address": 1,
-             "gst_legal_name": 1, "gst_trade_name": 1, "contact_name": 1, "contact_number": 1}
+             "gst_legal_name": 1, "gst_trade_name": 1, "contact_name": 1, "contact_number": 1,
+             "delivery_address": 1, "delivery_contact_name": 1, "delivery_contact_phone": 1}
         ):
             accounts_map[ad['id']] = ad
     for a in assignments:
@@ -1620,6 +1621,9 @@ async def list_distributor_account_assignments(
         a['gst_trade_name'] = acc.get('gst_trade_name')
         a['account_contact_name'] = acc.get('contact_name')
         a['account_contact_number'] = acc.get('contact_number')
+        a['delivery_address'] = acc.get('delivery_address')
+        a['delivery_contact_name'] = acc.get('delivery_contact_name')
+        a['delivery_contact_phone'] = acc.get('delivery_contact_phone')
     
     # Group by city
     by_city = {}
