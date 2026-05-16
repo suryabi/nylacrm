@@ -870,7 +870,8 @@ async def create_invoice_for_delivery(
 
 
 async def create_credit_note_for_return(
-    *, tenant_id: str, return_doc: dict, account: dict
+    *, tenant_id: str, return_doc: dict, account: dict,
+    reference_invoice_id: Optional[str] = None,
 ) -> dict:
     """Push a Nyla customer return as a Zoho Books credit note.
 
@@ -879,6 +880,11 @@ async def create_credit_note_for_return(
       • quantity → number of bottles returned
       • rate     → account.sku_pricing.return_bottle_credit for that SKU
                    (NOT the original selling price)
+
+    If `reference_invoice_id` is provided, the credit note will be created with
+    that invoice association (required by Zoho India GST rules — error 12069
+    otherwise). The CN can then be applied to the invoice via the standard
+    /creditnotes/{id}/invoices endpoint.
 
     Returns the canonical mapping doc (also stored in `zoho_invoice_mappings`
     under source_type='customer_return').
@@ -965,6 +971,12 @@ async def create_credit_note_for_return(
         "line_items": line_items,
         "notes": f"Generated from Nyla CRM customer return {return_doc.get('return_number')}",
     }
+    # Zoho India GST: each credit note MUST reference an invoice (12069 otherwise).
+    # When provided, also bind each line_item to the invoice so Zoho accepts it.
+    if reference_invoice_id:
+        creditnote_payload["invoice_id"] = reference_invoice_id
+        for li in creditnote_payload["line_items"]:
+            li["invoice_id"] = reference_invoice_id
 
     # Optional: per-tenant Zoho template override for the credit-note PDF.
     tenant_creds = await get_credentials(tenant_id) or {}
@@ -1073,25 +1085,90 @@ async def apply_credit_notes_to_zoho_invoice(
         if not local_cn_id or amount <= 0:
             continue
 
-        # Find the Zoho credit-note id we stamped during return → CN sync
+        # Find the Zoho credit-note id we may have stamped earlier
         cn = await db.credit_notes.find_one(
             {"id": local_cn_id, "tenant_id": tenant_id},
-            {"_id": 0, "zoho_creditnote_id": 1, "credit_note_number": 1},
+            {"_id": 0},
         )
-        zcn_id = (cn or {}).get("zoho_creditnote_id")
-        cn_number = (cn or {}).get("credit_note_number")
-        if not zcn_id:
-            logger.warning(
-                f"[zoho] Skipping Zoho apply for credit note {cn_number} "
-                f"on invoice {zoho_invoice_id} — local CN has no zoho_creditnote_id "
-                f"(was the credit-note push to Zoho ever successful?)"
-            )
+        if not cn:
             applied.append({
                 "credit_note_id": local_cn_id, "zoho_creditnote_id": None,
-                "amount": amount, "ok": False, "error": "no_zoho_mapping",
+                "amount": amount, "ok": False, "error": "local_cn_not_found",
             })
             continue
 
+        zcn_id = cn.get("zoho_creditnote_id")
+        cn_number = cn.get("credit_note_number")
+
+        # ── LAZY PUSH: If no Zoho CN exists yet, create one NOW with the
+        # invoice association in hand. The Zoho India GST rule requires every
+        # credit note to reference an invoice (error 12069 otherwise) — so we
+        # defer the Zoho push until the CN is applied to a delivery, at which
+        # point we know the Zoho invoice id.
+        if not zcn_id:
+            return_id = cn.get("return_id")
+            return_doc = None
+            if return_id:
+                return_doc = await db.customer_returns.find_one(
+                    {"id": return_id, "tenant_id": tenant_id},
+                    {"_id": 0},
+                )
+            account = await db.accounts.find_one(
+                {"$or": [
+                    {"id": cn.get("account_id")},
+                    {"account_id": cn.get("account_id")},
+                ], "tenant_id": tenant_id},
+                {"_id": 0},
+            )
+            if not return_doc or not account:
+                logger.warning(
+                    f"[zoho] Lazy CN push skipped for {cn_number}: missing return/account"
+                )
+                applied.append({
+                    "credit_note_id": local_cn_id, "zoho_creditnote_id": None,
+                    "amount": amount, "ok": False, "error": "missing_return_or_account",
+                })
+                continue
+            if not _account_has_zoho_link(account):
+                logger.info(
+                    f"[zoho] Lazy CN push skipped for {cn_number}: account not linked to Zoho"
+                )
+                applied.append({
+                    "credit_note_id": local_cn_id, "zoho_creditnote_id": None,
+                    "amount": amount, "ok": False, "error": "account_not_zoho_linked",
+                })
+                continue
+            try:
+                mapping = await create_credit_note_for_return(
+                    tenant_id=tenant_id,
+                    return_doc=return_doc,
+                    account=account,
+                    reference_invoice_id=zoho_invoice_id,
+                )
+                zcn_id = mapping.get("zoho_creditnote_id")
+                # Mirror back onto local CN doc so future operations have it
+                await db.credit_notes.update_one(
+                    {"id": local_cn_id, "tenant_id": tenant_id},
+                    {"$set": {
+                        "zoho_creditnote_id": zcn_id,
+                        "zoho_creditnote_number": mapping.get("zoho_creditnote_number"),
+                        "zoho_creditnote_url": mapping.get("zoho_creditnote_url"),
+                        "zoho_synced_at": mapping.get("synced_at"),
+                    }},
+                )
+                logger.info(
+                    f"[zoho] Lazy-created CN {mapping.get('zoho_creditnote_number')} "
+                    f"({zcn_id}) for return {return_doc.get('return_number')} bound to invoice {zoho_invoice_id}"
+                )
+            except Exception as e:
+                logger.warning(f"[zoho] Lazy CN creation failed for {cn_number}: {e}")
+                applied.append({
+                    "credit_note_id": local_cn_id, "zoho_creditnote_id": None,
+                    "amount": amount, "ok": False, "error": f"lazy_create_failed: {str(e)[:200]}",
+                })
+                continue
+
+        # zcn_id is now guaranteed to exist — apply to the invoice
         payload = {
             "invoices": [{
                 "invoice_id": zoho_invoice_id,

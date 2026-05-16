@@ -985,7 +985,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <div className="min-w-0">
                           <p className="text-xs text-amber-700 font-medium">Not yet synced to Zoho</p>
                           <p className="text-[11px] text-muted-foreground">
-                            Push failed earlier. After Admin re-connects Zoho (or fixes mappings), retry from here.
+                            Zoho India GST requires every credit note to reference an invoice.
+                            This CN will be pushed to Zoho automatically the moment it is applied to a delivery.
                           </p>
                         </div>
                         <Button
@@ -995,6 +996,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                           onClick={() => handleRetryZohoPush(selectedReturn)}
                           className="border-amber-300 text-amber-800 hover:bg-amber-50"
                           data-testid="retry-zoho-creditnote-push-btn"
+                          title="Retry only works once the CN has been applied to a delivery"
                         >
                           {retryingZohoPush === selectedReturn.id ? (
                             <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Retrying…</>

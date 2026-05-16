@@ -538,73 +538,18 @@ async def create_credit_note_from_return(
     
     logger.info(f"Created credit note {credit_note_number} for return {return_doc.get('return_number')} amount ₹{total_credit}")
 
-    # ── Push to Zoho Books (best-effort, non-blocking) ─────────────────────
-    # The local credit note exists regardless; Zoho push failures only log.
-    try:
-        from services.zoho_service import (
-            create_credit_note_for_return,
-            is_zoho_configured,
-            AccountNotLinkedToZohoError,
-        )
-        if is_zoho_configured():
-            account = await db.accounts.find_one(
-                {"$or": [
-                    {"id": return_doc.get("account_id")},
-                    {"account_id": return_doc.get("account_id")},
-                ], "tenant_id": tenant_id},
-                {"_id": 0},
-            )
-            if not account:
-                logger.warning(
-                    f"Account {return_doc.get('account_id')} not found — skipping Zoho credit-note push "
-                    f"for return {return_doc.get('return_number')}"
-                )
-            else:
-                try:
-                    mapping = await create_credit_note_for_return(
-                        tenant_id=tenant_id,
-                        return_doc=return_doc,
-                        account=account,
-                    )
-                    # Mirror Zoho identifiers onto the local credit_note row
-                    await db.credit_notes.update_one(
-                        {"id": credit_note.id, "tenant_id": tenant_id},
-                        {"$set": {
-                            "zoho_creditnote_id": mapping.get("zoho_creditnote_id"),
-                            "zoho_creditnote_number": mapping.get("zoho_creditnote_number"),
-                            "zoho_creditnote_url": mapping.get("zoho_creditnote_url"),
-                            "zoho_synced_at": mapping.get("synced_at"),
-                        }},
-                    )
-                    logger.info(
-                        f"Pushed credit note {credit_note_number} to Zoho as "
-                        f"{mapping.get('zoho_creditnote_number')}"
-                    )
-                except AccountNotLinkedToZohoError as e:
-                    # Expected when the account hasn't been linked to a Zoho contact.
-                    # The local credit note still works; we just don't mirror to Zoho.
-                    logger.info(
-                        f"Skipping Zoho credit-note push for return "
-                        f"{return_doc.get('return_number')}: {e}"
-                    )
-    except Exception as zoho_err:
-        # Don't block local credit-note creation if Zoho push fails
-        logger.error(
-            f"Failed to push credit note {credit_note_number} to Zoho: {zoho_err}"
-        )
-        try:
-            from services.zoho_service import record_sync_failure
-            await record_sync_failure(
-                tenant_id=tenant_id,
-                source_type="customer_return",
-                source_id=return_doc.get("id"),
-                source_reference=return_doc.get("return_number"),
-                distributor_id=distributor_id,
-                error=str(zoho_err),
-                attempts=1,
-            )
-        except Exception:
-            pass
+    # ── Push to Zoho Books — DEFERRED ──────────────────────────────────────
+    # Zoho India GST mandates that every credit note must reference an invoice
+    # (error 12069 otherwise). At the moment the customer-return credit-note
+    # is created, we usually don't have a Zoho invoice id yet — the CN gets
+    # applied to a future delivery, which is when an invoice is generated in
+    # Zoho. So we DEFER the Zoho push to that point (see `apply_credit_notes_to_zoho_invoice`
+    # which lazily creates + applies the Zoho CN when the local CN is applied
+    # to a delivery whose Zoho invoice id is known).
+    logger.info(
+        f"Local credit note {credit_note_number} created; Zoho push deferred until "
+        f"this CN is applied to a delivery (so we can bind it to the Zoho invoice)."
+    )
 
     return credit_note.model_dump()
 
@@ -660,6 +605,28 @@ async def retry_zoho_push(
     if not account:
         raise HTTPException(status_code=400, detail="Customer account not found for this return")
 
+    # Zoho India GST: a credit note MUST be bound to an invoice. Find a delivery
+    # that this CN has been applied to AND whose Zoho invoice has been pushed —
+    # use its Zoho invoice id as the credit-note's reference.
+    delivery_with_invoice = await db.distributor_deliveries.find_one(
+        {
+            "tenant_id": tenant_id,
+            "applied_credit_notes.credit_note_id": credit_note_id,
+            "zoho_invoice_id": {"$exists": True, "$ne": None},
+        },
+        {"_id": 0, "zoho_invoice_id": 1, "delivery_number": 1},
+    )
+    zoho_invoice_id = (delivery_with_invoice or {}).get("zoho_invoice_id")
+    if not zoho_invoice_id:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This credit note hasn't been applied to a Zoho-synced delivery yet. "
+                "Zoho India GST requires every credit note to reference an invoice. "
+                "Apply this CN to a delivery first — it will be pushed to Zoho automatically at that moment."
+            ),
+        )
+
     try:
         from services.zoho_service import (
             create_credit_note_for_return,
@@ -674,6 +641,7 @@ async def retry_zoho_push(
                 tenant_id=tenant_id,
                 return_doc=return_doc,
                 account=account,
+                reference_invoice_id=zoho_invoice_id,
             )
         except AccountNotLinkedToZohoError as e:
             raise HTTPException(status_code=400, detail=str(e))
