@@ -150,7 +150,6 @@ const MODULE_CONFIG = {
     modules: [
       { key: 'marketing_calendar', label: 'Content Calendar', icon: CalendarDays, description: 'Plan & schedule marketing content' },
       { key: 'marketing_masters', label: 'Marketing Masters', icon: Settings, description: 'Categories, platforms & events' },
-      { key: 'master_request_types', label: 'Marketing Request Types', icon: Tag, description: 'Catalog of types Sales can raise (Neck Tag, Standee, Video, …)', href: '/admin/marketing-request-types' },
       { key: 'meeting_minutes', label: 'Meeting Minutes', icon: ClipboardList, description: 'Record meeting notes & action items' },
     ]
   },
