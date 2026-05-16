@@ -104,6 +104,36 @@ def get_object(path: str) -> Tuple[bytes, str]:
         raise
 
 
+def delete_object(path: str) -> bool:
+    """
+    Delete a file from object storage.
+
+    Args:
+        path: Storage path to delete
+
+    Returns:
+        True if deleted (or already absent), False on hard failure.
+    """
+    if not path:
+        return True
+    key = init_storage()
+    try:
+        resp = requests.delete(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key},
+            timeout=30
+        )
+        # Treat 404 as already-deleted (idempotent)
+        if resp.status_code == 404:
+            return True
+        resp.raise_for_status()
+        logger.info(f"Deleted file from storage: {path}")
+        return True
+    except requests.RequestException as e:
+        logger.warning(f"Failed to delete file from {path}: {e}")
+        return False
+
+
 def upload_pdf(filename: str, pdf_bytes: bytes, subfolder: str = "debit-credit-notes") -> dict:
     """
     Convenience function to upload a PDF file.

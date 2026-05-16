@@ -251,6 +251,7 @@ export default function AccountDetail() {
   const [deliveryContactPhone, setDeliveryContactPhone] = useState('');
   const [savingContact, setSavingContact] = useState(false);
   const [gstUploading, setGstUploading] = useState(false);
+  const [gstDeleting, setGstDeleting] = useState(false);
   const gstFileInputRef = useRef(null);
   // True when delivery address card is in edit/form mode; false when displayed as visiting card
   const [editingDeliveryAddress, setEditingDeliveryAddress] = useState(false);
@@ -507,6 +508,25 @@ export default function AccountDetail() {
     } finally {
       setGstUploading(false);
       if (gstFileInputRef.current) gstFileInputRef.current.value = '';
+    }
+  };
+
+  const handleGstDelete = async () => {
+    if (!window.confirm(
+      'Delete the uploaded GST certificate? This will also clear the parsed GSTIN, PAN, legal name, trade name and billing address from this account.'
+    )) return;
+    setGstDeleting(true);
+    try {
+      await axios.delete(
+        `${API_URL}/accounts/${id}/gst-certificate`,
+        { withCredentials: true }
+      );
+      toast.success('GST certificate removed.');
+      fetchAccount();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to remove GST certificate.');
+    } finally {
+      setGstDeleting(false);
     }
   };
 
@@ -2059,21 +2079,40 @@ ${googleMapsLink}`;
                   onChange={handleGstUpload}
                   data-testid="gst-file-input"
                 />
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleGstFilePick}
-                  disabled={gstUploading}
-                  data-testid="gst-upload-btn"
-                >
-                  {gstUploading ? (
-                    <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Parsing…</>
-                  ) : account?.gst_number ? (
-                    <><Upload className="h-3.5 w-3.5 mr-1.5" /> Re-upload</>
-                  ) : (
-                    <><Upload className="h-3.5 w-3.5 mr-1.5" /> Upload GST Certificate</>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleGstFilePick}
+                    disabled={gstUploading || gstDeleting}
+                    data-testid="gst-upload-btn"
+                  >
+                    {gstUploading ? (
+                      <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Parsing…</>
+                    ) : account?.gst_number ? (
+                      <><Upload className="h-3.5 w-3.5 mr-1.5" /> Re-upload</>
+                    ) : (
+                      <><Upload className="h-3.5 w-3.5 mr-1.5" /> Upload GST Certificate</>
+                    )}
+                  </Button>
+                  {account?.gst_number && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleGstDelete}
+                      disabled={gstUploading || gstDeleting}
+                      className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                      data-testid="gst-delete-btn"
+                      title="Remove the uploaded GST certificate and clear parsed GST details"
+                    >
+                      {gstDeleting ? (
+                        <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Removing…</>
+                      ) : (
+                        <><Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete</>
+                      )}
+                    </Button>
                   )}
-                </Button>
+                </div>
               </div>
 
               {account?.gst_number ? (

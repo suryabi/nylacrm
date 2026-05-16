@@ -1309,6 +1309,57 @@ async def download_gst_certificate(
     )
 
 
+@router.delete("/{account_id}/gst-certificate")
+async def delete_gst_certificate(
+    account_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete the uploaded GST certificate and clear all GST-parsed fields on the account.
+
+    Removes the file from object storage and unsets:
+      gst_number, pan_number, gst_legal_name, gst_trade_name,
+      gst_registration_date, billing_address,
+      gst_certificate_url, gst_certificate_path, gst_certificate_mime.
+    The base account address (city/state) is preserved — only the parsed
+    GST-derived billing block and certificate file are removed.
+    """
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(
+        _account_match(account_id),
+        {'_id': 0, 'id': 1, 'gst_certificate_path': 1}
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    # Best-effort delete the file from object storage (idempotent)
+    stored_path = account.get('gst_certificate_path')
+    if stored_path:
+        try:
+            _objstore.delete_object(stored_path)
+        except Exception as e:
+            _logger.warning(f"Storage delete failed for {stored_path}: {e} — continuing with DB cleanup")
+
+    unset_fields = {
+        'gst_number': '',
+        'pan_number': '',
+        'gst_legal_name': '',
+        'gst_trade_name': '',
+        'gst_registration_date': '',
+        'billing_address': '',
+        'gst_certificate_url': '',
+        'gst_certificate_path': '',
+        'gst_certificate_mime': '',
+    }
+    await tdb.accounts.update_one(
+        _account_match(account_id),
+        {
+            '$unset': unset_fields,
+            '$set': {'updated_at': datetime.now(timezone.utc).isoformat()},
+        }
+    )
+    return {'message': 'GST certificate removed.', 'account_id': account_id}
+
+
 # ============= GOOGLE PLACES — place details (lat/lng) =============
 
 import httpx as _httpx
