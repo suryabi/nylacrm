@@ -58,6 +58,9 @@ DEFAULT_MODULE_PERMISSIONS = {
     # Marketing
     "marketing_calendar": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_masters": {"view": False, "create": False, "edit": False, "delete": False},
+    "marketing_requests": {"view": True, "create": True, "edit": True, "delete": False},
+    "master_departments": {"view": False, "create": False, "edit": False, "delete": False},
+    "marketing_request_types": {"view": False, "create": False, "edit": False, "delete": False},
 
     # Organization
     "company_profile": {"view": True, "create": False, "edit": False, "delete": False},
@@ -246,8 +249,8 @@ MODULE_CATEGORIES = {
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model"],
     "Documents": ["company_documents", "files_documents"],
     "Requests": ["leaves", "travel_requests", "budget_requests"],
-    "Marketing": ["marketing_calendar", "marketing_masters"],
-    "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories", "cogs_components"],
+    "Marketing": ["marketing_calendar", "marketing_masters", "marketing_requests"],
+    "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories", "cogs_components", "master_departments", "marketing_request_types"],
     "Admin": ["tenant_settings", "api_keys", "sku_replace"],
     "Distribution": ["distributors", "stock_dashboard", "cost_cards", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
     "Production": ["production_dashboard", "production_batches", "qc_routes", "qc_team", "rejection_reasons", "rejection_report", "rejection_cost_config", "packaging_types", "maintenance", "inventory", "quality_control", "assets", "vendors"],
@@ -290,6 +293,9 @@ MODULE_LABELS = {
     "budget_requests": "Budget Requests",
     "marketing_calendar": "Content Calendar",
     "marketing_masters": "Marketing Masters",
+    "marketing_requests": "Marketing Requests",
+    "master_departments": "Departments",
+    "marketing_request_types": "Marketing Request Types",
     "company_profile": "Company Profile",
     "team": "Team Management",
     "master_locations": "Master Locations",
