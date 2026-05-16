@@ -5400,48 +5400,97 @@ async def get_won_leads_revenue(
     
     # Build base query for WON leads
     query = {'status': 'won'}
-    
-    # Apply time filter
+
+    # ── Resolve the (start, end) period datetimes for filtering ──
+    # The Revenue Report is now driven by each lead's `target_closure_month` /
+    # `target_closure_year` (the period the deal was *expected to close in*),
+    # NOT by `updated_at`. We also scope invoices to the same window via
+    # `invoice_date` further below.
     now = datetime.now(timezone.utc)
     start_date = None
-    
+    end_date = None
+
     if time_filter == "this_week":
         start_date = now - timedelta(days=now.weekday())
+        end_date = now
     elif time_filter == "last_week":
         start_date = now - timedelta(days=now.weekday() + 7)
         end_date = now - timedelta(days=now.weekday())
     elif time_filter == "this_month":
         start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
     elif time_filter == "last_month":
-        first_of_this_month = now.replace(day=1)
+        first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         start_date = (first_of_this_month - relativedelta(months=1))
         end_date = first_of_this_month
     elif time_filter == "this_quarter":
         quarter = (now.month - 1) // 3
         start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
     elif time_filter == "last_quarter":
         quarter = (now.month - 1) // 3
         if quarter == 0:
-            start_date = now.replace(year=now.year - 1, month=10, day=1)
-            end_date = now.replace(month=1, day=1)
+            start_date = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         else:
-            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1)
-            end_date = now.replace(month=quarter * 3 + 1, day=1)
+            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
     elif time_filter == "last_3_months":
         start_date = now - relativedelta(months=3)
+        end_date = now
     elif time_filter == "last_6_months":
         start_date = now - relativedelta(months=6)
+        end_date = now
     elif time_filter == "this_year":
         start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
     elif time_filter == "last_year":
-        start_date = now.replace(year=now.year - 1, month=1, day=1)
-        end_date = now.replace(month=1, day=1)
-    
-    if start_date:
-        query['updated_at'] = {'$gte': start_date.isoformat()}
-        if 'end_date' in dir() and end_date:
-            query['updated_at']['$lt'] = end_date.isoformat()
-    
+        start_date = now.replace(year=now.year - 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Build the set of (year, month) pairs the time window spans. For
+    # multi-month windows (e.g., this_quarter, last_3_months) we accept any
+    # lead whose target_closure_year/month falls in the set.
+    target_year_month_pairs: list = []
+    if start_date and end_date:
+        cur = start_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # Walk month-by-month until we go past end_date
+        # Cap at 60 months as a sanity guard (we never expose > 5y windows)
+        for _ in range(60):
+            if cur >= end_date:
+                break
+            target_year_month_pairs.append((cur.year, cur.month))
+            cur = cur + relativedelta(months=1)
+        # Always include the start month even if end_date == start_date
+        if not target_year_month_pairs:
+            target_year_month_pairs.append((start_date.year, start_date.month))
+
+    # Apply lead-period filter: match by target_closure_month/year (preferred),
+    # falling back to updated_at for leads that lack those fields.
+    if target_year_month_pairs:
+        ym_or = [
+            {'target_closure_year': y, 'target_closure_month': m}
+            for (y, m) in target_year_month_pairs
+        ]
+        query['$or'] = [
+            *ym_or,
+            # Fallback: leads with no target_closure_* set — use updated_at
+            {
+                'target_closure_year': {'$in': [None, '', 0]},
+                'updated_at': {
+                    '$gte': start_date.isoformat(),
+                    '$lt': end_date.isoformat(),
+                },
+            },
+            {
+                'target_closure_year': {'$exists': False},
+                'updated_at': {
+                    '$gte': start_date.isoformat(),
+                    '$lt': end_date.isoformat(),
+                },
+            },
+        ]
+
     # Apply resource filter
     if resource_id:
         query['assigned_to'] = resource_id
@@ -5526,10 +5575,26 @@ async def get_won_leads_revenue(
 
     invoice_totals: dict = {}  # lead_id → {gross, net, credit, count}
     if inv_or:
+        # Scope invoices to the same time window the user selected, so the
+        # totals shown reflect billings during that period only. invoice_date
+        # may be stored as a YYYY-MM-DD string or a BSON datetime — match both.
+        inv_query: dict = {'$or': inv_or}
+        if start_date and end_date and time_filter != 'lifetime':
+            start_s = start_date.strftime('%Y-%m-%d')
+            end_s = end_date.strftime('%Y-%m-%d')
+            inv_query = {
+                '$and': [
+                    {'$or': inv_or},
+                    {'$or': [
+                        {'invoice_date': {'$gte': start_s, '$lt': end_s + 'T23:59:59'}},
+                        {'invoice_date': {'$gte': start_date, '$lt': end_date}},
+                    ]},
+                ]
+            }
         invoices_all = await get_tdb().invoices.find(
-            {'$or': inv_or},
+            inv_query,
             {'_id': 0, 'account_uuid': 1, 'account_id': 1, 'account_id_from_mq': 1,
-             'ca_lead_id': 1, 'lead_id': 1, 'lead_uuid': 1,
+             'ca_lead_id': 1, 'lead_id': 1, 'lead_uuid': 1, 'invoice_date': 1,
              'gross_invoice_value': 1, 'grand_total': 1, 'total_amount': 1,
              'net_invoice_value': 1, 'paid_amount': 1,
              'credit_note_value': 1, 'credit_note': 1}
@@ -5559,12 +5624,20 @@ async def get_won_leads_revenue(
     
     for lead in leads:
         live = invoice_totals.get(lead['id']) or {}
-        # Prefer live-computed totals; fall back to legacy cached fields if
-        # nothing came back (e.g., lead with no linked account/invoices yet).
-        gross = live.get('gross') or (lead.get('total_gross_invoice_value') or 0)
-        net = live.get('net') or (lead.get('total_net_invoice_value') or 0)
-        credit = live.get('credit') or (lead.get('total_credit_note_value') or 0)
-        invoice_count = live.get('count') or (lead.get('invoice_count') or 0)
+        # When a time window is in effect, trust the live period-scoped totals
+        # exclusively (no fallback to lifetime-cached fields — those would be
+        # misleading inside a "Last Month" or "Last Quarter" view). For
+        # `lifetime` we still fall back if the live recompute returned nothing.
+        if time_filter == 'lifetime':
+            gross = live.get('gross') or (lead.get('total_gross_invoice_value') or 0)
+            net = live.get('net') or (lead.get('total_net_invoice_value') or 0)
+            credit = live.get('credit') or (lead.get('total_credit_note_value') or 0)
+            invoice_count = live.get('count') or (lead.get('invoice_count') or 0)
+        else:
+            gross = live.get('gross') or 0
+            net = live.get('net') or 0
+            credit = live.get('credit') or 0
+            invoice_count = live.get('count') or 0
         
         total_gross += gross
         total_net += net

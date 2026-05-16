@@ -22,6 +22,12 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 
 ## Recent Implementations
 
+### 2026-05-16 (Revenue Report — target_closure-driven period filter)
+- **Revenue Report (`/sales-revenue/won-leads`) is now driven by `target_closure_month`/`target_closure_year`** instead of the lead's `updated_at`. This aligns the report with the *period the deal was planned to close*, not when the lead row was last touched. Multi-month windows (`this_quarter`, `last_3_months`, etc.) expand to a set of (year, month) pairs and accept any lead whose target falls in that set.
+  - Leads with no `target_closure_*` (legacy) fall back to the `updated_at` filter so historical data isn't dropped.
+- **Invoices are now period-scoped**: under any non-lifetime filter the totals reflect only invoices whose `invoice_date` falls within the same window (matches both `YYYY-MM-DD` strings and BSON datetime).
+- The lifetime filter still shows all-time totals (with the cached-field fallback as before).
+
 ### 2026-05-16 (later)
 - **Revenue Report all-zeros bug fixed** — `GET /api/sales-revenue/won-leads` was reading invoice totals from stale lead-level cached fields (`lead.total_gross_invoice_value` etc.), which stopped being maintained after invoices migrated to account-centric linkage. Now totals are recomputed live by joining won-leads → accounts (`account.lead_id` can be either UUID or formatted lead id) → invoices via the same multi-field matcher used by the Account Detail page (`account_uuid`/`account_id`/`account_id_from_mq`/`ca_lead_id`/`lead_id`). Verified on preview: "Last Month" Toopa Ice-creamery jumped from ₹0 → ₹62,939.50 (3 invoices).
 
