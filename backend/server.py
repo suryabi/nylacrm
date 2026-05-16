@@ -6528,7 +6528,7 @@ async def get_account_invoices(
     
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1, 'outstanding_balance': 1}
+        {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1, 'outstanding_balance': 1, 'zoho_contact_id': 1, 'gst_number': 1, 'gstin': 1}
     )
     if not account:
         logger.warning(f"[INVOICE_FETCH] Account not found: {account_id}")
@@ -6541,6 +6541,8 @@ async def get_account_invoices(
     acc_id = account.get('account_id')
     lead_id = account.get('lead_id')
     account_name = account.get('account_name')
+    zoho_contact_id = account.get('zoho_contact_id')
+    gstin = account.get('gst_number') or account.get('gstin')
     
     # Resolve the lead's formatted lead_id (e.g., ASEM-HYD-L26-001). External invoices
     # may store this string in `ca_lead_id`, not the lead UUID — so we must look it up.
@@ -6572,6 +6574,19 @@ async def get_account_invoices(
         # Formatted lead id (ca_lead_id) — distinct from lead UUID
         query['$or'].append({'ca_lead_id': _ci_eq(lead_formatted_id)})
         query['$or'].append({'lead_id': _ci_eq(lead_formatted_id)})  # In case it stored the formatted id under lead_id
+    if zoho_contact_id:
+        # Invoices pushed via Zoho carry the Zoho customer id — this is a strong
+        # linkage when the legacy account_id/account_uuid/account_name fields don't agree
+        # (e.g., recently-activated accounts where the external system pushed
+        # invoices using only the Zoho contact id).
+        query['$or'].append({'zoho_customer_id': zoho_contact_id})
+        query['$or'].append({'zoho_contact_id': zoho_contact_id})
+    if gstin:
+        # GSTIN linkage — invoices pushed via Zoho carry the customer's GSTIN.
+        # Useful when the account was re-created and account_id changed but GSTIN stayed.
+        query['$or'].append({'gst_number': _ci_eq(gstin)})
+        query['$or'].append({'gstin': _ci_eq(gstin)})
+        query['$or'].append({'customer_gstin': _ci_eq(gstin)})
     if account_name:
         # Escape regex special chars in account_name (parens, dots, plus, etc.)
         # so account names like "Asem (Hyderabad)" don't silently break the match.
