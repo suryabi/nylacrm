@@ -57,6 +57,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Tracks which return is mid-retry for the Zoho-push action
+  const [retryingZohoPush, setRetryingZohoPush] = useState(null);
 
   // Pay Customer / Issue Credit dialog — primary action from the Returns grid.
   // Single state-aware dialog handles submit / approve / mark-issued in one screen.
@@ -340,6 +342,48 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
       setShowDetailDialog(true);
     } catch (error) {
       toast.error('Failed to load return details');
+    }
+  };
+
+  // Retry pushing a previously-failed credit note to Zoho. Useful after the
+  // admin re-connects Zoho with the correct OAuth scopes / fixes SKU mappings.
+  const handleRetryZohoPush = async (ret) => {
+    if (!ret) return;
+    // Look up the local credit_note id for this return
+    setRetryingZohoPush(ret.id);
+    try {
+      const cnRes = await axios.get(
+        `${API_URL}/api/distributors/${distributorId}/credit-notes`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { account_id: ret.account_id }
+        }
+      );
+      const cn = (cnRes.data?.credit_notes || []).find(c => c.return_id === ret.id);
+      if (!cn) {
+        toast.error('No local credit note found for this return');
+        return;
+      }
+      const resp = await axios.post(
+        `${API_URL}/api/distributors/${distributorId}/credit-notes/${cn.id}/retry-zoho-push`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (resp.data?.zoho_creditnote_url) {
+        toast.success(`Pushed to Zoho as ${resp.data.zoho_creditnote_number || 'credit note'}`);
+        // Re-fetch the return so the dialog shows the new link
+        await viewReturnDetail(ret.id);
+        fetchReturns();
+      } else if (resp.data?.already_synced) {
+        toast.info('Already synced to Zoho — refreshing view');
+        await viewReturnDetail(ret.id);
+      } else {
+        toast.error('Push completed but no Zoho URL returned');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Zoho push failed');
+    } finally {
+      setRetryingZohoPush(null);
     }
   };
 
@@ -920,7 +964,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </Badge>
                     </div>
-                    {selectedReturn.zoho_creditnote_url && (
+                    {selectedReturn.zoho_creditnote_url ? (
                       <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
                         <span className="text-xs text-emerald-600">Synced to Zoho Books</span>
                         <a
@@ -933,6 +977,31 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                           <ExternalLink className="h-4 w-4" />
                           View / download in Zoho
                         </a>
+                      </div>
+                    ) : (
+                      // Not yet synced — surface a retry action so the rep can
+                      // re-push to Zoho after fixing OAuth scopes / SKU mapping.
+                      <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="min-w-0">
+                          <p className="text-xs text-amber-700 font-medium">Not yet synced to Zoho</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Push failed earlier. After Admin re-connects Zoho (or fixes mappings), retry from here.
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={retryingZohoPush === selectedReturn.id}
+                          onClick={() => handleRetryZohoPush(selectedReturn)}
+                          className="border-amber-300 text-amber-800 hover:bg-amber-50"
+                          data-testid="retry-zoho-creditnote-push-btn"
+                        >
+                          {retryingZohoPush === selectedReturn.id ? (
+                            <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Retrying…</>
+                          ) : (
+                            <><RefreshCw className="h-4 w-4 mr-2" /> Retry Zoho push</>
+                          )}
+                        </Button>
                       </div>
                     )}
                     {selectedReturn.credit_issued_to_delivery_number && (

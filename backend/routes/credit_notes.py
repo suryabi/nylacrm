@@ -609,6 +609,101 @@ async def create_credit_note_from_return(
     return credit_note.model_dump()
 
 
+@router.post("/{distributor_id}/credit-notes/{credit_note_id}/retry-zoho-push")
+async def retry_zoho_push(
+    distributor_id: str,
+    credit_note_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Retry pushing a previously-failed credit note to Zoho Books.
+
+    Use this after fixing the underlying cause (re-connecting Zoho with the
+    correct scopes, fixing missing SKU mappings, etc.). Idempotent — if the CN
+    is already synced, returns the existing mapping.
+    """
+    tenant_id = get_current_tenant_id()
+
+    cn = await db.credit_notes.find_one(
+        {"id": credit_note_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0},
+    )
+    if not cn:
+        raise HTTPException(status_code=404, detail="Credit note not found")
+
+    if cn.get("zoho_creditnote_id"):
+        return {
+            "ok": True,
+            "already_synced": True,
+            "zoho_creditnote_id": cn.get("zoho_creditnote_id"),
+            "zoho_creditnote_number": cn.get("zoho_creditnote_number"),
+            "zoho_creditnote_url": cn.get("zoho_creditnote_url"),
+        }
+
+    return_id = cn.get("return_id")
+    if not return_id:
+        raise HTTPException(status_code=400, detail="Credit note has no originating return; cannot push to Zoho.")
+
+    return_doc = await db.customer_returns.find_one(
+        {"id": return_id, "tenant_id": tenant_id},
+        {"_id": 0},
+    )
+    if not return_doc:
+        raise HTTPException(status_code=404, detail="Originating return not found")
+
+    account = await db.accounts.find_one(
+        {"$or": [
+            {"id": return_doc.get("account_id")},
+            {"account_id": return_doc.get("account_id")},
+        ], "tenant_id": tenant_id},
+        {"_id": 0},
+    )
+    if not account:
+        raise HTTPException(status_code=400, detail="Customer account not found for this return")
+
+    try:
+        from services.zoho_service import (
+            create_credit_note_for_return,
+            is_zoho_configured,
+            AccountNotLinkedToZohoError,
+        )
+        if not is_zoho_configured():
+            raise HTTPException(status_code=400, detail="Zoho Books integration is not configured.")
+
+        try:
+            mapping = await create_credit_note_for_return(
+                tenant_id=tenant_id,
+                return_doc=return_doc,
+                account=account,
+            )
+        except AccountNotLinkedToZohoError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Mirror Zoho ids onto the local credit_note doc (and the return doc is
+        # already stamped by create_credit_note_for_return).
+        await db.credit_notes.update_one(
+            {"id": credit_note_id, "tenant_id": tenant_id},
+            {"$set": {
+                "zoho_creditnote_id": mapping.get("zoho_creditnote_id"),
+                "zoho_creditnote_number": mapping.get("zoho_creditnote_number"),
+                "zoho_creditnote_url": mapping.get("zoho_creditnote_url"),
+                "zoho_synced_at": mapping.get("synced_at"),
+            }},
+        )
+
+        return {
+            "ok": True,
+            "already_synced": False,
+            "zoho_creditnote_id": mapping.get("zoho_creditnote_id"),
+            "zoho_creditnote_number": mapping.get("zoho_creditnote_number"),
+            "zoho_creditnote_url": mapping.get("zoho_creditnote_url"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"retry_zoho_push: failed to push CN {credit_note_id} to Zoho: {e}")
+        raise HTTPException(status_code=502, detail=f"Zoho push failed: {e}")
+
+
 @router.get("/{distributor_id}/credit-notes")
 async def list_credit_notes(
     distributor_id: str,
