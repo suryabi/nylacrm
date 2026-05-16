@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, TrendingDown, Minus, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -235,6 +235,9 @@ export default function AccountDetail() {
     sku_prices_correct: false,
     delivery_contact_updated: false,
   });
+  // Who bills this customer: 'company' (Nyla bills → register in Zoho)
+  // or 'distributor' (third-party distributor bills → skip Zoho).
+  const [billedBy, setBilledBy] = useState('company');
   // Live activation-status from backend (auto-validated against data)
   const [activationStatus, setActivationStatus] = useState({
     gst_updated: false,
@@ -1041,10 +1044,10 @@ ${googleMapsLink}`;
     try {
       const { data } = await axios.post(
         `${API_URL}/accounts/${id}/activate`,
-        activationChecks,
+        { ...activationChecks, billed_by: billedBy },
         { withCredentials: true }
       );
-      toast.success(data.message || 'Account activated and synced to Zoho Books.');
+      toast.success(data.message || 'Account activated.');
       setActivateDialogOpen(false);
       fetchAccount();
     } catch (err) {
@@ -1205,6 +1208,15 @@ ${googleMapsLink}`;
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     Active
                   </span>
+                  {account.billed_by === 'distributor' ? (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 ring-1 ring-inset ring-amber-200">
+                      Billed by Distributor
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-violet-700 ring-1 ring-inset ring-violet-200">
+                      Billed by Company
+                    </span>
+                  )}
                   {account.zoho_contact_id && (
                     <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
                       Zoho Synced
@@ -1215,7 +1227,13 @@ ${googleMapsLink}`;
                   Account active{account.activated_by_name ? ` — activated by ${account.activated_by_name}` : ''}
                 </p>
                 <p className="text-sm text-slate-600 leading-snug">
-                  {account.activated_at ? `On ${format(new Date(account.activated_at), 'dd MMM yyyy, hh:mm a')}` : 'Synced to Zoho Books'}
+                  {account.activated_at ? `On ${format(new Date(account.activated_at), 'dd MMM yyyy, hh:mm a')}` : ''}
+                  {account.billed_by === 'distributor' && (
+                    <>
+                      <span className="mx-1.5 text-slate-300">•</span>
+                      <span className="text-amber-700">No Zoho registration (third-party distributor handles billing).</span>
+                    </>
+                  )}
                   {account.zoho_contact_id && (
                     <>
                       <span className="mx-1.5 text-slate-300">•</span>
@@ -1237,16 +1255,18 @@ ${googleMapsLink}`;
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-slate-300 text-slate-800 hover:bg-slate-50 hover:border-slate-400 h-9 px-4 font-medium whitespace-nowrap"
-              onClick={handleOpenActivateDialog}
-              data-testid="resync-account-btn"
-            >
-              <Zap className="h-4 w-4 mr-2 text-emerald-600" />
-              Re-sync to Zoho
-            </Button>
+            {account.billed_by !== 'distributor' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-300 text-slate-800 hover:bg-slate-50 hover:border-slate-400 h-9 px-4 font-medium whitespace-nowrap"
+                onClick={handleOpenActivateDialog}
+                data-testid="resync-account-btn"
+              >
+                <Zap className="h-4 w-4 mr-2 text-emerald-600" />
+                Re-sync to Zoho
+              </Button>
+            )}
           </div>
         </div>
       ) : (
@@ -2855,15 +2875,88 @@ ${googleMapsLink}`;
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Zap className="h-5 w-5 text-violet-600" />
-              Activate Account & Sync to Zoho
+              Activate Account
             </DialogTitle>
             <DialogDescription>
-              Confirm the onboarding checklist below. Once all items are verified, this
-              account will be synced to Zoho Books as a customer. Invoices generated
-              from factory-warehouse stock-outs will reference the agreed SKU prices
-              set on this account.
+              Confirm the onboarding checklist and choose how this customer will be billed.
+              Activation finalises onboarding so deliveries, returns and credit notes can be
+              recorded against this account.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Billed-by selector */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2.5" data-testid="activation-billed-by-section">
+            <div className="flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-slate-700" />
+              <span className="text-sm font-semibold text-slate-900">Who bills this customer?</span>
+            </div>
+
+            <label
+              className={`flex items-start gap-3 rounded-md border px-3 py-2.5 cursor-pointer transition-colors ${
+                billedBy === 'company'
+                  ? 'border-violet-300 bg-violet-50 ring-1 ring-violet-300'
+                  : 'border-slate-200 bg-white hover:bg-slate-50'
+              }`}
+              data-testid="activation-billed-by-company"
+            >
+              <input
+                type="radio"
+                name="billed_by"
+                value="company"
+                checked={billedBy === 'company'}
+                onChange={() => setBilledBy('company')}
+                className="mt-1 accent-violet-600"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-slate-900">Billed by the company</span>
+                  <Badge variant="outline" className="text-[10px] bg-violet-100 text-violet-800 border-violet-300">
+                    Zoho sync ON
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  We invoice the customer directly. A Zoho Books contact will be created and all deliveries,
+                  credit notes and refunds will be synced to Zoho automatically.
+                </p>
+              </div>
+            </label>
+
+            <label
+              className={`flex items-start gap-3 rounded-md border px-3 py-2.5 cursor-pointer transition-colors ${
+                billedBy === 'distributor'
+                  ? 'border-amber-300 bg-amber-50 ring-1 ring-amber-300'
+                  : 'border-slate-200 bg-white hover:bg-slate-50'
+              }`}
+              data-testid="activation-billed-by-distributor"
+            >
+              <input
+                type="radio"
+                name="billed_by"
+                value="distributor"
+                checked={billedBy === 'distributor'}
+                onChange={() => setBilledBy('distributor')}
+                className="mt-1 accent-amber-600"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-slate-900">Billed by a third-party distributor</span>
+                  <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                    Zoho sync OFF
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  The distributor handles invoicing on their own books. We will not register this customer
+                  in Zoho. Local CRM records (deliveries, returns) remain unaffected.
+                </p>
+              </div>
+            </label>
+
+            {billedBy === 'distributor' && (
+              <p className="text-[11px] text-amber-800 bg-amber-100 border border-amber-200 rounded-md px-2.5 py-1.5">
+                Please confirm with your manager before choosing this option. It cannot be reversed without re-activation.
+              </p>
+            )}
+          </div>
 
           <div className="space-y-3 py-2">
             {[
@@ -2930,13 +3023,17 @@ ${googleMapsLink}`;
             <Button
               onClick={handleActivateAccount}
               disabled={!allChecksDone || activating}
-              className="bg-violet-600 hover:bg-violet-700 text-white"
+              className={billedBy === 'distributor'
+                ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                : 'bg-violet-600 hover:bg-violet-700 text-white'}
               data-testid="activation-confirm-btn"
             >
               {activating ? (
                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Activating…</>
+              ) : billedBy === 'distributor' ? (
+                <><Zap className="h-4 w-4 mr-2" /> Activate (no Zoho)</>
               ) : (
-                <><Zap className="h-4 w-4 mr-2" /> Activate & Sync</>
+                <><Zap className="h-4 w-4 mr-2" /> Activate & Sync to Zoho</>
               )}
             </Button>
           </DialogFooter>

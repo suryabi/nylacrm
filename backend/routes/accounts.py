@@ -883,6 +883,12 @@ class ActivationChecklist(BaseModel):
     sku_prices_correct: bool
     delivery_contact_updated: bool
     logo_uploaded: bool = False  # optional — kept for backward compatibility, no longer required
+    # Who bills this customer:
+    #   "company"     → Nyla bills the customer directly → create a Zoho Books contact
+    #   "distributor" → A third-party distributor bills them → DO NOT register in Zoho
+    # Default 'company' to preserve legacy behaviour for any caller that
+    # doesn't send the field.
+    billed_by: str = Field('company', pattern='^(company|distributor)$')
 
 
 async def _is_user_in_management_chain(tdb, user_id: str, target_user_id: str, max_depth: int = 8) -> bool:
@@ -993,67 +999,77 @@ async def activate_account(
     # ── Validate every SKU has a Zoho item mapping ──
     # We accept either an explicit `sku_id` reference on the pricing row or a
     # name match against master_skus → then look up zoho_sku_mappings.
-    sku_id_set: set = set()
-    name_to_id: dict = {}
-    async for ms in tdb.master_skus.find({}, {'_id': 0, 'id': 1, 'sku_name': 1, 'sku': 1, 'name': 1}):
-        sid = ms.get('id')
-        if sid:
-            for k in ('sku_name', 'sku', 'name'):
-                v = ms.get(k)
-                if v:
-                    name_to_id[str(v).strip().lower()] = sid
+    # Skip this validation entirely when the customer is billed by a third-party
+    # distributor — those accounts never touch Zoho.
+    billed_by_pre = (checklist.billed_by or 'company').lower()
+    if billed_by_pre == 'company':
+        sku_id_set: set = set()
+        name_to_id: dict = {}
+        async for ms in tdb.master_skus.find({}, {'_id': 0, 'id': 1, 'sku_name': 1, 'sku': 1, 'name': 1}):
+            sid = ms.get('id')
+            if sid:
+                for k in ('sku_name', 'sku', 'name'):
+                    v = ms.get(k)
+                    if v:
+                        name_to_id[str(v).strip().lower()] = sid
 
-    for p in sku_pricing:
-        sid = p.get('sku_id')
-        if not sid:
-            name = (p.get('sku') or p.get('sku_name') or '').strip().lower()
-            sid = name_to_id.get(name)
-        if sid:
-            sku_id_set.add(sid)
+        for p in sku_pricing:
+            sid = p.get('sku_id')
+            if not sid:
+                name = (p.get('sku') or p.get('sku_name') or '').strip().lower()
+                sid = name_to_id.get(name)
+            if sid:
+                sku_id_set.add(sid)
 
-    unmapped: list = []
-    for p in sku_pricing:
-        sid = p.get('sku_id')
-        name = p.get('sku') or p.get('sku_name') or ''
-        if not sid:
-            sid = name_to_id.get(name.strip().lower())
-        if not sid:
-            unmapped.append(name)
-            continue
-        mapping = await tdb.zoho_sku_mappings.find_one(
-            {'our_sku_id': sid}, {'_id': 0, 'zoho_item_id': 1}
-        )
-        if not mapping or not mapping.get('zoho_item_id'):
-            unmapped.append(name)
-    if unmapped:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "The following SKUs are not mapped to Zoho items: "
-                + ", ".join(sorted(set(unmapped)))
-                + ". Go to Settings → Integrations → Zoho Books → SKU Mapping first."
-            ),
-        )
+        unmapped: list = []
+        for p in sku_pricing:
+            sid = p.get('sku_id')
+            name = p.get('sku') or p.get('sku_name') or ''
+            if not sid:
+                sid = name_to_id.get(name.strip().lower())
+            if not sid:
+                unmapped.append(name)
+                continue
+            mapping = await tdb.zoho_sku_mappings.find_one(
+                {'our_sku_id': sid}, {'_id': 0, 'zoho_item_id': 1}
+            )
+            if not mapping or not mapping.get('zoho_item_id'):
+                unmapped.append(name)
+        if unmapped:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "The following SKUs are not mapped to Zoho items: "
+                    + ", ".join(sorted(set(unmapped)))
+                    + ". Go to Settings → Integrations → Zoho Books → SKU Mapping first."
+                ),
+            )
 
-    # ── Sync to Zoho (upsert contact) ──
+    # ── Sync to Zoho only when the customer is billed by the company ──
+    # If the customer is billed by a third-party distributor, we deliberately
+    # SKIP Zoho contact creation — downstream invoice / credit-note pushes
+    # already respect `account.zoho_contact_id` being absent.
     from services import zoho_service as zoho
     tenant_id = get_current_tenant_id()
-    if not zoho.is_zoho_configured():
-        raise HTTPException(
-            status_code=400,
-            detail='Zoho Books integration is not configured. Ask an admin to set ZOHO_CLIENT_ID/SECRET.'
-        )
-    creds = await zoho.get_credentials(tenant_id)
-    if not creds:
-        raise HTTPException(
-            status_code=400,
-            detail='Zoho Books is not connected for this tenant. Go to Settings → Integrations → Zoho Books and click Connect.'
-        )
+    zoho_contact_id = None
+    billed_by = (checklist.billed_by or 'company').lower()
 
-    try:
-        zoho_contact_id = await zoho.upsert_contact(tenant_id, account)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f'Failed to sync customer to Zoho Books: {e}')
+    if billed_by == 'company':
+        if not zoho.is_zoho_configured():
+            raise HTTPException(
+                status_code=400,
+                detail='Zoho Books integration is not configured. Ask an admin to set ZOHO_CLIENT_ID/SECRET.'
+            )
+        creds = await zoho.get_credentials(tenant_id)
+        if not creds:
+            raise HTTPException(
+                status_code=400,
+                detail='Zoho Books is not connected for this tenant. Go to Settings → Integrations → Zoho Books and click Connect.'
+            )
+        try:
+            zoho_contact_id = await zoho.upsert_contact(tenant_id, account)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f'Failed to sync customer to Zoho Books: {e}')
 
     now = datetime.now(timezone.utc).isoformat()
     update_doc = {
@@ -1061,15 +1077,28 @@ async def activate_account(
         'activated_at': now,
         'activated_by': user_id,
         'activated_by_name': (current_user or {}).get('name'),
-        'zoho_contact_id': zoho_contact_id,
         'updated_at': now,
         'activation_checklist': checklist.model_dump(),
+        'billed_by': billed_by,
     }
+    if zoho_contact_id:
+        update_doc['zoho_contact_id'] = zoho_contact_id
     await tdb.accounts.update_one(_account_match(account_id), {'$set': update_doc})
+
+    if billed_by == 'distributor':
+        return {
+            'message': 'Account activated. Billed by third-party distributor — Zoho registration was skipped.',
+            'account_id': account_id,
+            'billed_by': 'distributor',
+            'zoho_contact_id': None,
+            'activated_at': now,
+            'activated_by_name': (current_user or {}).get('name'),
+        }
 
     return {
         'message': 'Account activated and synced to Zoho Books.',
         'account_id': account_id,
+        'billed_by': 'company',
         'zoho_contact_id': zoho_contact_id,
         'activated_at': now,
         'activated_by_name': (current_user or {}).get('name'),
