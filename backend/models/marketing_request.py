@@ -198,7 +198,7 @@ class MarketingRequest(BaseModel):
 # DTO models for create / status-change / production-submit
 # ──────────────────────────────────────────────────────────────
 class MarketingRequestCreate(BaseModel):
-    title: str
+    title: Optional[str] = None  # auto-defaults to the request type's name on the server
     request_type_id: str
     assigned_department_id: str
     requested_due_date: str

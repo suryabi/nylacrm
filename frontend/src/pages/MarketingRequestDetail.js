@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { format } from 'date-fns';
+import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
 import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
@@ -17,6 +17,7 @@ import {
 import {
   ArrowLeft, Sparkles, Send, MessageSquare, Plus, Upload, FileText, X,
   Loader2, ExternalLink, ChevronRight, Truck, AlertTriangle, Clock,
+  Tag, Calendar, Building2, User, Image as ImageIcon, Link as LinkIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -27,15 +28,16 @@ const HEAD = () => {
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
 
-const STATUS_COLORS = {
-  submitted: 'bg-slate-100 text-slate-700 border-slate-300',
-  inputs_needed: 'bg-amber-100 text-amber-800 border-amber-300',
-  in_progress: 'bg-blue-100 text-blue-800 border-blue-300',
-  in_review: 'bg-violet-100 text-violet-800 border-violet-300',
-  approved_internal: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-  final_approved: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-  production_in_progress: 'bg-orange-100 text-orange-800 border-orange-300',
-  production_completed: 'bg-green-100 text-green-800 border-green-300',
+// Mirrors the styles in MarketingRequests.js list view
+const STATUS_STYLES = {
+  submitted:               { label: 'Submitted',           color: 'text-slate-700',   bg: 'bg-slate-100',   ring: 'border-slate-300' },
+  inputs_needed:           { label: 'Inputs Needed',       color: 'text-amber-700',   bg: 'bg-amber-100',   ring: 'border-amber-300' },
+  in_progress:             { label: 'In Progress',         color: 'text-blue-700',    bg: 'bg-blue-100',    ring: 'border-blue-300' },
+  in_review:               { label: 'In Review',           color: 'text-violet-700',  bg: 'bg-violet-100',  ring: 'border-violet-300' },
+  approved_internal:       { label: 'Approved (Internal)', color: 'text-indigo-700',  bg: 'bg-indigo-100',  ring: 'border-indigo-300' },
+  final_approved:          { label: 'Final Approved',      color: 'text-emerald-700', bg: 'bg-emerald-100', ring: 'border-emerald-300' },
+  production_in_progress:  { label: 'Production',          color: 'text-orange-700',  bg: 'bg-orange-100',  ring: 'border-orange-300' },
+  production_completed:    { label: 'Completed',           color: 'text-green-700',   bg: 'bg-green-100',   ring: 'border-green-300' },
 };
 
 const NEXT_TRANSITIONS = {
@@ -48,20 +50,24 @@ const NEXT_TRANSITIONS = {
   production_in_progress: ['production_completed'],
   production_completed: [],
 };
-const STATUS_LABEL = {
-  submitted: 'Submitted', inputs_needed: 'Inputs Needed', in_progress: 'In Progress',
-  in_review: 'In Review', approved_internal: 'Approved - Internal', final_approved: 'Final Approved',
-  production_in_progress: 'Production In Progress', production_completed: 'Production Completed',
+
+const isOverdueDate = (s) => { if (!s) return false; try { const d = parseISO(s); return isValid(d) && isPast(d) && !isToday(d); } catch { return false; } };
+const fmtDate = (s, f = 'dd MMM yyyy') => { try { return format(parseISO(s), f); } catch { return s || '—'; } };
+const getInitials = (name) => {
+  if (!name) return 'NA';
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
 };
 
 const FileChip = ({ f }) => (
   <a
     href={`${API}/marketing-requests/files/${f.id}`}
     target="_blank" rel="noopener noreferrer"
-    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs"
+    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-emerald-100 bg-white text-slate-700 hover:bg-emerald-50/60 text-xs transition-colors"
     data-testid={`file-chip-${f.id}`}
   >
-    <FileText className="h-3.5 w-3.5" /> {f.filename}
+    <FileText className="h-3.5 w-3.5 text-emerald-600" /> {f.filename}
   </a>
 );
 
@@ -73,7 +79,7 @@ export default function MarketingRequestDetail() {
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
 
-  // Version dialog
+  // Version dialog state
   const [showVersion, setShowVersion] = useState(false);
   const [versionName, setVersionName] = useState('');
   const [versionFiles, setVersionFiles] = useState([]);
@@ -83,7 +89,7 @@ export default function MarketingRequestDetail() {
   const [savingVersion, setSavingVersion] = useState(false);
   const versionFileInput = useRef(null);
 
-  // Production submit dialog
+  // Production submit dialog state
   const [showProd, setShowProd] = useState(false);
   const [departments, setDepartments] = useState([]);
   const [prodForm, setProdForm] = useState({
@@ -92,17 +98,17 @@ export default function MarketingRequestDetail() {
   });
   const [savingProd, setSavingProd] = useState(false);
 
-  const fetchReq = async () => {
+  const fetchReq = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await axios.get(`${API}/marketing-requests/${id}`, { headers: HEAD() });
       setReq(data);
-    } catch (e) {
+    } catch {
       toast.error('Failed to load request');
       navigate('/marketing-requests');
     } finally { setLoading(false); }
-  };
-  useEffect(() => { fetchReq(); }, [id]); // eslint-disable-line
+  }, [id, navigate]);
+  useEffect(() => { fetchReq(); }, [fetchReq]);
 
   const userDepts = (() => {
     const d = user?.department;
@@ -116,7 +122,7 @@ export default function MarketingRequestDetail() {
   const changeStatus = async (status_key, commentText) => {
     try {
       await axios.post(`${API}/marketing-requests/${id}/status`, { status_key, comment: commentText || null }, { headers: HEAD() });
-      toast.success(`Status → ${STATUS_LABEL[status_key]}`);
+      toast.success(`Status → ${STATUS_STYLES[status_key]?.label || status_key}`);
       fetchReq();
     } catch (e) { toast.error(e.response?.data?.detail || 'Status change failed'); }
   };
@@ -130,7 +136,6 @@ export default function MarketingRequestDetail() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to add comment'); }
   };
 
-  // Version upload helpers
   const uploadFile = async (file) => {
     const fd = new FormData();
     fd.append('file', file);
@@ -165,16 +170,15 @@ export default function MarketingRequestDetail() {
     finally { setSavingVersion(false); }
   };
 
-  // Production submit
   const openProdDialog = async () => {
     try {
       const { data } = await axios.get(`${API}/master-departments?kind=delivery`, { headers: HEAD() });
-      setDepartments(data?.departments || []);
-      // include all if delivery list empty
-      if (!data?.departments?.length) {
+      let depts = data?.departments || [];
+      if (!depts.length) {
         const all = await axios.get(`${API}/master-departments`, { headers: HEAD() });
-        setDepartments(all.data?.departments || []);
+        depts = all.data?.departments || [];
       }
+      setDepartments(depts);
       setShowProd(true);
     } catch { toast.error('Failed to load delivery departments'); }
   };
@@ -199,210 +203,261 @@ export default function MarketingRequestDetail() {
     finally { setSavingProd(false); }
   };
 
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading…</div>;
+  if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>;
   if (!req) return null;
 
+  const st = STATUS_STYLES[req.status_key] || STATUS_STYLES.submitted;
   const allowedNext = NEXT_TRANSITIONS[req.status_key] || [];
-  const isOverdue = req.requested_due_date && req.status_key !== 'production_completed' &&
-    new Date(req.requested_due_date) < new Date(new Date().toDateString());
+  const overdue = req.requested_due_date && req.status_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
 
   return (
-    <div className="space-y-4 p-4 sm:p-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/marketing-requests')}>
-          <ArrowLeft className="h-4 w-4 mr-2" /> Back
+    <div className="p-6 max-w-6xl mx-auto space-y-6" data-testid="mr-detail-page">
+      {/* Back link */}
+      <div>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/marketing-requests')} data-testid="mr-back-btn">
+          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Marketing Requests
         </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs text-slate-500">{req.request_number}</span>
-            <Badge variant="outline" className={`text-xs ${STATUS_COLORS[req.status_key] || ''}`}>
-              {req.status_name || req.status_key}
-            </Badge>
-            {isOverdue && (
+      </div>
+
+      {/* Hero header — Request Type is the prominent element */}
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] overflow-hidden">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded font-mono">
+              <Tag className="h-3 w-3" /> {req.request_number}
+            </span>
+            <Badge variant="outline" className={`${st.bg} ${st.color} border ${st.ring}`}>{st.label}</Badge>
+            {overdue && (
               <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
                 <AlertTriangle className="h-3 w-3 mr-1" /> Overdue
               </Badge>
             )}
+            {req.short_timeline_reason && (
+              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                <Clock className="h-3 w-3 mr-1" /> Tight Timeline
+              </Badge>
+            )}
           </div>
-          <h1 className="text-xl font-semibold text-slate-900 flex items-center gap-2 mt-0.5">
-            <Sparkles className="h-5 w-5 text-violet-600" /> {req.title}
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+            <Sparkles className="h-7 w-7 text-emerald-600 shrink-0" />
+            {req.request_type_name || 'Untyped Request'}
           </h1>
-        </div>
-      </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-4 text-sm text-slate-600">
+            <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-slate-400" /> {req.assigned_department_name}</span>
+            <span className="flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-slate-400" /> Due {fmtDate(req.requested_due_date)}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-slate-400" /> Lead Design {req.design_lead_time_days}d &middot; Production {req.production_lead_time_days}d
+            </span>
+            <span className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-full bg-emerald-100 border border-white flex items-center justify-center text-[10px] font-medium text-emerald-700">{getInitials(req.created_by_name)}</div>
+              Raised by <span className="text-slate-800 font-medium">{req.created_by_name}</span>
+            </span>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Status actions */}
-      <Card className="p-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-muted-foreground">Move to:</span>
-          {allowedNext.length === 0 && <span className="text-xs text-muted-foreground italic">(no further status transitions)</span>}
+      {/* Status action bar */}
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+        <CardContent className="p-4 flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-slate-500 mr-1">Move to:</span>
+          {allowedNext.length === 0 && <span className="text-xs text-slate-500 italic">(terminal state)</span>}
           {allowedNext.map(s => {
             const disabled =
               (s === 'final_approved' && !isRequestor) ||
-              (['inputs_needed','in_progress','in_review','approved_internal'].includes(s) && !isInAssignedDept);
+              (['inputs_needed', 'in_progress', 'in_review', 'approved_internal'].includes(s) && !isInAssignedDept);
             return (
               <Button
                 key={s}
                 variant="outline"
                 size="sm"
                 disabled={disabled}
-                title={disabled ? (s === 'final_approved' ? 'Only the requestor can mark Final Approved' : 'Only the assigned department can change this status') : ''}
+                title={disabled ? (s === 'final_approved' ? 'Only the requestor can mark Final Approved' : 'Only members of the assigned department can change this status') : ''}
                 onClick={() => changeStatus(s)}
                 data-testid={`status-${s}-btn`}
               >
-                <ChevronRight className="h-3.5 w-3.5 mr-1" /> {STATUS_LABEL[s]}
+                <ChevronRight className="h-3.5 w-3.5 mr-1" /> {STATUS_STYLES[s]?.label || s}
               </Button>
             );
           })}
           {req.status_key === 'final_approved' && (isRequestor || isInAssignedDept) && (
-            <Button size="sm" onClick={openProdDialog} data-testid="submit-production-btn" className="ml-auto">
+            <Button size="sm" onClick={openProdDialog} className="ml-auto bg-emerald-600 hover:bg-emerald-700" data-testid="submit-production-btn">
               <Truck className="h-4 w-4 mr-2" /> Submit for Production
             </Button>
           )}
           {req.status_key === 'production_in_progress' && isInDeliveryDept && (
-            <Button size="sm" onClick={() => changeStatus('production_completed')} className="ml-auto bg-green-600 hover:bg-green-700">
+            <Button size="sm" onClick={() => changeStatus('production_completed')} className="ml-auto bg-green-600 hover:bg-green-700" data-testid="mark-prod-complete-btn">
               <Truck className="h-4 w-4 mr-2" /> Mark Production Completed
             </Button>
           )}
-        </div>
+        </CardContent>
       </Card>
 
-      {/* Core info */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4 space-y-2.5 md:col-span-2">
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Requirement</span>
-            <p className="text-sm whitespace-pre-wrap text-slate-800 mt-0.5">{req.requirement_details}</p>
-          </div>
-          {req.additional_comments && (
+      {/* Body: Requirement + Inputs (col span 2)  ·  Side panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card className="lg:col-span-2 border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+          <CardContent className="p-5 space-y-4">
             <div>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Additional Comments</span>
-              <p className="text-sm whitespace-pre-wrap text-slate-700">{req.additional_comments}</p>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Requirement</span>
+              <p className="text-sm whitespace-pre-wrap text-slate-800 mt-1.5 leading-relaxed">{req.requirement_details}</p>
             </div>
-          )}
-          {(req.logo || req.references?.length > 0) && (
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Inputs</span>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {req.logo && <FileChip f={req.logo} />}
-                {(req.references || []).map(f => <FileChip key={f.id} f={f} />)}
+            {req.additional_comments && (
+              <div>
+                <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Additional Comments</span>
+                <p className="text-sm whitespace-pre-wrap text-slate-700 mt-1.5">{req.additional_comments}</p>
               </div>
-            </div>
-          )}
-          {(req.social_media_links?.length > 0 || req.file_links?.length > 0) && (
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Links</span>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {[...(req.social_media_links || []), ...(req.file_links || [])].map((l, i) => (
-                  <a key={i} href={l} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md border bg-slate-50 hover:bg-slate-100 text-xs text-slate-700">
-                    <ExternalLink className="h-3 w-3" /> {l.length > 40 ? l.slice(0, 40) + '…' : l}
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-4 space-y-2 text-sm">
-          <div><span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Type</span><p>{req.request_type_name}</p></div>
-          <div><span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Assigned Department</span><p>{req.assigned_department_name}</p></div>
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Due Date</span>
-            <p>{req.requested_due_date && format(new Date(req.requested_due_date), 'dd MMM yyyy')}</p>
-          </div>
-          <div>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Lead Time</span>
-            <p className="text-xs text-slate-600">Design: {req.design_lead_time_days}d &middot; Production: {req.production_lead_time_days}d</p>
-          </div>
-          {req.short_timeline_reason && (
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold flex items-center gap-1"><Clock className="h-3 w-3" /> Short Timeline Reason</span>
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mt-0.5">{req.short_timeline_reason}</p>
-            </div>
-          )}
-          <div><span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Raised by</span><p>{req.created_by_name}</p></div>
-          <div><span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Created</span><p className="text-xs">{format(new Date(req.created_at), 'dd MMM yyyy, hh:mm a')}</p></div>
-        </Card>
-      </div>
-
-      {/* Production */}
-      {req.production && (
-        <Card className="p-4 bg-orange-50/40 border-orange-200">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-orange-700" />
-              <span className="font-semibold text-slate-900">Production Submission</span>
-              <Badge variant="outline" className="text-[10px] bg-white">{req.production.production_status}</Badge>
-            </div>
-            <span className="text-xs text-muted-foreground">Submitted by {req.production.submitted_by_name} on {format(new Date(req.production.submitted_at), 'dd MMM yyyy')}</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-sm">
-            <div><span className="text-[10px] uppercase text-muted-foreground">Quantity</span><p>{req.production.quantity_required}</p></div>
-            <div><span className="text-[10px] uppercase text-muted-foreground">Production Date</span><p>{req.production.requested_production_date && format(new Date(req.production.requested_production_date), 'dd MMM yyyy')}</p></div>
-            <div className="col-span-2"><span className="text-[10px] uppercase text-muted-foreground">Delivery Team</span><p>{req.production.assigned_delivery_department_name}</p></div>
-            {req.production.production_notes && (
-              <div className="col-span-2 sm:col-span-4"><span className="text-[10px] uppercase text-muted-foreground">Notes</span><p className="whitespace-pre-wrap text-slate-700">{req.production.production_notes}</p></div>
             )}
-          </div>
-        </Card>
-      )}
-
-      {/* Work versions */}
-      <Card className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-900">Work Versions ({req.versions?.length || 0})</h3>
-          {isInAssignedDept && (
-            <Button size="sm" variant="outline" onClick={() => setShowVersion(true)} data-testid="add-version-btn">
-              <Plus className="h-4 w-4 mr-1" /> Add Version
-            </Button>
-          )}
-        </div>
-        {(req.versions || []).length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No work versions uploaded yet.</p>
-        ) : (
-          <div className="space-y-3">
-            {req.versions.map((v) => (
-              <div key={v.id} className="border rounded-lg p-3 bg-slate-50/40">
-                <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                  <span className="font-medium text-slate-900">{v.version_name}</span>
-                  <span className="text-xs text-muted-foreground">{v.uploaded_by_name} · {format(new Date(v.uploaded_at), 'dd MMM yyyy, hh:mm a')}</span>
+            {(req.logo || req.references?.length > 0) && (
+              <div>
+                <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold flex items-center gap-1.5">
+                  <ImageIcon className="h-3 w-3" /> Brand Assets & References
+                </span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {req.logo && <FileChip f={req.logo} />}
+                  {(req.references || []).map(f => <FileChip key={f.id} f={f} />)}
                 </div>
-                {v.comments && <p className="text-xs text-slate-700 italic mb-2">{v.comments}</p>}
-                <div className="flex flex-wrap gap-1.5">
-                  {(v.files || []).map(f => <FileChip key={f.id} f={f} />)}
-                  {(v.links || []).map((l, i) => (
-                    <a key={i} href={l} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2 py-1 rounded-md border bg-white text-xs hover:bg-slate-50">
-                      <ExternalLink className="h-3 w-3" /> {l.length > 40 ? l.slice(0, 40) + '…' : l}
+              </div>
+            )}
+            {(req.social_media_links?.length > 0 || req.file_links?.length > 0) && (
+              <div>
+                <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold flex items-center gap-1.5">
+                  <LinkIcon className="h-3 w-3" /> Links
+                </span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {[...(req.social_media_links || []), ...(req.file_links || [])].map((l, i) => (
+                    <a key={i} href={l} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-emerald-100 bg-white hover:bg-emerald-50/60 text-xs text-slate-700 transition-colors">
+                      <ExternalLink className="h-3 w-3 text-emerald-600" /> {l.length > 46 ? l.slice(0, 46) + '…' : l}
                     </a>
                   ))}
                 </div>
               </div>
-            ))}
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+          <CardContent className="p-5 space-y-3 text-sm">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Created</span>
+              <p className="text-xs text-slate-700 mt-0.5">{fmtDate(req.created_at, 'dd MMM yyyy, hh:mm a')}</p>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Last Updated</span>
+              <p className="text-xs text-slate-700 mt-0.5">{fmtDate(req.updated_at, 'dd MMM yyyy, hh:mm a')}</p>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Versions</span>
+              <p className="text-xs text-slate-700 mt-0.5">{req.versions?.length || 0} uploaded</p>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Comments</span>
+              <p className="text-xs text-slate-700 mt-0.5">{(req.comments || []).filter(c => c.kind === 'comment').length} added</p>
+            </div>
+            {req.short_timeline_reason && (
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold flex items-center gap-1"><Clock className="h-3 w-3" /> Short Timeline</span>
+                <p className="text-xs text-amber-800 mt-0.5">{req.short_timeline_reason}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Production submission */}
+      {req.production && (
+        <Card className="border border-orange-200 bg-orange-50/40 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 text-orange-700" />
+                <span className="font-semibold text-slate-900">Production Submission</span>
+                <Badge variant="outline" className="text-[10px] bg-white">{req.production.production_status}</Badge>
+              </div>
+              <span className="text-xs text-slate-500">Submitted by {req.production.submitted_by_name} on {fmtDate(req.production.submitted_at)}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-sm">
+              <div><span className="text-[10px] uppercase text-slate-500">Quantity</span><p className="text-slate-900">{req.production.quantity_required}</p></div>
+              <div><span className="text-[10px] uppercase text-slate-500">Production Date</span><p className="text-slate-900">{fmtDate(req.production.requested_production_date)}</p></div>
+              <div className="col-span-2"><span className="text-[10px] uppercase text-slate-500">Delivery Team</span><p className="text-slate-900">{req.production.assigned_delivery_department_name}</p></div>
+              {req.production.production_notes && (
+                <div className="col-span-2 sm:col-span-4"><span className="text-[10px] uppercase text-slate-500">Notes</span><p className="whitespace-pre-wrap text-slate-700">{req.production.production_notes}</p></div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Work versions */}
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+              <Upload className="h-4 w-4 text-emerald-600" /> Work Versions ({req.versions?.length || 0})
+            </h3>
+            {isInAssignedDept && (
+              <Button size="sm" variant="outline" onClick={() => setShowVersion(true)} data-testid="add-version-btn">
+                <Plus className="h-4 w-4 mr-1" /> Add Version
+              </Button>
+            )}
           </div>
-        )}
+          {(req.versions || []).length === 0 ? (
+            <p className="text-xs text-slate-500 italic">No work versions uploaded yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {req.versions.map((v) => (
+                <div key={v.id} className="border border-emerald-100 rounded-lg p-3 bg-emerald-50/30">
+                  <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                    <span className="font-semibold text-slate-900">{v.version_name}</span>
+                    <span className="text-xs text-slate-500">
+                      <span className="font-medium text-slate-700">{v.uploaded_by_name}</span> &middot; {fmtDate(v.uploaded_at, 'dd MMM yyyy, hh:mm a')}
+                    </span>
+                  </div>
+                  {v.comments && <p className="text-xs text-slate-700 italic mb-2">{v.comments}</p>}
+                  <div className="flex flex-wrap gap-1.5">
+                    {(v.files || []).map(f => <FileChip key={f.id} f={f} />)}
+                    {(v.links || []).map((l, i) => (
+                      <a key={i} href={l} target="_blank" rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-emerald-100 bg-white text-xs hover:bg-emerald-50/60">
+                        <ExternalLink className="h-3 w-3 text-emerald-600" /> {l.length > 40 ? l.slice(0, 40) + '…' : l}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       {/* Comments timeline */}
-      <Card className="p-4 space-y-3">
-        <h3 className="text-sm font-semibold flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Comments & Activity</h3>
-        <div className="space-y-2">
-          {(req.comments || []).slice().reverse().map((c) => (
-            <div key={c.id} className={`text-xs p-2 rounded-md border ${c.kind === 'comment' ? 'bg-white' : 'bg-slate-50 border-slate-200 italic text-slate-700'}`}>
-              <div className="flex items-center justify-between gap-2 mb-0.5">
-                <span className="font-medium text-slate-800">{c.user_name}</span>
-                <span className="text-[10px] text-muted-foreground">{format(new Date(c.created_at), 'dd MMM, hh:mm a')}</span>
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+        <CardContent className="p-5 space-y-3">
+          <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-emerald-600" /> Comments & Activity
+          </h3>
+          <div className="space-y-2">
+            {(req.comments || []).slice().reverse().map((c) => (
+              <div key={c.id} className={`text-xs p-2.5 rounded-md border ${c.kind === 'comment' ? 'bg-white border-slate-200' : 'bg-emerald-50/40 border-emerald-100 italic text-slate-700'}`}>
+                <div className="flex items-center justify-between gap-2 mb-0.5">
+                  <span className="font-medium text-slate-800 flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-medium text-emerald-700">{getInitials(c.user_name)}</div>
+                    {c.user_name}
+                  </span>
+                  <span className="text-[10px] text-slate-500">{fmtDate(c.created_at, 'dd MMM, hh:mm a')}</span>
+                </div>
+                <p className="whitespace-pre-wrap pl-7">{c.text}</p>
               </div>
-              <p className="whitespace-pre-wrap">{c.text}</p>
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <Textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment…" data-testid="mr-comment-input" />
-          <Button onClick={addComment} size="sm" disabled={!comment.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment…" data-testid="mr-comment-input" />
+            <Button onClick={addComment} size="sm" disabled={!comment.trim()} className="bg-emerald-600 hover:bg-emerald-700 self-start">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
       </Card>
 
       {/* Add Version Dialog */}
@@ -414,7 +469,7 @@ export default function MarketingRequestDetail() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Version Name</Label>
+              <Label>Version Name *</Label>
               <Input value={versionName} onChange={(e) => setVersionName(e.target.value)} placeholder="e.g. v1, v2 - revised colors" />
             </div>
             <div>
@@ -422,7 +477,7 @@ export default function MarketingRequestDetail() {
               <Input type="file" multiple ref={versionFileInput} onChange={handleVersionFiles} />
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {versionFiles.map((f) => (
-                  <Badge key={f.id} variant="outline" className="text-xs">
+                  <Badge key={f.id} variant="outline" className="text-xs bg-white">
                     {f.filename}
                     <button onClick={() => setVersionFiles(p => p.filter(x => x.id !== f.id))} className="ml-1.5"><X className="h-3 w-3" /></button>
                   </Badge>
@@ -432,12 +487,18 @@ export default function MarketingRequestDetail() {
             <div>
               <Label>Work Links</Label>
               <div className="flex gap-2">
-                <Input value={newVLink} onChange={(e) => setNewVLink(e.target.value)} placeholder="https://…" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const v = newVLink.trim(); if (v) { setVersionLinks(p => [...p, v]); setNewVLink(''); } } }} />
-                <Button type="button" variant="outline" size="sm" onClick={() => { const v = newVLink.trim(); if (v) { setVersionLinks(p => [...p, v]); setNewVLink(''); } }}><Plus className="h-4 w-4" /></Button>
+                <Input value={newVLink} onChange={(e) => setNewVLink(e.target.value)} placeholder="https://…"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const v = newVLink.trim(); if (v) { setVersionLinks(p => [...p, v]); setNewVLink(''); } } }} />
+                <Button type="button" variant="outline" size="sm"
+                  onClick={() => { const v = newVLink.trim(); if (v) { setVersionLinks(p => [...p, v]); setNewVLink(''); } }}>
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {versionLinks.map((l, i) => (
-                  <Badge key={i} variant="outline" className="text-xs">{l}<button onClick={() => setVersionLinks(p => p.filter((_, j) => j !== i))} className="ml-1.5"><X className="h-3 w-3" /></button></Badge>
+                  <Badge key={i} variant="outline" className="text-xs bg-white">{l}
+                    <button onClick={() => setVersionLinks(p => p.filter((_, j) => j !== i))} className="ml-1.5"><X className="h-3 w-3" /></button>
+                  </Badge>
                 ))}
               </div>
             </div>
@@ -448,7 +509,7 @@ export default function MarketingRequestDetail() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowVersion(false)}>Cancel</Button>
-            <Button onClick={addVersion} disabled={savingVersion || !versionName.trim()}>
+            <Button onClick={addVersion} disabled={savingVersion || !versionName.trim()} className="bg-emerald-600 hover:bg-emerald-700">
               {savingVersion ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…</> : <><Upload className="h-4 w-4 mr-2" /> Save Version</>}
             </Button>
           </DialogFooter>
@@ -464,15 +525,15 @@ export default function MarketingRequestDetail() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Quantity Required</Label>
+              <Label>Quantity Required *</Label>
               <Input type="number" min="1" value={prodForm.quantity_required} onChange={(e) => setProdForm({ ...prodForm, quantity_required: e.target.value })} />
             </div>
             <div>
-              <Label>Requested Production Date</Label>
+              <Label>Requested Production Date *</Label>
               <Input type="date" value={prodForm.requested_production_date} onChange={(e) => setProdForm({ ...prodForm, requested_production_date: e.target.value })} />
             </div>
             <div>
-              <Label>Assigned Delivery Team</Label>
+              <Label>Assigned Delivery Team *</Label>
               <Select value={prodForm.assigned_delivery_department_id} onValueChange={(v) => setProdForm({ ...prodForm, assigned_delivery_department_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Select team" /></SelectTrigger>
                 <SelectContent>
@@ -487,7 +548,7 @@ export default function MarketingRequestDetail() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowProd(false)}>Cancel</Button>
-            <Button onClick={submitProduction} disabled={savingProd}>
+            <Button onClick={submitProduction} disabled={savingProd} className="bg-emerald-600 hover:bg-emerald-700">
               {savingProd ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : <><Truck className="h-4 w-4 mr-2" /> Submit</>}
             </Button>
           </DialogFooter>

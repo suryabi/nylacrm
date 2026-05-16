@@ -1,14 +1,19 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
+import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { ArrowLeft, Sparkles, Upload, X, Link as LinkIcon, AlertTriangle, Loader2, Plus } from 'lucide-react';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../components/ui/select';
+import {
+  ArrowLeft, Sparkles, Upload, X, Link as LinkIcon, AlertTriangle, Loader2, Plus,
+  Tag, ImageIcon, FileText, CalendarClock, Building2, Send,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -24,7 +29,6 @@ export default function NewMarketingRequest() {
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState({
-    title: '',
     request_type_id: '',
     assigned_department_id: '',
     requested_due_date: '',
@@ -33,12 +37,13 @@ export default function NewMarketingRequest() {
     short_timeline_reason: '',
   });
   const [logoFile, setLogoFile] = useState(null);
-  const [referenceFiles, setReferenceFiles] = useState([]); // [{id, filename}]
+  const [referenceFiles, setReferenceFiles] = useState([]);
   const [socialLinks, setSocialLinks] = useState([]);
   const [fileLinks, setFileLinks] = useState([]);
   const [newSocialLink, setNewSocialLink] = useState('');
   const [newFileLink, setNewFileLink] = useState('');
   const refFileInput = useRef(null);
+  const logoFileInput = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -49,19 +54,19 @@ export default function NewMarketingRequest() {
         ]);
         setTypes(t.data?.types || []);
         setDepartments(d.data?.departments || []);
-      } catch (e) {
+      } catch {
         toast.error('Failed to load masters');
       }
     })();
   }, []);
 
-  const selectedType = types.find(t => t.id === form.request_type_id);
+  const selectedType = useMemo(() => types.find(t => t.id === form.request_type_id), [types, form.request_type_id]);
   const minLeadDays = selectedType ? (selectedType.design_lead_time_days + selectedType.production_lead_time_days) : 0;
-  const earliestDate = (() => {
+  const earliestDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + minLeadDays);
     return d.toISOString().slice(0, 10);
-  })();
+  }, [minLeadDays]);
   const isShortTimeline = selectedType && form.requested_due_date && (form.requested_due_date < earliestDate);
 
   const uploadFile = async (file) => {
@@ -70,57 +75,37 @@ export default function NewMarketingRequest() {
     const res = await axios.post(`${API}/marketing-requests/upload`, fd, {
       headers: { ...HEAD(), 'Content-Type': 'multipart/form-data' },
     });
-    return res.data; // {id, filename, ...}
+    return res.data;
   };
 
   const handleLogoChange = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    try {
-      const uploaded = await uploadFile(f);
-      setLogoFile(uploaded);
-      toast.success(`Uploaded logo: ${f.name}`);
-    } catch { toast.error('Logo upload failed'); }
+    try { const up = await uploadFile(f); setLogoFile(up); toast.success(`Uploaded logo`); }
+    catch { toast.error('Logo upload failed'); }
+    if (logoFileInput.current) logoFileInput.current.value = '';
   };
 
   const handleRefFilesChange = async (e) => {
     const files = Array.from(e.target.files || []);
-    if (!files.length) return;
     for (const f of files) {
-      try {
-        const uploaded = await uploadFile(f);
-        setReferenceFiles(prev => [...prev, uploaded]);
-      } catch { toast.error(`Failed to upload ${f.name}`); }
+      try { const up = await uploadFile(f); setReferenceFiles(prev => [...prev, up]); }
+      catch { toast.error(`Failed to upload ${f.name}`); }
     }
     if (refFileInput.current) refFileInput.current.value = '';
   };
-
   const removeRefFile = (id) => setReferenceFiles(prev => prev.filter(f => f.id !== id));
 
-  const addSocialLink = () => {
-    const v = newSocialLink.trim();
-    if (!v) return;
-    setSocialLinks(prev => [...prev, v]);
-    setNewSocialLink('');
-  };
-  const addFileLink = () => {
-    const v = newFileLink.trim();
-    if (!v) return;
-    setFileLinks(prev => [...prev, v]);
-    setNewFileLink('');
-  };
+  const addSocialLink = () => { const v = newSocialLink.trim(); if (v) { setSocialLinks(p => [...p, v]); setNewSocialLink(''); } };
+  const addFileLink = () => { const v = newFileLink.trim(); if (v) { setFileLinks(p => [...p, v]); setNewFileLink(''); } };
 
-  const canSubmit = form.title && form.request_type_id && form.assigned_department_id && form.requested_due_date && form.requirement_details && (!isShortTimeline || form.short_timeline_reason.trim());
+  const canSubmit = form.request_type_id && form.assigned_department_id && form.requested_due_date && form.requirement_details && (!isShortTimeline || form.short_timeline_reason.trim());
 
   const handleSubmit = async () => {
-    if (!canSubmit) {
-      toast.error('Please fill all required fields.');
-      return;
-    }
+    if (!canSubmit) { toast.error('Please fill all required fields.'); return; }
     setSubmitting(true);
     try {
       const payload = {
-        title: form.title.trim(),
         request_type_id: form.request_type_id,
         assigned_department_id: form.assigned_department_id,
         requested_due_date: form.requested_due_date,
@@ -143,66 +128,93 @@ export default function NewMarketingRequest() {
   };
 
   return (
-    <div className="space-y-4 p-4 sm:p-6 max-w-3xl mx-auto">
+    <div className="p-6 max-w-4xl mx-auto space-y-6" data-testid="new-mr-page">
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} data-testid="back-btn">
           <ArrowLeft className="h-4 w-4 mr-2" /> Back
         </Button>
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-violet-600" /> New Marketing Request
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-emerald-600" /> New Marketing Request
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">Pick a request type, set the timeline, describe the requirement.</p>
+        </div>
       </div>
 
-      <Card className="p-5 space-y-4">
-        <div className="space-y-2">
-          <Label>Request Title *</Label>
-          <Input
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-            placeholder="e.g. Neck-tag design for new mineral water bottle"
-            data-testid="mr-title-input"
-          />
-        </div>
+      {/* PROMINENT: Request Type selector */}
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Tag className="h-4 w-4 text-emerald-600" />
+            <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Request Type</span>
+            <span className="text-red-500">*</span>
+          </div>
+          {/* Big chip-style picker */}
+          <div className="flex flex-wrap gap-2">
+            {types.map(t => {
+              const active = form.request_type_id === t.id;
+              return (
+                <button
+                  type="button"
+                  key={t.id}
+                  onClick={() => setForm({ ...form, request_type_id: t.id })}
+                  className={`group relative rounded-xl border px-4 py-3 text-left transition-all ${
+                    active
+                      ? 'bg-emerald-600 border-emerald-600 text-white shadow-[0_8px_24px_rgba(6,95,70,0.18)] -translate-y-[1px]'
+                      : 'bg-white border-emerald-100 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50'
+                  }`}
+                  data-testid={`mr-type-chip-${t.id}`}
+                >
+                  <div className={`text-base font-semibold ${active ? 'text-white' : 'text-slate-900'}`}>{t.name}</div>
+                  <div className={`text-[11px] mt-0.5 ${active ? 'text-emerald-50' : 'text-slate-500'}`}>
+                    Design {t.design_lead_time_days}d &middot; Production {t.production_lead_time_days}d
+                  </div>
+                </button>
+              );
+            })}
+            {types.length === 0 && <span className="text-sm text-slate-400">Loading types…</span>}
+          </div>
+          {selectedType && (
+            <div className="mt-4 rounded-lg bg-emerald-50/60 border border-emerald-100 px-3 py-2 text-xs text-emerald-800">
+              <span className="font-semibold">{selectedType.name}</span> &middot; minimum lead time {minLeadDays} days (earliest delivery: {earliestDate})
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Request Type *</Label>
-            <Select value={form.request_type_id} onValueChange={(v) => setForm({ ...form, request_type_id: v })}>
-              <SelectTrigger data-testid="mr-type-select"><SelectValue placeholder="Select type" /></SelectTrigger>
-              <SelectContent>
-                {types.map(t => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
-              </SelectContent>
-            </Select>
-            {selectedType && (
-              <p className="text-[11px] text-muted-foreground">
-                Design: {selectedType.design_lead_time_days}d &middot; Production: {selectedType.production_lead_time_days}d &middot; Min total: {minLeadDays}d (earliest {earliestDate})
-              </p>
-            )}
+      {/* Main form */}
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+        <CardContent className="p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+                <Building2 className="h-3.5 w-3.5" /> Assigned Department *
+              </Label>
+              <Select value={form.assigned_department_id} onValueChange={(v) => setForm({ ...form, assigned_department_id: v })}>
+                <SelectTrigger data-testid="mr-dept-select"><SelectValue placeholder="Choose a fulfilment team" /></SelectTrigger>
+                <SelectContent>
+                  {departments.map(d => (<SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+                <CalendarClock className="h-3.5 w-3.5" /> Requested Due Date *
+              </Label>
+              <Input
+                type="date"
+                value={form.requested_due_date}
+                onChange={(e) => setForm({ ...form, requested_due_date: e.target.value })}
+                data-testid="mr-due-input"
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Assigned Department *</Label>
-            <Select value={form.assigned_department_id} onValueChange={(v) => setForm({ ...form, assigned_department_id: v })}>
-              <SelectTrigger data-testid="mr-dept-select"><SelectValue placeholder="Select department" /></SelectTrigger>
-              <SelectContent>
-                {departments.map(d => (<SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Requested Due Date *</Label>
-          <Input
-            type="date"
-            value={form.requested_due_date}
-            onChange={(e) => setForm({ ...form, requested_due_date: e.target.value })}
-            data-testid="mr-due-input"
-          />
           {isShortTimeline && (
-            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 space-y-2">
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 space-y-2">
               <div className="text-xs text-amber-800 flex items-center gap-1.5 font-medium">
-                <AlertTriangle className="h-4 w-4" /> Shorter than the minimum lead time ({minLeadDays} days, earliest {earliestDate}).
+                <AlertTriangle className="h-4 w-4" /> Tighter than the minimum lead time ({minLeadDays} days, earliest {earliestDate}). Please explain why.
               </div>
               <Textarea
                 rows={2}
@@ -213,116 +225,108 @@ export default function NewMarketingRequest() {
               />
             </div>
           )}
-        </div>
 
-        <div className="space-y-2">
-          <Label>Requirement Details *</Label>
-          <Textarea
-            rows={5}
-            value={form.requirement_details}
-            onChange={(e) => setForm({ ...form, requirement_details: e.target.value })}
-            placeholder="Describe what you need, target audience, brand cues, do/don'ts…"
-            data-testid="mr-details-input"
-          />
-        </div>
-
-        {/* Logo */}
-        <div className="space-y-2">
-          <Label>Logo Upload</Label>
-          {logoFile ? (
-            <div className="flex items-center justify-between bg-slate-50 border rounded-md px-3 py-2 text-sm">
-              <span className="truncate">{logoFile.filename}</span>
-              <Button variant="ghost" size="sm" onClick={() => setLogoFile(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <Input type="file" accept="image/*" onChange={handleLogoChange} data-testid="mr-logo-input" />
-          )}
-        </div>
-
-        {/* References */}
-        <div className="space-y-2">
-          <Label>Reference Files (multiple)</Label>
-          <Input type="file" multiple onChange={handleRefFilesChange} ref={refFileInput} data-testid="mr-references-input" />
-          {referenceFiles.length > 0 && (
-            <div className="space-y-1.5 mt-2">
-              {referenceFiles.map((f) => (
-                <div key={f.id} className="flex items-center justify-between bg-slate-50 border rounded-md px-3 py-2 text-sm">
-                  <span className="truncate">{f.filename}</span>
-                  <Button variant="ghost" size="sm" onClick={() => removeRefFile(f.id)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Social media links */}
-        <div className="space-y-2">
-          <Label>Social Media Links</Label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="https://instagram.com/…"
-              value={newSocialLink}
-              onChange={(e) => setNewSocialLink(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSocialLink(); } }}
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Requirement Details *</Label>
+            <Textarea
+              rows={5}
+              value={form.requirement_details}
+              onChange={(e) => setForm({ ...form, requirement_details: e.target.value })}
+              placeholder="Describe what you need, target audience, brand cues, do's/don'ts…"
+              data-testid="mr-details-input"
             />
-            <Button type="button" variant="outline" size="sm" onClick={addSocialLink}>
-              <Plus className="h-4 w-4" />
-            </Button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {socialLinks.map((l, i) => (
-              <Badge key={i} variant="outline" className="text-xs">
-                <LinkIcon className="h-3 w-3 mr-1" /> {l}
-                <button onClick={() => setSocialLinks(p => p.filter((_, j) => j !== i))} className="ml-1.5 hover:text-red-600"><X className="h-3 w-3" /></button>
-              </Badge>
-            ))}
-          </div>
-        </div>
 
-        {/* File links */}
-        <div className="space-y-2">
-          <Label>File Links (Google Drive, etc.)</Label>
-          <div className="flex gap-2">
-            <Input
-              placeholder="https://drive.google.com/…"
-              value={newFileLink}
-              onChange={(e) => setNewFileLink(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFileLink(); } }}
+          {/* Logo */}
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+              <ImageIcon className="h-3.5 w-3.5" /> Logo Upload
+            </Label>
+            {logoFile ? (
+              <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-100 rounded-md px-3 py-2 text-sm">
+                <span className="truncate flex items-center gap-2"><ImageIcon className="h-4 w-4 text-emerald-600" /> {logoFile.filename}</span>
+                <Button variant="ghost" size="sm" onClick={() => setLogoFile(null)}><X className="h-4 w-4" /></Button>
+              </div>
+            ) : (
+              <Input type="file" accept="image/*" ref={logoFileInput} onChange={handleLogoChange} data-testid="mr-logo-input" />
+            )}
+          </div>
+
+          {/* References */}
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5" /> Reference Files
+            </Label>
+            <Input type="file" multiple ref={refFileInput} onChange={handleRefFilesChange} data-testid="mr-references-input" />
+            {referenceFiles.length > 0 && (
+              <div className="space-y-1.5 mt-2">
+                {referenceFiles.map((f) => (
+                  <div key={f.id} className="flex items-center justify-between bg-slate-50 border rounded-md px-3 py-1.5 text-sm">
+                    <span className="truncate flex items-center gap-2"><FileText className="h-4 w-4 text-slate-500" /> {f.filename}</span>
+                    <Button variant="ghost" size="sm" onClick={() => removeRefFile(f.id)}><X className="h-4 w-4" /></Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Social media + file links */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Social Media Links</Label>
+              <div className="flex gap-2">
+                <Input placeholder="https://instagram.com/…"
+                  value={newSocialLink} onChange={(e) => setNewSocialLink(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSocialLink(); } }} />
+                <Button type="button" variant="outline" size="sm" onClick={addSocialLink}><Plus className="h-4 w-4" /></Button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {socialLinks.map((l, i) => (
+                  <Badge key={i} variant="outline" className="text-xs bg-white">
+                    <LinkIcon className="h-3 w-3 mr-1" /> {l}
+                    <button onClick={() => setSocialLinks(p => p.filter((_, j) => j !== i))} className="ml-1.5 hover:text-red-600"><X className="h-3 w-3" /></button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">File Links (Drive, etc.)</Label>
+              <div className="flex gap-2">
+                <Input placeholder="https://drive.google.com/…"
+                  value={newFileLink} onChange={(e) => setNewFileLink(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFileLink(); } }} />
+                <Button type="button" variant="outline" size="sm" onClick={addFileLink}><Plus className="h-4 w-4" /></Button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {fileLinks.map((l, i) => (
+                  <Badge key={i} variant="outline" className="text-xs bg-white">
+                    <LinkIcon className="h-3 w-3 mr-1" /> {l}
+                    <button onClick={() => setFileLinks(p => p.filter((_, j) => j !== i))} className="ml-1.5 hover:text-red-600"><X className="h-3 w-3" /></button>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Additional Comments</Label>
+            <Textarea
+              rows={2}
+              value={form.additional_comments}
+              onChange={(e) => setForm({ ...form, additional_comments: e.target.value })}
+              placeholder="Anything else the team should know?"
             />
-            <Button type="button" variant="outline" size="sm" onClick={addFileLink}>
-              <Plus className="h-4 w-4" />
-            </Button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {fileLinks.map((l, i) => (
-              <Badge key={i} variant="outline" className="text-xs">
-                <LinkIcon className="h-3 w-3 mr-1" /> {l}
-                <button onClick={() => setFileLinks(p => p.filter((_, j) => j !== i))} className="ml-1.5 hover:text-red-600"><X className="h-3 w-3" /></button>
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Additional Comments</Label>
-          <Textarea
-            rows={2}
-            value={form.additional_comments}
-            onChange={(e) => setForm({ ...form, additional_comments: e.target.value })}
-          />
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2 border-t">
-          <Button variant="outline" onClick={() => navigate('/marketing-requests')}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={!canSubmit || submitting} data-testid="mr-submit-btn">
-            {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : <><Upload className="h-4 w-4 mr-2" /> Submit Request</>}
-          </Button>
-        </div>
+        </CardContent>
       </Card>
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => navigate('/marketing-requests')}>Cancel</Button>
+        <Button onClick={handleSubmit} disabled={!canSubmit || submitting} className="bg-emerald-600 hover:bg-emerald-700" data-testid="mr-submit-btn">
+          {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : <><Send className="h-4 w-4 mr-2" /> Submit Request</>}
+        </Button>
+      </div>
     </div>
   );
 }
