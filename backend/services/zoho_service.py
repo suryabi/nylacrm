@@ -528,7 +528,13 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         try:
             await _zoho_request("PUT", f"/books/v3/contacts/{contact_id}", tenant_id=tenant_id, json=payload)
         except ZohoApiError as e:
-            logger.warning(f"Zoho contact update failed (continuing with existing): {e}")
+            # Surface the actual Zoho rejection instead of silently swallowing it.
+            # Common causes: company_name uniqueness conflict, gst_treatment validation,
+            # bad place_of_contact code. Without this raise the user sees a "synced ✓"
+            # toast even when the update was rejected — exactly the bug we hit when
+            # company_name wasn't refreshing on production invoices.
+            logger.error(f"Zoho contact PUT failed for {contact_id}: {e}")
+            raise
         return contact_id
 
     result = await _zoho_request("POST", "/books/v3/contacts", tenant_id=tenant_id, json=payload)
@@ -784,6 +790,52 @@ async def create_invoice_for_delivery(
         "line_items": line_items,
         "notes": f"Generated from Nyla CRM delivery {delivery.get('delivery_number')}",
     }
+
+    # ── Override the Bill To block on this invoice ────────────────────────────
+    # Zoho's invoice template renders the Bill To heading from the address's
+    # `attention` field (Indian GST template) or `customer_name` (default
+    # template). We inject "TRADE_NAME (ACCOUNT_NAME)" into BOTH so the delivery
+    # team can always identify the customer by the friendly account name AND
+    # the registered company name on the printed invoice — independent of
+    # whether the contact-level company_name update succeeded.
+    _trade = (account.get("gst_trade_name") or "").strip()
+    _legal = (account.get("gst_legal_name") or "").strip()
+    _acct = (account.get("account_name") or "").strip()
+    _primary = _trade or _legal
+    if _primary and _acct and _primary.lower() != _acct.lower():
+        _display_label = f"{_primary} ({_acct})"
+    else:
+        _display_label = _acct or _primary or ""
+
+    def _flatten_addr(src, attention):
+        if not isinstance(src, dict):
+            return None
+        line1 = (src.get("address_line1") or src.get("line1") or "").strip()
+        line2 = (src.get("address_line2") or src.get("line2") or "").strip()
+        city = (src.get("city") or "").strip()
+        state = (src.get("state") or "").strip()
+        zipc = (src.get("pincode") or src.get("zip") or src.get("postal_code") or "").strip()
+        if not (line1 or line2 or city or state or zipc):
+            return None
+        return {
+            "attention": attention,
+            "address": line1 or city,
+            "street2": line2 or "",
+            "city": city,
+            "state": state,
+            "zip": zipc,
+            "country": "India",
+        }
+
+    if _display_label:
+        billing_override = _flatten_addr(
+            account.get("billing_address") or account.get("delivery_address"), _display_label
+        )
+        shipping_override = _flatten_addr(account.get("delivery_address"), _display_label)
+        if billing_override:
+            invoice_payload["billing_address"] = billing_override
+        if shipping_override:
+            invoice_payload["shipping_address"] = shipping_override
 
     # Optional: per-tenant Zoho template override for the invoice PDF.
     # Configured via PUT /api/zoho/admin/template-settings — see zoho_books.py.
