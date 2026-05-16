@@ -6376,19 +6376,42 @@ async def get_account_invoices(
     lead_id = account.get('lead_id')
     account_name = account.get('account_name')
     
+    # Resolve the lead's formatted lead_id (e.g., ASEM-HYD-L26-001). External invoices
+    # may store this string in `ca_lead_id`, not the lead UUID — so we must look it up.
+    lead_doc = None
+    if lead_id:
+        lead_doc = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0, 'lead_id': 1, 'id': 1})
+    lead_formatted_id = (lead_doc or {}).get('lead_id')
+
+    import re as _re
+
+    def _ci_eq(value: str) -> dict:
+        """Case-insensitive exact-match regex (handles uppercase/lowercase storage)."""
+        return {'$regex': f'^{_re.escape(value)}$', '$options': 'i'}
+
     query = {'$or': []}
     if account_uuid:
         query['$or'].append({'account_id': account_uuid})  # Primary match - account_id field in invoice
         query['$or'].append({'account_uuid': account_uuid})  # Legacy match
     if acc_id:
-        query['$or'].append({'account_id': acc_id})
-        query['$or'].append({'account_id_from_mq': acc_id})  # MQ invoices use this field
+        # Case-insensitive match — handles upper/lower-case stored variants
+        query['$or'].append({'account_id': _ci_eq(acc_id)})
+        query['$or'].append({'account_id_from_mq': _ci_eq(acc_id)})
+        query['$or'].append({'ACCOUNT_ID': _ci_eq(acc_id)})  # Raw payload field used by some integrations
     if lead_id:
-        query['$or'].append({'ca_lead_id': lead_id})
+        # Lead UUID linkage
         query['$or'].append({'lead_id': lead_id})
+        query['$or'].append({'lead_uuid': lead_id})
+    if lead_formatted_id:
+        # Formatted lead id (ca_lead_id) — distinct from lead UUID
+        query['$or'].append({'ca_lead_id': _ci_eq(lead_formatted_id)})
+        query['$or'].append({'lead_id': _ci_eq(lead_formatted_id)})  # In case it stored the formatted id under lead_id
     if account_name:
-        query['$or'].append({'customer_name': {'$regex': account_name, '$options': 'i'}})
-    
+        # Escape regex special chars in account_name (parens, dots, plus, etc.)
+        # so account names like "Asem (Hyderabad)" don't silently break the match.
+        query['$or'].append({'customer_name': {'$regex': _re.escape(account_name), '$options': 'i'}})
+        query['$or'].append({'account_name': {'$regex': _re.escape(account_name), '$options': 'i'}})
+
     # Apply time filter
     if time_filter and time_filter != 'lifetime':
         from datetime import timedelta
@@ -6407,14 +6430,28 @@ async def get_account_invoices(
         if time_filter in date_ranges:
             start, end = date_ranges[time_filter]
             if start and end:
-                query['invoice_date'] = {
-                    '$gte': start.strftime('%Y-%m-%d'),
-                    '$lte': end.strftime('%Y-%m-%d')
-                }
+                # invoice_date may be stored as a 'YYYY-MM-DD' string OR a BSON
+                # datetime depending on the ingestion path. Use an $or on both
+                # representations so neither variant is silently dropped.
+                start_str = start.strftime('%Y-%m-%d')
+                end_str = end.replace(hour=23, minute=59, second=59).strftime('%Y-%m-%d')
+                start_dt = start.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_dt = end.replace(hour=23, minute=59, second=59, microsecond=999000)
+                date_clause = {'$or': [
+                    {'invoice_date': {'$gte': start_str, '$lte': end_str + 'T23:59:59'}},
+                    {'invoice_date': {'$gte': start_dt, '$lte': end_dt}},
+                ]}
+                # Merge with the account-linkage $or via $and so both must hold.
+                query = {'$and': [query, date_clause]}
     
     logger.info(f"[INVOICE_FETCH] Query: {query}")
     
-    if not query['$or']:
+    # Detect "empty linkage" — the original $or list of account-linkage clauses
+    # (may now be wrapped in $and with the date clause).
+    _linkage_or = query.get('$or')
+    if _linkage_or is None and '$and' in query:
+        _linkage_or = (query['$and'][0] or {}).get('$or') or []
+    if not _linkage_or:
         logger.warning(f"[INVOICE_FETCH] Empty query for account: {account_id}")
         return {'invoices': [], 'total_amount': 0, 'paid_amount': 0, 'outstanding': 0, 'total': 0, 'page': page, 'limit': limit, 'pages': 0}
     
@@ -6422,6 +6459,24 @@ async def get_account_invoices(
     total_count = await get_tdb().invoices.count_documents(query)
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 0
     skip = (page - 1) * limit
+
+    # If matcher returned zero invoices in the requested window, log the per-clause
+    # counts so we can see *which* linkage path is failing (this surfaces stale
+    # external invoices that lack proper account_id / account_uuid / ca_lead_id).
+    if total_count == 0 and time_filter == 'this_month':
+        try:
+            from datetime import timedelta as _td_dbg
+            _now_dbg = datetime.now(timezone.utc)
+            _date_clause_dbg = {'$or': [
+                {'invoice_date': {'$gte': _now_dbg.replace(day=1).strftime('%Y-%m-%d'), '$lte': _now_dbg.strftime('%Y-%m-%d') + 'T23:59:59'}},
+                {'invoice_date': {'$gte': _now_dbg.replace(day=1, hour=0, minute=0, second=0, microsecond=0), '$lte': _now_dbg}},
+            ]}
+            for clause in _linkage_or:
+                cnt = await get_tdb().invoices.count_documents({'$and': [clause, _date_clause_dbg]})
+                if cnt > 0:
+                    logger.warning(f"[INVOICE_FETCH] DIAGNOSTIC clause {clause} returned {cnt} this-month invoices in isolation")
+        except Exception as _e:
+            logger.warning(f"[INVOICE_FETCH] diagnostic block failed: {_e}")
     
     # Fetch paginated invoices
     invoices = await get_tdb().invoices.find(query, {'_id': 0}).sort('invoice_date', -1).skip(skip).limit(limit).to_list(limit)

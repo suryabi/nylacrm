@@ -22,6 +22,14 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 
 ## Recent Implementations
 
+### 2026-05-16
+- **Account-detail invoice matcher hardened** — `GET /api/accounts/{id}/invoices` was missing some externally-pushed invoices on the Account Detail page (visible on global `/invoices` list but absent on account page):
+  - **Case-insensitive** match on `account_id`, `account_id_from_mq`, `ACCOUNT_ID`.
+  - **Lead linkage fixed**: now resolves the lead's formatted `lead_id` (e.g., `ASEM-HYD-L26-001`) and matches it against `ca_lead_id` — previously matcher used the lead UUID against `ca_lead_id`, which never matched.
+  - **Regex-escaped** `account_name` (parentheses/special chars no longer break the `customer_name` regex match); also matches against invoice's own `account_name` field.
+  - **invoice_date as datetime OR string** — date-range clause is now an `$or` over both representations to catch invoices stored as BSON Date vs. `YYYY-MM-DD` string.
+  - **Diagnostic logging** — when the matcher returns zero invoices for `this_month`, the backend now logs per-clause counts so we can pinpoint which linkage path silently fails for a specific tenant.
+
 ### 2026-05-15
 - **Field check-in for Sales Reps on Leads** ("I am here" geo-fenced button)
   - New reusable `LeadDeliveryAddressCard.js` adds a Google Places autocomplete-driven address card on every Lead Detail page (mirrors AccountDetail's delivery card).
