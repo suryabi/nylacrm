@@ -5461,6 +5461,95 @@ async def get_won_leads_revenue(
     user_ids = list(set([l.get('assigned_to') for l in leads if l.get('assigned_to')]))
     users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     user_map = {u['id']: u['name'] for u in users}
+
+    # ── INVOICE AGGREGATION (recomputed live, not from stale lead-cached fields) ──
+    # External invoices were migrated to an account-centric linkage. The
+    # per-lead rollup fields (total_gross_invoice_value etc.) are no longer
+    # refreshed, so we must reconcile by querying invoices via every possible
+    # linkage field and bucketing them back to leads.
+    lead_ids = [l['id'] for l in leads if l.get('id')]
+    lead_formatted_ids = [l.get('lead_id') for l in leads if l.get('lead_id')]
+
+    # Resolve each lead → account(s). Accounts may store EITHER the lead UUID
+    # OR the formatted lead_id (e.g., TOOP-HYD-L26-001) in account.lead_id,
+    # depending on when they were created. Query for both.
+    lead_lookup_ids = [x for x in (lead_ids + lead_formatted_ids) if x]
+    accounts_for_leads = await get_tdb().accounts.find(
+        {'lead_id': {'$in': lead_lookup_ids}},
+        {'_id': 0, 'id': 1, 'account_id': 1, 'account_name': 1, 'lead_id': 1}
+    ).to_list(len(lead_lookup_ids) or 1) if lead_lookup_ids else []
+
+    # Build a map: account.lead_id (whatever it is) → lead.id (UUID).
+    # account.lead_id may be either a UUID or a formatted id, so cover both.
+    lead_uuid_by_any_id = {}
+    for ld in leads:
+        if ld.get('id'):
+            lead_uuid_by_any_id[ld['id']] = ld['id']
+        if ld.get('lead_id'):
+            lead_uuid_by_any_id[ld['lead_id']] = ld['id']
+
+    # Build reverse maps: any invoice-linkage value → owning lead UUID
+    inv_linkage_to_lead_id: dict = {}
+    account_uuids: list = []
+    account_formatted_ids: list = []
+    for acc in accounts_for_leads:
+        # Resolve the lead UUID this account belongs to (account.lead_id may
+        # be either UUID or formatted lead id).
+        owning_lead = lead_uuid_by_any_id.get(acc.get('lead_id'))
+        if not owning_lead:
+            continue
+        if acc.get('id'):
+            inv_linkage_to_lead_id[acc['id']] = owning_lead
+            account_uuids.append(acc['id'])
+        if acc.get('account_id'):
+            inv_linkage_to_lead_id[acc['account_id']] = owning_lead
+            account_formatted_ids.append(acc['account_id'])
+    for ld in leads:
+        if ld.get('id'):
+            inv_linkage_to_lead_id[ld['id']] = ld['id']
+        if ld.get('lead_id'):
+            inv_linkage_to_lead_id[ld['lead_id']] = ld['id']
+
+    # Build the master invoice query — match any linkage that points to a won lead
+    inv_or: list = []
+    if account_uuids:
+        inv_or.append({'account_uuid': {'$in': account_uuids}})
+        inv_or.append({'account_id': {'$in': account_uuids}})
+    if account_formatted_ids:
+        inv_or.append({'account_id': {'$in': account_formatted_ids}})
+        inv_or.append({'account_id_from_mq': {'$in': account_formatted_ids}})
+    if lead_ids:
+        inv_or.append({'lead_id': {'$in': lead_ids}})
+        inv_or.append({'lead_uuid': {'$in': lead_ids}})
+    if lead_formatted_ids:
+        inv_or.append({'ca_lead_id': {'$in': lead_formatted_ids}})
+
+    invoice_totals: dict = {}  # lead_id → {gross, net, credit, count}
+    if inv_or:
+        invoices_all = await get_tdb().invoices.find(
+            {'$or': inv_or},
+            {'_id': 0, 'account_uuid': 1, 'account_id': 1, 'account_id_from_mq': 1,
+             'ca_lead_id': 1, 'lead_id': 1, 'lead_uuid': 1,
+             'gross_invoice_value': 1, 'grand_total': 1, 'total_amount': 1,
+             'net_invoice_value': 1, 'paid_amount': 1,
+             'credit_note_value': 1, 'credit_note': 1}
+        ).to_list(20000)
+
+        for inv in invoices_all:
+            # Find which lead this invoice belongs to (priority order)
+            owner = None
+            for key in ('account_uuid', 'account_id', 'account_id_from_mq', 'ca_lead_id', 'lead_id', 'lead_uuid'):
+                val = inv.get(key)
+                if val and val in inv_linkage_to_lead_id:
+                    owner = inv_linkage_to_lead_id[val]
+                    break
+            if not owner:
+                continue
+            bucket = invoice_totals.setdefault(owner, {'gross': 0.0, 'net': 0.0, 'credit': 0.0, 'count': 0})
+            bucket['gross'] += float(inv.get('gross_invoice_value') or inv.get('grand_total') or inv.get('total_amount') or 0)
+            bucket['net']   += float(inv.get('net_invoice_value')   or inv.get('paid_amount') or 0)
+            bucket['credit']+= float(inv.get('credit_note_value')   or inv.get('credit_note') or 0)
+            bucket['count'] += 1
     
     # Build response with invoice data
     result = []
@@ -5469,9 +5558,13 @@ async def get_won_leads_revenue(
     total_credit = 0
     
     for lead in leads:
-        gross = lead.get('total_gross_invoice_value', 0) or 0
-        net = lead.get('total_net_invoice_value', 0) or 0
-        credit = lead.get('total_credit_note_value', 0) or 0
+        live = invoice_totals.get(lead['id']) or {}
+        # Prefer live-computed totals; fall back to legacy cached fields if
+        # nothing came back (e.g., lead with no linked account/invoices yet).
+        gross = live.get('gross') or (lead.get('total_gross_invoice_value') or 0)
+        net = live.get('net') or (lead.get('total_net_invoice_value') or 0)
+        credit = live.get('credit') or (lead.get('total_credit_note_value') or 0)
+        invoice_count = live.get('count') or (lead.get('invoice_count') or 0)
         
         total_gross += gross
         total_net += net
@@ -5486,7 +5579,7 @@ async def get_won_leads_revenue(
             'assigned_to': lead.get('assigned_to'),
             'assigned_to_name': user_map.get(lead.get('assigned_to'), '-'),
             'won_date': lead.get('updated_at'),
-            'invoice_count': lead.get('invoice_count', 0) or 0,
+            'invoice_count': invoice_count,
             'gross_invoice_value': gross,
             'net_invoice_value': net,
             'credit_note_value': credit

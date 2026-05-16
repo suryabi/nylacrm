@@ -22,6 +22,9 @@ Multi-tenant CRM covering Sales, Production, Marketing & Distribution. Recently 
 
 ## Recent Implementations
 
+### 2026-05-16 (later)
+- **Revenue Report all-zeros bug fixed** — `GET /api/sales-revenue/won-leads` was reading invoice totals from stale lead-level cached fields (`lead.total_gross_invoice_value` etc.), which stopped being maintained after invoices migrated to account-centric linkage. Now totals are recomputed live by joining won-leads → accounts (`account.lead_id` can be either UUID or formatted lead id) → invoices via the same multi-field matcher used by the Account Detail page (`account_uuid`/`account_id`/`account_id_from_mq`/`ca_lead_id`/`lead_id`). Verified on preview: "Last Month" Toopa Ice-creamery jumped from ₹0 → ₹62,939.50 (3 invoices).
+
 ### 2026-05-16
 - **Account-detail invoice matcher hardened** — `GET /api/accounts/{id}/invoices` was missing some externally-pushed invoices on the Account Detail page (visible on global `/invoices` list but absent on account page):
   - **Case-insensitive** match on `account_id`, `account_id_from_mq`, `ACCOUNT_ID`.
