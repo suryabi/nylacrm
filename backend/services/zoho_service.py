@@ -420,9 +420,29 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         except ZohoApiError as e:
             logger.warning(f"Zoho contact lookup by name failed: {e}")
 
+    # Compute the display label used by Zoho's invoice "Bill To" block.
+    # Format: "Trade Name (Account Name)" — when both are present and differ.
+    # Falls back gracefully so single-name customers don't get "(Same Name)".
+    trade_name = (account.get("gst_trade_name") or "").strip()
+    legal_name = (account.get("gst_legal_name") or "").strip()
+    acct_label = (account.get("account_name") or name or "").strip()
+    primary_label = trade_name or legal_name
+    if primary_label and acct_label and primary_label.lower() != acct_label.lower():
+        display_label = f"{primary_label} ({acct_label})"
+    elif acct_label:
+        display_label = acct_label
+    else:
+        display_label = primary_label or name
+
     payload = {
+        # `contact_name` must remain the account name — Zoho enforces uniqueness on
+        # this field and we use it later to find/match contacts. Don't change it.
         "contact_name": name,
-        "company_name": account.get("company_name") or name,
+        # `company_name` is what most Zoho invoice templates render as the bold
+        # heading of the "Bill To" block. Setting it to the trade-name-with-
+        # account-name format means the delivery team sees the registered name
+        # AND the friendly account name on every invoice PDF.
+        "company_name": display_label,
         "contact_type": "customer",
     }
     if email:
@@ -461,19 +481,9 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
     #   {attention, address, street2, city, state, zip, country}
     # Our internal model stores dicts: {address_line1, address_line2, city, state, pincode}.
     #
-    # `attention` prints as the *first line* of the billing block on the invoice
-    # PDF — we use it to display "Trade Name (Account Name)" so the delivery team
-    # can recognize the customer by either identifier without confusion.
-    trade_name = (account.get("gst_trade_name") or "").strip()
-    legal_name = (account.get("gst_legal_name") or "").strip()
-    acct_label = (account.get("account_name") or name or "").strip()
-    primary_label = trade_name or legal_name
-    if primary_label and acct_label and primary_label.lower() != acct_label.lower():
-        attention_line = f"{primary_label} ({acct_label})"
-    elif acct_label:
-        attention_line = acct_label
-    else:
-        attention_line = primary_label or name
+    # `attention` prints as the *first line* of the address block in some templates
+    # (used as a fallback in case the template renders contact_name not company_name).
+    attention_line = display_label
 
     def _zoho_addr(src) -> Optional[dict]:
         if not src:
