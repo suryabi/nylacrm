@@ -1739,6 +1739,9 @@ export default function DistributorDetail() {
   };
 
   const handleCancelDelivery = async (deliveryId) => {
+    if (!window.confirm(
+      'Cancel this delivery? Stock will be returned to the source warehouse and any pushed Zoho invoice will be voided. This cannot be undone.'
+    )) return;
     try {
       await axios.post(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/cancel`, {}, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1746,6 +1749,7 @@ export default function DistributorDetail() {
       });
       toast.success('Delivery cancelled');
       setDeleteTarget(null);
+      setShowDeliveryDetail(false);
       fetchDeliveries();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to cancel delivery');
@@ -3377,7 +3381,13 @@ export default function DistributorDetail() {
                 <div className="flex gap-2">
                   {canManage && selectedDelivery.status === 'draft' && (
                     <>
-                      <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleCancelDelivery(selectedDelivery.id)}
+                        className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
+                        data-testid="cancel-delivery-btn"
+                      >
+                        <X className="h-4 w-4 mr-2" />
                         Cancel Delivery
                       </Button>
                       <Button onClick={() => handleConfirmDelivery(selectedDelivery.id)}>
@@ -3388,8 +3398,14 @@ export default function DistributorDetail() {
                   )}
                   {canManage && selectedDelivery.status === 'confirmed' && (
                     <>
-                      <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
-                        Cancel
+                      <Button
+                        variant="outline"
+                        onClick={() => handleCancelDelivery(selectedDelivery.id)}
+                        className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
+                        data-testid="cancel-delivery-btn"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Cancel Delivery
                       </Button>
                       <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
                         <Check className="h-4 w-4 mr-2" />
