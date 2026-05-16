@@ -19,7 +19,7 @@ import {
   Loader2, ExternalLink, ChevronRight, Truck, AlertTriangle, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -104,7 +104,11 @@ export default function MarketingRequestDetail() {
   };
   useEffect(() => { fetchReq(); }, [id]); // eslint-disable-line
 
-  const userDepts = (user?.department || '').toString().toLowerCase();
+  const userDepts = (() => {
+    const d = user?.department;
+    if (Array.isArray(d)) return d.map(x => String(x || '').toLowerCase()).join(' ');
+    return String(d || '').toLowerCase();
+  })();
   const isInAssignedDept = req && userDepts.includes((req.assigned_department_name || '').toLowerCase());
   const isInDeliveryDept = req?.production && userDepts.includes((req.production.assigned_delivery_department_name || '').toLowerCase());
   const isRequestor = req && user?.id === req.created_by;

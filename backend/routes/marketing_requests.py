@@ -159,11 +159,11 @@ async def download_file(file_id: str, current_user: dict = Depends(get_current_u
     if not row:
         raise HTTPException(404, "File not found")
     try:
-        data = get_object(row["path"])
+        data, ctype = get_object(row["path"])
     except Exception as e:
         raise HTTPException(502, f"Storage fetch failed: {e}")
     headers = {"Content-Disposition": f'inline; filename="{row.get("filename", "file")}"'}
-    return Response(content=data, media_type=row.get("content_type") or "application/octet-stream", headers=headers)
+    return Response(content=data, media_type=row.get("content_type") or ctype or "application/octet-stream", headers=headers)
 
 
 # ──────────────────────────────────────────────────────────────

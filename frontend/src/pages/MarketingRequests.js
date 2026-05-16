@@ -11,7 +11,7 @@ import {
   AlertTriangle, Filter,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -58,10 +58,11 @@ const QUEUE_DEFINITIONS = {
 };
 
 const userPrimaryGroup = (user) => {
-  const dept = (user?.department || '').toLowerCase();
-  const role = (user?.role || '').toLowerCase();
+  const deptRaw = user?.department;
+  const dept = (Array.isArray(deptRaw) ? deptRaw.join(' ') : (deptRaw || '')).toString().toLowerCase();
+  const role = (user?.role || '').toString().toLowerCase();
   if (dept.includes('marketing') || role.includes('marketing')) return 'marketing';
-  if (dept.includes('production') || dept.includes('delivery') || role.includes('delivery')) return 'delivery';
+  if (dept.includes('production') || dept.includes('delivery') || role.includes('delivery') || role.includes('production')) return 'delivery';
   return 'sales';
 };
 
