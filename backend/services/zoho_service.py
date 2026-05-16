@@ -458,13 +458,28 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
 
     # ── Flatten our nested address dicts into Zoho's flat schema ──
     # Zoho's `billing_address` / `shipping_address` expect string fields:
-    #   {address, street2, city, state, zip, country}
+    #   {attention, address, street2, city, state, zip, country}
     # Our internal model stores dicts: {address_line1, address_line2, city, state, pincode}.
+    #
+    # `attention` prints as the *first line* of the billing block on the invoice
+    # PDF — we use it to display "Trade Name (Account Name)" so the delivery team
+    # can recognize the customer by either identifier without confusion.
+    trade_name = (account.get("gst_trade_name") or "").strip()
+    legal_name = (account.get("gst_legal_name") or "").strip()
+    acct_label = (account.get("account_name") or name or "").strip()
+    primary_label = trade_name or legal_name
+    if primary_label and acct_label and primary_label.lower() != acct_label.lower():
+        attention_line = f"{primary_label} ({acct_label})"
+    elif acct_label:
+        attention_line = acct_label
+    else:
+        attention_line = primary_label or name
+
     def _zoho_addr(src) -> Optional[dict]:
         if not src:
             return None
         if isinstance(src, str):
-            return {"address": src, "country": "India"}
+            return {"attention": attention_line, "address": src, "country": "India"}
         if not isinstance(src, dict):
             return None
         # Some legacy rows store the address as a JSON-stringified blob.
@@ -479,6 +494,7 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         if not (addr or city or state or zipc):
             return None
         return {
+            "attention": attention_line,
             "address": addr or city,
             "street2": line2 or "",
             "city": city,
