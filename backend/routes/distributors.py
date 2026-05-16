@@ -3721,6 +3721,25 @@ async def get_delivery(
     ).to_list(500)
     
     delivery['items'] = items
+
+    # Enrich applied_credit_notes with current Zoho deep-link / status — the
+    # snapshot stored on the delivery doesn't carry Zoho fields, and a CN may
+    # be synced to Zoho AFTER the delivery was created.
+    applied = delivery.get('applied_credit_notes') or []
+    cn_ids = [a.get('credit_note_id') for a in applied if a.get('credit_note_id')]
+    if cn_ids:
+        cns = await db.credit_notes.find(
+            {'id': {'$in': cn_ids}, 'tenant_id': tenant_id},
+            {'_id': 0, 'id': 1, 'zoho_creditnote_id': 1, 'zoho_creditnote_number': 1, 'zoho_creditnote_url': 1, 'status': 1}
+        ).to_list(len(cn_ids))
+        cn_map = {c['id']: c for c in cns}
+        for a in applied:
+            c = cn_map.get(a.get('credit_note_id'))
+            if c:
+                a['zoho_creditnote_id'] = c.get('zoho_creditnote_id')
+                a['zoho_creditnote_number'] = c.get('zoho_creditnote_number')
+                a['zoho_creditnote_url'] = c.get('zoho_creditnote_url')
+        delivery['applied_credit_notes'] = applied
     
     return delivery
 

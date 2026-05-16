@@ -987,6 +987,21 @@ async def create_credit_note_for_return(
     except Exception as e:
         logger.warning(f"Failed to stamp Zoho ids on return {return_doc.get('id')}: {e}")
 
+    # Stamp the same Zoho ids on the local credit_note doc so Distributor
+    # Stock Out → Apply Credit Notes can deep-link straight to Zoho Books.
+    try:
+        await db.credit_notes.update_many(
+            {"return_id": return_doc.get("id"), "tenant_id": tenant_id},
+            {"$set": {
+                "zoho_creditnote_id": zoho_creditnote_id,
+                "zoho_creditnote_number": zoho_creditnote_number,
+                "zoho_creditnote_url": zoho_creditnote_url,
+                "zoho_synced_at": now,
+            }},
+        )
+    except Exception as e:
+        logger.warning(f"Failed to stamp Zoho ids on credit_note for return {return_doc.get('id')}: {e}")
+
     mapping_doc = {
         "tenant_id": tenant_id,
         "source_type": "customer_return",

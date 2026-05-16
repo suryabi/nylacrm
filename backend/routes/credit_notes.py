@@ -659,7 +659,40 @@ async def get_available_credit_notes_for_account(
         },
         {"_id": 0}
     ).sort("created_at", 1).to_list(100)  # Oldest first for FIFO application
-    
+
+    # Backfill Zoho deep-link from the originating customer_return for any CNs
+    # that were synced before the credit_notes collection started carrying these
+    # fields. This is idempotent and cheap (only runs for missing ones).
+    missing_zoho = [cn for cn in credit_notes if cn.get("return_id") and not cn.get("zoho_creditnote_url")]
+    if missing_zoho:
+        return_ids = list({cn["return_id"] for cn in missing_zoho})
+        returns = await db.customer_returns.find(
+            {"id": {"$in": return_ids}, "tenant_id": tenant_id, "zoho_creditnote_url": {"$exists": True, "$ne": None}},
+            {"_id": 0, "id": 1, "zoho_creditnote_id": 1, "zoho_creditnote_number": 1, "zoho_creditnote_url": 1}
+        ).to_list(len(return_ids))
+        returns_by_id = {r["id"]: r for r in returns}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for cn in missing_zoho:
+            r = returns_by_id.get(cn.get("return_id"))
+            if not r or not r.get("zoho_creditnote_url"):
+                continue
+            cn["zoho_creditnote_id"] = r.get("zoho_creditnote_id")
+            cn["zoho_creditnote_number"] = r.get("zoho_creditnote_number")
+            cn["zoho_creditnote_url"] = r.get("zoho_creditnote_url")
+            # Persist for future fetches
+            try:
+                await db.credit_notes.update_one(
+                    {"id": cn.get("id"), "tenant_id": tenant_id},
+                    {"$set": {
+                        "zoho_creditnote_id": r.get("zoho_creditnote_id"),
+                        "zoho_creditnote_number": r.get("zoho_creditnote_number"),
+                        "zoho_creditnote_url": r.get("zoho_creditnote_url"),
+                        "zoho_synced_at": now_iso,
+                    }}
+                )
+            except Exception as e:
+                logger.warning(f"Failed to backfill zoho ids on credit_note {cn.get('id')}: {e}")
+
     total_available = sum(cn.get("balance_amount", 0) for cn in credit_notes)
     
     return {

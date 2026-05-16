@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, Factory } from 'lucide-react';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, Factory, ExternalLink } from 'lucide-react';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -971,13 +971,29 @@ export default function DeliveriesTab({
                                   />
                                   <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between">
-                                      <label 
-                                        htmlFor={`cn-${cn.id}`} 
-                                        className="font-medium text-sm cursor-pointer"
-                                      >
-                                        {cn.credit_note_number}
-                                      </label>
-                                      <span className="text-sm font-semibold text-emerald-600">
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <label
+                                          htmlFor={`cn-${cn.id}`}
+                                          className="font-medium text-sm cursor-pointer truncate"
+                                        >
+                                          {cn.credit_note_number}
+                                        </label>
+                                        {cn.zoho_creditnote_url && (
+                                          <a
+                                            href={cn.zoho_creditnote_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                                            title={`Open in Zoho Books${cn.zoho_creditnote_number ? ` — ${cn.zoho_creditnote_number}` : ''}`}
+                                            data-testid={`credit-note-zoho-link-${cn.id}`}
+                                          >
+                                            <ExternalLink className="h-3 w-3" />
+                                            <span className="hidden sm:inline">Zoho</span>
+                                          </a>
+                                        )}
+                                      </div>
+                                      <span className="text-sm font-semibold text-emerald-600 shrink-0 ml-2">
                                         ₹{cn.balance_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} available
                                       </span>
                                     </div>

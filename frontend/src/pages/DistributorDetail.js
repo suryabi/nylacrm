@@ -3305,13 +3305,26 @@ export default function DistributorDetail() {
                   <div className="space-y-2">
                     {selectedDelivery.applied_credit_notes.map((cn, idx) => (
                       <div key={cn.credit_note_id || idx} className="flex justify-between items-center text-sm">
-                        <div>
+                        <div className="flex items-center gap-2 min-w-0">
                           <span className="font-medium">{cn.credit_note_number}</span>
+                          {cn.zoho_creditnote_url && (
+                            <a
+                              href={cn.zoho_creditnote_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-white text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                              title={`Open in Zoho Books${cn.zoho_creditnote_number ? ` — ${cn.zoho_creditnote_number}` : ''}`}
+                              data-testid={`applied-cn-zoho-link-${cn.credit_note_id || idx}`}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              <span>Zoho</span>
+                            </a>
+                          )}
                           {cn.return_number && (
-                            <span className="text-muted-foreground ml-2">(Return: {cn.return_number})</span>
+                            <span className="text-muted-foreground text-xs">(Return: {cn.return_number})</span>
                           )}
                         </div>
-                        <span className="font-medium text-emerald-600">
+                        <span className="font-medium text-emerald-600 shrink-0 ml-2">
                           - ₹{cn.amount_applied?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
