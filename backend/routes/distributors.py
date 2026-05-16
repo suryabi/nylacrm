@@ -4,7 +4,7 @@ CRUD operations for distributors, operating coverage, and locations
 """
 from fastapi import APIRouter, HTTPException, Depends, Query, Response, BackgroundTasks
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import logging
 import uuid
 import bcrypt
@@ -1598,6 +1598,28 @@ async def list_distributor_account_assignments(
         query,
         {"_id": 0}
     ).sort([("servicing_city", 1), ("account_name", 1)]).to_list(1000)
+
+    # Enrich each assignment with the account's GST / PAN / billing details so the
+    # distributor's Account Assignments view can surface compliance info without
+    # an extra round-trip. Read-only — distributors don't edit account-level data.
+    account_ids = list({a.get('account_id') for a in assignments if a.get('account_id')})
+    accounts_map: Dict[str, Dict[str, Any]] = {}
+    if account_ids:
+        async for ad in db.accounts.find(
+            {"id": {"$in": account_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "gst_number": 1, "pan_number": 1, "billing_address": 1,
+             "gst_legal_name": 1, "gst_trade_name": 1, "contact_name": 1, "contact_number": 1}
+        ):
+            accounts_map[ad['id']] = ad
+    for a in assignments:
+        acc = accounts_map.get(a.get('account_id')) or {}
+        a['gst_number'] = acc.get('gst_number')
+        a['pan_number'] = acc.get('pan_number')
+        a['billing_address'] = acc.get('billing_address')
+        a['gst_legal_name'] = acc.get('gst_legal_name')
+        a['gst_trade_name'] = acc.get('gst_trade_name')
+        a['account_contact_name'] = acc.get('contact_name')
+        a['account_contact_number'] = acc.get('contact_number')
     
     # Group by city
     by_city = {}

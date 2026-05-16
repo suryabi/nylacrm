@@ -18,6 +18,7 @@ import {
   Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt
 } from 'lucide-react';
 import { format } from 'date-fns';
+import TaxBillingCard from '../components/TaxBillingCard';
 import {
   Select,
   SelectContent,
@@ -2179,6 +2180,28 @@ ${googleMapsLink}`;
                   GSTIN, PAN, legal & trade name, and billing address automatically.
                 </p>
               )}
+            </div>
+
+            {/* ── 1b) Tax & Billing Information (manual / auto-filled) ── */}
+            <div className="mb-5" data-testid="tax-billing-section">
+              <TaxBillingCard
+                data={{
+                  gst_number: account?.gst_number,
+                  pan_number: account?.pan_number,
+                  billing_address: account?.billing_address,
+                  gst_legal_name: account?.gst_legal_name,
+                  gst_trade_name: account?.gst_trade_name,
+                }}
+                editable={true}
+                onSave={async (payload) => {
+                  await axios.put(
+                    `${API_URL}/accounts/${id}`,
+                    payload,
+                    { withCredentials: true }
+                  );
+                  await fetchAccount();
+                }}
+              />
             </div>
 
             {/* ── 2) Delivery Address ── */}
