@@ -541,7 +541,11 @@ async def create_credit_note_from_return(
     # ── Push to Zoho Books (best-effort, non-blocking) ─────────────────────
     # The local credit note exists regardless; Zoho push failures only log.
     try:
-        from services.zoho_service import create_credit_note_for_return, is_zoho_configured
+        from services.zoho_service import (
+            create_credit_note_for_return,
+            is_zoho_configured,
+            AccountNotLinkedToZohoError,
+        )
         if is_zoho_configured():
             account = await db.accounts.find_one(
                 {"$or": [
@@ -556,25 +560,33 @@ async def create_credit_note_from_return(
                     f"for return {return_doc.get('return_number')}"
                 )
             else:
-                mapping = await create_credit_note_for_return(
-                    tenant_id=tenant_id,
-                    return_doc=return_doc,
-                    account=account,
-                )
-                # Mirror Zoho identifiers onto the local credit_note row
-                await db.credit_notes.update_one(
-                    {"id": credit_note.id, "tenant_id": tenant_id},
-                    {"$set": {
-                        "zoho_creditnote_id": mapping.get("zoho_creditnote_id"),
-                        "zoho_creditnote_number": mapping.get("zoho_creditnote_number"),
-                        "zoho_creditnote_url": mapping.get("zoho_creditnote_url"),
-                        "zoho_synced_at": mapping.get("synced_at"),
-                    }},
-                )
-                logger.info(
-                    f"Pushed credit note {credit_note_number} to Zoho as "
-                    f"{mapping.get('zoho_creditnote_number')}"
-                )
+                try:
+                    mapping = await create_credit_note_for_return(
+                        tenant_id=tenant_id,
+                        return_doc=return_doc,
+                        account=account,
+                    )
+                    # Mirror Zoho identifiers onto the local credit_note row
+                    await db.credit_notes.update_one(
+                        {"id": credit_note.id, "tenant_id": tenant_id},
+                        {"$set": {
+                            "zoho_creditnote_id": mapping.get("zoho_creditnote_id"),
+                            "zoho_creditnote_number": mapping.get("zoho_creditnote_number"),
+                            "zoho_creditnote_url": mapping.get("zoho_creditnote_url"),
+                            "zoho_synced_at": mapping.get("synced_at"),
+                        }},
+                    )
+                    logger.info(
+                        f"Pushed credit note {credit_note_number} to Zoho as "
+                        f"{mapping.get('zoho_creditnote_number')}"
+                    )
+                except AccountNotLinkedToZohoError as e:
+                    # Expected when the account hasn't been linked to a Zoho contact.
+                    # The local credit note still works; we just don't mirror to Zoho.
+                    logger.info(
+                        f"Skipping Zoho credit-note push for return "
+                        f"{return_doc.get('return_number')}: {e}"
+                    )
     except Exception as zoho_err:
         # Don't block local credit-note creation if Zoho push fails
         logger.error(

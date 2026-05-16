@@ -535,6 +535,21 @@ class MissingAgreedPriceError(RuntimeError):
     Zoho catalog rate, so we refuse to push when pricing is unknown."""
 
 
+class AccountNotLinkedToZohoError(RuntimeError):
+    """Raised when an account has no `zoho_contact_id` linked. Per product rule,
+    Zoho writes are only performed for accounts that have been explicitly
+    linked to a Zoho contact (manually mapped or imported). We never auto-create
+    Zoho contacts from a delivery / return flow."""
+
+
+def _account_has_zoho_link(account: dict) -> bool:
+    """True only when the account has a non-empty `zoho_contact_id`."""
+    if not account:
+        return False
+    zid = account.get("zoho_contact_id")
+    return bool(zid and str(zid).strip())
+
+
 def _zoho_books_url(zoho_invoice_id: str, creds: dict) -> Optional[str]:
     """Construct the admin-facing Zoho Books URL for an invoice based on the
     tenant's connected data centre.
@@ -866,6 +881,14 @@ async def create_credit_note_for_return(
     """
     if not is_zoho_configured():
         raise RuntimeError("Zoho Books integration is not configured (ZOHO_CLIENT_ID missing).")
+
+    # Product rule: only sync to Zoho for accounts already linked to a Zoho
+    # contact. Never auto-create Zoho contacts from a return flow.
+    if not _account_has_zoho_link(account):
+        raise AccountNotLinkedToZohoError(
+            f"Account {account.get('account_name')} ({account.get('id') or account.get('account_id')}) "
+            "has no zoho_contact_id — skipping Zoho credit-note creation."
+        )
 
     # ── Idempotency: if this return was already pushed, return existing mapping ──
     existing_mapping = await db.zoho_invoice_mappings.find_one(
@@ -1244,6 +1267,16 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
     account = await db.accounts.find_one(
         {"id": delivery.get("account_id"), "tenant_id": tenant_id}, {"_id": 0}
     ) or {"account_name": delivery.get("account_name") or "Customer"}
+
+    # Product rule: only push to Zoho for accounts already linked to a Zoho
+    # contact. We never auto-create Zoho contacts from a delivery flow.
+    if not _account_has_zoho_link(account):
+        logger.info(
+            f"sync_delivery_to_zoho: account {account.get('account_name')} "
+            f"({delivery.get('account_id')}) has no zoho_contact_id — skipping Zoho push for "
+            f"delivery {delivery.get('delivery_number')}"
+        )
+        return
 
     backoff_seconds = [0, 4, 16]  # 3 attempts total: immediate, +4s, +16s
     last_error: Optional[str] = None
