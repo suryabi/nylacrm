@@ -905,20 +905,6 @@ class DeliveryAddress(BaseModel):
     lng: Optional[float] = None
     formatted_address: Optional[str] = None
 
-class AccountUpdate(BaseModel):
-    account_name: Optional[str] = None
-    account_type: Optional[str] = None
-    lead_type: Optional[str] = None  # B2B or Retail
-    include_in_gop_metrics: Optional[bool] = None
-    contact_name: Optional[str] = None
-    contact_number: Optional[str] = None
-    gst_number: Optional[str] = None
-    next_follow_up: Optional[str] = None  # YYYY-MM-DD
-    sku_pricing: Optional[List[AccountSKUPricing]] = None
-    delivery_address: Optional[DeliveryAddress] = None
-    onboarded_month: Optional[int] = None
-    onboarded_year: Optional[int] = None
-
 class PaginatedAccountsResponse(BaseModel):
     """Paginated response for accounts list"""
     data: List['Account']
@@ -6440,43 +6426,11 @@ async def migrate_account_categories(current_user: dict = Depends(get_current_us
     
     return {'message': f'Updated {updated_count} accounts with categories from leads', 'updated': updated_count}
 
-@api_router.put("/accounts/{account_id}")
-async def update_account(account_id: str, update_data: AccountUpdate, current_user: dict = Depends(get_current_user)):
-    """Update account details including SKU pricing and delivery address"""
-    account = await get_tdb().accounts.find_one(
-        {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'_id': 0}
-    )
-    if not account:
-        raise HTTPException(status_code=404, detail='Account not found')
-    
-    update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
-    
-    # Convert SKU pricing to dict format
-    if 'sku_pricing' in update_dict:
-        update_dict['sku_pricing'] = [
-            sku.model_dump() if hasattr(sku, 'model_dump') else sku 
-            for sku in update_dict['sku_pricing']
-        ]
-    
-    # Convert delivery address to dict format
-    if 'delivery_address' in update_dict and update_dict['delivery_address']:
-        if hasattr(update_dict['delivery_address'], 'model_dump'):
-            update_dict['delivery_address'] = update_dict['delivery_address'].model_dump()
-    
-    update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await get_tdb().accounts.update_one(
-        {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'$set': update_dict}
-    )
-    
-    updated = await get_tdb().accounts.find_one(
-        {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'_id': 0}
-    )
-    
-    return updated
+# NOTE: PUT /accounts/{account_id} is handled by routes/accounts.py (which has the
+# full AccountUpdate model including gst_legal_name, gst_trade_name, pan_number,
+# billing_address, delivery_contact_*). The duplicate route that used to live
+# here shadowed the new one and silently dropped those fields — causing manual
+# edits to revert to GST-cert parsed text. Do not re-add it.
 
 # Admin endpoint to fix invoices missing tenant_id
 @api_router.post("/admin/fix-invoice-tenant-ids")
