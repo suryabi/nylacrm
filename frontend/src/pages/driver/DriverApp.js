@@ -70,7 +70,7 @@ export function DriverSchedules() {
             </div>
             <div>
               <div className="text-sm font-semibold text-slate-900 leading-tight">{user?.name}</div>
-              <div className="text-[11px] text-slate-500 leading-tight font-mono">{user?.phone}</div>
+              <div className="text-[11px] text-slate-500 leading-tight font-mono mt-0.5">{user?.phone}</div>
             </div>
           </div>
           <Button
