@@ -876,59 +876,14 @@ async def create_invoice_for_delivery(
         suffix = f" ({', '.join(cn_numbers)})" if cn_numbers else ""
         invoice_payload["adjustment_description"] = f"Sustainability Incentive — Bottle Return{suffix}"
 
-    # ── Override the Bill To block on this invoice ────────────────────────────
-    # The user's custom Zoho template renders Bill To as:
-    #   {company_name on the contact}     ← bold heading line (registered name)
-    #   {billing_address.attention}        ← secondary line (account / friendly name)
-    # So we put ONLY the friendly account name in `attention` here — no parens,
-    # no trade-name combo (that lives on the contact's company_name).
-    _trade = (account.get("gst_trade_name") or "").strip()
-    _legal = (account.get("gst_legal_name") or "").strip()
-    _acct = (account.get("account_name") or "").strip()
-    _primary = _trade or _legal
-    # `attention` = secondary line = account name (skip if it would duplicate
-    # the registered name shown on the line above)
-    if _primary and _acct and _primary.lower() != _acct.lower():
-        _attention_label = _acct
-    else:
-        _attention_label = ""  # nothing distinct to show — template will hide the empty line
-
-    def _flatten_addr(src, attention):
-        if not isinstance(src, dict):
-            return None
-        line1 = (src.get("address_line1") or src.get("line1") or "").strip()
-        line2 = (src.get("address_line2") or src.get("line2") or "").strip()
-        landmark = (src.get("landmark") or "").strip()
-        city = (src.get("city") or "").strip()
-        state = (src.get("state") or "").strip()
-        zipc = (src.get("pincode") or src.get("zip") or src.get("postal_code") or "").strip()
-        candidate_addr = ", ".join([p for p in (line1, landmark) if p]).strip()
-        if not (candidate_addr or line2 or city or state or zipc):
-            return None
-        # Zoho hard-caps every address-block field at 100 chars. Clip defensively
-        # and overflow address-line-1 → street2 so no information is dropped.
-        address = (candidate_addr[:100].strip()) or city[:100]
-        overflow = candidate_addr[100:].strip() if len(candidate_addr) > 100 else ""
-        street2 = ", ".join([p for p in (overflow, line2) if p]).strip()[:100]
-        return {
-            "attention": (attention or "")[:200],
-            "address": address,
-            "street2": street2,
-            "city": city[:100],
-            "state": state[:100],
-            "zip": zipc[:100],
-            "country": "India",
-        }
-
-    if _attention_label or _acct or _primary:
-        billing_override = _flatten_addr(
-            account.get("billing_address") or account.get("delivery_address"), _attention_label
-        )
-        shipping_override = _flatten_addr(account.get("delivery_address"), _attention_label)
-        if billing_override:
-            invoice_payload["billing_address"] = billing_override
-        if shipping_override:
-            invoice_payload["shipping_address"] = shipping_override
+    # ── Bill To / Ship To: delegate to the Zoho contact ─────────────────────
+    # We deliberately DO NOT send `billing_address` or `shipping_address` on
+    # the invoice payload. Zoho will fall back to the addresses already stored
+    # on the contact (see `upsert_contact` above, which syncs both blocks at
+    # create/update time). This mirrors what Zoho does when you create an
+    # invoice manually in the Zoho UI — and avoids the recurring
+    # "billing_address has less than 100 characters" 400 that came from our
+    # per-invoice override when any sub-field overflowed.
 
     # Optional: per-tenant Zoho template override for the invoice PDF.
     # Configured via PUT /api/zoho/admin/template-settings — see zoho_books.py.
