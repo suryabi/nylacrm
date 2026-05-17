@@ -74,7 +74,6 @@ const salesNavigationGroups = [
   {
     title: 'Product & SKU',
     items: [
-      { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'National Sales Head', 'Admin', 'System Admin'] },
       { name: 'Bottle Preview', href: '/bottle-preview', icon: Droplets, moduleKey: 'bottle_preview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
     ]
   },
@@ -101,23 +100,6 @@ const salesNavigationGroups = [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Contacts', href: '/contacts', icon: Contact, moduleKey: 'contacts', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin'] },
-      { name: 'Master Locations', href: '/master-locations', icon: MapPin, moduleKey: 'master_locations', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, moduleKey: 'lead_statuses', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'COGS Components', href: '/master/cogs-components', icon: Receipt, moduleKey: 'cogs_components', roles: ['CEO', 'Director', 'System Admin'] },
-    ]
-  },
-  {
-    title: 'Admin',
-    items: [
-      { name: 'Lead Scoring Model', href: '/lead-scoring-model', icon: Gauge, moduleKey: 'lead_scoring_model', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, moduleKey: 'tenant_settings', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'API Keys', href: '/settings/api-keys', icon: KeyRound, moduleKey: 'api_keys', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'Zoho Books', href: '/settings/integrations/zoho', icon: Cable, moduleKey: 'zoho_integration', roles: ['CEO', 'Admin', 'System Admin'] },
-      { name: 'Replace SKU', href: '/admin/sku-migrate', icon: ArrowLeftRight, moduleKey: 'sku_replace', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
-      { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
     ]
   },
 ];
@@ -150,12 +132,6 @@ const productionNavigationGroups = [
     ]
   },
   {
-    title: 'Product & SKU',
-    items: [
-      { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Admin', 'System Admin'] },
-    ]
-  },
-  {
     title: 'Documents',
     items: [
       { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, moduleKey: 'files_documents', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
@@ -183,12 +159,6 @@ const distributionNavigationGroups = [
     ]
   },
   {
-    title: 'Product & SKU',
-    items: [
-      { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ['CEO', 'Director', 'National Sales Head', 'Admin', 'System Admin'] },
-    ]
-  },
-  {
     title: 'Documents',
     items: [
       { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, moduleKey: 'files_documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
@@ -200,12 +170,6 @@ const distributionNavigationGroups = [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, moduleKey: 'task_management', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
-    ]
-  },
-  {
-    title: 'Admin',
-    items: [
-      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, moduleKey: 'tenant_settings', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
     ]
   },
 ];
@@ -264,12 +228,6 @@ const marketingNavigationGroups = [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
       { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, moduleKey: 'task_management', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
-    ]
-  },
-  {
-    title: 'Admin',
-    items: [
-      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, moduleKey: 'tenant_settings', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
     ]
   },
 ];
