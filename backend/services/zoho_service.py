@@ -420,28 +420,28 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         except ZohoApiError as e:
             logger.warning(f"Zoho contact lookup by name failed: {e}")
 
-    # Compute the display label used by Zoho's invoice "Bill To" block.
-    # Format: "Trade Name (Account Name)" — when both are present and differ.
-    # Falls back gracefully so single-name customers don't get "(Same Name)".
+    # Compute the two labels used by Zoho's invoice "Bill To" block:
+    #   • company_name → primary line of Bill To (registered name only)
+    #   • attention    → secondary line of Bill To (account / friendly name)
+    # Combined render on the user's custom Zoho template:
+    #     Jaitra Wellness Private Limited      ← company_name
+    #     Diggin Cafe                          ← attention
     trade_name = (account.get("gst_trade_name") or "").strip()
     legal_name = (account.get("gst_legal_name") or "").strip()
     acct_label = (account.get("account_name") or name or "").strip()
-    primary_label = trade_name or legal_name
-    if primary_label and acct_label and primary_label.lower() != acct_label.lower():
-        display_label = f"{primary_label} ({acct_label})"
-    elif acct_label:
-        display_label = acct_label
-    else:
-        display_label = primary_label or name
+    primary_label = trade_name or legal_name or acct_label
+    # If we have ONLY one identifier (no GST trade/legal name distinct from
+    # account name), both lines collapse to that single label — Zoho will
+    # de-dupe identical lines gracefully on most templates.
+    secondary_label = acct_label if (primary_label and primary_label.lower() != acct_label.lower()) else ""
+    display_label = primary_label  # bold heading text
 
     payload = {
         # `contact_name` must remain the account name — Zoho enforces uniqueness on
         # this field and we use it later to find/match contacts. Don't change it.
         "contact_name": name,
-        # `company_name` is what most Zoho invoice templates render as the bold
-        # heading of the "Bill To" block. Setting it to the trade-name-with-
-        # account-name format means the delivery team sees the registered name
-        # AND the friendly account name on every invoice PDF.
+        # `company_name` is the registered name (no parenthesis, no account name).
+        # The user's Zoho template prints this as the bold first line of "Bill To".
         "company_name": display_label,
         "contact_type": "customer",
     }
@@ -481,9 +481,10 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
     #   {attention, address, street2, city, state, zip, country}
     # Our internal model stores dicts: {address_line1, address_line2, city, state, pincode}.
     #
-    # `attention` prints as the *first line* of the address block in some templates
-    # (used as a fallback in case the template renders contact_name not company_name).
-    attention_line = display_label
+    # `attention` is rendered by the user's custom Zoho template as the
+    # secondary line right below the bold `company_name` heading — so we put
+    # the friendly account name here (NOT the trade-name-with-parens combo).
+    attention_line = secondary_label or acct_label  # never blank — fallback to account name
 
     def _zoho_addr(src) -> Optional[dict]:
         if not src:
@@ -792,20 +793,21 @@ async def create_invoice_for_delivery(
     }
 
     # ── Override the Bill To block on this invoice ────────────────────────────
-    # Zoho's invoice template renders the Bill To heading from the address's
-    # `attention` field (Indian GST template) or `customer_name` (default
-    # template). We inject "TRADE_NAME (ACCOUNT_NAME)" into BOTH so the delivery
-    # team can always identify the customer by the friendly account name AND
-    # the registered company name on the printed invoice — independent of
-    # whether the contact-level company_name update succeeded.
+    # The user's custom Zoho template renders Bill To as:
+    #   {company_name on the contact}     ← bold heading line (registered name)
+    #   {billing_address.attention}        ← secondary line (account / friendly name)
+    # So we put ONLY the friendly account name in `attention` here — no parens,
+    # no trade-name combo (that lives on the contact's company_name).
     _trade = (account.get("gst_trade_name") or "").strip()
     _legal = (account.get("gst_legal_name") or "").strip()
     _acct = (account.get("account_name") or "").strip()
     _primary = _trade or _legal
+    # `attention` = secondary line = account name (skip if it would duplicate
+    # the registered name shown on the line above)
     if _primary and _acct and _primary.lower() != _acct.lower():
-        _display_label = f"{_primary} ({_acct})"
+        _attention_label = _acct
     else:
-        _display_label = _acct or _primary or ""
+        _attention_label = ""  # nothing distinct to show — template will hide the empty line
 
     def _flatten_addr(src, attention):
         if not isinstance(src, dict):
@@ -827,11 +829,11 @@ async def create_invoice_for_delivery(
             "country": "India",
         }
 
-    if _display_label:
+    if _attention_label or _acct or _primary:
         billing_override = _flatten_addr(
-            account.get("billing_address") or account.get("delivery_address"), _display_label
+            account.get("billing_address") or account.get("delivery_address"), _attention_label
         )
-        shipping_override = _flatten_addr(account.get("delivery_address"), _display_label)
+        shipping_override = _flatten_addr(account.get("delivery_address"), _attention_label)
         if billing_override:
             invoice_payload["billing_address"] = billing_override
         if shipping_override:
