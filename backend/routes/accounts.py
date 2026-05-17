@@ -368,8 +368,44 @@ async def update_account(account_id: str, update: AccountUpdate, current_user: d
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     await tdb.accounts.update_one(_account_match(account_id), {'$set': update_data})
-    
-    return await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
+
+    updated = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
+
+    # ── Best-effort Zoho re-sync ──
+    # If this account is already linked to a Zoho contact AND any Zoho-relevant
+    # field changed in this update, push the new values to Zoho so the very
+    # next invoice / credit-note uses the updated Bill To / Ship To / GST /
+    # contact info — without the user needing to deactivate/reactivate.
+    ZOHO_RELEVANT_FIELDS = {
+        'billing_address', 'delivery_address',
+        'gst_number', 'pan_number', 'gst_legal_name', 'gst_trade_name',
+        'contact_name', 'contact_number', 'account_name',
+        'delivery_contact_name', 'delivery_contact_phone',
+    }
+    changed_zoho_fields = ZOHO_RELEVANT_FIELDS.intersection(update_data.keys())
+    if changed_zoho_fields and updated and updated.get('zoho_contact_id'):
+        billed_by = (updated.get('billed_by') or 'company').lower()
+        if billed_by == 'company':
+            try:
+                from services import zoho_service as _zoho
+                if _zoho.is_zoho_configured():
+                    tenant_id = get_current_tenant_id()
+                    creds = await _zoho.get_credentials(tenant_id)
+                    if creds:
+                        await _zoho.upsert_contact(tenant_id, updated)
+                        _logger.info(
+                            f"[zoho] Re-synced contact for account {updated.get('account_id')} "
+                            f"after edits: {sorted(changed_zoho_fields)}"
+                        )
+            except Exception as e:
+                # Never break the user's save because Zoho is down / mis-configured.
+                # The change is already in our DB — the user can hit save again
+                # later or manually re-sync.
+                _logger.warning(
+                    f"[zoho] Auto re-sync failed for account {updated.get('account_id')}: {e}"
+                )
+
+    return updated
 
 
 @router.delete("/{account_id}")
@@ -1452,4 +1488,22 @@ async def update_delivery_info(
         raise HTTPException(status_code=400, detail='No delivery fields provided')
 
     await tdb.accounts.update_one(_account_match(account_id), {'$set': update_doc})
+
+    # ── Best-effort Zoho re-sync (mirrors PUT /accounts/{id}) ──
+    try:
+        updated = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
+        if updated and updated.get('zoho_contact_id') and (updated.get('billed_by') or 'company').lower() == 'company':
+            from services import zoho_service as _zoho
+            if _zoho.is_zoho_configured():
+                tenant_id = get_current_tenant_id()
+                creds = await _zoho.get_credentials(tenant_id)
+                if creds:
+                    await _zoho.upsert_contact(tenant_id, updated)
+                    _logger.info(
+                        f"[zoho] Re-synced contact for account {updated.get('account_id')} "
+                        f"after delivery-info save: {[k for k in update_doc.keys() if k != 'updated_at']}"
+                    )
+    except Exception as e:
+        _logger.warning(f"[zoho] Auto re-sync failed after delivery-info save: {e}")
+
     return {'message': 'Delivery & contact details saved', 'updates': update_doc}
