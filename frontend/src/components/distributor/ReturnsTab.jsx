@@ -979,31 +979,19 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         </a>
                       </div>
                     ) : (
-                      // Not yet synced — surface a retry action so the rep can
-                      // re-push to Zoho after fixing OAuth scopes / SKU mapping.
-                      <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between gap-2 flex-wrap">
-                        <div className="min-w-0">
-                          <p className="text-xs text-amber-700 font-medium">Not yet synced to Zoho</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            Zoho India GST requires every credit note to reference an invoice.
-                            This CN will be pushed to Zoho automatically the moment it is applied to a delivery.
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={retryingZohoPush === selectedReturn.id}
-                          onClick={() => handleRetryZohoPush(selectedReturn)}
-                          className="border-amber-300 text-amber-800 hover:bg-amber-50"
-                          data-testid="retry-zoho-creditnote-push-btn"
-                          title="Retry only works once the CN has been applied to a delivery"
-                        >
-                          {retryingZohoPush === selectedReturn.id ? (
-                            <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Retrying…</>
-                          ) : (
-                            <><RefreshCw className="h-4 w-4 mr-2" /> Retry Zoho push</>
-                          )}
-                        </Button>
+                      // New flow: bottle-return CNs are no longer pushed to Zoho as
+                      // separate documents. Instead, when the CN is applied to a
+                      // delivery, the deduction is added as a post-tax
+                      // "Sustainability Incentive" adjustment on the Zoho invoice.
+                      // The local CN doc remains for settlement math & audit.
+                      <div className="mt-3 pt-3 border-t border-emerald-200">
+                        <p className="text-xs text-emerald-700 font-medium">
+                          Tracked locally — appears as a “Sustainability Incentive”
+                          deduction on the Zoho invoice when this CN is applied to a delivery.
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          No separate credit note is pushed to Zoho.
+                        </p>
                       </div>
                     )}
                     {selectedReturn.credit_issued_to_delivery_number && (

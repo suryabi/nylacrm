@@ -792,6 +792,28 @@ async def create_invoice_for_delivery(
         "notes": f"Generated from Nyla CRM delivery {delivery.get('delivery_number')}",
     }
 
+    # ── Sustainability Incentive (post-tax adjustment from bottle-return CNs) ─
+    # Indian GST: returns of *empty bottles* are a deposit refund, not a
+    # taxable supply — they don't reduce the original sale's taxable value.
+    # Push the credit-note total as Zoho's `adjustment` field (post-tax) so the
+    # invoice shows the incentive deduction to the customer WITHOUT affecting
+    # GST liability. This replaces the older flow of pushing a separate Zoho
+    # credit-note doc + applying it against the invoice.
+    applied_cns = delivery.get("applied_credit_notes") or []
+    incentive_total = 0.0
+    cn_numbers: list[str] = []
+    for _entry in applied_cns:
+        try:
+            incentive_total += float(_entry.get("amount_applied") or 0)
+        except (TypeError, ValueError):
+            pass
+        if _entry.get("credit_note_number"):
+            cn_numbers.append(_entry["credit_note_number"])
+    if incentive_total > 0:
+        invoice_payload["adjustment"] = -round(incentive_total, 2)
+        suffix = f" ({', '.join(cn_numbers)})" if cn_numbers else ""
+        invoice_payload["adjustment_description"] = f"Sustainability Incentive — Bottle Return{suffix}"
+
     # ── Override the Bill To block on this invoice ────────────────────────────
     # The user's custom Zoho template renders Bill To as:
     #   {company_name on the contact}     ← bold heading line (registered name)
@@ -927,23 +949,34 @@ async def create_invoice_for_delivery(
         upsert=True,
     )
 
-    # 7. Apply any credit notes that were attached to this delivery to the
-    #    Zoho invoice we just created. Zoho will auto-close the credit note
-    #    when its balance reaches 0.
-    if delivery.get("applied_credit_notes"):
+    # ── Mark applied CNs as "consumed via invoice adjustment" (no Zoho CN push) ──
+    # Earlier this code path pushed a separate Zoho Credit Note for every
+    # bottle-return event, then applied it against the invoice. We've replaced
+    # that with a post-tax `adjustment` on the invoice itself (see "Sustainability
+    # Incentive" block above) — so we no longer create CN documents in Zoho.
+    # We still stamp the local audit trail so reports / settlement math know
+    # the CNs were honoured by this delivery's invoice.
+    if applied_cns:
         try:
-            zoho_apply_results = await apply_credit_notes_to_zoho_invoice(
-                tenant_id=tenant_id, delivery=delivery, zoho_invoice_id=zoho_invoice_id
+            consumed_apps = [
+                {
+                    "credit_note_id": e.get("credit_note_id"),
+                    "credit_note_number": e.get("credit_note_number"),
+                    "amount": float(e.get("amount_applied") or 0),
+                    "applied_via": "invoice_adjustment",
+                    "zoho_invoice_id": zoho_invoice_id,
+                    "ok": True,
+                }
+                for e in applied_cns
+            ]
+            await db.distributor_deliveries.update_one(
+                {"id": delivery.get("id"), "tenant_id": tenant_id},
+                {"$set": {"zoho_credit_note_applications": consumed_apps}},
             )
-            if zoho_apply_results:
-                await db.distributor_deliveries.update_one(
-                    {"id": delivery.get("id"), "tenant_id": tenant_id},
-                    {"$set": {"zoho_credit_note_applications": zoho_apply_results}},
-                )
         except Exception as e:
             logger.warning(
-                f"Failed applying credit notes to Zoho invoice {zoho_invoice_id} "
-                f"for delivery {delivery.get('delivery_number')}: {e}"
+                f"Failed to stamp local CN-consumption audit on delivery "
+                f"{delivery.get('delivery_number')}: {e}"
             )
 
     return mapping_doc
