@@ -22,6 +22,9 @@ from database import db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 
+import os
+import httpx
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -48,6 +51,91 @@ async def _get_distributor_city(distributor_id: str, tenant_id: str) -> Optional
         or (dist.get("billing_address") or {}).get("city")
         or (dist.get("registered_address") or {}).get("city")
     )
+
+
+# ============ Distance helpers (Google Maps Distance Matrix) ==================
+
+def _address_to_query(addr) -> Optional[str]:
+    if not addr:
+        return None
+    if isinstance(addr, str):
+        s = addr.strip()
+        return s or None
+    if not isinstance(addr, dict):
+        return None
+    parts = [
+        addr.get("address_line1") or addr.get("address_line_1") or addr.get("line1"),
+        addr.get("address_line2") or addr.get("address_line_2") or addr.get("line2"),
+        addr.get("city"),
+        addr.get("state"),
+        addr.get("pincode") or addr.get("zip"),
+    ]
+    q = ", ".join([p for p in parts if p])
+    return q or None
+
+
+async def _get_factory_address(tenant_id: str) -> Optional[str]:
+    """Returns the factory address. Configured under tenants.settings.factory_address."""
+    t = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0, "settings": 1})
+    if not t:
+        return None
+    fa = (t.get("settings") or {}).get("factory_address")
+    if isinstance(fa, dict):
+        return _address_to_query(fa)
+    if isinstance(fa, str) and fa.strip():
+        return fa.strip()
+    return None
+
+
+async def _get_distributor_origin(distributor_id: str, tenant_id: str) -> Optional[str]:
+    """Distributor's default/primary location → address string for Distance Matrix origin."""
+    loc = await db.distributor_locations.find_one(
+        {"distributor_id": distributor_id, "tenant_id": tenant_id, "is_default": True},
+        {"_id": 0}
+    )
+    if not loc:
+        loc = await db.distributor_locations.find_one(
+            {"distributor_id": distributor_id, "tenant_id": tenant_id},
+            {"_id": 0}
+        )
+    if not loc:
+        return None
+    return _address_to_query({
+        "address_line1": loc.get("address_line_1") or loc.get("address_line1"),
+        "address_line2": loc.get("address_line_2") or loc.get("address_line2"),
+        "city": loc.get("city"),
+        "state": loc.get("state"),
+        "pincode": loc.get("pincode"),
+    })
+
+
+async def _distance_matrix(origins: List[str], destinations: List[str]) -> Optional[dict]:
+    """Use the modern Google Maps Routes API (computeRouteMatrix) since the legacy
+    Distance Matrix endpoint is no longer enabled by default for new projects.
+    Returns a parsed result list (one element per origin×destination pair) or None on failure."""
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+    if not api_key or not origins or not destinations:
+        return None
+    url = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix"
+    body = {
+        "origins": [{"waypoint": {"address": o}} for o in origins],
+        "destinations": [{"waypoint": {"address": d}} for d in destinations],
+        "travelMode": "DRIVE",
+        "routingPreference": "TRAFFIC_UNAWARE",
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": "originIndex,destinationIndex,distanceMeters,duration,status,condition",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(url, headers=headers, json=body)
+            r.raise_for_status()
+            return r.json()  # list of {originIndex, destinationIndex, distanceMeters, duration, ...}
+    except Exception as e:
+        logger.warning(f"Google Routes API failed: {e}")
+        return None
 
 
 # ============ Fleet pickers (vehicles / drivers filtered by distributor's city) ============
@@ -126,26 +214,85 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
             {"_id": 0}
         ).to_list(len(ids))
         by_id = {r["id"]: r for r in rows}
+
+        # Bulk-fetch line items + accounts in two queries to avoid N+1
+        items_by_delivery: dict = {}
+        async for it in db.distributor_delivery_items.find(
+            {"delivery_id": {"$in": ids}, "tenant_id": tenant_id},
+            {"_id": 0, "delivery_id": 1, "sku_name": 1, "sku_code": 1, "quantity": 1, "unit_price": 1}
+        ):
+            items_by_delivery.setdefault(it["delivery_id"], []).append(it)
+
+        account_ids = list({r.get("account_id") for r in rows if r.get("account_id")})
+        accounts_by_id: dict = {}
+        if account_ids:
+            async for a in db.accounts.find(
+                {"id": {"$in": account_ids}, "tenant_id": tenant_id},
+                {"_id": 0, "id": 1, "account_name": 1, "billing_address": 1, "delivery_address": 1,
+                 "contact_number": 1, "delivery_contact_phone": 1, "delivery_contact_name": 1}
+            ):
+                accounts_by_id[a["id"]] = a
+
+        def _addr_from(src):
+            if not isinstance(src, dict):
+                return None
+            line1 = src.get("address_line1") or src.get("address_line_1") or src.get("line1") or ""
+            line2 = src.get("address_line2") or src.get("address_line_2") or src.get("line2") or ""
+            city = src.get("city") or ""
+            state = src.get("state") or ""
+            pincode = src.get("pincode") or src.get("zip") or ""
+            if not (line1 or line2 or city or state or pincode):
+                return None
+            return {
+                "address_line1": line1 or None,
+                "address_line2": line2 or None,
+                "city": city or None,
+                "state": state or None,
+                "pincode": pincode or None,
+                "lat": src.get("lat") or src.get("latitude"),
+                "lng": src.get("lng") or src.get("longitude"),
+                "formatted": ", ".join([p for p in (line1, line2, city, state, pincode) if p]) or None,
+            }
+
         for did in ids:
             r = by_id.get(did)
             if not r:
                 continue
-            # Trim the delivery doc to what the schedule UI / PDF needs
+            acct = accounts_by_id.get(r.get("account_id")) or {}
+
+            # Customer name precedence: delivery.account_name → account.account_name → "Unknown"
+            customer_name = r.get("account_name") or r.get("customer_name") or acct.get("account_name") or "Unknown"
+            # Address precedence: delivery.delivery_address (if non-empty dict) → account.delivery_address → account.billing_address
+            dlv_addr = r.get("delivery_address")
+            addr = _addr_from(dlv_addr) if isinstance(dlv_addr, dict) else None
+            if not addr:
+                addr = _addr_from(acct.get("delivery_address")) or _addr_from(acct.get("billing_address"))
+            # Phone precedence
+            phone = (r.get("contact_phone") or r.get("delivery_contact_phone")
+                     or acct.get("delivery_contact_phone") or acct.get("contact_number"))
+
+            # Items
+            raw_items = items_by_delivery.get(did) or r.get("items") or []
             items = []
-            for line in r.get("items", []) or []:
+            total_qty = 0
+            for line in raw_items:
+                qty = int(line.get("quantity") or line.get("delivered_quantity") or 0)
+                total_qty += qty
                 items.append({
-                    "sku_name": line.get("sku_name") or line.get("sku") or line.get("name"),
-                    "quantity": line.get("quantity") or line.get("delivered_quantity") or 0,
+                    "sku_name": line.get("sku_name") or line.get("sku_code") or "Item",
+                    "quantity": qty,
                 })
+
             deliveries.append({
                 "id": r.get("id"),
                 "delivery_number": r.get("delivery_number"),
                 "status": r.get("status"),
                 "account_id": r.get("account_id"),
-                "customer_name": r.get("customer_name") or r.get("account_name"),
-                "delivery_address": r.get("delivery_address") or {},
-                "contact_phone": r.get("contact_phone") or r.get("delivery_contact_phone"),
+                "customer_name": customer_name,
+                "delivery_address": addr or {},
+                "contact_phone": phone,
                 "items": items,
+                "total_quantity": total_qty,
             })
     schedule["deliveries"] = deliveries
     return schedule
@@ -260,17 +407,56 @@ async def list_eligible_deliveries(current_user: dict = Depends(get_current_user
     deliveries = await db.distributor_deliveries.find(q, {"_id": 0}).sort("delivery_number", 1).to_list(2000)
     eligible = [d for d in deliveries if d.get("id") not in busy_ids]
 
-    # Trim payload
-    trimmed = [{
-        "id": d.get("id"),
-        "delivery_number": d.get("delivery_number"),
-        "customer_name": d.get("customer_name") or d.get("account_name"),
-        "account_id": d.get("account_id"),
-        "delivery_address": d.get("delivery_address") or {},
-        "contact_phone": d.get("contact_phone") or d.get("delivery_contact_phone"),
-        "items_count": len(d.get("items") or []),
-        "total_quantity": sum((line.get("quantity") or 0) for line in (d.get("items") or [])),
-    } for d in eligible]
+    # Pull related accounts in one go for address fallback
+    account_ids = list({d.get("account_id") for d in eligible if d.get("account_id")})
+    accounts_by_id: dict = {}
+    if account_ids:
+        async for a in db.accounts.find(
+            {"id": {"$in": account_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "account_name": 1, "billing_address": 1, "delivery_address": 1,
+             "contact_number": 1, "delivery_contact_phone": 1}
+        ):
+            accounts_by_id[a["id"]] = a
+
+    # Bulk-fetch item counts to compute total_quantity & items_count
+    item_stats: dict = {}
+    if eligible:
+        elig_ids = [d["id"] for d in eligible]
+        async for it in db.distributor_delivery_items.find(
+            {"delivery_id": {"$in": elig_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "delivery_id": 1, "quantity": 1}
+        ):
+            s = item_stats.setdefault(it["delivery_id"], {"count": 0, "qty": 0})
+            s["count"] += 1
+            s["qty"] += int(it.get("quantity") or 0)
+
+    def _addr_brief(src):
+        if not isinstance(src, dict):
+            return {}
+        return {
+            "address_line1": src.get("address_line1") or src.get("address_line_1"),
+            "city": src.get("city"),
+            "state": src.get("state"),
+            "pincode": src.get("pincode"),
+        }
+
+    trimmed = []
+    for d in eligible:
+        acct = accounts_by_id.get(d.get("account_id")) or {}
+        addr = d.get("delivery_address") if isinstance(d.get("delivery_address"), dict) and d.get("delivery_address") else None
+        if not addr or not any(addr.values()):
+            addr = acct.get("delivery_address") or acct.get("billing_address")
+        stats = item_stats.get(d["id"], {"count": 0, "qty": d.get("total_quantity") or 0})
+        trimmed.append({
+            "id": d.get("id"),
+            "delivery_number": d.get("delivery_number"),
+            "customer_name": d.get("account_name") or d.get("customer_name") or acct.get("account_name"),
+            "account_id": d.get("account_id"),
+            "delivery_address": _addr_brief(addr),
+            "contact_phone": d.get("contact_phone") or d.get("delivery_contact_phone") or acct.get("delivery_contact_phone") or acct.get("contact_number"),
+            "items_count": stats["count"] or len(d.get("items") or []),
+            "total_quantity": stats["qty"] or d.get("total_quantity") or 0,
+        })
 
     return {"deliveries": trimmed, "total": len(trimmed)}
 
@@ -660,6 +846,110 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
 
     doc.build(story)
     return buf.getvalue()
+
+
+# ============ Distance computation =============================================
+
+@router.get("/{schedule_id}/distance")
+async def compute_schedule_distance(schedule_id: str, current_user: dict = Depends(get_current_user)):
+    """Computes the full route distance: distributor → stop1 → stop2 → ... → stopN → factory.
+    Uses Google Maps Distance Matrix. Returns per-leg + total km. Graceful degradation if a
+    leg's address is missing or the API call fails."""
+    tenant_id = get_current_tenant_id()
+    distributor_id = _resolve_distributor_id(current_user)
+    s = await db.distributor_delivery_schedules.find_one(
+        {"id": schedule_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    s = await _enrich_schedule(s, tenant_id)
+    distributor_origin = await _get_distributor_origin(distributor_id, tenant_id)
+    factory_addr = await _get_factory_address(tenant_id)
+    api_key_present = bool(os.environ.get("GOOGLE_MAPS_API_KEY"))
+
+    # Build ordered route: distributor → stops → factory
+    stops: List[dict] = []
+    if distributor_origin:
+        stops.append({"label": "Distributor warehouse", "address": distributor_origin})
+    for delv in s.get("deliveries") or []:
+        stops.append({
+            "label": delv.get("customer_name") or "Stop",
+            "delivery_id": delv.get("id"),
+            "address": _address_to_query(delv.get("delivery_address")),
+        })
+    if factory_addr:
+        stops.append({"label": "Factory", "address": factory_addr})
+
+    warnings: List[str] = []
+    if not api_key_present:
+        warnings.append("Google Maps API key not configured.")
+    if not distributor_origin:
+        warnings.append("Distributor primary location address missing — first leg cannot be measured.")
+    if not factory_addr:
+        warnings.append("Factory address not configured — set it in Admin → Tenant Settings to measure the return leg.")
+
+    legs: List[dict] = []
+    total_km = 0.0
+
+    for i in range(len(stops) - 1):
+        origin = stops[i].get("address")
+        dest = stops[i + 1].get("address")
+        leg = {
+            "from": stops[i].get("label"),
+            "to": stops[i + 1].get("label"),
+            "to_delivery_id": stops[i + 1].get("delivery_id"),
+            "km": None,
+            "duration_min": None,
+            "status": "skipped",
+        }
+        if not api_key_present:
+            leg["status"] = "no_api_key"
+            legs.append(leg)
+            continue
+        if not origin or not dest:
+            leg["status"] = "address_missing"
+            legs.append(leg)
+            continue
+        data = await _distance_matrix([origin], [dest])
+        if not data or not isinstance(data, list) or not data:
+            leg["status"] = "api_error"
+            legs.append(leg)
+            continue
+        try:
+            elem = data[0]  # one origin × one destination
+            if elem.get("status") and elem["status"].get("code"):
+                # Non-OK status from Routes API
+                leg["status"] = "api_error"
+                legs.append(leg)
+                continue
+            distance_m = elem.get("distanceMeters")
+            duration_s = elem.get("duration")  # string like "1234s"
+            if distance_m is None:
+                leg["status"] = elem.get("condition", "no_route").lower()
+                legs.append(leg)
+                continue
+            leg["km"] = round(distance_m / 1000.0, 1)
+            if isinstance(duration_s, str) and duration_s.endswith("s"):
+                try:
+                    leg["duration_min"] = round(int(duration_s[:-1]) / 60.0)
+                except ValueError:
+                    pass
+            leg["status"] = "ok"
+            total_km += leg["km"]
+        except Exception as e:
+            logger.warning(f"Failed to parse Routes API row: {e}")
+            leg["status"] = "api_error"
+        legs.append(leg)
+
+    return {
+        "legs": legs,
+        "total_km": round(total_km, 1),
+        "warnings": warnings,
+        "factory_address": factory_addr,
+        "distributor_origin": distributor_origin,
+    }
 
 
 # ============ Quick-date helper for the UI =====================================

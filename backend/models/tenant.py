@@ -135,6 +135,12 @@ class TenantSettings(BaseModel):
     # Sales/Field Settings
     check_in_radius_meters: int = 50  # Geo-fence radius for "I am here" sales rep check-ins on leads
 
+    # Factory / company HQ address — used by distributor delivery schedules to
+    # compute the "last delivery → factory" leg of the route distance.
+    # Stored as a single free-text line OR a structured address dict; both forms
+    # are accepted by the distance route.
+    factory_address: Optional[str] = None
+
 
 # ============= INDUSTRY PROFILE SYSTEM =============
 

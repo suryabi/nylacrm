@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Truck, User, Loader2, ChevronUp, ChevronDown, Plus, X,
   Download, CheckCircle2, XCircle, Calendar, Package, Phone, MapPin,
+  GripVertical, Route, AlertTriangle,
 } from 'lucide-react';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -40,7 +41,18 @@ function fmtDate(iso) {
 
 function addrStr(a) {
   if (!a || typeof a !== 'object') return '—';
-  return [a.address_line1, a.address_line2, a.city, a.state, a.pincode].filter(Boolean).join(', ') || '—';
+  return a.formatted
+    || [a.address_line1, a.address_line2, a.city, a.state, a.pincode].filter(Boolean).join(', ')
+    || '—';
+}
+
+function legStatusLabel(s) {
+  if (s === 'ok') return null;
+  if (s === 'route_exists') return 'Same address';
+  if (s === 'address_missing') return 'Address missing';
+  if (s === 'api_error') return 'Distance unavailable';
+  if (s === 'no_api_key') return 'Maps not configured';
+  return s;
 }
 
 export default function DeliveryScheduleDetail() {
@@ -51,6 +63,9 @@ export default function DeliveryScheduleDetail() {
   const [schedule, setSchedule] = useState(null);
   const [fleet, setFleet] = useState({ vehicles: [], drivers: [], city: null });
   const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState({}); // delivery_id -> bool
+  const [distance, setDistance] = useState(null);
+  const [distanceLoading, setDistanceLoading] = useState(false);
 
   // Attach dialog state
   const [attachOpen, setAttachOpen] = useState(false);
@@ -60,6 +75,10 @@ export default function DeliveryScheduleDetail() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+
+  // Drag-and-drop
+  const dragSrc = useRef(null);
+  const [dragOver, setDragOver] = useState(null);
 
   const fetchSchedule = useCallback(async () => {
     setLoading(true);
@@ -85,13 +104,33 @@ export default function DeliveryScheduleDetail() {
         drivers: d.data?.drivers || [],
         city: v.data?.city || d.data?.city || null,
       });
-    } catch { /* ignore — admin may not have fleet for this city yet */ }
+    } catch { /* ignore */ }
   }, []);
 
+  const fetchDistance = useCallback(async () => {
+    setDistanceLoading(true);
+    try {
+      const { data } = await axios.get(`${BASE}/${id}/distance`, { withCredentials: true });
+      setDistance(data);
+    } catch {
+      setDistance(null);
+    } finally {
+      setDistanceLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => { fetchSchedule(); fetchFleet(); }, [fetchSchedule, fetchFleet]);
+  // Refetch distance whenever delivery_ids order changes or vehicle/driver assignments change
+  useEffect(() => {
+    if (schedule?.deliveries && schedule.deliveries.length > 0) {
+      fetchDistance();
+    } else {
+      setDistance(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedule?.id, JSON.stringify(schedule?.delivery_ids || [])]);
 
   const editable = schedule && schedule.status !== 'cancelled';
-  const canChangeAssignments = editable;
 
   const patch = async (body) => {
     setBusy(true);
@@ -108,6 +147,12 @@ export default function DeliveryScheduleDetail() {
   const changeVehicle = (vid) => patch({ vehicle_id: vid || null });
   const changeDriver = (did) => patch({ driver_id: did || null });
 
+  const reorderTo = async (ids) => {
+    // Optimistic local update so the UI feels instant; then persist.
+    setSchedule((prev) => prev ? { ...prev, delivery_ids: ids, deliveries: ids.map(x => prev.deliveries.find(d => d.id === x)).filter(Boolean) } : prev);
+    await patch({ delivery_ids: ids });
+  };
+
   const move = async (idx, direction) => {
     if (!schedule?.deliveries) return;
     const ids = (schedule.delivery_ids || []).slice();
@@ -115,7 +160,32 @@ export default function DeliveryScheduleDetail() {
     if (target < 0 || target >= ids.length) return;
     const [moved] = ids.splice(idx, 1);
     ids.splice(target, 0, moved);
-    await patch({ delivery_ids: ids });
+    await reorderTo(ids);
+  };
+
+  // ---- Drag-and-drop handlers (HTML5 native) ----
+  const onDragStart = (e, idx) => {
+    dragSrc.current = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    // Safari requires setData
+    try { e.dataTransfer.setData('text/plain', String(idx)); } catch { /* ignore */ }
+  };
+  const onDragOver = (e, idx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOver !== idx) setDragOver(idx);
+  };
+  const onDragLeave = () => setDragOver(null);
+  const onDrop = async (e, dropIdx) => {
+    e.preventDefault();
+    setDragOver(null);
+    const srcIdx = dragSrc.current;
+    dragSrc.current = null;
+    if (srcIdx === null || srcIdx === undefined || srcIdx === dropIdx) return;
+    const ids = (schedule.delivery_ids || []).slice();
+    const [moved] = ids.splice(srcIdx, 1);
+    ids.splice(dropIdx, 0, moved);
+    await reorderTo(ids);
   };
 
   const detach = async (deliveryId) => {
@@ -166,10 +236,10 @@ export default function DeliveryScheduleDetail() {
     try {
       const { data } = await axios.post(`${BASE}/${id}/confirm`, {}, { withCredentials: true });
       setSchedule(data);
-      toast.success('Schedule confirmed. Underlying stock-outs moved to Scheduled.');
+      toast.success('Schedule confirmed. Stock-outs are now Scheduled.');
       setConfirmOpen(false);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'Failed to confirm schedule');
+      toast.error(e?.response?.data?.detail || 'Failed to confirm');
     } finally {
       setBusy(false);
     }
@@ -180,7 +250,7 @@ export default function DeliveryScheduleDetail() {
     try {
       const { data } = await axios.post(`${BASE}/${id}/cancel`, {}, { withCredentials: true });
       setSchedule(data);
-      toast.success('Schedule cancelled. Attached stock-outs reverted to Confirmed.');
+      toast.success('Schedule cancelled.');
       setCancelOpen(false);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to cancel');
@@ -189,20 +259,27 @@ export default function DeliveryScheduleDetail() {
     }
   };
 
-  const downloadPDF = () => {
-    window.open(`${BASE}/${id}/pdf`, '_blank');
-  };
+  const downloadPDF = () => window.open(`${BASE}/${id}/pdf`, '_blank');
 
   if (loading || !schedule) {
-    return (
-      <div className="p-6 flex items-center justify-center text-slate-500">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
-      </div>
-    );
+    return <div className="p-6 flex items-center justify-center text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
   }
 
   const st = STATUS_LABELS[schedule.status] || { label: schedule.status, cls: 'bg-slate-100 text-slate-700 border-slate-200' };
   const deliveries = schedule.deliveries || [];
+
+  // legs keyed by destination delivery_id for quick lookup
+  const legByDeliveryId = {};
+  let firstLegKm = null;
+  let lastLegKm = null;
+  if (distance?.legs) {
+    for (const l of distance.legs) {
+      if (l.to_delivery_id) legByDeliveryId[l.to_delivery_id] = l;
+    }
+    if (distance.legs.length > 0) firstLegKm = distance.legs[0];
+    const last = distance.legs[distance.legs.length - 1];
+    if (last && !last.to_delivery_id) lastLegKm = last;  // factory leg
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto" data-testid="schedule-detail-page">
@@ -246,14 +323,9 @@ export default function DeliveryScheduleDetail() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card className="p-4">
           <Label className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-            <Truck className="h-3 w-3" /> Vehicle
-            {fleet.city && <span className="text-slate-400 normal-case ml-1">· in {fleet.city}</span>}
+            <Truck className="h-3 w-3" /> Vehicle {fleet.city && <span className="text-slate-400 normal-case ml-1">· in {fleet.city}</span>}
           </Label>
-          <Select
-            value={schedule.vehicle_id || '__none__'}
-            onValueChange={(v) => changeVehicle(v === '__none__' ? '' : v)}
-            disabled={!canChangeAssignments || busy}
-          >
+          <Select value={schedule.vehicle_id || '__none__'} onValueChange={(v) => changeVehicle(v === '__none__' ? '' : v)} disabled={!editable || busy}>
             <SelectTrigger className="mt-2" data-testid="assign-vehicle"><SelectValue placeholder="Pick vehicle" /></SelectTrigger>
             <SelectContent className="max-h-72">
               <SelectItem value="__none__">— None —</SelectItem>
@@ -265,43 +337,63 @@ export default function DeliveryScheduleDetail() {
               ))}
             </SelectContent>
           </Select>
-          {schedule.vehicle && (
-            <p className="text-xs text-slate-500 mt-2">
-              {schedule.vehicle.vehicle_type} {schedule.vehicle.vehicle_name && `· ${schedule.vehicle.vehicle_name}`}
-            </p>
-          )}
+          {schedule.vehicle && (<p className="text-xs text-slate-500 mt-2">{schedule.vehicle.vehicle_type}{schedule.vehicle.vehicle_name && ` · ${schedule.vehicle.vehicle_name}`}</p>)}
         </Card>
         <Card className="p-4">
           <Label className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-            <User className="h-3 w-3" /> Driver
-            {fleet.city && <span className="text-slate-400 normal-case ml-1">· in {fleet.city}</span>}
+            <User className="h-3 w-3" /> Driver {fleet.city && <span className="text-slate-400 normal-case ml-1">· in {fleet.city}</span>}
           </Label>
-          <Select
-            value={schedule.driver_id || '__none__'}
-            onValueChange={(v) => changeDriver(v === '__none__' ? '' : v)}
-            disabled={!canChangeAssignments || busy}
-          >
+          <Select value={schedule.driver_id || '__none__'} onValueChange={(v) => changeDriver(v === '__none__' ? '' : v)} disabled={!editable || busy}>
             <SelectTrigger className="mt-2" data-testid="assign-driver"><SelectValue placeholder="Pick driver" /></SelectTrigger>
             <SelectContent className="max-h-72">
               <SelectItem value="__none__">— None —</SelectItem>
               {fleet.drivers.map(d => (
-                <SelectItem key={d.id} value={d.id}>
-                  {d.full_name} <span className="text-slate-400 ml-1">· {d.phone}</span>
-                </SelectItem>
+                <SelectItem key={d.id} value={d.id}>{d.full_name} <span className="text-slate-400 ml-1">· {d.phone}</span></SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {schedule.driver && (
-            <p className="text-xs text-slate-500 mt-2 font-mono">{schedule.driver.phone}</p>
-          )}
+          {schedule.driver && (<p className="text-xs text-slate-500 mt-2 font-mono">{schedule.driver.phone}</p>)}
         </Card>
       </div>
 
-      {/* Deliveries list */}
-      <Card>
+      {/* Route summary card */}
+      {deliveries.length > 0 && (
+        <Card className="p-4 mb-4 bg-gradient-to-br from-slate-50 to-white">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-slate-900 text-white flex items-center justify-center">
+                <Route className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wider text-slate-500">Total route</div>
+                <div className="text-xl font-bold text-slate-900" data-testid="schedule-total-km">
+                  {distanceLoading ? <Loader2 className="h-4 w-4 animate-spin inline" /> : (
+                    distance?.total_km != null ? `${distance.total_km.toFixed(1)} km` : '—'
+                  )}
+                </div>
+                <div className="text-xs text-slate-500 mt-0.5">
+                  Distributor → {deliveries.length} stop{deliveries.length === 1 ? '' : 's'} → Factory
+                </div>
+              </div>
+            </div>
+            {distance?.warnings && distance.warnings.length > 0 && (
+              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-md flex items-start gap-1.5 max-w-md">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                <span>{distance.warnings.join(' ')}</span>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Deliveries list — ROW format with expander + drag-and-drop */}
+      <Card className="overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b">
           <div className="font-medium text-slate-900 flex items-center gap-2">
             <Package className="h-4 w-4 text-slate-600" /> Stops · in dispatch order
+            {editable && deliveries.length > 1 && (
+              <span className="text-xs text-slate-400 ml-2 font-normal">drag rows or use arrows to reorder</span>
+            )}
           </div>
           {editable && (
             <Button size="sm" variant="outline" onClick={openAttach} data-testid="schedule-attach-btn">
@@ -310,60 +402,140 @@ export default function DeliveryScheduleDetail() {
           )}
         </div>
 
+        {/* First leg (Distributor → Stop 1) */}
+        {firstLegKm && deliveries.length > 0 && (
+          <div className="px-5 py-2 bg-slate-50/60 border-b text-xs text-slate-600 flex items-center gap-2" data-testid="leg-first">
+            <Route className="h-3 w-3 text-slate-400" />
+            <span className="text-slate-400">Distributor warehouse →</span>
+            <span className="font-medium text-slate-700">{firstLegKm.km != null ? `${firstLegKm.km.toFixed(1)} km` : legStatusLabel(firstLegKm.status)}</span>
+            {firstLegKm.duration_min != null && <span className="text-slate-400">· ~{firstLegKm.duration_min} min</span>}
+          </div>
+        )}
+
         {deliveries.length === 0 ? (
           <div className="p-12 text-center" data-testid="schedule-empty-stops">
             <Package className="h-10 w-10 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-600 font-medium">No deliveries attached yet</p>
-            <p className="text-sm text-slate-400 mt-1">Click "Attach Stock-Outs" to add confirmed deliveries to this schedule.</p>
+            <p className="text-sm text-slate-400 mt-1">Click "Attach Stock-Outs" to add confirmed deliveries.</p>
           </div>
         ) : (
           <div className="divide-y">
-            {deliveries.map((d, idx) => (
-              <div key={d.id} className="px-5 py-4 flex items-start gap-4" data-testid={`stop-row-${d.id}`}>
-                {/* Order # + move buttons */}
-                <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-slate-900 text-white text-xs font-semibold flex items-center justify-center">{idx + 1}</div>
-                  {editable && (
-                    <div className="flex flex-col gap-0.5">
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => move(idx, -1)} disabled={idx === 0 || busy} data-testid={`stop-up-${d.id}`}>
-                        <ChevronUp className="h-3 w-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => move(idx, 1)} disabled={idx === deliveries.length - 1 || busy} data-testid={`stop-down-${d.id}`}>
-                        <ChevronDown className="h-3 w-3" />
-                      </Button>
+            {deliveries.map((d, idx) => {
+              const isOpen = !!expanded[d.id];
+              const interLeg = idx > 0 ? legByDeliveryId[d.id] : null; // leg INTO this stop (skip the first which is shown above)
+              const dropping = dragOver === idx;
+              return (
+                <React.Fragment key={d.id}>
+                  {/* Inter-leg banner between stops 1→2, 2→3, etc. */}
+                  {interLeg && (
+                    <div className="px-5 py-1.5 bg-slate-50/40 text-xs text-slate-500 flex items-center gap-2">
+                      <Route className="h-3 w-3 text-slate-400" />
+                      <span className="font-medium text-slate-700">{interLeg.km != null ? `${interLeg.km.toFixed(1)} km` : legStatusLabel(interLeg.status)}</span>
+                      {interLeg.duration_min != null && <span>· ~{interLeg.duration_min} min</span>}
                     </div>
                   )}
-                </div>
 
-                {/* Customer + address + items */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-slate-900">{d.customer_name || 'Unknown customer'}</span>
-                    {d.delivery_number && <span className="text-xs text-slate-400 font-mono">{d.delivery_number}</span>}
-                  </div>
-                  <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-1">
-                    {d.contact_phone && <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {d.contact_phone}</span>}
-                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {addrStr(d.delivery_address)}</span>
-                  </div>
-                  {d.items && d.items.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {d.items.map((it, i) => (
-                        <Badge key={i} variant="outline" className="text-xs bg-slate-50">
-                          {it.sku_name || 'Item'} · <span className="font-semibold ml-1">{it.quantity}</span>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                  <div
+                    className={`group ${dropping ? 'bg-emerald-50/60 ring-2 ring-emerald-300 ring-inset' : ''}`}
+                    draggable={editable && !busy}
+                    onDragStart={(e) => onDragStart(e, idx)}
+                    onDragOver={(e) => onDragOver(e, idx)}
+                    onDragLeave={onDragLeave}
+                    onDrop={(e) => onDrop(e, idx)}
+                    data-testid={`stop-row-${d.id}`}
+                  >
+                    {/* Compact row — always visible */}
+                    <button
+                      type="button"
+                      onClick={() => setExpanded((s) => ({ ...s, [d.id]: !s[d.id] }))}
+                      className="w-full text-left px-3 py-3 flex items-center gap-3 hover:bg-slate-50/70 transition-colors"
+                      data-testid={`stop-toggle-${d.id}`}
+                    >
+                      {editable && (
+                        <span className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing hidden md:inline-flex" title="Drag to reorder">
+                          <GripVertical className="h-4 w-4" />
+                        </span>
+                      )}
+                      <div className="w-7 h-7 rounded-full bg-slate-900 text-white text-xs font-semibold flex items-center justify-center flex-shrink-0">{idx + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-slate-900 truncate">{d.customer_name || 'Unknown customer'}</span>
+                          {d.delivery_number && <span className="text-[11px] text-slate-400 font-mono">{d.delivery_number}</span>}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5 truncate">{addrStr(d.delivery_address)}</div>
+                      </div>
+                      {/* Quantity summary badge */}
+                      <div className="hidden sm:flex flex-col items-end mr-2">
+                        <div className="text-xs text-slate-400 leading-none">qty</div>
+                        <div className="text-sm font-semibold text-slate-700 leading-tight">{d.total_quantity || 0}</div>
+                      </div>
+                      {editable && (
+                        <div className="hidden md:flex flex-col">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); move(idx, -1); }} disabled={idx === 0 || busy} data-testid={`stop-up-${d.id}`}>
+                            <ChevronUp className="h-3 w-3" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); move(idx, 1); }} disabled={idx === deliveries.length - 1 || busy} data-testid={`stop-down-${d.id}`}>
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      {editable && (
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); detach(d.id); }} disabled={busy} data-testid={`stop-remove-${d.id}`}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
 
-                {/* Remove */}
-                {editable && (
-                  <Button size="icon" variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => detach(d.id)} disabled={busy} data-testid={`stop-remove-${d.id}`}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+                    {/* Expander details */}
+                    {isOpen && (
+                      <div className="px-12 pb-4 -mt-1 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm" data-testid={`stop-expanded-${d.id}`}>
+                        <div className="space-y-2">
+                          <div className="text-xs uppercase tracking-wider text-slate-400">Delivery address</div>
+                          <div className="text-slate-700 flex items-start gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-slate-400" />
+                            <span>{addrStr(d.delivery_address)}</span>
+                          </div>
+                          {d.contact_phone && (
+                            <div className="text-slate-600 flex items-center gap-1.5 text-xs">
+                              <Phone className="h-3 w-3 text-slate-400" /> {d.contact_phone}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wider text-slate-400 mb-1.5">Crates / Items</div>
+                          {d.items && d.items.length > 0 ? (
+                            <div className="space-y-1">
+                              {d.items.map((it, i) => (
+                                <div key={i} className="flex items-center justify-between bg-slate-50 rounded-md px-2.5 py-1.5">
+                                  <span className="text-slate-700 truncate mr-2">{it.sku_name || 'Item'}</span>
+                                  <span className="text-sm font-semibold text-slate-900 whitespace-nowrap">{it.quantity}</span>
+                                </div>
+                              ))}
+                              <div className="flex items-center justify-between pt-1 px-2.5">
+                                <span className="text-xs text-slate-500">Total</span>
+                                <span className="text-sm font-bold text-slate-900">{d.total_quantity || 0}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 italic">No items recorded on this delivery.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </React.Fragment>
+              );
+            })}
+            {/* Last leg (Stop N → Factory) */}
+            {lastLegKm && (
+              <div className="px-5 py-2 bg-slate-50/60 text-xs text-slate-600 flex items-center gap-2" data-testid="leg-last">
+                <Route className="h-3 w-3 text-slate-400" />
+                <span className="text-slate-400">→ Factory</span>
+                <span className="font-medium text-slate-700">{lastLegKm.km != null ? `${lastLegKm.km.toFixed(1)} km` : legStatusLabel(lastLegKm.status)}</span>
+                {lastLegKm.duration_min != null && <span className="text-slate-400">· ~{lastLegKm.duration_min} min</span>}
               </div>
-            ))}
+            )}
           </div>
         )}
       </Card>
@@ -380,39 +552,29 @@ export default function DeliveryScheduleDetail() {
         <DialogContent className="max-w-2xl" data-testid="attach-dialog">
           <DialogHeader>
             <DialogTitle>Attach Confirmed Stock-Outs</DialogTitle>
-            <DialogDescription>
-              Pick deliveries to add to this schedule. Each delivery can be on only one active schedule.
-            </DialogDescription>
+            <DialogDescription>Pick deliveries to add to this schedule. Each delivery can be on only one active schedule.</DialogDescription>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto -mx-6 px-6">
             {eligibleLoading ? (
-              <div className="p-8 flex items-center justify-center text-slate-500">
-                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
-              </div>
+              <div className="p-8 flex items-center justify-center text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
             ) : eligible.length === 0 ? (
               <div className="p-8 text-center text-slate-500">
                 <Package className="h-8 w-8 text-slate-300 mx-auto mb-2" />
                 <p className="font-medium">No eligible stock-outs</p>
-                <p className="text-xs mt-1">All your confirmed stock-outs are either already attached or none are confirmed yet.</p>
+                <p className="text-xs mt-1">All your confirmed stock-outs are either already attached, or none are confirmed yet.</p>
               </div>
             ) : (
               <div className="divide-y border rounded-md">
                 {eligible.map(e => (
                   <label key={e.id} className="flex items-start gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer" data-testid={`eligible-row-${e.id}`}>
-                    <Checkbox
-                      checked={!!picked[e.id]}
-                      onCheckedChange={(v) => setPicked({ ...picked, [e.id]: !!v })}
-                      data-testid={`eligible-cb-${e.id}`}
-                    />
+                    <Checkbox checked={!!picked[e.id]} onCheckedChange={(v) => setPicked({ ...picked, [e.id]: !!v })} data-testid={`eligible-cb-${e.id}`} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-slate-900">{e.customer_name || 'Unknown'}</span>
                         {e.delivery_number && <span className="text-xs text-slate-400 font-mono">{e.delivery_number}</span>}
                       </div>
                       <div className="text-xs text-slate-500 mt-0.5">{addrStr(e.delivery_address)}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {e.items_count} item{e.items_count === 1 ? '' : 's'} · {e.total_quantity} unit{e.total_quantity === 1 ? '' : 's'}
-                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">{e.items_count} item{e.items_count === 1 ? '' : 's'} · {e.total_quantity} unit{e.total_quantity === 1 ? '' : 's'}</div>
                     </div>
                   </label>
                 ))}
@@ -434,8 +596,7 @@ export default function DeliveryScheduleDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm this delivery schedule?</AlertDialogTitle>
             <AlertDialogDescription>
-              {deliveries.length} stock-out{deliveries.length === 1 ? '' : 's'} will move from "Confirmed" to "Scheduled".
-              You can still reorder and add / remove stops after confirming. PDF download will become available.
+              {deliveries.length} stock-out{deliveries.length === 1 ? '' : 's'} will move from "Confirmed" to "Scheduled". PDF download will become available.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -452,10 +613,7 @@ export default function DeliveryScheduleDetail() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Cancel this schedule?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Attached stock-outs (if any) will revert to "Confirmed" so they can be added to another schedule.
-              This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Attached stock-outs (if any) will revert to "Confirmed".</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>Keep schedule</AlertDialogCancel>
