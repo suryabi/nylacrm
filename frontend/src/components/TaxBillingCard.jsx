@@ -50,6 +50,11 @@ export default function TaxBillingCard({
   });
 
   useEffect(() => {
+    // Only re-sync the form fields from props while the user is NOT actively
+    // editing. Otherwise every parent re-render (e.g. parent polls, sibling
+    // state changes) wipes the user's in-progress typing — that was the bug
+    // reported when editing details after a GST certificate upload.
+    if (editing) return;
     setForm({
       gst_number: data.gst_number || '',
       pan_number: data.pan_number || '',
@@ -57,7 +62,7 @@ export default function TaxBillingCard({
       gst_trade_name: data.gst_trade_name || '',
       billing_address: { ...emptyBilling, ...(data.billing_address || {}) },
     });
-  }, [data]);
+  }, [data, editing]);
 
   const ba = data.billing_address || {};
   const hasAny = !!(data.gst_number || data.pan_number || ba.address_line1 || ba.address_line2 || ba.city || ba.state || ba.pincode);
