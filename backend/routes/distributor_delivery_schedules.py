@@ -168,7 +168,7 @@ async def list_distributor_fleet_drivers(current_user: dict = Depends(get_curren
 
 # ============ Delivery Schedules ============
 
-ALLOWED_SCHEDULE_STATUSES = {"draft", "confirmed", "cancelled"}
+ALLOWED_SCHEDULE_STATUSES = {"draft", "confirmed", "approved", "cancelled"}
 
 
 class ScheduleCreate(BaseModel):
@@ -217,11 +217,34 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
 
         # Bulk-fetch line items + accounts in two queries to avoid N+1
         items_by_delivery: dict = {}
+        sku_ids: set = set()
         async for it in db.distributor_delivery_items.find(
             {"delivery_id": {"$in": ids}, "tenant_id": tenant_id},
-            {"_id": 0, "delivery_id": 1, "sku_name": 1, "sku_code": 1, "quantity": 1, "unit_price": 1}
+            {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1, "sku_code": 1, "quantity": 1, "unit_price": 1}
         ):
             items_by_delivery.setdefault(it["delivery_id"], []).append(it)
+            if it.get("sku_id"):
+                sku_ids.add(it["sku_id"])
+
+        # Pull SKU packaging info to compute crates from raw unit quantities.
+        # Each SKU stores `packaging_config.stock_out` — pick the entry marked
+        # `is_default=True` (fallback: first entry). `units_per_package` tells us
+        # how many bottles fit in one crate / pack — drivers care about crates,
+        # not bottles, so we report packaging units everywhere.
+        sku_packaging: dict = {}
+        if sku_ids:
+            async for s in db.master_skus.find(
+                {"id": {"$in": list(sku_ids)}},
+                {"_id": 0, "id": 1, "packaging_config": 1}
+            ):
+                pkgs = ((s.get("packaging_config") or {}).get("stock_out") or [])
+                if not pkgs:
+                    continue
+                pkg = next((p for p in pkgs if p.get("is_default")), pkgs[0])
+                sku_packaging[s["id"]] = {
+                    "units_per_package": int(pkg.get("units_per_package") or 0) or None,
+                    "packaging_type_name": pkg.get("packaging_type_name") or "Crate",
+                }
 
         account_ids = list({r.get("account_id") for r in rows if r.get("account_id")})
         accounts_by_id: dict = {}
@@ -271,16 +294,29 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
             phone = (r.get("contact_phone") or r.get("delivery_contact_phone")
                      or acct.get("delivery_contact_phone") or acct.get("contact_number"))
 
-            # Items
+            # Items — convert raw bottle counts into packaging units (crates).
             raw_items = items_by_delivery.get(did) or r.get("items") or []
             items = []
-            total_qty = 0
+            total_packages = 0
+            total_units = 0
             for line in raw_items:
-                qty = int(line.get("quantity") or line.get("delivered_quantity") or 0)
-                total_qty += qty
+                qty_units = int(line.get("quantity") or line.get("delivered_quantity") or 0)
+                total_units += qty_units
+                pkg_info = sku_packaging.get(line.get("sku_id")) or {}
+                upp = pkg_info.get("units_per_package")
+                pkg_label = pkg_info.get("packaging_type_name") or "Crate"
+                if upp and upp > 0:
+                    # Round UP — partial crates ship as a full crate
+                    pkg_count = -(-qty_units // upp)
+                else:
+                    pkg_count = qty_units  # fallback: treat each unit as one package
+                total_packages += pkg_count
                 items.append({
                     "sku_name": line.get("sku_name") or line.get("sku_code") or "Item",
-                    "quantity": qty,
+                    "quantity_units": qty_units,
+                    "quantity": pkg_count,
+                    "packaging_label": pkg_label,
+                    "units_per_package": upp,
                 })
 
             deliveries.append({
@@ -292,7 +328,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 "delivery_address": addr or {},
                 "contact_phone": phone,
                 "items": items,
-                "total_quantity": total_qty,
+                "total_quantity": total_packages,
+                "total_units": total_units,
             })
     schedule["deliveries"] = deliveries
     return schedule
@@ -418,17 +455,37 @@ async def list_eligible_deliveries(current_user: dict = Depends(get_current_user
         ):
             accounts_by_id[a["id"]] = a
 
-    # Bulk-fetch item counts to compute total_quantity & items_count
+    # Bulk-fetch item counts + SKU packaging to compute crate totals.
+    # We compute packages-per-line and sum, NOT total_bottles/units_per_package
+    # of the whole delivery (different SKUs may have different crate sizes).
     item_stats: dict = {}
+    line_skus: dict = {}  # delivery_id -> list of {sku_id, quantity}
     if eligible:
         elig_ids = [d["id"] for d in eligible]
         async for it in db.distributor_delivery_items.find(
             {"delivery_id": {"$in": elig_ids}, "tenant_id": tenant_id},
-            {"_id": 0, "delivery_id": 1, "quantity": 1}
+            {"_id": 0, "delivery_id": 1, "quantity": 1, "sku_id": 1}
         ):
-            s = item_stats.setdefault(it["delivery_id"], {"count": 0, "qty": 0})
+            line_skus.setdefault(it["delivery_id"], []).append({
+                "sku_id": it.get("sku_id"),
+                "quantity": int(it.get("quantity") or 0),
+            })
+            s = item_stats.setdefault(it["delivery_id"], {"count": 0, "qty_units": 0})
             s["count"] += 1
-            s["qty"] += int(it.get("quantity") or 0)
+            s["qty_units"] += int(it.get("quantity") or 0)
+
+    # SKU packaging lookup
+    sku_ids = list({sku_line["sku_id"] for lines in line_skus.values() for sku_line in lines if sku_line.get("sku_id")})
+    sku_packaging: dict = {}
+    if sku_ids:
+        async for s in db.master_skus.find(
+            {"id": {"$in": sku_ids}},
+            {"_id": 0, "id": 1, "packaging_config": 1}
+        ):
+            pkgs = ((s.get("packaging_config") or {}).get("stock_out") or [])
+            if pkgs:
+                pkg = next((p for p in pkgs if p.get("is_default")), pkgs[0])
+                sku_packaging[s["id"]] = int(pkg.get("units_per_package") or 0) or None
 
     def _addr_brief(src):
         if not isinstance(src, dict):
@@ -446,7 +503,13 @@ async def list_eligible_deliveries(current_user: dict = Depends(get_current_user
         addr = d.get("delivery_address") if isinstance(d.get("delivery_address"), dict) and d.get("delivery_address") else None
         if not addr or not any(addr.values()):
             addr = acct.get("delivery_address") or acct.get("billing_address")
-        stats = item_stats.get(d["id"], {"count": 0, "qty": d.get("total_quantity") or 0})
+        stats = item_stats.get(d["id"], {"count": 0, "qty_units": 0})
+        # Compute total packages by summing each line's packages (round-up).
+        total_packages = 0
+        for sku_line in line_skus.get(d["id"], []):
+            upp = sku_packaging.get(sku_line.get("sku_id"))
+            qty = sku_line["quantity"]
+            total_packages += (-(-qty // upp)) if (upp and upp > 0) else qty
         trimmed.append({
             "id": d.get("id"),
             "delivery_number": d.get("delivery_number"),
@@ -455,7 +518,7 @@ async def list_eligible_deliveries(current_user: dict = Depends(get_current_user
             "delivery_address": _addr_brief(addr),
             "contact_phone": d.get("contact_phone") or d.get("delivery_contact_phone") or acct.get("delivery_contact_phone") or acct.get("contact_number"),
             "items_count": stats["count"] or len(d.get("items") or []),
-            "total_quantity": stats["qty"] or d.get("total_quantity") or 0,
+            "total_quantity": total_packages or stats["qty_units"] or d.get("total_quantity") or 0,
         })
 
     return {"deliveries": trimmed, "total": len(trimmed)}
@@ -484,8 +547,8 @@ async def update_schedule(schedule_id: str, payload: ScheduleUpdate, current_use
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    if existing.get("status") == "cancelled":
-        raise HTTPException(status_code=400, detail="Cancelled schedules cannot be edited")
+    if existing.get("status") in ("cancelled", "approved"):
+        raise HTTPException(status_code=400, detail=f"{existing.get('status').title()} schedules cannot be edited")
 
     update_doc: dict = {}
     if payload.schedule_date is not None:
@@ -550,8 +613,8 @@ async def attach_deliveries(
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    if existing.get("status") == "cancelled":
-        raise HTTPException(status_code=400, detail="Cancelled schedules cannot be edited")
+    if existing.get("status") in ("cancelled", "approved"):
+        raise HTTPException(status_code=400, detail=f"{existing.get('status').title()} schedules cannot be edited")
 
     new_ids = [d for d in payload.delivery_ids if d]
     if not new_ids:
@@ -587,8 +650,9 @@ async def attach_deliveries(
     current = list(existing.get("delivery_ids") or [])
     merged = current + [d for d in new_ids if d not in current]
 
-    # If the schedule is already confirmed, immediately mark new deliveries as `scheduled`.
-    if existing.get("status") == "confirmed":
+    # If the schedule is already approved, immediately mark the new deliveries as
+    # `scheduled` (mirrors the `approve` step's side effect).
+    if existing.get("status") == "approved":
         await db.distributor_deliveries.update_many(
             {"tenant_id": tenant_id, "id": {"$in": [d for d in new_ids if d not in current]}, "status": "confirmed"},
             {"$set": {"status": "scheduled", "updated_at": datetime.now(timezone.utc).isoformat()}}
@@ -616,8 +680,8 @@ async def detach_delivery(
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    if existing.get("status") == "cancelled":
-        raise HTTPException(status_code=400, detail="Cancelled schedules cannot be edited")
+    if existing.get("status") in ("cancelled", "approved"):
+        raise HTTPException(status_code=400, detail=f"{existing.get('status').title()} schedules cannot be edited")
 
     ids = [d for d in (existing.get("delivery_ids") or []) if d != delivery_id]
     await db.distributor_delivery_schedules.update_one(
@@ -625,9 +689,9 @@ async def detach_delivery(
         {"$set": {"delivery_ids": ids, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
 
-    # If schedule was confirmed and the delivery was already in `scheduled` state,
+    # If schedule was approved and the delivery was already in `scheduled` state,
     # revert it back to `confirmed` so it can be re-attached to another schedule.
-    if existing.get("status") == "confirmed":
+    if existing.get("status") == "approved":
         await db.distributor_deliveries.update_one(
             {"tenant_id": tenant_id, "id": delivery_id, "status": "scheduled"},
             {"$set": {"status": "confirmed", "updated_at": datetime.now(timezone.utc).isoformat()}}
@@ -639,6 +703,9 @@ async def detach_delivery(
 
 @router.post("/{schedule_id}/confirm")
 async def confirm_schedule(schedule_id: str, current_user: dict = Depends(get_current_user)):
+    """Move schedule from `draft` → `confirmed`. Stock-out statuses are NOT changed
+    here — that happens on the subsequent `approve` step (the user wanted a
+    two-step submit-then-approve workflow before the driver actually leaves)."""
     tenant_id = get_current_tenant_id()
     distributor_id = _resolve_distributor_id(current_user)
     existing = await db.distributor_delivery_schedules.find_one(
@@ -661,6 +728,46 @@ async def confirm_schedule(schedule_id: str, current_user: dict = Depends(get_cu
             "status": "confirmed",
             "confirmed_at": now,
             "confirmed_by": current_user.get("id"),
+            "confirmed_by_name": current_user.get("full_name") or current_user.get("name") or current_user.get("email"),
+            "updated_at": now,
+        }}
+    )
+    s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
+    return await _enrich_schedule(s, tenant_id)
+
+
+@router.post("/{schedule_id}/approve")
+async def approve_schedule(schedule_id: str, current_user: dict = Depends(get_current_user)):
+    """Move schedule from `confirmed` → `approved`. Underlying stock-outs move
+    from `confirmed` → `scheduled` at this step. Approver name + timestamp are
+    recorded for the driver PDF header."""
+    tenant_id = get_current_tenant_id()
+    distributor_id = _resolve_distributor_id(current_user)
+    existing = await db.distributor_delivery_schedules.find_one(
+        {"id": schedule_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if existing.get("status") != "confirmed":
+        raise HTTPException(status_code=400, detail="Only confirmed schedules can be approved")
+    if not existing.get("delivery_ids"):
+        raise HTTPException(status_code=400, detail="No deliveries on this schedule to approve")
+
+    now = datetime.now(timezone.utc).isoformat()
+    approver_name = (
+        current_user.get("full_name")
+        or current_user.get("name")
+        or current_user.get("email")
+        or "Unknown approver"
+    )
+    await db.distributor_delivery_schedules.update_one(
+        {"id": schedule_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "approved",
+            "approved_at": now,
+            "approved_by": current_user.get("id"),
+            "approved_by_name": approver_name,
             "updated_at": now,
         }}
     )
@@ -669,7 +776,6 @@ async def confirm_schedule(schedule_id: str, current_user: dict = Depends(get_cu
         {"tenant_id": tenant_id, "id": {"$in": existing["delivery_ids"]}, "status": "confirmed"},
         {"$set": {"status": "scheduled", "updated_at": now}}
     )
-
     s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
     return await _enrich_schedule(s, tenant_id)
 
@@ -730,8 +836,8 @@ async def download_schedule_pdf(schedule_id: str, current_user: dict = Depends(g
     )
     if not s:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    if s.get("status") != "confirmed":
-        raise HTTPException(status_code=400, detail="PDF is only available for confirmed schedules")
+    if s.get("status") not in ("confirmed", "approved"):
+        raise HTTPException(status_code=400, detail="PDF is only available for confirmed or approved schedules")
 
     s = await _enrich_schedule(s, tenant_id)
     dist = await db.distributors.find_one(
@@ -777,7 +883,7 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
 
     v = schedule.get("vehicle") or {}
     d = schedule.get("driver") or {}
-    info = [
+    info_rows = [
         [Paragraph("<b>Vehicle</b>", body),
          Paragraph(f"{v.get('registration_number') or '—'} <font color='grey'>· {v.get('vehicle_name') or v.get('vehicle_type') or ''}</font>", body)],
         [Paragraph("<b>Driver</b>", body),
@@ -785,7 +891,20 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
         [Paragraph("<b>Total stops</b>", body),
          Paragraph(str(len(schedule.get("deliveries") or [])), body)],
     ]
-    t = Table(info, colWidths=[35 * mm, None])
+    # Approver line (only on approved schedules)
+    if schedule.get("approved_at"):
+        try:
+            approved_dt = datetime.fromisoformat(str(schedule["approved_at"]).replace("Z", "+00:00"))
+            stamp = approved_dt.strftime("%d %b %Y, %H:%M UTC")
+        except Exception:
+            stamp = str(schedule.get("approved_at"))
+        approver = schedule.get("approved_by_name") or "—"
+        info_rows.append([
+            Paragraph("<b>Approved by</b>", body),
+            Paragraph(f"{approver} <font color='grey'>· {stamp}</font>", body),
+        ])
+
+    t = Table(info_rows, colWidths=[35 * mm, None])
     t.setStyle(TableStyle([
         ('BOX', (0, 0), (-1, -1), 0.5, colors.lightgrey),
         ('INNERGRID', (0, 0), (-1, -1), 0.25, colors.lightgrey),
@@ -803,19 +922,23 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
         Paragraph("<b>#</b>", body),
         Paragraph("<b>Customer · Phone</b>", body),
         Paragraph("<b>Address</b>", body),
-        Paragraph("<b>Items</b>", body),
+        Paragraph("<b>Crates / packages</b>", body),
     ]
     rows = [header]
     for idx, delv in enumerate(schedule.get("deliveries") or [], start=1):
         addr = delv.get("delivery_address") or {}
-        addr_str = ", ".join([x for x in (
+        addr_str = (addr.get("formatted") or ", ".join([x for x in (
             addr.get("address_line1"), addr.get("address_line2"),
             addr.get("city"), addr.get("state"), addr.get("pincode")
-        ) if x]) or "—"
-        items_str = "<br/>".join([
-            f"{(it.get('sku_name') or '—')} — <b>{it.get('quantity') or 0}</b>"
-            for it in (delv.get("items") or [])
-        ]) or "—"
+        ) if x])) or "—"
+        items_lines = []
+        for it in (delv.get("items") or []):
+            pkg = it.get("packaging_label") or "Crate"
+            items_lines.append(
+                f"{(it.get('sku_name') or '—')} — <b>{it.get('quantity') or 0}</b> "
+                f"<font color='grey' size='8'>{pkg}</font>"
+            )
+        items_str = "<br/>".join(items_lines) or "—"
         rows.append([
             Paragraph(str(idx), body),
             Paragraph(
@@ -866,10 +989,11 @@ async def compute_schedule_distance(schedule_id: str, current_user: dict = Depen
 
     s = await _enrich_schedule(s, tenant_id)
     distributor_origin = await _get_distributor_origin(distributor_id, tenant_id)
-    factory_addr = await _get_factory_address(tenant_id)
     api_key_present = bool(os.environ.get("GOOGLE_MAPS_API_KEY"))
 
-    # Build ordered route: distributor → stops → factory
+    # Build round-trip route: distributor warehouse → stop 1 → ... → stop N → distributor warehouse.
+    # The driver always returns to the same warehouse, so total km includes the
+    # outbound first leg AND the return-to-base last leg.
     stops: List[dict] = []
     if distributor_origin:
         stops.append({"label": "Distributor warehouse", "address": distributor_origin})
@@ -879,16 +1003,14 @@ async def compute_schedule_distance(schedule_id: str, current_user: dict = Depen
             "delivery_id": delv.get("id"),
             "address": _address_to_query(delv.get("delivery_address")),
         })
-    if factory_addr:
-        stops.append({"label": "Factory", "address": factory_addr})
+    if distributor_origin and s.get("deliveries"):
+        stops.append({"label": "Back to warehouse", "address": distributor_origin, "is_return": True})
 
     warnings: List[str] = []
     if not api_key_present:
         warnings.append("Google Maps API key not configured.")
     if not distributor_origin:
-        warnings.append("Distributor primary location address missing — first leg cannot be measured.")
-    if not factory_addr:
-        warnings.append("Factory address not configured — set it in Admin → Tenant Settings to measure the return leg.")
+        warnings.append("Distributor primary location address missing — distance cannot be measured. Set it in distributor settings.")
 
     legs: List[dict] = []
     total_km = 0.0
@@ -947,7 +1069,6 @@ async def compute_schedule_distance(schedule_id: str, current_user: dict = Depen
         "legs": legs,
         "total_km": round(total_km, 1),
         "warnings": warnings,
-        "factory_address": factory_addr,
         "distributor_origin": distributor_origin,
     }
 
