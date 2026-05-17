@@ -274,6 +274,46 @@ const marketingNavigationGroups = [
   },
 ];
 
+// Admin Context Navigation (Fleet, Masters, Settings, Integrations)
+const ADMIN_ONLY_ROLES = ['CEO', 'Director', 'Admin', 'System Admin'];
+const adminNavigationGroups = [
+  {
+    title: 'Fleet',
+    items: [
+      { name: 'Vehicles', href: '/admin/vehicles', icon: Truck, roles: ADMIN_ONLY_ROLES },
+      { name: 'Drivers', href: '/admin/drivers', icon: UsersRound, roles: ADMIN_ONLY_ROLES },
+    ],
+  },
+  {
+    title: 'Product & SKU',
+    items: [
+      { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ADMIN_ONLY_ROLES },
+      { name: 'Replace SKU', href: '/admin/sku-migrate', icon: ArrowLeftRight, moduleKey: 'sku_replace', roles: ADMIN_ONLY_ROLES },
+    ],
+  },
+  {
+    title: 'Master Data',
+    items: [
+      { name: 'Locations', href: '/master-locations', icon: MapPin, moduleKey: 'master_locations', roles: ADMIN_ONLY_ROLES },
+      { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, moduleKey: 'lead_statuses', roles: ADMIN_ONLY_ROLES },
+      { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ADMIN_ONLY_ROLES },
+      { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ADMIN_ONLY_ROLES },
+      { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ADMIN_ONLY_ROLES },
+      { name: 'COGS Components', href: '/master/cogs-components', icon: Receipt, moduleKey: 'cogs_components', roles: ['CEO', 'Director', 'System Admin'] },
+      { name: 'Lead Scoring Model', href: '/lead-scoring-model', icon: Gauge, moduleKey: 'lead_scoring_model', roles: ADMIN_ONLY_ROLES },
+    ],
+  },
+  {
+    title: 'Settings & Integrations',
+    items: [
+      { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, moduleKey: 'tenant_settings', roles: ADMIN_ONLY_ROLES },
+      { name: 'API Keys', href: '/settings/api-keys', icon: KeyRound, moduleKey: 'api_keys', roles: ADMIN_ONLY_ROLES },
+      { name: 'Zoho Books', href: '/settings/integrations/zoho', icon: Cable, moduleKey: 'zoho_integration', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
+    ],
+  },
+];
+
 export default function DashboardLayout({ children }) {
   const { user, logout } = useAuth();
   const { currentContext, switchContext, canAccessMultipleModules, getAccessibleModules, modules, isDistributorUser, getDistributorId } = useAppContext();
@@ -286,7 +326,7 @@ export default function DashboardLayout({ children }) {
   // Get branding values with fallbacks
   const logoUrl = branding?.logo_url || null;
   const appName = branding?.app_name || 'Sales CRM';
-  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : currentContext === 'marketing' ? 'Marketing' : 'Sales CRM');
+  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : currentContext === 'marketing' ? 'Marketing' : currentContext === 'admin' ? 'Admin' : 'Sales CRM');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(
     location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
@@ -353,6 +393,8 @@ export default function DashboardLayout({ children }) {
         return distributionNavigationGroups;
       case 'marketing':
         return marketingNavigationGroups;
+      case 'admin':
+        return adminNavigationGroups;
       default:
         return salesNavigationGroups;
     }
@@ -462,6 +504,7 @@ export default function DashboardLayout({ children }) {
                 {currentContext === 'production' && <Factory className="w-4 h-4 text-primary" />}
                 {currentContext === 'distribution' && <Truck className="w-4 h-4 text-primary" />}
                 {currentContext === 'marketing' && <Megaphone className="w-4 h-4 text-primary" />}
+                {currentContext === 'admin' && <ShieldCheck className="w-4 h-4 text-primary" />}
                 <span className="text-xs text-primary font-medium">
                   {modules[currentContext]?.label || 'Sales'} Module Active
                 </span>

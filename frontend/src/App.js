@@ -66,6 +66,8 @@ import AccountSKUPricing from './pages/AccountSKUPricing';
 import NeckTagDesigner from './pages/NeckTagDesigner';
 import MasterCOGSComponents from './pages/MasterCOGSComponents';
 import AdminSkuMigrate from './pages/AdminSkuMigrate';
+import VehiclesList from './pages/admin/VehiclesList';
+import DriversList from './pages/admin/DriversList';
 import AccountDetail from './pages/AccountDetail';
 import AccountPerformance from './pages/AccountPerformance';
 import InvoicesList from './pages/InvoicesList';
@@ -291,6 +293,8 @@ function AppRouter() {
           <Route path="/sales/neck-tag-designer" element={<ProtectedRoute moduleKey="accounts"><NeckTagDesigner /></ProtectedRoute>} />
           <Route path="/master/cogs-components" element={<ProtectedRoute moduleKey="cogs_components"><MasterCOGSComponents /></ProtectedRoute>} />
           <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
+          <Route path="/admin/vehicles" element={<ProtectedRoute><VehiclesList /></ProtectedRoute>} />
+          <Route path="/admin/drivers" element={<ProtectedRoute><DriversList /></ProtectedRoute>} />
           <Route path="/accounts/:id" element={<ProtectedRoute moduleKey="accounts"><AccountDetail /></ProtectedRoute>} />
           <Route path="/invoices" element={<ProtectedRoute moduleKey="invoices"><InvoicesList /></ProtectedRoute>} />
           <Route path="/customer-returns" element={<ProtectedRoute moduleKey="customer_returns"><CustomerReturnsList /></ProtectedRoute>} />

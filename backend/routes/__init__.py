@@ -183,4 +183,10 @@ routes_router.include_router(manual_stock_router, prefix="/distributors", tags=[
 # Distributor ↔ Supplier chat
 routes_router.include_router(distributor_chat_router, tags=["Distributor Chat"])
 
+# Admin → Fleet (Vehicles & Drivers) — independent CRUD
+from .admin_vehicles import router as admin_vehicles_router
+from .admin_drivers import router as admin_drivers_router
+routes_router.include_router(admin_vehicles_router, prefix="/admin/vehicles", tags=["Admin · Vehicles"])
+routes_router.include_router(admin_drivers_router, prefix="/admin/drivers", tags=["Admin · Drivers"])
+
 __all__ = ['routes_router']

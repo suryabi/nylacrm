@@ -6,12 +6,16 @@ const AppContextContext = createContext(null);
 // Roles that can access all modules
 const ADMIN_ROLES = ['CEO', 'Director'];
 
+// Roles allowed in the Admin context (fleet, masters, settings, integrations)
+const ADMIN_CONTEXT_ROLES = ['CEO', 'Director', 'Admin', 'System Admin'];
+
 // Module definitions
 const MODULES = {
   sales: { id: 'sales', label: 'Sales', icon: 'Store', defaultRoute: '/home' },
   production: { id: 'production', label: 'Production', icon: 'Factory', defaultRoute: '/production-dashboard' },
   distribution: { id: 'distribution', label: 'Distribution', icon: 'Truck', defaultRoute: '/distributors' },
   marketing: { id: 'marketing', label: 'Marketing', icon: 'Megaphone', defaultRoute: '/marketing-calendar' },
+  admin: { id: 'admin', label: 'Admin', icon: 'ShieldCheck', defaultRoute: '/admin/vehicles' },
 };
 
 export function AppContextProvider({ children }) {
@@ -27,6 +31,11 @@ export function AppContextProvider({ children }) {
       return moduleId === 'distribution';
     }
     
+    // Admin context is restricted to a fixed set of admin-capable roles
+    if (moduleId === 'admin') {
+      return ADMIN_CONTEXT_ROLES.includes(user.role);
+    }
+
     // Admin roles can always access all modules
     if (ADMIN_ROLES.includes(user.role)) return true;
     // Check department-based access (support both string and array)
@@ -131,6 +140,7 @@ export function AppContextProvider({ children }) {
     canAccessProduction: canAccessProduction(),
     canAccessDistribution: canAccessDistribution(),
     canAccessMarketing: canAccessModule('marketing'),
+    canAccessAdmin: canAccessModule('admin'),
     getAccessibleModules,
     modules: MODULES,
     isDistributorUser: isDistributorUser(),
