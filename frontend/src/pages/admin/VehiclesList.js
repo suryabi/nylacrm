@@ -29,7 +29,7 @@ const STATUS_LABELS = {
   retired: { label: 'Retired', cls: 'bg-slate-200 text-slate-700 border-slate-300' },
 };
 
-const emptyForm = { registration_number: '', vehicle_type: 'Truck', status: 'active', notes: '' };
+const emptyForm = { registration_number: '', vehicle_name: '', vehicle_type: 'Truck', city: '', status: 'active', notes: '' };
 
 export default function VehiclesList() {
   const [vehicles, setVehicles] = useState([]);
@@ -38,6 +38,7 @@ export default function VehiclesList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [options, setOptions] = useState({ vehicle_types: ['Truck', 'Van', 'Mini-truck', 'Two-wheeler', 'Tempo', 'Other'], statuses: ['active', 'under_maintenance', 'retired'] });
+  const [cities, setCities] = useState([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -69,7 +70,15 @@ export default function VehiclesList() {
     } catch { /* keep defaults */ }
   };
 
-  useEffect(() => { fetchOptions(); }, []);
+  const fetchCities = async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/master-locations/flat`, { withCredentials: true });
+      const list = (data?.cities || []).map(c => ({ name: c.name, state: c.state_name })).sort((a, b) => a.name.localeCompare(b.name));
+      setCities(list);
+    } catch { /* leave empty; user can still pick city via free text fallback */ }
+  };
+
+  useEffect(() => { fetchOptions(); fetchCities(); }, []);
   useEffect(() => { fetchVehicles(); /* eslint-disable-next-line */ }, [search, statusFilter]);
 
   // Debounce search input → search
@@ -83,7 +92,9 @@ export default function VehiclesList() {
     setEditing(v);
     setForm({
       registration_number: v.registration_number || '',
+      vehicle_name: v.vehicle_name || '',
       vehicle_type: v.vehicle_type || 'Truck',
+      city: v.city || '',
       status: v.status || 'active',
       notes: v.notes || '',
     });
@@ -194,7 +205,9 @@ export default function VehiclesList() {
               <thead className="bg-slate-50 border-b text-slate-600">
                 <tr>
                   <th className="text-left px-4 py-2.5 font-medium">Registration</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Name</th>
                   <th className="text-left px-4 py-2.5 font-medium">Type</th>
+                  <th className="text-left px-4 py-2.5 font-medium">City</th>
                   <th className="text-left px-4 py-2.5 font-medium">Status</th>
                   <th className="text-left px-4 py-2.5 font-medium">Notes</th>
                   <th className="text-right px-4 py-2.5 font-medium w-32">Actions</th>
@@ -206,7 +219,9 @@ export default function VehiclesList() {
                   return (
                     <tr key={v.id} className="border-b last:border-b-0 hover:bg-slate-50/50" data-testid={`vehicle-row-${v.id}`}>
                       <td className="px-4 py-3 font-mono font-medium text-slate-900">{v.registration_number}</td>
+                      <td className="px-4 py-3 text-slate-700">{v.vehicle_name || <span className="text-slate-300">—</span>}</td>
                       <td className="px-4 py-3 text-slate-700">{v.vehicle_type}</td>
+                      <td className="px-4 py-3 text-slate-700">{v.city || <span className="text-slate-300">—</span>}</td>
                       <td className="px-4 py-3">
                         <Badge variant="outline" className={s.cls}>{s.label}</Badge>
                       </td>
@@ -249,6 +264,16 @@ export default function VehiclesList() {
                 data-testid="vehicle-reg-input"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-slate-500">Vehicle Name</Label>
+              <Input
+                value={form.vehicle_name}
+                onChange={(e) => setForm({ ...form, vehicle_name: e.target.value })}
+                placeholder="e.g. Truck 1, Banjara Hills Van, Old Tempo"
+                maxLength={80}
+                data-testid="vehicle-name-input"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs uppercase tracking-wider text-slate-500">Type</Label>
@@ -260,14 +285,34 @@ export default function VehiclesList() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs uppercase tracking-wider text-slate-500">Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                  <SelectTrigger data-testid="vehicle-status-input"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {options.statuses.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]?.label || s}</SelectItem>)}
+                <Label className="text-xs uppercase tracking-wider text-slate-500">City</Label>
+                <Select
+                  value={form.city || '__none__'}
+                  onValueChange={(v) => setForm({ ...form, city: v === '__none__' ? '' : v })}
+                >
+                  <SelectTrigger data-testid="vehicle-city-input"><SelectValue placeholder="Select city" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {cities.length === 0 && form.city && (
+                      <SelectItem value={form.city}>{form.city}</SelectItem>
+                    )}
+                    {cities.map(c => (
+                      <SelectItem key={c.name} value={c.name}>
+                        {c.name}{c.state ? <span className="text-slate-400 ml-1">· {c.state}</span> : null}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs uppercase tracking-wider text-slate-500">Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger data-testid="vehicle-status-input"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {options.statuses.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]?.label || s}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-slate-500">Notes</Label>

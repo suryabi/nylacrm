@@ -30,7 +30,9 @@ def _ensure_admin(current_user: dict) -> None:
 
 class VehicleBase(BaseModel):
     registration_number: str = Field(..., min_length=1, max_length=32)
+    vehicle_name: Optional[str] = Field(default=None, max_length=80)
     vehicle_type: str
+    city: Optional[str] = Field(default=None, max_length=80)
     status: str = "active"
     notes: Optional[str] = None
 
@@ -41,7 +43,9 @@ class VehicleCreate(VehicleBase):
 
 class VehicleUpdate(BaseModel):
     registration_number: Optional[str] = Field(default=None, max_length=32)
+    vehicle_name: Optional[str] = Field(default=None, max_length=80)
     vehicle_type: Optional[str] = None
+    city: Optional[str] = Field(default=None, max_length=80)
     status: Optional[str] = None
     notes: Optional[str] = None
 
@@ -66,7 +70,9 @@ async def list_vehicles(
         s = search.strip()
         q["$or"] = [
             {"registration_number": {"$regex": s, "$options": "i"}},
+            {"vehicle_name": {"$regex": s, "$options": "i"}},
             {"vehicle_type": {"$regex": s, "$options": "i"}},
+            {"city": {"$regex": s, "$options": "i"}},
             {"notes": {"$regex": s, "$options": "i"}},
         ]
 
@@ -94,7 +100,9 @@ async def create_vehicle(payload: VehicleCreate, current_user: dict = Depends(ge
     doc = {
         "id": str(uuid.uuid4()),
         "registration_number": reg,
+        "vehicle_name": (payload.vehicle_name or "").strip() or None,
         "vehicle_type": payload.vehicle_type,
+        "city": (payload.city or "").strip() or None,
         "status": payload.status,
         "notes": (payload.notes or "").strip() or None,
         "created_at": now,
@@ -128,6 +136,10 @@ async def update_vehicle(vehicle_id: str, payload: VehicleUpdate, current_user: 
         if payload.vehicle_type not in ALLOWED_VEHICLE_TYPES:
             raise HTTPException(status_code=400, detail=f"vehicle_type must be one of {ALLOWED_VEHICLE_TYPES}")
         update_doc["vehicle_type"] = payload.vehicle_type
+    if payload.vehicle_name is not None:
+        update_doc["vehicle_name"] = payload.vehicle_name.strip() or None
+    if payload.city is not None:
+        update_doc["city"] = payload.city.strip() or None
     if payload.status is not None:
         if payload.status not in ALLOWED_STATUSES:
             raise HTTPException(status_code=400, detail=f"status must be one of {ALLOWED_STATUSES}")
