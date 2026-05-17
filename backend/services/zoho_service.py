@@ -305,7 +305,18 @@ class ZohoApiError(Exception):
     def __init__(self, status_code: int, message: str, payload: Optional[dict] = None):
         super().__init__(f"Zoho API {status_code}: {message}")
         self.status_code = status_code
+        self.message = message
         self.payload = payload or {}
+
+
+def _flatten_strs(d, prefix=""):
+    """Yield (dotted_path, value) for every string in a (possibly nested) dict.
+    Used to surface field lengths in user-facing Zoho errors."""
+    if isinstance(d, dict):
+        for k, v in d.items():
+            yield from _flatten_strs(v, f"{prefix}{k}.")
+    elif isinstance(d, str):
+        yield (prefix.rstrip("."), d)
 
 
 async def _zoho_request(
@@ -549,13 +560,36 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         try:
             await _zoho_request("PUT", f"/books/v3/contacts/{contact_id}", tenant_id=tenant_id, json=payload)
         except ZohoApiError as e:
-            # Surface the actual Zoho rejection instead of silently swallowing it.
-            # Common causes: company_name uniqueness conflict, gst_treatment validation,
-            # bad place_of_contact code. Without this raise the user sees a "synced ✓"
-            # toast even when the update was rejected — exactly the bug we hit when
-            # company_name wasn't refreshing on production invoices.
-            logger.error(f"Zoho contact PUT failed for {contact_id}: {e}")
-            raise
+            # Diagnostic dump — print every string field length in the payload
+            # we sent to Zoho. Lets us instantly spot which sub-field tripped a
+            # Zoho length validation when the error message is generic (e.g.
+            # "billing_address has less than 100 characters").
+            def _lens(d, prefix=""):
+                lines = []
+                if not isinstance(d, dict):
+                    return lines
+                for k, v in d.items():
+                    if isinstance(v, dict):
+                        lines.extend(_lens(v, f"{prefix}{k}."))
+                    elif isinstance(v, str):
+                        lines.append(f"  {prefix}{k} = {len(v)} chars | {v[:80]!r}")
+                return lines
+            len_dump = "\n".join(_lens(payload))
+            logger.error(
+                f"Zoho contact PUT failed for {contact_id}: {e}\n"
+                f"Payload field lengths:\n{len_dump}"
+            )
+            # Surface the field lengths to the caller too, so the user sees the
+            # exact overflow in the production error toast (no backend log access).
+            longest = max(
+                ((k, len(v)) for k, v in _flatten_strs(payload)),
+                default=("", 0), key=lambda t: t[1],
+            )
+            raise ZohoApiError(
+                e.status_code,
+                f"{e.message}  ·  longest field: {longest[0]} ({longest[1]} chars)",
+                payload,
+            ) from e
         return contact_id
 
     result = await _zoho_request("POST", "/books/v3/contacts", tenant_id=tenant_id, json=payload)
