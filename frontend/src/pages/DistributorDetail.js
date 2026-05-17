@@ -20,7 +20,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, PackagePlus, ExternalLink
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, PackagePlus, ExternalLink, Loader2
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -1710,17 +1710,68 @@ export default function DistributorDetail() {
     setDeliveryItems(prev => prev.filter(item => item.id !== itemId));
   };
 
+  // After confirming a delivery, the backend pushes to Zoho as a *background*
+  // task. The Zoho invoice URL therefore appears on the delivery doc 1–5s
+  // later, not immediately when the confirm API returns. So we keep the dialog
+  // open, refresh the visible delivery state, and poll for `zoho_invoice_url`
+  // until it shows up (or the user gets an explicit "retry" affordance).
+  const pollForZohoInvoice = async (deliveryId, attempts = 12, intervalMs = 1500) => {
+    for (let i = 0; i < attempts; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(r => setTimeout(r, intervalMs));
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const response = await axios.get(
+          `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}`,
+          { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+        );
+        setSelectedDelivery(response.data);
+        if (response.data?.zoho_invoice_url) return true;
+      } catch (_) { /* ignore transient errors and keep polling */ }
+    }
+    return false;
+  };
+
   const handleConfirmDelivery = async (deliveryId) => {
     try {
       await axios.post(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/confirm`, {}, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
-      toast.success('Delivery confirmed');
+      toast.success('Delivery confirmed — generating Zoho invoice…');
       fetchDeliveries();
-      setShowDeliveryDetail(false);
+      // Optimistically reflect the new status in the open dialog so the action
+      // buttons switch immediately, then poll for the Zoho URL.
+      setSelectedDelivery(prev => prev && prev.id === deliveryId
+        ? { ...prev, status: 'confirmed' }
+        : prev);
+      const ok = await pollForZohoInvoice(deliveryId);
+      if (ok) toast.success('Zoho invoice ready.');
+      else toast.warning('Zoho invoice taking longer than expected. Use "Retry Zoho Push" if it does not appear.');
+      fetchDeliveries();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to confirm delivery');
+    }
+  };
+
+  const handleRetryZohoPush = async (deliveryId) => {
+    try {
+      setDownloadingInvoice(true);
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/retry-zoho-push`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success('Zoho invoice generated.');
+      // Refresh the dialog with the freshly-pushed Zoho URL
+      setSelectedDelivery(prev => prev && prev.id === deliveryId
+        ? { ...prev, zoho_invoice_url: data.zoho_invoice_url, zoho_invoice_number: data.zoho_invoice_number, zoho_invoice_id: data.zoho_invoice_id }
+        : prev);
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Zoho push failed');
+    } finally {
+      setDownloadingInvoice(false);
     }
   };
 
@@ -3339,7 +3390,10 @@ export default function DistributorDetail() {
 
               {/* Actions */}
               <div className="flex justify-between items-center pt-4 border-t">
-                {/* Invoice — link to Zoho Books when available, otherwise fall back to local GST PDF */}
+                {/* Zoho Invoice — there is no internal/local invoice anymore. The CRM
+                    only references the Zoho Books invoice URL once the auto-push
+                    completes. While the push is pending, we show a clear pending
+                    state with a manual Retry button. */}
                 <div className="flex gap-2">
                   {(selectedDelivery.status === 'delivered' || selectedDelivery.status === 'confirmed') && (
                     selectedDelivery.zoho_invoice_url ? (
@@ -3363,16 +3417,29 @@ export default function DistributorDetail() {
                         </Button>
                       </a>
                     ) : (
-                      <Button
-                        variant="outline"
-                        onClick={() => handleDownloadCustomerInvoice(selectedDelivery.id)}
-                        disabled={downloadingInvoice}
-                        className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                        data-testid="download-customer-invoice-btn"
-                      >
-                        <Download className="h-4 w-4 mr-2" />
-                        {downloadingInvoice ? 'Generating...' : 'Download Invoice (GST)'}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs"
+                          data-testid="zoho-pending-pill"
+                        >
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Zoho invoice pending…
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRetryZohoPush(selectedDelivery.id)}
+                          disabled={downloadingInvoice}
+                          className="text-violet-700 border-violet-300 hover:bg-violet-50"
+                          data-testid="retry-zoho-push-btn"
+                        >
+                          {downloadingInvoice ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Pushing…</>
+                          ) : (
+                            <><RefreshCw className="h-4 w-4 mr-2" /> Retry Zoho Push</>
+                          )}
+                        </Button>
+                      </div>
                     )
                   )}
                 </div>

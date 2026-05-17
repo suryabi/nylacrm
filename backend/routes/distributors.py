@@ -4274,6 +4274,55 @@ async def confirm_delivery(
     return {"message": f"Delivery {delivery['delivery_number']} confirmed", "status": "confirmed"}
 
 
+@router.post("/{distributor_id}/deliveries/{delivery_id}/retry-zoho-push")
+async def retry_delivery_zoho_push(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually re-attempt the Zoho Books invoice push for a confirmed delivery.
+
+    Useful when the auto-push (background task) fails silently — e.g. transient
+    network error, Zoho rate-limit, missing SKU mapping. Runs synchronously so
+    the caller sees the actual Zoho error (if any) instead of a "queued" toast.
+    """
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
+
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0},
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    if delivery.get('status') not in ('confirmed', 'delivered'):
+        raise HTTPException(status_code=400, detail="Delivery must be confirmed before pushing to Zoho")
+
+    from services.zoho_service import sync_delivery_to_zoho
+    try:
+        await sync_delivery_to_zoho(tenant_id, distributor_id, delivery_id)
+    except Exception as e:
+        logger.exception(f"Manual Zoho push failed for delivery {delivery_id}")
+        raise HTTPException(status_code=502, detail=f"Zoho push failed: {e}")
+
+    # Read back to pick up zoho_invoice_url written by the sync
+    fresh = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"_id": 0, "zoho_invoice_url": 1, "zoho_invoice_number": 1, "zoho_invoice_id": 1},
+    ) or {}
+    if not fresh.get('zoho_invoice_url'):
+        # Sync ran but produced no invoice — most often because the account
+        # isn't linked to a Zoho contact, or items have no agreed price.
+        raise HTTPException(status_code=502, detail="Zoho push completed but no invoice URL was produced. Check the account's Zoho link and SKU pricing.")
+    return {
+        "message": "Zoho invoice generated.",
+        "zoho_invoice_url": fresh.get('zoho_invoice_url'),
+        "zoho_invoice_number": fresh.get('zoho_invoice_number'),
+        "zoho_invoice_id": fresh.get('zoho_invoice_id'),
+    }
+
+
 @router.post("/{distributor_id}/deliveries/{delivery_id}/complete")
 async def complete_delivery(
     distributor_id: str,
