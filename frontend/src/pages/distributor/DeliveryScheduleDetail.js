@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Truck, User, Loader2, ChevronUp, ChevronDown, Plus, X,
   Download, CheckCircle2, XCircle, Calendar, Package, Phone, MapPin,
-  GripVertical, Route, AlertTriangle,
+  GripVertical, Route, AlertTriangle, Sparkles, TrendingDown,
 } from 'lucide-react';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -80,6 +80,11 @@ export default function DeliveryScheduleDetail() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+
+  // Optimize-route preview state
+  const [optimizeOpen, setOptimizeOpen] = useState(false);
+  const [optimizeData, setOptimizeData] = useState(null);
+  const [optimizeLoading, setOptimizeLoading] = useState(false);
 
   // Drag-and-drop
   const dragSrc = useRef(null);
@@ -289,6 +294,42 @@ export default function DeliveryScheduleDetail() {
 
   const downloadPDF = () => window.open(`${BASE}/${id}/pdf`, '_blank');
 
+  // ----- Route optimisation -------------------------------------------------
+  const openOptimize = async () => {
+    setOptimizeLoading(true);
+    setOptimizeOpen(true);
+    setOptimizeData(null);
+    try {
+      const { data } = await axios.post(`${BASE}/${id}/optimize-route`, { apply: false }, { withCredentials: true });
+      setOptimizeData(data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to compute optimised route');
+      setOptimizeOpen(false);
+    } finally {
+      setOptimizeLoading(false);
+    }
+  };
+
+  const applyOptimize = async () => {
+    if (!optimizeData?.optimized_order) return;
+    setBusy(true);
+    try {
+      const { data } = await axios.put(`${BASE}/${id}`, { delivery_ids: optimizeData.optimized_order }, { withCredentials: true });
+      setSchedule(data);
+      toast.success(
+        optimizeData.savings_km != null && optimizeData.savings_km > 0
+          ? `Route optimised — saving ~${optimizeData.savings_km.toFixed(1)} km`
+          : 'Stop order updated'
+      );
+      setOptimizeOpen(false);
+      setOptimizeData(null);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to apply optimised order');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loading || !schedule) {
     return <div className="p-6 flex items-center justify-center text-slate-500"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>;
   }
@@ -459,9 +500,16 @@ export default function DeliveryScheduleDetail() {
             )}
           </div>
           {editable && (
-            <Button size="sm" variant="outline" onClick={openAttach} data-testid="schedule-attach-btn">
-              <Plus className="h-4 w-4 mr-1.5" /> Attach Stock-Outs
-            </Button>
+            <div className="flex items-center gap-2">
+              {deliveries.length >= 2 && (
+                <Button size="sm" variant="outline" onClick={openOptimize} disabled={busy} data-testid="schedule-optimize-btn">
+                  <Sparkles className="h-4 w-4 mr-1.5" /> Optimize route
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={openAttach} data-testid="schedule-attach-btn">
+                <Plus className="h-4 w-4 mr-1.5" /> Attach Stock-Outs
+              </Button>
+            </div>
           )}
         </div>
 
@@ -708,6 +756,42 @@ export default function DeliveryScheduleDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Optimize-route preview dialog */}
+      <Dialog open={optimizeOpen} onOpenChange={(o) => { if (!o) { setOptimizeOpen(false); setOptimizeData(null); } }}>
+        <DialogContent className="max-w-lg" data-testid="optimize-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-emerald-600" /> Optimise route
+            </DialogTitle>
+            <DialogDescription>
+              Nearest-neighbour ordering using Google Maps distances (round-trip from your warehouse).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            {optimizeLoading && (
+              <div className="flex items-center justify-center py-8 text-slate-500">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Computing optimal route…
+              </div>
+            )}
+            {!optimizeLoading && optimizeData && (
+              <OptimizeSummary data={optimizeData} deliveries={schedule?.deliveries || []} />
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setOptimizeOpen(false); setOptimizeData(null); }} disabled={busy}>
+              Close
+            </Button>
+            <Button
+              onClick={applyOptimize}
+              disabled={busy || optimizeLoading || !optimizeData || optimizeData?.optimized_order?.join(',') === optimizeData?.original_order?.join(',')}
+              data-testid="optimize-apply-btn"
+            >
+              {busy ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Applying…</> : 'Apply new order'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -816,6 +900,82 @@ function StopStatusPill({ stopIdx, stop, deliveries, scheduleStatus }) {
     <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 text-[10px]" data-testid={`stop-status-${stop.id}`}>
       Pending
     </Badge>
+  );
+}
+
+
+
+/**
+ * OptimizeSummary — renders the route-optimisation preview: km saved
+ * (or "already optimal"), any API warnings, and the proposed new stop order
+ * with the deltas vs. the original sequence.
+ */
+function OptimizeSummary({ data, deliveries }) {
+  const byId = new Map((deliveries || []).map((d, i) => [d.id, { ...d, originalIdx: i }]));
+  const unchanged = data.optimized_order.join(',') === data.original_order.join(',');
+  const savings = data.savings_km;
+  const cannotMeasure = data.original_total_km == null || data.optimized_total_km == null;
+
+  return (
+    <div className="space-y-4">
+      {data.warnings && data.warnings.length > 0 && (
+        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded-md flex items-start gap-1.5">
+          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+          <span>{data.warnings.join(' ')}</span>
+        </div>
+      )}
+
+      {cannotMeasure ? (
+        <div className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-md px-3 py-2">
+          Distances couldn't be measured (see warnings). The button below is disabled.
+        </div>
+      ) : unchanged ? (
+        <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4" /> Already optimal — round trip is {data.optimized_total_km.toFixed(1)} km.
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="rounded-md bg-slate-50 border border-slate-200 px-2 py-3">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400">Current</div>
+            <div className="text-base font-semibold text-slate-700 mt-0.5">{data.original_total_km.toFixed(1)} km</div>
+          </div>
+          <div className="rounded-md bg-emerald-50 border border-emerald-200 px-2 py-3">
+            <div className="text-[10px] uppercase tracking-wider text-emerald-600">Optimised</div>
+            <div className="text-base font-semibold text-emerald-700 mt-0.5">{data.optimized_total_km.toFixed(1)} km</div>
+          </div>
+          <div className="rounded-md bg-blue-50 border border-blue-200 px-2 py-3">
+            <div className="text-[10px] uppercase tracking-wider text-blue-600 flex items-center justify-center gap-1">
+              <TrendingDown className="h-3 w-3" /> Saved
+            </div>
+            <div className="text-base font-semibold text-blue-700 mt-0.5">
+              {savings != null && savings > 0 ? `${savings.toFixed(1)} km` : '—'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">Proposed order</div>
+        <ol className="space-y-1 max-h-64 overflow-y-auto pr-1">
+          {data.optimized_order.map((did, newIdx) => {
+            const d = byId.get(did);
+            if (!d) return null;
+            const moved = d.originalIdx !== newIdx;
+            return (
+              <li key={did} className="flex items-center gap-2 text-sm" data-testid={`optimize-order-${did}`}>
+                <span className="w-6 h-6 rounded-full bg-slate-900 text-white text-[11px] font-semibold flex items-center justify-center flex-shrink-0">{newIdx + 1}</span>
+                <span className="flex-1 truncate text-slate-800">{d.customer_name || 'Stop'}</span>
+                {moved && (
+                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 font-mono">
+                    was #{d.originalIdx + 1}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
   );
 }
 

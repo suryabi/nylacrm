@@ -1087,7 +1087,6 @@ async def get_quick_dates(current_user: dict = Depends(get_current_user)):
 
 
 # ============ Live tracking (Distributor & Admin view) =========================
-
 @router.get("/{schedule_id}/tracking")
 async def get_schedule_tracking(
     schedule_id: str,
@@ -1138,5 +1137,187 @@ async def get_schedule_tracking(
         "pings": pings,
         "latest": latest,
         "total": len(pings),
+    }
+
+
+
+# ============ Route optimisation (nearest-neighbour heuristic) =================
+
+class OptimizeRoutePayload(BaseModel):
+    apply: bool = False  # when True, persist the new delivery_ids order
+
+
+@router.post("/{schedule_id}/optimize-route")
+async def optimize_route(
+    schedule_id: str,
+    payload: OptimizeRoutePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Greedy nearest-neighbour over Google Routes distance matrix.
+
+    Starts at the distributor's primary warehouse and at each step picks the
+    UNVISITED stop closest to the current position. Returns the suggested order
+    (with total km before/after) and, if `apply=true` and the schedule is
+    editable, persists the new order to `delivery_ids`.
+
+    Falls back gracefully when the API key or a stop address is missing — those
+    stops are appended in their original order at the end.
+    """
+    tenant_id = get_current_tenant_id()
+    distributor_id = _resolve_distributor_id(current_user)
+    s = await db.distributor_delivery_schedules.find_one(
+        {"id": schedule_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if payload.apply and s.get("status") in ("approved", "in_progress", "completed", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Cannot reorder a {s.get('status')} schedule")
+    if not s.get("delivery_ids"):
+        raise HTTPException(status_code=400, detail="No deliveries attached to this schedule")
+
+    enriched = await _enrich_schedule(s, tenant_id)
+    origin = await _get_distributor_origin(distributor_id, tenant_id)
+    api_key = os.environ.get("GOOGLE_MAPS_API_KEY")
+
+    stops = [
+        {
+            "delivery_id": d["id"],
+            "label": d.get("customer_name") or "Stop",
+            "address": _address_to_query(d.get("delivery_address")),
+        }
+        for d in enriched.get("deliveries") or []
+    ]
+    original_order = [stop["delivery_id"] for stop in stops]
+
+    warnings: List[str] = []
+    if not api_key:
+        warnings.append("Google Maps API key not configured — route was not optimised.")
+    if not origin:
+        warnings.append("Distributor primary location address missing — set it in distributor settings.")
+
+    # Without an API key OR origin we can't compute anything meaningful — bail
+    # out keeping the original order (no error, just a warning).
+    if not api_key or not origin:
+        return {
+            "original_order": original_order,
+            "optimized_order": original_order,
+            "original_total_km": None,
+            "optimized_total_km": None,
+            "savings_km": None,
+            "applied": False,
+            "warnings": warnings,
+        }
+
+    # Address-having stops we can plug into the matrix; the rest get appended in
+    # their original sequence at the end of the optimised list.
+    addressed = [stop for stop in stops if stop["address"]]
+    unaddressed = [stop for stop in stops if not stop["address"]]
+    if unaddressed:
+        warnings.append(f"{len(unaddressed)} stop(s) missing addresses — kept in original order at the end.")
+
+    # Compute the full N+1 × N+1 matrix (warehouse + every addressed stop) in
+    # ONE Routes API call. Free tier allows up to 25×25; for now we keep this
+    # simple and assume a tenant won't push past that on a single delivery run.
+    points = [origin] + [stop["address"] for stop in addressed]
+    matrix_raw = await _distance_matrix(points, points)
+    if not matrix_raw or not isinstance(matrix_raw, list):
+        warnings.append("Distance Matrix API call failed — route was not optimised.")
+        return {
+            "original_order": original_order,
+            "optimized_order": original_order,
+            "original_total_km": None,
+            "optimized_total_km": None,
+            "savings_km": None,
+            "applied": False,
+            "warnings": warnings,
+        }
+
+    n = len(points)
+    INF = float("inf")
+    dist = [[INF] * n for _ in range(n)]
+    for elem in matrix_raw:
+        oi = elem.get("originIndex")
+        di = elem.get("destinationIndex")
+        if oi is None or di is None:
+            continue
+        m = elem.get("distanceMeters")
+        if m is None:
+            continue
+        dist[oi][di] = m / 1000.0
+
+    def total_km(order_indices: List[int]) -> float:
+        """Round-trip total km: warehouse → stops in order → warehouse."""
+        if not order_indices:
+            return 0.0
+        prev = 0  # warehouse
+        total = 0.0
+        for idx in order_indices:
+            d = dist[prev][idx]
+            if d == INF:
+                return float("inf")
+            total += d
+            prev = idx
+        # back to warehouse
+        d_back = dist[prev][0]
+        if d_back == INF:
+            return float("inf")
+        return total + d_back
+
+    # Original order's km (only for the addressed subset, mirrors what the
+    # optimiser will produce — fair apples-to-apples comparison).
+    original_indices = list(range(1, n))  # stops are at indices 1..n-1 in input order
+    original_total = total_km(original_indices)
+
+    # Greedy nearest-neighbour
+    unvisited = set(range(1, n))
+    current = 0  # warehouse
+    optimised_indices: List[int] = []
+    while unvisited:
+        best, best_d = None, INF
+        for v in unvisited:
+            if dist[current][v] < best_d:
+                best, best_d = v, dist[current][v]
+        if best is None:
+            break
+        optimised_indices.append(best)
+        unvisited.remove(best)
+        current = best
+    optimised_total = total_km(optimised_indices)
+
+    # Safety: nearest-neighbour can produce a route worse than the original. If
+    # that happens we keep the original order so the UI never offers to swap to
+    # a longer path.
+    if original_total != float("inf") and optimised_total > original_total:
+        optimised_indices = original_indices
+        optimised_total = original_total
+        warnings.append("Original order was already shorter than the heuristic — kept as-is.")
+
+    # Map matrix indices back to delivery_ids; unaddressed stops trail at the end.
+    optimised_order = [addressed[i - 1]["delivery_id"] for i in optimised_indices]
+    optimised_order.extend(stop["delivery_id"] for stop in unaddressed)
+
+    applied = False
+    if payload.apply and optimised_order != original_order:
+        await db.distributor_delivery_schedules.update_one(
+            {"id": schedule_id, "tenant_id": tenant_id},
+            {"$set": {
+                "delivery_ids": optimised_order,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+        applied = True
+
+    def _km(v):
+        return None if v in (None, float("inf")) else round(v, 1)
+
+    return {
+        "original_order": original_order,
+        "optimized_order": optimised_order,
+        "original_total_km": _km(original_total),
+        "optimized_total_km": _km(optimised_total),
+        "savings_km": _km(original_total - optimised_total) if (original_total != float("inf") and optimised_total != float("inf")) else None,
+        "applied": applied,
+        "warnings": warnings,
     }
 
