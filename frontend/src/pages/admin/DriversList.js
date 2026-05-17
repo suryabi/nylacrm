@@ -29,7 +29,7 @@ const STATUS_LABELS = {
   inactive: { label: 'Inactive', cls: 'bg-slate-200 text-slate-700 border-slate-300' },
 };
 
-const emptyForm = { full_name: '', phone: '', license_number: '', status: 'active', notes: '' };
+const emptyForm = { full_name: '', phone: '', license_number: '', city: '', status: 'active', notes: '' };
 
 export default function DriversList() {
   const [drivers, setDrivers] = useState([]);
@@ -38,6 +38,7 @@ export default function DriversList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [options, setOptions] = useState({ statuses: ['active', 'on_leave', 'inactive'] });
+  const [cities, setCities] = useState([]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -69,7 +70,15 @@ export default function DriversList() {
     } catch { /* keep defaults */ }
   };
 
-  useEffect(() => { fetchOptions(); }, []);
+  const fetchCities = async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/master-locations/flat`, { withCredentials: true });
+      const list = (data?.cities || []).map(c => ({ name: c.name, state: c.state_name })).sort((a, b) => a.name.localeCompare(b.name));
+      setCities(list);
+    } catch { /* leave empty */ }
+  };
+
+  useEffect(() => { fetchOptions(); fetchCities(); }, []);
   useEffect(() => { fetchDrivers(); /* eslint-disable-next-line */ }, [search, statusFilter]);
 
   useEffect(() => {
@@ -84,6 +93,7 @@ export default function DriversList() {
       full_name: d.full_name || '',
       phone: d.phone || '',
       license_number: d.license_number || '',
+      city: d.city || '',
       status: d.status || 'active',
       notes: d.notes || '',
     });
@@ -195,6 +205,7 @@ export default function DriversList() {
                   <th className="text-left px-4 py-2.5 font-medium">Name</th>
                   <th className="text-left px-4 py-2.5 font-medium">Phone</th>
                   <th className="text-left px-4 py-2.5 font-medium">License</th>
+                  <th className="text-left px-4 py-2.5 font-medium">City</th>
                   <th className="text-left px-4 py-2.5 font-medium">Status</th>
                   <th className="text-left px-4 py-2.5 font-medium">Notes</th>
                   <th className="text-right px-4 py-2.5 font-medium w-32">Actions</th>
@@ -208,6 +219,7 @@ export default function DriversList() {
                       <td className="px-4 py-3 font-medium text-slate-900">{d.full_name}</td>
                       <td className="px-4 py-3 font-mono text-slate-700">{d.phone}</td>
                       <td className="px-4 py-3 font-mono text-slate-700">{d.license_number}</td>
+                      <td className="px-4 py-3 text-slate-700">{d.city || <span className="text-slate-300">—</span>}</td>
                       <td className="px-4 py-3">
                         <Badge variant="outline" className={s.cls}>{s.label}</Badge>
                       </td>
@@ -272,14 +284,36 @@ export default function DriversList() {
                 />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs uppercase tracking-wider text-slate-500">Status</Label>
-              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                <SelectTrigger data-testid="driver-status-input"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {options.statuses.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]?.label || s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-slate-500">Status</Label>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                  <SelectTrigger data-testid="driver-status-input"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {options.statuses.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]?.label || s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-slate-500">City</Label>
+                <Select
+                  value={form.city || '__none__'}
+                  onValueChange={(v) => setForm({ ...form, city: v === '__none__' ? '' : v })}
+                >
+                  <SelectTrigger data-testid="driver-city-input"><SelectValue placeholder="Select city" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {cities.length === 0 && form.city && (
+                      <SelectItem value={form.city}>{form.city}</SelectItem>
+                    )}
+                    {cities.map(c => (
+                      <SelectItem key={c.name} value={c.name}>
+                        {c.name}{c.state ? <span className="text-slate-400 ml-1">· {c.state}</span> : null}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-slate-500">Notes</Label>

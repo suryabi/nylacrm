@@ -189,4 +189,12 @@ from .admin_drivers import router as admin_drivers_router
 routes_router.include_router(admin_vehicles_router, prefix="/admin/vehicles", tags=["Admin · Vehicles"])
 routes_router.include_router(admin_drivers_router, prefix="/admin/drivers", tags=["Admin · Drivers"])
 
+# Distributor → daily Delivery Schedules (vehicle + driver + ordered confirmed deliveries → PDF)
+from .distributor_delivery_schedules import router as distributor_delivery_schedules_router
+routes_router.include_router(
+    distributor_delivery_schedules_router,
+    prefix="/distributor/delivery-schedules",
+    tags=["Distributor · Delivery Schedules"],
+)
+
 __all__ = ['routes_router']

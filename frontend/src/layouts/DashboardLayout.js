@@ -196,6 +196,12 @@ const buildDistributorUserNavigationGroups = (distributorId) => {
       ],
     },
     {
+      title: 'Deliveries',
+      items: [
+        { name: 'Delivery Schedules', href: '/distributor/delivery-schedules', icon: CalendarRange, roles: ['Distributor'] },
+      ],
+    },
+    {
       title: 'Finance',
       items: [
         { name: 'Settlements', href: tab('settlements'), icon: Receipt, roles: ['Distributor'] },
@@ -300,11 +306,13 @@ export default function DashboardLayout({ children }) {
       const ownProfilePrefix = `/distributors/${getDistributorId}`;
       const allowedPaths = ['/distributor-home', '/login', '/logout'];
 
-      // Allow: welcome page, login/logout, and the distributor's own detail page (with any ?tab=)
+      // Allow: welcome page, login/logout, the distributor's own detail page (with any ?tab=),
+      // and the new Delivery Schedules module (list + detail).
       const isOnOwnDetail = location.pathname === ownProfilePrefix || location.pathname.startsWith(ownProfilePrefix + '/');
       const isOnAllowed = allowedPaths.includes(location.pathname);
+      const isOnDeliverySchedules = location.pathname === '/distributor/delivery-schedules' || location.pathname.startsWith('/distributor/delivery-schedules/');
 
-      if (!isOnOwnDetail && !isOnAllowed) {
+      if (!isOnOwnDetail && !isOnAllowed && !isOnDeliverySchedules) {
         navigate('/distributor-home');
       } else if (location.pathname === '/distributors') {
         // Distributors should never see the global list page

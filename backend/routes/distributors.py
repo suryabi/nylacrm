@@ -3421,6 +3421,7 @@ async def get_distributor_stock(
 DELIVERY_STATUSES = {
     "draft": "Draft - Not yet confirmed",
     "confirmed": "Confirmed - Ready for delivery",
+    "scheduled": "Scheduled - On a confirmed delivery schedule",
     "in_transit": "In Transit - On the way",
     "delivered": "Delivered - Completed",
     "partially_delivered": "Partially Delivered",
@@ -4305,7 +4306,7 @@ async def retry_delivery_zoho_push(
     )
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
-    if delivery.get('status') not in ('confirmed', 'delivered'):
+    if delivery.get('status') not in ('confirmed', 'scheduled', 'delivered'):
         raise HTTPException(status_code=400, detail="Delivery must be confirmed before pushing to Zoho")
 
     from services.zoho_service import sync_delivery_to_zoho, ZohoPushSkippedError
@@ -4357,7 +4358,7 @@ async def complete_delivery(
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
     
-    if delivery.get('status') not in ['draft', 'confirmed', 'in_transit']:
+    if delivery.get('status') not in ['draft', 'confirmed', 'scheduled', 'in_transit']:
         raise HTTPException(status_code=400, detail="Delivery cannot be completed in current status")
     
     now = datetime.now(timezone.utc).isoformat()

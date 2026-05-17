@@ -45,6 +45,7 @@ class DriverBase(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=120)
     phone: str = Field(..., min_length=1, max_length=20)
     license_number: str = Field(..., min_length=1, max_length=32)
+    city: Optional[str] = Field(default=None, max_length=80)
     status: str = "active"
     notes: Optional[str] = None
 
@@ -57,6 +58,7 @@ class DriverUpdate(BaseModel):
     full_name: Optional[str] = Field(default=None, max_length=120)
     phone: Optional[str] = Field(default=None, max_length=20)
     license_number: Optional[str] = Field(default=None, max_length=32)
+    city: Optional[str] = Field(default=None, max_length=80)
     status: Optional[str] = None
     notes: Optional[str] = None
 
@@ -79,6 +81,7 @@ async def list_drivers(
             {"full_name": {"$regex": s, "$options": "i"}},
             {"phone": {"$regex": s, "$options": "i"}},
             {"license_number": {"$regex": s, "$options": "i"}},
+            {"city": {"$regex": s, "$options": "i"}},
             {"notes": {"$regex": s, "$options": "i"}},
         ]
 
@@ -114,6 +117,7 @@ async def create_driver(payload: DriverCreate, current_user: dict = Depends(get_
         "full_name": full_name,
         "phone": phone,
         "license_number": license_num,
+        "city": (payload.city or "").strip() or None,
         "status": payload.status,
         "notes": (payload.notes or "").strip() or None,
         "created_at": now,
@@ -159,6 +163,8 @@ async def update_driver(driver_id: str, payload: DriverUpdate, current_user: dic
         if payload.status not in ALLOWED_STATUSES:
             raise HTTPException(status_code=400, detail=f"status must be one of {ALLOWED_STATUSES}")
         update_doc["status"] = payload.status
+    if payload.city is not None:
+        update_doc["city"] = payload.city.strip() or None
     if payload.notes is not None:
         update_doc["notes"] = payload.notes.strip() or None
 
