@@ -486,31 +486,51 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
     # the friendly account name here (NOT the trade-name-with-parens combo).
     attention_line = secondary_label or acct_label  # never blank — fallback to account name
 
+    # Zoho enforces a 100-char limit on each of address / street2 / city / state.
+    # We clip defensively and overflow address-line-1 into street2 so we never
+    # drop content — also surfaces a cleaner rendering on the invoice PDF.
+    def _clip100(s: Optional[str]) -> str:
+        if not s:
+            return ""
+        s = str(s).strip()
+        return s[:100]
+
     def _zoho_addr(src) -> Optional[dict]:
         if not src:
             return None
         if isinstance(src, str):
-            return {"attention": attention_line, "address": src, "country": "India"}
+            full = src.strip()
+            return {
+                "attention": _clip100(attention_line)[:200],
+                "address": _clip100(full),
+                "street2": _clip100(full[100:200]) if len(full) > 100 else "",
+                "country": "India",
+            }
         if not isinstance(src, dict):
             return None
-        # Some legacy rows store the address as a JSON-stringified blob.
-        # Defensive parse so we don't store the JSON literally.
         line1 = (src.get("address_line1") or src.get("line1") or "").strip()
         line2 = (src.get("address_line2") or src.get("line2") or "").strip()
+        landmark = (src.get("landmark") or "").strip()
         city = (src.get("city") or "").strip()
         state = (src.get("state") or "").strip()
         zipc = (src.get("pincode") or src.get("zip") or src.get("postal_code") or "").strip()
-        # Compose a clean "address" line (Zoho line 1 is free text)
-        addr = ", ".join([p for p in (line1, src.get("landmark")) if p]).strip() or line1
-        if not (addr or city or state or zipc):
+
+        # Build a candidate address line (line1 + landmark) but cap at 100.
+        # If still too long after that, overflow goes to street2 so nothing is lost.
+        candidate_addr = ", ".join([p for p in (line1, landmark) if p]).strip()
+        if not (candidate_addr or line2 or city or state or zipc):
             return None
+        address = _clip100(candidate_addr) or _clip100(city)
+        # If the original candidate was longer than 100, capture the overflow.
+        overflow = candidate_addr[100:].strip() if len(candidate_addr) > 100 else ""
+        street2 = _clip100(", ".join([p for p in (overflow, line2) if p]).strip())
         return {
-            "attention": attention_line,
-            "address": addr or city,
-            "street2": line2 or "",
-            "city": city,
-            "state": state,
-            "zip": zipc,
+            "attention": _clip100(attention_line)[:200],
+            "address": address,
+            "street2": street2,
+            "city": _clip100(city),
+            "state": _clip100(state),
+            "zip": _clip100(zipc),
             "country": "India",
         }
 
@@ -844,18 +864,25 @@ async def create_invoice_for_delivery(
             return None
         line1 = (src.get("address_line1") or src.get("line1") or "").strip()
         line2 = (src.get("address_line2") or src.get("line2") or "").strip()
+        landmark = (src.get("landmark") or "").strip()
         city = (src.get("city") or "").strip()
         state = (src.get("state") or "").strip()
         zipc = (src.get("pincode") or src.get("zip") or src.get("postal_code") or "").strip()
-        if not (line1 or line2 or city or state or zipc):
+        candidate_addr = ", ".join([p for p in (line1, landmark) if p]).strip()
+        if not (candidate_addr or line2 or city or state or zipc):
             return None
+        # Zoho hard-caps every address-block field at 100 chars. Clip defensively
+        # and overflow address-line-1 → street2 so no information is dropped.
+        address = (candidate_addr[:100].strip()) or city[:100]
+        overflow = candidate_addr[100:].strip() if len(candidate_addr) > 100 else ""
+        street2 = ", ".join([p for p in (overflow, line2) if p]).strip()[:100]
         return {
-            "attention": attention,
-            "address": line1 or city,
-            "street2": line2 or "",
-            "city": city,
-            "state": state,
-            "zip": zipc,
+            "attention": (attention or "")[:200],
+            "address": address,
+            "street2": street2,
+            "city": city[:100],
+            "state": state[:100],
+            "zip": zipc[:100],
             "country": "India",
         }
 
