@@ -24,6 +24,11 @@ import { toast } from 'sonner';
  *   onSave (async fn, required when editable)
  *   compact (bool) — tighter layout for inline use inside an expanded table row
  */
+// India GST regex — 15 chars: 2-digit state + 10-char PAN + 1-char entity + 'Z' + 1-char check digit
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+// PAN regex — 10 chars: 5 letters + 4 digits + 1 letter (4th letter is entity type)
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+
 const emptyBilling = { address_line1: '', address_line2: '', city: '', state: '', pincode: '' };
 
 export default function TaxBillingCard({
@@ -39,6 +44,8 @@ export default function TaxBillingCard({
   const [form, setForm] = useState({
     gst_number: data.gst_number || '',
     pan_number: data.pan_number || '',
+    gst_legal_name: data.gst_legal_name || '',
+    gst_trade_name: data.gst_trade_name || '',
     billing_address: { ...emptyBilling, ...(data.billing_address || {}) },
   });
 
@@ -46,6 +53,8 @@ export default function TaxBillingCard({
     setForm({
       gst_number: data.gst_number || '',
       pan_number: data.pan_number || '',
+      gst_legal_name: data.gst_legal_name || '',
+      gst_trade_name: data.gst_trade_name || '',
       billing_address: { ...emptyBilling, ...(data.billing_address || {}) },
     });
   }, [data]);
@@ -61,13 +70,26 @@ export default function TaxBillingCard({
     );
   };
 
+  const gstinNorm = (form.gst_number || '').toUpperCase().trim();
+  const panNorm = (form.pan_number || '').toUpperCase().trim();
+  // Live inline-validity flags — used to colour inputs and gate Save
+  const gstinValid = !gstinNorm || GSTIN_REGEX.test(gstinNorm);
+  const panValid = !panNorm || PAN_REGEX.test(panNorm);
+  // Cross-check: GSTIN positions 3..12 must equal the PAN if both are present
+  const panFromGstin = gstinNorm.length === 15 ? gstinNorm.slice(2, 12) : '';
+  const gstinPanMatches = !panNorm || !panFromGstin || panFromGstin === panNorm;
+
   const validate = () => {
-    if (form.gst_number && form.gst_number.length !== 15) {
-      toast.error('GSTIN must be 15 characters');
+    if (gstinNorm && !GSTIN_REGEX.test(gstinNorm)) {
+      toast.error('Invalid GSTIN format. Expected 15 chars: 2-digit state + 10-char PAN + entity + Z + check digit.');
       return false;
     }
-    if (form.pan_number && form.pan_number.length !== 10) {
-      toast.error('PAN must be 10 characters');
+    if (panNorm && !PAN_REGEX.test(panNorm)) {
+      toast.error('Invalid PAN format. Expected 10 chars: 5 letters + 4 digits + 1 letter.');
+      return false;
+    }
+    if (!gstinPanMatches) {
+      toast.error('PAN does not match the PAN embedded in the GSTIN (positions 3–12).');
       return false;
     }
     if (form.billing_address.pincode && !/^\d{6}$/.test(form.billing_address.pincode)) {
@@ -82,8 +104,10 @@ export default function TaxBillingCard({
     setSaving(true);
     try {
       await onSave({
-        gst_number: (form.gst_number || '').toUpperCase().trim() || null,
-        pan_number: (form.pan_number || '').toUpperCase().trim() || null,
+        gst_number: gstinNorm || null,
+        pan_number: panNorm || null,
+        gst_legal_name: form.gst_legal_name?.trim() || null,
+        gst_trade_name: form.gst_trade_name?.trim() || null,
         billing_address: {
           address_line1: form.billing_address.address_line1 || null,
           address_line2: form.billing_address.address_line2 || null,
@@ -115,7 +139,10 @@ export default function TaxBillingCard({
             {titleSuffix && <span className="text-xs text-slate-500 font-normal">{titleSuffix}</span>}
           </CardTitle>
           {!compact && (
-            <CardDescription>GST, PAN and registered billing address used on every invoice.</CardDescription>
+            <CardDescription>
+              GSTIN, PAN, registered names and billing address used on every invoice.
+              These values — whether parsed from the GST certificate or entered/edited manually here — are what we sync to Zoho.
+            </CardDescription>
           )}
         </div>
         {editable && !editing && (
@@ -128,7 +155,12 @@ export default function TaxBillingCard({
             <Button size="sm" variant="outline" onClick={() => setEditing(false)} disabled={saving}>
               <X className="h-3.5 w-3.5 mr-1.5" /> Cancel
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving} data-testid="tax-billing-save-btn">
+            <Button
+              size="sm"
+              onClick={handleSave}
+              disabled={saving || !gstinValid || !panValid || !gstinPanMatches}
+              data-testid="tax-billing-save-btn"
+            >
               {saving ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving…</> : <><Save className="h-3.5 w-3.5 mr-1.5" /> Save</>}
             </Button>
           </div>
@@ -146,9 +178,12 @@ export default function TaxBillingCard({
                   onChange={(e) => setForm({ ...form, gst_number: e.target.value.toUpperCase() })}
                   placeholder="22AAAAA0000A1Z5"
                   maxLength={15}
-                  className="font-mono"
+                  className={`font-mono ${form.gst_number && !gstinValid ? 'border-red-300 focus-visible:ring-red-300' : ''}`}
                   data-testid="tax-gst-input"
                 />
+                {form.gst_number && !gstinValid && (
+                  <p className="text-[10px] text-red-600">Invalid GSTIN — expected 15 chars: state (2) + PAN (10) + entity + Z + check digit.</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs uppercase tracking-wider text-slate-500">PAN</Label>
@@ -157,8 +192,34 @@ export default function TaxBillingCard({
                   onChange={(e) => setForm({ ...form, pan_number: e.target.value.toUpperCase() })}
                   placeholder="ABCDE1234F"
                   maxLength={10}
-                  className="font-mono"
+                  className={`font-mono ${form.pan_number && !panValid ? 'border-red-300 focus-visible:ring-red-300' : ''}`}
                   data-testid="tax-pan-input"
+                />
+                {form.pan_number && !panValid && (
+                  <p className="text-[10px] text-red-600">Invalid PAN — expected 10 chars: 5 letters + 4 digits + 1 letter.</p>
+                )}
+                {form.pan_number && panValid && !gstinPanMatches && (
+                  <p className="text-[10px] text-amber-700">PAN inside GSTIN ({panFromGstin}) doesn't match.</p>
+                )}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-slate-500">Legal Name</Label>
+                <Input
+                  value={form.gst_legal_name}
+                  onChange={(e) => setForm({ ...form, gst_legal_name: e.target.value })}
+                  placeholder="Registered legal name (as per GST cert)"
+                  data-testid="tax-legal-name-input"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-slate-500">Trade Name</Label>
+                <Input
+                  value={form.gst_trade_name}
+                  onChange={(e) => setForm({ ...form, gst_trade_name: e.target.value })}
+                  placeholder="Business / brand name printed on invoice"
+                  data-testid="tax-trade-name-input"
                 />
               </div>
             </div>
