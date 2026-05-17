@@ -579,6 +579,14 @@ class AccountNotLinkedToZohoError(RuntimeError):
     Zoho contacts from a delivery / return flow."""
 
 
+class ZohoPushSkippedError(RuntimeError):
+    """Raised by sync_delivery_to_zoho when a delivery cannot be pushed to Zoho
+    for a *known* reason (non-factory source warehouse, missing source location,
+    no items on delivery, account not linked, etc). The background-task caller
+    swallows this. The /retry-zoho-push endpoint surfaces the message verbatim
+    so the rep sees exactly what to fix."""
+
+
 def _account_has_zoho_link(account: dict) -> bool:
     """True only when the account has a non-empty `zoho_contact_id`."""
     if not account:
@@ -1423,40 +1431,45 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
     """
     if not is_zoho_configured():
         logger.info("Zoho not configured, skipping auto-push")
-        return
+        raise ZohoPushSkippedError("Zoho Books integration is not configured on this tenant. Ask an admin to set ZOHO_CLIENT_ID/SECRET.")
     creds = await get_credentials(tenant_id)
     if not creds:
         logger.info(f"Zoho not connected for tenant {tenant_id}, skipping auto-push")
-        return
+        raise ZohoPushSkippedError("Zoho Books is not connected for this tenant. Go to Settings → Integrations → Zoho Books and click Connect.")
 
     delivery = await db.distributor_deliveries.find_one(
         {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0}
     )
     if not delivery:
         logger.warning(f"sync_delivery_to_zoho: delivery {delivery_id} not found")
-        return
+        raise ZohoPushSkippedError("Delivery not found.")
 
     # Guard: only factory-warehouse stock-outs are invoiced via Zoho.
     src_loc_id = delivery.get("distributor_location_id")
     if not src_loc_id:
         logger.info(f"sync_delivery_to_zoho: delivery {delivery.get('delivery_number')} has no source location; skipping")
-        return
+        raise ZohoPushSkippedError("Delivery has no source warehouse — cannot determine if it should be invoiced via Zoho.")
     src_loc = await db.distributor_locations.find_one(
         {"id": src_loc_id, "tenant_id": tenant_id}, {"_id": 0, "is_factory": 1, "location_name": 1}
     )
     if not src_loc or not src_loc.get("is_factory"):
+        loc_name = (src_loc or {}).get("location_name") or "(unknown)"
         logger.info(
             f"sync_delivery_to_zoho: delivery {delivery.get('delivery_number')} dispatched from "
-            f"non-factory warehouse '{(src_loc or {}).get('location_name')}'; skipping Zoho push"
+            f"non-factory warehouse '{loc_name}'; skipping Zoho push"
         )
-        return
+        raise ZohoPushSkippedError(
+            f"This delivery is dispatched from '{loc_name}' which is a distributor warehouse, not a factory. "
+            "Only factory-warehouse stock-outs are invoiced via Zoho (distributor warehouses use the local billing flow). "
+            "If this should be invoiced via Zoho, mark the source warehouse as Factory in Distributor → Locations."
+        )
 
     items = await db.distributor_delivery_items.find(
         {"delivery_id": delivery_id, "tenant_id": tenant_id}, {"_id": 0}
     ).to_list(500)
     if not items:
         logger.warning(f"sync_delivery_to_zoho: no items for delivery {delivery_id}")
-        return
+        raise ZohoPushSkippedError("This delivery has no line items to invoice.")
 
     account = await db.accounts.find_one(
         {"id": delivery.get("account_id"), "tenant_id": tenant_id}, {"_id": 0}
@@ -1470,7 +1483,10 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
             f"({delivery.get('account_id')}) has no zoho_contact_id — skipping Zoho push for "
             f"delivery {delivery.get('delivery_number')}"
         )
-        return
+        raise ZohoPushSkippedError(
+            f"Account '{account.get('account_name')}' is not linked to a Zoho contact. "
+            "Open the account → click 'Re-sync to Zoho' (or check Billed-by setting), then retry."
+        )
 
     backoff_seconds = [0, 4, 16]  # 3 attempts total: immediate, +4s, +16s
     last_error: Optional[str] = None

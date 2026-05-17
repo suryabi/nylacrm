@@ -4264,10 +4264,20 @@ async def confirm_delivery(
     
     logger.info(f"Delivery {delivery['delivery_number']} confirmed by {current_user['email']}")
 
-    # Auto-push to Zoho Books (no-op if integration not configured/connected for this tenant)
+    # Auto-push to Zoho Books — wrapped to swallow expected ZohoPushSkippedError
+    # (non-factory warehouse, account not linked, etc) without crashing the
+    # background task. The retry endpoint surfaces the same error to the user.
+    async def _safe_zoho_sync():
+        try:
+            from services.zoho_service import sync_delivery_to_zoho, ZohoPushSkippedError
+            try:
+                await sync_delivery_to_zoho(tenant_id, distributor_id, delivery_id)
+            except ZohoPushSkippedError as skip:
+                logger.info(f"Zoho push skipped for delivery {delivery_id}: {skip}")
+        except Exception:
+            logger.exception(f"Zoho sync background task failed for delivery {delivery_id}")
     try:
-        from services.zoho_service import sync_delivery_to_zoho
-        background_tasks.add_task(sync_delivery_to_zoho, tenant_id, distributor_id, delivery_id)
+        background_tasks.add_task(_safe_zoho_sync)
     except Exception as e:
         logger.warning(f"Failed to schedule Zoho sync for delivery {delivery_id}: {e}")
 
@@ -4282,9 +4292,8 @@ async def retry_delivery_zoho_push(
 ):
     """Manually re-attempt the Zoho Books invoice push for a confirmed delivery.
 
-    Useful when the auto-push (background task) fails silently — e.g. transient
-    network error, Zoho rate-limit, missing SKU mapping. Runs synchronously so
-    the caller sees the actual Zoho error (if any) instead of a "queued" toast.
+    Surfaces specific reasons via ZohoPushSkippedError (non-factory warehouse,
+    account not linked, etc.) so the user sees exactly what to fix.
     """
     if not can_manage_distributor_data(current_user, distributor_id):
         raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
@@ -4299,9 +4308,12 @@ async def retry_delivery_zoho_push(
     if delivery.get('status') not in ('confirmed', 'delivered'):
         raise HTTPException(status_code=400, detail="Delivery must be confirmed before pushing to Zoho")
 
-    from services.zoho_service import sync_delivery_to_zoho
+    from services.zoho_service import sync_delivery_to_zoho, ZohoPushSkippedError
     try:
         await sync_delivery_to_zoho(tenant_id, distributor_id, delivery_id)
+    except ZohoPushSkippedError as skip:
+        # Known reason — friendly 400 so the user sees the exact blocker
+        raise HTTPException(status_code=400, detail=str(skip))
     except Exception as e:
         logger.exception(f"Manual Zoho push failed for delivery {delivery_id}")
         raise HTTPException(status_code=502, detail=f"Zoho push failed: {e}")
@@ -4312,9 +4324,10 @@ async def retry_delivery_zoho_push(
         {"_id": 0, "zoho_invoice_url": 1, "zoho_invoice_number": 1, "zoho_invoice_id": 1},
     ) or {}
     if not fresh.get('zoho_invoice_url'):
-        # Sync ran but produced no invoice — most often because the account
-        # isn't linked to a Zoho contact, or items have no agreed price.
-        raise HTTPException(status_code=502, detail="Zoho push completed but no invoice URL was produced. Check the account's Zoho link and SKU pricing.")
+        raise HTTPException(
+            status_code=502,
+            detail="Zoho push completed but no invoice URL was produced. Most common causes: account has no Zoho contact ID, line items have no agreed price, or the source warehouse is not marked as Factory.",
+        )
     return {
         "message": "Zoho invoice generated.",
         "zoho_invoice_url": fresh.get('zoho_invoice_url'),
