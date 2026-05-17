@@ -70,6 +70,8 @@ import VehiclesList from './pages/admin/VehiclesList';
 import DriversList from './pages/admin/DriversList';
 import DeliverySchedulesList from './pages/distributor/DeliverySchedulesList';
 import DeliveryScheduleDetail from './pages/distributor/DeliveryScheduleDetail';
+import DriverLogin from './pages/driver/DriverLogin';
+import { DriverSchedules, DriverScheduleDetail } from './pages/driver/DriverApp';
 import AccountDetail from './pages/AccountDetail';
 import AccountPerformance from './pages/AccountPerformance';
 import InvoicesList from './pages/InvoicesList';
@@ -257,6 +259,12 @@ function AppRouter() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegisterTenant />} />
           <Route path="/auth/callback" element={<GoogleAuthCallback />} />
+
+          {/* Driver mobile-web app — own login, own minimal layout (no DashboardLayout) */}
+          <Route path="/driver/login" element={<DriverLogin />} />
+          <Route path="/driver" element={<DriverSchedules />} />
+          <Route path="/driver/schedules" element={<DriverSchedules />} />
+          <Route path="/driver/schedules/:id" element={<DriverScheduleDetail />} />
           
           <Route path="/home" element={<ProtectedRoute moduleKey="home"><HomeDashboard /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute moduleKey="dashboard"><Dashboard /></ProtectedRoute>} />

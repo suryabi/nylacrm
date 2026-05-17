@@ -233,6 +233,7 @@ export default function TenantSettings() {
     fiscal_year_start: '04-01',
     default_distributor_gst_percent: 18,
     check_in_radius_meters: 50,
+    gps_ping_interval_minutes: 5,
   });
   
   // Auth config for Google Workspace SSO
@@ -1933,6 +1934,28 @@ export default function TenantSettings() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Sales reps clicking "I am here" on a lead are flagged as off-site when they are farther than this radius from the lead's saved GPS location.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Driver GPS Ping Interval
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="60"
+                    step="1"
+                    value={settings.gps_ping_interval_minutes ?? 5}
+                    onChange={(e) => setSettings(prev => ({ ...prev, gps_ping_interval_minutes: parseInt(e.target.value, 10) || 5 }))}
+                    className="max-w-[120px]"
+                    data-testid="input-gps-ping-interval"
+                  />
+                  <span className="text-muted-foreground">minutes</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  How often the Driver mobile app pushes GPS coordinates while a delivery is in progress. Distributor & admin live maps poll at this cadence too.
                 </p>
               </div>
             </CardContent>

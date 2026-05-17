@@ -96,7 +96,11 @@ export default function Login() {
   // Redirect to home if user is already authenticated (not during login process)
   useEffect(() => {
     if (user && !authLoading && !loading) {
-      const dest = user.role === 'Distributor' ? '/distributor-home' : '/home';
+      const dest = user.role === 'Driver'
+        ? '/driver/schedules'
+        : user.role === 'Distributor'
+          ? '/distributor-home'
+          : '/home';
       navigate(dest, { replace: true });
     }
   }, [user, authLoading, loading, navigate]);
@@ -138,7 +142,11 @@ export default function Login() {
         // Small delay to ensure state is synced before redirect
         await new Promise(resolve => setTimeout(resolve, 100));
         // Use navigate with replace to prevent back button issues
-        const dest = userData.role === 'Distributor' ? '/distributor-home' : '/home';
+        const dest = userData.role === 'Driver'
+          ? '/driver/schedules'
+          : userData.role === 'Distributor'
+            ? '/distributor-home'
+            : '/home';
         navigate(dest, { replace: true });
       } else {
         toast.error('Login failed - no user data received');

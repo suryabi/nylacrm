@@ -141,6 +141,11 @@ class TenantSettings(BaseModel):
     # are accepted by the distance route.
     factory_address: Optional[str] = None
 
+    # Driver app — how frequently the driver's device pushes GPS coordinates to
+    # the backend (and how often distributor/admin map views poll for them).
+    # Configurable per tenant; default 5 minutes.
+    gps_ping_interval_minutes: int = 5
+
 
 # ============= INDUSTRY PROFILE SYSTEM =============
 

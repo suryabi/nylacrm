@@ -197,4 +197,8 @@ routes_router.include_router(
     tags=["Distributor · Delivery Schedules"],
 )
 
+# Driver mobile-web app (login by phone, schedules, GPS pings, mark stops complete)
+from .driver_app import router as driver_app_router
+routes_router.include_router(driver_app_router, prefix="/driver", tags=["Driver App"])
+
 __all__ = ['routes_router']

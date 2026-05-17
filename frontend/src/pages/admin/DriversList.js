@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, Loader2, IdCard, Search, RefreshCw,
+  Plus, Pencil, Trash2, Loader2, IdCard, Search, RefreshCw, KeyRound, Copy, Check,
 } from 'lucide-react';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -47,6 +47,11 @@ export default function DriversList() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // One-time password disclosure modal (shown after create / regenerate).
+  const [credentials, setCredentials] = useState(null); // { driver_name, login_username, login_password }
+  const [copied, setCopied] = useState(false);
+  const [regenerating, setRegenerating] = useState(null); // driver_id while in-flight
 
   const fetchDrivers = async () => {
     setLoading(true);
@@ -109,12 +114,22 @@ export default function DriversList() {
       if (editing) {
         await axios.put(`${API_URL}/admin/drivers/${editing.id}`, form, { withCredentials: true });
         toast.success('Driver updated');
+        setDialogOpen(false);
+        fetchDrivers();
       } else {
-        await axios.post(`${API_URL}/admin/drivers`, form, { withCredentials: true });
-        toast.success('Driver added');
+        const { data } = await axios.post(`${API_URL}/admin/drivers`, form, { withCredentials: true });
+        setDialogOpen(false);
+        fetchDrivers();
+        if (data?.login_password) {
+          setCredentials({
+            driver_name: data.full_name,
+            login_username: data.login_username,
+            login_password: data.login_password,
+          });
+        } else {
+          toast.success('Driver added');
+        }
       }
-      setDialogOpen(false);
-      fetchDrivers();
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to save driver');
     } finally {
@@ -135,6 +150,33 @@ export default function DriversList() {
     } finally {
       setDeleting(false);
     }
+  };
+
+  const handleRegenerate = async (driver) => {
+    setRegenerating(driver.id);
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/admin/drivers/${driver.id}/regenerate-password`, {}, { withCredentials: true }
+      );
+      setCredentials({
+        driver_name: driver.full_name,
+        login_username: data.login_username,
+        login_password: data.login_password,
+      });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to regenerate password');
+    } finally {
+      setRegenerating(null);
+    }
+  };
+
+  const handleCopyCreds = () => {
+    if (!credentials) return;
+    const text = `Mobile: ${credentials.login_username}\nPassword: ${credentials.login_password}`;
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   };
 
   const stats = useMemo(() => {
@@ -225,6 +267,16 @@ export default function DriversList() {
                       </td>
                       <td className="px-4 py-3 text-slate-600 max-w-md truncate">{d.notes || <span className="text-slate-300">—</span>}</td>
                       <td className="px-4 py-3 text-right">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRegenerate(d)}
+                          disabled={regenerating === d.id}
+                          title="Regenerate driver login password"
+                          data-testid={`driver-regenerate-${d.id}`}
+                        >
+                          {regenerating === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => openEdit(d)} data-testid={`driver-edit-${d.id}`}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -356,6 +408,42 @@ export default function DriversList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* One-time credentials disclosure modal */}
+      <Dialog open={!!credentials} onOpenChange={(open) => { if (!open) { setCredentials(null); setCopied(false); } }}>
+        <DialogContent className="max-w-md" data-testid="driver-credentials-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-emerald-600" /> Share these credentials
+            </DialogTitle>
+            <DialogDescription>
+              {credentials?.driver_name} can log in to the driver app with this mobile number and password.
+              The password is shown <strong>only once</strong> — copy it now.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Label className="text-xs uppercase tracking-wider text-slate-500">Mobile Number</Label>
+              <Input value={credentials?.login_username || ''} readOnly className="font-mono mt-1" data-testid="driver-creds-username" />
+            </div>
+            <div>
+              <Label className="text-xs uppercase tracking-wider text-slate-500">Password</Label>
+              <Input value={credentials?.login_password || ''} readOnly className="font-mono mt-1 text-lg" data-testid="driver-creds-password" />
+            </div>
+            <p className="text-xs text-slate-500">
+              Driver login URL: <span className="font-mono text-slate-700">/driver/login</span>
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={handleCopyCreds} data-testid="driver-creds-copy">
+              {copied ? <><Check className="h-4 w-4 mr-1.5" /> Copied</> : <><Copy className="h-4 w-4 mr-1.5" /> Copy</>}
+            </Button>
+            <Button onClick={() => { setCredentials(null); setCopied(false); }} data-testid="driver-creds-done">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -12,6 +12,7 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Label } from '../../components/ui/label';
 import { Checkbox } from '../../components/ui/checkbox';
+import LiveDriverMap from '../../components/LiveDriverMap';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
@@ -30,6 +31,8 @@ const STATUS_LABELS = {
   draft: { label: 'Draft', cls: 'bg-slate-100 text-slate-700 border-slate-200' },
   confirmed: { label: 'Confirmed', cls: 'bg-sky-100 text-sky-700 border-sky-200' },
   approved: { label: 'Approved', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+  in_progress: { label: 'In progress', cls: 'bg-amber-100 text-amber-800 border-amber-200' },
+  completed: { label: 'Completed', cls: 'bg-slate-200 text-slate-700 border-slate-300' },
   cancelled: { label: 'Cancelled', cls: 'bg-rose-100 text-rose-700 border-rose-200' },
 };
 
@@ -132,7 +135,7 @@ export default function DeliveryScheduleDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule?.id, JSON.stringify(schedule?.delivery_ids || [])]);
 
-  const editable = schedule && !['approved', 'cancelled'].includes(schedule.status);
+  const editable = schedule && !['approved', 'in_progress', 'completed', 'cancelled'].includes(schedule.status);
 
   const patch = async (body) => {
     setBusy(true);
@@ -421,6 +424,14 @@ export default function DeliveryScheduleDetail() {
             )}
           </div>
         </Card>
+      )}
+
+      {/* Live driver map — only meaningful once a driver is assigned + schedule
+          is past the planning stage. We render it for approved/in_progress/completed. */}
+      {schedule.driver_id && ['approved', 'in_progress', 'completed'].includes(schedule.status) && (
+        <div className="mb-4">
+          <LiveDriverMap scheduleId={schedule.id} />
+        </div>
       )}
 
       {/* Deliveries list — ROW format with expander + drag-and-drop */}

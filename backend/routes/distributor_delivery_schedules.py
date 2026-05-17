@@ -1084,3 +1084,59 @@ async def get_quick_dates(current_user: dict = Depends(get_current_user)):
         "today": today.isoformat(),
         "tomorrow": (today + timedelta(days=1)).isoformat(),
     }
+
+
+# ============ Live tracking (Distributor & Admin view) =========================
+
+@router.get("/{schedule_id}/tracking")
+async def get_schedule_tracking(
+    schedule_id: str,
+    since: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Return GPS breadcrumbs for a schedule. Visible to:
+      • the owning Distributor user,
+      • any tenant admin / non-Driver role with a Distribution context.
+    Optional `since` (ISO timestamp) returns only newer points (polling-friendly)."""
+    tenant_id = get_current_tenant_id()
+    role = (current_user.get("role") or "").strip()
+
+    # Authorise — owning distributor OR admin-ish role.
+    s = await db.distributor_delivery_schedules.find_one(
+        {"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    if role == "Distributor":
+        if current_user.get("distributor_id") != s.get("distributor_id"):
+            raise HTTPException(status_code=403, detail="Not your schedule")
+    elif role == "Driver":
+        if current_user.get("driver_id") != s.get("driver_id"):
+            raise HTTPException(status_code=403, detail="Not your schedule")
+    # Other roles (CEO/Director/Admin/System Admin/Sales/etc.) can read tracking.
+
+    q: dict = {"tenant_id": tenant_id, "schedule_id": schedule_id}
+    if since:
+        q["recorded_at"] = {"$gt": since}
+    pings = await db.driver_tracking_pings.find(
+        q, {"_id": 0, "id": 1, "lat": 1, "lng": 1, "recorded_at": 1, "speed_kmh": 1, "heading": 1}
+    ).sort("recorded_at", 1).to_list(2000)
+
+    latest = pings[-1] if pings else None
+    # Fetch GPS interval for client polling cadence.
+    t = await db.tenants.find_one({"tenant_id": tenant_id}, {"_id": 0, "settings": 1})
+    interval = ((t or {}).get("settings") or {}).get("gps_ping_interval_minutes") or 5
+
+    return {
+        "schedule_id": schedule_id,
+        "status": s.get("status"),
+        "tracking_active": bool(s.get("tracking_active")) and s.get("status") == "in_progress",
+        "started_at": s.get("started_at"),
+        "ended_at": s.get("ended_at"),
+        "gps_ping_interval_minutes": int(interval),
+        "pings": pings,
+        "latest": latest,
+        "total": len(pings),
+    }
+
