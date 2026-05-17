@@ -125,6 +125,15 @@ export default function DeliveryScheduleDetail() {
   }, [id]);
 
   useEffect(() => { fetchSchedule(); fetchFleet(); }, [fetchSchedule, fetchFleet]);
+  // While the schedule is live (in_progress), poll to surface stop completions
+  // pushed by the driver in near-real-time. Cadence matches the GPS-ping interval
+  // so we don't hammer the API.
+  useEffect(() => {
+    if (schedule?.status !== 'in_progress') return undefined;
+    const ms = Math.max(30_000, 60_000); // 1 min — progress is less time-sensitive than the map
+    const t = setInterval(fetchSchedule, ms);
+    return () => clearInterval(t);
+  }, [schedule?.status, fetchSchedule]);
   // Refetch distance whenever delivery_ids order changes or vehicle/driver assignments change
   useEffect(() => {
     if (schedule?.deliveries && schedule.deliveries.length > 0) {
@@ -434,6 +443,12 @@ export default function DeliveryScheduleDetail() {
         </div>
       )}
 
+      {/* Delivery progress — segmented bar + status pills. Shown once the
+          schedule has reached approved (i.e. driver work has begun or is about to). */}
+      {['approved', 'in_progress', 'completed'].includes(schedule.status) && deliveries.length > 0 && (
+        <ScheduleProgress schedule={schedule} deliveries={deliveries} />
+      )}
+
       {/* Deliveries list — ROW format with expander + drag-and-drop */}
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b">
@@ -509,6 +524,7 @@ export default function DeliveryScheduleDetail() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-slate-900 truncate">{d.customer_name || 'Unknown customer'}</span>
                           {d.delivery_number && <span className="text-[11px] text-slate-400 font-mono">{d.delivery_number}</span>}
+                          <StopStatusPill stopIdx={idx} stop={d} deliveries={deliveries} scheduleStatus={schedule.status} />
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5 truncate">{addrStr(d.delivery_address)}</div>
                       </div>
@@ -695,3 +711,111 @@ export default function DeliveryScheduleDetail() {
     </div>
   );
 }
+
+
+/**
+ * ScheduleProgress — segmented progress bar + status pills for a delivery
+ * schedule. Interpretation of stop state:
+ *   - delivered : `distributor_deliveries.status === 'delivered'`
+ *   - in_transit: the FIRST pending stop, but only while the schedule is
+ *                 actively `in_progress` (the driver is en route to it).
+ *   - pending   : every other non-delivered stop.
+ * On a `completed` schedule, any stops not marked delivered are surfaced as
+ * "Skipped" so the distributor can chase them up.
+ */
+function ScheduleProgress({ schedule, deliveries }) {
+  const total = deliveries.length;
+  const delivered = deliveries.filter(d => d.status === 'delivered').length;
+  const nonDelivered = total - delivered;
+  const isLive = schedule.status === 'in_progress';
+  const isDone = schedule.status === 'completed';
+
+  // In-transit = 1 (first pending) while live; 0 otherwise.
+  const inTransit = isLive && nonDelivered > 0 ? 1 : 0;
+  const pending = isDone ? 0 : Math.max(0, nonDelivered - inTransit);
+  const skipped = isDone ? nonDelivered : 0;
+
+  const pct = total === 0 ? 0 : (delivered / total) * 100;
+  const ptTransit = total === 0 ? 0 : (inTransit / total) * 100;
+
+  const pills = [
+    { key: 'delivered', label: `${delivered} of ${total} delivered`, cls: 'bg-emerald-100 text-emerald-700 border-emerald-200', show: true },
+    { key: 'in_transit', label: `${inTransit} in-transit`, cls: 'bg-amber-100 text-amber-800 border-amber-200', show: inTransit > 0 },
+    { key: 'pending', label: `${pending} pending`, cls: 'bg-slate-100 text-slate-700 border-slate-200', show: pending > 0 },
+    { key: 'skipped', label: `${skipped} skipped`, cls: 'bg-rose-100 text-rose-700 border-rose-200', show: skipped > 0 },
+  ];
+
+  return (
+    <Card className="p-4 mb-4" data-testid="schedule-progress">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="text-sm font-medium text-slate-700">Delivery progress</div>
+        <div className="text-xs text-slate-500 font-mono tabular-nums">{Math.round(pct)}%</div>
+      </div>
+      {/* Segmented bar: emerald (delivered) → amber (in-transit) → grey (pending) → red (skipped) */}
+      <div className="w-full h-2.5 rounded-full overflow-hidden bg-slate-100 flex" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
+        <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} data-testid="progress-seg-delivered" />
+        {inTransit > 0 && (
+          <div className="h-full bg-amber-400 transition-all animate-pulse" style={{ width: `${ptTransit}%` }} data-testid="progress-seg-transit" />
+        )}
+        {skipped > 0 && (
+          <div className="h-full bg-rose-400 transition-all" style={{ width: `${(skipped / total) * 100}%` }} data-testid="progress-seg-skipped" />
+        )}
+      </div>
+      <div className="flex items-center gap-2 mt-3 flex-wrap">
+        {pills.filter(p => p.show).map(p => (
+          <Badge key={p.key} variant="outline" className={p.cls} data-testid={`progress-pill-${p.key}`}>{p.label}</Badge>
+        ))}
+        {schedule.started_at && !isDone && (
+          <span className="text-xs text-slate-500 ml-auto" data-testid="progress-started-at">
+            Started {new Date(schedule.started_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+        {schedule.ended_at && isDone && (
+          <span className="text-xs text-slate-500 ml-auto" data-testid="progress-ended-at">
+            Ended {new Date(schedule.ended_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+
+/**
+ * StopStatusPill — small per-row badge that mirrors ScheduleProgress logic for
+ * a single stop. Only renders something for schedules at approved or later.
+ */
+function StopStatusPill({ stopIdx, stop, deliveries, scheduleStatus }) {
+  if (!['approved', 'in_progress', 'completed'].includes(scheduleStatus)) return null;
+  if (stop.status === 'delivered') {
+    return (
+      <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]" data-testid={`stop-status-${stop.id}`}>
+        Delivered
+      </Badge>
+    );
+  }
+  if (scheduleStatus === 'completed') {
+    return (
+      <Badge variant="outline" className="bg-rose-100 text-rose-700 border-rose-200 text-[10px]" data-testid={`stop-status-${stop.id}`}>
+        Skipped
+      </Badge>
+    );
+  }
+  if (scheduleStatus === 'in_progress') {
+    // First non-delivered stop = in-transit; rest = pending.
+    const firstPendingIdx = deliveries.findIndex(x => x.status !== 'delivered');
+    if (stopIdx === firstPendingIdx) {
+      return (
+        <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 text-[10px]" data-testid={`stop-status-${stop.id}`}>
+          In-transit
+        </Badge>
+      );
+    }
+  }
+  return (
+    <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 text-[10px]" data-testid={`stop-status-${stop.id}`}>
+      Pending
+    </Badge>
+  );
+}
+
