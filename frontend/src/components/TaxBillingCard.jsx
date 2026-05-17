@@ -175,7 +175,23 @@ export default function TaxBillingCard({
                 <Label className="text-xs uppercase tracking-wider text-slate-500">GSTIN</Label>
                 <Input
                   value={form.gst_number}
-                  onChange={(e) => setForm({ ...form, gst_number: e.target.value.toUpperCase() })}
+                  onChange={(e) => {
+                    const next = e.target.value.toUpperCase();
+                    setForm(prev => {
+                      // Auto-derive PAN from GSTIN positions 3–12 the moment
+                      // they form a valid PAN pattern. We only fill when the
+                      // PAN field is empty so we never overwrite a value the
+                      // user typed explicitly (the amber "doesn't match"
+                      // warning surfaces any conflict).
+                      const derived = next.length >= 12 ? next.slice(2, 12) : '';
+                      const shouldFill = !prev.pan_number && derived && PAN_REGEX.test(derived);
+                      return {
+                        ...prev,
+                        gst_number: next,
+                        pan_number: shouldFill ? derived : prev.pan_number,
+                      };
+                    });
+                  }}
                   placeholder="22AAAAA0000A1Z5"
                   maxLength={15}
                   className={`font-mono ${form.gst_number && !gstinValid ? 'border-red-300 focus-visible:ring-red-300' : ''}`}
