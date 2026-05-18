@@ -1029,6 +1029,101 @@ async def download_schedule_pdf(schedule_id: str, current_user: dict = Depends(g
     )
 
 
+@router.get("/{schedule_id}/bundle-pdf")
+async def download_schedule_bundle_pdf(
+    schedule_id: str,
+    inline: bool = True,
+    current_user: dict = Depends(get_current_user),
+):
+    """Combined PDF for a schedule: page 1 = the driver schedule sheet,
+    pages 2..N = one page per attached Zoho invoice. Useful when the
+    distributor wants to hand the driver a single printed bundle.
+
+    Query params:
+        inline=true  → Content-Disposition: inline (default; opens in browser
+                        and is what the front-end uses for the Print action).
+        inline=false → attachment (forces download).
+    """
+    tenant_id = get_current_tenant_id()
+    distributor_id = _resolve_distributor_id(current_user)
+    s = await db.distributor_delivery_schedules.find_one(
+        {"id": schedule_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    if not s:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if s.get("status") not in ("confirmed", "approved", "in_progress", "completed"):
+        raise HTTPException(
+            status_code=400,
+            detail="Bundle PDF is only available once the schedule has been confirmed."
+        )
+
+    s = await _enrich_schedule(s, tenant_id)
+    dist = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "distributor_name": 1, "distributor_code": 1}
+    ) or {}
+
+    # 1) Driver schedule sheet (always page 1).
+    schedule_pdf = _build_schedule_pdf(s, dist)
+
+    # 2) Per-delivery Zoho invoices. Best-effort: invoices that fail to
+    #    fetch (no zoho_invoice_id, fetch error, distributor-billed account)
+    #    are skipped and recorded in a warnings header on the response.
+    from services.zoho_service import fetch_invoice_pdf, ZohoApiError
+    invoice_pdfs: list[bytes] = []
+    skipped: list[str] = []
+    for delv in (s.get("deliveries") or []):
+        zoho_id = delv.get("zoho_invoice_id")
+        label = delv.get("customer_name") or delv.get("delivery_number") or delv.get("id")
+        if not zoho_id:
+            # Either it's distributor-billed (no Zoho invoice expected) or
+            # the Zoho push failed/hasn't run yet.
+            if (delv.get("account_billed_by") or "company") == "distributor":
+                skipped.append(f"{label} (distributor-billed)")
+            else:
+                skipped.append(f"{label} (no invoice yet)")
+            continue
+        try:
+            pdf_bytes, _ = await fetch_invoice_pdf(tenant_id, zoho_id)
+            invoice_pdfs.append(pdf_bytes)
+        except ZohoApiError as e:
+            logger.warning(f"Bundle: skipping invoice {zoho_id} for {label}: Zoho {e.status_code} — {e.message[:200] if e.message else ''}")
+            skipped.append(f"{label} (Zoho {e.status_code})")
+        except Exception as e:
+            logger.warning(f"Bundle: skipping invoice {zoho_id} for {label}: {e}")
+            skipped.append(f"{label} (fetch failed)")
+
+    # 3) Stitch them together with pypdf.
+    from pypdf import PdfReader, PdfWriter
+    writer = PdfWriter()
+    for source_bytes in [schedule_pdf, *invoice_pdfs]:
+        try:
+            reader = PdfReader(io.BytesIO(source_bytes))
+            for page in reader.pages:
+                writer.add_page(page)
+        except Exception as e:
+            logger.warning(f"Bundle: failed to read a source PDF, skipping it. {e}")
+
+    out = io.BytesIO()
+    writer.write(out)
+    out.seek(0)
+
+    filename = f"delivery-bundle-{s.get('schedule_date')}.pdf"
+    disposition = "inline" if inline else "attachment"
+    return StreamingResponse(
+        out,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="{filename}"',
+            # Surface skipped stops so the UI (or future automation) can warn the user.
+            "X-Bundle-Schedule-Pages": "1",
+            "X-Bundle-Invoice-Pages": str(len(invoice_pdfs)),
+            "X-Bundle-Skipped": ("; ".join(skipped).encode("ascii", "replace").decode("ascii")) if skipped else "",
+        },
+    )
+
+
 def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
     """Build the delivery sheet using ReportLab. Minimal, driver-friendly layout."""
     from reportlab.lib import colors

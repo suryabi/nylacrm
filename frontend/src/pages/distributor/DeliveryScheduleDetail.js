@@ -6,6 +6,7 @@ import {
   ArrowLeft, Truck, User, Loader2, ChevronUp, ChevronDown, Plus, X,
   Download, CheckCircle2, XCircle, Calendar, Package, Phone, MapPin,
   GripVertical, Route, AlertTriangle, Sparkles, TrendingDown, Receipt, ExternalLink,
+  Printer,
 } from 'lucide-react';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -293,6 +294,88 @@ export default function DeliveryScheduleDetail() {
 
   const downloadPDF = () => window.open(`${BASE}/${id}/pdf`, '_blank');
 
+  // Combined bundle: driver schedule + all attached Zoho invoices in ONE PDF.
+  // Download = save to disk; Print = open in a new tab and trigger window.print()
+  // after the PDF is rendered. Both call the same backend endpoint.
+  const [bundleBusy, setBundleBusy] = useState(false);
+  const [bundleAction, setBundleAction] = useState(null); // 'download' | 'print' | null
+
+  const fetchBundleBlob = async () => {
+    const response = await axios.get(
+      `${BASE}/${id}/bundle-pdf?inline=true`,
+      { responseType: 'blob', withCredentials: true }
+    );
+    const skipped = response.headers['x-bundle-skipped'] || '';
+    const invoicePages = response.headers['x-bundle-invoice-pages'] || '0';
+    return { blob: new Blob([response.data], { type: 'application/pdf' }), skipped, invoicePages };
+  };
+
+  const handleDownloadBundle = async () => {
+    setBundleBusy(true); setBundleAction('download');
+    try {
+      const { blob, skipped, invoicePages } = await fetchBundleBlob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `delivery-bundle-${schedule.schedule_date || id}.pdf`;
+      document.body.appendChild(link); link.click(); link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(`Bundle saved (1 schedule + ${invoicePages} invoice${invoicePages === '1' ? '' : 's'})`);
+      if (skipped) toast.warning(`Some stops were skipped: ${skipped}`);
+    } catch (e) {
+      let detail = e?.response?.data?.detail;
+      if (!detail && e?.response?.data instanceof Blob) {
+        try { detail = JSON.parse(await e.response.data.text()).detail; } catch (_) { /* ignore */ }
+      }
+      toast.error(detail || 'Failed to build bundle PDF');
+    } finally {
+      setBundleBusy(false); setBundleAction(null);
+    }
+  };
+
+  const handlePrintBundle = async () => {
+    setBundleBusy(true); setBundleAction('print');
+    try {
+      const { blob, skipped } = await fetchBundleBlob();
+      const url = window.URL.createObjectURL(blob);
+      // Open in a hidden iframe and call print() once loaded — this avoids
+      // popup-blocker issues and lets the print dialog appear without leaving
+      // the schedule page. We revoke the blob after printing finishes.
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0'; iframe.style.bottom = '0';
+      iframe.style.width = '0'; iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (err) {
+          // Fallback: open in a new tab if the iframe trick is blocked.
+          window.open(url, '_blank');
+        }
+        // Clean up after the user closes the print dialog. We give it a
+        // generous timeout because browsers fire `afterprint` inconsistently
+        // for cross-origin / blob URLs.
+        setTimeout(() => {
+          try { document.body.removeChild(iframe); } catch (_) { /* ignore */ }
+          window.URL.revokeObjectURL(url);
+        }, 60_000);
+      };
+      if (skipped) toast.warning(`Some stops were skipped: ${skipped}`);
+    } catch (e) {
+      let detail = e?.response?.data?.detail;
+      if (!detail && e?.response?.data instanceof Blob) {
+        try { detail = JSON.parse(await e.response.data.text()).detail; } catch (_) { /* ignore */ }
+      }
+      toast.error(detail || 'Failed to print bundle PDF');
+    } finally {
+      setBundleBusy(false); setBundleAction(null);
+    }
+  };
+
   // Download an individual delivery's Zoho invoice as a PDF via the server proxy
   // so the saved file matches the Zoho invoice number (INV-00017.pdf).
   const [invoiceBusyId, setInvoiceBusyId] = useState(null);
@@ -409,6 +492,32 @@ export default function DeliveryScheduleDetail() {
             <Button variant="outline" onClick={downloadPDF} data-testid="schedule-pdf-btn">
               <Download className="h-4 w-4 mr-1.5" /> Driver PDF
             </Button>
+          )}
+          {['confirmed', 'approved', 'in_progress', 'completed'].includes(schedule.status) && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleDownloadBundle}
+                disabled={bundleBusy}
+                data-testid="schedule-bundle-download-btn"
+                title="Driver schedule + all invoices in a single PDF"
+              >
+                {bundleBusy && bundleAction === 'download'
+                  ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Building…</>
+                  : <><Download className="h-4 w-4 mr-1.5" /> Download Bundle</>}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handlePrintBundle}
+                disabled={bundleBusy}
+                data-testid="schedule-bundle-print-btn"
+                title="Print driver schedule + all invoices in one go"
+              >
+                {bundleBusy && bundleAction === 'print'
+                  ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Preparing…</>
+                  : <><Printer className="h-4 w-4 mr-1.5" /> Print Bundle</>}
+              </Button>
+            </>
           )}
           {schedule.status === 'draft' && (
             <Button onClick={() => setConfirmOpen(true)} disabled={busy} data-testid="schedule-confirm-btn">
