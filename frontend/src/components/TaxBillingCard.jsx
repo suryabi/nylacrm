@@ -47,6 +47,8 @@ export default function TaxBillingCard({
     gst_legal_name: data.gst_legal_name || '',
     gst_trade_name: data.gst_trade_name || '',
     billing_address: { ...emptyBilling, ...(data.billing_address || {}) },
+    payment_terms_days: data.payment_terms_days == null ? '' : String(data.payment_terms_days),
+    payment_terms_label: data.payment_terms_label || '',
   });
 
   useEffect(() => {
@@ -61,6 +63,8 @@ export default function TaxBillingCard({
       gst_legal_name: data.gst_legal_name || '',
       gst_trade_name: data.gst_trade_name || '',
       billing_address: { ...emptyBilling, ...(data.billing_address || {}) },
+      payment_terms_days: data.payment_terms_days == null ? '' : String(data.payment_terms_days),
+      payment_terms_label: data.payment_terms_label || '',
     });
   }, [data, editing]);
 
@@ -108,6 +112,12 @@ export default function TaxBillingCard({
     if (!validate()) return;
     setSaving(true);
     try {
+      // Payment terms — normalise to int OR null. Empty string = "not set".
+      let ptDays = null;
+      if (form.payment_terms_days !== '' && form.payment_terms_days != null) {
+        const n = parseInt(form.payment_terms_days, 10);
+        ptDays = Number.isFinite(n) && n >= 0 ? n : null;
+      }
       await onSave({
         gst_number: gstinNorm || null,
         pan_number: panNorm || null,
@@ -120,6 +130,8 @@ export default function TaxBillingCard({
           state: form.billing_address.state || null,
           pincode: form.billing_address.pincode || null,
         },
+        payment_terms_days: ptDays,
+        payment_terms_label: form.payment_terms_label?.trim() || null,
       });
       toast.success('Tax & billing details saved');
       setEditing(false);
@@ -283,6 +295,50 @@ export default function TaxBillingCard({
                 />
               </div>
             </div>
+            {/* Payment terms — passed to Zoho on every invoice. Zoho expects
+                an integer (credit days); 0 = "Due on Receipt". */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-100">
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-slate-500">Payment Terms (days)</Label>
+                <Input
+                  type="number" min="0" max="365" step="1"
+                  value={form.payment_terms_days}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm(prev => {
+                      const n = parseInt(v, 10);
+                      // Auto-suggest a label whenever the value changes and
+                      // either there's no label yet or it still matches the
+                      // previous auto-generated one — preserves manual labels.
+                      const autoLabel = Number.isFinite(n) ? (n === 0 ? 'Due on Receipt' : `Net ${n}`) : '';
+                      const prevAutoLabel = prev.payment_terms_days === ''
+                        ? ''
+                        : (parseInt(prev.payment_terms_days, 10) === 0 ? 'Due on Receipt' : `Net ${prev.payment_terms_days}`);
+                      const shouldFillLabel = !prev.payment_terms_label || prev.payment_terms_label === prevAutoLabel;
+                      return {
+                        ...prev,
+                        payment_terms_days: v,
+                        payment_terms_label: shouldFillLabel ? autoLabel : prev.payment_terms_label,
+                      };
+                    });
+                  }}
+                  placeholder="e.g. 30"
+                  className="font-mono"
+                  data-testid="tax-payment-terms-days-input"
+                />
+                <p className="text-[10px] text-slate-500">0 = Due on Receipt · Empty = use Zoho default.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs uppercase tracking-wider text-slate-500">Terms Label</Label>
+                <Input
+                  value={form.payment_terms_label}
+                  onChange={(e) => setForm({ ...form, payment_terms_label: e.target.value })}
+                  placeholder="Net 30"
+                  data-testid="tax-payment-terms-label-input"
+                />
+                <p className="text-[10px] text-slate-500">Auto-fills from days. Editable.</p>
+              </div>
+            </div>
           </div>
         ) : !hasAny ? (
           <div className="text-sm text-slate-500 italic py-4 text-center">
@@ -299,6 +355,19 @@ export default function TaxBillingCard({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {data.gst_legal_name && <DetailField label="Legal Name" value={data.gst_legal_name} />}
                 {data.gst_trade_name && <DetailField label="Trade Name" value={data.gst_trade_name} />}
+              </div>
+            )}
+            {(data.payment_terms_days != null || data.payment_terms_label) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="tax-payment-terms-display">
+                <DetailField
+                  label="Payment Terms"
+                  value={data.payment_terms_days != null
+                    ? (data.payment_terms_days === 0 ? 'Due on Receipt' : `Net ${data.payment_terms_days} (${data.payment_terms_days} days)`)
+                    : null}
+                />
+                {data.payment_terms_label && data.payment_terms_label !== (data.payment_terms_days === 0 ? 'Due on Receipt' : `Net ${data.payment_terms_days}`) && (
+                  <DetailField label="Terms Label" value={data.payment_terms_label} />
+                )}
               </div>
             )}
             {formattedAddress && (

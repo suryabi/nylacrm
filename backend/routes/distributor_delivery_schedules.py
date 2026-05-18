@@ -252,7 +252,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
             async for a in db.accounts.find(
                 {"id": {"$in": account_ids}, "tenant_id": tenant_id},
                 {"_id": 0, "id": 1, "account_name": 1, "billing_address": 1, "delivery_address": 1,
-                 "contact_number": 1, "delivery_contact_phone": 1, "delivery_contact_name": 1}
+                 "contact_number": 1, "delivery_contact_phone": 1, "delivery_contact_name": 1,
+                 "billed_by": 1}
             ):
                 accounts_by_id[a["id"]] = a
 
@@ -335,6 +336,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 "zoho_invoice_id": r.get("zoho_invoice_id"),
                 "zoho_invoice_number": r.get("zoho_invoice_number"),
                 "zoho_invoice_url": r.get("zoho_invoice_url"),
+                # Hides Zoho UI when the account is billed by a third-party distributor.
+                "account_billed_by": (acct.get("billed_by") or "company"),
             })
     schedule["deliveries"] = deliveries
     return schedule

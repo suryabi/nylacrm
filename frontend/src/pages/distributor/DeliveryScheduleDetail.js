@@ -677,8 +677,17 @@ export default function DeliveryScheduleDetail() {
                         invoice for this delivery (i.e. schedule has been
                         confirmed at least once). Server proxy ensures the
                         downloaded file is named after the Zoho invoice number
-                        (e.g. INV-00017.pdf). */}
-                    {isOpen && (d.zoho_invoice_id || d.zoho_invoice_url) && (
+                        (e.g. INV-00017.pdf). Hidden when the account is
+                        billed by a third-party distributor (no Zoho invoice
+                        is generated in that case). */}
+                    {isOpen && d.account_billed_by === 'distributor' && (
+                      <div className="px-12 pb-4" data-testid={`stop-invoice-distributor-${d.id}`}>
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-200 bg-slate-50 text-slate-500 text-xs">
+                          Billing handled by third-party distributor — no Zoho invoice.
+                        </div>
+                      </div>
+                    )}
+                    {isOpen && d.account_billed_by !== 'distributor' && (d.zoho_invoice_id || d.zoho_invoice_url) && (
                       <div className="px-12 pb-4 flex flex-wrap items-center gap-2" data-testid={`stop-invoice-${d.id}`}>
                         <div className="inline-flex items-center gap-1.5 text-xs text-slate-500">
                           <Receipt className="h-3.5 w-3.5 text-emerald-600" />
@@ -717,7 +726,7 @@ export default function DeliveryScheduleDetail() {
                       </div>
                     )}
                     {/* Pending state — schedule is confirmed but invoice still being pushed */}
-                    {isOpen && !d.zoho_invoice_id && ['confirmed', 'approved', 'in_progress', 'completed'].includes(schedule.status) && (
+                    {isOpen && d.account_billed_by !== 'distributor' && !d.zoho_invoice_id && ['confirmed', 'approved', 'in_progress', 'completed'].includes(schedule.status) && (
                       <div className="px-12 pb-4" data-testid={`stop-invoice-pending-${d.id}`}>
                         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs">
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />

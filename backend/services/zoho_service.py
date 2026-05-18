@@ -903,6 +903,25 @@ async def create_invoice_for_delivery(
         "notes": f"Generated from Nyla CRM delivery {delivery.get('delivery_number')}",
     }
 
+    # ── Payment terms — pulled from account.payment_terms_days when set.
+    # Zoho Books expects an integer for `payment_terms` (number of credit days)
+    # and an optional `payment_terms_label` (human-readable string). If the
+    # account doesn't specify any terms we leave them off and Zoho falls back
+    # to its own default ("Due on Receipt").
+    try:
+        ptd_raw = account.get("payment_terms_days")
+        if ptd_raw is not None and ptd_raw != "":
+            ptd = int(ptd_raw)
+            if ptd >= 0:
+                invoice_payload["payment_terms"] = ptd
+                ptd_label = (account.get("payment_terms_label") or "").strip()
+                if not ptd_label:
+                    ptd_label = "Due on Receipt" if ptd == 0 else f"Net {ptd}"
+                invoice_payload["payment_terms_label"] = ptd_label
+    except (TypeError, ValueError):
+        # Bad data — skip silently so the invoice still pushes.
+        pass
+
     # ── Sustainability Incentive (post-tax adjustment from bottle-return CNs) ─
     # Indian GST: returns of *empty bottles* are a deposit refund, not a
     # taxable supply — they don't reduce the original sale's taxable value.
@@ -1494,6 +1513,28 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
     generate Zoho invoices. Deliveries from a distributor's own warehouse are skipped — those
     are handled by the distributor's own billing flow.
     """
+    # First-pass guard: if the account is billed by a third-party distributor
+    # we skip the push regardless of Zoho connection state. Run this BEFORE
+    # the connectivity checks so the UI surfaces the right reason even on
+    # tenants that haven't connected Zoho yet.
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "account_id": 1, "delivery_number": 1}
+    )
+    if delivery and delivery.get("account_id"):
+        acc_meta = await db.accounts.find_one(
+            {"id": delivery["account_id"], "tenant_id": tenant_id},
+            {"_id": 0, "account_name": 1, "billed_by": 1}
+        ) or {}
+        if (acc_meta.get("billed_by") or "company").lower() == "distributor":
+            logger.info(
+                f"sync_delivery_to_zoho: account {acc_meta.get('account_name')} is billed by "
+                f"third-party distributor; skipping Zoho push for delivery {delivery.get('delivery_number')}"
+            )
+            raise ZohoPushSkippedError(
+                f"Account '{acc_meta.get('account_name')}' is billed by a third-party distributor — Zoho invoice not generated."
+            )
+
     if not is_zoho_configured():
         logger.info("Zoho not configured, skipping auto-push")
         raise ZohoPushSkippedError("Zoho Books integration is not configured on this tenant. Ask an admin to set ZOHO_CLIENT_ID/SECRET.")
@@ -1539,6 +1580,20 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
     account = await db.accounts.find_one(
         {"id": delivery.get("account_id"), "tenant_id": tenant_id}, {"_id": 0}
     ) or {"account_name": delivery.get("account_name") or "Customer"}
+
+    # Product rule: when an account is billed by a third-party distributor
+    # (account.billed_by == 'distributor') we don't push to Zoho at all — the
+    # distributor raises the invoice in their own books. The CRM still tracks
+    # the delivery; only the Zoho leg is skipped.
+    billed_by = (account.get("billed_by") or "company").lower()
+    if billed_by == "distributor":
+        logger.info(
+            f"sync_delivery_to_zoho: account {account.get('account_name')} is billed by "
+            f"third-party distributor; skipping Zoho push for delivery {delivery.get('delivery_number')}"
+        )
+        raise ZohoPushSkippedError(
+            f"Account '{account.get('account_name')}' is billed by a third-party distributor — Zoho invoice not generated."
+        )
 
     # Product rule: only push to Zoho for accounts already linked to a Zoho
     # contact. We never auto-create Zoho contacts from a delivery flow.

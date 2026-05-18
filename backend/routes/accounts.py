@@ -110,6 +110,11 @@ class AccountUpdate(BaseModel):
     gst_trade_name: Optional[str] = None
     gst_registration_date: Optional[str] = None
     gst_certificate_url: Optional[str] = None
+    # Net credit period agreed with the customer. When set, we pass this
+    # through to Zoho on every invoice we push so the due-date computes
+    # correctly. e.g. 0 = "Due on Receipt", 15 = "Net 15", 30 = "Net 30".
+    payment_terms_days: Optional[int] = None
+    payment_terms_label: Optional[str] = None
 
 
 class PaginatedAccountsResponse(BaseModel):

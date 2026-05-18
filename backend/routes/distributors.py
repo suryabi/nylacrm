@@ -3754,6 +3754,18 @@ async def get_delivery(
     
     delivery['items'] = items
 
+    # Surface the account's billed_by flag on the delivery so the frontend can
+    # hide Zoho invoice affordances for accounts billed by a third-party
+    # distributor. This avoids an extra round-trip on the popup.
+    if delivery.get('account_id'):
+        acc = await db.accounts.find_one(
+            {"id": delivery['account_id'], "tenant_id": tenant_id},
+            {"_id": 0, "billed_by": 1}
+        )
+        delivery['account_billed_by'] = (acc or {}).get('billed_by') or 'company'
+    else:
+        delivery['account_billed_by'] = 'company'
+
     # Enrich applied_credit_notes with current Zoho deep-link / status — the
     # snapshot stored on the delivery doesn't carry Zoho fields, and a CN may
     # be synced to Zoho AFTER the delivery was created.

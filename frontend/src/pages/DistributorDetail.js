@@ -3450,7 +3450,17 @@ export default function DistributorDetail() {
                     INV-00017.pdf via server proxy) and "View in Zoho" (web app
                     link). While pending we offer a manual Retry. */}
                 <div className="flex gap-2 flex-wrap">
-                  {(selectedDelivery.status === 'delivered' || selectedDelivery.status === 'confirmed' || selectedDelivery.status === 'scheduled') && (
+                  {/* When the account is billed by a third-party distributor we
+                      don't generate a Zoho invoice at all — surface a small
+                      explanatory pill instead of the action buttons. */}
+                  {selectedDelivery.account_billed_by === 'distributor' ? (
+                    <div
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-200 bg-slate-50 text-slate-600 text-xs"
+                      data-testid="zoho-skipped-distributor-billing"
+                    >
+                      Billing handled by third-party distributor — no Zoho invoice generated.
+                    </div>
+                  ) : (selectedDelivery.status === 'delivered' || selectedDelivery.status === 'confirmed' || selectedDelivery.status === 'scheduled') && (
                     selectedDelivery.zoho_invoice_url ? (
                       <>
                         <Button
