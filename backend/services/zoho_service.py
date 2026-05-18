@@ -696,12 +696,18 @@ async def fetch_invoice_pdf(tenant_id: str, zoho_invoice_id: str) -> tuple[bytes
     token = await get_valid_access_token(tenant_id)
     org_id = creds["organization_id"]
     headers = {"Authorization": f"Zoho-oauthtoken {token}"}
+    # Zoho Books invoice URL prefix. Every other helper goes through
+    # `_zoho_request`, which adds this prefix automatically — but the PDF
+    # download has to bypass that helper (it returns binary, not JSON) so
+    # we add the prefix here explicitly. Missing this prefix made the
+    # request hit a generic zohoapis host and return a Zoho CRM HTML error.
+    invoice_url = f"{api_base}/books/v3/invoices/{zoho_invoice_id}"
     # First fetch the invoice metadata for invoice_number.
     invoice_number = zoho_invoice_id
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             meta = await client.get(
-                f"{api_base}/invoices/{zoho_invoice_id}",
+                invoice_url,
                 headers={**headers, "Content-Type": "application/json"},
                 params={"organization_id": org_id},
             )
@@ -719,7 +725,7 @@ async def fetch_invoice_pdf(tenant_id: str, zoho_invoice_id: str) -> tuple[bytes
     pdf_headers = {**headers, "Accept": "application/pdf"}
     async with httpx.AsyncClient(timeout=30.0) as client:
         pdf_resp = await client.get(
-            f"{api_base}/invoices/{zoho_invoice_id}",
+            invoice_url,
             headers=pdf_headers,
             params={"organization_id": org_id, "accept": "pdf"},
         )
@@ -732,7 +738,7 @@ async def fetch_invoice_pdf(tenant_id: str, zoho_invoice_id: str) -> tuple[bytes
             pass
         logger.error(
             f"Zoho PDF download failed: status={pdf_resp.status_code} "
-            f"url={api_base}/invoices/{zoho_invoice_id} body={body_text!r}"
+            f"url={invoice_url} body={body_text!r}"
         )
         raise ZohoApiError(pdf_resp.status_code, body_text)
     # Defensive: if Zoho returned JSON (e.g. fell back to the metadata
