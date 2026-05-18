@@ -504,7 +504,7 @@ export default function DeliveryScheduleDetail() {
               >
                 {bundleBusy && bundleAction === 'download'
                   ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Building…</>
-                  : <><Download className="h-4 w-4 mr-1.5" /> Download Bundle</>}
+                  : <><Download className="h-4 w-4 mr-1.5" /> Download All</>}
               </Button>
               <Button
                 variant="outline"
@@ -515,7 +515,7 @@ export default function DeliveryScheduleDetail() {
               >
                 {bundleBusy && bundleAction === 'print'
                   ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Preparing…</>
-                  : <><Printer className="h-4 w-4 mr-1.5" /> Print Bundle</>}
+                  : <><Printer className="h-4 w-4 mr-1.5" /> Print All</>}
               </Button>
             </>
           )}
