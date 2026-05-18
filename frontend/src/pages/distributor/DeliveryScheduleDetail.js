@@ -12,7 +12,6 @@ import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { Label } from '../../components/ui/label';
 import { Checkbox } from '../../components/ui/checkbox';
-import LiveDriverMap from '../../components/LiveDriverMap';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
@@ -80,9 +79,6 @@ export default function DeliveryScheduleDetail() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
-
-  // Live map collapse — keep collapsed by default; user expands on demand.
-  const [mapExpanded, setMapExpanded] = useState(false);
 
   // Optimize-route preview state
   const [optimizeOpen, setOptimizeOpen] = useState(false);
@@ -514,31 +510,25 @@ export default function DeliveryScheduleDetail() {
         </Card>
       )}
 
-      {/* Live driver map — only meaningful once a driver is assigned + schedule
-          is past the planning stage. Collapsed by default to keep the schedule
-          detail compact; user expands when they need to see the live route. */}
+      {/* Live driver map — temporarily DISABLED until Google Maps JavaScript
+          API is enabled on the API key. Surfaced as a collapsed, disabled
+          card so the placeholder is visible but not interactive. */}
       {schedule.driver_id && ['approved', 'in_progress', 'completed'].includes(schedule.status) && (
-        <Card className="mb-4 overflow-hidden" data-testid="live-map-card">
-          <button
-            type="button"
-            onClick={() => setMapExpanded(v => !v)}
-            className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors"
+        <Card className="mb-4 overflow-hidden opacity-60 cursor-not-allowed" data-testid="live-map-card">
+          <div
+            className="w-full flex items-center justify-between px-5 py-3 select-none"
             data-testid="live-map-toggle"
+            aria-disabled="true"
           >
-            <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
-              <MapPin className="h-4 w-4 text-slate-600" />
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <MapPin className="h-4 w-4 text-slate-500" />
               Live driver map
-              <span className="text-xs text-slate-400 font-normal">
-                {mapExpanded ? 'Tap to hide' : 'Tap to show'}
+              <span className="text-xs text-slate-400 font-normal italic">
+                Disabled · Google Maps setup pending
               </span>
             </div>
-            {mapExpanded ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
-          </button>
-          {mapExpanded && (
-            <div className="border-t">
-              <LiveDriverMap scheduleId={schedule.id} />
-            </div>
-          )}
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          </div>
         </Card>
       )}
 
