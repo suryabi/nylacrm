@@ -94,6 +94,7 @@ export default function DistributorDetail() {
   
   // Location dialog
   const [showLocationDialog, setShowLocationDialog] = useState(false);
+  const [editingLocationId, setEditingLocationId] = useState(null);
   const [newLocation, setNewLocation] = useState({
     location_name: '',
     address_line_1: '',
@@ -105,7 +106,10 @@ export default function DistributorDetail() {
     contact_number: '',
     email: '',
     is_default: false,
-    is_factory: false
+    is_factory: false,
+    lat: null,
+    lng: null,
+    formatted_address: '',
   });
   const [addingLocation, setAddingLocation] = useState(false);
   
@@ -822,41 +826,73 @@ export default function DistributorDetail() {
     }
   };
 
+  const resetLocationForm = () => setNewLocation({
+    location_name: '',
+    address_line_1: '',
+    address_line_2: '',
+    state: '',
+    city: '',
+    pincode: '',
+    contact_person: '',
+    contact_number: '',
+    email: '',
+    is_default: false,
+    is_factory: false,
+    lat: null,
+    lng: null,
+    formatted_address: '',
+  });
+
+  const handleEditLocation = (location) => {
+    setEditingLocationId(location.id);
+    setNewLocation({
+      location_name: location.location_name || '',
+      address_line_1: location.address_line_1 || '',
+      address_line_2: location.address_line_2 || '',
+      state: location.state || '',
+      city: location.city || '',
+      pincode: location.pincode || '',
+      contact_person: location.contact_person || '',
+      contact_number: location.contact_number || '',
+      email: location.email || '',
+      is_default: !!location.is_default,
+      is_factory: !!location.is_factory,
+      lat: location.lat ?? null,
+      lng: location.lng ?? null,
+      formatted_address: location.formatted_address || '',
+    });
+    setShowLocationDialog(true);
+  };
+
   const handleAddLocation = async () => {
     if (!newLocation.location_name || !newLocation.state || !newLocation.city) {
       toast.error('Location name, state, and city are required');
       return;
     }
-    
+
     try {
       setAddingLocation(true);
-      await axios.post(
-        `${API_URL}/api/distributors/${id}/locations`,
-        { ...newLocation, distributor_id: id },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true
-        }
-      );
-      
-      toast.success('Location added successfully');
+      if (editingLocationId) {
+        await axios.put(
+          `${API_URL}/api/distributors/${id}/locations/${editingLocationId}`,
+          newLocation,
+          { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+        );
+        toast.success('Location updated');
+      } else {
+        await axios.post(
+          `${API_URL}/api/distributors/${id}/locations`,
+          { ...newLocation, distributor_id: id },
+          { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+        );
+        toast.success('Location added successfully');
+      }
       setShowLocationDialog(false);
-      setNewLocation({
-        location_name: '',
-        address_line_1: '',
-        address_line_2: '',
-        state: '',
-        city: '',
-        pincode: '',
-        contact_person: '',
-        contact_number: '',
-        email: '',
-        is_default: false,
-        is_factory: false
-      });
+      setEditingLocationId(null);
+      resetLocationForm();
       fetchDistributor();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to add location');
+      toast.error(error.response?.data?.detail || `Failed to ${editingLocationId ? 'update' : 'add'} location`);
     } finally {
       setAddingLocation(false);
     }
@@ -2496,6 +2532,9 @@ export default function DistributorDetail() {
               handleAddLocation={handleAddLocation}
               addingLocation={addingLocation}
               setDeleteTarget={setDeleteTarget}
+              editingLocationId={editingLocationId}
+              setEditingLocationId={setEditingLocationId}
+              onEditLocation={handleEditLocation}
             />
           </div>
         </TabsContent>

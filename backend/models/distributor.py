@@ -153,6 +153,12 @@ class DistributorLocationCreate(BaseModel):
     is_default: Optional[bool] = False
     is_factory: Optional[bool] = False
     status: Optional[str] = "active"
+    # Google Places-derived geocoding fields. Populated when the user picks an
+    # address from the Places autocomplete; used for "Open in Google Maps" and
+    # potentially for routing/distance calcs in future.
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
 
 
 class DistributorLocationUpdate(BaseModel):
@@ -169,6 +175,9 @@ class DistributorLocationUpdate(BaseModel):
     is_default: Optional[bool] = None
     is_factory: Optional[bool] = None
     status: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
 
 
 class DistributorLocation(BaseModel):
@@ -188,6 +197,9 @@ class DistributorLocation(BaseModel):
     is_default: bool = False
     is_factory: bool = False
     status: str = "active"
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
     created_at: str
     updated_at: str
 

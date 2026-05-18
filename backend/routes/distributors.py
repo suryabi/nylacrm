@@ -955,6 +955,9 @@ async def create_distributor_location(
         "is_default": data.is_default or False,
         "is_factory": data.is_factory or False,
         "status": data.status or "active",
+        "lat": data.lat,
+        "lng": data.lng,
+        "formatted_address": data.formatted_address,
         "created_at": now,
         "updated_at": now
     }
@@ -1000,7 +1003,8 @@ async def update_distributor_location(
     
     for field in ['location_name', 'location_code', 'address_line_1', 'address_line_2',
                   'state', 'city', 'pincode', 'contact_person', 'contact_number',
-                  'email', 'is_default', 'is_factory', 'status']:
+                  'email', 'is_default', 'is_factory', 'status',
+                  'lat', 'lng', 'formatted_address']:
         value = getattr(data, field, None)
         if value is not None:
             update_data[field] = value
