@@ -712,14 +712,44 @@ async def fetch_invoice_pdf(tenant_id: str, zoho_invoice_id: str) -> tuple[bytes
     except Exception as e:
         logger.warning(f"Failed to fetch invoice meta for {zoho_invoice_id}: {e}")
     # Now stream the PDF binary.
+    # Zoho Books accepts BOTH the `Accept: application/pdf` header AND the
+    # legacy `accept=pdf` query param. We send both for maximum compatibility
+    # — some Zoho data centres only honour one. Without this, the call falls
+    # through to the JSON `invoice` payload and yields 400.
+    pdf_headers = {**headers, "Accept": "application/pdf"}
     async with httpx.AsyncClient(timeout=30.0) as client:
         pdf_resp = await client.get(
             f"{api_base}/invoices/{zoho_invoice_id}",
-            headers=headers,
+            headers=pdf_headers,
             params={"organization_id": org_id, "accept": "pdf"},
         )
     if pdf_resp.status_code != 200:
-        raise ZohoApiError(pdf_resp.status_code, pdf_resp.text[:500])
+        # Surface Zoho's actual error message so the caller can act on it.
+        body_text = ""
+        try:
+            body_text = pdf_resp.text[:500]
+        except Exception:
+            pass
+        logger.error(
+            f"Zoho PDF download failed: status={pdf_resp.status_code} "
+            f"url={api_base}/invoices/{zoho_invoice_id} body={body_text!r}"
+        )
+        raise ZohoApiError(pdf_resp.status_code, body_text)
+    # Defensive: if Zoho returned JSON (e.g. fell back to the metadata
+    # response), don't pretend it's a PDF.
+    ctype = (pdf_resp.headers.get("content-type") or "").lower()
+    if "pdf" not in ctype:
+        body_text = pdf_resp.text[:500] if hasattr(pdf_resp, "text") else ""
+        logger.error(
+            f"Zoho PDF download returned non-PDF content-type='{ctype}' "
+            f"body={body_text!r}"
+        )
+        raise ZohoApiError(
+            502,
+            f"Zoho returned content-type '{ctype}' instead of PDF. "
+            f"This usually means the invoice was created without a template attached. "
+            f"Open the invoice in Zoho Books → set a print template → retry."
+        )
     return pdf_resp.content, invoice_number
 
 

@@ -4414,7 +4414,23 @@ async def download_delivery_invoice_pdf(
     try:
         pdf_bytes, invoice_number = await fetch_invoice_pdf(tenant_id, zoho_id)
     except ZohoApiError as e:
-        raise HTTPException(status_code=502, detail=f"Zoho returned {e.status_code} while fetching the invoice PDF.")
+        # Try to extract Zoho's `message` field from the JSON body so the
+        # caller sees the real reason (e.g. "Template not found", "Invalid
+        # invoice id", "Insufficient permission to download PDF").
+        zoho_msg = ""
+        try:
+            import json as _json
+            parsed = _json.loads(e.message) if e.message else None
+            if isinstance(parsed, dict):
+                zoho_msg = parsed.get("message") or parsed.get("error") or ""
+        except Exception:
+            pass
+        detail = f"Zoho returned {e.status_code} while fetching the invoice PDF."
+        if zoho_msg:
+            detail = f"{detail} Reason: {zoho_msg}"
+        elif e.message:
+            detail = f"{detail} Reason: {str(e.message)[:200]}"
+        raise HTTPException(status_code=502, detail=detail)
     except Exception as e:
         logger.exception(f"Failed to download invoice PDF for delivery {delivery_id}")
         raise HTTPException(status_code=502, detail=f"Failed to download invoice: {e}")
