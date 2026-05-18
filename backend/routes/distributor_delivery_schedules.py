@@ -291,9 +291,23 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
             addr = _addr_from(dlv_addr) if isinstance(dlv_addr, dict) else None
             if not addr:
                 addr = _addr_from(acct.get("delivery_address")) or _addr_from(acct.get("billing_address"))
-            # Phone precedence
-            phone = (r.get("contact_phone") or r.get("delivery_contact_phone")
-                     or acct.get("delivery_contact_phone") or acct.get("contact_number"))
+            # Delivery contact — the on-ground person the driver should call.
+            # Prefer the delivery row's override, fall back to the account.
+            delivery_contact_name = (
+                r.get("delivery_contact_name")
+                or acct.get("delivery_contact_name")
+            )
+            delivery_contact_phone = (
+                r.get("delivery_contact_phone")
+                or acct.get("delivery_contact_phone")
+            )
+            # Legacy "contact_phone" — broadest fallback. Kept for backward
+            # compatibility with any UI that still reads it.
+            phone = (
+                r.get("contact_phone")
+                or delivery_contact_phone
+                or acct.get("contact_number")
+            )
 
             # Items — convert raw bottle counts into packaging units (crates).
             raw_items = items_by_delivery.get(did) or r.get("items") or []
@@ -328,6 +342,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 "customer_name": customer_name,
                 "delivery_address": addr or {},
                 "contact_phone": phone,
+                "delivery_contact_name": delivery_contact_name,
+                "delivery_contact_phone": delivery_contact_phone,
                 "items": items,
                 "total_quantity": total_packages,
                 "total_units": total_units,
@@ -1079,7 +1095,7 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
     # Stops table
     header = [
         Paragraph("<b>#</b>", body),
-        Paragraph("<b>Customer · Phone</b>", body),
+        Paragraph("<b>Customer · Delivery contact</b>", body),
         Paragraph("<b>Address</b>", body),
         Paragraph("<b>Crates / packages</b>", body),
     ]
@@ -1098,14 +1114,27 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
                 f"<font color='grey' size='8'>{pkg}</font>"
             )
         items_str = "<br/>".join(items_lines) or "—"
+
+        # Delivery contact block: prefer dedicated delivery_contact_* (the
+        # on-ground person), fall back to the legacy `contact_phone`.
+        dc_name = delv.get("delivery_contact_name")
+        dc_phone = delv.get("delivery_contact_phone") or delv.get("contact_phone")
+        contact_lines = [f"<b>{delv.get('customer_name') or '—'}</b>"]
+        if dc_name or dc_phone:
+            contact_bits = []
+            if dc_name:
+                contact_bits.append(f"<font color='#1f2937'>{dc_name}</font>")
+            if dc_phone:
+                contact_bits.append(f"<font color='#1f2937'>{dc_phone}</font>")
+            contact_lines.append(" · ".join(contact_bits))
+        if delv.get("delivery_number"):
+            contact_lines.append(
+                f"<font color='grey' size='8'>{delv.get('delivery_number')}</font>"
+            )
+
         rows.append([
             Paragraph(str(idx), body),
-            Paragraph(
-                f"<b>{delv.get('customer_name') or '—'}</b><br/>"
-                f"<font color='grey'>{delv.get('contact_phone') or ''}</font><br/>"
-                f"<font color='grey' size='8'>{delv.get('delivery_number') or ''}</font>",
-                body
-            ),
+            Paragraph("<br/>".join(contact_lines), body),
             Paragraph(addr_str, body),
             Paragraph(items_str, body),
         ])

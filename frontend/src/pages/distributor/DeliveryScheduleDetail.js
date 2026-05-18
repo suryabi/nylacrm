@@ -666,9 +666,22 @@ export default function DeliveryScheduleDetail() {
                             <MapPin className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-slate-400" />
                             <span>{addrStr(d.delivery_address)}</span>
                           </div>
-                          {d.contact_phone && (
-                            <div className="text-slate-600 flex items-center gap-1.5 text-xs">
-                              <Phone className="h-3 w-3 text-slate-400" /> {d.contact_phone}
+                          {(d.delivery_contact_name || d.delivery_contact_phone || d.contact_phone) && (
+                            <div className="mt-2 rounded-md bg-amber-50 border border-amber-100 px-2.5 py-1.5" data-testid={`stop-delivery-contact-${d.id}`}>
+                              <div className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold">Delivery contact</div>
+                              {d.delivery_contact_name && (
+                                <div className="text-slate-800 text-xs flex items-center gap-1.5 mt-0.5">
+                                  <User className="h-3 w-3 text-amber-600" /> {d.delivery_contact_name}
+                                </div>
+                              )}
+                              {(d.delivery_contact_phone || d.contact_phone) && (
+                                <a
+                                  href={`tel:${d.delivery_contact_phone || d.contact_phone}`}
+                                  className="text-slate-800 text-xs flex items-center gap-1.5 mt-0.5 hover:text-amber-700"
+                                >
+                                  <Phone className="h-3 w-3 text-amber-600" /> {d.delivery_contact_phone || d.contact_phone}
+                                </a>
+                              )}
                             </div>
                           )}
                         </div>

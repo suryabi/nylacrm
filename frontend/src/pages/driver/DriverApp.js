@@ -473,12 +473,24 @@ export function DriverScheduleDetail() {
                       </div>
                     )}
 
+                    {(d.delivery_contact_name || d.delivery_contact_phone || d.contact_phone) && (
+                      <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2" data-testid={`driver-contact-${d.id}`}>
+                        <div className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold mb-0.5">Delivery contact</div>
+                        {d.delivery_contact_name && (
+                          <div className="text-sm font-medium text-slate-800">{d.delivery_contact_name}</div>
+                        )}
+                        {(d.delivery_contact_phone || d.contact_phone) && (
+                          <a
+                            href={`tel:${d.delivery_contact_phone || d.contact_phone}`}
+                            className="inline-flex items-center gap-1 text-sm text-amber-700 font-semibold"
+                          >
+                            <Phone className="w-3.5 h-3.5" /> {d.delivery_contact_phone || d.contact_phone}
+                          </a>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-3 mt-3 flex-wrap">
-                      {d.contact_phone && (
-                        <a href={`tel:${d.contact_phone}`} className="inline-flex items-center gap-1 text-sm text-emerald-700 font-medium">
-                          <Phone className="w-3.5 h-3.5" /> {d.contact_phone}
-                        </a>
-                      )}
                       {mapsQ && (
                         <a
                           href={`https://www.google.com/maps/dir/?api=1&destination=${mapsQ}`}
