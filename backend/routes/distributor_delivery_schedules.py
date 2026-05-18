@@ -361,6 +361,16 @@ async def create_schedule(payload: ScheduleCreate, current_user: dict = Depends(
             raise HTTPException(status_code=404, detail="Driver not found")
 
     now = datetime.now(timezone.utc).isoformat()
+
+    # New schedules drop to the bottom of the day's list by default. We pick
+    # `max(priority_order) + 1` so the user can still drag them up.
+    last_for_day = await db.distributor_delivery_schedules.find_one(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "schedule_date": payload.schedule_date},
+        {"_id": 0, "priority_order": 1},
+        sort=[("priority_order", -1)],
+    )
+    next_order = (last_for_day or {}).get("priority_order", -1) + 1 if last_for_day else 0
+
     schedule = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -370,6 +380,7 @@ async def create_schedule(payload: ScheduleCreate, current_user: dict = Depends(
         "driver_id": payload.driver_id,
         "delivery_ids": [],
         "status": "draft",
+        "priority_order": next_order,
         "notes": (payload.notes or "").strip() or None,
         "created_at": now,
         "created_by": current_user.get("id"),
@@ -403,10 +414,54 @@ async def list_schedules(
         q["schedule_date"] = date_q
 
     schedules = await db.distributor_delivery_schedules.find(q, {"_id": 0}).sort([
-        ("schedule_date", -1), ("created_at", -1)
+        ("schedule_date", -1),
+        ("priority_order", 1),
+        ("created_at", 1),
     ]).to_list(500)
 
-    # Light enrichment — just labels + delivery_count, NOT every delivery doc
+    # Light enrichment — labels, delivery_count, AND total crate count so the
+    # row card can show "8 crates" before the user expands the detail.
+    # Crate total = ceil(quantity / units_per_package) summed across all line
+    # items for every delivery in the schedule. We do it in two bulk queries
+    # to avoid N+1.
+    all_delivery_ids: List[str] = []
+    for s in schedules:
+        all_delivery_ids.extend(s.get("delivery_ids") or [])
+
+    crate_total_by_delivery: dict[str, int] = {}
+    if all_delivery_ids:
+        # Pull line items
+        items_by_delivery: dict[str, list] = {}
+        sku_ids: set[str] = set()
+        async for it in db.distributor_delivery_items.find(
+            {"delivery_id": {"$in": all_delivery_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "delivery_id": 1, "sku_id": 1, "quantity": 1}
+        ):
+            items_by_delivery.setdefault(it["delivery_id"], []).append(it)
+            if it.get("sku_id"):
+                sku_ids.add(it["sku_id"])
+        # Pull SKU packaging info
+        sku_upp: dict[str, int] = {}
+        if sku_ids:
+            async for sku in db.master_skus.find(
+                {"id": {"$in": list(sku_ids)}},
+                {"_id": 0, "id": 1, "packaging_config": 1}
+            ):
+                pkgs = ((sku.get("packaging_config") or {}).get("stock_out") or [])
+                if not pkgs:
+                    continue
+                pkg = next((p for p in pkgs if p.get("is_default")), pkgs[0])
+                upp = int(pkg.get("units_per_package") or 0)
+                if upp > 0:
+                    sku_upp[sku["id"]] = upp
+        for did, lines in items_by_delivery.items():
+            total = 0
+            for ln in lines:
+                qty = int(ln.get("quantity") or 0)
+                upp = sku_upp.get(ln.get("sku_id"))
+                total += (-(-qty // upp)) if upp and upp > 0 else qty
+            crate_total_by_delivery[did] = total
+
     for s in schedules:
         if s.get("vehicle_id"):
             v = await db.vehicles.find_one(
@@ -421,8 +476,45 @@ async def list_schedules(
             )
             s["driver"] = d
         s["delivery_count"] = len(s.get("delivery_ids") or [])
+        s["total_crates"] = sum(crate_total_by_delivery.get(did, 0) for did in (s.get("delivery_ids") or []))
+        if "priority_order" not in s:
+            s["priority_order"] = 0
 
     return {"schedules": schedules, "total": len(schedules)}
+
+
+class ReorderPayload(BaseModel):
+    schedule_date: str
+    schedule_ids: List[str]
+
+
+@router.post("/reorder")
+async def reorder_schedules(payload: ReorderPayload, current_user: dict = Depends(get_current_user)):
+    """Persist the priority order of schedules for a given date. The list as
+    sent (top→bottom) becomes `priority_order` 0, 1, 2, … so the next
+    `list_schedules` call returns them in the same order.
+
+    Only schedules belonging to the calling distributor on that date are
+    touched; foreign ids in the payload are silently ignored."""
+    tenant_id = get_current_tenant_id()
+    distributor_id = _resolve_distributor_id(current_user)
+    if not payload.schedule_ids:
+        return {"updated": 0}
+    try:
+        _date.fromisoformat(payload.schedule_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="schedule_date must be in YYYY-MM-DD format")
+
+    now = datetime.now(timezone.utc).isoformat()
+    updated = 0
+    for idx, sid in enumerate(payload.schedule_ids):
+        res = await db.distributor_delivery_schedules.update_one(
+            {"id": sid, "tenant_id": tenant_id, "distributor_id": distributor_id, "schedule_date": payload.schedule_date},
+            {"$set": {"priority_order": idx, "updated_at": now}}
+        )
+        if res.modified_count or res.matched_count:
+            updated += 1
+    return {"updated": updated}
 
 
 @router.get("/eligible-deliveries")
