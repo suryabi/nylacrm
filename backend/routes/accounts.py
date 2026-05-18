@@ -935,7 +935,8 @@ class ActivationChecklist(BaseModel):
     delivery_address_updated: bool
     sku_prices_correct: bool
     delivery_contact_updated: bool
-    logo_uploaded: bool = False  # optional — kept for backward compatibility, no longer required
+    logo_uploaded: bool
+    payment_terms_set: bool
     # Who bills this customer:
     #   "company"     → Nyla bills the customer directly → create a Zoho Books contact
     #   "distributor" → A third-party distributor bills them → DO NOT register in Zoho
@@ -990,6 +991,9 @@ async def get_activation_status(
                 account.get('delivery_contact_name') and account.get('delivery_contact_phone')
             ),
             'logo_uploaded': bool((account.get('logo') or '').strip()),
+            # Net 0 is a legitimate term ("Due on Receipt") so we accept 0 as set —
+            # we only consider it missing when the field is None.
+            'payment_terms_set': account.get('payment_terms_days') is not None,
         },
     }
 
@@ -1011,8 +1015,10 @@ async def activate_account(
         checklist.delivery_address_updated,
         checklist.sku_prices_correct,
         checklist.delivery_contact_updated,
+        checklist.logo_uploaded,
+        checklist.payment_terms_set,
     ]):
-        raise HTTPException(status_code=400, detail='All four checklist items must be confirmed before activation.')
+        raise HTTPException(status_code=400, detail='All checklist items must be confirmed before activation.')
 
     tdb = get_tdb()
     account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
@@ -1046,6 +1052,10 @@ async def activate_account(
     sku_pricing = account.get('sku_pricing') or []
     if not sku_pricing:
         failures.append('No SKU pricing configured. Add agreed prices under SKU Pricing.')
+    if not (account.get('logo') or '').strip():
+        failures.append('Account logo is missing. Upload it under Account Logo.')
+    if account.get('payment_terms_days') is None:
+        failures.append('Payment terms are not set. Choose Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting.')
     if failures:
         raise HTTPException(status_code=400, detail=' '.join(failures))
 

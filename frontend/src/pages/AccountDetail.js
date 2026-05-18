@@ -235,6 +235,8 @@ export default function AccountDetail() {
     delivery_address_updated: false,
     sku_prices_correct: false,
     delivery_contact_updated: false,
+    logo_uploaded: false,
+    payment_terms_set: false,
   });
   // Who bills this customer: 'company' (Nyla bills → register in Zoho)
   // or 'distributor' (third-party distributor bills → skip Zoho).
@@ -245,6 +247,8 @@ export default function AccountDetail() {
     delivery_address_updated: false,
     sku_prices_correct: false,
     delivery_contact_updated: false,
+    logo_uploaded: false,
+    payment_terms_set: false,
   });
 
   // Customer's Delivery & Accounting section
@@ -256,6 +260,11 @@ export default function AccountDetail() {
   const gstFileInputRef = useRef(null);
   // True when delivery address card is in edit/form mode; false when displayed as visiting card
   const [editingDeliveryAddress, setEditingDeliveryAddress] = useState(false);
+
+  // Payment Terms — Net days agreed with the customer. 0 = Due on Receipt.
+  // Stored on account.payment_terms_days (int) and pushed to Zoho on every invoice.
+  const [paymentTermsDays, setPaymentTermsDays] = useState('');
+  const [savingPaymentTerms, setSavingPaymentTerms] = useState(false);
   
   // Delivery Address state
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -555,6 +564,36 @@ export default function AccountDetail() {
     }
   };
 
+  const PAYMENT_TERMS_OPTIONS = [
+    { value: '0', label: 'Net 0 — Due on Receipt' },
+    { value: '7', label: 'Net 7' },
+    { value: '30', label: 'Net 30' },
+    { value: '45', label: 'Net 45' },
+  ];
+
+  const handleSavePaymentTerms = async (value) => {
+    const days = parseInt(value, 10);
+    if (Number.isNaN(days)) {
+      toast.error('Please pick a payment term first.');
+      return;
+    }
+    const opt = PAYMENT_TERMS_OPTIONS.find(o => o.value === String(days));
+    setSavingPaymentTerms(true);
+    try {
+      await accountsAPI.update(id, {
+        payment_terms_days: days,
+        payment_terms_label: opt ? opt.label.replace(/\s+—.*/, '') : `Net ${days}`,
+      });
+      toast.success('Payment terms saved.');
+      setPaymentTermsDays(String(days));
+      fetchAccount();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to save payment terms.');
+    } finally {
+      setSavingPaymentTerms(false);
+    }
+  };
+
   // Copy delivery address with outlet name and Google Maps link
   // Copy delivery address with outlet name and Google Maps link
   const handleCopyDeliveryAddress = () => {
@@ -657,6 +696,11 @@ ${googleMapsLink}`;
       // Load Customer's Delivery & Accounting fields
       setDeliveryContactName(data.delivery_contact_name || '');
       setDeliveryContactPhone(data.delivery_contact_phone || '');
+      setPaymentTermsDays(
+        data.payment_terms_days === undefined || data.payment_terms_days === null
+          ? ''
+          : String(data.payment_terms_days)
+      );
 
       // Fetch activation status (auto-validated)
       try {
@@ -2565,6 +2609,54 @@ ${googleMapsLink}`;
                 </Button>
               </div>
             </div>
+
+            {/* ── 4) Payment Terms ── */}
+            <div className="rounded-xl border border-border bg-secondary/20 p-4 mt-5" data-testid="payment-terms-card">
+              <div className="flex items-center gap-2 mb-1">
+                <Receipt className="h-4 w-4 text-blue-600" />
+                <span className="font-semibold text-sm">Payment Terms</span>
+                {paymentTermsDays !== '' && (
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                    Net {paymentTermsDays}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground mb-3">
+                Credit period agreed with the customer. Pushed to Zoho on every invoice so the
+                due-date computes correctly.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {PAYMENT_TERMS_OPTIONS.map((opt) => {
+                  const active = paymentTermsDays === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      disabled={savingPaymentTerms}
+                      onClick={() => handleSavePaymentTerms(opt.value)}
+                      className={`text-left rounded-lg border px-3 py-2 transition-colors ${
+                        active
+                          ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-300'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      } ${savingPaymentTerms ? 'opacity-60 cursor-wait' : ''}`}
+                      data-testid={`payment-term-net-${opt.value}`}
+                    >
+                      <div className={`text-sm font-semibold ${active ? 'text-blue-700' : 'text-slate-900'}`}>
+                        Net {opt.value}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {opt.value === '0' ? 'Due on Receipt' : `${opt.value}-day credit`}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {savingPaymentTerms && (
+                <p className="text-[11px] text-muted-foreground mt-2 flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Saving payment terms…
+                </p>
+              )}
+            </div>
           </Card>
 
           {/* ── Mobile: Show More toggle for low-priority sections ─────────── */}
@@ -3083,6 +3175,8 @@ ${googleMapsLink}`;
               { key: 'delivery_address_updated', label: 'Delivery address is updated', helper: 'Line 1, city, state and PIN required (auto-validated).' },
               { key: 'sku_prices_correct', label: 'SKU prices are correct', helper: 'At least one row in SKU Pricing (auto-validated).' },
               { key: 'delivery_contact_updated', label: 'Delivery contact details are updated', helper: 'Contact name AND phone required (auto-validated).' },
+              { key: 'payment_terms_set', label: 'Payment terms are set', helper: 'Pick Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting (auto-validated).' },
+              { key: 'logo_uploaded', label: 'Account logo is uploaded', helper: 'Upload the customer\u2019s logo under Account Logo (auto-validated).' },
             ].map((item) => {
               const ok = !!activationStatus[item.key];
               return (
