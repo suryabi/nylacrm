@@ -608,6 +608,16 @@ export default function DeliveryScheduleDetail() {
                           <span className="font-medium text-slate-900 truncate">{d.customer_name || 'Unknown customer'}</span>
                           {d.delivery_number && <span className="text-[11px] text-slate-400 font-mono">{d.delivery_number}</span>}
                           <StopStatusPill stopIdx={idx} stop={d} deliveries={deliveries} scheduleStatus={schedule.status} />
+                          {d.account_billed_by === 'distributor' && (
+                            <Badge
+                              variant="outline"
+                              className="bg-slate-100 text-slate-600 border-slate-300 text-[10px]"
+                              title="This account is billed by a third-party distributor — no Zoho invoice will be generated."
+                              data-testid={`stop-billing-chip-${d.id}`}
+                            >
+                              Distributor-billed
+                            </Badge>
+                          )}
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5 truncate">{addrStr(d.delivery_address)}</div>
                       </div>
