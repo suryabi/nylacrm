@@ -948,7 +948,13 @@ ${googleMapsLink}`;
   };
 
   const handleAddSKU = () => {
-    setSkuPricing([...skuPricing, { sku: '', price_per_unit: 0, return_bottle_credit: 0 }]);
+    setSkuPricing([...skuPricing, {
+      sku: '',
+      price_per_unit: 0,
+      return_bottle_credit: 0,
+      active_from: new Date().toISOString().slice(0, 10),
+      active_to: '',
+    }]);
   };
 
   const handleRemoveSKU = (index) => {
@@ -1774,18 +1780,30 @@ ${googleMapsLink}`;
               </div>
             ) : (
               <div className="overflow-x-auto -mx-4 sm:mx-0">
-                <table className="w-full min-w-[440px]" data-testid="sku-pricing-table">
+                <table className="w-full min-w-[680px]" data-testid="sku-pricing-table">
                   <thead className="bg-muted/50">
                     <tr>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium">SKU</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Price/Unit (₹)</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Bottle Credit (₹)</th>
+                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active From</th>
+                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active To</th>
+                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Status</th>
                       {isEditing && <th className="w-10"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {skuPricing.map((item, index) => (
-                      <tr key={index}>
+                    {skuPricing.map((item, index) => {
+                      const today = new Date().toISOString().slice(0, 10);
+                      const isFuture = item.active_from && today < item.active_from;
+                      const isExpired = item.active_to && today > item.active_to;
+                      const pill = isExpired
+                        ? { label: 'Expired', cls: 'bg-rose-100 text-rose-700 border-rose-200' }
+                        : isFuture
+                          ? { label: 'Future', cls: 'bg-amber-100 text-amber-800 border-amber-200' }
+                          : { label: 'Active', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+                      return (
+                      <tr key={index} className={isExpired || isFuture ? 'opacity-70' : ''} data-testid={`sku-pricing-row-${index}`}>
                         <td className="px-3 py-2">
                           {isEditing ? (
                             <Select
@@ -1831,6 +1849,38 @@ ${googleMapsLink}`;
                             <span>₹{item.return_bottle_credit?.toLocaleString()}</span>
                           )}
                         </td>
+                        <td className="px-3 py-2">
+                          {isEditing ? (
+                            <Input
+                              type="date"
+                              value={item.active_from || ''}
+                              onChange={(e) => handleSKUChange(index, 'active_from', e.target.value)}
+                              className="w-36"
+                              data-testid={`sku-active-from-${index}`}
+                            />
+                          ) : (
+                            <span className="text-sm font-mono text-slate-700">{item.active_from || '—'}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {isEditing ? (
+                            <Input
+                              type="date"
+                              value={item.active_to || ''}
+                              onChange={(e) => handleSKUChange(index, 'active_to', e.target.value)}
+                              className="w-36"
+                              data-testid={`sku-active-to-${index}`}
+                              min={item.active_from || undefined}
+                            />
+                          ) : (
+                            <span className="text-sm font-mono text-slate-500">{item.active_to || <span className="text-slate-400 italic">no end</span>}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${pill.cls}`} data-testid={`sku-pricing-status-${index}`}>
+                            {pill.label}
+                          </span>
+                        </td>
                         {isEditing && (
                           <td className="px-3 py-2">
                             <Button
@@ -1844,7 +1894,8 @@ ${googleMapsLink}`;
                           </td>
                         )}
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               </div>

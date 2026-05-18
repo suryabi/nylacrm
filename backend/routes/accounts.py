@@ -37,6 +37,13 @@ class AccountSKUPricing(BaseModel):
     sku: str
     price_per_unit: float = 0.0
     return_bottle_credit: float = 0.0
+    # Optional validity window. When set we only consider this row "active"
+    # if `active_from <= today <= active_to`. Either bound may be omitted to
+    # mean "no lower / upper bound" respectively. Plain ISO date strings
+    # (YYYY-MM-DD) — kept as `Optional[str]` to avoid breaking historical rows
+    # that already exist without these fields.
+    active_from: Optional[str] = None
+    active_to: Optional[str] = None
 
 
 class DeliveryAddress(BaseModel):

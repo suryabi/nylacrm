@@ -3819,8 +3819,41 @@ async def get_assigned_accounts_for_delivery(
             {"_id": 0, "id": 1, "account_name": 1, "contact_name": 1, "city": 1, "state": 1, "delivery_address": 1, "territory": 1, "contact_number": 1, "sku_pricing": 1}
         )
         if account:
-            # Get SKU pricing and enrich with master SKU data for ID mapping
-            sku_pricing = account.get('sku_pricing', [])
+            # ── SKU pricing — pick the row that is ACTIVE today for each SKU.
+            # `account.sku_pricing` may contain historical / future-dated rows;
+            # we filter to the one matching today's date window. If multiple
+            # rows overlap, the one with the latest `active_from` wins (most
+            # recently scheduled price wins). Rows without dates are treated
+            # as "always active" but lose to a dated overlapping row.
+            from datetime import date as _date
+            raw_pricing = account.get('sku_pricing', []) or []
+            today_iso = _date.today().isoformat()
+
+            def _in_window(row):
+                af = (row.get('active_from') or '').strip()
+                at = (row.get('active_to') or '').strip()
+                if af and today_iso < af:
+                    return False
+                if at and today_iso > at:
+                    return False
+                return True
+
+            by_sku: dict[str, dict] = {}
+            for row in raw_pricing:
+                if not _in_window(row):
+                    continue
+                key = (row.get('sku') or '').strip()
+                if not key:
+                    continue
+                cur = by_sku.get(key)
+                if cur is None:
+                    by_sku[key] = row
+                    continue
+                # Prefer the row with the latest active_from (dated > undated).
+                if (row.get('active_from') or '') > (cur.get('active_from') or ''):
+                    by_sku[key] = row
+            sku_pricing = list(by_sku.values())
+
             enriched_skus = []
             if sku_pricing:
                 # Get all master SKUs to map names to IDs
