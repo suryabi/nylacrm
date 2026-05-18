@@ -9,7 +9,7 @@ from `confirmed` → `scheduled`. A driver-friendly PDF can be downloaded.
 Multi-tenant aware. Only callable by users with role 'Distributor' linked to a
 distributor record (`user.distributor_id`).
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from datetime import datetime, timezone, date as _date, timedelta
@@ -330,6 +330,11 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 "items": items,
                 "total_quantity": total_packages,
                 "total_units": total_units,
+                # Zoho identifiers — populated after schedule confirmation. Surfaced
+                # on the stop card so users can download/view the official invoice.
+                "zoho_invoice_id": r.get("zoho_invoice_id"),
+                "zoho_invoice_number": r.get("zoho_invoice_number"),
+                "zoho_invoice_url": r.get("zoho_invoice_url"),
             })
     schedule["deliveries"] = deliveries
     return schedule
@@ -702,10 +707,14 @@ async def detach_delivery(
 
 
 @router.post("/{schedule_id}/confirm")
-async def confirm_schedule(schedule_id: str, current_user: dict = Depends(get_current_user)):
+async def confirm_schedule(schedule_id: str, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
     """Move schedule from `draft` → `confirmed`. Stock-out statuses are NOT changed
     here — that happens on the subsequent `approve` step (the user wanted a
-    two-step submit-then-approve workflow before the driver actually leaves)."""
+    two-step submit-then-approve workflow before the driver actually leaves).
+
+    Zoho Books invoices are generated at THIS step (one per attached delivery)
+    so the invoice link is ready by the time the driver starts the run.
+    """
     tenant_id = get_current_tenant_id()
     distributor_id = _resolve_distributor_id(current_user)
     existing = await db.distributor_delivery_schedules.find_one(
@@ -732,6 +741,35 @@ async def confirm_schedule(schedule_id: str, current_user: dict = Depends(get_cu
             "updated_at": now,
         }}
     )
+
+    # Schedule Zoho invoice push for every delivery attached to this schedule.
+    # We swallow ZohoPushSkippedError (non-factory warehouse, account not linked,
+    # etc.) so the schedule confirmation never fails because of an integration
+    # issue on a single delivery. The retry endpoint surfaces specific errors.
+    delivery_ids = existing.get("delivery_ids") or []
+
+    async def _safe_zoho_sync_all():
+        from services.zoho_service import sync_delivery_to_zoho, ZohoPushSkippedError
+        for did in delivery_ids:
+            try:
+                # Skip deliveries that already have an invoice on Zoho.
+                d = await db.distributor_deliveries.find_one(
+                    {"id": did, "tenant_id": tenant_id},
+                    {"_id": 0, "zoho_invoice_id": 1}
+                )
+                if d and d.get("zoho_invoice_id"):
+                    continue
+                await sync_delivery_to_zoho(tenant_id, distributor_id, did)
+            except ZohoPushSkippedError as skip:
+                logger.info(f"Zoho push skipped for delivery {did}: {skip}")
+            except Exception:
+                logger.exception(f"Zoho sync background task failed for delivery {did}")
+
+    try:
+        background_tasks.add_task(_safe_zoho_sync_all)
+    except Exception as e:
+        logger.warning(f"Failed to schedule Zoho sync for schedule {schedule_id}: {e}")
+
     s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
     return await _enrich_schedule(s, tenant_id)
 

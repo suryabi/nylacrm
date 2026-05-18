@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query, Response, Backgrou
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 import logging
+import re
 import uuid
 import bcrypt
 
@@ -4265,22 +4266,10 @@ async def confirm_delivery(
     
     logger.info(f"Delivery {delivery['delivery_number']} confirmed by {current_user['email']}")
 
-    # Auto-push to Zoho Books — wrapped to swallow expected ZohoPushSkippedError
-    # (non-factory warehouse, account not linked, etc) without crashing the
-    # background task. The retry endpoint surfaces the same error to the user.
-    async def _safe_zoho_sync():
-        try:
-            from services.zoho_service import sync_delivery_to_zoho, ZohoPushSkippedError
-            try:
-                await sync_delivery_to_zoho(tenant_id, distributor_id, delivery_id)
-            except ZohoPushSkippedError as skip:
-                logger.info(f"Zoho push skipped for delivery {delivery_id}: {skip}")
-        except Exception:
-            logger.exception(f"Zoho sync background task failed for delivery {delivery_id}")
-    try:
-        background_tasks.add_task(_safe_zoho_sync)
-    except Exception as e:
-        logger.warning(f"Failed to schedule Zoho sync for delivery {delivery_id}: {e}")
+    # NOTE: Zoho invoice push is intentionally NOT triggered here anymore. The
+    # business flow moved to: stock-out confirm → schedule confirm (Zoho push
+    # happens then, once per attached delivery). The retry endpoint below can
+    # still be called manually if a particular delivery needs to be re-synced.
 
     return {"message": f"Delivery {delivery['delivery_number']} confirmed", "status": "confirmed"}
 
@@ -4335,6 +4324,60 @@ async def retry_delivery_zoho_push(
         "zoho_invoice_number": fresh.get('zoho_invoice_number'),
         "zoho_invoice_id": fresh.get('zoho_invoice_id'),
     }
+
+
+@router.get("/{distributor_id}/deliveries/{delivery_id}/invoice-pdf")
+async def download_delivery_invoice_pdf(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Download the Zoho-generated invoice for this delivery as a PDF.
+
+    Streams the binary back with `Content-Disposition: attachment; filename="INV-00017.pdf"`
+    so the saved file matches the Zoho invoice number. Returning a server-streamed
+    response (rather than a direct Zoho URL) keeps the access token server-side
+    and lets us force the filename — the Zoho hosted URL is cross-origin and
+    ignores the HTML `download` attribute.
+    """
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to download this invoice")
+
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "zoho_invoice_id": 1, "zoho_invoice_number": 1, "delivery_number": 1},
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    zoho_id = delivery.get("zoho_invoice_id")
+    if not zoho_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Zoho invoice has been generated for this delivery yet. Confirm the delivery schedule first or use 'Retry Zoho push'.",
+        )
+
+    from services.zoho_service import fetch_invoice_pdf, ZohoApiError
+    try:
+        pdf_bytes, invoice_number = await fetch_invoice_pdf(tenant_id, zoho_id)
+    except ZohoApiError as e:
+        raise HTTPException(status_code=502, detail=f"Zoho returned {e.status_code} while fetching the invoice PDF.")
+    except Exception as e:
+        logger.exception(f"Failed to download invoice PDF for delivery {delivery_id}")
+        raise HTTPException(status_code=502, detail=f"Failed to download invoice: {e}")
+
+    invoice_number = invoice_number or delivery.get("zoho_invoice_number") or zoho_id
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", invoice_number).strip("_") or "invoice"
+    filename = f"{safe_name}.pdf"
+    from fastapi.responses import Response as _Response
+    return _Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post("/{distributor_id}/deliveries/{delivery_id}/complete")

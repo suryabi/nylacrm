@@ -375,8 +375,12 @@ export function DriverScheduleDetail() {
                 <>
                   <div className="text-slate-500">Load</div>
                   <div className="font-medium text-slate-900" data-testid="driver-load-summary">
-                    {totalCrates} crate{totalCrates === 1 ? '' : 's'}
-                    {totalUnits > 0 && <span className="text-slate-500 font-normal"> · {totalUnits} units</span>}
+                    {totalCrates > 0 && <>{totalCrates} crate{totalCrates === 1 ? '' : 's'}</>}
+                    {totalUnits > 0 && totalUnits !== totalCrates && (
+                      <span className="text-slate-500 font-normal">
+                        {totalCrates > 0 ? ' · ' : ''}{totalUnits} bottle{totalUnits === 1 ? '' : 's'}
+                      </span>
+                    )}
                   </div>
                 </>
               );
@@ -408,33 +412,63 @@ export function DriverScheduleDetail() {
                     <div className="text-xs text-slate-500 mt-0.5">{d.delivery_number}</div>
                     <div className="text-sm text-slate-600 mt-2 leading-relaxed">{addr.formatted || '—'}</div>
 
-                    {/* SKU / crate manifest — what the driver actually has to hand over */}
+                    {/* SKU / crate manifest — what the driver actually has to hand over.
+                        Field drivers aren't tech-savvy; we visually SEPARATE the qty
+                        from the packaging label so "1 12 Bottle Crate" never reads
+                        as "112". Layout: stacked rows with a big green qty badge,
+                        then the packaging label, with a small "= N bottles" line. */}
                     {Array.isArray(d.items) && d.items.length > 0 && (
                       <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 overflow-hidden" data-testid={`driver-stop-items-${d.id}`}>
                         <div className="px-3 py-1.5 border-b border-slate-200 flex items-center justify-between bg-white">
                           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1">
                             <Package className="w-3 h-3" /> Manifest
                           </div>
-                          {d.total_quantity != null && (
-                            <div className="text-[11px] text-slate-600 font-medium">
-                              {d.total_quantity} {d.total_quantity === 1 ? 'unit' : 'units'} total
+                          {(d.total_quantity != null || d.total_units != null) && (
+                            <div className="text-[11px] text-slate-600 font-medium" data-testid={`driver-stop-total-${d.id}`}>
+                              {d.total_quantity > 0 && (
+                                <>
+                                  <span className="text-slate-900 font-semibold">{d.total_quantity}</span>{' '}
+                                  {d.total_quantity === 1 ? 'crate' : 'crates'}
+                                  {d.total_units > 0 && d.total_units !== d.total_quantity && ' · '}
+                                </>
+                              )}
+                              {d.total_units > 0 && d.total_units !== d.total_quantity && (
+                                <>
+                                  <span className="text-slate-900 font-semibold">{d.total_units}</span>{' '}
+                                  {d.total_units === 1 ? 'bottle' : 'bottles'}
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
                         <ul className="divide-y divide-slate-200">
-                          {d.items.map((it, i) => (
-                            <li key={`${d.id}-it-${i}`} className="flex items-center justify-between px-3 py-2 text-sm">
-                              <span className="text-slate-800 truncate mr-2">{it.sku_name}</span>
-                              <span className="text-slate-900 font-semibold whitespace-nowrap font-mono tabular-nums">
-                                {it.quantity} {it.packaging_label || 'Crate'}{it.quantity === 1 ? '' : 's'}
-                                {it.units_per_package && it.quantity_units != null && it.units_per_package > 1 && (
-                                  <span className="text-[10px] text-slate-400 font-normal ml-1.5">
-                                    ({it.quantity_units} units)
+                          {d.items.map((it, i) => {
+                            const unitsLabel = it.units_per_package && it.quantity_units != null && it.units_per_package > 1
+                              ? `= ${it.quantity_units} bottle${it.quantity_units === 1 ? '' : 's'}`
+                              : null;
+                            const pkgLabel = it.packaging_label || 'Crate';
+                            return (
+                              <li key={`${d.id}-it-${i}`} className="flex items-center justify-between gap-3 px-3 py-2.5" data-testid={`driver-stop-item-${d.id}-${i}`}>
+                                <span className="text-sm text-slate-800 truncate flex-1">{it.sku_name}</span>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  {/* Big qty badge so "1" can't merge with the label */}
+                                  <span
+                                    className="inline-flex items-center justify-center min-w-[34px] h-[34px] px-2 rounded-md bg-emerald-600 text-white font-bold text-base font-mono tabular-nums leading-none"
+                                    data-testid={`driver-stop-item-qty-${d.id}-${i}`}
+                                  >
+                                    {it.quantity}
                                   </span>
-                                )}
-                              </span>
-                            </li>
-                          ))}
+                                  <span className="text-slate-400 font-medium">×</span>
+                                  <div className="text-right leading-tight">
+                                    <div className="text-sm font-medium text-slate-900">{pkgLabel}</div>
+                                    {unitsLabel && (
+                                      <div className="text-[10px] text-slate-500 font-mono tabular-nums">{unitsLabel}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}

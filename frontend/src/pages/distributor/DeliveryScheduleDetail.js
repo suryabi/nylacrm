@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Truck, User, Loader2, ChevronUp, ChevronDown, Plus, X,
   Download, CheckCircle2, XCircle, Calendar, Package, Phone, MapPin,
-  GripVertical, Route, AlertTriangle, Sparkles, TrendingDown,
+  GripVertical, Route, AlertTriangle, Sparkles, TrendingDown, Receipt, ExternalLink,
 } from 'lucide-react';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -293,6 +293,41 @@ export default function DeliveryScheduleDetail() {
   };
 
   const downloadPDF = () => window.open(`${BASE}/${id}/pdf`, '_blank');
+
+  // Download an individual delivery's Zoho invoice as a PDF via the server proxy
+  // so the saved file matches the Zoho invoice number (INV-00017.pdf).
+  const [invoiceBusyId, setInvoiceBusyId] = useState(null);
+  const handleDownloadInvoice = async (delivery) => {
+    if (!schedule?.distributor_id || !delivery?.zoho_invoice_id) {
+      toast.error('Invoice is not ready yet — confirm the schedule first.');
+      return;
+    }
+    setInvoiceBusyId(delivery.id);
+    try {
+      const response = await axios.get(
+        `${API_URL}/distributors/${schedule.distributor_id}/deliveries/${delivery.id}/invoice-pdf`,
+        { responseType: 'blob', withCredentials: true }
+      );
+      const cd = response.headers['content-disposition'] || '';
+      const match = /filename="?([^"]+)"?/.exec(cd);
+      const filename = match?.[1] || `${delivery.zoho_invoice_number || 'invoice'}.pdf`;
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = filename;
+      document.body.appendChild(link); link.click(); link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${filename}`);
+    } catch (e) {
+      let detail = e?.response?.data?.detail;
+      if (!detail && e?.response?.data instanceof Blob) {
+        try { detail = JSON.parse(await e.response.data.text()).detail; } catch (_) { /* keep null */ }
+      }
+      toast.error(detail || 'Failed to download invoice');
+    } finally {
+      setInvoiceBusyId(null);
+    }
+  };
 
   // ----- Route optimisation -------------------------------------------------
   const openOptimize = async () => {
@@ -635,6 +670,58 @@ export default function DeliveryScheduleDetail() {
                           ) : (
                             <p className="text-xs text-slate-400 italic">No items recorded on this delivery.</p>
                           )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Zoho invoice action row — only shown when there is an
+                        invoice for this delivery (i.e. schedule has been
+                        confirmed at least once). Server proxy ensures the
+                        downloaded file is named after the Zoho invoice number
+                        (e.g. INV-00017.pdf). */}
+                    {isOpen && (d.zoho_invoice_id || d.zoho_invoice_url) && (
+                      <div className="px-12 pb-4 flex flex-wrap items-center gap-2" data-testid={`stop-invoice-${d.id}`}>
+                        <div className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+                          <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>Invoice</span>
+                          {d.zoho_invoice_number && (
+                            <span className="font-mono text-slate-700 font-medium">{d.zoho_invoice_number}</span>
+                          )}
+                        </div>
+                        {d.zoho_invoice_id && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(d); }}
+                            disabled={invoiceBusyId === d.id}
+                            className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                            data-testid={`stop-invoice-download-${d.id}`}
+                          >
+                            {invoiceBusyId === d.id
+                              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Downloading…</>
+                              : <><Download className="h-3.5 w-3.5 mr-1.5" /> Download Invoice</>}
+                          </Button>
+                        )}
+                        {d.zoho_invoice_url && (
+                          <a
+                            href={d.zoho_invoice_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            data-testid={`stop-invoice-view-${d.id}`}
+                          >
+                            <Button size="sm" variant="ghost" className="text-violet-700 hover:bg-violet-50">
+                              <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> View in Zoho
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {/* Pending state — schedule is confirmed but invoice still being pushed */}
+                    {isOpen && !d.zoho_invoice_id && ['confirmed', 'approved', 'in_progress', 'completed'].includes(schedule.status) && (
+                      <div className="px-12 pb-4" data-testid={`stop-invoice-pending-${d.id}`}>
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Invoice generating in Zoho…
                         </div>
                       </div>
                     )}

@@ -675,6 +675,55 @@ def _zoho_books_url(zoho_invoice_id: str, creds: dict) -> Optional[str]:
     return f"https://{books_domain}/#/invoices/{zoho_invoice_id}"
 
 
+async def fetch_invoice_pdf(tenant_id: str, zoho_invoice_id: str) -> tuple[bytes, str]:
+    """Download the official invoice PDF straight from Zoho Books.
+
+    Returns `(pdf_bytes, invoice_number)`. `invoice_number` is the human-readable
+    Zoho identifier (e.g. `INV-00017`) used by the caller to build a clean
+    `Content-Disposition` filename. Falls back to the supplied zoho_invoice_id
+    if the API response doesn't contain `invoice_number`.
+
+    We call this endpoint directly (rather than going through `_zoho_request`)
+    because we need the raw binary body — `_zoho_request` parses JSON only.
+    """
+    if not zoho_invoice_id:
+        raise RuntimeError("zoho_invoice_id is required")
+    cfg = get_zoho_config()
+    creds = await get_credentials(tenant_id)
+    if not creds:
+        raise RuntimeError("Zoho Books is not connected for this tenant")
+    api_base = (creds.get("api_base_url") or cfg["api_base_url"]).rstrip("/")
+    token = await get_valid_access_token(tenant_id)
+    org_id = creds["organization_id"]
+    headers = {"Authorization": f"Zoho-oauthtoken {token}"}
+    # First fetch the invoice metadata for invoice_number.
+    invoice_number = zoho_invoice_id
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            meta = await client.get(
+                f"{api_base}/invoices/{zoho_invoice_id}",
+                headers={**headers, "Content-Type": "application/json"},
+                params={"organization_id": org_id},
+            )
+            if meta.status_code == 200:
+                payload = meta.json()
+                inv = payload.get("invoice") or {}
+                invoice_number = inv.get("invoice_number") or invoice_number
+    except Exception as e:
+        logger.warning(f"Failed to fetch invoice meta for {zoho_invoice_id}: {e}")
+    # Now stream the PDF binary.
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        pdf_resp = await client.get(
+            f"{api_base}/invoices/{zoho_invoice_id}",
+            headers=headers,
+            params={"organization_id": org_id, "accept": "pdf"},
+        )
+    if pdf_resp.status_code != 200:
+        raise ZohoApiError(pdf_resp.status_code, pdf_resp.text[:500])
+    return pdf_resp.content, invoice_number
+
+
+
 async def _ensure_mirror_invoice(
     *,
     tenant_id: str,
