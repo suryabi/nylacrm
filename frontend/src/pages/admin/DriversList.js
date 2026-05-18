@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
-  Plus, Pencil, Trash2, Loader2, IdCard, Search, RefreshCw, KeyRound, Copy, Check,
+  Plus, Pencil, Trash2, Loader2, IdCard, Search, RefreshCw, KeyRound, Copy, Check, Eye, EyeOff,
 } from 'lucide-react';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -52,6 +52,12 @@ export default function DriversList() {
   const [credentials, setCredentials] = useState(null); // { driver_name, login_username, login_password }
   const [copied, setCopied] = useState(false);
   const [regenerating, setRegenerating] = useState(null); // driver_id while in-flight
+
+  // Set-custom-password dialog
+  const [setPwdTarget, setSetPwdTarget] = useState(null); // driver row
+  const [setPwdValue, setSetPwdValue] = useState('');
+  const [setPwdShow, setSetPwdShow] = useState(false);
+  const [setPwdSaving, setSetPwdSaving] = useState(false);
 
   const fetchDrivers = async () => {
     setLoading(true);
@@ -179,6 +185,35 @@ export default function DriversList() {
     });
   };
 
+  const openSetPwd = (driver) => {
+    setSetPwdTarget(driver);
+    setSetPwdValue('');
+    setSetPwdShow(false);
+  };
+
+  const handleSetPwd = async () => {
+    if (!setPwdTarget) return;
+    if (setPwdValue.length < 4) {
+      toast.error('Password must be at least 4 characters');
+      return;
+    }
+    setSetPwdSaving(true);
+    try {
+      await axios.post(
+        `${API_URL}/admin/drivers/${setPwdTarget.id}/set-password`,
+        { password: setPwdValue },
+        { withCredentials: true }
+      );
+      toast.success(`Password updated for ${setPwdTarget.full_name}`);
+      setSetPwdTarget(null);
+      setSetPwdValue('');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to update password');
+    } finally {
+      setSetPwdSaving(false);
+    }
+  };
+
   const stats = useMemo(() => {
     const by = { active: 0, on_leave: 0, inactive: 0 };
     drivers.forEach(d => { by[d.status] = (by[d.status] || 0) + 1; });
@@ -270,12 +305,21 @@ export default function DriversList() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          onClick={() => openSetPwd(d)}
+                          title="Set a custom login password"
+                          data-testid={`driver-setpwd-${d.id}`}
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           onClick={() => handleRegenerate(d)}
                           disabled={regenerating === d.id}
-                          title="Regenerate driver login password"
+                          title="Regenerate a random one-time password"
                           data-testid={`driver-regenerate-${d.id}`}
                         >
-                          {regenerating === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+                          {regenerating === d.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => openEdit(d)} data-testid={`driver-edit-${d.id}`}>
                           <Pencil className="h-4 w-4" />
@@ -408,6 +452,63 @@ export default function DriversList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Set custom password dialog */}
+      <Dialog open={!!setPwdTarget} onOpenChange={(o) => { if (!o) { setSetPwdTarget(null); setSetPwdValue(''); setSetPwdShow(false); } }}>
+        <DialogContent className="max-w-md" data-testid="driver-setpwd-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-emerald-600" /> Set driver password
+            </DialogTitle>
+            <DialogDescription>
+              Set a custom login password for <strong>{setPwdTarget?.full_name}</strong>. The driver signs in with their mobile number
+              (<span className="font-mono">{setPwdTarget?.phone}</span>) and this password. Use the random-password button (
+              <RefreshCw className="inline h-3 w-3 -mt-0.5" />) if you'd rather generate one automatically.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <div>
+              <Label className="text-xs uppercase tracking-wider text-slate-500">New password</Label>
+              <div className="relative mt-1">
+                <Input
+                  type={setPwdShow ? 'text' : 'password'}
+                  value={setPwdValue}
+                  onChange={(e) => setSetPwdValue(e.target.value)}
+                  placeholder="At least 4 characters"
+                  className="font-mono pr-10"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSetPwd(); }}
+                  data-testid="driver-setpwd-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSetPwdShow(s => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label={setPwdShow ? 'Hide password' : 'Show password'}
+                  data-testid="driver-setpwd-toggle"
+                >
+                  {setPwdShow ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 mt-1.5">
+                Password is stored as a hash; we can't show it again later. Note it down before saving.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setSetPwdTarget(null); setSetPwdValue(''); }} disabled={setPwdSaving}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSetPwd}
+              disabled={setPwdSaving || setPwdValue.length < 4}
+              data-testid="driver-setpwd-save"
+            >
+              {setPwdSaving ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Saving…</> : 'Save Password'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* One-time credentials disclosure modal */}
       <Dialog open={!!credentials} onOpenChange={(open) => { if (!open) { setCredentials(null); setCopied(false); } }}>

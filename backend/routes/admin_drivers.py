@@ -296,6 +296,67 @@ async def regenerate_driver_password(driver_id: str, current_user: dict = Depend
     }
 
 
+class SetDriverPasswordPayload(BaseModel):
+    password: str = Field(..., min_length=4, max_length=64)
+
+
+@router.post("/{driver_id}/set-password")
+async def set_driver_password(
+    driver_id: str,
+    payload: SetDriverPasswordPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin/CEO sets a custom password for the driver. Useful when the driver
+    can't (or won't) memorise the system-generated string. The password is
+    stored only as a bcrypt hash; we don't echo it back."""
+    _ensure_admin(current_user)
+    tdb = get_tenant_db()
+    driver = await tdb.drivers.find_one({"id": driver_id}, {"_id": 0})
+    if not driver:
+        raise HTTPException(status_code=404, detail="Driver not found")
+
+    tenant_id = get_current_tenant_id()
+    phone = driver["phone"]
+    now = datetime.now(timezone.utc).isoformat()
+
+    # If a driver user doesn't yet exist (legacy fleet rows), create one with
+    # the supplied password instead of a random one.
+    existing = await tdb.users.find_one({"role": "Driver", "phone": phone}, {"_id": 0, "id": 1})
+    if existing:
+        await tdb.users.update_one(
+            {"id": existing["id"]},
+            {"$set": {
+                "password": hash_password(payload.password),
+                "driver_id": driver["id"],
+                "name": driver["full_name"],
+                "is_active": driver.get("status") == "active",
+                "updated_at": now,
+            }}
+        )
+    else:
+        user_doc = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "email": _driver_synthetic_email(phone, tenant_id),
+            "name": driver["full_name"],
+            "role": "Driver",
+            "department": "Distribution",
+            "phone": phone,
+            "city": driver.get("city"),
+            "is_active": driver.get("status") == "active",
+            "driver_id": driver["id"],
+            "password": hash_password(payload.password),
+            "force_password_change": False,
+            "created_at": now,
+            "updated_at": now,
+            "created_by": current_user.get("id"),
+            "provisioned_via": "fleet_driver_manual_password",
+        }
+        await tdb.users.insert_one(user_doc)
+
+    return {"driver_id": driver_id, "login_username": phone, "updated": True}
+
+
 @router.delete("/{driver_id}")
 async def delete_driver(driver_id: str, current_user: dict = Depends(get_current_user)):
     _ensure_admin(current_user)

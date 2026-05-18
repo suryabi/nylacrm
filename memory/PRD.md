@@ -14,6 +14,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-17 — Admin can set a custom driver password ✅ DONE
+- New backend `POST /api/admin/drivers/{id}/set-password` (admin-gated) accepts `{password}` (min 4 chars, max 64) and stores it as a bcrypt hash on the linked driver user row. Creates the user row on the fly for legacy fleet rows missing one.
+- Admin Drivers list now has TWO key actions per row: a "Set custom password" (key icon → dialog with show/hide toggle, enter-to-save, ≥4 char validation) and a "Regenerate random password" (refresh icon → existing one-time disclosure flow).
+- Verified 200/401/404/422/auth-guard paths end-to-end; old password rejected once a new one is set; lint clean.
+
 ### 2026-05-17 — Driver sees SKU + crate manifest per stop ✅ DONE
 - `GET /api/driver/schedules/{id}` now re-uses the distributor's `_enrich_schedule` helper so each stop's `items[]` (sku_name, quantity in crates, packaging_label, quantity_units, units_per_package) and rollups (`total_quantity`, `total_units`) are surfaced to the driver — identical to what the distributor saw at approval time. Driver-only `delivered_at` field is layered on top.
 - Driver UI: each stop card now shows a "Manifest" panel listing SKUs with `qty Crate(s) (n units)`; schedule header card shows a "Load" row totalling crates + units across the run.
