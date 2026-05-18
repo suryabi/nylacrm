@@ -22,7 +22,7 @@ from core.tenant import get_current_tenant_id
 router = APIRouter(tags=["Distributor Contacts"])
 logger = logging.getLogger(__name__)
 
-DISTRIBUTOR_DEFAULT_PASSWORD = "nyladist##"
+from core.distributor_auth import DISTRIBUTOR_DEFAULT_PASSWORD  # noqa: E402
 
 
 def _hash_password(password: str) -> str:

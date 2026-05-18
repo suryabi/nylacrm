@@ -31,8 +31,7 @@ from utils.object_storage import upload_pdf, download_pdf, init_storage
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Default password for distributor users
-DISTRIBUTOR_DEFAULT_PASSWORD = "nyladist##"
+from core.distributor_auth import DISTRIBUTOR_DEFAULT_PASSWORD  # noqa: E402
 
 
 def hash_password(password: str) -> str:
