@@ -963,7 +963,13 @@ ${googleMapsLink}`;
 
   const handleSKUChange = (index, field, value) => {
     const updated = [...skuPricing];
-    updated[index] = { ...updated[index], [field]: field === 'sku' ? value : parseFloat(value) || 0 };
+    // String-valued fields (sku id + date strings) must pass through unchanged;
+    // running parseFloat on "2026-05-18" wipes out the date.
+    const stringFields = ['sku', 'active_from', 'active_to'];
+    updated[index] = {
+      ...updated[index],
+      [field]: stringFields.includes(field) ? value : (parseFloat(value) || 0),
+    };
     setSkuPricing(updated);
   };
 

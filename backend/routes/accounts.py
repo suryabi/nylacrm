@@ -183,14 +183,19 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     # Generate account ID
     account_id = await generate_account_id(lead['company'], lead['city'])
     
-    # Map SKU pricing from lead's proposed pricing
+    # Map SKU pricing from lead's proposed pricing.
+    # Default each row's validity window to "active from today, no end date" so
+    # the converted account is immediately quotable. The user can edit later.
+    today_iso = datetime.now(timezone.utc).date().isoformat()
     sku_pricing = []
     if lead.get('proposed_sku_pricing'):
         for sku_item in lead['proposed_sku_pricing']:
             sku_pricing.append({
                 'sku': sku_item.get('sku', ''),
                 'price_per_unit': sku_item.get('proposed_price', sku_item.get('price_per_unit', 0)),
-                'return_bottle_credit': sku_item.get('bottle_return_credit', sku_item.get('return_bottle_credit', 0))
+                'return_bottle_credit': sku_item.get('bottle_return_credit', sku_item.get('return_bottle_credit', 0)),
+                'active_from': sku_item.get('active_from') or today_iso,
+                'active_to': sku_item.get('active_to') or None,
             })
     
     # Create account - tenant_id added automatically by TenantDB
