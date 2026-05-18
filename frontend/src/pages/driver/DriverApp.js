@@ -4,7 +4,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   Loader2, MapPin, Phone, ChevronLeft, CheckCircle2, Play, StopCircle,
-  Truck, Calendar, LogOut, Navigation,
+  Truck, Calendar, LogOut, Navigation, Package,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/button';
@@ -367,6 +367,20 @@ export function DriverScheduleDetail() {
             <div className="font-medium text-slate-900 font-mono">{schedule.vehicle?.registration_number || '—'}</div>
             <div className="text-slate-500">Total stops</div>
             <div className="font-medium text-slate-900">{doneStops} of {totalStops} delivered</div>
+            {(() => {
+              const totalCrates = (schedule.deliveries || []).reduce((acc, d) => acc + (d.total_quantity || 0), 0);
+              const totalUnits = (schedule.deliveries || []).reduce((acc, d) => acc + (d.total_units || 0), 0);
+              if (totalCrates === 0 && totalUnits === 0) return null;
+              return (
+                <>
+                  <div className="text-slate-500">Load</div>
+                  <div className="font-medium text-slate-900" data-testid="driver-load-summary">
+                    {totalCrates} crate{totalCrates === 1 ? '' : 's'}
+                    {totalUnits > 0 && <span className="text-slate-500 font-normal"> · {totalUnits} units</span>}
+                  </div>
+                </>
+              );
+            })()}
             {schedule.tracking_active && lastPingAt && (
               <>
                 <div className="text-slate-500">Last GPS ping</div>
@@ -393,6 +407,38 @@ export function DriverScheduleDetail() {
                     <div className="font-semibold text-slate-900 truncate">{d.customer_name || '—'}</div>
                     <div className="text-xs text-slate-500 mt-0.5">{d.delivery_number}</div>
                     <div className="text-sm text-slate-600 mt-2 leading-relaxed">{addr.formatted || '—'}</div>
+
+                    {/* SKU / crate manifest — what the driver actually has to hand over */}
+                    {Array.isArray(d.items) && d.items.length > 0 && (
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 overflow-hidden" data-testid={`driver-stop-items-${d.id}`}>
+                        <div className="px-3 py-1.5 border-b border-slate-200 flex items-center justify-between bg-white">
+                          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                            <Package className="w-3 h-3" /> Manifest
+                          </div>
+                          {d.total_quantity != null && (
+                            <div className="text-[11px] text-slate-600 font-medium">
+                              {d.total_quantity} {d.total_quantity === 1 ? 'unit' : 'units'} total
+                            </div>
+                          )}
+                        </div>
+                        <ul className="divide-y divide-slate-200">
+                          {d.items.map((it, i) => (
+                            <li key={`${d.id}-it-${i}`} className="flex items-center justify-between px-3 py-2 text-sm">
+                              <span className="text-slate-800 truncate mr-2">{it.sku_name}</span>
+                              <span className="text-slate-900 font-semibold whitespace-nowrap font-mono tabular-nums">
+                                {it.quantity} {it.packaging_label || 'Crate'}{it.quantity === 1 ? '' : 's'}
+                                {it.units_per_package && it.quantity_units != null && it.units_per_package > 1 && (
+                                  <span className="text-[10px] text-slate-400 font-normal ml-1.5">
+                                    ({it.quantity_units} units)
+                                  </span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-3 mt-3 flex-wrap">
                       {d.contact_phone && (
                         <a href={`tel:${d.contact_phone}`} className="inline-flex items-center gap-1 text-sm text-emerald-700 font-medium">

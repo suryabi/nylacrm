@@ -25,6 +25,7 @@ import uuid
 from database import db, get_tenant_db
 from deps import get_current_user, verify_password, create_session
 from core.tenant import get_current_tenant_id
+from .distributor_delivery_schedules import _enrich_schedule
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -150,66 +151,29 @@ async def list_driver_schedules(
 
 
 async def _enrich_driver_schedule(schedule: dict, tenant_id: str) -> dict:
-    """Pull stops (deliveries) in dispatch order with customer/address info."""
-    ids = schedule.get("delivery_ids") or []
-    deliveries: List[dict] = []
-    if ids:
-        rows = await db.distributor_deliveries.find(
+    """Pull stops (deliveries) in dispatch order with customer/address/contact
+    info AND the SKU line items (with crate counts) the driver must hand over.
+
+    Re-uses the distributor-side enrichment so the driver always sees the
+    same SKUs/crate counts the distributor agreed when approving the schedule.
+    On top of that we add `delivered_at` per stop (used by the UI to render
+    "Delivered at HH:MM" once a stop is marked complete).
+    """
+    enriched = await _enrich_schedule(schedule, tenant_id)
+    deliveries = enriched.get("deliveries") or []
+    if deliveries:
+        ids = [d["id"] for d in deliveries if d.get("id")]
+        delivered_at_by_id: dict = {}
+        async for r in db.distributor_deliveries.find(
             {"id": {"$in": ids}, "tenant_id": tenant_id},
-            {"_id": 0}
-        ).to_list(len(ids))
-        by_id = {r["id"]: r for r in rows}
-        account_ids = list({r.get("account_id") for r in rows if r.get("account_id")})
-        accounts_by_id = {}
-        if account_ids:
-            async for a in db.accounts.find(
-                {"id": {"$in": account_ids}, "tenant_id": tenant_id},
-                {"_id": 0, "id": 1, "account_name": 1, "billing_address": 1, "delivery_address": 1,
-                 "contact_number": 1, "delivery_contact_phone": 1}
-            ):
-                accounts_by_id[a["id"]] = a
+            {"_id": 0, "id": 1, "delivered_at": 1}
+        ):
+            delivered_at_by_id[r["id"]] = r.get("delivered_at")
+        for d in deliveries:
+            d["delivered_at"] = delivered_at_by_id.get(d.get("id"))
+    return enriched
 
-        def _addr_from(src):
-            if not isinstance(src, dict):
-                return None
-            line1 = src.get("address_line1") or src.get("address_line_1") or ""
-            line2 = src.get("address_line2") or src.get("address_line_2") or ""
-            city = src.get("city") or ""
-            state = src.get("state") or ""
-            pincode = src.get("pincode") or src.get("zip") or ""
-            return {
-                "address_line1": line1 or None,
-                "address_line2": line2 or None,
-                "city": city or None,
-                "state": state or None,
-                "pincode": pincode or None,
-                "lat": src.get("lat") or src.get("latitude"),
-                "lng": src.get("lng") or src.get("longitude"),
-                "formatted": ", ".join([p for p in (line1, line2, city, state, pincode) if p]) or None,
-            }
 
-        for did in ids:
-            r = by_id.get(did)
-            if not r:
-                continue
-            acct = accounts_by_id.get(r.get("account_id")) or {}
-            dlv_addr = r.get("delivery_address")
-            addr = _addr_from(dlv_addr) if isinstance(dlv_addr, dict) else None
-            if not addr or not addr.get("formatted"):
-                addr = _addr_from(acct.get("delivery_address")) or _addr_from(acct.get("billing_address"))
-            phone = (r.get("contact_phone") or r.get("delivery_contact_phone")
-                     or acct.get("delivery_contact_phone") or acct.get("contact_number"))
-            deliveries.append({
-                "id": r.get("id"),
-                "delivery_number": r.get("delivery_number"),
-                "status": r.get("status"),
-                "customer_name": r.get("account_name") or r.get("customer_name") or acct.get("account_name"),
-                "delivery_address": addr or {},
-                "contact_phone": phone,
-                "delivered_at": r.get("delivered_at"),
-            })
-    schedule["deliveries"] = deliveries
-    return schedule
 
 
 @router.get("/schedules/{schedule_id}")
