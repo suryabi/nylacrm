@@ -1934,6 +1934,12 @@ export default function DistributorDetail() {
     const statusConfig = {
       draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
       confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
+      delivery_assigned: { label: 'Delivery Assigned', color: 'bg-indigo-100 text-indigo-800' },
+      delivery_scheduled: { label: 'Delivery Scheduled', color: 'bg-violet-100 text-violet-800' },
+      on_the_way: { label: 'On the Way', color: 'bg-amber-100 text-amber-800' },
+      complete: { label: 'Complete', color: 'bg-green-100 text-green-800' },
+      // Legacy statuses (older rows before the new flow):
+      scheduled: { label: 'Scheduled', color: 'bg-violet-100 text-violet-800' },
       in_transit: { label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
       delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
       returned: { label: 'Returned', color: 'bg-orange-100 text-orange-800' },
@@ -3460,7 +3466,7 @@ export default function DistributorDetail() {
                     >
                       Billing handled by third-party distributor — no Zoho invoice generated.
                     </div>
-                  ) : (selectedDelivery.status === 'delivered' || selectedDelivery.status === 'confirmed' || selectedDelivery.status === 'scheduled') && (
+                  ) : (['delivered', 'complete', 'confirmed', 'scheduled', 'delivery_assigned', 'delivery_scheduled', 'on_the_way'].includes(selectedDelivery.status)) && (
                     selectedDelivery.zoho_invoice_url ? (
                       <>
                         <Button

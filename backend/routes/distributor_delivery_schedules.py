@@ -729,7 +729,7 @@ async def attach_deliveries(
     missing = set(new_ids) - found_ids
     if missing:
         raise HTTPException(status_code=400, detail=f"Unknown / cross-distributor delivery ids: {sorted(missing)}")
-    bad_status = [r["id"] for r in rows if r.get("status") not in ("confirmed", "scheduled")]
+    bad_status = [r["id"] for r in rows if r.get("status") not in ("confirmed", "scheduled", "delivery_assigned")]
     if bad_status:
         raise HTTPException(status_code=400, detail=f"Only confirmed deliveries can be attached. Invalid: {bad_status}")
 
@@ -749,14 +749,25 @@ async def attach_deliveries(
 
     current = list(existing.get("delivery_ids") or [])
     merged = current + [d for d in new_ids if d not in current]
+    newly_added = [d for d in new_ids if d not in current]
+    now_iso = datetime.now(timezone.utc).isoformat()
 
-    # If the schedule is already approved, immediately mark the new deliveries as
-    # `scheduled` (mirrors the `approve` step's side effect).
-    if existing.get("status") == "approved":
+    # Status flow side-effects for newly attached deliveries:
+    #   - If schedule is already APPROVED → bump straight to `delivery_scheduled`.
+    #   - Otherwise (draft/confirmed schedule) → mark as `delivery_assigned` so
+    #     the stock-out screen surfaces "attached to schedule" state.
+    if newly_added:
+        target_status = "delivery_scheduled" if existing.get("status") == "approved" else "delivery_assigned"
         await db.distributor_deliveries.update_many(
-            {"tenant_id": tenant_id, "id": {"$in": [d for d in new_ids if d not in current]}, "status": "confirmed"},
-            {"$set": {"status": "scheduled", "updated_at": datetime.now(timezone.utc).isoformat()}}
+            {"tenant_id": tenant_id, "id": {"$in": newly_added}, "status": "confirmed"},
+            {"$set": {"status": target_status, "updated_at": now_iso}}
         )
+        # If schedule is approved, also lift any deliveries that were only `delivery_assigned`
+        if existing.get("status") == "approved":
+            await db.distributor_deliveries.update_many(
+                {"tenant_id": tenant_id, "id": {"$in": newly_added}, "status": "delivery_assigned"},
+                {"$set": {"status": "delivery_scheduled", "updated_at": now_iso}}
+            )
 
     await db.distributor_delivery_schedules.update_one(
         {"id": schedule_id, "tenant_id": tenant_id},
@@ -784,18 +795,23 @@ async def detach_delivery(
         raise HTTPException(status_code=400, detail=f"{existing.get('status').title()} schedules cannot be edited")
 
     ids = [d for d in (existing.get("delivery_ids") or []) if d != delivery_id]
+    now_iso = datetime.now(timezone.utc).isoformat()
     await db.distributor_delivery_schedules.update_one(
         {"id": schedule_id, "tenant_id": tenant_id},
-        {"$set": {"delivery_ids": ids, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": {"delivery_ids": ids, "updated_at": now_iso}}
     )
 
-    # If schedule was approved and the delivery was already in `scheduled` state,
-    # revert it back to `confirmed` so it can be re-attached to another schedule.
-    if existing.get("status") == "approved":
-        await db.distributor_deliveries.update_one(
-            {"tenant_id": tenant_id, "id": delivery_id, "status": "scheduled"},
-            {"$set": {"status": "confirmed", "updated_at": datetime.now(timezone.utc).isoformat()}}
-        )
+    # Revert the detached delivery's status back to `confirmed` so it can be
+    # re-attached elsewhere. We accept any of the intermediate states the
+    # schedule could have advanced it to.
+    await db.distributor_deliveries.update_one(
+        {
+            "tenant_id": tenant_id,
+            "id": delivery_id,
+            "status": {"$in": ["delivery_assigned", "delivery_scheduled", "scheduled"]},
+        },
+        {"$set": {"status": "confirmed", "updated_at": now_iso}}
+    )
 
     s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
     return await _enrich_schedule(s, tenant_id)
@@ -904,10 +920,15 @@ async def approve_schedule(schedule_id: str, current_user: dict = Depends(get_cu
             "updated_at": now,
         }}
     )
-    # Move underlying deliveries: confirmed → scheduled
+    # Move underlying deliveries to `delivery_scheduled`. We accept legacy
+    # `confirmed`/`scheduled` rows AND the new `delivery_assigned` state.
     await db.distributor_deliveries.update_many(
-        {"tenant_id": tenant_id, "id": {"$in": existing["delivery_ids"]}, "status": "confirmed"},
-        {"$set": {"status": "scheduled", "updated_at": now}}
+        {
+            "tenant_id": tenant_id,
+            "id": {"$in": existing["delivery_ids"]},
+            "status": {"$in": ["confirmed", "delivery_assigned", "scheduled"]},
+        },
+        {"$set": {"status": "delivery_scheduled", "updated_at": now}}
     )
     s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
     return await _enrich_schedule(s, tenant_id)
@@ -930,10 +951,15 @@ async def cancel_schedule(schedule_id: str, current_user: dict = Depends(get_cur
         {"id": schedule_id, "tenant_id": tenant_id},
         {"$set": {"status": "cancelled", "cancelled_at": now, "updated_at": now}}
     )
-    # Revert any `scheduled` underlying deliveries back to `confirmed`
+    # Revert any non-terminal underlying deliveries back to `confirmed` so they
+    # can be re-attached elsewhere.
     if existing.get("delivery_ids"):
         await db.distributor_deliveries.update_many(
-            {"tenant_id": tenant_id, "id": {"$in": existing["delivery_ids"]}, "status": "scheduled"},
+            {
+                "tenant_id": tenant_id,
+                "id": {"$in": existing["delivery_ids"]},
+                "status": {"$in": ["scheduled", "delivery_scheduled", "delivery_assigned", "on_the_way"]},
+            },
             {"$set": {"status": "confirmed", "updated_at": now}}
         )
     s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})

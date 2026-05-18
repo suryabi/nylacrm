@@ -105,7 +105,7 @@ async def compute_available_stock_at_distributor(tenant_id: str, distributor_id:
     # 2. STOCK OUT: deliveries to customers
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
         "id",
-        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed"]}}
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed", "complete"]}}
     )
     delivery_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},

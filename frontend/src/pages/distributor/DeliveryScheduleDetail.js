@@ -81,6 +81,9 @@ export default function DeliveryScheduleDetail() {
   const [approveOpen, setApproveOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
 
+  // Live map collapse — keep collapsed by default; user expands on demand.
+  const [mapExpanded, setMapExpanded] = useState(false);
+
   // Optimize-route preview state
   const [optimizeOpen, setOptimizeOpen] = useState(false);
   const [optimizeData, setOptimizeData] = useState(null);
@@ -512,11 +515,31 @@ export default function DeliveryScheduleDetail() {
       )}
 
       {/* Live driver map — only meaningful once a driver is assigned + schedule
-          is past the planning stage. We render it for approved/in_progress/completed. */}
+          is past the planning stage. Collapsed by default to keep the schedule
+          detail compact; user expands when they need to see the live route. */}
       {schedule.driver_id && ['approved', 'in_progress', 'completed'].includes(schedule.status) && (
-        <div className="mb-4">
-          <LiveDriverMap scheduleId={schedule.id} />
-        </div>
+        <Card className="mb-4 overflow-hidden" data-testid="live-map-card">
+          <button
+            type="button"
+            onClick={() => setMapExpanded(v => !v)}
+            className="w-full flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors"
+            data-testid="live-map-toggle"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+              <MapPin className="h-4 w-4 text-slate-600" />
+              Live driver map
+              <span className="text-xs text-slate-400 font-normal">
+                {mapExpanded ? 'Tap to hide' : 'Tap to show'}
+              </span>
+            </div>
+            {mapExpanded ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+          </button>
+          {mapExpanded && (
+            <div className="border-t">
+              <LiveDriverMap scheduleId={schedule.id} />
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Delivery progress — segmented bar + status pills. Shown once the
@@ -835,7 +858,7 @@ export default function DeliveryScheduleDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Approve this schedule?</AlertDialogTitle>
             <AlertDialogDescription>
-              Approving locks the schedule and moves the {deliveries.length} underlying stock-out{deliveries.length === 1 ? '' : 's'} from <b>Confirmed</b> to <b>Scheduled</b>. Your name and the current time will be recorded on the driver PDF. This cannot be edited afterwards — only cancelled.
+              Approving locks the schedule and moves the {deliveries.length} underlying stock-out{deliveries.length === 1 ? '' : 's'} from <b>Delivery Assigned</b> to <b>Delivery Scheduled</b>. Your name and the current time will be recorded on the driver PDF. This cannot be edited afterwards — only cancelled.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -915,13 +938,15 @@ export default function DeliveryScheduleDetail() {
  */
 function ScheduleProgress({ schedule, deliveries }) {
   const total = deliveries.length;
-  const delivered = deliveries.filter(d => d.status === 'delivered').length;
+  const isComplete = (s) => s === 'delivered' || s === 'complete';
+  const delivered = deliveries.filter(d => isComplete(d.status)).length;
+  const onTheWay = deliveries.filter(d => d.status === 'on_the_way').length;
   const nonDelivered = total - delivered;
   const isLive = schedule.status === 'in_progress';
   const isDone = schedule.status === 'completed';
 
-  // In-transit = 1 (first pending) while live; 0 otherwise.
-  const inTransit = isLive && nonDelivered > 0 ? 1 : 0;
+  // In-transit count = explicit `on_the_way` rows; fall back to "1 if live" for legacy data.
+  const inTransit = onTheWay > 0 ? onTheWay : (isLive && nonDelivered > 0 ? 1 : 0);
   const pending = isDone ? 0 : Math.max(0, nonDelivered - inTransit);
   const skipped = isDone ? nonDelivered : 0;
 
@@ -977,10 +1002,17 @@ function ScheduleProgress({ schedule, deliveries }) {
  */
 function StopStatusPill({ stopIdx, stop, deliveries, scheduleStatus }) {
   if (!['approved', 'in_progress', 'completed'].includes(scheduleStatus)) return null;
-  if (stop.status === 'delivered') {
+  if (stop.status === 'delivered' || stop.status === 'complete') {
     return (
       <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]" data-testid={`stop-status-${stop.id}`}>
         Delivered
+      </Badge>
+    );
+  }
+  if (stop.status === 'on_the_way') {
+    return (
+      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 text-[10px]" data-testid={`stop-status-${stop.id}`}>
+        On the way
       </Badge>
     );
   }
@@ -993,7 +1025,7 @@ function StopStatusPill({ stopIdx, stop, deliveries, scheduleStatus }) {
   }
   if (scheduleStatus === 'in_progress') {
     // First non-delivered stop = in-transit; rest = pending.
-    const firstPendingIdx = deliveries.findIndex(x => x.status !== 'delivered');
+    const firstPendingIdx = deliveries.findIndex(x => x.status !== 'delivered' && x.status !== 'complete');
     if (stopIdx === firstPendingIdx) {
       return (
         <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 text-[10px]" data-testid={`stop-status-${stop.id}`}>

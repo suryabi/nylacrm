@@ -141,7 +141,7 @@ async def list_driver_schedules(
         s["delivery_count"] = len(delv_ids)
         if delv_ids:
             done = await db.distributor_deliveries.count_documents({
-                "tenant_id": tenant_id, "id": {"$in": delv_ids}, "status": "delivered"
+                "tenant_id": tenant_id, "id": {"$in": delv_ids}, "status": {"$in": ["delivered", "complete"]}
             })
             s["completed_count"] = done
         else:
@@ -211,6 +211,18 @@ async def start_schedule(schedule_id: str, current_user: dict = Depends(get_curr
             "updated_at": now,
         }}
     )
+    # Bump all attached deliveries (not yet delivered) into `on_the_way` so the
+    # stock-out screen and distributor dashboard reflect the live state.
+    delv_ids = s.get("delivery_ids") or []
+    if delv_ids:
+        await db.distributor_deliveries.update_many(
+            {
+                "tenant_id": tenant_id,
+                "id": {"$in": delv_ids},
+                "status": {"$in": ["delivery_scheduled", "scheduled", "delivery_assigned", "confirmed"]},
+            },
+            {"$set": {"status": "on_the_way", "updated_at": now}}
+        )
     updated = await db.distributor_delivery_schedules.find_one(
         {"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0}
     )
@@ -275,14 +287,14 @@ async def complete_stop(
     )
     if not delv:
         raise HTTPException(status_code=404, detail="Delivery not found")
-    if delv.get("status") == "delivered":
+    if delv.get("status") in ("delivered", "complete"):
         return {"already_delivered": True, "delivery_id": delivery_id}
 
     now = datetime.now(timezone.utc).isoformat()
     await db.distributor_deliveries.update_one(
         {"id": delivery_id, "tenant_id": tenant_id},
         {"$set": {
-            "status": "delivered",
+            "status": "complete",
             "delivered_at": now,
             "delivered_by": driver_id,
             "delivery_notes": payload.notes,
@@ -295,7 +307,7 @@ async def complete_stop(
     # If every stop on this schedule is delivered, auto-complete the schedule.
     all_ids = s.get("delivery_ids") or []
     pending = await db.distributor_deliveries.count_documents({
-        "tenant_id": tenant_id, "id": {"$in": all_ids}, "status": {"$ne": "delivered"}
+        "tenant_id": tenant_id, "id": {"$in": all_ids}, "status": {"$nin": ["delivered", "complete"]}
     })
     auto_completed = False
     if pending == 0:

@@ -341,7 +341,7 @@ export function DriverScheduleDetail() {
 
   const pill = STATUS_PILL[schedule.status] || { label: schedule.status, cls: 'bg-slate-100 text-slate-700' };
   const totalStops = schedule.deliveries?.length || 0;
-  const doneStops = (schedule.deliveries || []).filter(d => d.status === 'delivered').length;
+  const doneStops = (schedule.deliveries || []).filter(d => d.status === 'delivered' || d.status === 'complete').length;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32" data-testid="driver-schedule-detail">
@@ -398,7 +398,7 @@ export function DriverScheduleDetail() {
 
         <div className="space-y-3">
           {(schedule.deliveries || []).map((d, idx) => {
-            const delivered = d.status === 'delivered';
+            const delivered = d.status === 'delivered' || d.status === 'complete';
             const addr = d.delivery_address || {};
             const mapsQ = encodeURIComponent(addr.formatted || [addr.address_line1, addr.city, addr.state, addr.pincode].filter(Boolean).join(', '));
             return (

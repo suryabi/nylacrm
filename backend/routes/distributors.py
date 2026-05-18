@@ -3425,6 +3425,11 @@ async def get_distributor_stock(
 DELIVERY_STATUSES = {
     "draft": "Draft - Not yet confirmed",
     "confirmed": "Confirmed - Ready for delivery",
+    "delivery_assigned": "Delivery Assigned - Attached to a schedule",
+    "delivery_scheduled": "Delivery Scheduled - Schedule approved",
+    "on_the_way": "On the Way - Driver started the run",
+    "complete": "Complete - Delivered to customer",
+    # Legacy values kept for backward compatibility (older rows):
     "scheduled": "Scheduled - On a confirmed delivery schedule",
     "in_transit": "In Transit - On the way",
     "delivered": "Delivered - Completed",
@@ -3614,7 +3619,7 @@ async def get_deliveries_summary(
     # Count by status
     draft = await db.distributor_deliveries.count_documents({**query, "status": "draft"})
     confirmed = await db.distributor_deliveries.count_documents({**query, "status": "confirmed"})
-    delivered = await db.distributor_deliveries.count_documents({**query, "status": "delivered"})
+    delivered = await db.distributor_deliveries.count_documents({**query, "status": {"$in": ["delivered", "complete"]}})
     cancelled = await db.distributor_deliveries.count_documents({**query, "status": "cancelled"})
     
     # Calculate totals
@@ -4343,7 +4348,7 @@ async def retry_delivery_zoho_push(
     )
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
-    if delivery.get('status') not in ('confirmed', 'scheduled', 'delivered'):
+    if delivery.get('status') not in ('confirmed', 'scheduled', 'delivered', 'complete', 'delivery_assigned', 'delivery_scheduled', 'on_the_way'):
         raise HTTPException(status_code=400, detail="Delivery must be confirmed before pushing to Zoho")
 
     from services.zoho_service import sync_delivery_to_zoho, ZohoPushSkippedError
@@ -4449,14 +4454,14 @@ async def complete_delivery(
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
     
-    if delivery.get('status') not in ['draft', 'confirmed', 'scheduled', 'in_transit']:
+    if delivery.get('status') not in ['draft', 'confirmed', 'scheduled', 'in_transit', 'delivery_assigned', 'delivery_scheduled', 'on_the_way']:
         raise HTTPException(status_code=400, detail="Delivery cannot be completed in current status")
     
     now = datetime.now(timezone.utc).isoformat()
     actual_date = delivery_date or now[:10]
     
     update_data = {
-        "status": "delivered",
+        "status": "complete",
         "delivery_date": actual_date,
         "delivered_at": now,
         "delivered_by": current_user.get('id'),
@@ -4493,7 +4498,7 @@ async def complete_delivery(
     
     logger.info(f"Delivery {delivery['delivery_number']} completed by {current_user['email']}")
     
-    return {"message": f"Delivery {delivery['delivery_number']} completed", "status": "delivered"}
+    return {"message": f"Delivery {delivery['delivery_number']} completed", "status": "complete"}
 
 
 @router.delete("/{distributor_id}/deliveries/{delivery_id}")
@@ -5096,7 +5101,7 @@ async def get_unsettled_deliveries(
     query = {
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "id": {"$nin": settled_delivery_ids}
     }
     
@@ -5180,7 +5185,7 @@ async def get_settlement_preview(
     deliveries = await db.distributor_deliveries.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "id": {"$nin": settled_delivery_ids},
         "delivery_date": {"$gte": start_date, "$lt": end_date}
     }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
@@ -5279,7 +5284,7 @@ async def create_settlement(
     deliveries = await db.distributor_deliveries.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "delivery_date": {"$gte": data.period_start, "$lte": data.period_end},
         "id": {"$nin": settled_delivery_ids}
     }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
@@ -5454,7 +5459,7 @@ async def generate_monthly_settlements(
     query = {
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "id": {"$nin": settled_delivery_ids},
         "delivery_date": {"$gte": start_date, "$lt": end_date}
     }
@@ -6427,7 +6432,7 @@ async def calculate_reconciliation(
     deliveries = await db.distributor_deliveries.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "delivery_date": {"$gte": data.period_start, "$lte": data.period_end}
     }).to_list(1000)
     
@@ -7100,10 +7105,10 @@ async def get_stock_dashboard(
                 factory_wh_by_location[wh_id] = {"warehouse_name": fws.get("warehouse_name", ""), "skus": []}
             factory_wh_by_location[wh_id]["skus"].append({"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": qty})
     
-    # === 2. STOCK OUT: Deliveries to customers (delivered/completed) ===
+    # === 2. STOCK OUT: Deliveries to customers (delivered/completed/complete) ===
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
         "id",
-        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed"]}}
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed", "complete"]}}
     )
     delivery_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
@@ -7127,7 +7132,7 @@ async def get_stock_dashboard(
         {
             "tenant_id": tenant_id,
             "distributor_id": distributor_id,
-            "status": {"$in": ["delivered", "completed"]},
+            "status": {"$in": ["delivered", "completed", "complete"]},
             "delivery_date": {"$gte": twelve_weeks_ago}
         },
         {"_id": 0, "id": 1, "delivery_date": 1}
@@ -7395,7 +7400,7 @@ async def get_billing_summary(
     unreconciled_count = await db.distributor_deliveries.count_documents({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "id": {"$nin": reconciled_delivery_ids}
     })
     
