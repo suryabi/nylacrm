@@ -1903,6 +1903,11 @@ class SKUModel(BaseModel):
     category: str  # e.g., "Jar", "Bottle", "Premium", "Sparkling", "White Label"
     unit: str  # e.g., "20L", "600ml", "1L x 12"
     description: Optional[str] = None
+    # When True, accounts can/must set a per-row MRP for this SKU on the
+    # Account Detail page; activation will then enforce that MRP > 0. When
+    # False (default), the MRP field is hidden in account SKU pricing and
+    # activation does not check MRP for rows referencing this SKU.
+    allow_custom_mrp: bool = False
     is_active: bool = True
     sort_order: int = 0  # For custom ordering in dropdowns
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -1915,6 +1920,7 @@ class SKUCreate(BaseModel):
     category: str
     unit: str
     description: Optional[str] = None
+    allow_custom_mrp: bool = False
     is_active: bool = True
     sort_order: int = 0
     packaging_config: Optional[dict] = None  # {production: [{id,name,units,is_default}], stock_in: [...], stock_out: [...]}
@@ -1926,6 +1932,7 @@ class SKUUpdate(BaseModel):
     category: Optional[str] = None
     unit: Optional[str] = None
     description: Optional[str] = None
+    allow_custom_mrp: Optional[bool] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
     packaging_config: Optional[dict] = None
@@ -1984,6 +1991,7 @@ async def get_master_skus(
             'category': sku.get('category'),
             'unit': sku.get('unit'),
             'description': sku.get('description'),
+            'allow_custom_mrp': bool(sku.get('allow_custom_mrp', False)),
             'is_active': sku.get('is_active', True),
             'sort_order': sku.get('sort_order', 0),
             'packaging_config': sku.get('packaging_config'),
@@ -2027,6 +2035,7 @@ async def create_sku(
         'category': sku.category,
         'unit': sku.unit,
         'description': sku.description,
+        'allow_custom_mrp': bool(doc.get('allow_custom_mrp', False)),
         'is_active': sku.is_active,
         'sort_order': sku.sort_order,
         'packaging_config': doc.get('packaging_config'),
@@ -2084,6 +2093,7 @@ async def update_sku(
         'category': updated.get('category'),
         'unit': updated.get('unit'),
         'description': updated.get('description'),
+        'allow_custom_mrp': bool(updated.get('allow_custom_mrp', False)),
         'is_active': updated.get('is_active', True),
         'sort_order': updated.get('sort_order', 0),
         'packaging_config': updated.get('packaging_config'),

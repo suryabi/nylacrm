@@ -60,6 +60,7 @@ export default function SKUManagement() {
     category: '',
     unit: '',
     description: '',
+    allow_custom_mrp: false,
     is_active: true,
     sort_order: 0,
     packaging_config: { production: [], stock_in: [], stock_out: [] },
@@ -118,6 +119,7 @@ export default function SKUManagement() {
     setEditingSku(null);
     setFormData({
       sku_name: '', external_sku_id: '', category: '', unit: '', description: '',
+      allow_custom_mrp: false,
       is_active: true, sort_order: skus.length + 1,
       packaging_config: { production: [], stock_in: [], stock_out: [] },
       cogs_components_values: {},
@@ -133,6 +135,7 @@ export default function SKUManagement() {
       category: sku.category || '',
       unit: sku.unit || '',
       description: sku.description || '',
+      allow_custom_mrp: !!sku.allow_custom_mrp,
       is_active: sku.is_active !== false,
       sort_order: sku.sort_order || 0,
       packaging_config: sku.packaging_config || { production: [], stock_in: [], stock_out: [] },
@@ -650,6 +653,24 @@ export default function SKUManagement() {
                   />
                   <span className="text-sm">{formData.is_active ? 'Active' : 'Inactive'}</span>
                 </div>
+              </div>
+            </div>
+
+            {/* Allow per-account MRP customisation */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 flex items-start gap-3">
+              <Switch
+                checked={formData.allow_custom_mrp}
+                onCheckedChange={(checked) => setFormData({ ...formData, allow_custom_mrp: checked })}
+                data-testid="sku-allow-custom-mrp-toggle"
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <Label className="text-sm font-medium cursor-pointer" onClick={() => setFormData({ ...formData, allow_custom_mrp: !formData.allow_custom_mrp })}>
+                  Allow custom MRP per account
+                </Label>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  When on, each account using this SKU must enter an MRP under Account Detail → SKU Pricing before it can be activated. When off, the MRP column is hidden and activation is not blocked.
+                </p>
               </div>
             </div>
           </div>

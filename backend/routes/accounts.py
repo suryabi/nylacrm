@@ -987,16 +987,30 @@ async def get_activation_status(
     da = account.get('delivery_address') or {}
     sku_pricing = account.get('sku_pricing') or []
 
-    # Auto-validate that every SKU pricing row has its own MRP > 0.
-    # `sku_prices_correct` collapses BOTH "at least one pricing row" AND
-    # "MRP exists on every row".
-    def _row_has_mrp(p: dict) -> bool:
+    # Build sku_name → allow_custom_mrp map so we can skip MRP validation for
+    # SKUs that don't have the feature toggled on.
+    allow_mrp_by_name: dict = {}
+    if sku_pricing:
+        async for ms in tdb.master_skus.find(
+            {}, {'_id': 0, 'sku_name': 1, 'sku': 1, 'name': 1, 'allow_custom_mrp': 1}
+        ):
+            flag = bool(ms.get('allow_custom_mrp', False))
+            for k in ('sku_name', 'sku', 'name'):
+                v = ms.get(k)
+                if v:
+                    allow_mrp_by_name[str(v).strip().lower()] = flag
+
+    def _row_passes_mrp(p: dict) -> bool:
+        key = str(p.get('sku') or p.get('sku_name') or '').strip().lower()
+        # Rows whose SKU doesn't allow custom MRP always pass.
+        if not allow_mrp_by_name.get(key, False):
+            return True
         try:
             return p.get('mrp') is not None and float(p['mrp']) > 0
         except (TypeError, ValueError):
             return False
 
-    sku_pricing_complete = bool(sku_pricing) and all(_row_has_mrp(p) for p in sku_pricing)
+    sku_pricing_complete = bool(sku_pricing) and all(_row_passes_mrp(p) for p in sku_pricing)
 
     return {
         'is_active': account.get('status') == 'active',
@@ -1079,12 +1093,26 @@ async def activate_account(
     if account.get('payment_terms_days') is None:
         failures.append('Payment terms are not set. Choose Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting.')
 
-    # Every SKU pricing row must have an MRP > 0. MRP is per-account because the
-    # printed invoice MRP can differ between customers / channels.
+    # Every SKU pricing row whose MASTER SKU has `allow_custom_mrp=True` must
+    # have an MRP > 0 on the row. Rows referencing SKUs without the flag are
+    # exempt — MRP is hidden in the UI for them anyway.
     if sku_pricing:
+        # Build sku_name → allow_custom_mrp map from the master.
+        allow_mrp_by_name: dict = {}
+        async for ms in tdb.master_skus.find(
+            {}, {'_id': 0, 'sku_name': 1, 'sku': 1, 'name': 1, 'allow_custom_mrp': 1}
+        ):
+            flag = bool(ms.get('allow_custom_mrp', False))
+            for k in ('sku_name', 'sku', 'name'):
+                v = ms.get(k)
+                if v:
+                    allow_mrp_by_name[str(v).strip().lower()] = flag
         missing_mrp: list = []
         for p in sku_pricing:
             label = p.get('sku') or p.get('sku_name') or p.get('sku_id') or '—'
+            key = str(label).strip().lower()
+            if not allow_mrp_by_name.get(key, False):
+                continue  # MRP not required for this SKU
             try:
                 mrp_val = p.get('mrp')
                 if mrp_val is None or float(mrp_val) <= 0:

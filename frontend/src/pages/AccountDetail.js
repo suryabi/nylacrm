@@ -1002,6 +1002,17 @@ ${googleMapsLink}`;
     }]);
   };
 
+  // Helper: does the master SKU for a given pricing row allow custom MRP?
+  // Used to conditionally show/enforce the MRP input cell.
+  const skuAllowsCustomMrp = (skuName) => {
+    if (!skuName) return false;
+    const ms = masterSkus.find(
+      m => (m.sku_name || m.sku || '').toLowerCase() === String(skuName).toLowerCase()
+    );
+    return !!(ms && ms.allow_custom_mrp);
+  };
+  const anyRowAllowsCustomMrp = skuPricing.some(r => skuAllowsCustomMrp(r.sku));
+
   const handleRemoveSKU = (index) => {
     setSkuPricing(skuPricing.filter((_, i) => i !== index));
   };
@@ -1836,7 +1847,9 @@ ${googleMapsLink}`;
                     <tr>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium">SKU</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Price/Unit (₹)</th>
-                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap" title="Maximum Retail Price printed on the invoice for this customer.">MRP (₹) *</th>
+                      {anyRowAllowsCustomMrp && (
+                        <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap" title="Maximum Retail Price printed on the invoice for this customer. Required only for SKUs that allow custom MRP.">MRP (₹) *</th>
+                      )}
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Bottle Credit (₹)</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active From</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active To</th>
@@ -1889,26 +1902,32 @@ ${googleMapsLink}`;
                             <span>₹{item.price_per_unit?.toLocaleString()}</span>
                           )}
                         </td>
-                        <td className="px-3 py-2">
-                          {isEditing ? (
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={item.mrp ?? ''}
-                              onChange={(e) => handleSKUChange(index, 'mrp', e.target.value)}
-                              placeholder="Required"
-                              className={`w-24 ${(item.mrp == null || item.mrp === '') ? 'border-amber-400 ring-1 ring-amber-200' : ''}`}
-                              data-testid={`sku-mrp-${index}`}
-                            />
-                          ) : (
-                            item.mrp != null && item.mrp !== '' ? (
-                              <span>₹{Number(item.mrp).toLocaleString()}</span>
+                        {anyRowAllowsCustomMrp && (
+                          <td className="px-3 py-2">
+                            {skuAllowsCustomMrp(item.sku) ? (
+                              isEditing ? (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={item.mrp ?? ''}
+                                  onChange={(e) => handleSKUChange(index, 'mrp', e.target.value)}
+                                  placeholder="Required"
+                                  className={`w-24 ${(item.mrp == null || item.mrp === '') ? 'border-amber-400 ring-1 ring-amber-200' : ''}`}
+                                  data-testid={`sku-mrp-${index}`}
+                                />
+                              ) : (
+                                item.mrp != null && item.mrp !== '' ? (
+                                  <span>₹{Number(item.mrp).toLocaleString()}</span>
+                                ) : (
+                                  <span className="text-xs text-amber-700" title="Required for activation">⚠ Not set</span>
+                                )
+                              )
                             ) : (
-                              <span className="text-xs text-amber-700" title="Required for activation">⚠ Not set</span>
-                            )
-                          )}
-                        </td>
+                              <span className="text-xs text-slate-300">—</span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-3 py-2">
                           {isEditing ? (
                             <Input
@@ -3195,7 +3214,7 @@ ${googleMapsLink}`;
             {[
               { key: 'gst_updated', label: 'GST is updated', helper: 'GSTIN must be present on the account (auto-validated).' },
               { key: 'delivery_address_updated', label: 'Delivery address is updated', helper: 'Line 1, city, state and PIN required (auto-validated).' },
-              { key: 'sku_prices_correct', label: 'SKU Pricing and MRP pricing is correct', helper: 'At least one row in SKU Pricing AND MRP is set on every row (auto-validated).' },
+              { key: 'sku_prices_correct', label: 'SKU Pricing and MRP pricing is correct', helper: 'At least one row in SKU Pricing AND MRP is set on rows whose SKU has "Allow custom MRP" turned on in SKU Management (auto-validated).' },
               { key: 'delivery_contact_updated', label: 'Delivery contact details are updated', helper: 'Contact name AND phone required (auto-validated).' },
               { key: 'payment_terms_set', label: 'Payment terms are set', helper: 'Pick Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting (auto-validated).' },
               { key: 'logo_uploaded', label: 'Account logo is uploaded', helper: 'Upload the customer\u2019s logo under Account Logo (auto-validated).' },
