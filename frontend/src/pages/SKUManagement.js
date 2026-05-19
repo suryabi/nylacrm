@@ -60,6 +60,7 @@ export default function SKUManagement() {
     category: '',
     unit: '',
     description: '',
+    mrp: '',
     is_active: true,
     sort_order: 0,
     packaging_config: { production: [], stock_in: [], stock_out: [] },
@@ -118,6 +119,7 @@ export default function SKUManagement() {
     setEditingSku(null);
     setFormData({
       sku_name: '', external_sku_id: '', category: '', unit: '', description: '',
+      mrp: '',
       is_active: true, sort_order: skus.length + 1,
       packaging_config: { production: [], stock_in: [], stock_out: [] },
       cogs_components_values: {},
@@ -133,6 +135,7 @@ export default function SKUManagement() {
       category: sku.category || '',
       unit: sku.unit || '',
       description: sku.description || '',
+      mrp: sku.mrp ?? '',
       is_active: sku.is_active !== false,
       sort_order: sku.sort_order || 0,
       packaging_config: sku.packaging_config || { production: [], stock_in: [], stock_out: [] },
@@ -165,6 +168,19 @@ export default function SKUManagement() {
         if (!isNaN(num)) cleanedCogs[k] = num;
       });
       const payload = { ...formData, cogs_components_values: cleanedCogs };
+
+      // Normalise MRP — accept blank ("not set") OR a positive number.
+      if (formData.mrp === '' || formData.mrp === null || formData.mrp === undefined) {
+        payload.mrp = null;
+      } else {
+        const mrpNum = parseFloat(formData.mrp);
+        if (Number.isNaN(mrpNum) || mrpNum < 0) {
+          toast.error('MRP must be a positive number, or leave it blank.');
+          setSaving(false);
+          return;
+        }
+        payload.mrp = mrpNum;
+      }
 
       if (editingSku) {
         await skusAPI.update(editingSku.id, payload);
@@ -378,6 +394,16 @@ export default function SKUManagement() {
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         <span>Unit: {sku.unit}</span>
+                        {sku.mrp != null && sku.mrp !== '' && (
+                          <span className="text-emerald-700 font-medium" data-testid={`sku-mrp-${sku.id}`}>
+                            MRP ₹{sku.mrp}
+                          </span>
+                        )}
+                        {(sku.mrp == null || sku.mrp === '') && sku.is_active !== false && (
+                          <span className="text-amber-700 text-xs" title="Accounts that use this SKU cannot be activated until MRP is set">
+                            ⚠ MRP not set
+                          </span>
+                        )}
                         {sku.packaging_config && (() => {
                           const prod = (sku.packaging_config.production || []).find(p => p.is_default);
                           return prod ? <span>Prod: {prod.packaging_type_name} ({prod.units_per_package})</span> : null;
@@ -516,6 +542,26 @@ export default function SKUManagement() {
                 placeholder="Optional description"
                 data-testid="sku-description-input"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mrp" className="flex items-center gap-2">
+                MRP (₹)
+                <span className="text-[10px] font-normal text-slate-400 uppercase tracking-wider">Optional</span>
+              </Label>
+              <Input
+                id="mrp"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.mrp}
+                onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
+                placeholder="e.g., 80"
+                data-testid="sku-mrp-input"
+              />
+              <p className="text-[11px] text-slate-500">
+                Maximum Retail Price printed on the customer invoice. Optional here, but mandatory before an account that uses this SKU can be activated.
+              </p>
             </div>
 
             {/* Packaging Configuration — 3 contexts */}

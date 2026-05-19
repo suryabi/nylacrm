@@ -3173,7 +3173,7 @@ ${googleMapsLink}`;
             {[
               { key: 'gst_updated', label: 'GST is updated', helper: 'GSTIN must be present on the account (auto-validated).' },
               { key: 'delivery_address_updated', label: 'Delivery address is updated', helper: 'Line 1, city, state and PIN required (auto-validated).' },
-              { key: 'sku_prices_correct', label: 'SKU prices are correct', helper: 'At least one row in SKU Pricing (auto-validated).' },
+              { key: 'sku_prices_correct', label: 'SKU Pricing and MRP pricing is correct', helper: 'At least one row in SKU Pricing AND every referenced SKU has MRP set in SKU Management (auto-validated).' },
               { key: 'delivery_contact_updated', label: 'Delivery contact details are updated', helper: 'Contact name AND phone required (auto-validated).' },
               { key: 'payment_terms_set', label: 'Payment terms are set', helper: 'Pick Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting (auto-validated).' },
               { key: 'logo_uploaded', label: 'Account logo is uploaded', helper: 'Upload the customer\u2019s logo under Account Logo (auto-validated).' },

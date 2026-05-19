@@ -979,6 +979,37 @@ async def get_activation_status(
 
     da = account.get('delivery_address') or {}
     sku_pricing = account.get('sku_pricing') or []
+
+    # Auto-validate that every SKU referenced by this account has an MRP set
+    # on the master record. `sku_prices_correct` collapses BOTH "at least one
+    # pricing row" AND "MRP exists on every referenced SKU".
+    sku_pricing_complete = False
+    if sku_pricing:
+        master_by_id: dict = {}
+        master_by_name: dict = {}
+        async for ms in tdb.master_skus.find({}, {'_id': 0, 'id': 1, 'sku_name': 1, 'sku': 1, 'name': 1, 'mrp': 1}):
+            sid = ms.get('id')
+            if sid:
+                master_by_id[sid] = ms
+            for k in ('sku_name', 'sku', 'name'):
+                v = ms.get(k)
+                if v:
+                    master_by_name[str(v).strip().lower()] = ms
+
+        def _row_has_mrp(p: dict) -> bool:
+            ms = master_by_id.get(p.get('sku_id')) if p.get('sku_id') else None
+            if not ms:
+                key = (p.get('sku') or p.get('sku_name') or '').strip().lower()
+                ms = master_by_name.get(key)
+            if not ms:
+                return False
+            try:
+                return ms.get('mrp') is not None and float(ms['mrp']) > 0
+            except (TypeError, ValueError):
+                return False
+
+        sku_pricing_complete = all(_row_has_mrp(p) for p in sku_pricing)
+
     return {
         'is_active': account.get('status') == 'active',
         'checks': {
@@ -986,7 +1017,10 @@ async def get_activation_status(
             'delivery_address_updated': bool(
                 da.get('address_line1') and da.get('city') and da.get('state') and da.get('pincode')
             ),
-            'sku_prices_correct': len(sku_pricing) > 0,
+            # True only when there's at least one row AND every referenced SKU
+            # has MRP set on the master record. Renamed in the UI to "SKU
+            # Pricing and MRP pricing is correct".
+            'sku_prices_correct': sku_pricing_complete,
             'delivery_contact_updated': bool(
                 account.get('delivery_contact_name') and account.get('delivery_contact_phone')
             ),
@@ -1056,6 +1090,46 @@ async def activate_account(
         failures.append('Account logo is missing. Upload it under Account Logo.')
     if account.get('payment_terms_days') is None:
         failures.append('Payment terms are not set. Choose Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting.')
+
+    # Every SKU referenced by this account must have an MRP set on the master
+    # SKU. MRP is optional in SKU Management, but mandatory for accounts that
+    # invoice (otherwise MRP doesn't appear on the customer invoice).
+    if sku_pricing:
+        # Build a sku_id → master record map so we can look up MRP regardless
+        # of whether the pricing row stores `sku_id` or just the name.
+        master_by_id: dict = {}
+        master_by_name: dict = {}
+        async for ms in tdb.master_skus.find({}, {'_id': 0, 'id': 1, 'sku_name': 1, 'sku': 1, 'name': 1, 'mrp': 1}):
+            sid = ms.get('id')
+            if sid:
+                master_by_id[sid] = ms
+            for k in ('sku_name', 'sku', 'name'):
+                v = ms.get(k)
+                if v:
+                    master_by_name[str(v).strip().lower()] = ms
+        missing_mrp: list = []
+        for p in sku_pricing:
+            ms = master_by_id.get(p.get('sku_id')) if p.get('sku_id') else None
+            if not ms:
+                key = (p.get('sku') or p.get('sku_name') or '').strip().lower()
+                ms = master_by_name.get(key)
+            label = p.get('sku') or p.get('sku_name') or p.get('sku_id') or '—'
+            if not ms:
+                missing_mrp.append(f"{label} (SKU not found in master)")
+                continue
+            mrp_val = ms.get('mrp')
+            try:
+                if mrp_val is None or float(mrp_val) <= 0:
+                    missing_mrp.append(label)
+            except (TypeError, ValueError):
+                missing_mrp.append(label)
+        if missing_mrp:
+            failures.append(
+                'MRP is missing on the master record for: '
+                + ', '.join(sorted(set(missing_mrp)))
+                + '. Open SKU Management and set MRP for each.'
+            )
+
     if failures:
         raise HTTPException(status_code=400, detail=' '.join(failures))
 
