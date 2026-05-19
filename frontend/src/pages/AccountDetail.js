@@ -995,6 +995,7 @@ ${googleMapsLink}`;
     setSkuPricing([...skuPricing, {
       sku: '',
       price_per_unit: 0,
+      mrp: '',
       return_bottle_credit: 0,
       active_from: new Date().toISOString().slice(0, 10),
       active_to: '',
@@ -1835,6 +1836,7 @@ ${googleMapsLink}`;
                     <tr>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium">SKU</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Price/Unit (₹)</th>
+                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap" title="Maximum Retail Price printed on the invoice for this customer.">MRP (₹) *</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Bottle Credit (₹)</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active From</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active To</th>
@@ -1885,6 +1887,26 @@ ${googleMapsLink}`;
                             />
                           ) : (
                             <span>₹{item.price_per_unit?.toLocaleString()}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.mrp ?? ''}
+                              onChange={(e) => handleSKUChange(index, 'mrp', e.target.value)}
+                              placeholder="Required"
+                              className={`w-24 ${(item.mrp == null || item.mrp === '') ? 'border-amber-400 ring-1 ring-amber-200' : ''}`}
+                              data-testid={`sku-mrp-${index}`}
+                            />
+                          ) : (
+                            item.mrp != null && item.mrp !== '' ? (
+                              <span>₹{Number(item.mrp).toLocaleString()}</span>
+                            ) : (
+                              <span className="text-xs text-amber-700" title="Required for activation">⚠ Not set</span>
+                            )
                           )}
                         </td>
                         <td className="px-3 py-2">
@@ -3173,7 +3195,7 @@ ${googleMapsLink}`;
             {[
               { key: 'gst_updated', label: 'GST is updated', helper: 'GSTIN must be present on the account (auto-validated).' },
               { key: 'delivery_address_updated', label: 'Delivery address is updated', helper: 'Line 1, city, state and PIN required (auto-validated).' },
-              { key: 'sku_prices_correct', label: 'SKU Pricing and MRP pricing is correct', helper: 'At least one row in SKU Pricing AND every referenced SKU has MRP set in SKU Management (auto-validated).' },
+              { key: 'sku_prices_correct', label: 'SKU Pricing and MRP pricing is correct', helper: 'At least one row in SKU Pricing AND MRP is set on every row (auto-validated).' },
               { key: 'delivery_contact_updated', label: 'Delivery contact details are updated', helper: 'Contact name AND phone required (auto-validated).' },
               { key: 'payment_terms_set', label: 'Payment terms are set', helper: 'Pick Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting (auto-validated).' },
               { key: 'logo_uploaded', label: 'Account logo is uploaded', helper: 'Upload the customer\u2019s logo under Account Logo (auto-validated).' },

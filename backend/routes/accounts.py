@@ -37,6 +37,10 @@ class AccountSKUPricing(BaseModel):
     sku: str
     price_per_unit: float = 0.0
     return_bottle_credit: float = 0.0
+    # MRP printed on the invoice for this account. Optional on the model
+    # (older rows don't have it) but **required** for every row before an
+    # account can be activated.
+    mrp: Optional[float] = None
     # Optional validity window. When set we only consider this row "active"
     # if `active_from <= today <= active_to`. Either bound may be omitted to
     # mean "no lower / upper bound" respectively. Plain ISO date strings
@@ -185,7 +189,9 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     
     # Map SKU pricing from lead's proposed pricing.
     # Default each row's validity window to "active from today, no end date" so
-    # the converted account is immediately quotable. The user can edit later.
+    # the converted account is immediately quotable. MRP is intentionally NOT
+    # carried over — it's an account-level concept (per-customer / per-channel)
+    # and must be set by the user under Account Detail before activation.
     today_iso = datetime.now(timezone.utc).date().isoformat()
     sku_pricing = []
     if lead.get('proposed_sku_pricing'):
@@ -194,6 +200,7 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
                 'sku': sku_item.get('sku', ''),
                 'price_per_unit': sku_item.get('proposed_price', sku_item.get('price_per_unit', 0)),
                 'return_bottle_credit': sku_item.get('bottle_return_credit', sku_item.get('return_bottle_credit', 0)),
+                'mrp': None,
                 'active_from': sku_item.get('active_from') or today_iso,
                 'active_to': sku_item.get('active_to') or None,
             })
@@ -980,35 +987,16 @@ async def get_activation_status(
     da = account.get('delivery_address') or {}
     sku_pricing = account.get('sku_pricing') or []
 
-    # Auto-validate that every SKU referenced by this account has an MRP set
-    # on the master record. `sku_prices_correct` collapses BOTH "at least one
-    # pricing row" AND "MRP exists on every referenced SKU".
-    sku_pricing_complete = False
-    if sku_pricing:
-        master_by_id: dict = {}
-        master_by_name: dict = {}
-        async for ms in tdb.master_skus.find({}, {'_id': 0, 'id': 1, 'sku_name': 1, 'sku': 1, 'name': 1, 'mrp': 1}):
-            sid = ms.get('id')
-            if sid:
-                master_by_id[sid] = ms
-            for k in ('sku_name', 'sku', 'name'):
-                v = ms.get(k)
-                if v:
-                    master_by_name[str(v).strip().lower()] = ms
+    # Auto-validate that every SKU pricing row has its own MRP > 0.
+    # `sku_prices_correct` collapses BOTH "at least one pricing row" AND
+    # "MRP exists on every row".
+    def _row_has_mrp(p: dict) -> bool:
+        try:
+            return p.get('mrp') is not None and float(p['mrp']) > 0
+        except (TypeError, ValueError):
+            return False
 
-        def _row_has_mrp(p: dict) -> bool:
-            ms = master_by_id.get(p.get('sku_id')) if p.get('sku_id') else None
-            if not ms:
-                key = (p.get('sku') or p.get('sku_name') or '').strip().lower()
-                ms = master_by_name.get(key)
-            if not ms:
-                return False
-            try:
-                return ms.get('mrp') is not None and float(ms['mrp']) > 0
-            except (TypeError, ValueError):
-                return False
-
-        sku_pricing_complete = all(_row_has_mrp(p) for p in sku_pricing)
+    sku_pricing_complete = bool(sku_pricing) and all(_row_has_mrp(p) for p in sku_pricing)
 
     return {
         'is_active': account.get('status') == 'active',
@@ -1017,9 +1005,9 @@ async def get_activation_status(
             'delivery_address_updated': bool(
                 da.get('address_line1') and da.get('city') and da.get('state') and da.get('pincode')
             ),
-            # True only when there's at least one row AND every referenced SKU
-            # has MRP set on the master record. Renamed in the UI to "SKU
-            # Pricing and MRP pricing is correct".
+            # True only when there's at least one row AND every row has its
+            # own MRP. Renamed in the UI to "SKU Pricing and MRP pricing is
+            # correct".
             'sku_prices_correct': sku_pricing_complete,
             'delivery_contact_updated': bool(
                 account.get('delivery_contact_name') and account.get('delivery_contact_phone')
@@ -1091,43 +1079,23 @@ async def activate_account(
     if account.get('payment_terms_days') is None:
         failures.append('Payment terms are not set. Choose Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting.')
 
-    # Every SKU referenced by this account must have an MRP set on the master
-    # SKU. MRP is optional in SKU Management, but mandatory for accounts that
-    # invoice (otherwise MRP doesn't appear on the customer invoice).
+    # Every SKU pricing row must have an MRP > 0. MRP is per-account because the
+    # printed invoice MRP can differ between customers / channels.
     if sku_pricing:
-        # Build a sku_id → master record map so we can look up MRP regardless
-        # of whether the pricing row stores `sku_id` or just the name.
-        master_by_id: dict = {}
-        master_by_name: dict = {}
-        async for ms in tdb.master_skus.find({}, {'_id': 0, 'id': 1, 'sku_name': 1, 'sku': 1, 'name': 1, 'mrp': 1}):
-            sid = ms.get('id')
-            if sid:
-                master_by_id[sid] = ms
-            for k in ('sku_name', 'sku', 'name'):
-                v = ms.get(k)
-                if v:
-                    master_by_name[str(v).strip().lower()] = ms
         missing_mrp: list = []
         for p in sku_pricing:
-            ms = master_by_id.get(p.get('sku_id')) if p.get('sku_id') else None
-            if not ms:
-                key = (p.get('sku') or p.get('sku_name') or '').strip().lower()
-                ms = master_by_name.get(key)
             label = p.get('sku') or p.get('sku_name') or p.get('sku_id') or '—'
-            if not ms:
-                missing_mrp.append(f"{label} (SKU not found in master)")
-                continue
-            mrp_val = ms.get('mrp')
             try:
+                mrp_val = p.get('mrp')
                 if mrp_val is None or float(mrp_val) <= 0:
                     missing_mrp.append(label)
             except (TypeError, ValueError):
                 missing_mrp.append(label)
         if missing_mrp:
             failures.append(
-                'MRP is missing on the master record for: '
+                'MRP is missing on the SKU Pricing row for: '
                 + ', '.join(sorted(set(missing_mrp)))
-                + '. Open SKU Management and set MRP for each.'
+                + '. Add MRP next to each SKU Pricing row under the Account Detail page.'
             )
 
     if failures:

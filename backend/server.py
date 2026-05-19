@@ -1903,9 +1903,6 @@ class SKUModel(BaseModel):
     category: str  # e.g., "Jar", "Bottle", "Premium", "Sparkling", "White Label"
     unit: str  # e.g., "20L", "600ml", "1L x 12"
     description: Optional[str] = None
-    mrp: Optional[float] = None  # Maximum Retail Price (₹). Optional on the master,
-                                  # but required on every SKU referenced by an account's
-                                  # SKU pricing before that account can be activated.
     is_active: bool = True
     sort_order: int = 0  # For custom ordering in dropdowns
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -1918,7 +1915,6 @@ class SKUCreate(BaseModel):
     category: str
     unit: str
     description: Optional[str] = None
-    mrp: Optional[float] = None  # Maximum Retail Price — optional
     is_active: bool = True
     sort_order: int = 0
     packaging_config: Optional[dict] = None  # {production: [{id,name,units,is_default}], stock_in: [...], stock_out: [...]}
@@ -1930,7 +1926,6 @@ class SKUUpdate(BaseModel):
     category: Optional[str] = None
     unit: Optional[str] = None
     description: Optional[str] = None
-    mrp: Optional[float] = None  # Maximum Retail Price; pass null to clear, omit to leave unchanged
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
     packaging_config: Optional[dict] = None
@@ -1989,7 +1984,6 @@ async def get_master_skus(
             'category': sku.get('category'),
             'unit': sku.get('unit'),
             'description': sku.get('description'),
-            'mrp': sku.get('mrp'),
             'is_active': sku.get('is_active', True),
             'sort_order': sku.get('sort_order', 0),
             'packaging_config': sku.get('packaging_config'),
@@ -2033,7 +2027,6 @@ async def create_sku(
         'category': sku.category,
         'unit': sku.unit,
         'description': sku.description,
-        'mrp': doc.get('mrp'),
         'is_active': sku.is_active,
         'sort_order': sku.sort_order,
         'packaging_config': doc.get('packaging_config'),
@@ -2091,7 +2084,6 @@ async def update_sku(
         'category': updated.get('category'),
         'unit': updated.get('unit'),
         'description': updated.get('description'),
-        'mrp': updated.get('mrp'),
         'is_active': updated.get('is_active', True),
         'sort_order': updated.get('sort_order', 0),
         'packaging_config': updated.get('packaging_config'),
