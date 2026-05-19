@@ -265,6 +265,9 @@ export default function AccountDetail() {
   // Stored on account.payment_terms_days (int) and pushed to Zoho on every invoice.
   const [paymentTermsDays, setPaymentTermsDays] = useState('');
   const [savingPaymentTerms, setSavingPaymentTerms] = useState(false);
+
+  // Fullscreen preview for the read-only logo thumbnail.
+  const [logoPreviewOpen, setLogoPreviewOpen] = useState(false);
   
   // Delivery Address state
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -1609,13 +1612,19 @@ ${googleMapsLink}`;
                 {account.logo_url && (
                   <div className="md:col-span-2 pt-4 border-t">
                     <p className="text-sm text-muted-foreground mb-2">Account Logo</p>
-                    <div className="w-24 h-24 border rounded-lg overflow-hidden bg-gray-50">
-                      <img 
+                    <button
+                      type="button"
+                      onClick={() => setLogoPreviewOpen(true)}
+                      className="w-24 h-24 border rounded-lg overflow-hidden bg-gray-50 cursor-zoom-in hover:border-blue-400 hover:shadow-md transition-all"
+                      data-testid="account-logo-thumbnail"
+                      title="Click to preview"
+                    >
+                      <img
                         src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`}
                         alt="Account logo"
                         className="w-full h-full object-contain"
                       />
-                    </div>
+                    </button>
                     {account.logo_width_mm && account.logo_height_mm && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Dimensions: {account.logo_width_mm}mm x {account.logo_height_mm}mm
@@ -3291,6 +3300,25 @@ ${googleMapsLink}`;
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Account logo fullscreen preview — opened from the read-only logo
+          thumbnail. View only (no download), mirroring Files & Documents. */}
+      <Dialog open={logoPreviewOpen} onOpenChange={setLogoPreviewOpen}>
+        <DialogContent className="max-w-3xl" data-testid="account-logo-preview-dialog">
+          <DialogHeader>
+            <DialogTitle>Account Logo</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center items-center bg-slate-50 rounded-lg p-4 min-h-[260px]">
+            {account?.logo_url && (
+              <img
+                src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`}
+                alt="Account logo"
+                className="max-h-[60vh] max-w-full object-contain"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

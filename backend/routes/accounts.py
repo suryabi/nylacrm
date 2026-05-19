@@ -1026,7 +1026,7 @@ async def get_activation_status(
             'delivery_contact_updated': bool(
                 account.get('delivery_contact_name') and account.get('delivery_contact_phone')
             ),
-            'logo_uploaded': bool((account.get('logo') or '').strip()),
+            'logo_uploaded': bool((account.get('logo_url') or '').strip()) or bool((account.get('logo') or '').strip()),
             # Net 0 is a legitimate term ("Due on Receipt") so we accept 0 as set —
             # we only consider it missing when the field is None.
             'payment_terms_set': account.get('payment_terms_days') is not None,
@@ -1088,7 +1088,7 @@ async def activate_account(
     sku_pricing = account.get('sku_pricing') or []
     if not sku_pricing:
         failures.append('No SKU pricing configured. Add agreed prices under SKU Pricing.')
-    if not (account.get('logo') or '').strip():
+    if not (account.get('logo_url') or '').strip() and not (account.get('logo') or '').strip():
         failures.append('Account logo is missing. Upload it under Account Logo.')
     if account.get('payment_terms_days') is None:
         failures.append('Payment terms are not set. Choose Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting.')

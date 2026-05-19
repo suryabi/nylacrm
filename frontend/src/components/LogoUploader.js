@@ -62,6 +62,8 @@ export default function LogoUploader({ entityType = 'accounts', entityId, curren
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Fullscreen preview for the current logo — opened by tapping/clicking the thumbnail.
+  const [previewOpen, setPreviewOpen] = useState(false);
   
   // Dimension controls (in mm)
   const [widthMm, setWidthMm] = useState(35);
@@ -72,14 +74,27 @@ export default function LogoUploader({ entityType = 'accounts', entityId, curren
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
+  // Accepted image formats for account logo uploads. The MIME-type check
+  // catches files re-named with a misleading extension.
+  const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const ACCEPTED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
+
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File size must be less than 5MB');
+      const lowerName = (file.name || '').toLowerCase();
+      const okType = ACCEPTED_IMAGE_TYPES.includes(file.type)
+        || ACCEPTED_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+      if (!okType) {
+        toast.error('Unsupported file. Please upload a JPG, JPEG, PNG or WEBP image.');
+        e.target.value = '';
         return;
       }
-      
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB');
+        e.target.value = '';
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         setImageSrc(reader.result);
@@ -180,25 +195,33 @@ export default function LogoUploader({ entityType = 'accounts', entityId, curren
       
       {/* Current logo display */}
       <div className="flex items-center gap-4">
-        <div className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => currentLogo && setPreviewOpen(true)}
+          disabled={!currentLogo}
+          title={currentLogo ? 'Click to preview' : ''}
+          className={`w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50 overflow-hidden transition-all ${currentLogo ? 'cursor-zoom-in hover:border-blue-400 hover:shadow-md' : 'cursor-default'}`}
+          data-testid="logo-thumbnail"
+        >
           {currentLogo ? (
-            <img 
-              src={currentLogo} 
-              alt="Account logo" 
+            <img
+              src={currentLogo}
+              alt="Account logo"
               className="w-full h-full object-contain"
             />
           ) : (
             <ImageIcon className="w-8 h-8 text-gray-400" />
           )}
-        </div>
+        </button>
         
         <div className="flex flex-col gap-2">
           <label className="cursor-pointer">
             <input
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
               onChange={handleFileSelect}
               className="hidden"
+              data-testid="logo-file-input"
             />
             <Button type="button" variant="outline" size="sm" asChild>
               <span>
@@ -333,6 +356,27 @@ export default function LogoUploader({ entityType = 'accounts', entityId, curren
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inline preview dialog — opens when the thumbnail is clicked. Mirrors
+          the Files & Documents preview behaviour: view-only, no download. */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-3xl" data-testid="logo-preview-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ImageIcon className="w-5 h-5" /> {label} preview
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center items-center bg-slate-50 rounded-lg p-4 min-h-[260px]">
+            {currentLogo && (
+              <img
+                src={currentLogo}
+                alt="Account logo"
+                className="max-h-[60vh] max-w-full object-contain"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
