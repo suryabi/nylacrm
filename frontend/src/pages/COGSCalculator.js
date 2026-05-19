@@ -191,10 +191,11 @@ export default function COGSCalculator() {
     (row, key) => (isLegacy(key) ? (row?.[key] ?? '') : (row?.custom_components?.[key] ?? '')),
     [isLegacy]
   );
-  const writeField = React.useCallback(
-    (index, key, val) => (isLegacy(key) ? updateField(index, key, val) : updateCustomField(index, key, val)),
-    [isLegacy] // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  // Plain function — NOT useCallback'd. `updateField`/`updateCustomField` are
+  // closures over `cogsData`, and useCallback would freeze a stale closure
+  // that resets the table to its initial empty state on the first keystroke.
+  const writeField = (index, key, val) =>
+    isLegacy(key) ? updateField(index, key, val) : updateCustomField(index, key, val);
 
   // Custom (non-legacy) active components — kept for backwards-compat with totalCOGS calc.
   const customRupeeComponents = React.useMemo(
@@ -303,76 +304,79 @@ export default function COGSCalculator() {
   };
 
   const updateField = (index, field, value) => {
-    const newData = [...cogsData];
-    newData[index] = { ...newData[index], [field]: value };
-    
-    // Calculate computed values locally in real-time
-    const row = newData[index];
-    const primary = parseFloat(row.primary_packaging_cost) || 0;
-    const secondary = parseFloat(row.secondary_packaging_cost) || 0;
-    const manufacturing = parseFloat(row.manufacturing_variable_cost) || 0;
-    const marginPercent = parseFloat(row.gross_margin) || 0;
-    const logistics = parseFloat(row.outbound_logistics_cost) || 0;
-    const distributionPercent = parseFloat(row.distribution_cost) || 0;
+    setCogsData(prev => {
+      const newData = [...prev];
+      if (!newData[index]) return prev;
+      newData[index] = { ...newData[index], [field]: value };
 
-    // Total COGS = sum of all active ₹ columns (master-driven).
-    // Outbound logistics is NOT part of COGS — added post-margin into base cost below.
-    let totalCOGS =
-      (isShown('primary_packaging_cost') ? primary : 0) +
-      (isShown('secondary_packaging_cost') ? secondary : 0) +
-      (isShown('manufacturing_variable_cost') ? manufacturing : 0);
-    customRupeeComponents.forEach((c) => {
-      const v = parseFloat(row.custom_components?.[c.key]);
-      if (!Number.isNaN(v)) totalCOGS += v;
+      // Calculate computed values locally in real-time
+      const row = newData[index];
+      const primary = parseFloat(row.primary_packaging_cost) || 0;
+      const secondary = parseFloat(row.secondary_packaging_cost) || 0;
+      const manufacturing = parseFloat(row.manufacturing_variable_cost) || 0;
+      const marginPercent = parseFloat(row.gross_margin) || 0;
+      const logistics = parseFloat(row.outbound_logistics_cost) || 0;
+      const distributionPercent = parseFloat(row.distribution_cost) || 0;
+
+      // Total COGS = sum of all active ₹ columns (master-driven).
+      // Outbound logistics is NOT part of COGS — added post-margin into base cost below.
+      let totalCOGS =
+        (isShown('primary_packaging_cost') ? primary : 0) +
+        (isShown('secondary_packaging_cost') ? secondary : 0) +
+        (isShown('manufacturing_variable_cost') ? manufacturing : 0);
+      customRupeeComponents.forEach((c) => {
+        const v = parseFloat(row.custom_components?.[c.key]);
+        if (!Number.isNaN(v)) totalCOGS += v;
+      });
+
+      // Gross Margin in rupees (0 if % column disabled)
+      const effMargin = isShown('gross_margin') ? marginPercent : 0;
+      const grossMarginRupees = totalCOGS * (effMargin / 100);
+
+      // Ex-Factory Price
+      const exFactory = totalCOGS + grossMarginRupees;
+
+      // Base Cost = Total COGS + Gross Margin (₹) + Outbound Logistics (passthrough, not part of COGS)
+      const effLogistics = isShown('outbound_logistics_cost') ? logistics : 0;
+      const baseCost = totalCOGS + grossMarginRupees + effLogistics;
+
+      // Minimum Landing Price: Min Landing = Base Cost / (1 − Distribution %)
+      const effDistribution = isShown('distribution_cost') ? distributionPercent : 0;
+      let landingPrice;
+      if (effDistribution >= 100) {
+        landingPrice = 0;
+      } else if (effDistribution > 0) {
+        landingPrice = baseCost / (1 - effDistribution / 100);
+      } else {
+        landingPrice = baseCost;
+      }
+
+      newData[index].total_cogs = totalCOGS;
+      newData[index].ex_factory_price = exFactory;
+      newData[index].minimum_landing_price = landingPrice;
+      newData[index].base_cost = baseCost;
+      return newData;
     });
-
-    // Gross Margin in rupees (0 if % column disabled)
-    const effMargin = isShown('gross_margin') ? marginPercent : 0;
-    const grossMarginRupees = totalCOGS * (effMargin / 100);
-
-    // Ex-Factory Price
-    const exFactory = totalCOGS + grossMarginRupees;
-
-    // Base Cost = Total COGS + Gross Margin (₹) + Outbound Logistics (passthrough, not part of COGS)
-    const effLogistics = isShown('outbound_logistics_cost') ? logistics : 0;
-    const baseCost = totalCOGS + grossMarginRupees + effLogistics;
-
-    // Minimum Landing Price: Min Landing = Base Cost / (1 − Distribution %)
-    const effDistribution = isShown('distribution_cost') ? distributionPercent : 0;
-    let landingPrice;
-    if (effDistribution >= 100) {
-      landingPrice = 0;
-    } else if (effDistribution > 0) {
-      landingPrice = baseCost / (1 - effDistribution / 100);
-    } else {
-      landingPrice = baseCost;
-    }
-    
-    // Update computed fields
-    newData[index].total_cogs = totalCOGS;
-    newData[index].ex_factory_price = exFactory;
-    newData[index].minimum_landing_price = landingPrice;
-    newData[index].base_cost = baseCost;
-    
-    setCogsData(newData);
     setHasChanges(true);
   };
 
   // Update a custom (non-legacy) component value — stored in row.custom_components map
   const updateCustomField = (index, key, value) => {
-    const newData = [...cogsData];
-    const row = { ...newData[index] };
-    row.custom_components = { ...(row.custom_components || {}), [key]: value };
-    newData[index] = row;
+    setCogsData(prev => {
+      const newData = [...prev];
+      if (!newData[index]) return prev;
+      const row = { ...newData[index] };
+      row.custom_components = { ...(row.custom_components || {}), [key]: value };
+      newData[index] = row;
 
-    // Trigger total recompute
-    const d = computeDerived(row);
-    newData[index].total_cogs = d.totalCOGS;
-    newData[index].ex_factory_price = d.exFactory;
-    newData[index].base_cost = d.baseCost;
-    newData[index].minimum_landing_price = d.landingPrice;
-
-    setCogsData(newData);
+      // Trigger total recompute
+      const d = computeDerived(row);
+      newData[index].total_cogs = d.totalCOGS;
+      newData[index].ex_factory_price = d.exFactory;
+      newData[index].base_cost = d.baseCost;
+      newData[index].minimum_landing_price = d.landingPrice;
+      return newData;
+    });
     setHasChanges(true);
   };
 
