@@ -206,6 +206,7 @@ async def production_dashboard(
     sku_map = {}
     total_crates_all = 0
     total_unallocated_all = 0
+    total_in_qc_crates = 0
     total_ready_all = 0
     total_transferred_all = 0
     total_rejected_all = 0
@@ -215,6 +216,17 @@ async def production_dashboard(
     for b in batches:
         batch_id_set.add(b.get("id"))
         sid = b.get("sku_id", "unknown")
+        # Crates currently in some QC stage for this batch.
+        # Bypassed batches have total_passed_final == total_bottles (already
+        # warehouse-ready), so converting that to crates and subtracting puts
+        # them at zero in-QC — which is correct.
+        b_total_crates = b.get("total_crates", 0) or 0
+        b_unallocated = b.get("unallocated_crates", 0) or 0
+        b_bpc = b.get("bottles_per_crate", 0) or 0
+        b_passed_final_bottles = b.get("total_passed_final", 0) or 0
+        b_passed_final_crates = (b_passed_final_bottles // b_bpc) if b_bpc > 0 else 0
+        b_in_qc = max(0, b_total_crates - b_unallocated - b_passed_final_crates)
+        total_in_qc_crates += b_in_qc
         if sid not in sku_map:
             sku_map[sid] = {
                 "sku_id": sid,
@@ -353,6 +365,7 @@ async def production_dashboard(
             "active_batches": active_batches,
             "total_crates": total_crates_all,
             "unallocated_crates": total_unallocated_all,
+            "in_qc_crates": total_in_qc_crates,
             "ready_for_warehouse": total_ready_all - total_transferred_all,
             "transferred_to_warehouse": total_transferred_all,
             "total_rejected": total_rejected_all,

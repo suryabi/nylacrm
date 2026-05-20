@@ -378,7 +378,13 @@ export default function ProductionDashboard() {
   // Computed KPIs
   const totalBottles = skus.reduce((acc, s) => acc + (s.total_bottles || 0), 0);
   const rejRatePct = totalBottles > 0 ? ((summary.total_rejected || 0) / totalBottles) * 100 : 0;
-  const inQc = (summary.total_crates || 0) - (summary.unallocated_crates || 0) - (summary.ready_for_warehouse || 0);
+  // Backend now computes in_qc_crates correctly (handles bypassed-QC batches
+  // where total_passed_final == total_bottles → 0 crates in QC). Fall back to
+  // the old client-side formula only if the backend hasn't shipped the field
+  // yet, so older deploys don't NaN-out.
+  const inQc = summary.in_qc_crates !== undefined
+    ? summary.in_qc_crates
+    : (summary.total_crates || 0) - (summary.unallocated_crates || 0) - (summary.ready_for_warehouse || 0);
   const topSku = breakdown.top_skus && breakdown.top_skus[0];
   const showCostBreakdown = (summary.total_rejection_cost || 0) > 0;
 
