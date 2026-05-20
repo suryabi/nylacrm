@@ -866,17 +866,19 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
   }, [batchId]);
 
   const handleTransfer = async () => {
-    const qty = parseInt(transferQty);
-    if (!qty || qty <= 0) { toast.error('Enter a valid quantity'); return; }
-    if (qty > available) { toast.error(`Only ${available} crates available`); return; }
+    const crates = parseInt(transferQty);
+    if (!crates || crates <= 0) { toast.error('Enter a valid number of crates'); return; }
+    if (crates > availableCrates) { toast.error(`Only ${availableCrates} crates available`); return; }
     if (!selectedWarehouse) { toast.error('Select a factory warehouse'); return; }
+    // Backend stores transfers in bottles. Convert crates → bottles here.
+    const bottlesPayload = crates * bottlesPerCrate;
     try {
       setSaving(true);
       const headers = getAuthHeaders();
       await axios.post(`${API_URL}/production/batches/${batchId}/transfer-to-warehouse`, {
-        warehouse_location_id: selectedWarehouse, quantity: qty, notes: transferNotes,
+        warehouse_location_id: selectedWarehouse, quantity: bottlesPayload, notes: transferNotes,
       }, { headers });
-      toast.success(`${qty} bottles transferred to warehouse`);
+      toast.success(`${crates} crate${crates === 1 ? '' : 's'} (${bottlesPayload.toLocaleString()} bottles) transferred to warehouse`);
       setTransferQty(''); setTransferNotes(''); setShowTransfer(false);
       onUpdate();
       // Refresh transfers
@@ -898,12 +900,15 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
         </div>
         <div className="flex items-center gap-3">
           <div className="text-xs text-teal-600">
-            <span className="font-medium">{available}</span> bottles ({availableCrates} crates) available
+            <span className="font-medium">{availableCrates}</span> crate{availableCrates === 1 ? '' : 's'} available
+            <span className="text-teal-500 ml-1.5">({available.toLocaleString()} bottles)</span>
             {(batch?.transferred_to_warehouse || 0) > 0 && (
-              <span className="text-teal-500 ml-2">({batch.transferred_to_warehouse} bottles transferred)</span>
+              <span className="text-teal-500 ml-2">
+                ({Math.floor((batch.transferred_to_warehouse || 0) / bottlesPerCrate)} crates transferred)
+              </span>
             )}
           </div>
-          {available > 0 && (
+          {availableCrates > 0 && (
             <button
               onClick={() => setShowTransfer(!showTransfer)}
               className="px-3 py-1.5 text-xs font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-1.5"
@@ -940,14 +945,22 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
               )}
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Bottles to Transfer * (max {available})</label>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">
+                Crates to Transfer * (max {availableCrates})
+              </label>
               <input
-                type="number" min="1" max={available} value={transferQty}
+                type="number" min="1" max={availableCrates} value={transferQty}
                 onChange={e => setTransferQty(e.target.value)}
-                placeholder={`1 - ${available}`}
+                placeholder={`1 - ${availableCrates}`}
                 className="w-full h-10 border border-slate-200 rounded-lg px-3 text-sm focus:ring-2 focus:ring-teal-500/20 focus:border-teal-400"
                 data-testid="transfer-qty-input"
               />
+              {transferQty && parseInt(transferQty) > 0 && (
+                <div className="mt-1 text-[11px] text-teal-600">
+                  = {(parseInt(transferQty) * bottlesPerCrate).toLocaleString()} bottles
+                  <span className="text-slate-400"> ({bottlesPerCrate}/crate)</span>
+                </div>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Notes</label>
