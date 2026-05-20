@@ -44,20 +44,10 @@
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
-        
-        <!-- Service Worker Registration -->
-        <script>
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                    navigator.serviceWorker.register('/sw.js')
-                        .then(function(registration) {
-                            console.log('ServiceWorker registered:', registration.scope);
-                        })
-                        .catch(function(error) {
-                            console.log('ServiceWorker registration failed:', error);
-                        });
-                });
-            }
-        </script>
+
+        <!-- Service Worker Registration removed.
+             A kill-switch sw.js is shipped at /sw.js to unregister any old SW
+             that browsers still have cached, which was serving stale JS bundles
+             across deploys. We are not registering a new SW here. -->
     </body>
 </html>
