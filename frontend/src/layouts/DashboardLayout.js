@@ -16,7 +16,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -292,6 +292,18 @@ export default function DashboardLayout({ children }) {
   const appName = branding?.app_name || 'Sales CRM';
   const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : currentContext === 'marketing' ? 'Marketing' : currentContext === 'admin' ? 'Admin' : 'Sales CRM');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Desktop / iPad: user can collapse the sidebar to gain horizontal room.
+  // Persisted so the choice survives reloads.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('sidebarCollapsed') === '1'; } catch { return false; }
+  });
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('sidebarCollapsed', next ? '1' : '0'); } catch {}
+      return next;
+    });
+  };
   const [dashboardOpen, setDashboardOpen] = useState(
     location.pathname === '/dashboard' || location.pathname === '/sales-revenue' || 
     location.pathname === '/target-sku' || location.pathname === '/target-resource' ||
@@ -420,7 +432,18 @@ export default function DashboardLayout({ children }) {
   return (
     <div className="min-h-screen flex bg-background">
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[hsl(200,35%,12%)] dark:bg-[hsl(200,40%,8%)] transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-[hsl(200,35%,12%)] dark:bg-[hsl(200,40%,8%)] transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${sidebarCollapsed ? 'lg:-translate-x-full' : 'lg:translate-x-0'}`} data-testid="dashboard-sidebar">
+        {/* Desktop collapse handle — sits at the right edge of the sidebar */}
+        <button
+          type="button"
+          onClick={toggleSidebarCollapsed}
+          title="Collapse sidebar"
+          aria-label="Collapse sidebar"
+          className="hidden lg:flex absolute -right-3 top-6 z-[60] h-7 w-7 items-center justify-center rounded-full bg-white text-slate-700 shadow-md ring-1 ring-slate-200 hover:bg-slate-50 transition-colors"
+          data-testid="sidebar-collapse-btn"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-5 border-b border-white/10">
@@ -629,7 +652,20 @@ export default function DashboardLayout({ children }) {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
+      <div className={`flex-1 flex flex-col min-w-0 transition-[margin-left] duration-200 ${sidebarCollapsed ? 'lg:ml-0' : 'lg:ml-64'}`}>
+        {/* Desktop floating "expand sidebar" handle — only when collapsed */}
+        {sidebarCollapsed && (
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+            className="hidden lg:flex fixed left-2 top-4 z-40 h-9 w-9 items-center justify-center rounded-lg bg-white text-slate-700 shadow-md ring-1 ring-slate-200 hover:bg-slate-50 transition-colors"
+            data-testid="sidebar-expand-btn"
+          >
+            <PanelLeftOpen className="h-5 w-5" />
+          </button>
+        )}
         {/* Top Bar (Mobile) */}
         <header className="bg-card border-b border-border px-4 py-3 lg:hidden sticky top-0 z-30 shadow-sm">
           <div className="flex items-center justify-between">
