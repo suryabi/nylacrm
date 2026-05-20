@@ -14,6 +14,18 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-20 — Production Batch: Edit + Cascade Force-Delete ✅ DONE
+- **Edit**: New "Edit" button on `BatchDetail` opens a dialog to update `batch_code`, `production_date`, `total_crates`, `bottles_per_crate`, `ph_value`, `notes`. Backend `PUT /api/production/batches/{id}` enforces (a) batch-code uniqueness on rename, (b) crates / bottles-per-crate are locked once the batch leaves `created` status (would break QC math), (c) `ph_value`/`notes`/`production_date`/`batch_code` editable at any status.
+- **Force Delete (CEO / System Admin)**: New rose-coloured "Force Delete" button visible on batches that are past `created`. Opens a type-`DELETE`-to-confirm dialog. Backend `DELETE /api/production/batches/{id}?force=true` cascade-deletes:
+  - `inspections` (which hold QC stage rejections + rework entries)
+  - `stage_movements` (passed-to-warehouse moves, stage-to-stage moves)
+  - `warehouse_transfers` for the batch
+  - rolls back `factory_warehouse_stock` quantities contributed by this batch (deletes row when qty hits 0)
+  - writes a `production_batch_deletions` audit row with full snapshot before dropping the parent
+- Role gating: `_require_elevated` (CEO + System Admin) blocks force-delete for everyone else with 403.
+- Verified via curl: created throwaway batch → force-deleted → 404 on subsequent GET → audit row written. Edit of `total_crates` on a `completed` batch returns 400 with friendly message.
+
+
 ### 2026-05-20 — Stock Entry feature fully removed ✅ DONE
 - Deleted `/app/backend/routes/manual_stock_entries.py` and `/app/frontend/src/components/distributor/StockEntriesTab.jsx`.
 - Removed router registration in `/app/backend/routes/__init__.py` (`manual_stock_router` import + include line gone).

@@ -84,6 +84,8 @@ class WarehouseReset(BaseModel):
     warehouse_location_id: Optional[str] = None  # if omitted: applies to ALL factory warehouses
 
 class BatchUpdate(BaseModel):
+    batch_code: Optional[str] = None
+    production_date: Optional[str] = None
     total_crates: Optional[int] = None
     bottles_per_crate: Optional[int] = None
     ph_value: Optional[float] = None
@@ -575,24 +577,62 @@ async def update_batch(batch_id: str, data: BatchUpdate, current_user: dict = De
     if not existing:
         raise HTTPException(status_code=404, detail="Batch not found")
 
+    is_created = (existing.get("status") == "created")
     updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    for field in ["total_crates", "bottles_per_crate", "ph_value", "notes", "status"]:
+
+    # Always-editable fields (no impact on QC math)
+    for field in ["ph_value", "notes", "production_date"]:
         val = getattr(data, field, None)
         if val is not None:
             updates[field] = val
 
-    # Recalculate total_bottles if crates or bottles_per_crate changed
-    new_crates = data.total_crates or existing.get("total_crates", 0)
-    new_bpc = data.bottles_per_crate or existing.get("bottles_per_crate", 0)
-    if data.total_crates is not None or data.bottles_per_crate is not None:
+    # batch_code: enforce uniqueness when changed
+    if data.batch_code is not None and data.batch_code != existing.get("batch_code"):
+        dup = await tdb.production_batches.find_one(
+            {"batch_code": data.batch_code, "tenant_id": tenant_id, "id": {"$ne": batch_id}}
+        )
+        if dup:
+            raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
+        updates["batch_code"] = data.batch_code
+
+    # Crates/bottles_per_crate only editable while batch is still "created"
+    # (after that, stage_balances + transfers are tied to the original count).
+    crates_changed = data.total_crates is not None and data.total_crates != existing.get("total_crates")
+    bpc_changed = data.bottles_per_crate is not None and data.bottles_per_crate != existing.get("bottles_per_crate")
+    if crates_changed or bpc_changed:
+        if not is_created:
+            raise HTTPException(
+                status_code=400,
+                detail="Total crates / bottles-per-crate can only be changed before QC starts.",
+            )
+        new_crates = data.total_crates if data.total_crates is not None else existing.get("total_crates", 0)
+        new_bpc = data.bottles_per_crate if data.bottles_per_crate is not None else existing.get("bottles_per_crate", 0)
+        updates["total_crates"] = new_crates
+        updates["bottles_per_crate"] = new_bpc
         updates["total_bottles"] = new_crates * new_bpc
+        updates["unallocated_crates"] = new_crates  # safe: nothing moved yet
 
     await tdb.production_batches.update_one({"id": batch_id}, {"$set": updates})
     updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
     return updated
 
 @router.delete("/batches/{batch_id}")
-async def delete_batch(batch_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_batch(
+    batch_id: str,
+    force: bool = False,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a production batch.
+
+    Default behaviour (any role): only batches in `created` status can be
+    deleted — no cascade is needed because nothing downstream exists yet.
+
+    Force mode (`?force=true`, CEO/System Admin only): cascade-deletes every
+    child record tied to this batch — inspections (which hold QC stage
+    rejections/rework data), stage movements, warehouse transfers — and
+    rolls back the factory-warehouse stock that this batch contributed.
+    A `production_batch_deletions` audit row is written for traceability.
+    """
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
 
@@ -600,12 +640,102 @@ async def delete_batch(batch_id: str, current_user: dict = Depends(get_current_u
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    # Only allow deleting batches that haven't moved to QC yet
-    if batch.get("status") not in ("created",):
-        raise HTTPException(status_code=400, detail="Cannot delete a batch that is already in QC process")
+    if not force:
+        if batch.get("status") not in ("created",):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete a batch that is already in QC process. CEO/Admin can use force-delete to cascade.",
+            )
+        await tdb.production_batches.delete_one({"id": batch_id})
+        return {"message": "Batch deleted", "cascade": False}
 
+    # ── Force cascade delete (CEO / System Admin only) ──
+    _require_elevated(current_user)
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1. Roll back factory warehouse stock contributed by this batch.
+    transfers = await tdb.warehouse_transfers.find(
+        {"tenant_id": tenant_id, "batch_id": batch_id}, {"_id": 0}
+    ).to_list(10000)
+    stock_rollback = []
+    for t in transfers:
+        wh_id = t.get("warehouse_location_id")
+        sku_id = t.get("sku_id")
+        qty = int(t.get("quantity") or 0)
+        if not wh_id or not sku_id or qty <= 0:
+            continue
+        stock_row = await tdb.factory_warehouse_stock.find_one({
+            "tenant_id": tenant_id,
+            "warehouse_location_id": wh_id,
+            "sku_id": sku_id,
+        })
+        if not stock_row:
+            continue
+        new_qty = max(0, int(stock_row.get("quantity") or 0) - qty)
+        if new_qty == 0:
+            await tdb.factory_warehouse_stock.delete_one({"id": stock_row["id"]})
+            stock_rollback.append({
+                "warehouse_location_id": wh_id, "sku_id": sku_id,
+                "previous_qty": stock_row.get("quantity"), "deleted": True,
+            })
+        else:
+            await tdb.factory_warehouse_stock.update_one(
+                {"id": stock_row["id"]},
+                {"$set": {"quantity": new_qty, "updated_at": now}},
+            )
+            stock_rollback.append({
+                "warehouse_location_id": wh_id, "sku_id": sku_id,
+                "previous_qty": stock_row.get("quantity"), "new_qty": new_qty,
+            })
+
+    # 2. Delete child collections tied to this batch.
+    transfers_res = await tdb.warehouse_transfers.delete_many(
+        {"tenant_id": tenant_id, "batch_id": batch_id}
+    )
+    inspections_res = await tdb.inspections.delete_many(
+        {"tenant_id": tenant_id, "batch_id": batch_id}
+    )
+    movements_res = await tdb.stage_movements.delete_many(
+        {"tenant_id": tenant_id, "batch_id": batch_id}
+    )
+
+    # 3. Audit row before the parent delete so we never lose the trail.
+    audit = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "batch_id": batch_id,
+        "batch_code": batch.get("batch_code"),
+        "sku_id": batch.get("sku_id"),
+        "sku_name": batch.get("sku_name"),
+        "status_at_delete": batch.get("status"),
+        "total_crates": batch.get("total_crates"),
+        "bottles_per_crate": batch.get("bottles_per_crate"),
+        "total_bottles": batch.get("total_bottles"),
+        "transfers_deleted": transfers_res.deleted_count,
+        "inspections_deleted": inspections_res.deleted_count,
+        "movements_deleted": movements_res.deleted_count,
+        "stock_rollback": stock_rollback,
+        "deleted_by": current_user.get("id"),
+        "deleted_by_name": current_user.get("name"),
+        "deleted_by_role": current_user.get("role"),
+        "deleted_at": now,
+    }
+    await tdb.production_batch_deletions.insert_one(audit)
+    audit.pop("_id", None)
+
+    # 4. Finally, drop the batch itself.
     await tdb.production_batches.delete_one({"id": batch_id})
-    return {"message": "Batch deleted"}
+
+    return {
+        "message": "Batch and all child records deleted",
+        "cascade": True,
+        "transfers_deleted": transfers_res.deleted_count,
+        "inspections_deleted": inspections_res.deleted_count,
+        "movements_deleted": movements_res.deleted_count,
+        "stock_rollback_count": len(stock_rollback),
+        "audit_id": audit["id"],
+    }
 
 
 # ──────────────────────────────────────────────
