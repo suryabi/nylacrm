@@ -459,8 +459,8 @@ export default function ProductionDashboard() {
                 />
                 <HeroTile
                   label="Warehouse Ready"
-                  value={num(summary.ready_for_warehouse)}
-                  sub="bottles awaiting transfer"
+                  value={`${num(summary.ready_for_warehouse_crates ?? 0)}c / ${num(summary.ready_for_warehouse)}bt`}
+                  sub="awaiting transfer"
                   icon={Truck}
                   accent="emerald"
                   onClick={() => navigate('/production-batches?stage=warehouse_ready')}
@@ -468,8 +468,8 @@ export default function ProductionDashboard() {
                 />
                 <HeroTile
                   label="Transferred"
-                  value={num(summary.transferred_to_warehouse)}
-                  sub="bottles to warehouse"
+                  value={`${num(summary.transferred_to_warehouse_crates ?? 0)}c / ${num(summary.transferred_to_warehouse)}bt`}
+                  sub="to warehouse"
                   icon={Factory}
                   accent="indigo"
                   onClick={() => navigate('/production-batches?stage=transferred')}

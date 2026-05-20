@@ -358,6 +358,20 @@ async def production_dashboard(
 
     skus = sorted(sku_map.values(), key=lambda s: s["total_crates"], reverse=True)
 
+    # Crate-equivalents of aggregate bottle figures, by walking each SKU and
+    # using that SKU's bottles_per_crate. This is more accurate than dividing
+    # the global bottle total by an average BPC.
+    total_ready_crates = 0
+    total_transferred_crates = 0
+    for s in skus:
+        bpc = s.get("bottles_per_crate", 0) or 0
+        if bpc <= 0:
+            continue
+        s_ready_bottles = max(0, (s.get("total_passed_final", 0) or 0) - (s.get("transferred_to_warehouse", 0) or 0))
+        s_transferred_bottles = s.get("transferred_to_warehouse", 0) or 0
+        total_ready_crates += s_ready_bottles // bpc
+        total_transferred_crates += s_transferred_bottles // bpc
+
     return {
         "summary": {
             "total_skus": len(skus),
@@ -367,7 +381,9 @@ async def production_dashboard(
             "unallocated_crates": total_unallocated_all,
             "in_qc_crates": total_in_qc_crates,
             "ready_for_warehouse": total_ready_all - total_transferred_all,
+            "ready_for_warehouse_crates": total_ready_crates,
             "transferred_to_warehouse": total_transferred_all,
+            "transferred_to_warehouse_crates": total_transferred_crates,
             "total_rejected": total_rejected_all,
             "total_rejection_cost": round(total_rejection_cost, 2),
             "rejection_events": rejection_events,
