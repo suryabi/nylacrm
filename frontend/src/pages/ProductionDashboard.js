@@ -418,117 +418,128 @@ export default function ProductionDashboard() {
         </div>
       ) : (
         <>
-          {/* ── Section 1: STOCK FLOW (4 hero tiles) ──────────────────── */}
-          <section>
-            <SectionHeading icon={Activity} title="Stock Flow" hint="Crates in motion across the factory" accent="sky" />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <HeroTile
-                label="Total Crates"
-                value={num(summary.total_crates)}
-                sub={`${num(summary.total_batches)} batches · ${num(summary.active_batches)} active`}
-                icon={Boxes}
-                accent="sky"
-                onClick={() => navigate('/production-batches')}
-                dataTestId="summary-total-crates"
-              />
-              <HeroTile
-                label="Unallocated"
-                value={num(summary.unallocated_crates)}
-                sub="crates awaiting QC"
-                icon={Boxes}
-                accent="slate"
-                onClick={() => navigate('/production-batches?stage=unallocated')}
-                dataTestId="summary-unallocated"
-              />
-              <HeroTile
-                label="In QC Stages"
-                value={num(inQc)}
-                sub="crates being inspected"
-                icon={ShieldCheck}
-                accent="amber"
-                onClick={() => navigate('/production-batches?stage=in_qc')}
-                dataTestId="summary-in-qc-stages"
-              />
-              <HeroTile
-                label="Warehouse Ready"
-                value={num(summary.ready_for_warehouse)}
-                sub={`${num(summary.transferred_to_warehouse)} bottles transferred`}
-                icon={Truck}
-                accent="emerald"
-                onClick={() => navigate('/production-batches?stage=warehouse_ready')}
-                dataTestId="summary-warehouse-ready"
-              />
-            </div>
-          </section>
-
-          {/* ── Section 2: QUALITY & COST IMPACT (4 hero tiles) ───────── */}
-          <section>
-            <SectionHeading icon={AlertTriangle} title="Quality & Cost Impact" hint="Rejections and the rupee cost they carry" accent="rose" />
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <HeroTile
-                label="Rejected Bottles"
-                value={num(summary.total_rejected)}
-                sub={`${rejRatePct.toFixed(2)}% of produced`}
-                icon={AlertTriangle}
-                accent="rose"
-                onClick={() => navigate('/rejection-report')}
-                dataTestId="summary-rejected"
-              />
-              <HeroTile
-                label="Rejection Cost"
-                value={inr(summary.total_rejection_cost)}
-                sub={`${num(summary.rejection_events)} rejection events`}
-                icon={IndianRupee}
-                accent="rose"
-                onClick={() => navigate('/rejection-report')}
-                dataTestId="summary-rejection-cost"
-              />
-              <HeroTile
-                label="Unmapped Events"
-                value={num(summary.rejection_unmapped)}
-                sub={(summary.rejection_unmapped || 0) > 0 ? 'Configure mappings →' : 'All events mapped'}
-                icon={Sparkles}
-                accent="amber"
-                onClick={() => navigate('/production/rejection-cost-config')}
-                dataTestId="summary-unmapped-events"
-              />
-              <HeroTile
-              label="Top Costly SKU"
-              value={topSku ? inr(topSku.rejection_cost) : '—'}
-              sub={topSku ? `${topSku.sku_name} · ${num(topSku.total_rejected)} bottles` : 'No rejection cost recorded'}
-              icon={Tags}
-              accent="indigo"
-              dataTestId="summary-top-costly-sku"
-            />
-            </div>
-          </section>
-
-          {/* ── Section 3: AT-A-GLANCE — secondary mini stats ─────────── */}
-          <section>
-            <SectionHeading icon={Layers} title="At a Glance" accent="slate" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
-              <MiniStat label="SKUs" value={num(summary.total_skus)} accent="indigo" dataTestId="mini-skus" />
-              <MiniStat label="Batches" value={num(summary.total_batches)} sub={`${num(summary.active_batches)} active`} accent="sky" onClick={() => navigate('/production-batches')} dataTestId="mini-batches" />
-              <MiniStat label="Total Bottles" value={num(totalBottles)} accent="slate" dataTestId="mini-total-bottles" />
-              <MiniStat label="Transferred" value={num(summary.transferred_to_warehouse)} sub="bottles" accent="violet" onClick={() => navigate('/production-batches?stage=transferred')} dataTestId="mini-transferred" />
-              <MiniStat label="Rejection Rate" value={`${rejRatePct.toFixed(2)}%`} sub="rejected / produced" accent="rose" dataTestId="mini-rejection-rate" />
-            </div>
-          </section>
-
-          {/* ── Section 4: REJECTION COST BREAKDOWN ───────────────────── */}
-          {showCostBreakdown && (
+          {/* ── Top Metrics Container — visually unified panel for KPI sections ── */}
+          <div className="rounded-3xl border border-slate-200/70 dark:border-slate-700/60 bg-gradient-to-br from-white via-slate-50/40 to-white dark:from-slate-900 dark:via-slate-900/50 dark:to-slate-900 p-4 sm:p-6 space-y-6 shadow-sm">
+            {/* ── Section 1: STOCK FLOW (5 hero tiles) ──────────────────── */}
             <section>
-              <SectionHeading icon={IndianRupee} title="Rejection Cost Breakdown" hint="Top 5 contributors per dimension" accent="rose" />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-                <RejectionBreakdown title="By Reason"  items={breakdown.by_reason} icon={AlertTriangle} accent="rose" />
-                <RejectionBreakdown title="By Stage"   items={breakdown.by_stage}  icon={Layers}        accent="amber" />
-                <RejectionBreakdown title="Top SKUs"   items={(breakdown.top_skus || []).map((s) => ({ ...s, cost: s.rejection_cost }))} icon={Tags} accent="indigo" />
+              <SectionHeading icon={Activity} title="Stock Flow" hint="Crates in motion across the factory" accent="sky" />
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                <HeroTile
+                  label="Total Crates"
+                  value={num(summary.total_crates)}
+                  sub={`${num(summary.total_batches)} batches · ${num(summary.active_batches)} active`}
+                  icon={Boxes}
+                  accent="sky"
+                  onClick={() => navigate('/production-batches')}
+                  dataTestId="summary-total-crates"
+                />
+                <HeroTile
+                  label="Unallocated"
+                  value={num(summary.unallocated_crates)}
+                  sub="crates awaiting QC"
+                  icon={Boxes}
+                  accent="slate"
+                  onClick={() => navigate('/production-batches?stage=unallocated')}
+                  dataTestId="summary-unallocated"
+                />
+                <HeroTile
+                  label="In QC Stages"
+                  value={num(inQc)}
+                  sub="crates being inspected"
+                  icon={ShieldCheck}
+                  accent="amber"
+                  onClick={() => navigate('/production-batches?stage=in_qc')}
+                  dataTestId="summary-in-qc-stages"
+                />
+                <HeroTile
+                  label="Warehouse Ready"
+                  value={num(summary.ready_for_warehouse)}
+                  sub="bottles awaiting transfer"
+                  icon={Truck}
+                  accent="emerald"
+                  onClick={() => navigate('/production-batches?stage=warehouse_ready')}
+                  dataTestId="summary-warehouse-ready"
+                />
+                <HeroTile
+                  label="Transferred"
+                  value={num(summary.transferred_to_warehouse)}
+                  sub="bottles to warehouse"
+                  icon={Factory}
+                  accent="indigo"
+                  onClick={() => navigate('/production-batches?stage=transferred')}
+                  dataTestId="summary-transferred"
+                />
               </div>
             </section>
-          )}
 
-          {/* ── Section 5: SKU PIPELINES ──────────────────────────────── */}
-          <section>
+            {/* ── Section 2: QUALITY & COST IMPACT (4 hero tiles) ───────── */}
+            <section>
+              <SectionHeading icon={AlertTriangle} title="Quality & Cost Impact" hint="Rejections and the rupee cost they carry" accent="rose" />
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <HeroTile
+                  label="Rejected Bottles"
+                  value={num(summary.total_rejected)}
+                  sub={`${rejRatePct.toFixed(2)}% of produced`}
+                  icon={AlertTriangle}
+                  accent="rose"
+                  onClick={() => navigate('/rejection-report')}
+                  dataTestId="summary-rejected"
+                />
+                <HeroTile
+                  label="Rejection Cost"
+                  value={inr(summary.total_rejection_cost)}
+                  sub={`${num(summary.rejection_events)} rejection events`}
+                  icon={IndianRupee}
+                  accent="rose"
+                  onClick={() => navigate('/rejection-report')}
+                  dataTestId="summary-rejection-cost"
+                />
+                <HeroTile
+                  label="Unmapped Events"
+                  value={num(summary.rejection_unmapped)}
+                  sub={(summary.rejection_unmapped || 0) > 0 ? 'Configure mappings →' : 'All events mapped'}
+                  icon={Sparkles}
+                  accent="amber"
+                  onClick={() => navigate('/production/rejection-cost-config')}
+                  dataTestId="summary-unmapped-events"
+                />
+                <HeroTile
+                  label="Top Costly SKU"
+                  value={topSku ? inr(topSku.rejection_cost) : '—'}
+                  sub={topSku ? `${topSku.sku_name} · ${num(topSku.total_rejected)} bottles` : 'No rejection cost recorded'}
+                  icon={Tags}
+                  accent="indigo"
+                  dataTestId="summary-top-costly-sku"
+                />
+              </div>
+            </section>
+
+            {/* ── Section 3: AT-A-GLANCE — secondary mini stats ─────────── */}
+            <section>
+              <SectionHeading icon={Layers} title="At a Glance" accent="slate" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                <MiniStat label="SKUs" value={num(summary.total_skus)} accent="indigo" dataTestId="mini-skus" />
+                <MiniStat label="Batches" value={num(summary.total_batches)} sub={`${num(summary.active_batches)} active`} accent="sky" onClick={() => navigate('/production-batches')} dataTestId="mini-batches" />
+                <MiniStat label="Total Bottles" value={num(totalBottles)} accent="slate" dataTestId="mini-total-bottles" />
+                <MiniStat label="Rejection Rate" value={`${rejRatePct.toFixed(2)}%`} sub="rejected / produced" accent="rose" dataTestId="mini-rejection-rate" />
+              </div>
+            </section>
+
+            {/* ── Section 4: REJECTION COST BREAKDOWN ───────────────────── */}
+            {showCostBreakdown && (
+              <section>
+                <SectionHeading icon={IndianRupee} title="Rejection Cost Breakdown" hint="Top 5 contributors per dimension" accent="rose" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+                  <RejectionBreakdown title="By Reason"  items={breakdown.by_reason} icon={AlertTriangle} accent="rose" />
+                  <RejectionBreakdown title="By Stage"   items={breakdown.by_stage}  icon={Layers}        accent="amber" />
+                  <RejectionBreakdown title="Top SKUs"   items={(breakdown.top_skus || []).map((s) => ({ ...s, cost: s.rejection_cost }))} icon={Tags} accent="indigo" />
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* ── Section 5: SKU PIPELINES — visually distinct from metrics above ── */}
+          <section className="rounded-3xl bg-slate-100/60 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 p-4 sm:p-6">
             <SectionHeading icon={Droplets} title="SKU Pipelines" hint={`${skus.length} ${skus.length === 1 ? 'SKU' : 'SKUs'} in the selected window`} accent="slate" />
             {skus.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center">
