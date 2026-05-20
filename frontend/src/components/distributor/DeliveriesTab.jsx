@@ -602,15 +602,27 @@ export default function DeliveriesTab({
                 <div className="space-y-2">
                   <Label>Account *</Label>
                   {selectedDeliveryAccount ? (
-                    <div className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{selectedDeliveryAccount.account_name}</p>
-                        <p className="text-sm text-muted-foreground">
+                    <div
+                      className="relative overflow-hidden flex items-center justify-between p-3 rounded-md border border-blue-200 bg-gradient-to-br from-blue-50 via-sky-50 to-white shadow-[0_1px_0_rgba(15,23,42,0.04)]"
+                      data-testid="delivery-selected-account-tile"
+                    >
+                      {/* Subtle accent rail on the left edge */}
+                      <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-blue-500 to-sky-400" aria-hidden />
+                      <div className="flex-1 min-w-0 pl-2">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900 truncate">{selectedDeliveryAccount.account_name}</p>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-blue-700 bg-blue-100 border border-blue-200 px-1.5 py-0.5 rounded">
+                            Selected
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-600">
                           {selectedDeliveryAccount.city}{selectedDeliveryAccount.state ? `, ${selectedDeliveryAccount.state}` : ''}
-                          {selectedDeliveryAccount.is_primary && ' ★ Primary'}
+                          {selectedDeliveryAccount.is_primary && (
+                            <span className="text-amber-600 ml-1">★ Primary</span>
+                          )}
                         </p>
                         {selectedDeliveryAccount.contact_name && (
-                          <p className="text-xs text-muted-foreground mt-1">
+                          <p className="text-xs text-slate-500 mt-1">
                             Contact: {selectedDeliveryAccount.contact_name}
                             {selectedDeliveryAccount.contact_number && ` • ${selectedDeliveryAccount.contact_number}`}
                           </p>
@@ -619,6 +631,7 @@ export default function DeliveriesTab({
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="text-slate-500 hover:text-slate-700"
                         onClick={() => {
                           setSelectedDeliveryAccount(null);
                           setDeliveryForm(prev => ({ ...prev, account_id: '', distributor_location_id: '' }));
