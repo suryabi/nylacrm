@@ -3146,6 +3146,40 @@ export default function DistributorDetail() {
                     <span className="ml-2 font-medium">{selectedDelivery.vehicle_number}</span>
                   </div>
                 )}
+                {(selectedDelivery.driver_name || selectedDelivery.driver_contact) && (
+                  <div className="sm:col-span-2">
+                    <span className="text-muted-foreground">Driver:</span>
+                    <span className="ml-2 font-medium">
+                      {selectedDelivery.driver_name || '—'}
+                      {selectedDelivery.driver_contact ? ` · ${selectedDelivery.driver_contact}` : ''}
+                    </span>
+                  </div>
+                )}
+                {/* Remarks captured at delivery creation time (admin) */}
+                {selectedDelivery.remarks && (
+                  <div className="sm:col-span-2" data-testid="delivery-detail-remarks">
+                    <div className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Remarks</div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm whitespace-pre-wrap">
+                      {selectedDelivery.remarks}
+                    </div>
+                  </div>
+                )}
+                {/* Delivery notes captured by the driver at completion time */}
+                {selectedDelivery.delivery_notes && (
+                  <div className="sm:col-span-2" data-testid="delivery-detail-driver-notes">
+                    <div className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5 flex items-center gap-1.5">
+                      Driver notes
+                      {selectedDelivery.delivered_at && (
+                        <span className="text-[10px] text-slate-400 font-normal normal-case">
+                          captured {new Date(selectedDelivery.delivered_at).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm whitespace-pre-wrap">
+                      {selectedDelivery.delivery_notes}
+                    </div>
+                  </div>
+                )}
                 {(selectedDelivery.total_credit_applied || 0) > 0 && (
                   <div className="sm:col-span-2 mt-1 inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-rose-50 border border-rose-200 self-start" data-testid="delivery-credit-note-applied">
                     <span className="text-[11px] font-medium uppercase tracking-wider text-rose-700">Credit Note applied</span>
