@@ -16,6 +16,28 @@ from database import db, get_tenant_db
 router = APIRouter(prefix="/production", tags=["Production QC"])
 
 # ──────────────────────────────────────────────
+# Role helpers
+# ──────────────────────────────────────────────
+
+# Only these roles can reset master factory stock or bypass QC on a production.
+ELEVATED_ROLES = {"ceo", "system admin"}
+
+
+def _is_elevated(user: dict) -> bool:
+    """True if the user is a CEO or System Admin. Matched case-insensitively
+    against `user.role` to align with seed data ('CEO', 'System Admin')."""
+    return (user.get("role") or "").strip().lower() in ELEVATED_ROLES
+
+
+def _require_elevated(user: dict):
+    if not _is_elevated(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only CEO and System Admin can perform this action.",
+        )
+
+
+# ──────────────────────────────────────────────
 # Models
 # ──────────────────────────────────────────────
 
@@ -45,6 +67,21 @@ class BatchCreate(BaseModel):
     bottles_per_crate: int
     ph_value: Optional[float] = None
     notes: Optional[str] = None
+    # When True (CEO / System Admin only), the batch skips every QC stage and
+    # is created in a `completed` state with all bottles marked warehouse-ready.
+    # The audit fields `qc_bypassed_by`/`qc_bypassed_at`/`qc_bypassed_reason`
+    # are populated for later reporting.
+    skip_qc: bool = False
+    skip_qc_reason: Optional[str] = None
+
+class WarehouseReset(BaseModel):
+    """Payload for resetting all stock at master factory warehouses."""
+    # `mode` controls what "reset" means:
+    #   "zero"   → leave the rows in place but set quantity = 0 (preserves SKU/warehouse mapping for reports)
+    #   "purge"  → delete every factory_warehouse_stock row (fresh slate; rows
+    #              reappear as new transfers happen)
+    mode: str = Field("zero", pattern="^(zero|purge)$")
+    warehouse_location_id: Optional[str] = None  # if omitted: applies to ALL factory warehouses
 
 class BatchUpdate(BaseModel):
     total_crates: Optional[int] = None
@@ -448,6 +485,13 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_curre
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
 
+    # Gate the QC-bypass fast path to CEO / System Admin.
+    if data.skip_qc and not _is_elevated(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only CEO and System Admin can skip QC when creating a production batch.",
+        )
+
     # Check if batch code already exists
     existing = await tdb.production_batches.find_one({"batch_code": data.batch_code, "tenant_id": tenant_id})
     if existing:
@@ -498,11 +542,26 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_curre
         "unallocated_crates": data.total_crates,  # crates not yet moved to any stage
         "total_rejected": 0,
         "total_passed_final": 0,
+        "qc_bypassed": False,
         "created_by": current_user.get("id"),
         "created_by_name": current_user.get("name"),
         "created_at": now,
         "updated_at": now,
     }
+
+    if data.skip_qc:
+        # Treat every bottle as warehouse-ready. Skip stage-by-stage tracking
+        # entirely. We still preserve the QC route snapshot for context.
+        batch["status"] = "completed"
+        batch["unallocated_crates"] = 0
+        batch["total_passed_final"] = total_bottles
+        batch["transferred_to_warehouse"] = 0
+        batch["qc_bypassed"] = True
+        batch["qc_bypassed_by"] = current_user.get("id")
+        batch["qc_bypassed_by_name"] = current_user.get("name")
+        batch["qc_bypassed_at"] = now
+        batch["qc_bypassed_reason"] = (data.skip_qc_reason or "").strip() or None
+
     await tdb.production_batches.insert_one(batch)
     batch.pop("_id", None)
     return batch
@@ -1715,3 +1774,94 @@ async def get_batch_warehouse_transfers(
     ).sort("transferred_at", -1).to_list(500)
 
     return {"transfers": transfers, "total": len(transfers)}
+
+
+# ──────────────────────────────────────────────
+# Master factory warehouse — RESET (CEO / System Admin only)
+# ──────────────────────────────────────────────
+
+@router.post("/factory-warehouse-stock/reset")
+async def reset_factory_warehouse_stock(
+    data: WarehouseReset,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reset stock at master factory warehouses.
+
+    Restricted to CEO and System Admin. Two modes:
+      - "zero"  → set quantity = 0 on every matching factory_warehouse_stock row
+      - "purge" → delete every matching row (clean slate)
+
+    If `warehouse_location_id` is provided the reset is scoped to that
+    warehouse; otherwise it affects ALL factory warehouses in the tenant.
+
+    Every reset writes a `warehouse_stock_resets` audit document with the
+    actor's id/name, the previous-quantity snapshot, and the timestamp.
+    """
+    _require_elevated(current_user)
+
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    query = {"tenant_id": tenant_id}
+    if data.warehouse_location_id:
+        query["warehouse_location_id"] = data.warehouse_location_id
+
+    # Snapshot the rows we're about to modify — used for audit + UI
+    # confirmation. Even with hundreds of warehouses this is small.
+    snapshot = await tdb.factory_warehouse_stock.find(query, {"_id": 0}).to_list(10000)
+
+    now = datetime.now(timezone.utc).isoformat()
+    if data.mode == "zero":
+        result = await tdb.factory_warehouse_stock.update_many(
+            query, {"$set": {"quantity": 0, "updated_at": now}}
+        )
+        affected = result.modified_count
+    else:  # purge
+        result = await tdb.factory_warehouse_stock.delete_many(query)
+        affected = result.deleted_count
+
+    audit = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "mode": data.mode,
+        "warehouse_location_id": data.warehouse_location_id,
+        "affected_rows": affected,
+        "snapshot": [
+            {
+                "warehouse_location_id": s.get("warehouse_location_id"),
+                "warehouse_name": s.get("warehouse_name"),
+                "sku_id": s.get("sku_id"),
+                "sku_name": s.get("sku_name"),
+                "quantity_before": s.get("quantity"),
+            }
+            for s in snapshot
+        ],
+        "actor_id": current_user.get("id"),
+        "actor_name": current_user.get("name"),
+        "actor_role": current_user.get("role"),
+        "performed_at": now,
+    }
+    await tdb.warehouse_stock_resets.insert_one(audit)
+    audit.pop("_id", None)
+
+    return {
+        "mode": data.mode,
+        "affected_rows": affected,
+        "performed_at": now,
+        "audit_id": audit["id"],
+    }
+
+
+@router.get("/factory-warehouse-stock/resets")
+async def list_factory_warehouse_resets(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the most recent warehouse-stock resets (audit trail)."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    rows = (
+        await tdb.warehouse_stock_resets.find({"tenant_id": tenant_id}, {"_id": 0})
+        .sort("performed_at", -1)
+        .to_list(50)
+    )
+    return {"resets": rows}

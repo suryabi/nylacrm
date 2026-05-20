@@ -6,14 +6,24 @@ import {
   RefreshCw, Package, Truck, RotateCcw, Factory, AlertTriangle,
   TrendingUp, Clock, Droplets, ChevronDown, ChevronRight, BarChart3
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
 
 const fmt = (v) => (v || 0).toLocaleString('en-IN');
 const pct = (v) => `${(v || 0).toFixed(1)}%`;
 
 export default function StockDashboardTab({ distributor, API_URL, token }) {
+  const { user } = useAuth();
+  const isElevated = ['ceo', 'system admin'].includes((user?.role || '').trim().toLowerCase());
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedSku, setExpandedSku] = useState({});
+  // Reset stock dialog state — CEO / System Admin only
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetMode, setResetMode] = useState('zero'); // 'zero' | 'purge'
+  const [resetWh, setResetWh] = useState(''); // warehouse_location_id; '' = ALL
+  const [resetBusy, setResetBusy] = useState(false);
 
   const fetchDashboard = async () => {
     if (!distributor?.id) return;
@@ -36,6 +46,39 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
   useEffect(() => { fetchDashboard(); }, [distributor?.id]);
 
   const toggleSku = (id) => setExpandedSku(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const handleResetStock = async () => {
+    setResetBusy(true);
+    try {
+      const authToken = token || localStorage.getItem('token');
+      const tenantId = localStorage.getItem('selectedTenant') || localStorage.getItem('tenant_id') || 'nyla-air-water';
+      const res = await fetch(`${API_URL}/api/production/factory-warehouse-stock/reset`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+          'X-Tenant-ID': tenantId,
+        },
+        body: JSON.stringify({
+          mode: resetMode,
+          warehouse_location_id: resetWh || null,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.detail || 'Failed to reset stock');
+      toast.success(
+        resetMode === 'purge'
+          ? `Stock rows purged (${payload.affected_rows} rows)`
+          : `Stock set to zero (${payload.affected_rows} rows)`
+      );
+      setResetOpen(false);
+      fetchDashboard();
+    } catch (e) {
+      toast.error(e.message || 'Failed to reset stock');
+    } finally {
+      setResetBusy(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -126,14 +169,29 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
       {(t.factory_warehouse_stock > 0 || (data.factory_warehouses || []).length > 0) && (
         <Card data-testid="factory-warehouse-stock-card">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Factory className="h-4 w-4 text-teal-600" />
-              Factory Warehouse Stock
-              <Badge className="bg-teal-100 text-teal-700 border-teal-200 ml-2" variant="outline">
-                {fmt(t.factory_warehouse_stock)} crates total
-              </Badge>
-            </CardTitle>
-            <CardDescription>Stock transferred from production, available for dispatch</CardDescription>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Factory className="h-4 w-4 text-teal-600" />
+                  Factory Warehouse Stock
+                  <Badge className="bg-teal-100 text-teal-700 border-teal-200 ml-2" variant="outline">
+                    {fmt(t.factory_warehouse_stock)} crates total
+                  </Badge>
+                </CardTitle>
+                <CardDescription>Stock transferred from production, available for dispatch</CardDescription>
+              </div>
+              {isElevated && (data.factory_warehouses || []).length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+                  onClick={() => { setResetMode('zero'); setResetWh(''); setResetOpen(true); }}
+                  data-testid="factory-stock-reset-btn"
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset Stock
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {(data.factory_warehouses || []).length > 0 ? (
@@ -358,6 +416,71 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Reset Factory Warehouse Stock — confirmation dialog (CEO / System Admin) */}
+      {resetOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !resetBusy && setResetOpen(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()} data-testid="factory-stock-reset-dialog">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-rose-600" />
+              <h3 className="text-base font-semibold text-slate-900">Reset factory warehouse stock</h3>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                ⚠ This is a sensitive action. The current quantities are recorded for audit, but operations relying on the live counts will be affected immediately.
+              </div>
+
+              <div>
+                <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5 block">Scope</label>
+                <select
+                  value={resetWh}
+                  onChange={e => setResetWh(e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  data-testid="factory-stock-reset-scope"
+                >
+                  <option value="">ALL factory warehouses</option>
+                  {(data.factory_warehouses || []).map(wh => (
+                    <option key={wh.warehouse_id} value={wh.warehouse_id}>
+                      {wh.warehouse_name || 'Factory Warehouse'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1.5 block">Mode</label>
+                <div className="space-y-2">
+                  <label className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer ${resetMode === 'zero' ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+                    <input type="radio" name="reset-mode" value="zero" checked={resetMode === 'zero'} onChange={() => setResetMode('zero')} className="mt-0.5" data-testid="factory-stock-reset-mode-zero" />
+                    <div>
+                      <div className="text-sm font-medium text-slate-800">Set quantities to zero</div>
+                      <div className="text-[11px] text-slate-500">Keeps SKU↔warehouse rows so reports still show every line. Recommended.</div>
+                    </div>
+                  </label>
+                  <label className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer ${resetMode === 'purge' ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+                    <input type="radio" name="reset-mode" value="purge" checked={resetMode === 'purge'} onChange={() => setResetMode('purge')} className="mt-0.5" data-testid="factory-stock-reset-mode-purge" />
+                    <div>
+                      <div className="text-sm font-medium text-slate-800">Delete all rows (purge)</div>
+                      <div className="text-[11px] text-slate-500">Removes every stock row. New rows will be created when transfers happen.</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={resetBusy} data-testid="factory-stock-reset-cancel">Cancel</Button>
+              <Button
+                onClick={handleResetStock}
+                disabled={resetBusy}
+                className="bg-rose-600 hover:bg-rose-700 text-white"
+                data-testid="factory-stock-reset-confirm"
+              >
+                {resetBusy ? (<><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Resetting…</>) : 'Confirm reset'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

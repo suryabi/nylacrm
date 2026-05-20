@@ -295,6 +295,15 @@ export default function ProductionBatches() {
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                       <span className="text-sm font-semibold text-slate-900">{batch.batch_code}</span>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${st.color}`}>{st.label}</span>
+                      {batch.qc_bypassed && (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-700 border border-rose-200"
+                          title={`QC bypassed${batch.qc_bypassed_by_name ? ' by ' + batch.qc_bypassed_by_name : ''}${batch.qc_bypassed_at ? ' at ' + batch.qc_bypassed_at : ''}${batch.qc_bypassed_reason ? ' — ' + batch.qc_bypassed_reason : ''}`}
+                          data-testid={`batch-qc-bypassed-${batch.id}`}
+                        >
+                          Bypassed QC
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 sm:gap-3 text-xs text-slate-500 flex-wrap">
                       <span className="flex items-center gap-1"><Tag size={11} /> {batch.sku_name}</span>
@@ -330,6 +339,7 @@ export default function ProductionBatches() {
       {showCreate && (
         <CreateBatchModal
           skus={skus}
+          user={user}
           onClose={() => setShowCreate(false)}
           onSuccess={() => { setShowCreate(false); fetchData(); }}
         />
@@ -338,11 +348,14 @@ export default function ProductionBatches() {
   );
 }
 
-function CreateBatchModal({ skus, onClose, onSuccess }) {
+function CreateBatchModal({ skus, user, onClose, onSuccess }) {
   const [form, setForm] = useState({
     sku_id: '', sku_name: '', batch_code: '', production_date: new Date().toISOString().split('T')[0],
     total_crates: '', bottles_per_crate: '', ph_value: '', notes: '',
+    skip_qc: false,
+    skip_qc_reason: '',
   });
+  const isElevated = ['ceo', 'system admin'].includes((user?.role || '').trim().toLowerCase());
   const [saving, setSaving] = useState(false);
   const [hasQCRoute, setHasQCRoute] = useState(null);
   const [packagingTypes, setPackagingTypes] = useState([]);
@@ -386,8 +399,10 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
         total_crates: parseInt(form.total_crates),
         bottles_per_crate: parseInt(form.bottles_per_crate),
         ph_value: form.ph_value ? parseFloat(form.ph_value) : null,
+        skip_qc: !!form.skip_qc,
+        skip_qc_reason: form.skip_qc ? (form.skip_qc_reason || '').trim() || null : null,
       }, { headers: getAuthHeaders() });
-      toast.success('Batch created successfully');
+      toast.success(form.skip_qc ? 'Batch created and marked warehouse-ready (QC bypassed)' : 'Batch created successfully');
       onSuccess();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to create batch');
@@ -471,6 +486,39 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
               </span>
             </div>
           )}
+
+          {isElevated && (
+            <div className={`rounded-lg border px-3 py-2.5 ${form.skip_qc ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.skip_qc}
+                  onChange={e => setForm(p => ({ ...p, skip_qc: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                  data-testid="batch-skip-qc-checkbox"
+                />
+                <div className="flex-1">
+                  <span className={`text-sm font-medium ${form.skip_qc ? 'text-rose-700' : 'text-slate-800'}`}>
+                    Skip QC — warehouse ready immediately
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Bypasses every QC stage. All bottles are marked warehouse-ready on creation. Your name and the timestamp will be saved on the batch as an audit trail. Available only to CEO and System Admin.
+                  </p>
+                </div>
+              </label>
+              {form.skip_qc && (
+                <input
+                  type="text"
+                  value={form.skip_qc_reason}
+                  onChange={e => setForm(p => ({ ...p, skip_qc_reason: e.target.value }))}
+                  placeholder="Reason for skipping QC (optional but recommended)"
+                  className="mt-2 w-full text-xs border border-rose-200 bg-white rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                  data-testid="batch-skip-qc-reason-input"
+                />
+              )}
+            </div>
+          )}
+
           <div>
             <label className="text-xs text-slate-500 font-medium mb-1 block">Notes</label>
             <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
@@ -480,10 +528,12 @@ function CreateBatchModal({ skus, onClose, onSuccess }) {
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100">
           <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg">Cancel</button>
           <button onClick={handleSubmit} disabled={saving}
-            className="px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50 flex items-center gap-2"
+            className={`px-5 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 flex items-center gap-2 ${
+              form.skip_qc ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
             data-testid="batch-submit-btn">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            Create Batch
+            {form.skip_qc ? 'Create & Skip QC' : 'Create Batch'}
           </button>
         </div>
       </div>

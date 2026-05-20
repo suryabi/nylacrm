@@ -207,6 +207,15 @@ export default function BatchDetail() {
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-slate-800">{batch.batch_code}</h1>
             <span className={`px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-medium ${st.color}`}>{st.label}</span>
+            {batch.qc_bypassed && (
+              <span
+                className="px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-100 text-rose-700 border border-rose-200"
+                title={`QC bypassed${batch.qc_bypassed_by_name ? ' by ' + batch.qc_bypassed_by_name : ''}${batch.qc_bypassed_at ? ' at ' + batch.qc_bypassed_at : ''}${batch.qc_bypassed_reason ? ' — ' + batch.qc_bypassed_reason : ''}`}
+                data-testid="batch-detail-qc-bypassed"
+              >
+                Bypassed QC
+              </span>
+            )}
             {phVal && (
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-bold border ${phBg} ${phColor}`} data-testid="ph-badge">
                 pH {phVal}
