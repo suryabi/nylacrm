@@ -150,7 +150,17 @@ function StageNode({ name, type, data, total, isLast, vertical }) {
 function SKUPipeline({ sku }) {
   const stages = sku.stage_order || [];
   const total = sku.total_crates || 1;
+  const bpc = sku.bottles_per_crate || 0;
   const navigate = useNavigate();
+
+  // Convert a bottle count to "Xc / Ybt" — falls back to bottles-only if
+  // bottles_per_crate is unknown.
+  const fmtBottlesAsCrates = (bottles) => {
+    const b = bottles || 0;
+    if (!bpc) return `${b}`;
+    const c = Math.floor(b / bpc);
+    return `${c}c / ${b}bt`;
+  };
 
   const navToFiltered = (stage) => {
     const params = new URLSearchParams();
@@ -213,8 +223,7 @@ function SKUPipeline({ sku }) {
             <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600">Wh. Ready</span>
           </div>
           <div className="flex justify-between items-baseline">
-            <span className="text-lg font-black tabular-nums text-teal-700">{(sku.total_passed_final || 0) - (sku.transferred_to_warehouse || 0)}</span>
-            <span className="text-[9px] text-teal-400">bottles</span>
+            <span className="text-lg font-black tabular-nums text-teal-700">{fmtBottlesAsCrates((sku.total_passed_final || 0) - (sku.transferred_to_warehouse || 0))}</span>
           </div>
           <div className="h-1.5 bg-teal-100 rounded-full overflow-hidden mt-1">
             <div className="h-full rounded-full bg-teal-500 transition-all duration-500"
@@ -231,8 +240,7 @@ function SKUPipeline({ sku }) {
             <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Transferred</span>
           </div>
           <div className="flex justify-between items-baseline">
-            <span className="text-lg font-black tabular-nums text-indigo-700">{sku.transferred_to_warehouse || 0}</span>
-            <span className="text-[9px] text-indigo-400">bottles</span>
+            <span className="text-lg font-black tabular-nums text-indigo-700">{fmtBottlesAsCrates(sku.transferred_to_warehouse || 0)}</span>
           </div>
           <div className="h-1.5 bg-indigo-100 rounded-full overflow-hidden mt-1">
             <div className="h-full rounded-full bg-indigo-500 transition-all duration-500"
@@ -264,8 +272,7 @@ function SKUPipeline({ sku }) {
             <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600">Warehouse Ready</span>
           </div>
           <div className="flex justify-between items-baseline">
-            <span className="text-lg font-black tabular-nums text-teal-700">{sku.total_passed_final}</span>
-            <span className="text-[9px] text-teal-400">crates</span>
+            <span className="text-lg font-black tabular-nums text-teal-700">{fmtBottlesAsCrates((sku.total_passed_final || 0) - (sku.transferred_to_warehouse || 0))}</span>
           </div>
         </div>
       </div>

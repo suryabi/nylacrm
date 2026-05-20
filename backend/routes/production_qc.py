@@ -221,6 +221,7 @@ async def production_dashboard(
                 "sku_name": b.get("sku_name", "Unknown"),
                 "total_crates": 0,
                 "total_bottles": 0,
+                "bottles_per_crate": b.get("bottles_per_crate") or 0,
                 "unallocated_crates": 0,
                 "total_passed_final": 0,
                 "transferred_to_warehouse": 0,
@@ -231,6 +232,8 @@ async def production_dashboard(
                 "stage_order": [],
             }
         sku = sku_map[sid]
+        if not sku.get("bottles_per_crate") and b.get("bottles_per_crate"):
+            sku["bottles_per_crate"] = b.get("bottles_per_crate")
         sku["total_crates"] += b.get("total_crates", 0)
         sku["total_bottles"] += b.get("total_bottles", 0)
         sku["unallocated_crates"] += b.get("unallocated_crates", 0)
