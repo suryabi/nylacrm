@@ -203,12 +203,38 @@ export default function DeliveriesTab({
 
   // Auto-select the warehouse location when there's only one — applies to both the
   // delivery form and the factory-return form so the user doesn't have to pick.
+  // Watches the form's distributor_location_id so it re-fires after the form is
+  // reset (e.g. when the dialog is re-opened for a new delivery).
   useEffect(() => {
     if (distributorLocations.length !== 1) return;
     const onlyLocId = distributorLocations[0].id;
-    setFactoryForm(f => f.distributor_location_id ? f : { ...f, distributor_location_id: onlyLocId });
-    setDeliveryForm(f => f.distributor_location_id ? f : { ...f, distributor_location_id: onlyLocId });
-  }, [distributorLocations]);
+    if (!factoryForm.distributor_location_id) {
+      setFactoryForm(f => ({ ...f, distributor_location_id: onlyLocId }));
+    }
+    if (!deliveryForm.distributor_location_id) {
+      setDeliveryForm(f => ({ ...f, distributor_location_id: onlyLocId }));
+    }
+  }, [distributorLocations, deliveryForm.distributor_location_id, factoryForm.distributor_location_id, setDeliveryForm, setFactoryForm]);
+
+  // Auto-select the only SKU in the account's pricing list when an item row is
+  // added. If the account has exactly one SKU on file, every blank-sku row gets
+  // its sku_id + price filled in immediately so the user doesn't have to pick.
+  useEffect(() => {
+    const accountSkus = selectedDeliveryAccount?.sku_pricing || [];
+    if (accountSkus.length !== 1) return;
+    const only = accountSkus[0];
+    // `only.id` may not exist on legacy rows — resolve against master skus by name.
+    const matched = skus.find(s => s.id === only.id)
+      || skus.find(s => (s.sku_name || s.sku) === (only.sku || only.sku_name));
+    if (!matched) return;
+    const blankItems = deliveryItems.filter(i => !i.sku_id);
+    if (blankItems.length === 0) return;
+    blankItems.forEach(i => {
+      updateDeliveryItem(i.id, 'sku_id', matched.id);
+      updateDeliveryItem(i.id, 'sku_name', matched.sku_name || matched.sku || '');
+      updateDeliveryItem(i.id, 'unit_price', parseFloat(only.price_per_unit) || 0);
+    });
+  }, [deliveryItems.length, selectedDeliveryAccount, skus]);  // eslint-disable-line react-hooks/exhaustive-deps
   
   // Auto-select first matching reason when source changes or master loads
   useEffect(() => {
