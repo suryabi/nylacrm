@@ -848,10 +848,23 @@ export default function DeliveriesTab({
                               </p>
                             </div>
                             <div className="flex-1 min-w-[100px]">
-                              <Label className="text-xs text-muted-foreground">Price/unit (₹)</Label>
-                              <Input type="number" min="0" step="0.01" className="h-10 mt-1 text-base" value={item.unit_price}
-                                onChange={(e) => updateDeliveryItem(item.id, 'unit_price', e.target.value)} />
-                              <p className="h-4"></p>
+                              <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                                Price/unit (₹)
+                                <span className="text-[10px] text-slate-400 font-normal">· locked</span>
+                              </Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                className="h-10 mt-1 text-base bg-slate-50 cursor-not-allowed"
+                                value={item.unit_price}
+                                readOnly
+                                title="Price is set on the account's SKU Pricing. Edit there to change it."
+                                data-testid={`delivery-item-price-${item.id}`}
+                              />
+                              <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+                                Set on account
+                              </p>
                             </div>
                             <div className="w-20 flex-shrink-0">
                               <Label className="text-xs text-muted-foreground">Disc %</Label>
