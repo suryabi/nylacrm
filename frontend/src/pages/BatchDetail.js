@@ -187,6 +187,7 @@ export default function BatchDetail() {
   };
 
   const openEdit = () => {
+    if (!batch) return;
     setEditForm({
       batch_code: batch.batch_code || '',
       production_date: batch.production_date || '',
@@ -491,6 +492,167 @@ export default function BatchDetail() {
         <span>Created by {batch.created_by_name}</span>
         <span>{new Date(batch.created_at).toLocaleDateString()}</span>
       </div>
+      {/* ── Edit Batch Dialog ── */}
+      {showEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" data-testid="edit-batch-dialog">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-800">Edit Batch</h3>
+              <button onClick={() => setShowEdit(false)} className="text-slate-400 hover:text-slate-600" data-testid="edit-batch-close">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Batch code</label>
+                <input
+                  type="text"
+                  value={editForm.batch_code || ''}
+                  onChange={(e) => setEditForm({ ...editForm, batch_code: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  data-testid="edit-batch-code"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Production date</label>
+                <input
+                  type="date"
+                  value={editForm.production_date || ''}
+                  onChange={(e) => setEditForm({ ...editForm, production_date: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  data-testid="edit-batch-prod-date"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Total crates
+                    {batch.status !== 'created' && <span className="ml-1 text-[10px] text-slate-400">(locked)</span>}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    disabled={batch.status !== 'created'}
+                    value={editForm.total_crates ?? 0}
+                    onChange={(e) => setEditForm({ ...editForm, total_crates: e.target.value })}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    data-testid="edit-batch-crates"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Bottles / crate
+                    {batch.status !== 'created' && <span className="ml-1 text-[10px] text-slate-400">(locked)</span>}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    disabled={batch.status !== 'created'}
+                    value={editForm.bottles_per_crate ?? 0}
+                    onChange={(e) => setEditForm({ ...editForm, bottles_per_crate: e.target.value })}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    data-testid="edit-batch-bpc"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">pH value</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={editForm.ph_value ?? ''}
+                  onChange={(e) => setEditForm({ ...editForm, ph_value: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  data-testid="edit-batch-ph"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+                <textarea
+                  rows="3"
+                  value={editForm.notes || ''}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  data-testid="edit-batch-notes"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowEdit(false)}
+                disabled={editSaving}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                data-testid="edit-batch-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEdit}
+                disabled={editSaving}
+                className="px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg disabled:opacity-60 flex items-center gap-1.5"
+                data-testid="edit-batch-save"
+              >
+                {editSaving && <Loader2 size={14} className="animate-spin" />}
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Force-Delete (cascade) Dialog ── */}
+      {showForceDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" data-testid="force-delete-dialog">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 border-2 border-rose-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-600" />
+              <h3 className="text-base font-semibold text-rose-700">Force-Delete Batch</h3>
+            </div>
+            <div className="text-sm text-slate-600 space-y-2">
+              <p>
+                This will <span className="font-semibold text-rose-700">permanently delete</span> batch{' '}
+                <span className="font-mono font-semibold">{batch.batch_code}</span> and all related data:
+              </p>
+              <ul className="text-xs text-slate-500 ml-4 list-disc space-y-0.5">
+                <li>All QC inspection records (incl. stage rejections & rework)</li>
+                <li>All stage movements / passed-to-warehouse moves</li>
+                <li>All warehouse transfers from this batch</li>
+                <li>Roll-back of factory warehouse stock contributed by this batch</li>
+              </ul>
+              <p className="text-xs text-slate-500 italic">An audit row is kept in <code>production_batch_deletions</code>.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Type <span className="font-mono text-rose-700">DELETE</span> to confirm</label>
+              <input
+                type="text"
+                autoFocus
+                value={forceConfirmText}
+                onChange={(e) => setForceConfirmText(e.target.value)}
+                className="w-full border border-rose-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-300"
+                placeholder="DELETE"
+                data-testid="force-delete-confirm-input"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowForceDelete(false)}
+                disabled={forceDeleting}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
+                data-testid="force-delete-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleForceDelete}
+                disabled={forceDeleting || forceConfirmText.trim().toUpperCase() !== 'DELETE'}
+                className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-60 flex items-center gap-1.5"
+                data-testid="force-delete-confirm-btn"
+              >
+                {forceDeleting && <Loader2 size={14} className="animate-spin" />}
+                Force-Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1371,167 +1533,6 @@ function ActivityLog({ history, showHistory, setShowHistory }) {
         </div>
       )}
 
-      {/* ── Edit Batch Dialog ── */}
-      {showEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" data-testid="edit-batch-dialog">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-800">Edit Batch</h3>
-              <button onClick={() => setShowEdit(false)} className="text-slate-400 hover:text-slate-600" data-testid="edit-batch-close">✕</button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Batch code</label>
-                <input
-                  type="text"
-                  value={editForm.batch_code}
-                  onChange={(e) => setEditForm({ ...editForm, batch_code: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                  data-testid="edit-batch-code"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Production date</label>
-                <input
-                  type="date"
-                  value={editForm.production_date}
-                  onChange={(e) => setEditForm({ ...editForm, production_date: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                  data-testid="edit-batch-prod-date"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Total crates
-                    {batch.status !== 'created' && <span className="ml-1 text-[10px] text-slate-400">(locked)</span>}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    disabled={batch.status !== 'created'}
-                    value={editForm.total_crates}
-                    onChange={(e) => setEditForm({ ...editForm, total_crates: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    data-testid="edit-batch-crates"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Bottles / crate
-                    {batch.status !== 'created' && <span className="ml-1 text-[10px] text-slate-400">(locked)</span>}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    disabled={batch.status !== 'created'}
-                    value={editForm.bottles_per_crate}
-                    onChange={(e) => setEditForm({ ...editForm, bottles_per_crate: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:bg-slate-50 disabled:text-slate-400"
-                    data-testid="edit-batch-bpc"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">pH value</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={editForm.ph_value}
-                  onChange={(e) => setEditForm({ ...editForm, ph_value: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                  data-testid="edit-batch-ph"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-                <textarea
-                  rows="3"
-                  value={editForm.notes}
-                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                  data-testid="edit-batch-notes"
-                />
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowEdit(false)}
-                disabled={editSaving}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                data-testid="edit-batch-cancel"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveEdit}
-                disabled={editSaving}
-                className="px-4 py-2 text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 rounded-lg disabled:opacity-60 flex items-center gap-1.5"
-                data-testid="edit-batch-save"
-              >
-                {editSaving && <Loader2 size={14} className="animate-spin" />}
-                Save changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Force-Delete (cascade) Dialog ── */}
-      {showForceDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" data-testid="force-delete-dialog">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 border-2 border-rose-200">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-rose-600" />
-              <h3 className="text-base font-semibold text-rose-700">Force-Delete Batch</h3>
-            </div>
-            <div className="text-sm text-slate-600 space-y-2">
-              <p>
-                This will <span className="font-semibold text-rose-700">permanently delete</span> batch{' '}
-                <span className="font-mono font-semibold">{batch.batch_code}</span> and all related data:
-              </p>
-              <ul className="text-xs text-slate-500 ml-4 list-disc space-y-0.5">
-                <li>All QC inspection records (incl. stage rejections & rework)</li>
-                <li>All stage movements / passed-to-warehouse moves</li>
-                <li>All warehouse transfers from this batch</li>
-                <li>Roll-back of factory warehouse stock contributed by this batch</li>
-              </ul>
-              <p className="text-xs text-slate-500 italic">An audit row is kept in <code>production_batch_deletions</code>.</p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Type <span className="font-mono text-rose-700">DELETE</span> to confirm</label>
-              <input
-                type="text"
-                autoFocus
-                value={forceConfirmText}
-                onChange={(e) => setForceConfirmText(e.target.value)}
-                className="w-full border border-rose-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-300"
-                placeholder="DELETE"
-                data-testid="force-delete-confirm-input"
-              />
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setShowForceDelete(false)}
-                disabled={forceDeleting}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg"
-                data-testid="force-delete-cancel"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleForceDelete}
-                disabled={forceDeleting || forceConfirmText.trim().toUpperCase() !== 'DELETE'}
-                className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg disabled:opacity-60 flex items-center gap-1.5"
-                data-testid="force-delete-confirm-btn"
-              >
-                {forceDeleting && <Loader2 size={14} className="animate-spin" />}
-                Force-Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
