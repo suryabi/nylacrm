@@ -1718,7 +1718,13 @@ async def transfer_to_warehouse(
         new_qty = existing_stock.get("quantity", 0) + data.quantity
         await tdb.factory_warehouse_stock.update_one(
             {"id": existing_stock["id"]},
-            {"$set": {"quantity": new_qty, "updated_at": now}}
+            {"$set": {
+                "quantity": new_qty,
+                # Keep bottles_per_crate in sync with the most recent batch so
+                # the dashboard can convert bottles → crates accurately.
+                "bottles_per_crate": batch.get("bottles_per_crate") or existing_stock.get("bottles_per_crate"),
+                "updated_at": now,
+            }}
         )
     else:
         stock_doc = {
@@ -1728,7 +1734,8 @@ async def transfer_to_warehouse(
             "warehouse_name": warehouse.get("location_name"),
             "sku_id": sku_id,
             "sku_name": sku_name,
-            "quantity": data.quantity,
+            "quantity": data.quantity,  # stored in BOTTLES
+            "bottles_per_crate": batch.get("bottles_per_crate"),
             "created_at": now,
             "updated_at": now,
         }

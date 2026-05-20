@@ -7106,20 +7106,51 @@ async def get_stock_dashboard(
             {"tenant_id": tenant_id, "warehouse_location_id": {"$in": factory_location_ids}},
             {"_id": 0}
         ).to_list(5000)
+
+        # Build a sku_id → bottles_per_crate map so we can convert bottles
+        # (stored on the row) → crates (what the dashboard displays).
+        # We prefer the value stored on the row itself (set at transfer time)
+        # but fall back to master_skus.packaging_config / unit so legacy rows
+        # still convert correctly.
+        sku_ids_needed = list({fws.get("sku_id", "") for fws in fws_docs if fws.get("sku_id")})
+        bpc_by_sku: dict = {}
+        if sku_ids_needed:
+            async for ms in tdb.master_skus.find(
+                {"id": {"$in": sku_ids_needed}},
+                {"_id": 0, "id": 1, "packaging_config": 1, "unit": 1, "bottles_per_crate": 1}
+            ):
+                # Order of preference: explicit bottles_per_crate field →
+                # production packaging default 'units' → leave as None.
+                bpc = ms.get("bottles_per_crate")
+                if not bpc:
+                    pc = (ms.get("packaging_config") or {}).get("production") or []
+                    default = next((p for p in pc if p.get("is_default")), None)
+                    if default and default.get("units"):
+                        bpc = default["units"]
+                bpc_by_sku[ms["id"]] = bpc or 1
+
+        def _to_crates(sku_id: str, bottles_qty: int, row_bpc=None) -> int:
+            bpc = row_bpc or bpc_by_sku.get(sku_id) or 1
+            try:
+                return int(bottles_qty) // int(bpc) if int(bpc) > 0 else int(bottles_qty)
+            except Exception:
+                return int(bottles_qty)
+
         for fws in fws_docs:
             sid = fws.get("sku_id", "")
-            qty = fws.get("quantity", 0)
-            if qty <= 0:
+            bottles_qty = fws.get("quantity", 0)
+            if bottles_qty <= 0:
                 continue
-            total_factory_wh_stock += qty
+            crates_qty = _to_crates(sid, bottles_qty, fws.get("bottles_per_crate"))
+            total_factory_wh_stock += crates_qty
             if sid not in factory_wh_stock_by_sku:
                 factory_wh_stock_by_sku[sid] = {"sku_id": sid, "sku_name": fws.get("sku_name", "Unknown"), "qty": 0}
-            factory_wh_stock_by_sku[sid]["qty"] += qty
+            factory_wh_stock_by_sku[sid]["qty"] += crates_qty
             # Per-location breakdown
             wh_id = fws.get("warehouse_location_id", "")
             if wh_id not in factory_wh_by_location:
                 factory_wh_by_location[wh_id] = {"warehouse_name": fws.get("warehouse_name", ""), "skus": []}
-            factory_wh_by_location[wh_id]["skus"].append({"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": qty})
+            factory_wh_by_location[wh_id]["skus"].append({"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": crates_qty})
     
     # === 2. STOCK OUT: Deliveries to customers (delivered/completed/complete) ===
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
