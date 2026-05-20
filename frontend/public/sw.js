@@ -1,6 +1,6 @@
-const CACHE_NAME = 'nyla-crm-v1';
-const STATIC_CACHE = 'nyla-static-v1';
-const DYNAMIC_CACHE = 'nyla-dynamic-v1';
+const CACHE_NAME = 'nyla-crm-v2';
+const STATIC_CACHE = 'nyla-static-v2';
+const DYNAMIC_CACHE = 'nyla-dynamic-v2';
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -60,6 +60,14 @@ self.addEventListener('fetch', (event) => {
 
   // Skip chrome-extension and other non-http requests
   if (!url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // Always go to network for the JS/CSS bundles under /static/.
+  // CRA already content-hashes these filenames, so caching them in the SW
+  // adds zero value AND causes stale-bundle bugs whenever a hash changes
+  // unexpectedly. Letting the browser HTTP cache handle them is enough.
+  if (url.pathname.startsWith('/static/')) {
     return;
   }
 
