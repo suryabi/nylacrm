@@ -279,6 +279,10 @@ export default function ProductionBatches() {
         ) : filtered.map(batch => {
           const st = STATUS_MAP[batch.status] || STATUS_MAP.created;
           const stageCount = batch.qc_stages?.length || 0;
+          const transferred = batch.transferred_to_warehouse || 0;
+          const transferable = batch.total_passed_final || 0;
+          const fullyTransferred = transferable > 0 && transferred >= transferable;
+          const partiallyTransferred = transferred > 0 && transferred < transferable;
           return (
             <div
               key={batch.id}
@@ -302,6 +306,24 @@ export default function ProductionBatches() {
                           data-testid={`batch-qc-bypassed-${batch.id}`}
                         >
                           Bypassed QC
+                        </span>
+                      )}
+                      {fullyTransferred && (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1"
+                          title={`${transferred.toLocaleString()} bottles transferred to warehouse`}
+                          data-testid={`batch-transferred-${batch.id}`}
+                        >
+                          <Truck size={10} /> Transferred
+                        </span>
+                      )}
+                      {partiallyTransferred && (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200 inline-flex items-center gap-1"
+                          title={`${transferred.toLocaleString()} of ${transferable.toLocaleString()} bottles transferred`}
+                          data-testid={`batch-partial-transferred-${batch.id}`}
+                        >
+                          <Truck size={10} /> Partial Transfer
                         </span>
                       )}
                     </div>
