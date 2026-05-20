@@ -7277,12 +7277,21 @@ async def get_stock_dashboard(
         fr_data = factory_return_by_sku.get(sid, {})
         fws_data = factory_wh_stock_by_sku.get(sid, {})
         
-        qty_in = si.get('qty', 0)
-        qty_out = so.get('qty', 0)
+        qty_in_shipments = si.get('qty', 0)        # Stock-In via shipments (in bottles)
+        qty_out = so.get('qty', 0)                  # Stock-Out delivered (in bottles)
         qty_cust_returned = cr_data.get('total', 0)
         qty_factory_returned = fr_data.get('total', 0)
-        qty_factory_wh = fws_data.get('qty', 0)
-        
+        qty_factory_wh = fws_data.get('qty', 0)     # crates currently in factory warehouse
+
+        # `stock_received` represents EVERYTHING this distributor has ever
+        # received — Stock-In shipments PLUS warehouse transfers from the
+        # production team into the master factory warehouse (in crates).
+        # Note: when the factory warehouse later ships to a distributor
+        # location, that quantity is removed from `factory_warehouse_stock`
+        # and added to `distributor_shipments`, so adding both buckets does
+        # not double-count.
+        qty_in = qty_in_shipments + qty_factory_wh
+
         # Stock at hand = received - delivered to customers - returned to factory + customer returns back
         # Customer returns come back to distributor, factory returns leave distributor
         stock_at_hand = qty_in - qty_out - qty_factory_returned + qty_cust_returned
