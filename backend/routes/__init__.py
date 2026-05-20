@@ -54,7 +54,6 @@ from .knowledge_base import router as knowledge_base_router
 from .distributor_portal import router as distributor_portal_router
 from .distributor_contacts import router as distributor_contacts_router
 from .zoho_books import router as zoho_books_router
-from .manual_stock_entries import router as manual_stock_router
 from .distributor_chat import router as distributor_chat_router
 
 # Include routers with their prefixes
@@ -176,9 +175,6 @@ routes_router.include_router(distributor_contacts_router, prefix="/distributors"
 
 # Zoho Books integration (OAuth, SKU mapping, invoice push)
 routes_router.include_router(zoho_books_router, tags=["Zoho Books"])
-
-# Manual stock entries (self-managed distributors only)
-routes_router.include_router(manual_stock_router, prefix="/distributors", tags=["Manual Stock"])
 
 # Distributor ↔ Supplier chat
 routes_router.include_router(distributor_chat_router, tags=["Distributor Chat"])

@@ -19,7 +19,7 @@ import re
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://delivery-flow-45.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stock-mgmt-6.preview.emergentagent.com").rstrip("/")
 LOGIN = {"email": "surya.yadavalli@nylaairwater.earth", "password": "test123", "tenant_id": "nyla-air-water"}
 
 

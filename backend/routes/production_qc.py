@@ -1827,12 +1827,48 @@ async def reset_factory_warehouse_stock(
         result = await tdb.factory_warehouse_stock.delete_many(query)
         affected = result.deleted_count
 
+    # Also wipe `distributor_stock` rows that point at the same warehouse —
+    # those hold legacy quantities from the now-removed Manual Stock Entry
+    # feature. Without this the master warehouse widget would still show
+    # phantom stock from confirmed manual entries.
+    dist_stock_q = {"tenant_id": tenant_id}
+    if data.warehouse_location_id:
+        dist_stock_q["distributor_location_id"] = data.warehouse_location_id
+    dist_affected = 0
+    if data.mode == "zero":
+        r2 = await tdb.distributor_stock.update_many(
+            dist_stock_q, {"$set": {"quantity": 0, "updated_at": now}}
+        )
+        dist_affected = r2.modified_count
+    else:
+        r2 = await tdb.distributor_stock.delete_many(dist_stock_q)
+        dist_affected = r2.deleted_count
+
+    # Mark every manual stock entry as cancelled so historical audit is
+    # preserved but they no longer contribute to derived reports.
+    manual_cancel_q = {"tenant_id": tenant_id, "status": {"$ne": "cancelled"}}
+    if data.warehouse_location_id:
+        manual_cancel_q["distributor_location_id"] = data.warehouse_location_id
+    manual_res = await tdb.distributor_manual_stock_entries.update_many(
+        manual_cancel_q,
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": now,
+            "cancelled_by": current_user.get("id"),
+            "cancelled_by_email": current_user.get("email"),
+            "cancel_reason": "Auto-cancelled by factory warehouse stock reset.",
+            "updated_at": now,
+        }},
+    )
+
     audit = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "mode": data.mode,
         "warehouse_location_id": data.warehouse_location_id,
         "affected_rows": affected,
+        "distributor_stock_affected": dist_affected,
+        "manual_entries_cancelled": manual_res.modified_count,
         "snapshot": [
             {
                 "warehouse_location_id": s.get("warehouse_location_id"),
@@ -1854,6 +1890,8 @@ async def reset_factory_warehouse_stock(
     return {
         "mode": data.mode,
         "affected_rows": affected,
+        "distributor_stock_affected": dist_affected,
+        "manual_entries_cancelled": manual_res.modified_count,
         "performed_at": now,
         "audit_id": audit["id"],
     }
