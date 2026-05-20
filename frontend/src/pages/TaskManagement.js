@@ -268,6 +268,54 @@ function DeptMultiSelect({ departments, selected, onChange }) {
   );
 }
 
+// ─── Status Multi-Select Popover ────────────────────
+const STATUS_OPTIONS = [
+  { id: 'open', label: 'Open' },
+  { id: 'in_progress', label: 'In Progress' },
+  { id: 'review', label: 'In Review' },
+  { id: 'closed', label: 'Closed' },
+];
+
+function StatusMultiSelect({ selected, onChange, testId }) {
+  const [open, setOpen] = useState(false);
+  const toggle = (id) => {
+    onChange(selected.includes(id) ? selected.filter(s => s !== id) : [...selected, id]);
+  };
+  const allSelected = selected.length === STATUS_OPTIONS.length;
+  const toggleAll = () => onChange(allSelected ? [] : STATUS_OPTIONS.map(s => s.id));
+  const label = selected.length === 0 ? 'No status'
+    : allSelected ? 'All Status'
+    : selected.length === 1 ? (STATUS_OPTIONS.find(s => s.id === selected[0])?.label || selected[0])
+    : `${selected.length} statuses`;
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-9 min-w-[140px] justify-between text-sm font-normal" data-testid={testId}>
+          <div className="flex items-center gap-2 truncate">
+            <Circle className="h-4 w-4 text-slate-400 shrink-0" />
+            <span className="truncate">{label}</span>
+          </div>
+          <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 ml-1" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        <div className="px-2 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded" onClick={toggleAll}>
+          <Checkbox checked={allSelected} />
+          <span className="text-sm font-medium">Select All</span>
+        </div>
+        <DropdownMenuSeparator />
+        {STATUS_OPTIONS.map(s => (
+          <div key={s.id} className="px-2 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-slate-50 rounded" onClick={() => toggle(s.id)}>
+            <Checkbox checked={selected.includes(s.id)} />
+            <span className="text-sm">{s.label}</span>
+          </div>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 
 // ═════════════════════════════════════════════════════════
 // ─── MAIN COMPONENT ─────────────────────────────────────
@@ -298,9 +346,12 @@ export default function TaskManagement() {
   const [subView, setSubView] = useState(searchParams.get('sub') || 'list');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Default: everything except "closed" so closed tickets are hidden by default.
+  const DEFAULT_STATUSES = ['open', 'in_progress', 'review'];
+
   // "My Tasks" filters
   const [myFilters, setMyFilters] = useState({
-    status: 'active',
+    statuses: DEFAULT_STATUSES,
     severity: '',
     activeMetric: '',  // track which metric card is active
   });
@@ -308,7 +359,7 @@ export default function TaskManagement() {
 
   // "All Tasks" filters
   const [allFilters, setAllFilters] = useState({
-    status: 'active',
+    statuses: DEFAULT_STATUSES,
     severity: '',
     department_ids: [],
     assignee_id: '',
@@ -358,13 +409,13 @@ export default function TaskManagement() {
       const params = {};
       if (primaryTab === 'my') {
         params.view = 'mine';
-        if (myFilters.status) params.status = myFilters.status;
+        if (myFilters.statuses && myFilters.statuses.length > 0) params.status = myFilters.statuses.join(',');
         if (myFilters.severity) params.severity = myFilters.severity;
         if (myOverdue) params.overdue = 'true';
       } else {
         if (allFilters.view && allFilters.view !== 'all') params.view = allFilters.view;
         if (allFilters.department_ids.length > 0) params.department_id = allFilters.department_ids.join(',');
-        if (allFilters.status) params.status = allFilters.status;
+        if (allFilters.statuses && allFilters.statuses.length > 0) params.status = allFilters.statuses.join(',');
         if (allFilters.severity) params.severity = allFilters.severity;
         if (allFilters.assignee_id) params.assignee_id = allFilters.assignee_id;
         if (allOverdue) params.overdue = 'true';
@@ -531,12 +582,12 @@ export default function TaskManagement() {
           <MetricCard key={m.label} {...m} isActive={myFilters.activeMetric === m.key}
             testId={`my-stat-${m.label.toLowerCase().replace(/\s+/g, '-')}`}
             onClick={() => {
-              if (m.key === 'overdue') { setMyOverdue(true); setMyFilters({ status: '', severity: '', activeMetric: 'overdue' }); }
-              else if (m.key === 'assigned') { setMyOverdue(false); setMyFilters({ status: '', severity: '', activeMetric: 'assigned' }); }
-              else if (m.key === 'created') { setMyOverdue(false); setMyFilters({ status: '', severity: '', activeMetric: 'created' }); }
-              else if (m.key === 'in_progress') { setMyOverdue(false); setMyFilters({ status: 'in_progress', severity: '', activeMetric: 'in_progress' }); }
-              else if (m.key === 'high') { setMyOverdue(false); setMyFilters({ status: '', severity: 'high', activeMetric: 'high' }); }
-              else { setMyOverdue(false); setMyFilters({ status: '', severity: '', activeMetric: '' }); }
+              if (m.key === 'overdue') { setMyOverdue(true); setMyFilters({ statuses: [], severity: '', activeMetric: 'overdue' }); }
+              else if (m.key === 'assigned') { setMyOverdue(false); setMyFilters({ statuses: [], severity: '', activeMetric: 'assigned' }); }
+              else if (m.key === 'created') { setMyOverdue(false); setMyFilters({ statuses: [], severity: '', activeMetric: 'created' }); }
+              else if (m.key === 'in_progress') { setMyOverdue(false); setMyFilters({ statuses: ['in_progress'], severity: '', activeMetric: 'in_progress' }); }
+              else if (m.key === 'high') { setMyOverdue(false); setMyFilters({ statuses: [], severity: 'high', activeMetric: 'high' }); }
+              else { setMyOverdue(false); setMyFilters({ statuses: DEFAULT_STATUSES, severity: '', activeMetric: '' }); }
             }}
           />
         ))}
@@ -560,9 +611,9 @@ export default function TaskManagement() {
           <MetricCard key={m.label} {...m} isActive={allFilters.activeMetric === m.key}
             testId={`all-stat-${m.label.toLowerCase().replace(/\s+/g, '-')}`}
             onClick={() => {
-              if (m.key === 'overdue') { setAllOverdue(true); setAllFilters(f => ({ ...f, status: '', activeMetric: 'overdue' })); }
-              else if (m.key) { setAllOverdue(false); setAllFilters(f => ({ ...f, status: m.key, activeMetric: m.key })); }
-              else { setAllOverdue(false); setAllFilters(f => ({ ...f, status: '', activeMetric: '' })); }
+              if (m.key === 'overdue') { setAllOverdue(true); setAllFilters(f => ({ ...f, statuses: [], activeMetric: 'overdue' })); }
+              else if (m.key) { setAllOverdue(false); setAllFilters(f => ({ ...f, statuses: [m.key], activeMetric: m.key })); }
+              else { setAllOverdue(false); setAllFilters(f => ({ ...f, statuses: DEFAULT_STATUSES, activeMetric: '' })); }
             }}
           />
         ))}
@@ -601,17 +652,11 @@ export default function TaskManagement() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input placeholder="Search tasks..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 w-56" data-testid="task-search-input" />
           </div>
-          <Select value={myFilters.status || "all_status"} onValueChange={v => { setMyFilters(f => ({ ...f, status: v === 'all_status' ? '' : v, activeMetric: '' })); setMyOverdue(false); }}>
-            <SelectTrigger className="w-32" data-testid="my-task-status-filter"><Circle className="h-4 w-4 mr-2 text-slate-400" /><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all_status">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="review">In Review</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
-            </SelectContent>
-          </Select>
+          <StatusMultiSelect
+            selected={myFilters.statuses || []}
+            onChange={(arr) => { setMyFilters(f => ({ ...f, statuses: arr, activeMetric: '' })); setMyOverdue(false); }}
+            testId="my-task-status-filter"
+          />
           <Select value={myFilters.severity || "all_sev"} onValueChange={v => setMyFilters(f => ({ ...f, severity: v === 'all_sev' ? '' : v, activeMetric: '' }))}>
             <SelectTrigger className="w-32" data-testid="my-task-severity-filter"><Flag className="h-4 w-4 mr-2 text-slate-400" /><SelectValue placeholder="Severity" /></SelectTrigger>
             <SelectContent>
@@ -621,8 +666,8 @@ export default function TaskManagement() {
               <SelectItem value="low">Low</SelectItem>
             </SelectContent>
           </Select>
-          {(myFilters.status || myFilters.severity || myOverdue) && (
-            <Button variant="ghost" size="sm" onClick={() => { setMyFilters({ status: '', severity: '', activeMetric: '' }); setMyOverdue(false); }} className="text-red-500 hover:text-red-600 hover:bg-red-50" data-testid="my-task-clear-filters">
+          {((myFilters.statuses && myFilters.statuses.join(',') !== DEFAULT_STATUSES.join(',')) || myFilters.severity || myOverdue) && (
+            <Button variant="ghost" size="sm" onClick={() => { setMyFilters({ statuses: DEFAULT_STATUSES, severity: '', activeMetric: '' }); setMyOverdue(false); }} className="text-red-500 hover:text-red-600 hover:bg-red-50" data-testid="my-task-clear-filters">
               <X className="h-4 w-4 mr-1" />Clear
             </Button>
           )}
@@ -637,17 +682,11 @@ export default function TaskManagement() {
           <Input placeholder="Search tasks..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 w-56" data-testid="task-search-input" />
         </div>
         <DeptMultiSelect departments={departments} selected={allFilters.department_ids} onChange={ids => setAllFilters(f => ({ ...f, department_ids: ids }))} />
-        <Select value={allFilters.status || "all_status"} onValueChange={v => { setAllFilters(f => ({ ...f, status: v === 'all_status' ? '' : v, activeMetric: '' })); setAllOverdue(false); }}>
-          <SelectTrigger className="w-32" data-testid="all-task-status-filter"><Circle className="h-4 w-4 mr-2 text-slate-400" /><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all_status">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="review">In Review</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-          </SelectContent>
-        </Select>
+        <StatusMultiSelect
+          selected={allFilters.statuses || []}
+          onChange={(arr) => { setAllFilters(f => ({ ...f, statuses: arr, activeMetric: '' })); setAllOverdue(false); }}
+          testId="all-task-status-filter"
+        />
         <Select value={allFilters.severity || "all_sev"} onValueChange={v => setAllFilters(f => ({ ...f, severity: v === 'all_sev' ? '' : v, activeMetric: '' }))}>
           <SelectTrigger className="w-32" data-testid="all-task-severity-filter"><Flag className="h-4 w-4 mr-2 text-slate-400" /><SelectValue placeholder="Severity" /></SelectTrigger>
           <SelectContent>
@@ -657,8 +696,8 @@ export default function TaskManagement() {
             <SelectItem value="low">Low</SelectItem>
           </SelectContent>
         </Select>
-        {(allFilters.status || allFilters.severity || allOverdue || allFilters.department_ids.length > 0) && (
-          <Button variant="ghost" size="sm" onClick={() => { setAllFilters(f => ({ ...f, status: '', severity: '', department_ids: [], activeMetric: '' })); setAllOverdue(false); }} className="text-red-500 hover:text-red-600 hover:bg-red-50" data-testid="all-task-clear-filters">
+        {((allFilters.statuses && allFilters.statuses.join(',') !== DEFAULT_STATUSES.join(',')) || allFilters.severity || allOverdue || allFilters.department_ids.length > 0) && (
+          <Button variant="ghost" size="sm" onClick={() => { setAllFilters(f => ({ ...f, statuses: DEFAULT_STATUSES, severity: '', department_ids: [], activeMetric: '' })); setAllOverdue(false); }} className="text-red-500 hover:text-red-600 hover:bg-red-50" data-testid="all-task-clear-filters">
             <X className="h-4 w-4 mr-1" />Clear
           </Button>
         )}
