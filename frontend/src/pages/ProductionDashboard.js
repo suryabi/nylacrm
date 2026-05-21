@@ -69,7 +69,7 @@ function HeroTile({ label, value, sub, icon: Icon, accent = 'slate', onClick, da
       </div>
 
       <div className="mt-3 relative">
-        <p className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums truncate" title={typeof value === 'string' ? value : undefined}>
+        <p className="text-lg sm:text-xl lg:text-[1.4rem] font-bold tracking-tight text-slate-900 dark:text-white tabular-nums leading-tight break-words" title={typeof value === 'string' ? value : undefined}>
           {value}
         </p>
         {sub && <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>}
