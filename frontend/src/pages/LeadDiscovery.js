@@ -167,7 +167,13 @@ export default function LeadDiscovery() {
         rating: place.rating,
         price_range: place.price_level,
         distance: 0,
-        place_id: place.place_id
+        place_id: place.place_id,
+        // Geo + structured address — used to pre-fill the lead's delivery_address.
+        lat: place.lat ?? null,
+        lng: place.lng ?? null,
+        pincode: place.pincode || '',
+        place_city: place.city || '',
+        place_state: place.state || '',
       }));
       
       setResults(transformedResults);
@@ -270,7 +276,23 @@ export default function LeadDiscovery() {
             current_selling_price: null,
             interested_skus: [],
             notes: `Discovered via Lead Discovery. Rating: ${outlet.rating || 'N/A'}★, Price: ${outlet.price_range || 'N/A'}. Address: ${outlet.address || 'N/A'}`,
-            estimated_value: null
+            estimated_value: null,
+            // Pre-fill the lead's delivery_address from the Google Places result
+            // so the Lead Details page shows the real address (with lat/lng for
+            // the "I am here" check-in) instead of forcing the user to retype it.
+            delivery_address: outlet.address ? {
+              address_line1: outlet.address,
+              address_line2: '',
+              city: outlet.place_city || selectedCity,
+              state: outlet.place_state || locationInfo.state,
+              pincode: outlet.pincode || '',
+              landmark: '',
+              lat: outlet.lat ?? null,
+              lng: outlet.lng ?? null,
+              formatted_address: outlet.address,
+              source: 'lead_discovery',
+              place_id: outlet.place_id || null,
+            } : null,
           };
           
           // Check if lead exists and we're doing a re-import

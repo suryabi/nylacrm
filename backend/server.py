@@ -794,6 +794,7 @@ class LeadCreate(BaseModel):
     onboarded_year: Optional[int] = None
     target_closure_month: Optional[int] = None
     target_closure_year: Optional[int] = None
+    delivery_address: Optional[Dict[str, Any]] = None
 
 class LeadUpdate(BaseModel):
     company: Optional[str] = None
@@ -7739,7 +7740,7 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                 headers = {
                     'Content-Type': 'application/json',
                     'X-Goog-Api-Key': api_key,
-                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id'
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id,places.location,places.addressComponents'
                 }
                 
                 body = {
@@ -7789,6 +7790,14 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                         if price_range == 'premium' and price_level < 4:
                             continue
                         
+                        # Extract structured address components (postal code, locality, etc.)
+                        addr_comps = place.get('addressComponents', []) or []
+                        def _pick(types):
+                            for c in addr_comps:
+                                if any(t in (c.get('types') or []) for t in types):
+                                    return c.get('longText') or c.get('shortText') or ''
+                            return ''
+                        place_loc = place.get('location', {}) or {}
                         outlet_data = {
                             'place_id': place_id,
                             'name': place.get('displayName', {}).get('text', 'Unknown'),
@@ -7798,7 +7807,12 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                             'user_ratings_total': place.get('userRatingCount', 0),
                             'price_level': '₹' * price_level,
                             'types': place.get('types', []),
-                            'search_type': search_type
+                            'search_type': search_type,
+                            'lat': place_loc.get('latitude'),
+                            'lng': place_loc.get('longitude'),
+                            'pincode': _pick(['postal_code']),
+                            'city': _pick(['locality', 'administrative_area_level_2']),
+                            'state': _pick(['administrative_area_level_1']),
                         }
                         
                         all_places.append(outlet_data)
