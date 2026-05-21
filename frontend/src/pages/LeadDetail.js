@@ -27,6 +27,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
+import { MapPin } from 'lucide-react';
 import ActivityTimeline from '../components/ActivityTimeline';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
@@ -118,6 +120,9 @@ export default function LeadDetail() {
   const [activityFollowUpDate, setActivityFollowUpDate] = useState('');
   const [activityDate, setActivityDate] = useState(''); // Admin-only: backdate activity
   const [convertingToAccount, setConvertingToAccount] = useState(false);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  // 'copy' = use lead's address; 'different' = different delivery address
+  const [convertAddressChoice, setConvertAddressChoice] = useState('copy');
   const [generatingLeadId, setGeneratingLeadId] = useState(false);
   
   // Lead Group state for copying activities
@@ -748,28 +753,27 @@ ${userEmail}`;
       toast.error('Please ensure all SKUs have a valid name and price greater than 0');
       return;
     }
-    
+
+    // If the lead has a captured delivery address, ask the user whether to
+    // copy it to the new account. Otherwise convert straight away.
+    if (lead?.delivery_address?.address_line1) {
+      setConvertAddressChoice('copy');
+      setShowConvertDialog(true);
+      return;
+    }
+    await performConvert(false);
+  };
+
+  const performConvert = async (copyAddress) => {
+    setShowConvertDialog(false);
     setConvertingToAccount(true);
     try {
-      // Ask whether the delivery address is the same as the lead's address —
-      // only when the lead actually has one captured. If yes, the lead's
-      // address is copied onto the new account; if no, the account starts
-      // with an empty delivery address (user can set it later).
-      let copyAddress = false;
-      const leadAddr = lead?.delivery_address?.address_line1;
-      if (leadAddr) {
-        copyAddress = window.confirm(
-          `Use the same delivery address as the lead?\n\n${leadAddr}\n\n` +
-          `Click "OK" to copy this address onto the new account.\n` +
-          `Click "Cancel" if the delivery location is different.`
-        );
-      }
       const response = await accountsAPI.convertFromLead(lead.id, copyAddress);
-      
+
       // Trigger celebration for customer activation
       setCelebrationType('customer');
       setShowCelebration(true);
-      
+
       // Wait for celebration to show briefly before navigating
       setTimeout(() => {
         toast.success(`Account created: ${response.data.account_id}`);
@@ -2262,6 +2266,80 @@ ${userEmail}`;
             <Button onClick={handleProposalDownload}>
               <Download className="h-4 w-4 mr-2" />
               Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert to Account — confirm delivery address dialog */}
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="sm:max-w-md" data-testid="convert-account-dialog">
+          <DialogHeader>
+            <DialogTitle>Convert to Account</DialogTitle>
+            <DialogDescription>
+              Choose how to set the delivery address for the new account.
+            </DialogDescription>
+          </DialogHeader>
+
+          {lead?.delivery_address?.address_line1 && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">
+                <MapPin className="h-3.5 w-3.5" />
+                Lead's address
+              </div>
+              <div className="text-slate-900 leading-snug" data-testid="convert-lead-address">
+                {lead.delivery_address.address_line1}
+                {lead.delivery_address.address_line2 ? `, ${lead.delivery_address.address_line2}` : ''}
+                {lead.delivery_address.city ? `, ${lead.delivery_address.city}` : ''}
+                {lead.delivery_address.state ? `, ${lead.delivery_address.state}` : ''}
+                {lead.delivery_address.pincode ? ` - ${lead.delivery_address.pincode}` : ''}
+              </div>
+            </div>
+          )}
+
+          <RadioGroup value={convertAddressChoice} onValueChange={setConvertAddressChoice} className="gap-2">
+            <label
+              htmlFor="convert-addr-copy"
+              className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${convertAddressChoice === 'copy' ? 'border-blue-500 bg-blue-50/60' : 'border-slate-200 hover:bg-slate-50'}`}
+            >
+              <RadioGroupItem value="copy" id="convert-addr-copy" className="mt-0.5" data-testid="convert-addr-copy" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-slate-900">Use this address as Delivery address</div>
+                <div className="text-xs text-slate-500 mt-0.5">The lead's address will be copied onto the new account.</div>
+              </div>
+            </label>
+            <label
+              htmlFor="convert-addr-different"
+              className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${convertAddressChoice === 'different' ? 'border-blue-500 bg-blue-50/60' : 'border-slate-200 hover:bg-slate-50'}`}
+            >
+              <RadioGroupItem value="different" id="convert-addr-different" className="mt-0.5" data-testid="convert-addr-different" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-slate-900">Do not use this address as Delivery address</div>
+                <div className="text-xs text-slate-500 mt-0.5">Account will start with an empty delivery address — you can add the actual delivery location later.</div>
+              </div>
+            </label>
+          </RadioGroup>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowConvertDialog(false)}
+              disabled={convertingToAccount}
+              data-testid="convert-dialog-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => performConvert(convertAddressChoice === 'copy')}
+              disabled={convertingToAccount}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              data-testid="convert-dialog-confirm"
+            >
+              {convertingToAccount ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Converting…</>
+              ) : (
+                <><ArrowRightCircle className="h-4 w-4 mr-2" /> Convert to Account</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
