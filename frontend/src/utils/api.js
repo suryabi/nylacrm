@@ -84,7 +84,7 @@ export const accountsAPI = {
     return axios.get(`${API_URL}/accounts?${queryParams.toString()}`, { headers: getAuthHeaders() });
   },
   getById: (id) => axios.get(`${API_URL}/accounts/${id}`, { headers: getAuthHeaders() }),
-  convertFromLead: (leadId) => axios.post(`${API_URL}/accounts/convert-lead`, { lead_id: leadId }, { headers: getAuthHeaders() }),
+  convertFromLead: (leadId, copyLeadAddress = false) => axios.post(`${API_URL}/accounts/convert-lead`, { lead_id: leadId, copy_lead_address: copyLeadAddress }, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/accounts/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/accounts/${id}`, { headers: getAuthHeaders() }),
   getInvoices: (id, params = {}) => {

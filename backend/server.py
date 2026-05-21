@@ -892,6 +892,7 @@ class Account(BaseModel):
 
 class AccountCreate(BaseModel):
     lead_id: str
+    copy_lead_address: Optional[bool] = False
 
 class DeliveryAddress(BaseModel):
     """Delivery address for an account or lead"""
@@ -6047,6 +6048,25 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     doc = account.model_dump()
     # Add category from lead (extra field allowed by model)
     doc['category'] = lead.get('category')
+    # Carry the lead's delivery address over to the new account when the
+    # converting user confirmed the addresses are the same. The frontend asks
+    # the user explicitly before sending `copy_lead_address=True`.
+    if data.copy_lead_address and lead.get('delivery_address'):
+        lda = lead['delivery_address'] or {}
+        if lda.get('address_line1'):
+            doc['delivery_address'] = {
+                'address_line1': lda.get('address_line1') or '',
+                'address_line2': lda.get('address_line2') or '',
+                'city': lda.get('city') or lead.get('city') or '',
+                'state': lda.get('state') or lead.get('state') or '',
+                'pincode': lda.get('pincode') or '',
+                'landmark': lda.get('landmark') or '',
+                'lat': lda.get('lat'),
+                'lng': lda.get('lng'),
+                'formatted_address': lda.get('formatted_address') or lda.get('address_line1') or '',
+                'source': 'copied_from_lead',
+                'copied_from_lead_id': lead.get('id'),
+            }
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
 
@@ -6066,7 +6086,11 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         {'$set': {'account_id': account_id, 'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
 
-    return account
+    # Return the actual saved document (includes delivery_address when copied
+    # from the lead). The Pydantic Account model would otherwise drop the
+    # extra delivery_address field from the response payload.
+    doc.pop('_id', None)
+    return doc
 
 @api_router.get("/accounts", response_model=PaginatedAccountsResponse)
 async def get_accounts(

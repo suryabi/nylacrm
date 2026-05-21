@@ -751,7 +751,20 @@ ${userEmail}`;
     
     setConvertingToAccount(true);
     try {
-      const response = await accountsAPI.convertFromLead(lead.id);
+      // Ask whether the delivery address is the same as the lead's address —
+      // only when the lead actually has one captured. If yes, the lead's
+      // address is copied onto the new account; if no, the account starts
+      // with an empty delivery address (user can set it later).
+      let copyAddress = false;
+      const leadAddr = lead?.delivery_address?.address_line1;
+      if (leadAddr) {
+        copyAddress = window.confirm(
+          `Use the same delivery address as the lead?\n\n${leadAddr}\n\n` +
+          `Click "OK" to copy this address onto the new account.\n` +
+          `Click "Cancel" if the delivery location is different.`
+        );
+      }
+      const response = await accountsAPI.convertFromLead(lead.id, copyAddress);
       
       // Trigger celebration for customer activation
       setCelebrationType('customer');
