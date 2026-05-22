@@ -394,6 +394,67 @@ async def update_daily_status(
     
     return updated_status
 
+
+@router.get("/daily-status/yesterday-followup-status")
+async def yesterday_followup_status(
+    current_user: dict = Depends(get_current_user)
+):
+    """For each action item from the user's previous daily-status, report
+    whether any activity has been logged against the linked lead since
+    that status date. Lets the team see at-a-glance which planned items
+    were actually worked upon today.
+    """
+    tdb = get_tdb()
+    uid = current_user['id']
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    # Find the most recent daily_status for this user BEFORE today.
+    cursor = tdb.daily_status.find(
+        {'user_id': uid, 'status_date': {'$lt': today}},
+        {'_id': 0}
+    ).sort('status_date', -1).limit(1)
+    prev = await cursor.to_list(length=1)
+    if not prev:
+        return {'previous_status_date': None, 'items': []}
+    prev_status = prev[0]
+    prev_date = prev_status.get('status_date')
+    items_in = prev_status.get('action_items_v2') or []
+
+    enriched = []
+    for it in items_in:
+        lid = it.get('lead_id')
+        worked_upon = False
+        last_activity = None
+        if lid:
+            cursor = tdb.activities.find(
+                {
+                    'lead_id': lid,
+                    'created_at': {'$gt': prev_date},
+                    'activity_type': {'$ne': 'action_item'},
+                },
+                {'_id': 0}
+            ).sort('created_at', -1).limit(1)
+            res = await cursor.to_list(length=1)
+            if res:
+                worked_upon = True
+                last_activity = {
+                    'activity_type': res[0].get('activity_type'),
+                    'description': res[0].get('description'),
+                    'created_at': res[0].get('created_at'),
+                    'created_by_name': res[0].get('created_by_name'),
+                }
+        enriched.append({
+            **it,
+            'worked_upon': worked_upon,
+            'last_activity': last_activity,
+        })
+
+    return {
+        'previous_status_date': prev_date,
+        'items': enriched,
+    }
+
+
 @router.get("/daily-status/auto-populate/{status_date}")
 async def auto_populate_from_activities(
     status_date: str, 

@@ -26,6 +26,7 @@ import {
 } from '../components/ui/alert-dialog';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import ActionItemsBuilder from '../components/ActionItemsBuilder';
+import YesterdayActionItems from '../components/YesterdayActionItems';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -606,6 +607,11 @@ export default function DailyStatusUpdate() {
 
         {/* Form Sections - Full Width, Larger */}
         <div className="space-y-4 mb-6">
+          {/* Yesterday's Action Items follow-up status (only when posting for self & today) */}
+          {isViewingOwnStatus && isToday && (
+            <YesterdayActionItems />
+          )}
+
           {/* Updates Section */}
           <Card className="p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90">
             <StatusInput
