@@ -125,32 +125,55 @@ def _action_items_to_text(items):
     return '\n'.join(lines)
 
 
-async def _push_followups_to_leads(items, target_user_id):
+async def _push_followups_to_leads(items, target_user_id, status_date=None, user_name=None):
     """For every action item that has both a lead_id and a follow_up_date,
     update that lead's next_follow_up so the lead doesn't fall off the
-    follow-up radar. Best-effort — failures here must not roll back the
-    status itself."""
+    follow-up radar AND auto-log an `action_item` activity entry on the lead
+    so the daily-status commitment shows up in the lead's activity timeline.
+    Best-effort — failures here must not roll back the status itself."""
     if not items:
         return
     now_iso = datetime.now(timezone.utc).isoformat()
     for it in items:
         lid = it.get('lead_id')
-        date = it.get('follow_up_date')
-        if not lid or not date:
+        if not lid:
             continue
+        date = it.get('follow_up_date')
+        # 1. Set lead's next_follow_up
+        if date:
+            try:
+                await get_tdb().leads.update_one(
+                    {'id': lid},
+                    {'$set': {
+                        'next_follow_up': date,
+                        'next_follow_up_set_by': target_user_id,
+                        'next_follow_up_source': 'daily_status',
+                        'updated_at': now_iso,
+                    }}
+                )
+            except Exception:
+                pass
+        # 2. Log an `action_item` activity entry on the lead
         try:
-            await get_tdb().leads.update_one(
-                {'id': lid},
-                {'$set': {
-                    'next_follow_up': date,
-                    'next_follow_up_set_by': target_user_id,
-                    'next_follow_up_source': 'daily_status',
-                    'updated_at': now_iso,
-                }}
-            )
+            desc = (it.get('description') or '').strip()
+            if not desc:
+                continue
+            note_parts = [desc]
+            if date:
+                note_parts.append(f"(planned for {date})")
+            await get_tdb().activities.insert_one({
+                'id': str(uuid.uuid4()),
+                'lead_id': lid,
+                'activity_type': 'action_item',
+                'description': ' '.join(note_parts),
+                'interaction_method': None,
+                'created_by': target_user_id,
+                'created_by_name': user_name,
+                'source': 'daily_status',
+                'status_date': status_date,
+                'created_at': now_iso,
+            })
         except Exception:
-            # Swallow per-lead failures; we don't want one bad lead id to
-            # break the entire status submission.
             pass
 
 
@@ -228,7 +251,7 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
     await get_tdb().daily_status.insert_one(doc)
 
     # Propagate follow-up dates onto each linked lead.
-    await _push_followups_to_leads(items, target_user_id)
+    await _push_followups_to_leads(items, target_user_id, status_obj.status_date, posted_by_name)
     return status_obj
 
 @router.get("/daily-status")
@@ -359,6 +382,8 @@ async def update_daily_status(
         await _push_followups_to_leads(
             update_data.get('action_items_v2') or [],
             status.get('user_id'),
+            status.get('status_date'),
+            current_user.get('name'),
         )
 
     updated_status = await get_tdb().daily_status.find_one({'id': status_id}, {'_id': 0})

@@ -139,8 +139,19 @@ export default function ActivityTimeline({ activities }) {
                       STATUS CHANGE
                     </span>
                   )}
+                  {/* Action items auto-created from the Daily Status module */}
+                  {activity.activity_type === 'action_item' && (
+                    <span
+                      className="px-2 py-0.5 text-xs rounded font-medium bg-indigo-100 text-indigo-800 border border-indigo-200"
+                      title={activity.source === 'daily_status' && activity.status_date
+                        ? `From daily status on ${activity.status_date}`
+                        : 'Action Item'}
+                    >
+                      ACTION ITEM
+                    </span>
+                  )}
                   {/* Show interaction method subtly - small gray text */}
-                  {activity.interaction_method && activity.activity_type !== 'status_change' && (
+                  {activity.interaction_method && activity.activity_type !== 'status_change' && activity.activity_type !== 'action_item' && (
                     <span className="text-xs text-muted-foreground">
                       via {activity.interaction_method.replace('_', ' ')}
                     </span>
