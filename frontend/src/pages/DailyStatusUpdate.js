@@ -313,7 +313,6 @@ export default function DailyStatusUpdate() {
   const [yesterdayUpdates, setYesterdayUpdates] = useState('');
   const [todayActions, setTodayActions] = useState('');
   const [actionItems, setActionItems] = useState([]); // structured action items v2
-  const [helpNeeded, setHelpNeeded] = useState('');
   
   // Confirmation dialog state
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -361,12 +360,10 @@ export default function DailyStatusUpdate() {
       setYesterdayUpdates(existing.yesterday_updates || '');
       setTodayActions(existing.today_actions || '');
       setActionItems(Array.isArray(existing.action_items_v2) ? existing.action_items_v2 : []);
-      setHelpNeeded(existing.help_needed || '');
     } else {
       setYesterdayUpdates('');
       setTodayActions('');
       setActionItems([]);
-      setHelpNeeded('');
     }
   }, [selectedDate, pastStatuses]);
 
@@ -408,7 +405,7 @@ export default function DailyStatusUpdate() {
       return;
     }
 
-    if (!yesterdayUpdates.trim() && !todayActions.trim() && trimmedItems.length === 0 && !helpNeeded.trim()) {
+    if (!yesterdayUpdates.trim() && !todayActions.trim() && trimmedItems.length === 0) {
       toast.error('Please fill at least one section');
       return;
     }
@@ -437,7 +434,7 @@ export default function DailyStatusUpdate() {
         yesterday_updates: convertToBulletFormat(yesterdayUpdates),
         today_actions: convertToBulletFormat(todayActions),
         action_items_v2: trimmedItems,
-        help_needed: convertToBulletFormat(helpNeeded)
+        help_needed: ''
       };
       
       if (!isViewingOwnStatus && selectedResource) {
@@ -624,37 +621,23 @@ export default function DailyStatusUpdate() {
             />
           </Card>
 
-          {/* Two Column Layout for Action Items and Help Needed */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Action Items Section — structured wizard with lead association */}
-            <Card className={`p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90 ${isPastDate ? 'opacity-60' : ''}`}>
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="h-5 w-5 text-primary" />
-                <h3 className="text-base font-semibold">
-                  {isToday ? "Tomorrow's Action Items & Follow-ups" : "Today's Action Items & Follow-ups"}
-                </h3>
-              </div>
-              <p className="text-xs text-slate-500 mb-3">
-                Each action item must be linked to a lead so we can trace whether it was followed up. If it's not lead-related, explicitly tick "Not associated with any lead".
-              </p>
-              <ActionItemsBuilder
-                value={actionItems}
-                onChange={setActionItems}
-                disabled={isPastDate}
-              />
-            </Card>
-
-            {/* Help Needed Section */}
-            <Card className="p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90">
-              <StatusInput
-                title="Help Needed from the Team"
-                value={helpNeeded}
-                onChange={setHelpNeeded}
-                placeholder="Support needed from colleagues or management..."
-                icon={Users}
-              />
-            </Card>
-          </div>
+          {/* Action Items Section — structured wizard with lead association */}
+          <Card className={`p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90 ${isPastDate ? 'opacity-60' : ''}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="h-5 w-5 text-primary" />
+              <h3 className="text-base font-semibold">
+                {isToday ? "Tomorrow's Action Items & Follow-ups" : "Today's Action Items & Follow-ups"}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-3">
+              Each action item must be linked to a lead so we can trace whether it was followed up. If it's not lead-related, explicitly tick "Not associated with any lead".
+            </p>
+            <ActionItemsBuilder
+              value={actionItems}
+              onChange={setActionItems}
+              disabled={isPastDate}
+            />
+          </Card>
         </div>
 
         {/* Recent Updates */}
@@ -690,7 +673,7 @@ export default function DailyStatusUpdate() {
                     <ChevronDown className="h-5 w-5 text-muted-foreground -rotate-90" />
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {status.yesterday_updates && (
                       <div className="bg-white/60 dark:bg-slate-900/60 rounded-lg p-3">
                         <p className="font-semibold text-xs text-muted-foreground mb-2 uppercase tracking-wide">Updates</p>
@@ -701,12 +684,6 @@ export default function DailyStatusUpdate() {
                       <div className="bg-white/60 dark:bg-slate-900/60 rounded-lg p-3">
                         <p className="font-semibold text-xs text-muted-foreground mb-2 uppercase tracking-wide">Action Items</p>
                         <StyledContentDisplay text={status.today_actions} />
-                      </div>
-                    )}
-                    {status.help_needed && (
-                      <div className="bg-white/60 dark:bg-slate-900/60 rounded-lg p-3">
-                        <p className="font-semibold text-xs text-muted-foreground mb-2 uppercase tracking-wide">Help Needed</p>
-                        <StyledContentDisplay text={status.help_needed} />
                       </div>
                     )}
                   </div>
