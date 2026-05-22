@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, MapPin, AlertCircle, Search, Calendar as CalendarIcon, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, MapPin, AlertCircle, Search, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Checkbox } from './ui/checkbox';
 import { Badge } from './ui/badge';
@@ -97,43 +96,22 @@ function ActionItemRow({ index, item, onChange, onRemove, disabled }) {
             data-testid={`action-item-desc-${index}`}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {/* Lead selector */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                Associated Lead
-                {!isExplicitlyUnassociated && <span className="text-red-500">*</span>}
-              </label>
-              <LeadPicker
-                value={item.lead_id ? { id: item.lead_id, label: item.lead_name || item.lead_id } : null}
-                onChange={(lead) => onChange({
-                  lead_id: lead ? lead.id : null,
-                  lead_name: lead ? lead.label : null,
-                  // Picking a lead automatically clears the "no lead" flag.
-                  no_lead: lead ? false : item.no_lead,
-                })}
-                disabled={disabled || isExplicitlyUnassociated}
-                testId={`action-item-lead-${index}`}
-              />
-            </div>
-
-            {/* Follow-up date */}
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
-                <CalendarIcon className="h-3 w-3" />
-                Follow-up Date
-                <span className="text-slate-400 normal-case font-normal">(updates lead)</span>
-              </label>
-              <Input
-                type="date"
-                value={item.follow_up_date || ''}
-                onChange={(e) => onChange({ follow_up_date: e.target.value })}
-                disabled={disabled}
-                className="h-9 text-sm"
-                data-testid={`action-item-date-${index}`}
-              />
-            </div>
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
+              <MapPin className="h-3 w-3" />
+              Associated Lead
+              {!isExplicitlyUnassociated && <span className="text-red-500">*</span>}
+            </label>
+            <LeadPicker
+              value={item.lead_id ? { id: item.lead_id, label: item.lead_name || item.lead_id } : null}
+              onChange={(lead) => onChange({
+                lead_id: lead ? lead.id : null,
+                lead_name: lead ? lead.label : null,
+                no_lead: lead ? false : item.no_lead,
+              })}
+              disabled={disabled || isExplicitlyUnassociated}
+              testId={`action-item-lead-${index}`}
+            />
           </div>
 
           <div className="flex items-center justify-between gap-2 pt-1">

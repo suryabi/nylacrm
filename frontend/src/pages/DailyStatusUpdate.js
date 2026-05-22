@@ -426,7 +426,11 @@ export default function DailyStatusUpdate() {
     setLoading(true);
     try {
       const existing = pastStatuses.find(s => s.status_date === selectedDate);
-      const trimmedItems = (actionItems || []).filter(it => (it.description || '').trim());
+      // The selected status date is the implicit follow-up date for every
+      // action item — users no longer pick a per-item date.
+      const trimmedItems = (actionItems || [])
+        .filter(it => (it.description || '').trim())
+        .map(it => ({ ...it, follow_up_date: selectedDate }));
       const data = {
         status_date: selectedDate,
         yesterday_updates: convertToBulletFormat(yesterdayUpdates),
@@ -625,7 +629,7 @@ export default function DailyStatusUpdate() {
                 </h3>
               </div>
               <p className="text-xs text-slate-500 mb-3">
-                Each action item must be linked to a lead — that's how we trace whether it was followed up. If it's not lead-related, explicitly tick "Not associated with any lead". Picking a follow-up date will also update the lead's next-follow-up automatically.
+                Each action item must be linked to a lead so we can trace whether it was followed up. If it's not lead-related, explicitly tick "Not associated with any lead". The selected status date will automatically become the next follow-up date on every linked lead.
               </p>
               <ActionItemsBuilder
                 value={actionItems}
