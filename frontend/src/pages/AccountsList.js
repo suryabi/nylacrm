@@ -29,6 +29,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import StatTile from '../components/StatTile';
+import AccountLogoTile from '../components/AccountLogoTile';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -362,7 +363,7 @@ export default function AccountsList() {
                     navigateTo(`/accounts/${account.account_id}`, { label: account.account_name || 'Account Details' });
                   }} className="group cursor-pointer">
                     <div className="relative rounded-lg overflow-hidden bg-white border border-gray-200 hover:border-primary/50 transition-all duration-200 hover:shadow-lg" style={{ width: '132px', height: '132px' }}>
-                      {account.logo_url ? <img src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`} alt={account.account_name} className="w-full h-full object-contain p-1" /> : <div className="w-full h-full flex items-center justify-center p-1 bg-gradient-to-br from-gray-50 to-gray-100"><p className="text-[8px] font-medium text-gray-500 text-center leading-tight line-clamp-3 px-1">{account.account_name}</p></div>}
+                      <AccountLogoTile logoUrl={account.logo_url} name={account.account_name} />
                       <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"><p className="text-[8px] font-medium text-white text-center px-1 leading-tight">{account.account_name}</p></div>
                     </div>
                   </div>

@@ -8,7 +8,7 @@ import json
 import requests
 from datetime import datetime, timezone, timedelta
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stock-mgmt-6.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://driver-delivery-crm.preview.emergentagent.com").rstrip("/")
 EMAIL = "surya.yadavalli@nylaairwater.earth"
 PASSWORD = "test123"
 
