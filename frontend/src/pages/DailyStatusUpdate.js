@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import AppBreadcrumb from '../components/AppBreadcrumb';
+import ActionItemsBuilder from '../components/ActionItemsBuilder';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -310,6 +311,7 @@ export default function DailyStatusUpdate() {
   // Form state
   const [yesterdayUpdates, setYesterdayUpdates] = useState('');
   const [todayActions, setTodayActions] = useState('');
+  const [actionItems, setActionItems] = useState([]); // structured action items v2
   const [helpNeeded, setHelpNeeded] = useState('');
   
   // Confirmation dialog state
@@ -357,10 +359,12 @@ export default function DailyStatusUpdate() {
     if (existing) {
       setYesterdayUpdates(existing.yesterday_updates || '');
       setTodayActions(existing.today_actions || '');
+      setActionItems(Array.isArray(existing.action_items_v2) ? existing.action_items_v2 : []);
       setHelpNeeded(existing.help_needed || '');
     } else {
       setYesterdayUpdates('');
       setTodayActions('');
+      setActionItems([]);
       setHelpNeeded('');
     }
   }, [selectedDate, pastStatuses]);
@@ -395,7 +399,15 @@ export default function DailyStatusUpdate() {
 
   // Handle submit button click - show confirmation if posting for someone else
   const handleSubmitClick = () => {
-    if (!yesterdayUpdates.trim() && !todayActions.trim() && !helpNeeded.trim()) {
+    // Validate every action item has a lead OR is explicitly marked as un-associated.
+    const trimmedItems = (actionItems || []).filter(it => (it.description || '').trim());
+    const invalid = trimmedItems.find(it => !it.lead_id && !it.no_lead);
+    if (invalid) {
+      toast.error('Each action item must be associated with a lead, or marked as "not associated with any lead".');
+      return;
+    }
+
+    if (!yesterdayUpdates.trim() && !todayActions.trim() && trimmedItems.length === 0 && !helpNeeded.trim()) {
       toast.error('Please fill at least one section');
       return;
     }
@@ -414,10 +426,12 @@ export default function DailyStatusUpdate() {
     setLoading(true);
     try {
       const existing = pastStatuses.find(s => s.status_date === selectedDate);
+      const trimmedItems = (actionItems || []).filter(it => (it.description || '').trim());
       const data = {
         status_date: selectedDate,
         yesterday_updates: convertToBulletFormat(yesterdayUpdates),
         today_actions: convertToBulletFormat(todayActions),
+        action_items_v2: trimmedItems,
         help_needed: convertToBulletFormat(helpNeeded)
       };
       
@@ -602,15 +616,21 @@ export default function DailyStatusUpdate() {
 
           {/* Two Column Layout for Action Items and Help Needed */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Action Items Section */}
+            {/* Action Items Section — structured wizard with lead association */}
             <Card className={`p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90 ${isPastDate ? 'opacity-60' : ''}`}>
-              <StatusInput
-                title={isToday ? "Tomorrow's Action Items & Follow-ups" : "Today's Action Items & Follow-ups"}
-                value={todayActions}
-                onChange={setTodayActions}
-                placeholder="Planned follow-ups and tasks for the next day..."
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="h-5 w-5 text-primary" />
+                <h3 className="text-base font-semibold">
+                  {isToday ? "Tomorrow's Action Items & Follow-ups" : "Today's Action Items & Follow-ups"}
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mb-3">
+                Each action item must be linked to a lead — that's how we trace whether it was followed up. If it's not lead-related, explicitly tick "Not associated with any lead". Picking a follow-up date will also update the lead's next-follow-up automatically.
+              </p>
+              <ActionItemsBuilder
+                value={actionItems}
+                onChange={setActionItems}
                 disabled={isPastDate}
-                icon={Clock}
               />
             </Card>
 

@@ -3,7 +3,7 @@ Daily Status module - Team status updates, AI revisions, rollups, and period sum
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
 import os
 import uuid
@@ -35,6 +35,7 @@ class DailyStatus(BaseModel):
     today_actions: str = ''
     today_original: Optional[str] = None
     today_ai_revised: bool = False
+    action_items_v2: List[Dict[str, Any]] = []
 
     help_needed: str = ''
     help_original: Optional[str] = None
@@ -51,6 +52,7 @@ class DailyStatusCreate(BaseModel):
     status_date: str
     yesterday_updates: str = ''
     today_actions: str = ''
+    action_items_v2: Optional[List[Dict[str, Any]]] = None
     help_needed: str = ''
     target_user_id: Optional[str] = None
 
@@ -62,9 +64,94 @@ class DailyStatusUpdate(BaseModel):
     today_actions: Optional[str] = None
     today_original: Optional[str] = None
     today_ai_revised: Optional[bool] = None
+    action_items_v2: Optional[List[Dict[str, Any]]] = None
     help_needed: Optional[str] = None
     help_original: Optional[str] = None
     help_ai_revised: Optional[bool] = None
+
+
+def _sanitize_action_items_v2(items):
+    """Validate + clean structured action items.
+
+    Each item must have:
+      - description (non-empty)
+      - either lead_id (truthy) OR no_lead == True
+    Anything else raises HTTPException(400).
+    Returns the cleaned list ready for persistence.
+    """
+    if items is None:
+        return None
+    if not isinstance(items, list):
+        raise HTTPException(status_code=400, detail='action_items_v2 must be a list')
+    cleaned = []
+    for idx, it in enumerate(items):
+        if not isinstance(it, dict):
+            continue
+        desc = (it.get('description') or '').strip()
+        if not desc:
+            continue  # skip blank rows
+        lead_id = (it.get('lead_id') or '').strip() or None
+        no_lead = bool(it.get('no_lead'))
+        if not lead_id and not no_lead:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Action item #{idx + 1} must be associated with a lead OR explicitly marked as not associated.",
+            )
+        cleaned.append({
+            'description': desc,
+            'lead_id': lead_id,
+            'lead_name': (it.get('lead_name') or '').strip() or None,
+            'no_lead': no_lead,
+            'follow_up_date': (it.get('follow_up_date') or '').strip() or None,
+        })
+    return cleaned
+
+
+def _action_items_to_text(items):
+    """Render structured action items into the legacy bullet `today_actions`
+    string so existing summary/report views keep working."""
+    lines = []
+    for it in items or []:
+        desc = it.get('description') or ''
+        lead = it.get('lead_name') or ''
+        date = it.get('follow_up_date') or ''
+        suffix_parts = []
+        if lead:
+            suffix_parts.append(f"Lead: {lead}")
+        if date:
+            suffix_parts.append(f"Follow-up: {date}")
+        suffix = f" [{' | '.join(suffix_parts)}]" if suffix_parts else ''
+        lines.append(f"• {desc}{suffix}")
+    return '\n'.join(lines)
+
+
+async def _push_followups_to_leads(items, target_user_id):
+    """For every action item that has both a lead_id and a follow_up_date,
+    update that lead's next_follow_up so the lead doesn't fall off the
+    follow-up radar. Best-effort — failures here must not roll back the
+    status itself."""
+    if not items:
+        return
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for it in items:
+        lid = it.get('lead_id')
+        date = it.get('follow_up_date')
+        if not lid or not date:
+            continue
+        try:
+            await get_tdb().leads.update_one(
+                {'id': lid},
+                {'$set': {
+                    'next_follow_up': date,
+                    'next_follow_up_set_by': target_user_id,
+                    'next_follow_up_source': 'daily_status',
+                    'updated_at': now_iso,
+                }}
+            )
+        except Exception:
+            # Swallow per-lead failures; we don't want one bad lead id to
+            # break the entire status submission.
+            pass
 
 
 # ============= DAILY STATUS ROUTES =============
@@ -119,6 +206,16 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
     
     status_data = status_input.model_dump()
     status_data.pop('target_user_id', None)  # Remove from data
+
+    # Sanitise + apply structured action items if the client sent them.
+    items = _sanitize_action_items_v2(status_data.get('action_items_v2'))
+    if items is not None:
+        status_data['action_items_v2'] = items
+        # Keep the bullet-text representation in sync so existing reports work.
+        status_data['today_actions'] = _action_items_to_text(items)
+    else:
+        status_data.pop('action_items_v2', None)
+
     status_data['user_id'] = target_user_id
     status_data['posted_by'] = posted_by
     status_data['posted_by_name'] = posted_by_name
@@ -129,6 +226,9 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
     doc['updated_at'] = doc['updated_at'].isoformat()
     
     await get_tdb().daily_status.insert_one(doc)
+
+    # Propagate follow-up dates onto each linked lead.
+    await _push_followups_to_leads(items, target_user_id)
     return status_obj
 
 @router.get("/daily-status")
@@ -234,14 +334,33 @@ async def update_daily_status(
     
     update_data = status_update.model_dump()
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
+
+    # Sanitise + apply structured action items if the client sent them.
+    items_in_payload = 'action_items_v2' in (status_update.model_dump(exclude_unset=True) or {})
+    if items_in_payload:
+        items = _sanitize_action_items_v2(update_data.get('action_items_v2'))
+        if items is not None:
+            update_data['action_items_v2'] = items
+            update_data['today_actions'] = _action_items_to_text(items)
+        else:
+            update_data['action_items_v2'] = []
+    else:
+        update_data.pop('action_items_v2', None)
+
     # Track who updated if different from owner
     if not is_own_status:
         update_data['posted_by'] = current_user['id']
         update_data['posted_by_name'] = current_user.get('name', current_user.get('email'))
     
     await get_tdb().daily_status.update_one({'id': status_id}, {'$set': update_data})
-    
+
+    # Propagate follow-up dates onto each linked lead.
+    if items_in_payload:
+        await _push_followups_to_leads(
+            update_data.get('action_items_v2') or [],
+            status.get('user_id'),
+        )
+
     updated_status = await get_tdb().daily_status.find_one({'id': status_id}, {'_id': 0})
     if isinstance(updated_status['created_at'], str):
         updated_status['created_at'] = datetime.fromisoformat(updated_status['created_at'])
@@ -721,6 +840,17 @@ async def generate_period_summary(request: dict, current_user: dict = Depends(ge
         
         summary = await chat.send_message(user_message)
         
+        return {
+            'summary': summary,
+            'period_type': period_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'days_covered': len(statuses)
+        }
+    except Exception as e:
+        logger.error(f'Period summary error: {str(e)}')
+        raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
+
         return {
             'summary': summary,
             'period_type': period_type,
