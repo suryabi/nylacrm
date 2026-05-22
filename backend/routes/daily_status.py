@@ -161,6 +161,7 @@ async def _push_followups_to_leads(items, target_user_id, status_date=None, user
                 'created_by_name': user_name,
                 'source': 'daily_status',
                 'status_date': status_date,
+                'planned_date': date,  # Explicit field so frontend can colour-code green/red
                 'created_at': now_iso,
             })
         except Exception:

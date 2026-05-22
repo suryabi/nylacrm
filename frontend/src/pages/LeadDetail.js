@@ -1518,6 +1518,11 @@ ${userEmail}`;
               </Button>
             </form>
           </Card>
+
+          <ActionItemsSection
+            actionItems={activities.filter(a => a.activity_type === 'action_item')}
+            activities={activities}
+          />
         </div>
 
         {/* Right Column - Activity Timeline */}
@@ -2061,8 +2066,6 @@ ${userEmail}`;
             <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Activity Timeline</h2>
             <ActivityTimeline activities={activities.filter(a => a.activity_type !== 'action_item')} />
           </Card>
-
-          <ActionItemsSection actionItems={activities.filter(a => a.activity_type === 'action_item')} />
 
           {/* Lead Details */}
           <Card className="p-4 sm:p-6">
