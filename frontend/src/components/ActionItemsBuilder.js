@@ -181,7 +181,15 @@ function LeadPicker({ value, onChange, disabled, testId }) {
       setLoading(true);
       try {
         const res = await leadsAPI.getAll({ search: query, pageSize: 15 });
-        const list = res?.data?.leads || res?.data || [];
+        // Backend returns { data: [...], total, page, ... } – not { leads: [...] }.
+        const body = res?.data;
+        const list = Array.isArray(body?.data)
+          ? body.data
+          : Array.isArray(body?.leads)
+            ? body.leads
+            : Array.isArray(body)
+              ? body
+              : [];
         setResults(list.map((l) => ({
           id: l.id,
           label: l.company || l.contact_person || l.name || l.id,
