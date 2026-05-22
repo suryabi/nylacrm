@@ -76,7 +76,7 @@ export default function YesterdayActionItems({ refreshTick = 0 }) {
             </Badge>
           )}
           {done > 0 && (
-            <Badge variant="outline" className="text-[11px] text-emerald-700 border-emerald-300 bg-emerald-50">
+            <Badge variant="outline" className="text-[11px] text-blue-700 border-blue-300 bg-blue-50">
               {done} done
             </Badge>
           )}
@@ -102,14 +102,15 @@ export default function YesterdayActionItems({ refreshTick = 0 }) {
         {items.map((it, idx) => {
           const linked = !!it.lead_id;
           const stale = linked && !it.worked_upon;
+          const acted = linked && it.worked_upon;
           return (
             <div
               key={idx}
               className={`rounded-lg p-3 border transition-colors ${
                 stale
                   ? 'border-red-300 bg-red-50/60 ring-1 ring-red-200'
-                  : linked
-                    ? 'border-emerald-200 bg-emerald-50/40'
+                  : acted
+                    ? 'border-blue-300 bg-blue-50/60 ring-1 ring-blue-200'
                     : 'border-slate-200 bg-slate-50/50'
               }`}
               data-testid={`yesterday-item-${idx}`}
@@ -117,11 +118,11 @@ export default function YesterdayActionItems({ refreshTick = 0 }) {
               <div className="flex items-start gap-2">
                 {linked
                   ? (it.worked_upon
-                      ? <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 flex-shrink-0" />
+                      ? <CheckCircle2 className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                       : <AlertTriangle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />)
                   : <Clock className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm leading-snug ${stale ? 'text-red-900' : 'text-slate-900'}`}>
+                  <p className={`text-sm leading-snug ${stale ? 'text-red-900' : acted ? 'text-blue-900' : 'text-slate-900'}`}>
                     {it.description}
                   </p>
                   <div className="flex items-center flex-wrap gap-2 mt-1 text-[11px]">
@@ -130,7 +131,7 @@ export default function YesterdayActionItems({ refreshTick = 0 }) {
                         href={`/leads/${it.lead_id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className={`inline-flex items-center gap-1 font-medium hover:underline ${stale ? 'text-red-700' : 'text-emerald-700'}`}
+                        className={`inline-flex items-center gap-1 font-medium hover:underline ${stale ? 'text-red-700' : 'text-blue-700'}`}
                         data-testid={`yesterday-item-${idx}-lead-link`}
                       >
                         {it.lead_name || 'View lead'} <ExternalLink className="h-3 w-3" />
@@ -138,8 +139,8 @@ export default function YesterdayActionItems({ refreshTick = 0 }) {
                     ) : (
                       <span className="text-slate-500 italic">Not associated with any lead</span>
                     )}
-                    {linked && it.worked_upon && it.last_activity && (
-                      <span className="text-slate-500">
+                    {acted && it.last_activity && (
+                      <span className="text-blue-700">
                         · last activity: {it.last_activity.activity_type}
                         {it.last_activity.created_by_name ? ` by ${it.last_activity.created_by_name}` : ''}
                       </span>

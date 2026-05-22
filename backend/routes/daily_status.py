@@ -126,11 +126,15 @@ def _action_items_to_text(items):
 
 
 async def _push_followups_to_leads(items, target_user_id, status_date=None, user_name=None):
-    """For every action item that has both a lead_id and a follow_up_date,
-    update that lead's next_follow_up so the lead doesn't fall off the
-    follow-up radar AND auto-log an `action_item` activity entry on the lead
-    so the daily-status commitment shows up in the lead's activity timeline.
-    Best-effort — failures here must not roll back the status itself."""
+    """For every action item that has a lead_id, auto-log an `action_item`
+    activity entry on the lead so the daily-status commitment shows up in
+    the lead's activity timeline.
+    Best-effort — failures here must not roll back the status itself.
+
+    NOTE: We intentionally do NOT touch the lead's `next_follow_up` date
+    here. Action-item follow-up dates and lead-level follow-up dates are
+    tracked independently (per user request 2026-05-22).
+    """
     if not items:
         return
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -139,21 +143,7 @@ async def _push_followups_to_leads(items, target_user_id, status_date=None, user
         if not lid:
             continue
         date = it.get('follow_up_date')
-        # 1. Set lead's next_follow_up
-        if date:
-            try:
-                await get_tdb().leads.update_one(
-                    {'id': lid},
-                    {'$set': {
-                        'next_follow_up': date,
-                        'next_follow_up_set_by': target_user_id,
-                        'next_follow_up_source': 'daily_status',
-                        'updated_at': now_iso,
-                    }}
-                )
-            except Exception:
-                pass
-        # 2. Log an `action_item` activity entry on the lead
+        # Log an `action_item` activity entry on the lead
         try:
             desc = (it.get('description') or '').strip()
             if not desc:

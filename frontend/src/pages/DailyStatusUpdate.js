@@ -635,7 +635,7 @@ export default function DailyStatusUpdate() {
                 </h3>
               </div>
               <p className="text-xs text-slate-500 mb-3">
-                Each action item must be linked to a lead so we can trace whether it was followed up. If it's not lead-related, explicitly tick "Not associated with any lead". The selected status date will automatically become the next follow-up date on every linked lead.
+                Each action item must be linked to a lead so we can trace whether it was followed up. If it's not lead-related, explicitly tick "Not associated with any lead".
               </p>
               <ActionItemsBuilder
                 value={actionItems}

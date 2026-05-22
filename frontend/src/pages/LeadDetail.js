@@ -30,6 +30,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { MapPin } from 'lucide-react';
 import ActivityTimeline from '../components/ActivityTimeline';
+import ActionItemsSection from '../components/ActionItemsSection';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
 import LogoUploader from '../components/LogoUploader';
@@ -2058,8 +2059,10 @@ ${userEmail}`;
 
           <Card className="p-4 sm:p-6">
             <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Activity Timeline</h2>
-            <ActivityTimeline activities={activities} />
+            <ActivityTimeline activities={activities.filter(a => a.activity_type !== 'action_item')} />
           </Card>
+
+          <ActionItemsSection actionItems={activities.filter(a => a.activity_type === 'action_item')} />
 
           {/* Lead Details */}
           <Card className="p-4 sm:p-6">
