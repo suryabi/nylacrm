@@ -1028,6 +1028,20 @@ ${userEmail}`;
                 )}
               </Button>
             )}
+
+            {/* Drive folder shortcut */}
+            {lead.drive_folder_id && (
+              <a
+                href={`https://drive.google.com/drive/folders/${lead.drive_folder_id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-2 py-1"
+                data-testid="lead-drive-folder-link"
+                title="Open this lead's folder in Google Drive"
+              >
+                <span>📁</span> Open in Drive
+              </a>
+            )}
             
             {/* Follow-up date - Hidden on very small screens */}
             {lead.next_followup_date && (

@@ -1377,7 +1377,27 @@ async def upload_gst_certificate(
         except Exception:
             pass
 
+    # If this account was converted from a lead, route the GST cert into
+    # the lead's dedicated Drive folder (so all collateral stays together).
     storage_path = f"{_objstore.APP_NAME}/gst-certs/{account_id}{suffix}"
+    try:
+        account_doc = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'lead_id': 1})
+        src_lead_uuid = (account_doc or {}).get('lead_id')
+        if src_lead_uuid:
+            lead_doc = await tdb.leads.find_one({'id': src_lead_uuid}, {'_id': 0, 'lead_id': 1})
+            human_lead_id = (lead_doc or {}).get('lead_id')
+            if human_lead_id:
+                storage_path = f"{human_lead_id}/gst-certificates/{account_id}{suffix}"
+                # Ensure the folder exists (idempotent, no-op if Drive is off)
+                try:
+                    from utils.google_drive_storage import ensure_lead_folder
+                    from core.tenant import get_current_tenant_id as _gctid
+                    await ensure_lead_folder(_gctid(), human_lead_id)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     try:
         from utils.storage import put_object as _disp_put
         await _disp_put(storage_path, contents, mime)

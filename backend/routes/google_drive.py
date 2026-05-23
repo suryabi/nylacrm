@@ -152,4 +152,44 @@ async def usage(current_user: dict = Depends(get_current_user)):
         raise HTTPException(403, "Only admins can view Drive usage")
     tenant_id = get_current_tenant_id()
     count = await db.google_drive_files.count_documents({"tenant_id": tenant_id})
-    return {"tenant_id": tenant_id, "files_uploaded": count}
+    folders = await db.google_drive_folders.count_documents({"tenant_id": tenant_id})
+    return {"tenant_id": tenant_id, "files_uploaded": count, "folders_created": folders}
+
+
+@router.post("/backfill-lead-folders")
+async def backfill_lead_folders(current_user: dict = Depends(get_current_user)):
+    """One-time helper: ensure every existing lead in this tenant has a Drive
+    folder (so historical leads work the same as newly-created ones). Idempotent
+    — safe to re-run."""
+    if not _is_admin(current_user):
+        raise HTTPException(403, "Only admins can run the backfill")
+    tenant_id = get_current_tenant_id()
+    cfg = await drive.get_drive_config(tenant_id)
+    if not cfg or not cfg.get("enabled") or not cfg.get("service_account_json"):
+        raise HTTPException(400, "Google Drive is not configured / enabled.")
+
+    cursor = db.leads.find(
+        {"tenant_id": tenant_id, "lead_id": {"$ne": None}},
+        {"_id": 0, "id": 1, "lead_id": 1, "drive_folder_id": 1},
+    )
+    created = 0
+    skipped = 0
+    errors = 0
+    async for lead in cursor:
+        if lead.get("drive_folder_id"):
+            skipped += 1
+            continue
+        try:
+            folder_id = await drive.ensure_lead_folder(tenant_id, lead["lead_id"])
+            if folder_id:
+                await db.leads.update_one(
+                    {"id": lead["id"], "tenant_id": tenant_id},
+                    {"$set": {"drive_folder_id": folder_id}},
+                )
+                created += 1
+            else:
+                skipped += 1
+        except Exception:
+            logger.exception("Backfill failed for lead %s", lead.get("lead_id"))
+            errors += 1
+    return {"ok": True, "created": created, "skipped": skipped, "errors": errors}

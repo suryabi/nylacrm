@@ -4256,6 +4256,20 @@ async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_c
     
     await get_tdb().leads.insert_one(doc)
     
+    # Best-effort: create a dedicated Drive folder for this lead (no-op if
+    # Drive isn't configured for this tenant).
+    try:
+        from utils.google_drive_storage import ensure_lead_folder
+        from core.tenant import get_current_tenant_id as _gctid
+        folder_id = await ensure_lead_folder(_gctid(), lead_obj.lead_id)
+        if folder_id:
+            await get_tdb().leads.update_one(
+                {'id': lead_obj.id},
+                {'$set': {'drive_folder_id': folder_id}}
+            )
+    except Exception:
+        logger.exception('Drive folder creation failed for lead %s', lead_obj.lead_id)
+    
     # Create initial activity
     activity = Activity(
         lead_id=lead_obj.id,

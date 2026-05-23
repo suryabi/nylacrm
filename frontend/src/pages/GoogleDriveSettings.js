@@ -79,6 +79,22 @@ export default function GoogleDriveSettings() {
     }
   };
 
+  const [backfilling, setBackfilling] = useState(false);
+  const runBackfill = async () => {
+    if (!window.confirm('Create a Drive folder for every existing lead in this tenant? Safe to re-run.')) return;
+    setBackfilling(true);
+    try {
+      const res = await axios.post(`${API}/google-drive/backfill-lead-folders`, {}, { headers: authHeaders() });
+      const { created, skipped, errors } = res.data;
+      toast.success(`Backfill complete — ${created} created · ${skipped} skipped · ${errors} errors`);
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Backfill failed');
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   const toggleEnabled = async (next) => {
     try {
       await axios.put(`${API}/google-drive/config`, { enabled: next }, { headers: authHeaders() });
@@ -188,10 +204,16 @@ export default function GoogleDriveSettings() {
 
         <div className="flex justify-end gap-2">
           {config?.has_service_account && (
-            <Button type="button" variant="outline" onClick={runTest} disabled={testing} data-testid="drive-test-btn">
-              {testing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-              Run connection test
-            </Button>
+            <>
+              <Button type="button" variant="outline" onClick={runBackfill} disabled={backfilling} data-testid="drive-backfill-btn">
+                {backfilling ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <FolderTree className="h-4 w-4 mr-2" />}
+                Backfill lead folders
+              </Button>
+              <Button type="button" variant="outline" onClick={runTest} disabled={testing} data-testid="drive-test-btn">
+                {testing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+                Run connection test
+              </Button>
+            </>
           )}
           <Button onClick={save} disabled={saving} data-testid="drive-save-btn">
             {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}

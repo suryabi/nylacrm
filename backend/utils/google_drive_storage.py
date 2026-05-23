@@ -114,6 +114,53 @@ async def _resolve_folder_path(svc, drive_id: str, root_id: str, segments: list[
     return parent_id
 
 
+async def ensure_lead_folder(tenant_id: str, lead_id: str) -> Optional[str]:
+    """Ensure a dedicated folder exists for this lead under the tenant's
+    folder_prefix (or shared-drive root). Returns the folder ID. Lookups +
+    creations are idempotent and cached in `google_drive_folders`.
+
+    Returns None silently if Drive isn't configured for this tenant — so the
+    caller (lead creation) never breaks when Drive is off.
+    """
+    if not lead_id:
+        return None
+    cached = await db.google_drive_folders.find_one(
+        {"tenant_id": tenant_id, "kind": "lead", "ref_id": lead_id},
+        {"_id": 0, "folder_id": 1},
+    )
+    if cached and cached.get("folder_id"):
+        return cached["folder_id"]
+    svc, cfg = await _service_for_tenant(tenant_id)
+    if not svc:
+        return None
+    drive_id = cfg["shared_drive_id"]
+    prefix = (cfg.get("folder_prefix") or "").strip("/")
+    segments = ([prefix] if prefix else []) + [lead_id]
+    folder_id = await _resolve_folder_path(svc, drive_id, drive_id, segments)
+    await db.google_drive_folders.update_one(
+        {"tenant_id": tenant_id, "kind": "lead", "ref_id": lead_id},
+        {"$set": {
+            "tenant_id": tenant_id,
+            "kind": "lead",
+            "ref_id": lead_id,
+            "folder_id": folder_id,
+            "shared_drive_id": drive_id,
+            "folder_prefix": prefix,
+        }},
+        upsert=True,
+    )
+    return folder_id
+
+
+async def get_lead_folder_id(tenant_id: str, lead_id: str) -> Optional[str]:
+    """Return the Drive folder ID for the lead, if any (without creating)."""
+    cached = await db.google_drive_folders.find_one(
+        {"tenant_id": tenant_id, "kind": "lead", "ref_id": lead_id},
+        {"_id": 0, "folder_id": 1},
+    )
+    return cached.get("folder_id") if cached else None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API — drop-in for utils.object_storage
 # ─────────────────────────────────────────────────────────────────────────────

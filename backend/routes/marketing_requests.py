@@ -115,13 +115,14 @@ async def _stored_files_from_ids(tenant_id: str, file_ids: List[str]) -> List[di
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    lead_id: Optional[str] = Query(None, description="Optional Lead ID to scope the upload under the lead's Drive folder"),
     current_user: dict = Depends(get_current_user),
 ):
     """Upload a single file into object storage and return its handle.
 
-    The caller then references the returned `file_id` when creating a request,
-    adding a version, etc. This lets the form do many parallel uploads while
-    the create-request payload stays small.
+    If `lead_id` is supplied (the human-readable lead_id like INNO-MUM-L26-001),
+    the file is stored under `<lead_id>/marketing-requests/...` so it lands
+    inside the lead's dedicated Drive folder.
     """
     tenant_id = get_current_tenant_id()
     file_id = str(uuid.uuid4())
@@ -129,7 +130,16 @@ async def upload_file(
     if not raw:
         raise HTTPException(400, "Empty file")
     safe_name = (file.filename or "upload.bin").replace("/", "_")
-    path = f"nyla-crm/{tenant_id}/marketing-requests/{file_id}/{safe_name}"
+    if lead_id:
+        # Ensure the lead folder exists (idempotent — no-op if Drive is off)
+        try:
+            from utils.google_drive_storage import ensure_lead_folder
+            await ensure_lead_folder(tenant_id, lead_id)
+        except Exception:
+            pass
+        path = f"{lead_id}/marketing-requests/{file_id}/{safe_name}"
+    else:
+        path = f"nyla-crm/{tenant_id}/marketing-requests/{file_id}/{safe_name}"
 
     try:
         meta = await put_object(path, raw, file.content_type or "application/octet-stream")
