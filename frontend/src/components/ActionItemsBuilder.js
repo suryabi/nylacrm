@@ -103,16 +103,6 @@ function EditingRow({ index, item, onChange, onRemove, disabled }) {
           {index + 1}
         </div>
         <div className="flex-1 space-y-2">
-          <Textarea
-            value={item.description || ''}
-            onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="What needs to be done? e.g. Call back regarding pricing proposal"
-            rows={2}
-            disabled={disabled}
-            className="text-sm resize-none"
-            data-testid={`action-item-desc-${index}`}
-          />
-
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide flex items-center gap-1">
               <MapPin className="h-3 w-3" />
@@ -128,6 +118,21 @@ function EditingRow({ index, item, onChange, onRemove, disabled }) {
               })}
               disabled={disabled || isExplicitlyUnassociated}
               testId={`action-item-lead-${index}`}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+              Comments
+            </label>
+            <Textarea
+              value={item.description || ''}
+              onChange={(e) => onChange({ description: e.target.value })}
+              placeholder="What needs to be done? e.g. Call back regarding pricing proposal"
+              rows={2}
+              disabled={disabled}
+              className="text-sm resize-none"
+              data-testid={`action-item-desc-${index}`}
             />
           </div>
 
