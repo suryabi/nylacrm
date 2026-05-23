@@ -145,19 +145,24 @@ async def _push_followups_to_leads(items, target_user_id, status_date=None, user
         if not lid:
             continue
         date = it.get('follow_up_date')
-        # Log an `action_item` activity entry on the lead
+        # Log an `action_item` activity entry on the lead. Description is
+        # optional now — if missing, we still create the activity row with a
+        # placeholder so it shows up on the timeline with the "ACTION ITEM"
+        # label and feeds the planned-day green/red colouring.
         try:
             desc = (it.get('description') or '').strip()
-            if not desc:
-                continue
-            note_parts = [desc]
-            if date:
-                note_parts.append(f"(planned for {date})")
+            if desc:
+                note_parts = [desc]
+                if date:
+                    note_parts.append(f"(planned for {date})")
+                full_desc = ' '.join(note_parts)
+            else:
+                full_desc = f"Action item planned for {date}" if date else "Action item"
             await get_tdb().activities.insert_one({
                 'id': str(uuid.uuid4()),
                 'lead_id': lid,
                 'activity_type': 'action_item',
-                'description': ' '.join(note_parts),
+                'description': full_desc,
                 'interaction_method': None,
                 'created_by': target_user_id,
                 'created_by_name': user_name,

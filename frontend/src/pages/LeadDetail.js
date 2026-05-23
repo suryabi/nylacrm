@@ -2064,7 +2064,7 @@ ${userEmail}`;
 
           <Card className="p-4 sm:p-6">
             <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Activity Timeline</h2>
-            <ActivityTimeline activities={activities.filter(a => a.activity_type !== 'action_item')} />
+            <ActivityTimeline activities={activities} />
           </Card>
 
           {/* Lead Details */}
