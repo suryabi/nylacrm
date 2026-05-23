@@ -16,7 +16,7 @@ from database import db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.credit_note import CreditNote, CreditNoteApplication
-from utils.object_storage import put_object, get_object
+from utils.storage import put_object, get_object
 
 router = APIRouter(tags=["Credit Notes"])
 logger = logging.getLogger(__name__)
@@ -182,7 +182,7 @@ async def upload_issuance_attachment(
         f"nyla-crm/credit-note-issuances/{distributor_id}/{credit_note_id}/"
         f"{uuid.uuid4()}-{safe_name}"
     )
-    put_object(storage_path, contents, file.content_type or "application/octet-stream")
+    await put_object(storage_path, contents, file.content_type or "application/octet-stream")
     logger.info(
         f"Uploaded issuance attachment for CN {cn.get('credit_note_number')} "
         f"({len(contents)} bytes) by {current_user['email']}"
@@ -209,7 +209,7 @@ async def download_issuance_attachment(
     )
     if not issuance or not issuance.get("attachment_path"):
         raise HTTPException(status_code=404, detail="Attachment not found")
-    content, content_type = get_object(issuance["attachment_path"])
+    content, content_type = await get_object(issuance["attachment_path"])
     headers = {
         "Content-Disposition": f'attachment; filename="{issuance.get("attachment_filename") or "attachment"}"'
     }

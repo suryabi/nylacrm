@@ -183,6 +183,10 @@ routes_router.include_router(distributor_chat_router, tags=["Distributor Chat"])
 from .slack import router as slack_router
 routes_router.include_router(slack_router, prefix="/slack", tags=["Slack Integration"])
 
+# Google Drive — Service Account + Shared Drive storage backend (per-tenant)
+from .google_drive import router as google_drive_router
+routes_router.include_router(google_drive_router, prefix="/google-drive", tags=["Google Drive"])
+
 # Admin → Fleet (Vehicles & Drivers) — independent CRUD
 from .admin_vehicles import router as admin_vehicles_router
 from .admin_drivers import router as admin_drivers_router

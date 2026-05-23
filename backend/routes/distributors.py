@@ -26,7 +26,8 @@ from models.distributor import (
     ProvisionalInvoiceCreate, ReconciliationCreate, DebitCreditNoteCreate
 )
 from utils.pdf_generator import generate_debit_credit_note_pdf, generate_customer_invoice_pdf
-from utils.object_storage import upload_pdf, download_pdf, init_storage
+from utils.storage import upload_pdf, download_pdf
+from utils.object_storage import init_storage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -7966,7 +7967,7 @@ async def generate_monthly_note(
         
         # Upload PDF to object storage
         pdf_filename = f"{note_number}.pdf"
-        storage_result = upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
+        storage_result = await upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
         
         # Store PDF reference in note document
         note_doc["pdf_path"] = storage_result.get("path")
@@ -8047,7 +8048,7 @@ async def download_note_pdf(
             
             # Upload and store reference
             pdf_filename = f"{note.get('note_number', note_id)}.pdf"
-            storage_result = upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
+            storage_result = await upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
             
             # Update note with PDF path
             await db.distributor_debit_credit_notes.update_one(
@@ -8067,7 +8068,7 @@ async def download_note_pdf(
     
     # Download PDF from storage
     try:
-        pdf_content = download_pdf(pdf_path)
+        pdf_content = await download_pdf(pdf_path)
         
         filename = f"{note.get('note_number', note_id)}.pdf"
         

@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, 
 from database import db
 from core.tenant import get_current_tenant_id
 from deps import get_current_user
-from utils.object_storage import put_object, get_object
+from utils.storage import put_object, get_object
 from models.marketing_request import (
     MarketingRequest, MarketingRequestCreate, StatusChangeRequest,
     CommentCreate, VersionCreate, ProductionSubmitRequest,
@@ -132,7 +132,7 @@ async def upload_file(
     path = f"nyla-crm/{tenant_id}/marketing-requests/{file_id}/{safe_name}"
 
     try:
-        meta = put_object(path, raw, file.content_type or "application/octet-stream")
+        meta = await put_object(path, raw, file.content_type or "application/octet-stream")
     except Exception as e:
         logger.error(f"Object-storage upload failed: {e}")
         raise HTTPException(502, f"Storage upload failed: {e}")
@@ -160,7 +160,7 @@ async def download_file(file_id: str, current_user: dict = Depends(get_current_u
     if not row:
         raise HTTPException(404, "File not found")
     try:
-        data, ctype = get_object(row["path"])
+        data, ctype = await get_object(row["path"])
     except Exception as e:
         raise HTTPException(502, f"Storage fetch failed: {e}")
     headers = {"Content-Disposition": f'inline; filename="{row.get("filename", "file")}"'}

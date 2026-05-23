@@ -1379,7 +1379,8 @@ async def upload_gst_certificate(
 
     storage_path = f"{_objstore.APP_NAME}/gst-certs/{account_id}{suffix}"
     try:
-        _objstore.put_object(storage_path, contents, mime)
+        from utils.storage import put_object as _disp_put
+        await _disp_put(storage_path, contents, mime)
     except Exception as e:
         _logger.warning(f"Failed to persist GST cert to object storage: {e}")
         storage_path = None
@@ -1432,7 +1433,8 @@ async def download_gst_certificate(
     if not account or not account.get('gst_certificate_path'):
         raise HTTPException(status_code=404, detail='No GST certificate uploaded for this account')
     try:
-        content, content_type = _objstore.get_object(account['gst_certificate_path'])
+        from utils.storage import get_object as _disp_get
+        content, content_type = await _disp_get(account['gst_certificate_path'])
     except Exception as e:
         raise HTTPException(status_code=502, detail=f'Could not retrieve GST certificate: {e}')
     return _StreamingResponse(
@@ -1468,7 +1470,8 @@ async def delete_gst_certificate(
     stored_path = account.get('gst_certificate_path')
     if stored_path:
         try:
-            _objstore.delete_object(stored_path)
+            from utils.storage import delete_object as _disp_del
+            await _disp_del(stored_path)
         except Exception as e:
             _logger.warning(f"Storage delete failed for {stored_path}: {e} — continuing with DB cleanup")
 
