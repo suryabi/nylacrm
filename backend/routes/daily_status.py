@@ -390,20 +390,24 @@ async def update_daily_status(
 
 @router.get("/daily-status/yesterday-followup-status")
 async def yesterday_followup_status(
+    status_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """For each action item from the user's previous daily-status, report
     whether any activity has been logged against the linked lead since
     that status date. Lets the team see at-a-glance which planned items
     were actually worked upon today.
+
+    If `status_date` is supplied, the "previous" status is the most recent
+    daily_status STRICTLY BEFORE that date. Otherwise it defaults to today.
     """
     tdb = get_tdb()
     uid = current_user['id']
-    today = datetime.now(timezone.utc).date().isoformat()
+    anchor = status_date or datetime.now(timezone.utc).date().isoformat()
 
-    # Find the most recent daily_status for this user BEFORE today.
+    # Find the most recent daily_status for this user BEFORE the anchor date.
     cursor = tdb.daily_status.find(
-        {'user_id': uid, 'status_date': {'$lt': today}},
+        {'user_id': uid, 'status_date': {'$lt': anchor}},
         {'_id': 0}
     ).sort('status_date', -1).limit(1)
     prev = await cursor.to_list(length=1)

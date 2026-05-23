@@ -612,9 +612,10 @@ export default function DailyStatusUpdate() {
 
         {/* Form Sections - Full Width, Larger */}
         <div className="space-y-4 mb-6">
-          {/* Yesterday's Action Items follow-up status (only when posting for self & today) */}
-          {isViewingOwnStatus && isToday && (
-            <YesterdayActionItems />
+          {/* Previous status action items follow-up — always shown for the
+             user's own status, regardless of which date is selected. */}
+          {isViewingOwnStatus && (
+            <YesterdayActionItems statusDate={selectedDate} />
           )}
 
           {/* Updates Section */}

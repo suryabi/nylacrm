@@ -195,34 +195,35 @@ function EditingRow({ index, item, onChange, onRemove, disabled }) {
 // ────────────────────────────────────────────────────────────────────────────
 function SavedRow({ index, item, onChange, onRemove, disabled }) {
   const linked = !!item.lead_id;
+  const hasComments = !!(item.description || '').trim();
   return (
     <div
-      className="rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 py-2 flex items-start gap-2"
+      className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 flex items-start gap-2"
       data-testid={`action-item-row-${index}`}
     >
-      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold flex items-center justify-center mt-0.5">
-        <Check className="h-3.5 w-3.5" />
+      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold flex items-center justify-center mt-0.5">
+        {index + 1}
       </div>
       <div className="flex-1 min-w-0">
-        {(item.description || '').trim() ? (
-          <p className="text-sm text-slate-900 leading-snug" data-testid={`action-item-display-${index}`}>
-            <span className="font-medium text-slate-500 mr-1">{index + 1}.</span>
-            {item.description}
-          </p>
-        ) : (
-          <p className="text-sm text-slate-400 italic leading-snug" data-testid={`action-item-display-${index}`}>
-            <span className="font-medium text-slate-500 mr-1 not-italic">{index + 1}.</span>
-            (no comments)
-          </p>
-        )}
-        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-600">
-          <MapPin className="h-3 w-3 text-slate-400" />
+        {/* Lead first */}
+        <div className="flex items-center gap-1.5 text-sm" data-testid={`action-item-display-${index}`}>
+          <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
           {linked ? (
-            <span className="font-medium text-emerald-700">{item.lead_name || item.lead_id}</span>
+            <span className="font-medium text-slate-800">{item.lead_name || item.lead_id}</span>
           ) : (
             <span className="italic text-slate-500">Not associated with any lead</span>
           )}
         </div>
+        {/* Comments on the next line */}
+        {hasComments ? (
+          <p className="text-xs text-slate-600 leading-snug mt-1 pl-5">
+            {item.description}
+          </p>
+        ) : (
+          <p className="text-xs text-slate-400 italic leading-snug mt-1 pl-5">
+            (no comments)
+          </p>
+        )}
       </div>
       {!disabled && (
         <div className="flex items-center gap-1 flex-shrink-0">
