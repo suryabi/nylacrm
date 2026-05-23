@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, MapPin, AlertCircle, Search, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, MapPin, AlertCircle, Search, ChevronDown, Save, Pencil, X, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Checkbox } from './ui/checkbox';
@@ -9,10 +9,13 @@ import { leadsAPI } from '../utils/api';
 /**
  * Structured action-item builder for the Daily Status module.
  *
- * Every action item must EITHER be associated with a lead OR be explicitly
- * marked as "not associated with any lead" via the checkbox. When a lead is
- * picked and a follow-up date is set, the backend will copy that date onto
- * the lead's `next_follow_up` so the item is traceable.
+ * Per-item lifecycle:
+ *   1. New row → editing mode (description textarea + lead picker + Save).
+ *   2. Save → row collapses into a compact list-style display with Edit / Delete.
+ *   3. Edit → row re-opens for editing.
+ *
+ * Each action item must EITHER be associated with a lead OR be explicitly
+ * marked as "not associated with any lead" via the checkbox.
  *
  * Props:
  *   value:    Array of action item objects to render.
@@ -29,7 +32,7 @@ export default function ActionItemsBuilder({ value, onChange, disabled = false }
   const addItem = () => {
     onChange([
       ...items,
-      { description: '', lead_id: null, lead_name: null, no_lead: false, follow_up_date: '' },
+      { description: '', lead_id: null, lead_name: null, no_lead: false, follow_up_date: '', _editing: true },
     ]);
   };
   const removeItem = (idx) => {
@@ -72,9 +75,23 @@ export default function ActionItemsBuilder({ value, onChange, disabled = false }
 }
 
 function ActionItemRow({ index, item, onChange, onRemove, disabled }) {
+  const isEditing = !!item._editing;
+
+  if (isEditing) {
+    return <EditingRow index={index} item={item} onChange={onChange} onRemove={onRemove} disabled={disabled} />;
+  }
+  return <SavedRow index={index} item={item} onChange={onChange} onRemove={onRemove} disabled={disabled} />;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Editable row — shown while user is filling/editing an item.
+// ────────────────────────────────────────────────────────────────────────────
+function EditingRow({ index, item, onChange, onRemove, disabled }) {
   const isAssociated = !!item.lead_id;
   const isExplicitlyUnassociated = !!item.no_lead;
   const needsLeadDecision = !isAssociated && !isExplicitlyUnassociated;
+  const hasDescription = !!(item.description || '').trim();
+  const canSave = hasDescription && (isAssociated || isExplicitlyUnassociated);
 
   return (
     <div
@@ -114,13 +131,12 @@ function ActionItemRow({ index, item, onChange, onRemove, disabled }) {
             />
           </div>
 
-          <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
             <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
               <Checkbox
                 checked={isExplicitlyUnassociated}
                 onCheckedChange={(checked) => onChange({
                   no_lead: !!checked,
-                  // Clear lead when marking "no lead"
                   lead_id: checked ? null : item.lead_id,
                   lead_name: checked ? null : item.lead_name,
                 })}
@@ -138,19 +154,91 @@ function ActionItemRow({ index, item, onChange, onRemove, disabled }) {
             )}
 
             {!disabled && (
-              <button
-                type="button"
-                onClick={onRemove}
-                className="ml-auto text-slate-400 hover:text-red-600 transition-colors"
-                title="Remove action item"
-                data-testid={`action-item-remove-${index}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1.5 ml-auto">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onRemove}
+                  className="h-7 px-2 text-slate-500 hover:text-red-600"
+                  data-testid={`action-item-remove-${index}`}
+                  title="Delete this item"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onChange({ _editing: false })}
+                  disabled={!canSave}
+                  className="h-7 px-3"
+                  data-testid={`action-item-save-${index}`}
+                >
+                  <Save className="h-3.5 w-3.5 mr-1" />
+                  Save
+                </Button>
+              </div>
             )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Saved (collapsed) row — compact list display with Edit / Delete actions.
+// ────────────────────────────────────────────────────────────────────────────
+function SavedRow({ index, item, onChange, onRemove, disabled }) {
+  const linked = !!item.lead_id;
+  return (
+    <div
+      className="rounded-lg border border-emerald-200 bg-emerald-50/40 px-3 py-2 flex items-start gap-2"
+      data-testid={`action-item-row-${index}`}
+    >
+      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold flex items-center justify-center mt-0.5">
+        <Check className="h-3.5 w-3.5" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-slate-900 leading-snug" data-testid={`action-item-display-${index}`}>
+          <span className="font-medium text-slate-500 mr-1">{index + 1}.</span>
+          {item.description}
+        </p>
+        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-600">
+          <MapPin className="h-3 w-3 text-slate-400" />
+          {linked ? (
+            <span className="font-medium text-emerald-700">{item.lead_name || item.lead_id}</span>
+          ) : (
+            <span className="italic text-slate-500">Not associated with any lead</span>
+          )}
+        </div>
+      </div>
+      {!disabled && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => onChange({ _editing: true })}
+            className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600"
+            data-testid={`action-item-edit-${index}`}
+            title="Edit"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={onRemove}
+            className="h-7 w-7 p-0 text-slate-500 hover:text-red-600"
+            data-testid={`action-item-delete-${index}`}
+            title="Delete"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -165,7 +253,6 @@ function LeadPicker({ value, onChange, disabled, testId }) {
   const [loading, setLoading] = useState(false);
   const containerRef = useRef(null);
 
-  // Close on outside click
   useEffect(() => {
     function onDocClick(e) {
       if (!containerRef.current?.contains(e.target)) setOpen(false);
@@ -174,14 +261,12 @@ function LeadPicker({ value, onChange, disabled, testId }) {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
-  // Search leads (debounced)
   useEffect(() => {
     if (!open) return;
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
         const res = await leadsAPI.getAll({ search: query, pageSize: 15 });
-        // Backend returns { data: [...], total, page, ... } – not { leads: [...] }.
         const body = res?.data;
         const list = Array.isArray(body?.data)
           ? body.data

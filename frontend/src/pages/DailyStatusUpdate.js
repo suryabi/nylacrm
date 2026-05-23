@@ -405,6 +405,13 @@ export default function DailyStatusUpdate() {
       return;
     }
 
+    // Block posting if any action item is still being edited (unsaved).
+    const unsaved = (actionItems || []).find(it => it._editing);
+    if (unsaved) {
+      toast.error('Please save (or delete) every action item before posting your status.');
+      return;
+    }
+
     if (!yesterdayUpdates.trim() && !todayActions.trim() && trimmedItems.length === 0) {
       toast.error('Please fill at least one section');
       return;
@@ -428,7 +435,7 @@ export default function DailyStatusUpdate() {
       // action item — users no longer pick a per-item date.
       const trimmedItems = (actionItems || [])
         .filter(it => (it.description || '').trim())
-        .map(it => ({ ...it, follow_up_date: selectedDate }));
+        .map(({ _editing, ...rest }) => ({ ...rest, follow_up_date: selectedDate }));
       const data = {
         status_date: selectedDate,
         yesterday_updates: convertToBulletFormat(yesterdayUpdates),
