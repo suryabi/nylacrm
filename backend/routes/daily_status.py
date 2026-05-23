@@ -496,12 +496,15 @@ async def auto_populate_from_activities(
         start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
         end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
         
-        # Get original activities (not copies)
+        # Get original activities (not copies). Exclude `action_item` rows so
+        # daily-status commitments that get auto-logged on linked leads don't
+        # boomerang back into the same day's status summary.
         activities = await get_tdb().activities.find(
             {
                 'created_by': fetch_user_id,
                 'created_at': {'$gte': start_datetime, '$lte': end_datetime},
-                'is_shared_copy': {'$ne': True}  # Exclude copied activities to avoid duplicates
+                'is_shared_copy': {'$ne': True},
+                'activity_type': {'$ne': 'action_item'},
             },
             {'_id': 0}
         ).to_list(100)
