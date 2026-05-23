@@ -73,11 +73,12 @@ class DailyStatusUpdate(BaseModel):
 def _sanitize_action_items_v2(items):
     """Validate + clean structured action items.
 
-    Each item must have:
-      - description (non-empty)
-      - either lead_id (truthy) OR no_lead == True
-    Anything else raises HTTPException(400).
-    Returns the cleaned list ready for persistence.
+    Each item must have either:
+      - lead_id (truthy), OR
+      - no_lead == True
+
+    Description (comments) is OPTIONAL. Rows with no lead decision AND no
+    description are treated as blank and dropped silently.
     """
     if items is None:
         return None
@@ -88,10 +89,11 @@ def _sanitize_action_items_v2(items):
         if not isinstance(it, dict):
             continue
         desc = (it.get('description') or '').strip()
-        if not desc:
-            continue  # skip blank rows
         lead_id = (it.get('lead_id') or '').strip() or None
         no_lead = bool(it.get('no_lead'))
+        # Skip truly blank rows.
+        if not desc and not lead_id and not no_lead:
+            continue
         if not lead_id and not no_lead:
             raise HTTPException(
                 status_code=400,

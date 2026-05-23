@@ -90,8 +90,7 @@ function EditingRow({ index, item, onChange, onRemove, disabled }) {
   const isAssociated = !!item.lead_id;
   const isExplicitlyUnassociated = !!item.no_lead;
   const needsLeadDecision = !isAssociated && !isExplicitlyUnassociated;
-  const hasDescription = !!(item.description || '').trim();
-  const canSave = hasDescription && (isAssociated || isExplicitlyUnassociated);
+  const canSave = isAssociated || isExplicitlyUnassociated;
 
   return (
     <div
@@ -123,7 +122,7 @@ function EditingRow({ index, item, onChange, onRemove, disabled }) {
 
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
-              Comments
+              Comments <span className="text-slate-400 font-normal normal-case">(optional)</span>
             </label>
             <Textarea
               value={item.description || ''}
@@ -205,10 +204,17 @@ function SavedRow({ index, item, onChange, onRemove, disabled }) {
         <Check className="h-3.5 w-3.5" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-900 leading-snug" data-testid={`action-item-display-${index}`}>
-          <span className="font-medium text-slate-500 mr-1">{index + 1}.</span>
-          {item.description}
-        </p>
+        {(item.description || '').trim() ? (
+          <p className="text-sm text-slate-900 leading-snug" data-testid={`action-item-display-${index}`}>
+            <span className="font-medium text-slate-500 mr-1">{index + 1}.</span>
+            {item.description}
+          </p>
+        ) : (
+          <p className="text-sm text-slate-400 italic leading-snug" data-testid={`action-item-display-${index}`}>
+            <span className="font-medium text-slate-500 mr-1 not-italic">{index + 1}.</span>
+            (no comments)
+          </p>
+        )}
         <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-600">
           <MapPin className="h-3 w-3 text-slate-400" />
           {linked ? (

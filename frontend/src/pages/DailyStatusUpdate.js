@@ -398,7 +398,7 @@ export default function DailyStatusUpdate() {
   // Handle submit button click - show confirmation if posting for someone else
   const handleSubmitClick = () => {
     // Validate every action item has a lead OR is explicitly marked as un-associated.
-    const trimmedItems = (actionItems || []).filter(it => (it.description || '').trim());
+    const trimmedItems = (actionItems || []).filter(it => (it.description || '').trim() || it.lead_id || it.no_lead);
     const invalid = trimmedItems.find(it => !it.lead_id && !it.no_lead);
     if (invalid) {
       toast.error('Each action item must be associated with a lead, or marked as "not associated with any lead".');
@@ -433,8 +433,9 @@ export default function DailyStatusUpdate() {
       const existing = pastStatuses.find(s => s.status_date === selectedDate);
       // The selected status date is the implicit follow-up date for every
       // action item — users no longer pick a per-item date.
+      // Keep items that have either a lead decision OR some content.
       const trimmedItems = (actionItems || [])
-        .filter(it => (it.description || '').trim())
+        .filter(it => (it.description || '').trim() || it.lead_id || it.no_lead)
         .map(({ _editing, ...rest }) => ({ ...rest, follow_up_date: selectedDate }));
       const data = {
         status_date: selectedDate,
