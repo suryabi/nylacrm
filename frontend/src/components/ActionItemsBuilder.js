@@ -195,6 +195,7 @@ function EditingRow({ index, item, onChange, onRemove, disabled }) {
 // ────────────────────────────────────────────────────────────────────────────
 function SavedRow({ index, item, onChange, onRemove, disabled }) {
   const linked = !!item.lead_id;
+  const taskLinked = !linked && !!item.task_id;
   const hasComments = !!(item.description || '').trim();
   return (
     <div
@@ -206,10 +207,23 @@ function SavedRow({ index, item, onChange, onRemove, disabled }) {
       </div>
       <div className="flex-1 min-w-0">
         {/* Lead first */}
-        <div className="flex items-center gap-1.5 text-sm" data-testid={`action-item-display-${index}`}>
+        <div className="flex items-center gap-1.5 text-sm flex-wrap" data-testid={`action-item-display-${index}`}>
           <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
           {linked ? (
             <span className="font-medium text-slate-800">{item.lead_name || item.lead_id}</span>
+          ) : taskLinked ? (
+            <>
+              <span className="italic text-slate-500">Not associated with any lead</span>
+              <a
+                href={`/tasks?task=${item.task_id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 hover:underline"
+                data-testid={`action-item-task-link-${index}`}
+              >
+                {item.task_number || 'Task'}
+              </a>
+            </>
           ) : (
             <span className="italic text-slate-500">Not associated with any lead</span>
           )}

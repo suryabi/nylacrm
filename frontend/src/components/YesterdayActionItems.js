@@ -59,9 +59,9 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
   const { previous_status_date: prevDate, items } = data;
   if (!prevDate || items.length === 0) return null;
 
-  const pending = items.filter(it => it.lead_id && !it.worked_upon).length;
-  const done = items.filter(it => it.lead_id && it.worked_upon).length;
-  const noLead = items.filter(it => !it.lead_id).length;
+  const pending = items.filter(it => (it.lead_id || it.task_id) && !it.worked_upon).length;
+  const done = items.filter(it => (it.lead_id || it.task_id) && it.worked_upon).length;
+  const noLead = items.filter(it => !it.lead_id && !it.task_id).length;
 
   return (
     <Card className="p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90" data-testid="yesterday-action-items">
@@ -105,8 +105,10 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
       <div className="space-y-2">
         {items.map((it, idx) => {
           const linked = !!it.lead_id;
-          const stale = linked && !it.worked_upon;
-          const acted = linked && it.worked_upon;
+          const taskLinked = !linked && !!it.task_id;
+          const trackable = linked || taskLinked;
+          const stale = trackable && !it.worked_upon;
+          const acted = trackable && it.worked_upon;
           const rowCls = stale
             ? 'border-red-300 bg-red-50/60 ring-1 ring-red-200'
             : acted
@@ -123,8 +125,8 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
               <div className="flex items-start gap-2">
                 <Icon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${iconCls}`} />
                 <div className="flex-1 min-w-0">
-                  {/* Lead first */}
-                  <div className="flex items-center gap-1.5 text-sm">
+                  {/* Lead OR task link first */}
+                  <div className="flex items-center gap-1.5 text-sm flex-wrap">
                     <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                     {linked ? (
                       <a
@@ -136,8 +138,23 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
                       >
                         {it.lead_name || 'View lead'} <ExternalLink className="h-3 w-3" />
                       </a>
+                    ) : taskLinked ? (
+                      <a
+                        href={`/tasks?task=${it.task_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`inline-flex items-center gap-1 font-medium hover:underline ${stale ? 'text-red-700' : acted ? 'text-emerald-700' : 'text-slate-700'}`}
+                        data-testid={`yesterday-item-${idx}-task-link`}
+                      >
+                        {it.task?.task_number || it.task_number || 'View task'} <ExternalLink className="h-3 w-3" />
+                      </a>
                     ) : (
                       <span className="italic text-slate-500">Not associated with any lead</span>
+                    )}
+                    {taskLinked && it.task?.status && (
+                      <Badge variant="outline" className="text-[10px] capitalize">
+                        {it.task.status.replace('_', ' ')}
+                      </Badge>
                     )}
                   </div>
                   {/* Comments next */}
@@ -151,15 +168,25 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
                     </p>
                   )}
                   <div className="flex items-center flex-wrap gap-2 mt-1 pl-5 text-[11px]">
-                    {acted && it.last_activity && (
+                    {acted && linked && it.last_activity && (
                       <span className="text-emerald-700">
                         last activity: {it.last_activity.activity_type}
                         {it.last_activity.created_by_name ? ` by ${it.last_activity.created_by_name}` : ''}
                       </span>
                     )}
-                    {stale && (
+                    {acted && taskLinked && (
+                      <span className="text-emerald-700">
+                        Task has been worked on
+                      </span>
+                    )}
+                    {stale && linked && (
                       <span className="font-medium text-red-700">
                         No follow-up activity recorded yet
+                      </span>
+                    )}
+                    {stale && taskLinked && (
+                      <span className="font-medium text-red-700">
+                        Task has had no updates yet
                       </span>
                     )}
                   </div>

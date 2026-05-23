@@ -105,6 +105,8 @@ def _sanitize_action_items_v2(items):
             'lead_name': (it.get('lead_name') or '').strip() or None,
             'no_lead': no_lead,
             'follow_up_date': (it.get('follow_up_date') or '').strip() or None,
+            'task_id': (it.get('task_id') or '').strip() or None,
+            'task_number': (it.get('task_number') or '').strip() or None,
         })
     return cleaned
 
@@ -175,6 +177,86 @@ async def _push_followups_to_leads(items, target_user_id, status_date=None, user
             pass
 
 
+async def _create_tasks_for_no_lead_items(items, user, status_date):
+    """For every `no_lead=True` action item that hasn't been linked to a task yet,
+    auto-create a Task (department from user's first dept or "Sales"), assign it to
+    the user, set due_date = the planned follow-up date, and stamp the resulting
+    `task_id` / `task_number` on the action item dict (mutates in place).
+
+    This lets the Daily Status UI render a green/red status indicator for
+    no-lead items based on whether the linked task has been worked upon.
+
+    Best-effort: failures do not roll back the status save.
+    """
+    if not items:
+        return
+    tdb = get_tdb()
+    user_id = user.get('id')
+    user_name = user.get('name') or user.get('email')
+    user_dept = user.get('department')
+    if isinstance(user_dept, list):
+        department = user_dept[0] if user_dept else 'Sales'
+    else:
+        department = user_dept or 'Sales'
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for it in items:
+        if not it.get('no_lead'):
+            continue
+        if it.get('task_id'):
+            continue  # Task already linked (edit re-save)
+        try:
+            desc = (it.get('description') or '').strip()
+            date = it.get('follow_up_date') or status_date
+            title = desc or f"Action item from daily status {status_date or ''}".strip()
+
+            # Allocate a sequential task number.
+            count = await tdb.tasks_v2.count_documents({})
+            task_number = f"TASK-{count + 1:05d}"
+            task_id = str(uuid.uuid4())
+
+            task_doc = {
+                'id': task_id,
+                'task_number': task_number,
+                'title': title[:200],
+                'description': desc,
+                'severity': 'medium',
+                'status': 'open',
+                'department_id': department,
+                'assignees': [user_id] if user_id else [],
+                'assignees_data': [{'id': user_id, 'name': user_name}] if user_id else [],
+                'milestone_id': None,
+                'labels': [],
+                'due_date': date,
+                'due_time': None,
+                'reminder_date': None,
+                'linked_entity_type': 'daily_status',
+                'linked_entity_id': status_date,
+                'watchers': [user_id] if user_id else [],
+                'created_by': user_id,
+                'created_by_name': user_name,
+                'created_at': now_iso,
+                'updated_at': now_iso,
+                'source': 'daily_status_action_item',
+            }
+            await tdb.tasks_v2.insert_one(task_doc)
+            # Activity row for the auto-creation, so updates are detectable later.
+            await tdb.task_activities.insert_one({
+                'id': str(uuid.uuid4()),
+                'task_id': task_id,
+                'action': 'created',
+                'old_value': None,
+                'new_value': None,
+                'created_by': user_id,
+                'created_by_name': user_name,
+                'created_at': now_iso,
+            })
+            it['task_id'] = task_id
+            it['task_number'] = task_number
+        except Exception:
+            # Don't roll back the daily-status save on task-creation hiccups.
+            pass
+
+
 # ============= DAILY STATUS ROUTES =============
 
 @router.post("/daily-status", response_model=DailyStatus)
@@ -231,6 +313,15 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
     # Sanitise + apply structured action items if the client sent them.
     items = _sanitize_action_items_v2(status_data.get('action_items_v2'))
     if items is not None:
+        # Auto-create tasks for "no lead" items so they're trackable.
+        # We need the target user's record (department + name) — the current
+        # user might be a manager posting on behalf.
+        actor = current_user
+        if target_user_id != current_user['id']:
+            target_user = await get_tdb().users.find_one({'id': target_user_id}, {'_id': 0})
+            if target_user:
+                actor = target_user
+        await _create_tasks_for_no_lead_items(items, actor, status_input.status_date)
         status_data['action_items_v2'] = items
         # Keep the bullet-text representation in sync so existing reports work.
         status_data['today_actions'] = _action_items_to_text(items)
@@ -361,6 +452,13 @@ async def update_daily_status(
     if items_in_payload:
         items = _sanitize_action_items_v2(update_data.get('action_items_v2'))
         if items is not None:
+            # Auto-create tasks for newly-added no_lead items.
+            actor = current_user
+            if status['user_id'] != current_user['id']:
+                target_user = await get_tdb().users.find_one({'id': status['user_id']}, {'_id': 0})
+                if target_user:
+                    actor = target_user
+            await _create_tasks_for_no_lead_items(items, actor, status.get('status_date'))
             update_data['action_items_v2'] = items
             update_data['today_actions'] = _action_items_to_text(items)
         else:
@@ -425,8 +523,10 @@ async def yesterday_followup_status(
     enriched = []
     for it in items_in:
         lid = it.get('lead_id')
+        tid = it.get('task_id')
         worked_upon = False
         last_activity = None
+        task_info = None
         if lid:
             cursor = tdb.activities.find(
                 {
@@ -445,10 +545,36 @@ async def yesterday_followup_status(
                     'created_at': res[0].get('created_at'),
                     'created_by_name': res[0].get('created_by_name'),
                 }
+        elif tid:
+            # No-lead item — check if the linked task has been touched. We
+            # consider any task_activities row beyond the auto-`created` row,
+            # OR any status change away from 'open', OR a comment, as "worked
+            # upon".
+            task = await tdb.tasks_v2.find_one({'id': tid}, {'_id': 0})
+            if task:
+                task_info = {
+                    'id': task.get('id'),
+                    'task_number': task.get('task_number'),
+                    'title': task.get('title'),
+                    'status': task.get('status'),
+                    'due_date': task.get('due_date'),
+                }
+                if task.get('status') and task.get('status') != 'open':
+                    worked_upon = True
+                else:
+                    progress_count = await tdb.task_activities.count_documents({
+                        'task_id': tid,
+                        'action': {'$ne': 'created'},
+                    })
+                    if progress_count == 0:
+                        progress_count = await tdb.task_comments_v2.count_documents({'task_id': tid})
+                    if progress_count > 0:
+                        worked_upon = True
         enriched.append({
             **it,
             'worked_upon': worked_upon,
             'last_activity': last_activity,
+            'task': task_info,
         })
 
     return {
