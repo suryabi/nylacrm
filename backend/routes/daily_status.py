@@ -207,7 +207,7 @@ async def _create_tasks_for_no_lead_items(items, user, status_date):
         try:
             desc = (it.get('description') or '').strip()
             date = it.get('follow_up_date') or status_date
-            title = desc or f"Action item from daily status {status_date or ''}".strip()
+            title = f"{user_name or 'User'} : Action Item"
 
             # Allocate a sequential task number.
             count = await tdb.tasks_v2.count_documents({})
