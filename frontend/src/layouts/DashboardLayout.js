@@ -273,6 +273,7 @@ const adminNavigationGroups = [
       { name: 'Tenant Settings', href: '/tenant-settings', icon: Settings, moduleKey: 'tenant_settings', roles: ADMIN_ONLY_ROLES },
       { name: 'API Keys', href: '/settings/api-keys', icon: KeyRound, moduleKey: 'api_keys', roles: ADMIN_ONLY_ROLES },
       { name: 'Zoho Books', href: '/settings/integrations/zoho', icon: Cable, moduleKey: 'zoho_integration', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Slack', href: '/admin/slack', icon: Cable, moduleKey: 'slack_integration', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
     ],
   },

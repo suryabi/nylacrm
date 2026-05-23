@@ -179,6 +179,10 @@ routes_router.include_router(zoho_books_router, tags=["Zoho Books"])
 # Distributor ↔ Supplier chat
 routes_router.include_router(distributor_chat_router, tags=["Distributor Chat"])
 
+# Slack integration (per-tenant bot, marketing-request notifications, two-way webhooks)
+from .slack import router as slack_router
+routes_router.include_router(slack_router, prefix="/slack", tags=["Slack Integration"])
+
 # Admin → Fleet (Vehicles & Drivers) — independent CRUD
 from .admin_vehicles import router as admin_vehicles_router
 from .admin_drivers import router as admin_drivers_router

@@ -31,6 +31,7 @@ from models.marketing_request import (
     StoredFile, FileVersion, RequestComment, ProductionSubmission,
     LIFECYCLE_STATUSES,
 )
+from routes.slack import post_event_message as slack_post_event
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -240,6 +241,19 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
     ).model_dump())
     await db.marketing_requests.insert_one(doc)
     doc.pop("_id", None)
+    # Slack notification (best-effort, non-blocking on failure)
+    try:
+        await slack_post_event(
+            tenant_id=tenant_id,
+            event_type="marketing_request_created",
+            text=(
+                f":memo: *New marketing request* `{doc['request_number']}` — {doc['title']}\n"
+                f"Type: {doc['request_type_name']} · Assigned to: {doc['assigned_department_name']}\n"
+                f"Requested due: {doc['requested_due_date']} · Raised by: {doc['created_by_name']}"
+            ),
+        )
+    except Exception:
+        logger.exception("Slack notification failed for new marketing request")
     return doc
 
 
@@ -404,6 +418,18 @@ async def change_status(request_id: str, payload: StatusChangeRequest, current_u
          "$push": {"comments": timeline_event}}
     )
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    try:
+        await slack_post_event(
+            tenant_id=tenant_id,
+            event_type="marketing_request_status_changed",
+            text=(
+                f":arrows_counterclockwise: *{doc['request_number']}* status → *{status_doc['name']}*\n"
+                f"{doc.get('title','')}  · by {current_user.get('name') or current_user.get('email')}"
+                + (f"\n_{payload.comment}_" if payload.comment else "")
+            ),
+        )
+    except Exception:
+        logger.exception("Slack notification failed for marketing request status change")
     return doc
 
 
@@ -426,6 +452,24 @@ async def add_comment(request_id: str, payload: CommentCreate, current_user: dic
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Request not found")
+    # Slack notification — only for plain comments (skip system/status_change rows)
+    if (payload.kind or "comment") == "comment":
+        try:
+            parent = await db.marketing_requests.find_one(
+                {"id": request_id, "tenant_id": tenant_id},
+                {"_id": 0, "request_number": 1, "title": 1},
+            )
+            if parent:
+                await slack_post_event(
+                    tenant_id=tenant_id,
+                    event_type="marketing_request_commented",
+                    text=(
+                        f":speech_balloon: *{parent.get('request_number')}* — {parent.get('title','')}\n"
+                        f"New comment by {event['user_name']}:\n_{event['text']}_"
+                    ),
+                )
+        except Exception:
+            logger.exception("Slack notification failed for marketing request comment")
     return event
 
 

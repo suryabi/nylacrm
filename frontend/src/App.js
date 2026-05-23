@@ -107,6 +107,7 @@ import ContactsList from './pages/ContactsList';
 import TenantSettings from './pages/TenantSettings';
 import ApiKeysPage from './pages/ApiKeysPage';
 import ZohoIntegration from './pages/ZohoIntegration';
+import SlackSettings from './pages/SlackSettings';
 import PlatformAdmin from './pages/PlatformAdmin';
 import KnowledgeBase from './pages/KnowledgeBase';
 import LeadScoringModel from './pages/LeadScoringModel';
@@ -324,6 +325,7 @@ function AppRouter() {
           <Route path="/master-contact-categories" element={<ProtectedRoute moduleKey="contact_categories"><MasterContactCategories /></ProtectedRoute>} />
           <Route path="/contacts" element={<ProtectedRoute moduleKey="contacts"><ContactsList /></ProtectedRoute>} />
           <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
+          <Route path="/admin/slack" element={<ProtectedRoute><SlackSettings /></ProtectedRoute>} />
           <Route path="/settings/api-keys" element={<ProtectedRoute><ApiKeysPage /></ProtectedRoute>} />
           <Route path="/settings/integrations/zoho" element={<ProtectedRoute><ZohoIntegration /></ProtectedRoute>} />
           <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />

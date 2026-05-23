@@ -14,6 +14,24 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-23 — Slack Integration (per-tenant, Marketing Requests v1) ✅ DONE
+- **Backend** (`/app/backend/routes/slack.py`):
+  - Tenant-scoped Slack config: bot_token, signing_secret, default_channel, per-event-type channel mappings (DB: `slack_config`).
+  - Routes: `GET/PUT /api/slack/config`, `GET /api/slack/channels`, `POST /api/slack/test`, plus `POST /api/slack/events` (URL verification + signed event webhook) and `POST /api/slack/interactivity` (signed). Tenant resolution by `team_id` inside the inbound Slack payload.
+  - HMAC signature verification (5-min replay window) using the tenant's `signing_secret`.
+  - Helper `post_event_message(tenant_id, event_type, text)` looks up the channel mapping → posts via `slack_sdk.WebClient`. Failures are logged but never roll back the originating business operation.
+- **Marketing Requests** lifecycle now emits Slack notifications:
+  - `marketing_request_created` — on POST `/api/marketing-requests`.
+  - `marketing_request_status_changed` — on POST `/{id}/status`.
+  - `marketing_request_commented` — on POST `/{id}/comments` (plain comments only, not system/status_change rows).
+- **Frontend** (`/app/frontend/src/pages/SlackSettings.js`, route `/admin/slack`):
+  - "Workspace Connection" card: paste bot token + signing secret, click Save & Verify (runs `auth.test` server-side, captures team_id / team / bot_user_id).
+  - "Event → Channel Mapping": default channel radio table + per-event-type channel selector + on/off toggle.
+  - "Test" button per channel posts a hello message immediately.
+  - Webhook URLs shown for the user to paste into the Slack App config (api.slack.com).
+  - Sidebar entry: Settings → Slack (Admin/CEO/System Admin only).
+- **Connected to workspace**: `Nylalife` (team_id T05VB9NJ6MA), bot user `U0B5Q3SFX3Q`, default channel `#designrequests` (C0B5AMPD58X). End-to-end verified via curl: created `MR-2026-0006`, transitioned to `in_progress`, added a comment → 3 Slack messages posted, no errors.
+
 ### 2026-05-23 — Action Items: Compact Table Layout + Expander ✅ DONE
 - Redesigned both the **Previous Status Action Items** widget (`YesterdayActionItems`) AND the **Daily Status action-items builder** (`ActionItemsBuilder.SavedRow`) into a unified compact table layout:
   - Single horizontal row per item: status icon · MapPin · Lead name / Task badge + status pill · truncated comment · "Followed up / No follow-up / Worked on / No updates" tag · row actions (toggle, edit, delete).
