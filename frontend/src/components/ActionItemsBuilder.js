@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, MapPin, AlertCircle, Search, ChevronDown, Save, Pencil, X, Check } from 'lucide-react';
+import { Plus, Trash2, MapPin, AlertCircle, Search, ChevronDown, ChevronUp, Save, Pencil } from 'lucide-react';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Checkbox } from './ui/checkbox';
@@ -47,16 +47,20 @@ export default function ActionItemsBuilder({ value, onChange, disabled = false }
         </div>
       )}
 
-      {items.map((item, idx) => (
-        <ActionItemRow
-          key={idx}
-          index={idx}
-          item={item}
-          onChange={(patch) => updateItem(idx, patch)}
-          onRemove={() => removeItem(idx)}
-          disabled={disabled}
-        />
-      ))}
+      {items.length > 0 && (
+        <div className="rounded-md border border-slate-200 overflow-hidden">
+          {items.map((item, idx) => (
+            <ActionItemRow
+              key={idx}
+              index={idx}
+              item={item}
+              onChange={(patch) => updateItem(idx, patch)}
+              onRemove={() => removeItem(idx)}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+      )}
 
       {!disabled && (
         <Button
@@ -94,7 +98,7 @@ function EditingRow({ index, item, onChange, onRemove, disabled }) {
 
   return (
     <div
-      className={`rounded-xl border p-3 ${needsLeadDecision ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-white'} transition-colors`}
+      className={`border-b border-slate-200 last:border-b-0 p-3 ${needsLeadDecision ? 'bg-amber-50/40' : 'bg-white'} transition-colors`}
       data-testid={`action-item-row-${index}`}
     >
       <div className="flex items-start gap-2">
@@ -194,75 +198,93 @@ function EditingRow({ index, item, onChange, onRemove, disabled }) {
 // Saved (collapsed) row — compact list display with Edit / Delete actions.
 // ────────────────────────────────────────────────────────────────────────────
 function SavedRow({ index, item, onChange, onRemove, disabled }) {
+  const [expanded, setExpanded] = useState(false);
   const linked = !!item.lead_id;
   const taskLinked = !linked && !!item.task_id;
   const hasComments = !!(item.description || '').trim();
+  const hasExtra = hasComments || taskLinked;
+
   return (
     <div
-      className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 flex items-start gap-2"
+      className="border-b border-slate-200 last:border-b-0 bg-slate-50/40 hover:bg-slate-50 transition-colors"
       data-testid={`action-item-row-${index}`}
     >
-      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-200 text-slate-600 text-xs font-semibold flex items-center justify-center mt-0.5">
-        {index + 1}
-      </div>
-      <div className="flex-1 min-w-0">
-        {/* Lead first */}
-        <div className="flex items-center gap-1.5 text-sm flex-wrap" data-testid={`action-item-display-${index}`}>
-          <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-          {linked ? (
-            <span className="font-medium text-slate-800">{item.lead_name || item.lead_id}</span>
-          ) : taskLinked ? (
-            <>
-              <span className="italic text-slate-500">Not associated with any lead</span>
-              <a
-                href={`/tasks?task=${item.task_id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 hover:underline"
-                data-testid={`action-item-task-link-${index}`}
-              >
-                {item.task_number || 'Task'}
-              </a>
-            </>
-          ) : (
-            <span className="italic text-slate-500">Not associated with any lead</span>
-          )}
+      <div className="flex items-center gap-2 px-3 py-2 text-sm">
+        <div className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-200 text-slate-600 text-[11px] font-semibold flex items-center justify-center">
+          {index + 1}
         </div>
-        {/* Comments on the next line */}
-        {hasComments ? (
-          <p className="text-xs text-slate-600 leading-snug mt-1 pl-5">
-            {item.description}
-          </p>
+        <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+        {linked ? (
+          <span className="font-medium text-slate-800 truncate max-w-[220px]" data-testid={`action-item-display-${index}`}>
+            {item.lead_name || item.lead_id}
+          </span>
+        ) : taskLinked ? (
+          <span className="flex items-center gap-1.5 truncate" data-testid={`action-item-display-${index}`}>
+            <span className="italic text-slate-500 text-xs">No lead</span>
+            <a
+              href={`/tasks?task=${item.task_id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 hover:underline flex-shrink-0"
+              data-testid={`action-item-task-link-${index}`}
+            >
+              {item.task_number || 'Task'}
+            </a>
+          </span>
         ) : (
-          <p className="text-xs text-slate-400 italic leading-snug mt-1 pl-5">
-            (no comments)
-          </p>
+          <span className="italic text-slate-500 truncate" data-testid={`action-item-display-${index}`}>
+            Not associated
+          </span>
+        )}
+        <span className="text-xs flex-1 truncate text-slate-600">
+          {hasComments ? item.description : <span className="italic text-slate-400">(no comments)</span>}
+        </span>
+        {!disabled && (
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            {hasExtra && (
+              <button
+                type="button"
+                onClick={() => setExpanded(e => !e)}
+                className="text-slate-400 hover:text-slate-700 p-0.5 rounded"
+                aria-label={expanded ? 'Collapse' : 'Expand'}
+                data-testid={`action-item-toggle-${index}`}
+              >
+                {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => onChange({ _editing: true })}
+              className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600"
+              data-testid={`action-item-edit-${index}`}
+              title="Edit"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onRemove}
+              className="h-7 w-7 p-0 text-slate-500 hover:text-red-600"
+              data-testid={`action-item-delete-${index}`}
+              title="Delete"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         )}
       </div>
-      {!disabled && (
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => onChange({ _editing: true })}
-            className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600"
-            data-testid={`action-item-edit-${index}`}
-            title="Edit"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onRemove}
-            className="h-7 w-7 p-0 text-slate-500 hover:text-red-600"
-            data-testid={`action-item-delete-${index}`}
-            title="Delete"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+      {expanded && hasExtra && (
+        <div className="px-3 pb-2 pl-12 text-xs border-t border-slate-100 bg-white/40 pt-2 space-y-1">
+          {hasComments && (
+            <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{item.description}</p>
+          )}
+          {taskLinked && (
+            <p className="text-slate-500">Auto-linked task: <span className="font-mono text-indigo-700">{item.task_number}</span></p>
+          )}
         </div>
       )}
     </div>

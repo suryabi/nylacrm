@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { CheckCircle2, AlertTriangle, Clock, ExternalLink, RefreshCw, MapPin } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Clock, ExternalLink, RefreshCw, MapPin, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -13,20 +13,19 @@ function getAuthHeaders() {
 }
 
 /**
- * Shows the user's PREVIOUS daily-status action items (the most recent
- * daily_status strictly BEFORE `statusDate`) and whether each linked lead
- * has had any follow-up activity since.
- *
+ * Compact, table-style list of the user's PREVIOUS daily-status action items.
  * Colour logic:
- *   - Linked + worked-upon → GREEN (border, ring, icon, text)
- *   - Linked + NOT worked-upon → RED (border, ring, icon, text)
- *   - No-lead items → muted grey row.
+ *   - Linked + worked-upon → GREEN.
+ *   - Linked + NOT worked-upon → RED.
+ *   - No-lead (no task either) → muted neutral.
  *
- * Layout: lead name appears FIRST, comments appear below.
+ * Each row is a single line. Click the chevron to expand for the full
+ * comment / linked-activity / task metadata.
  */
 export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
   const [data, setData] = useState({ previous_status_date: null, items: [] });
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState({});
 
   const load = async () => {
     setLoading(true);
@@ -48,7 +47,7 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
 
   if (loading) {
     return (
-      <Card className="p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90">
+      <Card className="p-4 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90">
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <RefreshCw className="h-4 w-4 animate-spin" /> Checking previous status follow-ups…
         </div>
@@ -63,14 +62,14 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
   const done = items.filter(it => (it.lead_id || it.task_id) && it.worked_upon).length;
   const noLead = items.filter(it => !it.lead_id && !it.task_id).length;
 
+  const toggle = (idx) => setExpanded(prev => ({ ...prev, [idx]: !prev[idx] }));
+
   return (
-    <Card className="p-5 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90" data-testid="yesterday-action-items">
+    <Card className="p-4 border-0 shadow-sm bg-white/90 dark:bg-slate-900/90" data-testid="yesterday-action-items">
       <div className="flex items-start justify-between mb-3 gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <Clock className="h-5 w-5 text-primary" />
-          <h3 className="text-base font-semibold">
-            Previous Status Action Items
-          </h3>
+          <h3 className="text-base font-semibold">Previous Status Action Items</h3>
           <span className="text-xs text-slate-500">({prevDate})</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -89,20 +88,13 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
               {noLead} non-lead
             </Badge>
           )}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={load}
-            className="h-7 px-2"
-            data-testid="yesterday-refresh-btn"
-          >
+          <Button type="button" size="sm" variant="ghost" onClick={load} className="h-7 px-2" data-testid="yesterday-refresh-btn">
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="rounded-md border border-slate-200 overflow-hidden">
         {items.map((it, idx) => {
           const linked = !!it.lead_id;
           const taskLinked = !linked && !!it.task_id;
@@ -110,88 +102,108 @@ export default function YesterdayActionItems({ statusDate, refreshTick = 0 }) {
           const stale = trackable && !it.worked_upon;
           const acted = trackable && it.worked_upon;
           const rowCls = stale
-            ? 'border-red-300 bg-red-50/60 ring-1 ring-red-200'
+            ? 'bg-red-50/60 hover:bg-red-50'
             : acted
-              ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200'
-              : 'border-slate-200 bg-slate-50/50';
+              ? 'bg-emerald-50/60 hover:bg-emerald-50'
+              : 'bg-slate-50/40 hover:bg-slate-50';
           const Icon = acted ? CheckCircle2 : stale ? AlertTriangle : Clock;
-          const iconCls = acted ? 'text-emerald-600' : stale ? 'text-red-600' : 'text-slate-400';
+          const iconCls = acted ? 'text-emerald-600' : stale ? 'text-red-500' : 'text-slate-400';
+          const labelCls = stale ? 'text-red-700' : acted ? 'text-emerald-700' : 'text-slate-700';
+          const isOpen = !!expanded[idx];
+          const hasExtra = (it.description || '').trim() || (acted && it.last_activity) || taskLinked;
+
           return (
             <div
               key={idx}
-              className={`rounded-lg p-3 border transition-colors ${rowCls}`}
+              className={`border-b border-slate-200 last:border-b-0 ${rowCls} transition-colors`}
               data-testid={`yesterday-item-${idx}`}
             >
-              <div className="flex items-start gap-2">
-                <Icon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${iconCls}`} />
-                <div className="flex-1 min-w-0">
-                  {/* Lead OR task link first */}
-                  <div className="flex items-center gap-1.5 text-sm flex-wrap">
-                    <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                    {linked ? (
-                      <a
-                        href={`/leads/${it.lead_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`inline-flex items-center gap-1 font-medium hover:underline ${stale ? 'text-red-700' : acted ? 'text-emerald-700' : 'text-slate-700'}`}
-                        data-testid={`yesterday-item-${idx}-lead-link`}
-                      >
-                        {it.lead_name || 'View lead'} <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : taskLinked ? (
-                      <a
-                        href={`/tasks?task=${it.task_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={`inline-flex items-center gap-1 font-medium hover:underline ${stale ? 'text-red-700' : acted ? 'text-emerald-700' : 'text-slate-700'}`}
-                        data-testid={`yesterday-item-${idx}-task-link`}
-                      >
-                        {it.task?.task_number || it.task_number || 'View task'} <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : (
-                      <span className="italic text-slate-500">Not associated with any lead</span>
-                    )}
-                    {taskLinked && it.task?.status && (
-                      <Badge variant="outline" className="text-[10px] capitalize">
-                        {it.task.status.replace('_', ' ')}
-                      </Badge>
-                    )}
-                  </div>
-                  {/* Comments next */}
-                  {(it.description || '').trim() ? (
-                    <p className={`text-xs leading-snug mt-1 pl-5 ${stale ? 'text-red-800' : acted ? 'text-emerald-800' : 'text-slate-700'}`}>
-                      {it.description}
-                    </p>
-                  ) : (
-                    <p className="text-xs italic text-slate-400 leading-snug mt-1 pl-5">
-                      (no comments)
+              {/* Single-line summary row */}
+              <div className="flex items-center gap-2 px-3 py-2 text-sm">
+                <Icon className={`h-4 w-4 flex-shrink-0 ${iconCls}`} />
+                <MapPin className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                {linked ? (
+                  <a
+                    href={`/leads/${it.lead_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`inline-flex items-center gap-1 font-medium hover:underline truncate max-w-[200px] ${labelCls}`}
+                    data-testid={`yesterday-item-${idx}-lead-link`}
+                  >
+                    {it.lead_name || 'View lead'} <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                  </a>
+                ) : taskLinked ? (
+                  <a
+                    href={`/tasks?task=${it.task_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`inline-flex items-center gap-1 font-medium hover:underline truncate max-w-[200px] ${labelCls}`}
+                    data-testid={`yesterday-item-${idx}-task-link`}
+                  >
+                    {it.task?.task_number || it.task_number || 'View task'} <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                  </a>
+                ) : (
+                  <span className="italic text-slate-500 truncate">Not associated</span>
+                )}
+                {taskLinked && it.task?.status && (
+                  <Badge variant="outline" className="text-[10px] capitalize flex-shrink-0">
+                    {it.task.status.replace('_', ' ')}
+                  </Badge>
+                )}
+                <span className={`text-xs flex-1 truncate ${stale ? 'text-red-800' : acted ? 'text-emerald-800' : 'text-slate-600'}`}>
+                  {(it.description || '').trim() || <span className="italic text-slate-400">(no comments)</span>}
+                </span>
+                <span className="text-[11px] flex-shrink-0">
+                  {acted && (
+                    <span className="text-emerald-700 font-medium">
+                      {linked ? 'Followed up' : 'Worked on'}
+                    </span>
+                  )}
+                  {stale && (
+                    <span className="text-red-700 font-medium">
+                      {linked ? 'No follow-up' : 'No updates'}
+                    </span>
+                  )}
+                </span>
+                {hasExtra && (
+                  <button
+                    type="button"
+                    onClick={() => toggle(idx)}
+                    className="text-slate-400 hover:text-slate-700 p-0.5 rounded"
+                    aria-label={isOpen ? 'Collapse' : 'Expand'}
+                    data-testid={`yesterday-item-${idx}-toggle`}
+                  >
+                    {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+              </div>
+
+              {/* Expanded detail */}
+              {isOpen && hasExtra && (
+                <div className="px-3 pb-3 pl-12 text-xs space-y-1 border-t border-slate-100 bg-white/40">
+                  {(it.description || '').trim() && (
+                    <p className="text-slate-700 whitespace-pre-wrap leading-relaxed pt-2">{it.description}</p>
+                  )}
+                  {acted && linked && it.last_activity && (
+                    <p className="text-emerald-700">
+                      Last activity: {it.last_activity.activity_type}
+                      {it.last_activity.created_by_name ? ` by ${it.last_activity.created_by_name}` : ''}
                     </p>
                   )}
-                  <div className="flex items-center flex-wrap gap-2 mt-1 pl-5 text-[11px]">
-                    {acted && linked && it.last_activity && (
-                      <span className="text-emerald-700">
-                        last activity: {it.last_activity.activity_type}
-                        {it.last_activity.created_by_name ? ` by ${it.last_activity.created_by_name}` : ''}
-                      </span>
-                    )}
-                    {acted && taskLinked && (
-                      <span className="text-emerald-700">
-                        Task has been worked on
-                      </span>
-                    )}
-                    {stale && linked && (
-                      <span className="font-medium text-red-700">
-                        No follow-up activity recorded yet
-                      </span>
-                    )}
-                    {stale && taskLinked && (
-                      <span className="font-medium text-red-700">
-                        Task has had no updates yet
-                      </span>
-                    )}
-                  </div>
+                  {acted && taskLinked && (
+                    <p className="text-emerald-700">Task has been worked on.</p>
+                  )}
+                  {stale && linked && (
+                    <p className="text-red-700">No follow-up activity recorded yet.</p>
+                  )}
+                  {stale && taskLinked && (
+                    <p className="text-red-700">Task has had no updates yet.</p>
+                  )}
+                  {taskLinked && it.task?.due_date && (
+                    <p className="text-slate-500">Task due: {it.task.due_date}</p>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
           );
         })}
