@@ -313,15 +313,10 @@ async def create_daily_status(status_input: DailyStatusCreate, current_user: dic
     # Sanitise + apply structured action items if the client sent them.
     items = _sanitize_action_items_v2(status_data.get('action_items_v2'))
     if items is not None:
-        # Auto-create tasks for "no lead" items so they're trackable.
-        # We need the target user's record (department + name) — the current
-        # user might be a manager posting on behalf.
-        actor = current_user
-        if target_user_id != current_user['id']:
-            target_user = await get_tdb().users.find_one({'id': target_user_id}, {'_id': 0})
-            if target_user:
-                actor = target_user
-        await _create_tasks_for_no_lead_items(items, actor, status_input.status_date)
+        # Auto-create tasks for "no lead" items so they're trackable. Always
+        # assign to the logged-in user (the one actually setting up the
+        # action items), regardless of whose daily-status it belongs to.
+        await _create_tasks_for_no_lead_items(items, current_user, status_input.status_date)
         status_data['action_items_v2'] = items
         # Keep the bullet-text representation in sync so existing reports work.
         status_data['today_actions'] = _action_items_to_text(items)
@@ -452,13 +447,9 @@ async def update_daily_status(
     if items_in_payload:
         items = _sanitize_action_items_v2(update_data.get('action_items_v2'))
         if items is not None:
-            # Auto-create tasks for newly-added no_lead items.
-            actor = current_user
-            if status['user_id'] != current_user['id']:
-                target_user = await get_tdb().users.find_one({'id': status['user_id']}, {'_id': 0})
-                if target_user:
-                    actor = target_user
-            await _create_tasks_for_no_lead_items(items, actor, status.get('status_date'))
+            # Auto-create tasks for newly-added no_lead items. Always assign
+            # to the logged-in user (the one actually setting up the items).
+            await _create_tasks_for_no_lead_items(items, current_user, status.get('status_date'))
             update_data['action_items_v2'] = items
             update_data['today_actions'] = _action_items_to_text(items)
         else:
