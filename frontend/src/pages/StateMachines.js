@@ -1,0 +1,397 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import { toast } from 'sonner';
+import { Plus, Trash2, GitBranch, Save, Copy, ArrowLeft, RefreshCw, ChevronRight } from 'lucide-react';
+import { Card } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Badge } from '../components/ui/badge';
+import { Checkbox } from '../components/ui/checkbox';
+import AppBreadcrumb from '../components/AppBreadcrumb';
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
+
+const blankSM = () => ({
+  name: '',
+  code: '',
+  description: '',
+  states: [
+    { key: 'submitted', label: 'Submitted', color: '#94a3b8', is_initial: true, is_terminal: false },
+    { key: 'closed', label: 'Closed', color: '#16a34a', is_initial: false, is_terminal: true },
+  ],
+  transitions: [],
+  applied_to: [],
+});
+
+export default function StateMachines() {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null); // current state machine being edited (null = list view)
+  const [actionCatalog, setActionCatalog] = useState([]);
+  const [workflowCatalog, setWorkflowCatalog] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [departments, setDepartments] = useState([]);
+
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [smRes, actRes, wfRes, usrRes, deptRes] = await Promise.all([
+        axios.get(`${API}/state-machines/`, { headers: authHeaders() }),
+        axios.get(`${API}/state-machines/actions/catalog`, { headers: authHeaders() }),
+        axios.get(`${API}/state-machines/workflows/catalog`, { headers: authHeaders() }),
+        axios.get(`${API}/users`, { headers: authHeaders() }).catch(() => ({ data: [] })),
+        axios.get(`${API}/admin/departments`, { headers: authHeaders() }).catch(() => ({ data: [] })),
+      ]);
+      setList(smRes.data || []);
+      setActionCatalog(actRes.data?.actions || []);
+      setWorkflowCatalog(wfRes.data?.workflows || []);
+      setUsers(Array.isArray(usrRes.data) ? usrRes.data : (usrRes.data?.users || []));
+      setDepartments(Array.isArray(deptRes.data) ? deptRes.data : (deptRes.data?.departments || []));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to load state machines');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadAll(); }, []);
+
+  const createNew = () => setEditing(blankSM());
+
+  const openExisting = (sm) => setEditing(JSON.parse(JSON.stringify(sm)));
+
+  const cancelEdit = () => setEditing(null);
+
+  const save = async () => {
+    try {
+      if (!editing.name?.trim()) {
+        toast.error('Name is required');
+        return;
+      }
+      const body = {
+        name: editing.name.trim(),
+        code: editing.code || null,
+        description: editing.description || '',
+        states: editing.states,
+        transitions: editing.transitions,
+        applied_to: editing.applied_to,
+      };
+      let saved;
+      if (editing.id) {
+        saved = await axios.put(`${API}/state-machines/${editing.id}`, body, { headers: authHeaders() });
+      } else {
+        saved = await axios.post(`${API}/state-machines/`, body, { headers: authHeaders() });
+      }
+      toast.success('Saved ✔');
+      setEditing(saved.data);
+      await loadAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Save failed');
+    }
+  };
+
+  const clone = async (sm) => {
+    const name = window.prompt('Name for the cloned state machine:', `${sm.name} (copy)`);
+    if (!name) return;
+    try {
+      await axios.post(`${API}/state-machines/${sm.id}/clone`, { name }, { headers: authHeaders() });
+      toast.success('Cloned ✔');
+      await loadAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Clone failed');
+    }
+  };
+
+  const remove = async (sm) => {
+    if (!window.confirm(`Delete state machine "${sm.name}"? This cannot be undone.`)) return;
+    try {
+      await axios.delete(`${API}/state-machines/${sm.id}`, { headers: authHeaders() });
+      toast.success('Deleted');
+      await loadAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Delete failed');
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6 flex items-center gap-2 text-slate-500"><RefreshCw className="h-4 w-4 animate-spin" /> Loading…</div>;
+  }
+
+  if (editing) {
+    return (
+      <StateMachineEditor
+        sm={editing}
+        setSm={setEditing}
+        onSave={save}
+        onCancel={cancelEdit}
+        actionCatalog={actionCatalog}
+        workflowCatalog={workflowCatalog}
+        users={users}
+        departments={departments}
+      />
+    );
+  }
+
+  return (
+    <div className="p-4 sm:p-6 space-y-5 max-w-6xl mx-auto" data-testid="state-machines-page">
+      <AppBreadcrumb items={[{ label: 'Admin', to: '/admin' }, { label: 'State Machines' }]} />
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center">
+            <GitBranch className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold">State Machines</h1>
+            <p className="text-sm text-slate-500">Reusable workflow definitions you can attach to CRM modules.</p>
+          </div>
+        </div>
+        <Button onClick={createNew} data-testid="create-state-machine-btn">
+          <Plus className="h-4 w-4 mr-2" /> New State Machine
+        </Button>
+      </div>
+
+      <Card className="p-0 overflow-hidden">
+        <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-600">
+          <div className="col-span-4">Name</div>
+          <div className="col-span-2">States</div>
+          <div className="col-span-2">Transitions</div>
+          <div className="col-span-3">Attached to</div>
+          <div className="col-span-1 text-right">Actions</div>
+        </div>
+        {list.length === 0 && (
+          <div className="p-8 text-center text-sm text-slate-500">
+            No state machines yet. Click "New State Machine" to create your first one.
+          </div>
+        )}
+        {list.map((sm) => (
+          <div key={sm.id} className="grid grid-cols-12 gap-2 px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 text-sm items-center">
+            <div className="col-span-4">
+              <button onClick={() => openExisting(sm)} className="font-medium text-blue-700 hover:underline text-left" data-testid={`state-machine-${sm.id}-open`}>
+                {sm.name}
+              </button>
+              {sm.description && <p className="text-xs text-slate-500 mt-0.5">{sm.description}</p>}
+            </div>
+            <div className="col-span-2">
+              <Badge variant="outline">{(sm.states || []).length}</Badge>
+            </div>
+            <div className="col-span-2">
+              <Badge variant="outline">{(sm.transitions || []).length}</Badge>
+            </div>
+            <div className="col-span-3 flex flex-wrap gap-1">
+              {(sm.applied_to || []).length === 0 ? (
+                <span className="text-xs italic text-slate-400">Not attached</span>
+              ) : (
+                (sm.applied_to || []).map((w) => (
+                  <Badge key={w} variant="outline" className="text-[10px]">{w}</Badge>
+                ))
+              )}
+            </div>
+            <div className="col-span-1 flex justify-end gap-1">
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => clone(sm)} title="Clone" data-testid={`state-machine-${sm.id}-clone`}>
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => remove(sm)} title="Delete" data-testid={`state-machine-${sm.id}-delete`}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Editor
+// ───────────────────────────────────────────────────────────────────────────
+function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workflowCatalog, users, departments }) {
+  const stateKeys = useMemo(() => (sm.states || []).map((s) => s.key), [sm.states]);
+
+  const addState = () => {
+    const key = `state_${(sm.states || []).length + 1}`;
+    setSm({ ...sm, states: [...(sm.states || []), { key, label: 'New state', color: '#94a3b8', is_initial: false, is_terminal: false }] });
+  };
+  const updateState = (idx, patch) => {
+    const next = [...sm.states];
+    next[idx] = { ...next[idx], ...patch };
+    setSm({ ...sm, states: next });
+  };
+  const removeState = (idx) => {
+    const next = [...sm.states];
+    next.splice(idx, 1);
+    setSm({ ...sm, states: next });
+  };
+
+  const addTransition = () => {
+    setSm({
+      ...sm,
+      transitions: [
+        ...(sm.transitions || []),
+        {
+          action_key: 'submit',
+          action_label: '',
+          from_state: '',
+          to_state: stateKeys[0] || '',
+          auto_department_ids: [],
+          auto_role_keys: [],
+          auto_user_ids: [],
+          notify_all: true,
+          comment_required: false,
+        },
+      ],
+    });
+  };
+  const updateTransition = (idx, patch) => {
+    const next = [...sm.transitions];
+    next[idx] = { ...next[idx], ...patch };
+    setSm({ ...sm, transitions: next });
+  };
+  const removeTransition = (idx) => {
+    const next = [...sm.transitions];
+    next.splice(idx, 1);
+    setSm({ ...sm, transitions: next });
+  };
+
+  const toggleApplied = (wfKey, checked) => {
+    const cur = sm.applied_to || [];
+    setSm({ ...sm, applied_to: checked ? [...cur.filter((w) => w !== wfKey), wfKey] : cur.filter((w) => w !== wfKey) });
+  };
+
+  return (
+    <div className="p-4 sm:p-6 space-y-5 max-w-6xl mx-auto" data-testid="state-machine-editor">
+      <AppBreadcrumb items={[{ label: 'Admin', to: '/admin' }, { label: 'State Machines', to: '/admin/state-machines' }, { label: sm.name || 'New' }]} />
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <Button variant="ghost" onClick={onCancel} data-testid="cancel-editor"><ArrowLeft className="h-4 w-4 mr-2" /> Back</Button>
+        <Button onClick={onSave} data-testid="save-state-machine"><Save className="h-4 w-4 mr-2" /> Save</Button>
+      </div>
+
+      <Card className="p-5 space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="md:col-span-2 space-y-1">
+            <Label className="text-xs">Name *</Label>
+            <Input value={sm.name} onChange={(e) => setSm({ ...sm, name: e.target.value })} placeholder="Marketing Request Lifecycle" data-testid="sm-name-input" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Code <span className="text-slate-400">(optional)</span></Label>
+            <Input value={sm.code || ''} onChange={(e) => setSm({ ...sm, code: e.target.value })} placeholder="MARK_REQ_v1" data-testid="sm-code-input" />
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Description</Label>
+          <Textarea rows={2} value={sm.description || ''} onChange={(e) => setSm({ ...sm, description: e.target.value })} placeholder="What this state machine governs..." data-testid="sm-description-input" />
+        </div>
+      </Card>
+
+      {/* States */}
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">States</h2>
+          <Button size="sm" variant="outline" onClick={addState} data-testid="add-state-btn"><Plus className="h-3.5 w-3.5 mr-1" /> Add state</Button>
+        </div>
+        <div className="rounded-md border border-slate-200 overflow-hidden">
+          <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-600">
+            <div className="col-span-3">Key</div>
+            <div className="col-span-4">Label</div>
+            <div className="col-span-2">Color</div>
+            <div className="col-span-1 text-center">Initial</div>
+            <div className="col-span-1 text-center">Terminal</div>
+            <div className="col-span-1 text-right">—</div>
+          </div>
+          {(sm.states || []).map((st, idx) => (
+            <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 border-b border-slate-100 last:border-b-0 items-center">
+              <div className="col-span-3"><Input value={st.key} onChange={(e) => updateState(idx, { key: e.target.value.replace(/\s+/g, '_').toLowerCase() })} className="h-8 text-xs font-mono" data-testid={`state-key-${idx}`} /></div>
+              <div className="col-span-4"><Input value={st.label} onChange={(e) => updateState(idx, { label: e.target.value })} className="h-8 text-xs" data-testid={`state-label-${idx}`} /></div>
+              <div className="col-span-2">
+                <input type="color" value={st.color || '#94a3b8'} onChange={(e) => updateState(idx, { color: e.target.value })} className="h-8 w-full rounded border border-slate-200" />
+              </div>
+              <div className="col-span-1 flex justify-center"><Checkbox checked={!!st.is_initial} onCheckedChange={(v) => updateState(idx, { is_initial: !!v })} /></div>
+              <div className="col-span-1 flex justify-center"><Checkbox checked={!!st.is_terminal} onCheckedChange={(v) => updateState(idx, { is_terminal: !!v })} /></div>
+              <div className="col-span-1 flex justify-end">
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => removeState(idx)} title="Delete state"><Trash2 className="h-3.5 w-3.5" /></Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Transitions */}
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-semibold">Transitions</h2>
+          <Button size="sm" variant="outline" onClick={addTransition} data-testid="add-transition-btn"><Plus className="h-3.5 w-3.5 mr-1" /> Add transition</Button>
+        </div>
+        <div className="rounded-md border border-slate-200 overflow-hidden">
+          <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-600">
+            <div className="col-span-2">Action</div>
+            <div className="col-span-2">Display label</div>
+            <div className="col-span-2">From state</div>
+            <div className="col-span-1 flex justify-center"><ChevronRight className="h-3 w-3" /></div>
+            <div className="col-span-2">Result state</div>
+            <div className="col-span-2">Auto-assign</div>
+            <div className="col-span-1 text-right">—</div>
+          </div>
+          {(sm.transitions || []).map((t, idx) => (
+            <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 border-b border-slate-100 last:border-b-0 items-start">
+              <div className="col-span-2">
+                <select value={t.action_key} onChange={(e) => updateTransition(idx, { action_key: e.target.value })} className="w-full h-8 text-xs border border-slate-200 rounded px-2">
+                  {actionCatalog.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2"><Input value={t.action_label || ''} onChange={(e) => updateTransition(idx, { action_label: e.target.value })} placeholder="(use action label)" className="h-8 text-xs" /></div>
+              <div className="col-span-2">
+                <select value={t.from_state || ''} onChange={(e) => updateTransition(idx, { from_state: e.target.value || null })} className="w-full h-8 text-xs border border-slate-200 rounded px-2">
+                  <option value="">(initial)</option>
+                  {(sm.states || []).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                </select>
+              </div>
+              <div className="col-span-1 flex justify-center pt-1.5"><ChevronRight className="h-3.5 w-3.5 text-slate-400" /></div>
+              <div className="col-span-2">
+                <select value={t.to_state} onChange={(e) => updateTransition(idx, { to_state: e.target.value })} className="w-full h-8 text-xs border border-slate-200 rounded px-2">
+                  {(sm.states || []).map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2 space-y-1">
+                <select multiple value={t.auto_department_ids || []}
+                  onChange={(e) => updateTransition(idx, { auto_department_ids: Array.from(e.target.selectedOptions).map((o) => o.value) })}
+                  className="w-full text-[11px] border border-slate-200 rounded px-1 py-0.5 max-h-16">
+                  {departments.map((d) => <option key={d.id || d.code} value={d.id || d.code}>{d.name || d.label || d.id}</option>)}
+                </select>
+                <select multiple value={t.auto_user_ids || []}
+                  onChange={(e) => updateTransition(idx, { auto_user_ids: Array.from(e.target.selectedOptions).map((o) => o.value) })}
+                  className="w-full text-[11px] border border-slate-200 rounded px-1 py-0.5 max-h-16">
+                  {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+                </select>
+                <p className="text-[10px] text-slate-400">Ctrl/⌘+click to multi-select. All matched users will be notified.</p>
+              </div>
+              <div className="col-span-1 flex justify-end pt-1">
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => removeTransition(idx)} title="Delete transition"><Trash2 className="h-3.5 w-3.5" /></Button>
+              </div>
+            </div>
+          ))}
+          {(sm.transitions || []).length === 0 && (
+            <div className="p-4 text-center text-sm text-slate-500">No transitions yet. Click "Add transition" to wire up the workflow.</div>
+          )}
+        </div>
+      </Card>
+
+      {/* Attach to workflows */}
+      <Card className="p-5 space-y-2">
+        <h2 className="text-base font-semibold">Attach to Workflows</h2>
+        <p className="text-xs text-slate-500">
+          Pick which CRM modules should use this state machine. (Runtime consumption ships in Phase B — for now this records the intent.)
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+          {workflowCatalog.map((wf) => (
+            <label key={wf.key} className="flex items-center gap-2 text-sm cursor-pointer rounded border border-slate-200 px-3 py-2 hover:bg-slate-50">
+              <Checkbox checked={(sm.applied_to || []).includes(wf.key)} onCheckedChange={(v) => toggleApplied(wf.key, !!v)} />
+              <span>{wf.label}</span>
+            </label>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}

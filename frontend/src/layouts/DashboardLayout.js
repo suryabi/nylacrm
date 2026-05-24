@@ -275,6 +275,7 @@ const adminNavigationGroups = [
       { name: 'Zoho Books', href: '/settings/integrations/zoho', icon: Cable, moduleKey: 'zoho_integration', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'Slack', href: '/admin/slack', icon: Cable, moduleKey: 'slack_integration', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'Google Drive', href: '/admin/google-drive', icon: Cable, moduleKey: 'google_drive_integration', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'State Machines', href: '/admin/state-machines', icon: Cable, moduleKey: 'state_machines', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
     ],
   },

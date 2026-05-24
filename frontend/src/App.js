@@ -109,6 +109,7 @@ import ApiKeysPage from './pages/ApiKeysPage';
 import ZohoIntegration from './pages/ZohoIntegration';
 import SlackSettings from './pages/SlackSettings';
 import GoogleDriveSettings from './pages/GoogleDriveSettings';
+import StateMachines from './pages/StateMachines';
 import PlatformAdmin from './pages/PlatformAdmin';
 import KnowledgeBase from './pages/KnowledgeBase';
 import LeadScoringModel from './pages/LeadScoringModel';
@@ -328,6 +329,7 @@ function AppRouter() {
           <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
           <Route path="/admin/slack" element={<ProtectedRoute><SlackSettings /></ProtectedRoute>} />
           <Route path="/admin/google-drive" element={<ProtectedRoute><GoogleDriveSettings /></ProtectedRoute>} />
+          <Route path="/admin/state-machines" element={<ProtectedRoute><StateMachines /></ProtectedRoute>} />
           <Route path="/settings/api-keys" element={<ProtectedRoute><ApiKeysPage /></ProtectedRoute>} />
           <Route path="/settings/integrations/zoho" element={<ProtectedRoute><ZohoIntegration /></ProtectedRoute>} />
           <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
