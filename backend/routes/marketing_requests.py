@@ -1,18 +1,27 @@
-"""Marketing Requests — lifecycle router.
+"""Marketing Requests — State-Machine-driven lifecycle router.
+
+This module is fully driven by the State Machine attached to the
+"marketing_requests" workflow. The SM defines:
+  - the list of states (keys, labels, colors, initial, terminal)
+  - the transitions between them (action_key + action_label + from/to states)
+  - auto-assign side-effects (user / department / role) per transition
+  - permission gates per transition (allowed_role_keys / allowed_department_ids / requestor_only)
+
+A default SM is auto-seeded on first access if none is attached.
 
 Endpoints (prefix `/marketing-requests`):
-  POST   /upload                       upload a single file → returns file_id (re-usable)
-  GET    /files/{file_id}              download a previously-uploaded file
-  POST   /                             create a request
-  GET    /                             list (with queue, search, filters, paging)
-  GET    /{id}                         detail
-  PATCH  /{id}                         edit a few mutable header fields (Sales rep, draft state)
-  POST   /{id}/status                  change status (validates allowed transitions)
-  POST   /{id}/comments                add a comment
-  POST   /{id}/versions                add a work-version (Marketing)
-  POST   /{id}/production-submit       submit for production (after final_approved)
-  POST   /{id}/production-status       mark production in-progress / completed (Delivery)
-  GET    /counts                       per-queue counts (sidebar badges)
+  POST   /upload                          upload a single file → returns file handle
+  GET    /files/{file_id}                 download a file
+  POST   /                                create a request (initial state from SM)
+  GET    /                                list (with queue + search + filters + paging)
+  GET    /counts                          per-state counts (state_key → count)
+  GET    /{id}                            detail
+  PATCH  /{id}                            edit a few mutable header fields
+  GET    /{id}/available-transitions      list of transitions the current user can trigger
+  POST   /{id}/transition                 trigger an action_key (validates + applies auto-assign + comment)
+  POST   /{id}/comments                   add a comment
+  POST   /{id}/versions                   add a work version (files + links + notes)
+  POST   /{id}/production-submit          attach a production payload (does NOT change state)
 """
 from datetime import datetime, timezone, date, timedelta
 from typing import List, Optional
@@ -20,16 +29,25 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, Response
+from pydantic import BaseModel
 
 from database import db
 from core.tenant import get_current_tenant_id
 from deps import get_current_user
 from utils.storage import put_object, get_object
+from utils.sm_helpers import (
+    ensure_default_marketing_request_sm,
+    get_attached_state_machine,
+    get_initial_state,
+    find_state,
+    find_transition,
+    find_transitions_from,
+    user_can_trigger,
+    apply_auto_assign,
+)
 from models.marketing_request import (
-    MarketingRequest, MarketingRequestCreate, StatusChangeRequest,
-    CommentCreate, VersionCreate, ProductionSubmitRequest,
+    MarketingRequestCreate, CommentCreate, VersionCreate, ProductionSubmitRequest,
     StoredFile, FileVersion, RequestComment, ProductionSubmission,
-    LIFECYCLE_STATUSES,
 )
 from routes.slack import post_event_message as slack_post_event
 
@@ -40,42 +58,6 @@ router = APIRouter()
 # ──────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────
-_STATUS_BY_KEY = {s["key"]: s for s in LIFECYCLE_STATUSES}
-
-# Allowed lifecycle transitions. Empty set means "terminal".
-ALLOWED_TRANSITIONS = {
-    "submitted":              {"inputs_needed", "in_progress"},
-    "inputs_needed":          {"in_progress", "submitted"},
-    "in_progress":            {"inputs_needed", "in_review"},
-    "in_review":              {"in_progress", "approved_internal"},
-    "approved_internal":      {"in_progress", "final_approved"},
-    "final_approved":         {"production_in_progress"},  # via production-submit
-    "production_in_progress": {"production_completed"},
-    "production_completed":   set(),
-}
-
-
-def _user_departments(user: dict) -> List[str]:
-    """Return the user's department list (always lower-cased)."""
-    d = user.get("department")
-    if not d:
-        return []
-    if isinstance(d, list):
-        return [str(x).strip().lower() for x in d if x]
-    return [str(d).strip().lower()]
-
-
-def _user_in_dept(user: dict, dept_name: str) -> bool:
-    if not dept_name:
-        return False
-    return dept_name.strip().lower() in _user_departments(user)
-
-
-def _is_admin(user: dict) -> bool:
-    role = (user.get("role") or "").lower()
-    return any(t in role for t in ("ceo", "admin", "director", "vp", "national sales head"))
-
-
 async def _next_request_number(tenant_id: str) -> str:
     """Generate MR-YYYY-NNNN per tenant."""
     year = datetime.now(timezone.utc).year
@@ -109,21 +91,27 @@ async def _stored_files_from_ids(tenant_id: str, file_ids: List[str]) -> List[di
     return [StoredFile(**r).model_dump() for r in rows]
 
 
+async def _resolve_sm(tenant_id: str) -> dict:
+    """Get the SM attached to marketing_requests, or seed a default if none exists."""
+    return await ensure_default_marketing_request_sm(tenant_id)
+
+
+def _user_departments_lower(user: dict) -> List[str]:
+    d = user.get("department") or []
+    if isinstance(d, str):
+        d = [d]
+    return [str(x).strip().lower() for x in d if x]
+
+
 # ──────────────────────────────────────────────────────────────
 # File upload (re-usable across logo, references, version files)
 # ──────────────────────────────────────────────────────────────
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    lead_id: Optional[str] = Query(None, description="Optional Lead ID to scope the upload under the lead's Drive folder"),
+    lead_id: Optional[str] = Query(None, description="Optional human-readable Lead ID to scope upload under that lead's Drive folder"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Upload a single file into object storage and return its handle.
-
-    If `lead_id` is supplied (the human-readable lead_id like INNO-MUM-L26-001),
-    the file is stored under `<lead_id>/marketing-requests/...` so it lands
-    inside the lead's dedicated Drive folder.
-    """
     tenant_id = get_current_tenant_id()
     file_id = str(uuid.uuid4())
     raw = await file.read()
@@ -131,7 +119,6 @@ async def upload_file(
         raise HTTPException(400, "Empty file")
     safe_name = (file.filename or "upload.bin").replace("/", "_")
     if lead_id:
-        # Ensure the lead folder exists (idempotent — no-op if Drive is off)
         try:
             from utils.google_drive_storage import ensure_lead_folder
             await ensure_lead_folder(tenant_id, lead_id)
@@ -178,13 +165,13 @@ async def download_file(file_id: str, current_user: dict = Depends(get_current_u
 
 
 # ──────────────────────────────────────────────────────────────
-# Create a request
+# Create a request — initial state comes from the attached SM
 # ──────────────────────────────────────────────────────────────
 @router.post("")
+@router.post("/")
 async def create_request(payload: MarketingRequestCreate, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
 
-    # Resolve type + department for denormalised display
     type_doc = await db.marketing_request_types.find_one(
         {"id": payload.request_type_id, "tenant_id": tenant_id}, {"_id": 0}
     )
@@ -196,8 +183,7 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
     if not dept_doc:
         raise HTTPException(400, "Assigned department not found")
 
-    # Lead-time guardrail — block if requested_due_date is too soon AND no
-    # short-timeline reason supplied.
+    # Lead-time guardrail
     try:
         due = date.fromisoformat(payload.requested_due_date[:10])
     except ValueError:
@@ -208,11 +194,15 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
         raise HTTPException(
             400,
             f"Requested due date {due} is earlier than the minimum lead time "
-            f"({required_days} days → earliest {earliest}). Please provide a "
-            f"`short_timeline_reason` to proceed.",
+            f"({required_days} days → earliest {earliest}). Provide a `short_timeline_reason` to proceed.",
         )
 
-    # Stitch attached files (uploaded ahead of time)
+    # State machine — seed default if none attached
+    sm = await _resolve_sm(tenant_id)
+    initial = get_initial_state(sm)
+    if not initial:
+        raise HTTPException(500, "Attached state machine has no initial state")
+
     logo_doc = None
     if payload.logo_file_id:
         f = await _get_file(tenant_id, payload.logo_file_id)
@@ -220,38 +210,55 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
             logo_doc = StoredFile(**f).model_dump()
     ref_docs = await _stored_files_from_ids(tenant_id, payload.reference_file_ids or [])
 
-    req = MarketingRequest(
-        tenant_id=tenant_id,
-        request_number=await _next_request_number(tenant_id),
-        title=(payload.title or type_doc["name"]),
-        request_type_id=type_doc["id"],
-        request_type_name=type_doc["name"],
-        assigned_department_id=dept_doc["id"],
-        assigned_department_name=dept_doc["name"],
-        requested_due_date=payload.requested_due_date,
-        requirement_details=payload.requirement_details,
-        design_lead_time_days=int(type_doc.get("design_lead_time_days") or 0),
-        production_lead_time_days=int(type_doc.get("production_lead_time_days") or 0),
-        short_timeline_reason=payload.short_timeline_reason,
-        logo=logo_doc,
-        references=ref_docs,
-        social_media_links=payload.social_media_links,
-        file_links=payload.file_links,
-        additional_comments=payload.additional_comments,
-        status_key="submitted",
-        status_name="Submitted",
-        created_by=current_user.get("id"),
-        created_by_name=current_user.get("name") or current_user.get("email"),
-    )
-    doc = req.model_dump()
-    # Seed the timeline with a "submitted" event
+    doc = {
+        "id": str(uuid.uuid4()),
+        "request_number": await _next_request_number(tenant_id),
+        "tenant_id": tenant_id,
+        "title": (payload.title or type_doc["name"]),
+        "request_type_id": type_doc["id"],
+        "request_type_name": type_doc["name"],
+        "assigned_department_id": dept_doc["id"],
+        "assigned_department_name": dept_doc["name"],
+        "assigned_user_id": None,
+        "assigned_user_name": None,
+        "assigned_role": None,
+        "requested_due_date": payload.requested_due_date,
+        "requirement_details": payload.requirement_details,
+        "design_lead_time_days": int(type_doc.get("design_lead_time_days") or 0),
+        "production_lead_time_days": int(type_doc.get("production_lead_time_days") or 0),
+        "short_timeline_reason": payload.short_timeline_reason,
+        "logo": logo_doc,
+        "references": ref_docs,
+        "social_media_links": payload.social_media_links or [],
+        "file_links": payload.file_links or [],
+        "additional_comments": payload.additional_comments,
+        # SM-driven state
+        "state_machine_id": sm["id"],
+        "state_machine_name": sm.get("name"),
+        "current_state_key": initial["key"],
+        "current_state_label": initial.get("label") or initial["key"],
+        "current_state_color": initial.get("color") or "#94a3b8",
+        # Legacy aliases for back-compat (frontend may still reference these)
+        "status_key": initial["key"],
+        "status_name": initial.get("label") or initial["key"],
+        "versions": [],
+        "comments": [],
+        "production": None,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name") or current_user.get("email"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
     doc["comments"].append(RequestComment(
-        user_id=current_user.get("id"), user_name=current_user.get("name") or "User",
-        text=f"Request {doc['request_number']} created.", kind="system",
+        user_id=current_user.get("id"),
+        user_name=current_user.get("name") or "User",
+        text=f"Request {doc['request_number']} created. State: {doc['current_state_label']}.",
+        kind="system",
     ).model_dump())
     await db.marketing_requests.insert_one(doc)
     doc.pop("_id", None)
-    # Slack notification (best-effort, non-blocking on failure)
+
+    # Slack notification (best-effort)
     try:
         await slack_post_event(
             tenant_id=tenant_id,
@@ -268,74 +275,14 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
 
 
 # ──────────────────────────────────────────────────────────────
-# List + counts
+# List + counts (queues are simple filters; state filter via query)
 # ──────────────────────────────────────────────────────────────
-QUEUE_FILTERS = {
-    # Sales-facing
-    "my_requests":           {"_kind": "by_user"},                  # created_by = me
-    "my_inputs_needed":      {"_kind": "by_user", "status_key": "inputs_needed"},
-    "my_in_progress":        {"_kind": "by_user", "status_key": {"$in": ["in_progress", "in_review", "approved_internal"]}},
-    "my_approved":           {"_kind": "by_user", "status_key": "final_approved"},
-    "my_sent_for_production":{"_kind": "by_user", "status_key": {"$in": ["production_in_progress", "production_completed"]}},
-    # Marketing-facing (by assigned dept)
-    "new_requests":          {"_kind": "by_dept", "status_key": "submitted"},
-    "inputs_needed":         {"_kind": "by_dept", "status_key": "inputs_needed"},
-    "in_progress":           {"_kind": "by_dept", "status_key": "in_progress"},
-    "in_review":             {"_kind": "by_dept", "status_key": "in_review"},
-    "approved_internal":     {"_kind": "by_dept", "status_key": "approved_internal"},
-    "final_approved":        {"_kind": "by_dept", "status_key": "final_approved"},
-    # Delivery-facing
-    "ready_for_production":  {"_kind": "by_delivery_dept", "status_key": "final_approved"},
-    "production_pending":    {"_kind": "by_delivery_dept", "production.production_status": "pending"},
-    "production_in_progress":{"_kind": "by_delivery_dept", "status_key": "production_in_progress"},
-    "production_completed":  {"_kind": "by_delivery_dept", "status_key": "production_completed"},
-    # All (admin / debugging)
-    "all":                   {},
-}
-
-
-def _build_query(tenant_id: str, user: dict, queue: str, search: Optional[str], status_key: Optional[str]) -> dict:
-    q: dict = {"tenant_id": tenant_id}
-    cfg = QUEUE_FILTERS.get(queue or "my_requests") or {}
-    kind = cfg.get("_kind")
-    user_depts = _user_departments(user)
-    user_id = user.get("id")
-
-    if kind == "by_user":
-        q["created_by"] = user_id
-    elif kind == "by_dept":
-        # User must be in one of the assigned-dept names
-        if user_depts:
-            q["assigned_department_name"] = {
-                "$in": [d for d in [u.title() for u in user_depts] + [u for u in user_depts]]
-            }
-    elif kind == "by_delivery_dept":
-        if user_depts:
-            q["production.assigned_delivery_department_name"] = {
-                "$in": [d for d in [u.title() for u in user_depts] + [u for u in user_depts]]
-            }
-    # Apply per-queue extra filters (status_key, production.production_status)
-    for k, v in cfg.items():
-        if k == "_kind":
-            continue
-        q[k] = v
-    # Optional explicit status filter on top
-    if status_key:
-        q["status_key"] = status_key
-    # Text search across number/title
-    if search:
-        q["$or"] = [
-            {"request_number": {"$regex": search, "$options": "i"}},
-            {"title": {"$regex": search, "$options": "i"}},
-        ]
-    return q
-
-
 @router.get("")
+@router.get("/")
 async def list_requests(
-    queue: str = "my_requests",
+    queue: str = "all",
     search: Optional[str] = None,
-    status_key: Optional[str] = None,
+    state_key: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     sort: str = "-created_at",
@@ -344,11 +291,38 @@ async def list_requests(
     tenant_id = get_current_tenant_id()
     page = max(page, 1)
     limit = max(min(limit, 100), 1)
-    q = _build_query(tenant_id, current_user, queue, search, status_key)
+
+    q: dict = {"tenant_id": tenant_id}
+    if queue == "my_raised":
+        q["created_by"] = current_user.get("id")
+    elif queue == "my_assigned":
+        # Either directly assigned, or my role/department was auto-assigned
+        user_depts = _user_departments_lower(current_user)
+        user_role = (current_user.get("role") or "").strip()
+        ors: list = [{"assigned_user_id": current_user.get("id")}]
+        if user_depts:
+            # match by case-insensitive department name
+            ors.append({"assigned_department_name": {"$regex": f"^({'|'.join(user_depts)})$", "$options": "i"}})
+        if user_role:
+            ors.append({"assigned_role": {"$regex": f"^{user_role}$", "$options": "i"}})
+        q["$or"] = ors
+    if state_key:
+        q["current_state_key"] = state_key
+    if search:
+        s = {"$regex": search, "$options": "i"}
+        text_ors = [
+            {"request_number": s}, {"title": s}, {"request_type_name": s},
+            {"requirement_details": s},
+        ]
+        if "$or" in q:
+            q = {"$and": [q, {"$or": text_ors}]}
+        else:
+            q["$or"] = text_ors
+
     total = await db.marketing_requests.count_documents(q)
     sort_field = sort.lstrip("-+")
     sort_dir = -1 if sort.startswith("-") else 1
-    rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).skip((page-1)*limit).limit(limit).to_list(limit)
+    rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).skip((page - 1) * limit).limit(limit).to_list(limit)
     return {
         "items": rows, "total": total, "page": page, "limit": limit,
         "pages": (total + limit - 1) // limit if total else 0,
@@ -356,22 +330,62 @@ async def list_requests(
 
 
 @router.get("/counts")
-async def queue_counts(current_user: dict = Depends(get_current_user)):
+async def state_counts(current_user: dict = Depends(get_current_user)):
+    """Return total count + per-state-key counts + per-queue counts."""
     tenant_id = get_current_tenant_id()
-    counts: dict = {}
-    for queue in QUEUE_FILTERS:
-        if queue == "all":
-            continue
-        try:
-            q = _build_query(tenant_id, current_user, queue, None, None)
-            counts[queue] = await db.marketing_requests.count_documents(q)
-        except Exception:
-            counts[queue] = 0
-    return {"counts": counts}
+    sm = await _resolve_sm(tenant_id)
+    state_keys = [s["key"] for s in (sm.get("states") or [])]
+
+    pipeline = [
+        {"$match": {"tenant_id": tenant_id}},
+        {"$group": {"_id": "$current_state_key", "n": {"$sum": 1}}},
+    ]
+    by_state = {s: 0 for s in state_keys}
+    total = 0
+    async for row in db.marketing_requests.aggregate(pipeline):
+        total += row["n"]
+        if row["_id"] in by_state:
+            by_state[row["_id"]] = row["n"]
+        else:
+            # state was deleted from SM but doc still references it
+            by_state[row["_id"] or "_unknown"] = row["n"]
+
+    # My queues
+    my_raised = await db.marketing_requests.count_documents(
+        {"tenant_id": tenant_id, "created_by": current_user.get("id")}
+    )
+    user_depts = _user_departments_lower(current_user)
+    user_role = (current_user.get("role") or "").strip()
+    assigned_or = [{"assigned_user_id": current_user.get("id")}]
+    if user_depts:
+        assigned_or.append({"assigned_department_name": {"$regex": f"^({'|'.join(user_depts)})$", "$options": "i"}})
+    if user_role:
+        assigned_or.append({"assigned_role": {"$regex": f"^{user_role}$", "$options": "i"}})
+    my_assigned = await db.marketing_requests.count_documents({"tenant_id": tenant_id, "$or": assigned_or})
+
+    return {
+        "total": total,
+        "by_state": by_state,
+        "queues": {"my_raised": my_raised, "my_assigned": my_assigned, "all": total},
+        "states": sm.get("states") or [],
+        "state_machine_id": sm["id"],
+        "state_machine_name": sm.get("name"),
+    }
 
 
 # ──────────────────────────────────────────────────────────────
-# Detail / edit
+# State machine surface — for the detail page
+# ──────────────────────────────────────────────────────────────
+@router.get("/state-machine")
+async def get_state_machine(current_user: dict = Depends(get_current_user)):
+    """Return the SM currently attached to marketing_requests (auto-seeds if missing)."""
+    tenant_id = get_current_tenant_id()
+    sm = await _resolve_sm(tenant_id)
+    return sm
+
+
+# ──────────────────────────────────────────────────────────────
+# Detail
 # ──────────────────────────────────────────────────────────────
 @router.get("/{request_id}")
 async def get_request(request_id: str, current_user: dict = Depends(get_current_user)):
@@ -382,64 +396,124 @@ async def get_request(request_id: str, current_user: dict = Depends(get_current_
     return doc
 
 
+@router.get("/{request_id}/available-transitions")
+async def available_transitions(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Return the set of transitions the current user can trigger from this request's current state."""
+    tenant_id = get_current_tenant_id()
+    doc = await db.marketing_requests.find_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"_id": 0, "current_state_key": 1, "state_machine_id": 1, "created_by": 1},
+    )
+    if not doc:
+        raise HTTPException(404, "Request not found")
+
+    sm = await _resolve_sm(tenant_id)
+    transitions = find_transitions_from(sm, doc.get("current_state_key") or "")
+    out = []
+    for t in transitions:
+        allowed = await user_can_trigger(t, current_user, tenant_id, doc.get("created_by"))
+        target_state = find_state(sm, t.get("to_state") or "")
+        out.append({
+            "action_key": t.get("action_key"),
+            "action_label": t.get("action_label") or t.get("action_key"),
+            "from_state": t.get("from_state"),
+            "to_state": t.get("to_state"),
+            "to_state_label": (target_state or {}).get("label") or t.get("to_state"),
+            "to_state_color": (target_state or {}).get("color"),
+            "comment_required": bool(t.get("comment_required")),
+            "auto_assign_mode": t.get("auto_assign_mode"),
+            "requestor_only": bool(t.get("requestor_only")),
+            "allowed": allowed,
+        })
+    return {"current_state_key": doc.get("current_state_key"), "transitions": out}
+
+
 # ──────────────────────────────────────────────────────────────
-# Status transition
+# Transition — SM drives validation, auto-assign, side-effects
 # ──────────────────────────────────────────────────────────────
-@router.post("/{request_id}/status")
-async def change_status(request_id: str, payload: StatusChangeRequest, current_user: dict = Depends(get_current_user)):
+class TransitionRequest(BaseModel):
+    action_key: str
+    comment: Optional[str] = None
+
+
+@router.post("/{request_id}/transition")
+async def trigger_transition(request_id: str, payload: TransitionRequest, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Request not found")
 
-    current_key = doc.get("status_key") or "submitted"
-    target_key = payload.status_key
-    if target_key not in _STATUS_BY_KEY:
-        raise HTTPException(400, f"Unknown status key: {target_key}")
-    allowed = ALLOWED_TRANSITIONS.get(current_key) or set()
-    # Allow admin to override
-    if target_key not in allowed and not _is_admin(current_user):
-        raise HTTPException(400, f"Cannot transition from {current_key} → {target_key}. Allowed: {sorted(allowed)}")
+    sm = await _resolve_sm(tenant_id)
+    current_key = doc.get("current_state_key") or ""
+    transition = find_transition(sm, current_key, payload.action_key)
+    if not transition:
+        raise HTTPException(400, f"No transition for action '{payload.action_key}' from state '{current_key}'")
 
-    # Permission gate by role/dept:
-    # - "final_approved" can only be set by the requestor or an admin (Sales rep confirms after external sign-off)
-    # - Marketing-only transitions: inputs_needed, in_progress, in_review, approved_internal — must be in Marketing dept (or admin)
-    if target_key == "final_approved" and current_user.get("id") != doc.get("created_by") and not _is_admin(current_user):
-        raise HTTPException(403, "Only the request raiser (or an admin) can mark a request as Final Approved.")
-    if target_key in {"inputs_needed", "in_progress", "in_review", "approved_internal"}:
-        if not (_is_admin(current_user) or _user_in_dept(current_user, doc.get("assigned_department_name") or "")):
-            raise HTTPException(403, "Only members of the assigned department (or admin) can change this status.")
+    # Permission gate
+    if not await user_can_trigger(transition, current_user, tenant_id, doc.get("created_by")):
+        raise HTTPException(403, "You don't have permission to trigger this action.")
+    if transition.get("comment_required") and not (payload.comment and payload.comment.strip()):
+        raise HTTPException(400, "A comment is required for this transition.")
 
-    status_doc = _STATUS_BY_KEY[target_key]
+    target_state = find_state(sm, transition.get("to_state") or "")
+    if not target_state:
+        raise HTTPException(500, f"Target state '{transition.get('to_state')}' not found in SM")
+
+    # Apply auto-assign
+    assign = await apply_auto_assign(transition, tenant_id)
+
+    set_doc = {
+        "current_state_key": target_state["key"],
+        "current_state_label": target_state.get("label") or target_state["key"],
+        "current_state_color": target_state.get("color"),
+        "status_key": target_state["key"],
+        "status_name": target_state.get("label") or target_state["key"],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # Overwrite assignment when this transition specifies one
+    if transition.get("auto_assign_mode"):
+        set_doc["assigned_user_id"] = assign["assigned_user_id"]
+        set_doc["assigned_user_name"] = assign["assigned_user_name"]
+        if assign["assigned_department_id"]:
+            set_doc["assigned_department_id"] = assign["assigned_department_id"]
+            set_doc["assigned_department_name"] = assign["assigned_department_name"]
+        set_doc["assigned_role"] = assign["assigned_role"]
+
+    timeline_lines = [
+        payload.comment or f"{transition.get('action_label') or transition['action_key']} → {target_state.get('label') or target_state['key']}",
+    ]
+    if assign.get("assignee_label"):
+        timeline_lines.append(f"Auto-assigned to {assign['assignee_label']}.")
+
     timeline_event = RequestComment(
         user_id=current_user.get("id"),
         user_name=current_user.get("name") or current_user.get("email") or "User",
-        text=(payload.comment or f"Status changed to {status_doc['name']}"),
+        text="\n".join(timeline_lines),
         kind="status_change",
     ).model_dump()
 
     await db.marketing_requests.update_one(
         {"id": request_id, "tenant_id": tenant_id},
-        {"$set": {
-            "status_key": target_key,
-            "status_name": status_doc["name"],
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        },
-         "$push": {"comments": timeline_event}}
+        {"$set": set_doc, "$push": {"comments": timeline_event}},
     )
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+
+    # Slack notification (best-effort)
     try:
         await slack_post_event(
             tenant_id=tenant_id,
             event_type="marketing_request_status_changed",
             text=(
-                f":arrows_counterclockwise: *{doc['request_number']}* status → *{status_doc['name']}*\n"
-                f"{doc.get('title','')}  · by {current_user.get('name') or current_user.get('email')}"
+                f":arrows_counterclockwise: *{doc['request_number']}* "
+                f"→ *{target_state.get('label') or target_state['key']}*\n"
+                f"{doc.get('title','')} · by {current_user.get('name') or current_user.get('email')}"
+                + (f"\n_Auto-assigned to {assign['assignee_label']}_" if assign.get("assignee_label") else "")
                 + (f"\n_{payload.comment}_" if payload.comment else "")
             ),
         )
     except Exception:
-        logger.exception("Slack notification failed for marketing request status change")
+        logger.exception("Slack notification failed for marketing request transition")
+
     return doc
 
 
@@ -458,11 +532,10 @@ async def add_comment(request_id: str, payload: CommentCreate, current_user: dic
     res = await db.marketing_requests.update_one(
         {"id": request_id, "tenant_id": tenant_id},
         {"$push": {"comments": event},
-         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     if res.matched_count == 0:
         raise HTTPException(404, "Request not found")
-    # Slack notification — only for plain comments (skip system/status_change rows)
     if (payload.kind or "comment") == "comment":
         try:
             parent = await db.marketing_requests.find_one(
@@ -484,7 +557,7 @@ async def add_comment(request_id: str, payload: CommentCreate, current_user: dic
 
 
 # ──────────────────────────────────────────────────────────────
-# Versions — Marketing uploads work files (versioned)
+# Versions — work files (versioned)
 # ──────────────────────────────────────────────────────────────
 @router.post("/{request_id}/versions")
 async def add_version(request_id: str, payload: VersionCreate, current_user: dict = Depends(get_current_user)):
@@ -492,8 +565,6 @@ async def add_version(request_id: str, payload: VersionCreate, current_user: dic
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Request not found")
-    if not (_is_admin(current_user) or _user_in_dept(current_user, doc.get("assigned_department_name") or "")):
-        raise HTTPException(403, "Only members of the assigned department (or admin) can upload work versions.")
 
     files = await _stored_files_from_ids(tenant_id, payload.file_ids or [])
     version = FileVersion(
@@ -508,13 +579,13 @@ async def add_version(request_id: str, payload: VersionCreate, current_user: dic
     await db.marketing_requests.update_one(
         {"id": request_id, "tenant_id": tenant_id},
         {"$push": {"versions": version},
-         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+         "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     return version
 
 
 # ──────────────────────────────────────────────────────────────
-# Production submission (after final_approved)
+# Production submission — records the payload; state changes are SM-driven
 # ──────────────────────────────────────────────────────────────
 @router.post("/{request_id}/production-submit")
 async def submit_for_production(request_id: str, payload: ProductionSubmitRequest, current_user: dict = Depends(get_current_user)):
@@ -522,11 +593,6 @@ async def submit_for_production(request_id: str, payload: ProductionSubmitReques
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Request not found")
-    if doc.get("status_key") != "final_approved":
-        raise HTTPException(400, "Request must be in Final Approved status to submit for production.")
-    if current_user.get("id") != doc.get("created_by") and not _is_admin(current_user) \
-            and not _user_in_dept(current_user, doc.get("assigned_department_name") or ""):
-        raise HTTPException(403, "Only the requestor, assigned-dept member or admin can submit for production.")
 
     delivery_dept = await db.master_departments.find_one(
         {"id": payload.assigned_delivery_department_id, "tenant_id": tenant_id}, {"_id": 0}
@@ -550,58 +616,13 @@ async def submit_for_production(request_id: str, payload: ProductionSubmitReques
 
     await db.marketing_requests.update_one(
         {"id": request_id, "tenant_id": tenant_id},
-        {"$set": {
-            "production": sub,
-            "status_key": "production_in_progress",
-            "status_name": "Production In Progress",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        },
-        "$push": {"comments": RequestComment(
-            user_id=current_user.get("id"),
-            user_name=current_user.get("name") or "User",
-            text=f"Submitted for production to {delivery_dept['name']} — qty {payload.quantity_required}.",
-            kind="system",
-        ).model_dump()}}
-    )
-    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
-    return doc
-
-
-@router.post("/{request_id}/production-status")
-async def update_production_status(request_id: str, payload: StatusChangeRequest, current_user: dict = Depends(get_current_user)):
-    """Delivery team toggles production_in_progress / production_completed."""
-    tenant_id = get_current_tenant_id()
-    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
-    if not doc:
-        raise HTTPException(404, "Request not found")
-    if not doc.get("production"):
-        raise HTTPException(400, "Production not yet submitted for this request.")
-    target = payload.status_key
-    if target not in {"production_in_progress", "production_completed"}:
-        raise HTTPException(400, "Production status must be production_in_progress or production_completed")
-    delivery_dept_name = doc["production"].get("assigned_delivery_department_name") or ""
-    if not (_is_admin(current_user) or _user_in_dept(current_user, delivery_dept_name)):
-        raise HTTPException(403, "Only members of the delivery department (or admin) can update production status.")
-    status_doc = _STATUS_BY_KEY[target]
-    set_doc = {
-        "status_key": target,
-        "status_name": status_doc["name"],
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "production.production_status": "completed" if target == "production_completed" else "in_progress",
-    }
-    if target == "production_completed":
-        set_doc["production.production_completed_at"] = datetime.now(timezone.utc).isoformat()
-        set_doc["production.production_completed_by"] = current_user.get("id")
-        set_doc["production.production_completed_by_name"] = current_user.get("name") or "User"
-    await db.marketing_requests.update_one(
-        {"id": request_id, "tenant_id": tenant_id},
-        {"$set": set_doc,
+        {"$set": {"production": sub, "updated_at": datetime.now(timezone.utc).isoformat()},
          "$push": {"comments": RequestComment(
              user_id=current_user.get("id"),
              user_name=current_user.get("name") or "User",
-             text=(payload.comment or f"Production status → {status_doc['name']}"),
-             kind="status_change",
-         ).model_dump()}}
+             text=f"Submitted for production to {delivery_dept['name']} — qty {payload.quantity_required}.",
+             kind="system",
+         ).model_dump()}},
     )
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
     return doc

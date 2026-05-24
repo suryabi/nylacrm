@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Trash2, GitBranch, Save, Copy, ArrowLeft, RefreshCw, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, GitBranch, Save, Copy, ArrowLeft, RefreshCw, ChevronRight, Settings2 } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -44,7 +44,7 @@ export default function StateMachines() {
         axios.get(`${API}/state-machines/actions/catalog`, { headers: authHeaders() }),
         axios.get(`${API}/state-machines/workflows/catalog`, { headers: authHeaders() }),
         axios.get(`${API}/users`, { headers: authHeaders() }).catch(() => ({ data: [] })),
-        axios.get(`${API}/admin/departments`, { headers: authHeaders() }).catch(() => ({ data: [] })),
+        axios.get(`${API}/master-departments`, { headers: authHeaders() }).catch(() => ({ data: { departments: [] } })),
         axios.get(`${API}/state-machines/roles/catalog`, { headers: authHeaders() }).catch(() => ({ data: { roles: [] } })),
       ]);
       setList(smRes.data || []);
@@ -213,6 +213,7 @@ export default function StateMachines() {
 // ───────────────────────────────────────────────────────────────────────────
 function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workflowCatalog, users, departments, roles }) {
   const stateKeys = useMemo(() => (sm.states || []).map((s) => s.key), [sm.states]);
+  const [expandedTxn, setExpandedTxn] = useState(null);
 
   const addState = () => {
     const key = `state_${(sm.states || []).length + 1}`;
@@ -245,6 +246,9 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
           auto_assign_role: '',
           notify_all: true,
           comment_required: false,
+          allowed_role_keys: [],
+          allowed_department_ids: [],
+          requestor_only: false,
         },
       ],
     });
@@ -416,9 +420,71 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                   <p className="text-[10px] text-slate-400">Only one of User / Department / Role can be set.</p>
                 )}
               </div>
-              <div className="col-span-1 flex justify-end pt-1">
+              <div className="col-span-1 flex justify-end pt-1 gap-0.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setExpandedTxn(expandedTxn === idx ? null : idx)}
+                  title="Permissions & options"
+                  data-testid={`transition-options-${idx}`}
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </Button>
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => removeTransition(idx)} title="Delete transition"><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
+              {expandedTxn === idx && (
+                <div className="col-span-12 mt-2 -mx-3 -mb-2 px-3 py-3 bg-slate-50 border-t border-slate-200 space-y-2 text-xs">
+                  <div className="font-medium text-slate-700">Options for "{t.action_label || t.action_key}" → {(sm.states || []).find(s => s.key === t.to_state)?.label || t.to_state}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2">
+                      <Checkbox
+                        checked={!!t.requestor_only}
+                        onCheckedChange={(v) => updateTransition(idx, { requestor_only: !!v })}
+                        data-testid={`txn-requestor-only-${idx}`}
+                      />
+                      <span>Requestor only (only the doc creator can trigger)</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <Checkbox
+                        checked={!!t.comment_required}
+                        onCheckedChange={(v) => updateTransition(idx, { comment_required: !!v })}
+                        data-testid={`txn-comment-required-${idx}`}
+                      />
+                      <span>Comment required when triggering</span>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-slate-500 mb-1">Allowed roles (empty = anyone)</div>
+                      <select
+                        multiple
+                        value={t.allowed_role_keys || []}
+                        onChange={(e) => updateTransition(idx, { allowed_role_keys: Array.from(e.target.selectedOptions).map(o => o.value) })}
+                        className="w-full text-[11px] border border-slate-200 rounded px-1 py-0.5"
+                        size={Math.min(roles.length || 1, 6)}
+                        data-testid={`txn-allowed-roles-${idx}`}
+                      >
+                        {roles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <div className="text-slate-500 mb-1">Allowed departments (empty = anyone)</div>
+                      <select
+                        multiple
+                        value={t.allowed_department_ids || []}
+                        onChange={(e) => updateTransition(idx, { allowed_department_ids: Array.from(e.target.selectedOptions).map(o => o.value) })}
+                        className="w-full text-[11px] border border-slate-200 rounded px-1 py-0.5"
+                        size={Math.min(departments.length || 1, 6)}
+                        data-testid={`txn-allowed-departments-${idx}`}
+                      >
+                        {departments.map((d) => <option key={d.id || d.code} value={d.id || d.code}>{d.name || d.label || d.id}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-400">Admins (CEO / Director / Admin) always bypass these gates. Ctrl/⌘+click to multi-select.</p>
+                </div>
+              )}
             </div>
           ))}
           {(sm.transitions || []).length === 0 && (

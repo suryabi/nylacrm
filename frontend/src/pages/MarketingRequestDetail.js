@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
@@ -17,7 +17,8 @@ import {
 import {
   ArrowLeft, Sparkles, Send, MessageSquare, Plus, Upload, FileText, X,
   Loader2, ExternalLink, ChevronRight, Truck, AlertTriangle, Clock,
-  Tag, Calendar, Building2, User, Image as ImageIcon, Link as LinkIcon,
+  Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
+  UserCircle, ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -28,29 +29,6 @@ const HEAD = () => {
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
 
-// Mirrors the styles in MarketingRequests.js list view
-const STATUS_STYLES = {
-  submitted:               { label: 'Submitted',           color: 'text-slate-700',   bg: 'bg-slate-100',   ring: 'border-slate-300' },
-  inputs_needed:           { label: 'Inputs Needed',       color: 'text-amber-700',   bg: 'bg-amber-100',   ring: 'border-amber-300' },
-  in_progress:             { label: 'In Progress',         color: 'text-blue-700',    bg: 'bg-blue-100',    ring: 'border-blue-300' },
-  in_review:               { label: 'In Review',           color: 'text-violet-700',  bg: 'bg-violet-100',  ring: 'border-violet-300' },
-  approved_internal:       { label: 'Approved (Internal)', color: 'text-indigo-700',  bg: 'bg-indigo-100',  ring: 'border-indigo-300' },
-  final_approved:          { label: 'Final Approved',      color: 'text-emerald-700', bg: 'bg-emerald-100', ring: 'border-emerald-300' },
-  production_in_progress:  { label: 'Production',          color: 'text-orange-700',  bg: 'bg-orange-100',  ring: 'border-orange-300' },
-  production_completed:    { label: 'Completed',           color: 'text-green-700',   bg: 'bg-green-100',   ring: 'border-green-300' },
-};
-
-const NEXT_TRANSITIONS = {
-  submitted: ['inputs_needed', 'in_progress'],
-  inputs_needed: ['in_progress', 'submitted'],
-  in_progress: ['inputs_needed', 'in_review'],
-  in_review: ['in_progress', 'approved_internal'],
-  approved_internal: ['in_progress', 'final_approved'],
-  final_approved: [],
-  production_in_progress: ['production_completed'],
-  production_completed: [],
-};
-
 const isOverdueDate = (s) => { if (!s) return false; try { const d = parseISO(s); return isValid(d) && isPast(d) && !isToday(d); } catch { return false; } };
 const fmtDate = (s, f = 'dd MMM yyyy') => { try { return format(parseISO(s), f); } catch { return s || '—'; } };
 const getInitials = (name) => {
@@ -58,6 +36,12 @@ const getInitials = (name) => {
   const parts = name.trim().split(' ').filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return name.slice(0, 2).toUpperCase();
+};
+
+// Build inline styles from a hex color so the badge follows the SM-defined color.
+const stateBadgeStyle = (hex) => {
+  if (!hex) return { background: '#f1f5f9', color: '#334155', borderColor: '#e2e8f0' };
+  return { background: `${hex}1f`, color: hex, borderColor: `${hex}55` };
 };
 
 const FileChip = ({ f }) => (
@@ -76,8 +60,14 @@ export default function MarketingRequestDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [req, setReq] = useState(null);
+  const [transitions, setTransitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
+
+  // Transition confirm dialog (for comment_required transitions)
+  const [confirmTxn, setConfirmTxn] = useState(null); // {action_key, action_label, to_state_label, comment_required}
+  const [txnComment, setTxnComment] = useState('');
+  const [savingTxn, setSavingTxn] = useState(false);
 
   // Version dialog state
   const [showVersion, setShowVersion] = useState(false);
@@ -98,33 +88,45 @@ export default function MarketingRequestDetail() {
   });
   const [savingProd, setSavingProd] = useState(false);
 
-  const fetchReq = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get(`${API}/marketing-requests/${id}`, { headers: HEAD() });
-      setReq(data);
+      const [r1, r2] = await Promise.all([
+        axios.get(`${API}/marketing-requests/${id}`, { headers: HEAD() }),
+        axios.get(`${API}/marketing-requests/${id}/available-transitions`, { headers: HEAD() }),
+      ]);
+      setReq(r1.data);
+      setTransitions(r2.data?.transitions || []);
     } catch {
       toast.error('Failed to load request');
       navigate('/marketing-requests');
     } finally { setLoading(false); }
   }, [id, navigate]);
-  useEffect(() => { fetchReq(); }, [fetchReq]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const userDepts = (() => {
-    const d = user?.department;
-    if (Array.isArray(d)) return d.map(x => String(x || '').toLowerCase()).join(' ');
-    return String(d || '').toLowerCase();
-  })();
-  const isInAssignedDept = req && userDepts.includes((req.assigned_department_name || '').toLowerCase());
-  const isInDeliveryDept = req?.production && userDepts.includes((req.production.assigned_delivery_department_name || '').toLowerCase());
-  const isRequestor = req && user?.id === req.created_by;
-
-  const changeStatus = async (status_key, commentText) => {
+  const runTransition = async (action_key, commentText) => {
+    setSavingTxn(true);
     try {
-      await axios.post(`${API}/marketing-requests/${id}/status`, { status_key, comment: commentText || null }, { headers: HEAD() });
-      toast.success(`Status → ${STATUS_STYLES[status_key]?.label || status_key}`);
-      fetchReq();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Status change failed'); }
+      await axios.post(`${API}/marketing-requests/${id}/transition`,
+        { action_key, comment: commentText || null },
+        { headers: HEAD() },
+      );
+      toast.success('Transition applied');
+      setConfirmTxn(null);
+      setTxnComment('');
+      fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Transition failed');
+    } finally { setSavingTxn(false); }
+  };
+
+  const onActionClick = (t) => {
+    if (t.comment_required) {
+      setConfirmTxn(t);
+      setTxnComment('');
+    } else {
+      runTransition(t.action_key, null);
+    }
   };
 
   const addComment = async () => {
@@ -132,7 +134,7 @@ export default function MarketingRequestDetail() {
     try {
       await axios.post(`${API}/marketing-requests/${id}/comments`, { text: comment.trim() }, { headers: HEAD() });
       setComment('');
-      fetchReq();
+      fetchAll();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to add comment'); }
   };
 
@@ -165,7 +167,7 @@ export default function MarketingRequestDetail() {
       toast.success(`Version "${versionName}" added`);
       setShowVersion(false);
       setVersionName(''); setVersionFiles([]); setVersionLinks([]); setVersionComment('');
-      fetchReq();
+      fetchAll();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to add version'); }
     finally { setSavingVersion(false); }
   };
@@ -196,37 +198,45 @@ export default function MarketingRequestDetail() {
         final_approved_file_ids: [],
         final_approved_links: [],
       }, { headers: HEAD() });
-      toast.success('Submitted for production');
+      toast.success('Production payload attached');
       setShowProd(false);
-      fetchReq();
+      fetchAll();
     } catch (e) { toast.error(e.response?.data?.detail || 'Production submit failed'); }
     finally { setSavingProd(false); }
   };
 
+  const allowedTransitions = useMemo(() => transitions.filter(t => t.allowed), [transitions]);
+  const blockedTransitions = useMemo(() => transitions.filter(t => !t.allowed), [transitions]);
+
   if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>;
   if (!req) return null;
 
-  const st = STATUS_STYLES[req.status_key] || STATUS_STYLES.submitted;
-  const allowedNext = NEXT_TRANSITIONS[req.status_key] || [];
-  const overdue = req.requested_due_date && req.status_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
+  const overdue = req.requested_due_date && !['production_completed'].includes(req.current_state_key) && isOverdueDate(req.requested_due_date);
+  const stateStyle = stateBadgeStyle(req.current_state_color);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6" data-testid="mr-detail-page">
-      {/* Back link */}
       <div>
         <Button variant="ghost" size="sm" onClick={() => navigate('/marketing-requests')} data-testid="mr-back-btn">
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Marketing Requests
         </Button>
       </div>
 
-      {/* Hero header — Request Type is the prominent element */}
+      {/* Hero header */}
       <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] overflow-hidden">
         <CardContent className="p-6">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded font-mono">
               <Tag className="h-3 w-3" /> {req.request_number}
             </span>
-            <Badge variant="outline" className={`${st.bg} ${st.color} border ${st.ring}`}>{st.label}</Badge>
+            <Badge
+              variant="outline"
+              style={stateStyle}
+              className="border"
+              data-testid="mr-current-state-badge"
+            >
+              {req.current_state_label || req.current_state_key}
+            </Badge>
             {overdue && (
               <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
                 <AlertTriangle className="h-3 w-3 mr-1" /> Overdue
@@ -243,7 +253,13 @@ export default function MarketingRequestDetail() {
             {req.request_type_name || 'Untyped Request'}
           </h1>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-4 text-sm text-slate-600">
-            <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-slate-400" /> {req.assigned_department_name}</span>
+            <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-slate-400" /> {req.assigned_department_name || '—'}</span>
+            {req.assigned_user_name && (
+              <span className="flex items-center gap-1.5"><UserCircle className="h-4 w-4 text-slate-400" /> {req.assigned_user_name}</span>
+            )}
+            {req.assigned_role && (
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-slate-400" /> Role: {req.assigned_role}</span>
+            )}
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-slate-400" /> Due {fmtDate(req.requested_due_date)}
             </span>
@@ -258,43 +274,53 @@ export default function MarketingRequestDetail() {
         </CardContent>
       </Card>
 
-      {/* Status action bar */}
+      {/* Action bar — driven by /available-transitions */}
       <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
         <CardContent className="p-4 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500 mr-1">Move to:</span>
-          {allowedNext.length === 0 && <span className="text-xs text-slate-500 italic">(terminal state)</span>}
-          {allowedNext.map(s => {
-            const disabled =
-              (s === 'final_approved' && !isRequestor) ||
-              (['inputs_needed', 'in_progress', 'in_review', 'approved_internal'].includes(s) && !isInAssignedDept);
-            return (
-              <Button
-                key={s}
-                variant="outline"
-                size="sm"
-                disabled={disabled}
-                title={disabled ? (s === 'final_approved' ? 'Only the requestor can mark Final Approved' : 'Only members of the assigned department can change this status') : ''}
-                onClick={() => changeStatus(s)}
-                data-testid={`status-${s}-btn`}
-              >
-                <ChevronRight className="h-3.5 w-3.5 mr-1" /> {STATUS_STYLES[s]?.label || s}
-              </Button>
-            );
-          })}
-          {req.status_key === 'final_approved' && (isRequestor || isInAssignedDept) && (
-            <Button size="sm" onClick={openProdDialog} className="ml-auto bg-emerald-600 hover:bg-emerald-700" data-testid="submit-production-btn">
-              <Truck className="h-4 w-4 mr-2" /> Submit for Production
-            </Button>
+          <span className="text-xs text-slate-500 mr-1">Actions:</span>
+          {allowedTransitions.length === 0 && blockedTransitions.length === 0 && (
+            <span className="text-xs text-slate-500 italic">(terminal state — no transitions defined)</span>
           )}
-          {req.status_key === 'production_in_progress' && isInDeliveryDept && (
-            <Button size="sm" onClick={() => changeStatus('production_completed')} className="ml-auto bg-green-600 hover:bg-green-700" data-testid="mark-prod-complete-btn">
-              <Truck className="h-4 w-4 mr-2" /> Mark Production Completed
+          {allowedTransitions.map((t) => (
+            <Button
+              key={`${t.action_key}-${t.to_state}`}
+              variant="outline"
+              size="sm"
+              onClick={() => onActionClick(t)}
+              disabled={savingTxn}
+              data-testid={`action-${t.action_key}-btn`}
+              title={`Moves to: ${t.to_state_label}`}
+            >
+              <ChevronRight className="h-3.5 w-3.5 mr-1" /> {t.action_label}
             </Button>
-          )}
+          ))}
+          {blockedTransitions.map((t) => (
+            <Button
+              key={`${t.action_key}-${t.to_state}-blocked`}
+              variant="outline"
+              size="sm"
+              disabled
+              title={t.requestor_only ? 'Only the requestor can do this' : "You don't have permission for this action"}
+              data-testid={`action-${t.action_key}-blocked`}
+              className="opacity-50"
+            >
+              <ChevronRight className="h-3.5 w-3.5 mr-1" /> {t.action_label}
+            </Button>
+          ))}
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={openProdDialog}
+            data-testid="attach-production-btn"
+          >
+            <Truck className="h-4 w-4 mr-2" />
+            {req.production ? 'Update Production Payload' : 'Attach Production Payload'}
+          </Button>
         </CardContent>
       </Card>
 
-      {/* Body: Requirement + Inputs (col span 2)  ·  Side panel */}
+      {/* Body: Requirement + Inputs · Side panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <Card className="lg:col-span-2 border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
           <CardContent className="p-5 space-y-4">
@@ -339,6 +365,10 @@ export default function MarketingRequestDetail() {
 
         <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
           <CardContent className="p-5 space-y-3 text-sm">
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Lifecycle</span>
+              <p className="text-xs text-slate-700 mt-0.5">{req.state_machine_name || '—'}</p>
+            </div>
             <div>
               <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Created</span>
               <p className="text-xs text-slate-700 mt-0.5">{fmtDate(req.created_at, 'dd MMM yyyy, hh:mm a')}</p>
@@ -396,11 +426,9 @@ export default function MarketingRequestDetail() {
             <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
               <Upload className="h-4 w-4 text-emerald-600" /> Work Versions ({req.versions?.length || 0})
             </h3>
-            {isInAssignedDept && (
-              <Button size="sm" variant="outline" onClick={() => setShowVersion(true)} data-testid="add-version-btn">
-                <Plus className="h-4 w-4 mr-1" /> Add Version
-              </Button>
-            )}
+            <Button size="sm" variant="outline" onClick={() => setShowVersion(true)} data-testid="add-version-btn">
+              <Plus className="h-4 w-4 mr-1" /> Add Version
+            </Button>
           </div>
           {(req.versions || []).length === 0 ? (
             <p className="text-xs text-slate-500 italic">No work versions uploaded yet.</p>
@@ -444,6 +472,9 @@ export default function MarketingRequestDetail() {
                   <span className="font-medium text-slate-800 flex items-center gap-1.5">
                     <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-medium text-emerald-700">{getInitials(c.user_name)}</div>
                     {c.user_name}
+                    {c.kind !== 'comment' && (
+                      <Badge variant="outline" className="text-[9px] bg-white border-slate-200">{c.kind.replace('_', ' ')}</Badge>
+                    )}
                   </span>
                   <span className="text-[10px] text-slate-500">{fmtDate(c.created_at, 'dd MMM, hh:mm a')}</span>
                 </div>
@@ -453,12 +484,42 @@ export default function MarketingRequestDetail() {
           </div>
           <div className="flex gap-2 pt-1">
             <Textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment…" data-testid="mr-comment-input" />
-            <Button onClick={addComment} size="sm" disabled={!comment.trim()} className="bg-emerald-600 hover:bg-emerald-700 self-start">
+            <Button onClick={addComment} size="sm" disabled={!comment.trim()} className="bg-emerald-600 hover:bg-emerald-700 self-start" data-testid="mr-comment-send-btn">
               <Send className="h-4 w-4" />
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Transition confirm dialog (only for comment_required transitions) */}
+      <Dialog open={!!confirmTxn} onOpenChange={(o) => { if (!o) setConfirmTxn(null); }}>
+        <DialogContent className="max-w-md" data-testid="transition-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle>{confirmTxn?.action_label}</DialogTitle>
+            <DialogDescription>
+              Moves to <span className="font-semibold">{confirmTxn?.to_state_label}</span>.
+              {confirmTxn?.comment_required && ' A comment is required for this action.'}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            rows={3}
+            value={txnComment}
+            onChange={(e) => setTxnComment(e.target.value)}
+            placeholder="Add a comment…"
+            data-testid="transition-comment-input"
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmTxn(null)}>Cancel</Button>
+            <Button
+              onClick={() => runTransition(confirmTxn.action_key, txnComment)}
+              disabled={savingTxn || (confirmTxn?.comment_required && !txnComment.trim())}
+              data-testid="transition-confirm-btn"
+            >
+              {savingTxn ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Version Dialog */}
       <Dialog open={showVersion} onOpenChange={setShowVersion}>
@@ -520,8 +581,8 @@ export default function MarketingRequestDetail() {
       <Dialog open={showProd} onOpenChange={setShowProd}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Submit for Production</DialogTitle>
-            <DialogDescription>Capture quantity, target date and the delivery team to hand off this approved design.</DialogDescription>
+            <DialogTitle>Attach Production Payload</DialogTitle>
+            <DialogDescription>Capture quantity, target date and delivery team. State transitions are still driven by the lifecycle actions.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div>
@@ -549,7 +610,7 @@ export default function MarketingRequestDetail() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowProd(false)}>Cancel</Button>
             <Button onClick={submitProduction} disabled={savingProd} className="bg-emerald-600 hover:bg-emerald-700">
-              {savingProd ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : <><Truck className="h-4 w-4 mr-2" /> Submit</>}
+              {savingProd ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…</> : <><Truck className="h-4 w-4 mr-2" /> Save</>}
             </Button>
           </DialogFooter>
         </DialogContent>

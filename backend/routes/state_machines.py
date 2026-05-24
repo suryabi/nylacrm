@@ -93,6 +93,12 @@ class Transition(BaseModel):
     auto_assign_role: Optional[str] = None
     notify_all: bool = True  # notify everyone matching the auto-assign target
     comment_required: bool = False
+    # Permission gates: who can trigger this transition.
+    # Empty list = anyone in the tenant. Admins (CEO/Director/admin) always bypass.
+    allowed_role_keys: List[str] = Field(default_factory=list)
+    allowed_department_ids: List[str] = Field(default_factory=list)
+    # If True, only the document's creator (e.g. the requestor) can trigger.
+    requestor_only: bool = False
 
 
 class StateMachineCreate(BaseModel):
