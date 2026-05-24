@@ -85,10 +85,13 @@ class Transition(BaseModel):
     action_label: Optional[str] = None  # override / display text
     from_state: Optional[str] = None  # None = initial transition
     to_state: str
-    auto_department_ids: List[str] = Field(default_factory=list)
-    auto_role_keys: List[str] = Field(default_factory=list)
-    auto_user_ids: List[str] = Field(default_factory=list)
-    notify_all: bool = True  # always notify every matched assignee
+    # Single-target auto-assignment. Mutually exclusive — at most one of
+    # `user`, `department`, `role`. Empty string / None means no auto-assign.
+    auto_assign_mode: Optional[str] = None  # 'user' | 'department' | 'role' | None
+    auto_assign_user_id: Optional[str] = None
+    auto_assign_department_id: Optional[str] = None
+    auto_assign_role: Optional[str] = None
+    notify_all: bool = True  # notify everyone matching the auto-assign target
     comment_required: bool = False
 
 
@@ -124,6 +127,7 @@ def _validate(states: List[State], transitions: List[Transition]):
         raise HTTPException(400, "Only one state may be marked as initial")
     seen_pairs = set()
     valid_action_keys = {a["key"] for a in ACTION_CATALOG}
+    valid_modes = {None, "", "user", "department", "role"}
     for idx, t in enumerate(transitions):
         if t.action_key not in valid_action_keys:
             raise HTTPException(400, f"Transition #{idx + 1}: unknown action_key '{t.action_key}'")
@@ -135,6 +139,27 @@ def _validate(states: List[State], transitions: List[Transition]):
         if pair in seen_pairs:
             raise HTTPException(400, f"Duplicate transition for action '{t.action_key}' from state '{t.from_state or '(initial)'}'")
         seen_pairs.add(pair)
+        # Auto-assign mutual-exclusivity check
+        if t.auto_assign_mode not in valid_modes:
+            raise HTTPException(400, f"Transition #{idx + 1}: invalid auto_assign_mode '{t.auto_assign_mode}'")
+        targets = [
+            ("user", t.auto_assign_user_id),
+            ("department", t.auto_assign_department_id),
+            ("role", t.auto_assign_role),
+        ]
+        provided = [name for name, val in targets if val]
+        if len(provided) > 1:
+            raise HTTPException(
+                400,
+                f"Transition #{idx + 1}: auto-assign supports only ONE of user / department / role (got: {', '.join(provided)})",
+            )
+        if t.auto_assign_mode and t.auto_assign_mode not in (None, ""):
+            wanted = next((val for name, val in targets if name == t.auto_assign_mode), None)
+            if not wanted:
+                raise HTTPException(
+                    400,
+                    f"Transition #{idx + 1}: auto_assign_mode is '{t.auto_assign_mode}' but no target ID provided",
+                )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -143,6 +168,16 @@ def _validate(states: List[State], transitions: List[Transition]):
 @router.get("/actions/catalog")
 async def actions_catalog(current_user: dict = Depends(get_current_user)):
     return {"actions": ACTION_CATALOG}
+
+
+@router.get("/roles/catalog")
+async def roles_catalog(current_user: dict = Depends(get_current_user)):
+    """Distinct roles found on existing users in this tenant — used by the
+    state-machine editor as the "Auto Assign to a Role" dropdown."""
+    tenant_id = get_current_tenant_id()
+    roles = await db.users.distinct("role", {"tenant_id": tenant_id})
+    cleaned = sorted({(r or "").strip() for r in roles if r})
+    return {"roles": [{"key": r, "label": r} for r in cleaned]}
 
 
 @router.get("/workflows/catalog")

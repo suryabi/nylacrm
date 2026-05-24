@@ -34,22 +34,25 @@ export default function StateMachines() {
   const [workflowCatalog, setWorkflowCatalog] = useState([]);
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [roles, setRoles] = useState([]);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [smRes, actRes, wfRes, usrRes, deptRes] = await Promise.all([
+      const [smRes, actRes, wfRes, usrRes, deptRes, rolesRes] = await Promise.all([
         axios.get(`${API}/state-machines/`, { headers: authHeaders() }),
         axios.get(`${API}/state-machines/actions/catalog`, { headers: authHeaders() }),
         axios.get(`${API}/state-machines/workflows/catalog`, { headers: authHeaders() }),
         axios.get(`${API}/users`, { headers: authHeaders() }).catch(() => ({ data: [] })),
         axios.get(`${API}/admin/departments`, { headers: authHeaders() }).catch(() => ({ data: [] })),
+        axios.get(`${API}/state-machines/roles/catalog`, { headers: authHeaders() }).catch(() => ({ data: { roles: [] } })),
       ]);
       setList(smRes.data || []);
       setActionCatalog(actRes.data?.actions || []);
       setWorkflowCatalog(wfRes.data?.workflows || []);
       setUsers(Array.isArray(usrRes.data) ? usrRes.data : (usrRes.data?.users || []));
       setDepartments(Array.isArray(deptRes.data) ? deptRes.data : (deptRes.data?.departments || []));
+      setRoles(rolesRes.data?.roles || []);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to load state machines');
     } finally {
@@ -131,6 +134,7 @@ export default function StateMachines() {
         workflowCatalog={workflowCatalog}
         users={users}
         departments={departments}
+        roles={roles}
       />
     );
   }
@@ -207,7 +211,7 @@ export default function StateMachines() {
 // ───────────────────────────────────────────────────────────────────────────
 // Editor
 // ───────────────────────────────────────────────────────────────────────────
-function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workflowCatalog, users, departments }) {
+function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workflowCatalog, users, departments, roles }) {
   const stateKeys = useMemo(() => (sm.states || []).map((s) => s.key), [sm.states]);
 
   const addState = () => {
@@ -235,9 +239,10 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
           action_label: '',
           from_state: '',
           to_state: stateKeys[0] || '',
-          auto_department_ids: [],
-          auto_role_keys: [],
-          auto_user_ids: [],
+          auto_assign_mode: '',
+          auto_assign_user_id: '',
+          auto_assign_department_id: '',
+          auto_assign_role: '',
           notify_all: true,
           comment_required: false,
         },
@@ -354,17 +359,62 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                 </select>
               </div>
               <div className="col-span-2 space-y-1">
-                <select multiple value={t.auto_department_ids || []}
-                  onChange={(e) => updateTransition(idx, { auto_department_ids: Array.from(e.target.selectedOptions).map((o) => o.value) })}
-                  className="w-full text-[11px] border border-slate-200 rounded px-1 py-0.5 max-h-16">
-                  {departments.map((d) => <option key={d.id || d.code} value={d.id || d.code}>{d.name || d.label || d.id}</option>)}
+                <select
+                  value={t.auto_assign_mode || ''}
+                  onChange={(e) => {
+                    const mode = e.target.value;
+                    updateTransition(idx, {
+                      auto_assign_mode: mode,
+                      // Clear the other two targets when switching modes
+                      auto_assign_user_id: mode === 'user' ? (t.auto_assign_user_id || '') : '',
+                      auto_assign_department_id: mode === 'department' ? (t.auto_assign_department_id || '') : '',
+                      auto_assign_role: mode === 'role' ? (t.auto_assign_role || '') : '',
+                    });
+                  }}
+                  className="w-full h-8 text-xs border border-slate-200 rounded px-2"
+                  data-testid={`auto-assign-mode-${idx}`}
+                >
+                  <option value="">No auto-assign</option>
+                  <option value="user">Assign to User</option>
+                  <option value="department">Assign to Department</option>
+                  <option value="role">Assign to Role</option>
                 </select>
-                <select multiple value={t.auto_user_ids || []}
-                  onChange={(e) => updateTransition(idx, { auto_user_ids: Array.from(e.target.selectedOptions).map((o) => o.value) })}
-                  className="w-full text-[11px] border border-slate-200 rounded px-1 py-0.5 max-h-16">
-                  {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
-                </select>
-                <p className="text-[10px] text-slate-400">Ctrl/⌘+click to multi-select. All matched users will be notified.</p>
+                {t.auto_assign_mode === 'user' && (
+                  <select
+                    value={t.auto_assign_user_id || ''}
+                    onChange={(e) => updateTransition(idx, { auto_assign_user_id: e.target.value })}
+                    className="w-full h-8 text-xs border border-slate-200 rounded px-2"
+                    data-testid={`auto-assign-user-${idx}`}
+                  >
+                    <option value="">— pick a user —</option>
+                    {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+                  </select>
+                )}
+                {t.auto_assign_mode === 'department' && (
+                  <select
+                    value={t.auto_assign_department_id || ''}
+                    onChange={(e) => updateTransition(idx, { auto_assign_department_id: e.target.value })}
+                    className="w-full h-8 text-xs border border-slate-200 rounded px-2"
+                    data-testid={`auto-assign-department-${idx}`}
+                  >
+                    <option value="">— pick a department —</option>
+                    {departments.map((d) => <option key={d.id || d.code} value={d.id || d.code}>{d.name || d.label || d.id}</option>)}
+                  </select>
+                )}
+                {t.auto_assign_mode === 'role' && (
+                  <select
+                    value={t.auto_assign_role || ''}
+                    onChange={(e) => updateTransition(idx, { auto_assign_role: e.target.value })}
+                    className="w-full h-8 text-xs border border-slate-200 rounded px-2"
+                    data-testid={`auto-assign-role-${idx}`}
+                  >
+                    <option value="">— pick a role —</option>
+                    {roles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                  </select>
+                )}
+                {t.auto_assign_mode && (
+                  <p className="text-[10px] text-slate-400">Only one of User / Department / Role can be set.</p>
+                )}
               </div>
               <div className="col-span-1 flex justify-end pt-1">
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => removeTransition(idx)} title="Delete transition"><Trash2 className="h-3.5 w-3.5" /></Button>
