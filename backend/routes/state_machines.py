@@ -69,6 +69,18 @@ WORKFLOW_CATALOG = [
 ]
 
 
+# Default `kind` hints used when auto-migrating action_keys from legacy SMs.
+ACTION_KIND_HINTS = {
+    "approve": "positive", "final_approve": "positive", "resume": "positive",
+    "close": "positive", "start_working": "positive",
+    "reject": "negative", "cancel": "negative", "on_hold": "negative",
+    "request_changes": "negative", "escalate": "negative",
+    "submit": "neutral", "submit_for_final_approval": "neutral",
+    "send_for_review": "neutral", "reopen": "neutral", "reassign": "neutral",
+    "custom": "neutral",
+}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Pydantic models
 # ─────────────────────────────────────────────────────────────────────────────
@@ -78,6 +90,14 @@ class State(BaseModel):
     color: Optional[str] = None  # hex or tailwind token
     is_initial: bool = False
     is_terminal: bool = False
+
+
+class Action(BaseModel):
+    """Per-workflow action vocabulary. Transitions reference these by `key`."""
+    key: str
+    label: str
+    description: Optional[str] = None
+    kind: str = "neutral"  # 'positive' | 'neutral' | 'negative'
 
 
 class Transition(BaseModel):
@@ -106,6 +126,7 @@ class StateMachineCreate(BaseModel):
     code: Optional[str] = None
     description: Optional[str] = None
     states: List[State] = Field(default_factory=list)
+    actions: List[Action] = Field(default_factory=list)
     transitions: List[Transition] = Field(default_factory=list)
     applied_to: List[str] = Field(default_factory=list)
 
@@ -115,6 +136,7 @@ class StateMachineUpdate(BaseModel):
     code: Optional[str] = None
     description: Optional[str] = None
     states: Optional[List[State]] = None
+    actions: Optional[List[Action]] = None
     transitions: Optional[List[Transition]] = None
     applied_to: Optional[List[str]] = None
 
@@ -124,19 +146,32 @@ def _is_admin(user: dict) -> bool:
     return role in ("ceo", "admin", "system_admin", "tenant_admin")
 
 
-def _validate(states: List[State], transitions: List[Transition]):
+def _validate(states: List[State], actions: List[Action], transitions: List[Transition]):
     state_keys = {s.key for s in states}
     if not states:
         raise HTTPException(400, "State machine must have at least one state")
     initial_count = sum(1 for s in states if s.is_initial)
     if initial_count > 1:
         raise HTTPException(400, "Only one state may be marked as initial")
+    # Actions: unique keys; transitions must reference an action defined here.
+    action_keys = set()
+    for idx, a in enumerate(actions):
+        if not (a.key or "").strip():
+            raise HTTPException(400, f"Action #{idx + 1}: key is required")
+        if a.key in action_keys:
+            raise HTTPException(400, f"Duplicate action key '{a.key}'")
+        if a.kind not in ("positive", "neutral", "negative"):
+            raise HTTPException(400, f"Action '{a.key}': kind must be positive/neutral/negative")
+        action_keys.add(a.key)
     seen_pairs = set()
-    valid_action_keys = {a["key"] for a in ACTION_CATALOG}
     valid_modes = {None, "", "user", "department", "role"}
     for idx, t in enumerate(transitions):
-        if t.action_key not in valid_action_keys:
-            raise HTTPException(400, f"Transition #{idx + 1}: unknown action_key '{t.action_key}'")
+        if t.action_key not in action_keys:
+            raise HTTPException(
+                400,
+                f"Transition #{idx + 1}: action '{t.action_key}' is not defined in this workflow's Actions list. "
+                f"Add it to Actions first.",
+            )
         if t.to_state not in state_keys:
             raise HTTPException(400, f"Transition #{idx + 1}: to_state '{t.to_state}' is not in states")
         if t.from_state and t.from_state not in state_keys:
@@ -166,6 +201,37 @@ def _validate(states: List[State], transitions: List[Transition]):
                     400,
                     f"Transition #{idx + 1}: auto_assign_mode is '{t.auto_assign_mode}' but no target ID provided",
                 )
+
+
+def _migrate_actions_inplace(doc: dict) -> dict:
+    """Backfill `actions[]` on legacy SMs (created before per-workflow actions).
+    Derives the action list from distinct action_keys in `transitions[]`,
+    using ACTION_CATALOG labels + ACTION_KIND_HINTS as defaults."""
+    if not isinstance(doc, dict):
+        return doc
+    if doc.get("actions"):
+        return doc
+    transitions = doc.get("transitions") or []
+    if not transitions:
+        doc["actions"] = []
+        return doc
+    catalog_by_key = {a["key"]: a for a in ACTION_CATALOG}
+    seen = set()
+    out = []
+    for t in transitions:
+        key = (t or {}).get("action_key")
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        cat = catalog_by_key.get(key, {})
+        out.append({
+            "key": key,
+            "label": (t.get("action_label") or cat.get("label") or key.replace("_", " ").title()),
+            "description": None,
+            "kind": ACTION_KIND_HINTS.get(key, "neutral"),
+        })
+    doc["actions"] = out
+    return doc
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -198,7 +264,8 @@ async def workflows_catalog(current_user: dict = Depends(get_current_user)):
 async def list_state_machines(current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
     cursor = db.state_machines.find({"tenant_id": tenant_id}, {"_id": 0}).sort("name", 1)
-    return await cursor.to_list(length=200)
+    docs = await cursor.to_list(length=200)
+    return [_migrate_actions_inplace(d) for d in docs]
 
 
 @router.post("/")
@@ -206,7 +273,15 @@ async def create_state_machine(payload: StateMachineCreate, current_user: dict =
     if not _is_admin(current_user):
         raise HTTPException(403, "Only admins can create state machines")
     tenant_id = get_current_tenant_id()
-    _validate(payload.states, payload.transitions)
+    # If actions list is empty, auto-populate from transitions (UX nicety)
+    actions = payload.actions or []
+    if not actions and payload.transitions:
+        derived = _migrate_actions_inplace({
+            "actions": [],
+            "transitions": [t.model_dump() for t in payload.transitions],
+        })["actions"]
+        actions = [Action(**a) for a in derived]
+    _validate(payload.states, actions, payload.transitions)
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": str(uuid.uuid4()),
@@ -215,6 +290,7 @@ async def create_state_machine(payload: StateMachineCreate, current_user: dict =
         "code": (payload.code or "").strip() or None,
         "description": payload.description or "",
         "states": [s.model_dump() for s in payload.states],
+        "actions": [a.model_dump() for a in actions],
         "transitions": [t.model_dump() for t in payload.transitions],
         "applied_to": list(set(payload.applied_to or [])),
         "created_at": now,
@@ -233,7 +309,7 @@ async def get_state_machine(sm_id: str, current_user: dict = Depends(get_current
     doc = await db.state_machines.find_one({"id": sm_id, "tenant_id": tenant_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "State machine not found")
-    return doc
+    return _migrate_actions_inplace(doc)
 
 
 @router.put("/{sm_id}")
@@ -244,18 +320,21 @@ async def update_state_machine(sm_id: str, payload: StateMachineUpdate, current_
     existing = await db.state_machines.find_one({"id": sm_id, "tenant_id": tenant_id}, {"_id": 0})
     if not existing:
         raise HTTPException(404, "State machine not found")
+    existing = _migrate_actions_inplace(existing)
     data = payload.model_dump(exclude_unset=True)
-    if "states" in data or "transitions" in data:
+    if "states" in data or "transitions" in data or "actions" in data:
         new_states = [State(**s) for s in (data.get("states") or existing.get("states") or [])]
+        new_actions_raw = data.get("actions") if "actions" in data else existing.get("actions") or []
+        new_actions = [Action(**a) for a in new_actions_raw]
         new_trans = [Transition(**t) for t in (data.get("transitions") or existing.get("transitions") or [])]
-        _validate(new_states, new_trans)
+        _validate(new_states, new_actions, new_trans)
     data["updated_at"] = datetime.now(timezone.utc).isoformat()
     data["updated_by"] = current_user.get("id")
     if "applied_to" in data and data["applied_to"] is not None:
         data["applied_to"] = list(set(data["applied_to"]))
     await db.state_machines.update_one({"id": sm_id, "tenant_id": tenant_id}, {"$set": data})
     doc = await db.state_machines.find_one({"id": sm_id, "tenant_id": tenant_id}, {"_id": 0})
-    return doc
+    return _migrate_actions_inplace(doc)
 
 
 @router.delete("/{sm_id}")

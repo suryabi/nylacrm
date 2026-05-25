@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Trash2, GitBranch, Save, Copy, ArrowLeft, RefreshCw, ChevronRight, Settings2 } from 'lucide-react';
+import { Plus, Trash2, GitBranch, Save, Copy, ArrowLeft, RefreshCw, ChevronRight, Settings2, Sparkles } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -22,6 +22,7 @@ const blankSM = () => ({
     { key: 'submitted', label: 'Submitted', color: '#94a3b8', is_initial: true, is_terminal: false },
     { key: 'closed', label: 'Closed', color: '#16a34a', is_initial: false, is_terminal: true },
   ],
+  actions: [],
   transitions: [],
   applied_to: [],
 });
@@ -231,12 +232,13 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
   };
 
   const addTransition = () => {
+    const firstAction = (sm.actions || [])[0];
     setSm({
       ...sm,
       transitions: [
         ...(sm.transitions || []),
         {
-          action_key: 'submit',
+          action_key: firstAction?.key || '',
           action_label: '',
           from_state: '',
           to_state: stateKeys[0] || '',
@@ -262,6 +264,47 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
     const next = [...sm.transitions];
     next.splice(idx, 1);
     setSm({ ...sm, transitions: next });
+  };
+
+  // ── Actions (per-workflow vocabulary) ──────────────────────────────
+  const addAction = (preset) => {
+    const cur = sm.actions || [];
+    const baseKey = preset?.key || `action_${cur.length + 1}`;
+    let key = baseKey;
+    let n = 2;
+    const taken = new Set(cur.map((a) => a.key));
+    while (taken.has(key)) { key = `${baseKey}_${n++}`; }
+    const action = {
+      key,
+      label: preset?.label || 'New action',
+      description: preset?.description || '',
+      kind: preset?.kind || 'neutral',
+    };
+    setSm({ ...sm, actions: [...cur, action] });
+  };
+  const updateAction = (idx, patch) => {
+    const oldKey = sm.actions[idx]?.key;
+    const next = [...sm.actions];
+    next[idx] = { ...next[idx], ...patch };
+    // If the key changed, propagate to transitions
+    let transitions = sm.transitions;
+    if (patch.key && patch.key !== oldKey) {
+      transitions = (transitions || []).map((t) =>
+        t.action_key === oldKey ? { ...t, action_key: patch.key } : t,
+      );
+    }
+    setSm({ ...sm, actions: next, transitions });
+  };
+  const removeAction = (idx) => {
+    const a = sm.actions[idx];
+    const used = (sm.transitions || []).filter((t) => t.action_key === a.key);
+    if (used.length > 0) {
+      toast.error(`Cannot delete "${a.label}" — used by ${used.length} transition(s). Remove the transitions first.`);
+      return;
+    }
+    const next = [...sm.actions];
+    next.splice(idx, 1);
+    setSm({ ...sm, actions: next });
   };
 
   const toggleApplied = (wfKey, checked) => {
@@ -326,6 +369,104 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
         </div>
       </Card>
 
+      {/* Actions (per-workflow action vocabulary) */}
+      <Card className="p-5 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <h2 className="text-base font-semibold">Actions</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Verbs the user can take in this workflow. Transitions reference these.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => addAction()} data-testid="add-action-btn"><Plus className="h-3.5 w-3.5 mr-1" /> Add action</Button>
+            <div className="relative group">
+              <Button size="sm" variant="ghost" data-testid="suggested-actions-btn"><Sparkles className="h-3.5 w-3.5 mr-1" /> Quick add</Button>
+              <div className="absolute right-0 mt-1 w-64 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-md shadow-lg z-30 hidden group-hover:block">
+                {(actionCatalog || []).map((a) => {
+                  const taken = (sm.actions || []).some((x) => x.key === a.key);
+                  return (
+                    <button
+                      key={a.key}
+                      type="button"
+                      disabled={taken}
+                      onClick={() => addAction(a)}
+                      className={`w-full text-left px-3 py-1.5 text-xs hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed`}
+                      data-testid={`suggested-action-${a.key}`}
+                    >
+                      <div className="font-medium">{a.label}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{a.key}{taken ? ' · added' : ''}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="rounded-md border border-slate-200 overflow-hidden">
+          <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-xs font-medium text-slate-600">
+            <div className="col-span-3">Key</div>
+            <div className="col-span-3">Label</div>
+            <div className="col-span-4">Description</div>
+            <div className="col-span-1">Kind</div>
+            <div className="col-span-1 text-right">—</div>
+          </div>
+          {(sm.actions || []).length === 0 && (
+            <div className="px-3 py-6 text-center text-xs text-slate-400 italic">
+              No actions defined yet. Click "Add action" or "Quick add" to pick from suggested verbs.
+            </div>
+          )}
+          {(sm.actions || []).map((a, idx) => {
+            const useCount = (sm.transitions || []).filter((t) => t.action_key === a.key).length;
+            return (
+              <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 border-b border-slate-100 last:border-b-0 items-center">
+                <div className="col-span-3">
+                  <Input
+                    value={a.key}
+                    onChange={(e) => updateAction(idx, { key: e.target.value.replace(/\s+/g, '_').toLowerCase() })}
+                    className="h-8 text-xs font-mono"
+                    data-testid={`action-key-${idx}`}
+                  />
+                </div>
+                <div className="col-span-3">
+                  <Input
+                    value={a.label}
+                    onChange={(e) => updateAction(idx, { label: e.target.value })}
+                    className="h-8 text-xs"
+                    data-testid={`action-label-${idx}`}
+                  />
+                </div>
+                <div className="col-span-4">
+                  <Input
+                    value={a.description || ''}
+                    onChange={(e) => updateAction(idx, { description: e.target.value })}
+                    placeholder="(optional tooltip)"
+                    className="h-8 text-xs"
+                    data-testid={`action-description-${idx}`}
+                  />
+                </div>
+                <div className="col-span-1">
+                  <select
+                    value={a.kind || 'neutral'}
+                    onChange={(e) => updateAction(idx, { kind: e.target.value })}
+                    className="w-full h-8 text-xs border border-slate-200 rounded px-2"
+                    data-testid={`action-kind-${idx}`}
+                  >
+                    <option value="positive">Positive</option>
+                    <option value="neutral">Neutral</option>
+                    <option value="negative">Negative</option>
+                  </select>
+                </div>
+                <div className="col-span-1 flex items-center justify-end gap-1">
+                  {useCount > 0 && (
+                    <span className="text-[10px] text-slate-400" title={`Used by ${useCount} transition(s)`}>{useCount}×</span>
+                  )}
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => removeAction(idx)} title="Delete action"><Trash2 className="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
       {/* Transitions */}
       <Card className="p-5 space-y-3">
         <div className="flex items-center justify-between">
@@ -345,8 +486,14 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
           {(sm.transitions || []).map((t, idx) => (
             <div key={idx} className="grid grid-cols-12 gap-2 px-3 py-2 border-b border-slate-100 last:border-b-0 items-start">
               <div className="col-span-2">
-                <select value={t.action_key} onChange={(e) => updateTransition(idx, { action_key: e.target.value })} className="w-full h-8 text-xs border border-slate-200 rounded px-2">
-                  {actionCatalog.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
+                <select
+                  value={t.action_key}
+                  onChange={(e) => updateTransition(idx, { action_key: e.target.value })}
+                  className="w-full h-8 text-xs border border-slate-200 rounded px-2"
+                  data-testid={`transition-action-${idx}`}
+                >
+                  {(sm.actions || []).length === 0 && <option value="">— define an action first —</option>}
+                  {(sm.actions || []).map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
                 </select>
               </div>
               <div className="col-span-2"><Input value={t.action_label || ''} onChange={(e) => updateTransition(idx, { action_label: e.target.value })} placeholder="(use action label)" className="h-8 text-xs" /></div>

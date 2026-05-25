@@ -176,6 +176,18 @@ _DEFAULT_MR_STATES = [
     {"key": "production_completed",     "label": "Production Completed", "color": "#16a34a", "is_initial": False, "is_terminal": True},
 ]
 
+_DEFAULT_MR_ACTIONS = [
+    {"key": "start_working",             "label": "Start Working",             "kind": "positive", "description": "Begin or resume work on the request."},
+    {"key": "request_changes",           "label": "Request Changes",           "kind": "negative", "description": "Ask the requestor for clarifications or revisions."},
+    {"key": "resume",                    "label": "Resume Work",               "kind": "positive", "description": "Resume after inputs were provided."},
+    {"key": "send_for_review",           "label": "Send for Internal Review",  "kind": "neutral",  "description": "Route the work to internal reviewers."},
+    {"key": "approve",                   "label": "Internal Approve",          "kind": "positive", "description": "Internal approval from the design / marketing team."},
+    {"key": "submit_for_final_approval", "label": "Send to Requestor",         "kind": "neutral",  "description": "Hand off to the requestor for final sign-off."},
+    {"key": "final_approve",             "label": "Final Approve",             "kind": "positive", "description": "Requestor's final approval — work is locked."},
+    {"key": "close",                     "label": "Mark Completed",            "kind": "positive", "description": "Mark the request as completed."},
+    {"key": "reopen",                    "label": "Reopen",                    "kind": "neutral",  "description": "Reopen a completed request."},
+]
+
 _DEFAULT_MR_TRANSITIONS = [
     {"action_key": "start_working",            "action_label": "Start Working",          "from_state": "submitted",         "to_state": "in_progress"},
     {"action_key": "request_changes",          "action_label": "Request Inputs",         "from_state": "submitted",         "to_state": "inputs_needed"},
@@ -206,6 +218,7 @@ async def ensure_default_marketing_request_sm(tenant_id: str) -> dict:
         "code": "MR_DEFAULT_v1",
         "description": "Auto-seeded default lifecycle for Marketing Requests. Edit or clone in Admin → State Machines.",
         "states": [dict(s) for s in _DEFAULT_MR_STATES],
+        "actions": [dict(a) for a in _DEFAULT_MR_ACTIONS],
         "transitions": [
             {
                 "auto_assign_mode": None,
