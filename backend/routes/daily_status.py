@@ -780,34 +780,24 @@ async def auto_populate_from_activities(
             'leads_contacted': 0
         }
 async def revise_status_with_ai(request: dict, current_user: dict = Depends(get_current_user)):
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
+    from utils.gemini_helpers import gemini_text
+
     original_text = request.get('text', '')
     if not original_text:
         raise HTTPException(status_code=400, detail='Text is required')
-    
+
     try:
-        user_id = current_user['id']
-        session_id = f'status-revision-{user_id}'
-        
-        # Initialize Claude chat
-        chat = LlmChat(
-            api_key=os.environ['EMERGENT_LLM_KEY'],
-            session_id=session_id,
-            system_message='You are a professional editor. Your job is to ONLY fix grammar, correct spelling, and improve sentence structure. Do NOT add headings, sections, bullet points, or any new information. Do NOT add greetings or conclusions. Keep the same tone and length. Just make the existing text grammatically correct and more readable while preserving all original content and meaning exactly as written.'
-        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
-        
-        user_message = UserMessage(
-            text=f'Fix grammar and improve readability of this text. Do not add headings, sections, or new information. Keep it concise:\n\n{original_text}'
+        revised_text = await gemini_text(
+            prompt=f'Fix grammar and improve readability of this text. Do not add headings, sections, or new information. Keep it concise:\n\n{original_text}',
+            system='You are a professional editor. Your job is to ONLY fix grammar, correct spelling, and improve sentence structure. Do NOT add headings, sections, bullet points, or any new information. Do NOT add greetings or conclusions. Keep the same tone and length. Just make the existing text grammatically correct and more readable while preserving all original content and meaning exactly as written.',
         )
-        
-        revised_text = await chat.send_message(user_message)
-        
         return {
             'original': original_text,
             'revised': revised_text,
-            'model': 'claude-sonnet-4.5'
+            'model': 'gemini-2.5-flash',
         }
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f'AI revision error: {str(e)}')
         raise HTTPException(status_code=500, detail=f'AI revision failed: {str(e)}')
@@ -922,17 +912,17 @@ async def get_team_status_rollup(
 @router.post("/daily-status/team-summary")
 async def generate_team_summary(request: dict, current_user: dict = Depends(get_current_user)):
     """Generate AI consolidated summary of team daily statuses"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
+    from utils.gemini_helpers import gemini_text
+
     team_statuses = request.get('team_statuses', [])
     status_date = request.get('status_date', '')
-    
+
     if not team_statuses:
         raise HTTPException(status_code=400, detail='No team statuses provided')
-    
+
     # Build consolidated text for AI
     status_text = f"Team Daily Status Summary for {status_date}\n\n"
-    
+
     for status in team_statuses:
         status_text += f"--- {status['user_name']} ({status['user_designation']}) - {status['user_territory']} ---\n"
         if status.get('yesterday_updates'):
@@ -942,28 +932,19 @@ async def generate_team_summary(request: dict, current_user: dict = Depends(get_
         if status.get('help_needed'):
             status_text += f"Help Needed: {status['help_needed']}\n"
         status_text += "\n"
-    
+
     try:
-        user_id = current_user['id']
-        session_id = f'team-summary-{user_id}'
-        
-        chat = LlmChat(
-            api_key=os.environ['EMERGENT_LLM_KEY'],
-            session_id=session_id,
-            system_message='You are a professional editor. Your ONLY job is to: 1) Combine all team member updates into flowing paragraphs, 2) Fix grammar and spelling, 3) Make sentences clear and professional. DO NOT add interpretations like "significant progress" or "achieved well". DO NOT add adjectives or descriptions that were not in the original text. DO NOT elaborate or embellish. Just combine the facts exactly as stated, fix grammar, and organize into 3 paragraphs: Updates, Action Items, Help Needed. Keep it purely factual.'
-        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
-        
-        user_message = UserMessage(
-            text=f'Combine these team status updates into 3 paragraphs (Updates, Actions, Help). Fix grammar ONLY. Do not add interpretations or adjectives. Stay purely factual:\n\n{status_text}'
+        summary = await gemini_text(
+            prompt=f'Combine these team status updates into 3 paragraphs (Updates, Actions, Help). Fix grammar ONLY. Do not add interpretations or adjectives. Stay purely factual:\n\n{status_text}',
+            system='You are a professional editor. Your ONLY job is to: 1) Combine all team member updates into flowing paragraphs, 2) Fix grammar and spelling, 3) Make sentences clear and professional. DO NOT add interpretations like "significant progress" or "achieved well". DO NOT add adjectives or descriptions that were not in the original text. DO NOT elaborate or embellish. Just combine the facts exactly as stated, fix grammar, and organize into 3 paragraphs: Updates, Action Items, Help Needed. Keep it purely factual.',
         )
-        
-        summary = await chat.send_message(user_message)
-        
         return {
             'summary': summary,
             'date': status_date,
-            'team_count': len(team_statuses)
+            'team_count': len(team_statuses),
         }
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f'Team summary generation error: {str(e)}')
         raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
@@ -1009,19 +990,19 @@ async def get_weekly_status_summary(
 @router.post("/daily-status/generate-period-summary")
 async def generate_period_summary(request: dict, current_user: dict = Depends(get_current_user)):
     """Generate AI summary for weekly/monthly period"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
+    from utils.gemini_helpers import gemini_text
+
     statuses = request.get('statuses', [])
     period_type = request.get('period_type', 'weekly')  # weekly or monthly
     start_date = request.get('start_date', '')
     end_date = request.get('end_date', '')
-    
+
     if not statuses:
         raise HTTPException(status_code=400, detail='No statuses provided')
-    
+
     # Build text for AI
     summary_text = f"{period_type.title()} Status Summary: {start_date} to {end_date}\n\n"
-    
+
     for status in statuses:
         user_name = status.get('user_name', 'Unknown')
         date = status.get('status_date', '')
@@ -1031,41 +1012,21 @@ async def generate_period_summary(request: dict, current_user: dict = Depends(ge
         if status.get('today_actions'):
             summary_text += f"  {status['today_actions']}\n"
         summary_text += "\n"
-    
-    try:
-        user_id = current_user['id']
-        session_id = f'period-summary-{user_id}'
-        
-        chat = LlmChat(
-            api_key=os.environ['EMERGENT_LLM_KEY'],
-            session_id=session_id,
-            system_message=f'You are a professional editor creating a {period_type} summary. Combine all daily updates into a coherent summary. Organize into: 1) Key Activities (what was done), 2) Outcomes (deals, meetings, results), 3) Pending Items (what needs follow-up). Fix grammar, stay factual, do NOT add interpretations or exaggerate. Just consolidate the facts clearly.'
-        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
-        
-        user_message = UserMessage(
-            text=f'Create a {period_type} summary from these daily updates. Combine into 3 clear paragraphs. Fix grammar only, stay factual:\n\n{summary_text}'
-        )
-        
-        summary = await chat.send_message(user_message)
-        
-        return {
-            'summary': summary,
-            'period_type': period_type,
-            'start_date': start_date,
-            'end_date': end_date,
-            'days_covered': len(statuses)
-        }
-    except Exception as e:
-        logger.error(f'Period summary error: {str(e)}')
-        raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
 
+    try:
+        summary = await gemini_text(
+            prompt=f'Create a {period_type} summary from these daily updates. Combine into 3 clear paragraphs. Fix grammar only, stay factual:\n\n{summary_text}',
+            system=f'You are a professional editor creating a {period_type} summary. Combine all daily updates into a coherent summary. Organize into: 1) Key Activities (what was done), 2) Outcomes (deals, meetings, results), 3) Pending Items (what needs follow-up). Fix grammar, stay factual, do NOT add interpretations or exaggerate. Just consolidate the facts clearly.',
+        )
         return {
             'summary': summary,
             'period_type': period_type,
             'start_date': start_date,
             'end_date': end_date,
-            'days_covered': len(statuses)
+            'days_covered': len(statuses),
         }
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.error(f'Period summary error: {str(e)}')
         raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')

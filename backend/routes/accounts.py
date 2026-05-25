@@ -1291,27 +1291,18 @@ def _detect_mime(filename: str, content_type: Optional[str]) -> str:
     }.get(ext, "application/octet-stream")
 
 
-async def _parse_gst_with_gemini(file_path: str, mime: str) -> dict:
-    """Call Gemini 2.5 Flash via emergentintegrations to OCR + parse a GST cert."""
-    api_key = _os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="LLM key not configured. Contact admin.")
+async def _parse_gst_with_gemini(file_bytes: bytes, mime: str) -> dict:
+    """Call Gemini 2.5 Flash directly (user's own GEMINI_API_KEY) to OCR + parse a GST cert."""
+    from utils.gemini_helpers import gemini_text_with_file
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
-    except ImportError as e:
-        raise HTTPException(status_code=500, detail=f"emergentintegrations missing: {e}")
-
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"gst-parse-{uuid.uuid4()}",
-        system_message="You extract structured JSON from Indian GST registration certificates. Return only JSON."
-    ).with_model("gemini", "gemini-2.5-flash")
-
-    file_part = FileContentWithMimeType(file_path=file_path, mime_type=mime)
-    msg = UserMessage(text=GST_EXTRACTION_PROMPT, file_contents=[file_part])
-
-    try:
-        response = await chat.send_message(msg)
+        response = await gemini_text_with_file(
+            prompt=GST_EXTRACTION_PROMPT,
+            file_bytes=file_bytes,
+            mime_type=mime,
+            system="You extract structured JSON from Indian GST registration certificates. Return only JSON.",
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI parsing failed: {e}")
 
@@ -1365,17 +1356,7 @@ async def upload_gst_certificate(
         "image/jpeg": ".jpg",
         "image/webp": ".webp",
     }.get(mime, "")
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    try:
-        tmp.write(contents)
-        tmp.flush()
-        tmp.close()
-        parsed = await _parse_gst_with_gemini(tmp.name, mime)
-    finally:
-        try:
-            _Path(tmp.name).unlink(missing_ok=True)
-        except Exception:
-            pass
+    parsed = await _parse_gst_with_gemini(contents, mime)
 
     # If this account was converted from a lead, route the GST cert into
     # the lead's dedicated Drive folder (so all collateral stays together).

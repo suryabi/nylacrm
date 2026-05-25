@@ -443,43 +443,46 @@ async def ask_nyla(payload: AskPayload, current_user: dict = Depends(get_current
 
     context_text, citations = _build_context(docs)
 
-    # Build prompt
-    user_prompt_parts = [
+    # Build prompt — fold history into a single Gemini call (multi-turn is achieved by
+    # prepending recent user messages to the prompt body).
+    history_lines = []
+    if payload.history:
+        for h in payload.history[-6:]:
+            role = h.get("role")
+            content = (h.get("content") or "").strip()
+            if not content:
+                continue
+            if role == "user":
+                history_lines.append(f"Earlier user message: {content}")
+            elif role == "assistant":
+                history_lines.append(f"Your earlier answer: {content}")
+
+    user_prompt_parts = []
+    if history_lines:
+        user_prompt_parts.append("Conversation so far:")
+        user_prompt_parts.extend(history_lines)
+        user_prompt_parts.append("")
+    user_prompt_parts.extend([
         "Here is our knowledge base:",
         context_text,
         "",
         f"Question: {question}",
         "",
         "Answer concisely using only the knowledge base above. Cite source documents inline as [Doc N].",
-    ]
+    ])
     user_prompt = "\n".join(user_prompt_parts)
 
-    # Call LLM via emergentintegrations
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="LLM key not configured. Contact admin.")
-
+    # Call Gemini directly with the user's own API key.
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        chat = LlmChat(
-            api_key=api_key,
-            session_id=f"kb_{tenant_id}_{current_user.get('id', 'unknown')}_{session_id}",
-            system_message=ASK_NYLA_SYSTEM_PROMPT,
-        ).with_model("openai", "gpt-4.1")
-
-        # Replay prior history (if any) so multi-turn works
-        if payload.history:
-            for h in payload.history[-6:]:  # cap history to last 6 turns
-                role = h.get("role")
-                content = (h.get("content") or "").strip()
-                if not content:
-                    continue
-                if role == "user":
-                    await chat.send_message(UserMessage(text=content))
-
-        response = await chat.send_message(UserMessage(text=user_prompt))
+        from utils.gemini_helpers import gemini_text
+        response = await gemini_text(
+            prompt=user_prompt,
+            system=ASK_NYLA_SYSTEM_PROMPT,
+        )
     except HTTPException:
         raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.exception("LLM call failed")
         raise HTTPException(status_code=502, detail=f"AI service error: {e}")
