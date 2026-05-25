@@ -299,7 +299,7 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
     const a = sm.actions[idx];
     const used = (sm.transitions || []).filter((t) => t.action_key === a.key);
     if (used.length > 0) {
-      toast.error(`Cannot delete "${a.label}" — used by ${used.length} transition(s). Remove the transitions first.`);
+      toast.error(`Cannot delete "${a.label}" — used by ${used.length} transition(s). Remove the transitions first.`, { id: `del-action-${a.key}` });
       return;
     }
     const next = [...sm.actions];
