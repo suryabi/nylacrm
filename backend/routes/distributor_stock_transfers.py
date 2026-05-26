@@ -124,20 +124,21 @@ def _extract_pan(gstin: Optional[str]) -> str:
 def _qualifies_for_challan(src_distributor: dict, dst_distributor: dict,
                            src_location: dict, dst_location: dict) -> bool:
     """Per Indian GST: a Delivery Challan is appropriate iff both warehouses are
-    *self-managed* (same legal entity) AND share the same PAN.
+    *self-managed* (same legal entity) AND share the EXACT SAME GSTIN.
 
-    A company may hold different GSTINs in different states (state code differs)
-    but the PAN portion of the GSTIN (positions 3-12) stays identical. So we
-    compare PANs — not full GSTINs — to catch inter-state branch transfers.
+    A company holding different GSTINs in different states is treated as different
+    GST registrations for compliance purposes — inter-state branch transfers between
+    those registrations require a Tax Invoice, NOT a Delivery Challan. So we compare
+    full GSTINs, not just the PAN portion.
     """
     if not (src_distributor.get("is_self_managed") and dst_distributor.get("is_self_managed")):
         return False
     # Effective GSTIN — location-level override falls back to parent distributor.
-    src_pan = _extract_pan(src_location.get("gstin") or src_distributor.get("gstin"))
-    dst_pan = _extract_pan(dst_location.get("gstin") or dst_distributor.get("gstin"))
-    if not src_pan or not dst_pan:
+    src_gstin = (src_location.get("gstin") or src_distributor.get("gstin") or "").strip().upper()
+    dst_gstin = (dst_location.get("gstin") or dst_distributor.get("gstin") or "").strip().upper()
+    if not src_gstin or not dst_gstin:
         return False
-    return src_pan == dst_pan
+    return src_gstin == dst_gstin
 
 
 async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,

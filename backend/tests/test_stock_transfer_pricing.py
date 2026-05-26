@@ -17,7 +17,10 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import db  # noqa: E402
-from routes.distributor_stock_transfers import _resolve_per_bottle_rate  # noqa: E402
+from routes.distributor_stock_transfers import (  # noqa: E402
+    _qualifies_for_challan,
+    _resolve_per_bottle_rate,
+)
 
 
 TENANT_ID = f"test_tenant_{uuid.uuid4().hex[:8]}"
@@ -140,3 +143,56 @@ async def test_ignores_inactive_entries():
         assert res is None
     finally:
         await _cleanup()
+
+
+# ──────────────────────────────────────────────────────────────
+# Delivery-Challan vs Invoice decision (per Indian GST rules)
+# ──────────────────────────────────────────────────────────────
+SELF = {"is_self_managed": True}
+THIRD = {"is_self_managed": False}
+
+
+def test_challan_when_same_gstin_self_managed():
+    """Both self-managed + identical GSTIN → Delivery Challan."""
+    src = {**SELF, "gstin": "29ABCDE1234F1Z5"}
+    dst = {**SELF, "gstin": "29ABCDE1234F1Z5"}
+    assert _qualifies_for_challan(src, dst, {}, {}) is True
+
+
+def test_invoice_when_same_pan_but_different_gstin():
+    """Same legal entity, different state registrations (different GSTIN) → Invoice.
+
+    This is the behavior change requested 2026-05-27: PAN-only matching used to
+    qualify for a Delivery Challan, but the user clarified that inter-state
+    branches with different GSTINs need a Tax Invoice instead.
+    """
+    src = {**SELF, "gstin": "29ABCDE1234F1Z5"}  # Karnataka
+    dst = {**SELF, "gstin": "27ABCDE1234F1Z5"}  # Maharashtra (same PAN ABCDE1234F)
+    assert _qualifies_for_challan(src, dst, {}, {}) is False
+
+
+def test_invoice_when_one_party_not_self_managed():
+    src = {**SELF, "gstin": "29ABCDE1234F1Z5"}
+    dst = {**THIRD, "gstin": "29ABCDE1234F1Z5"}
+    assert _qualifies_for_challan(src, dst, {}, {}) is False
+
+
+def test_invoice_when_gstin_missing():
+    src = {**SELF, "gstin": ""}
+    dst = {**SELF, "gstin": "29ABCDE1234F1Z5"}
+    assert _qualifies_for_challan(src, dst, {}, {}) is False
+
+
+def test_challan_uses_location_gstin_override():
+    """Location-level GSTIN takes precedence over the parent distributor's."""
+    src_dist = {**SELF, "gstin": "29ABCDE1234F1Z5"}
+    dst_dist = {**SELF, "gstin": "27ABCDE1234F1Z5"}
+    src_loc = {"gstin": "33ABCDE1234F1Z5"}  # overrides parent
+    dst_loc = {"gstin": "33ABCDE1234F1Z5"}  # overrides parent
+    assert _qualifies_for_challan(src_dist, dst_dist, src_loc, dst_loc) is True
+
+
+def test_gstin_match_is_case_insensitive():
+    src = {**SELF, "gstin": "29abcde1234f1z5"}
+    dst = {**SELF, "gstin": "29ABCDE1234F1Z5"}
+    assert _qualifies_for_challan(src, dst, {}, {}) is True
