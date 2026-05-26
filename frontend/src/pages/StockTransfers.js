@@ -481,6 +481,47 @@ export default function StockTransfers() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Retry failed'); }
   };
 
+  const downloadZohoPdf = async (transfer) => {
+    try {
+      const res = await axios.get(`${API}/distributor/stock-transfers/${transfer.id}/zoho-pdf`, {
+        headers: HEAD(),
+        responseType: 'blob',
+      });
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      // Prefer the filename Zoho gave us via Content-Disposition; fall back
+      // to the transfer number so it stays meaningful even if the header is stripped.
+      let filename = `${transfer.zoho_doc_type === 'delivery_challan' ? 'DC' : 'INV'}-${transfer.transfer_number}.pdf`;
+      const cd = res.headers['content-disposition'];
+      if (cd) {
+        const match = cd.match(/filename="?([^"]+)"?/i);
+        if (match) filename = match[1];
+      }
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${filename}`);
+    } catch (e) {
+      let msg = 'Failed to download PDF';
+      // axios returns the error body as a Blob when responseType is blob —
+      // we need to read it back to a string to surface Zoho's actual error.
+      if (e.response?.data instanceof Blob) {
+        try {
+          const text = await e.response.data.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.detail || msg;
+        } catch { msg = e.response?.statusText || msg; }
+      } else {
+        msg = e.response?.data?.detail || msg;
+      }
+      toast.error(msg);
+    }
+  };
+
   const downloadEwayBill = async (transfer) => {
     try {
       const { data } = await axios.get(`${API}/distributor/stock-transfers/${transfer.id}/eway-bill`, { headers: HEAD() });
@@ -583,6 +624,18 @@ export default function StockTransfers() {
                           <a href={t.zoho_invoice_url} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:text-emerald-800" title="Open in Zoho">
                             <ExternalLink className="h-3.5 w-3.5" />
                           </a>
+                        )}
+                        {t.zoho_status === 'synced' && t.zoho_invoice_id && (
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-7 px-2 text-[10px] text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                            onClick={() => downloadZohoPdf(t)}
+                            title={`Download ${t.zoho_doc_type === 'delivery_challan' ? 'Delivery Challan' : 'Invoice'} PDF from Zoho`}
+                            data-testid={`zoho-pdf-btn-${t.id}`}
+                          >
+                            <Download className="h-3 w-3 mr-1" />
+                            {t.zoho_doc_type === 'delivery_challan' ? 'Challan' : 'Invoice'} PDF
+                          </Button>
                         )}
                         {t.zoho_status === 'failed' && (
                           <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => retryZoho(t.id)} title="Retry Zoho push" data-testid={`retry-zoho-${t.id}`}>

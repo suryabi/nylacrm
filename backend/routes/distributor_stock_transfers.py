@@ -27,6 +27,7 @@ from typing import List, Optional
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from database import db
@@ -35,6 +36,8 @@ from deps import get_current_user
 from services.zoho_service import (
     create_delivery_challan_for_stock_transfer,
     create_invoice_for_delivery,
+    fetch_delivery_challan_pdf,
+    fetch_invoice_pdf,
     is_zoho_configured,
     MissingZohoMappingError,
     MissingAgreedPriceError,
@@ -998,3 +1001,51 @@ async def get_eway_bill_payload(transfer_id: str, current_user: dict = Depends(g
         # GSTN bulk-upload wrapper — same JSON, wrapped in an array.
         "bulk_payload": {"version": "1.0.0123", "billLists": [payload]},
     }
+
+
+@router.get("/{transfer_id}/zoho-pdf")
+async def download_zoho_pdf(transfer_id: str, current_user: dict = Depends(get_current_user)):
+    """Stream the official Zoho Books PDF (Invoice or Delivery Challan) for this transfer.
+
+    Resolves the correct Zoho endpoint from the persisted `zoho_doc_type` on
+    the transfer doc — invoices go to `/invoices/{id}` and challans to
+    `/deliverychallans/{id}`. Returns a `Content-Disposition: attachment`
+    response so the browser triggers a file download.
+    """
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    transfer = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id},
+        {"_id": 0, "zoho_invoice_id": 1, "zoho_doc_type": 1,
+         "zoho_status": 1, "transfer_number": 1},
+    )
+    if not transfer:
+        raise HTTPException(404, "Stock transfer not found")
+    zoho_id = transfer.get("zoho_invoice_id")
+    if not zoho_id:
+        raise HTTPException(
+            400,
+            "This transfer hasn't been synced to Zoho yet. "
+            "Wait for the Zoho push to succeed (or retry it) before downloading the PDF.",
+        )
+
+    doc_type = transfer.get("zoho_doc_type") or "invoice"
+    try:
+        if doc_type == "delivery_challan":
+            pdf_bytes, doc_number = await fetch_delivery_challan_pdf(tenant_id, zoho_id)
+            filename = f"DC-{doc_number}.pdf"
+        else:
+            pdf_bytes, doc_number = await fetch_invoice_pdf(tenant_id, zoho_id)
+            filename = f"INV-{doc_number}.pdf"
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        logger.exception("Zoho PDF download failed")
+        raise HTTPException(502, f"Zoho PDF download failed: {e}")
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+

@@ -759,6 +759,77 @@ async def fetch_invoice_pdf(tenant_id: str, zoho_invoice_id: str) -> tuple[bytes
     return pdf_resp.content, invoice_number
 
 
+async def fetch_delivery_challan_pdf(tenant_id: str, zoho_deliverychallan_id: str) -> tuple[bytes, str]:
+    """Download the official delivery-challan PDF from Zoho Books.
+
+    Returns `(pdf_bytes, challan_number)`. Same shape as `fetch_invoice_pdf`
+    but targets the `/books/v3/deliverychallans/{id}` endpoint.
+    """
+    if not zoho_deliverychallan_id:
+        raise RuntimeError("zoho_deliverychallan_id is required")
+    cfg = get_zoho_config()
+    creds = await get_credentials(tenant_id)
+    if not creds:
+        raise RuntimeError("Zoho Books is not connected for this tenant")
+    api_base = (creds.get("api_base_url") or cfg["api_base_url"]).rstrip("/")
+    token = await get_valid_access_token(tenant_id)
+    org_id = creds["organization_id"]
+    headers = {"Authorization": f"Zoho-oauthtoken {token}"}
+    challan_url = f"{api_base}/books/v3/deliverychallans/{zoho_deliverychallan_id}"
+
+    # Fetch metadata so we have a clean challan_number for the filename.
+    challan_number = zoho_deliverychallan_id
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            meta = await client.get(
+                challan_url,
+                headers={**headers, "Content-Type": "application/json"},
+                params={"organization_id": org_id},
+            )
+            if meta.status_code == 200:
+                payload = meta.json()
+                ch = payload.get("deliverychallan") or payload.get("delivery_challan") or {}
+                challan_number = (
+                    ch.get("deliverychallan_number")
+                    or ch.get("delivery_challan_number")
+                    or challan_number
+                )
+    except Exception as e:
+        logger.warning(f"Failed to fetch challan meta for {zoho_deliverychallan_id}: {e}")
+
+    pdf_headers = {**headers, "Accept": "application/pdf"}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        pdf_resp = await client.get(
+            challan_url,
+            headers=pdf_headers,
+            params={"organization_id": org_id, "accept": "pdf"},
+        )
+    if pdf_resp.status_code != 200:
+        body_text = ""
+        try:
+            body_text = pdf_resp.text[:500]
+        except Exception:
+            pass
+        logger.error(
+            f"Zoho challan PDF download failed: status={pdf_resp.status_code} "
+            f"url={challan_url} body={body_text!r}"
+        )
+        raise ZohoApiError(pdf_resp.status_code, body_text)
+    ctype = (pdf_resp.headers.get("content-type") or "").lower()
+    if "pdf" not in ctype:
+        body_text = pdf_resp.text[:500] if hasattr(pdf_resp, "text") else ""
+        logger.error(
+            f"Zoho challan PDF returned non-PDF content-type='{ctype}' "
+            f"body={body_text!r}"
+        )
+        raise ZohoApiError(
+            502,
+            f"Zoho returned content-type '{ctype}' instead of PDF. "
+            "Open the delivery challan in Zoho Books → set a print template → retry."
+        )
+    return pdf_resp.content, challan_number
+
+
 
 async def _ensure_mirror_invoice(
     *,
