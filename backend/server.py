@@ -1922,6 +1922,7 @@ class SKUCreate(BaseModel):
     category: str
     unit: str
     description: Optional[str] = None
+    base_price: Optional[float] = None  # ₹ per bottle. Used for Stock Transfer Schedule-I invoicing & E-way Bill valuation.
     allow_custom_mrp: bool = False
     is_active: bool = True
     sort_order: int = 0
@@ -1934,6 +1935,7 @@ class SKUUpdate(BaseModel):
     category: Optional[str] = None
     unit: Optional[str] = None
     description: Optional[str] = None
+    base_price: Optional[float] = None  # ₹ per bottle (no margin); set to 0 to clear effectively
     allow_custom_mrp: Optional[bool] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
@@ -1993,6 +1995,7 @@ async def get_master_skus(
             'category': sku.get('category'),
             'unit': sku.get('unit'),
             'description': sku.get('description'),
+            'base_price': sku.get('base_price'),
             'allow_custom_mrp': bool(sku.get('allow_custom_mrp', False)),
             'is_active': sku.get('is_active', True),
             'sort_order': sku.get('sort_order', 0),
@@ -2037,6 +2040,7 @@ async def create_sku(
         'category': sku.category,
         'unit': sku.unit,
         'description': sku.description,
+        'base_price': doc.get('base_price'),
         'allow_custom_mrp': bool(doc.get('allow_custom_mrp', False)),
         'is_active': sku.is_active,
         'sort_order': sku.sort_order,
@@ -2095,6 +2099,7 @@ async def update_sku(
         'category': updated.get('category'),
         'unit': updated.get('unit'),
         'description': updated.get('description'),
+        'base_price': updated.get('base_price'),
         'allow_custom_mrp': bool(updated.get('allow_custom_mrp', False)),
         'is_active': updated.get('is_active', True),
         'sort_order': updated.get('sort_order', 0),

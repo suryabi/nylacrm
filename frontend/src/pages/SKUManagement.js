@@ -60,6 +60,7 @@ export default function SKUManagement() {
     category: '',
     unit: '',
     description: '',
+    base_price: '',
     allow_custom_mrp: false,
     is_active: true,
     sort_order: 0,
@@ -119,6 +120,7 @@ export default function SKUManagement() {
     setEditingSku(null);
     setFormData({
       sku_name: '', external_sku_id: '', category: '', unit: '', description: '',
+      base_price: '',
       allow_custom_mrp: false,
       is_active: true, sort_order: skus.length + 1,
       packaging_config: { production: [], stock_in: [], stock_out: [] },
@@ -135,6 +137,7 @@ export default function SKUManagement() {
       category: sku.category || '',
       unit: sku.unit || '',
       description: sku.description || '',
+      base_price: sku.base_price != null ? String(sku.base_price) : '',
       allow_custom_mrp: !!sku.allow_custom_mrp,
       is_active: sku.is_active !== false,
       sort_order: sku.sort_order || 0,
@@ -168,6 +171,13 @@ export default function SKUManagement() {
         if (!isNaN(num)) cleanedCogs[k] = num;
       });
       const payload = { ...formData, cogs_components_values: cleanedCogs };
+      // Coerce base_price → number (or null to clear it)
+      if (payload.base_price === '' || payload.base_price === null || payload.base_price === undefined) {
+        payload.base_price = null;
+      } else {
+        const bp = parseFloat(payload.base_price);
+        payload.base_price = isNaN(bp) ? null : bp;
+      }
 
       if (editingSku) {
         await skusAPI.update(editingSku.id, payload);
@@ -518,6 +528,23 @@ export default function SKUManagement() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Optional description"
                 data-testid="sku-description-input"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="base_price" className="flex items-center gap-2">
+                Base Price (₹ per bottle)
+                <span className="text-[10px] text-slate-400 font-normal">Used for Stock Transfer invoicing (no margin) & E-way Bill valuation</span>
+              </Label>
+              <Input
+                id="base_price"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.base_price}
+                onChange={(e) => setFormData({ ...formData, base_price: e.target.value })}
+                placeholder="e.g. 20.00"
+                data-testid="sku-base-price-input"
               />
             </div>
 

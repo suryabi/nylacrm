@@ -141,19 +141,17 @@ function NewTransferDialog({ open, onClose, onCreated }) {
   const sourceObj = useMemo(() => sources.find((s) => s.location_id === form.source_location_id), [sources, form.source_location_id]);
   const targetObj = useMemo(() => targets.find((t) => t.location_id === form.dest_location_id), [targets, form.dest_location_id]);
 
-  // Resolve per-package rate from destination's commercials whenever the
-  // relevant inputs change. The user cannot type a price — pricing comes from
-  // distributor_margin_matrix (city + SKU + active date).
+  // Resolve per-package rate from the SKU's company-wide Base Price (master_skus.base_price).
+  // Stock transfers have NO margin — the rate is independent of source/destination
+  // distributor. If a SKU has no Base Price set, the user must add it under
+  // Settings → SKU Management before transferring.
   const resolveRateForItem = useCallback(async (idx, item) => {
-    if (!targetObj || !item.sku_id || !item.units_per_package) return;
+    if (!item.sku_id || !item.units_per_package) return;
     updateItem(idx, { rate_status: 'loading', rate_reason: '' });
     try {
       const params = new URLSearchParams({
-        dest_distributor_id: targetObj.distributor_id,
-        dest_location_id: targetObj.location_id,
         sku_id: item.sku_id,
         units_per_package: String(item.units_per_package),
-        transfer_date: form.transfer_date,
       });
       const { data } = await axios.get(`${API}/distributor/stock-transfers/resolve-rate?${params}`, { headers: HEAD() });
       if (data?.ok) {
@@ -168,7 +166,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
         updateItem(idx, {
           rate: 0, rate_per_bottle: 0,
           rate_status: 'missing',
-          rate_reason: data?.reason || 'No commercial configured.',
+          rate_reason: data?.reason || 'No Base Price set for this SKU.',
           rate_details: null,
         });
       }
@@ -181,20 +179,17 @@ function NewTransferDialog({ open, onClose, onCreated }) {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetObj, form.transfer_date]);
+  }, []);
 
-  // Re-resolve whenever destination, SKU, packaging or transfer date changes.
+  // Re-resolve whenever SKU or packaging changes (rate is destination-independent now).
   useEffect(() => {
     items.forEach((it, idx) => {
-      if (it.sku_id && it.units_per_package > 0 && targetObj) {
+      if (it.sku_id && it.units_per_package > 0) {
         resolveRateForItem(idx, it);
       }
     });
-    // We intentionally only watch the *resolution inputs*, not `items` (rate-status
-    // updates would otherwise cause an infinite loop).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    targetObj?.location_id, form.transfer_date,
     items.map((it) => `${it.sku_id}|${it.packaging_type_id}|${it.units_per_package}`).join(','),
   ]);
 
@@ -260,7 +255,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ArrowLeftRight className="h-5 w-5 text-emerald-600" /> New Stock Transfer</DialogTitle>
           <DialogDescription>
-            Move stock from one warehouse to another. A Zoho <b>Delivery Challan</b> is created only if both warehouses are self-managed and share the <b>exact same GSTIN</b> (same legal entity, same state registration). Any difference in GSTIN — including inter-state branches — generates a Tax <b>Invoice</b>. Rates are <b>auto-fetched from the destination distributor's commercials</b> (Distributor → Margin Matrix) — they cannot be edited here.
+            Move stock between warehouses — <b>internal logistics only, no margin</b>. A Zoho <b>Delivery Challan</b> is created only when both warehouses are self-managed and share the <b>exact same GSTIN</b>. Different GSTIN of the same legal entity (same PAN) generates a Tax Invoice. Transfers to a <b>different PAN</b> (third-party distributor) are blocked — raise those via <b>Stock In</b> so margin and commission are tracked. Rates are <b>auto-fetched from the SKU's Base Price</b> (Settings → SKU Management) — they cannot be edited here.
           </DialogDescription>
         </DialogHeader>
 
@@ -518,7 +513,9 @@ export default function StockTransfers() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <ArrowLeftRight className="h-6 w-6 text-emerald-600" /> Stock Transfers
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Move stock between distributor warehouses. Self-managed → self-managed transfers <b>(exact same GSTIN — same legal entity AND same state registration)</b> generate a Zoho Delivery Challan; everything else (including inter-state branches with different GSTINs) generates a Tax Invoice.</p>
+          <p className="text-sm text-slate-500 mt-1">
+            Move stock between warehouses (internal logistics — <b>no margin</b>). Same GSTIN → Delivery Challan; different GSTIN of the same legal entity (same PAN) → Tax Invoice at the SKU's Base Price. Cross-PAN sales are blocked — use <b>Stock In</b> instead.
+          </p>
         </div>
         <Button onClick={() => setShowNew(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-stock-transfer-btn">
           <Plus className="h-4 w-4 mr-2" /> New Stock Transfer

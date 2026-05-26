@@ -1,16 +1,13 @@
-"""Tests for the auto-resolve rate flow on Distributor Stock Transfers.
+"""Tests for the new Stock-Transfer rate resolver — sources price from
+`master_skus.base_price` (NO margin), and the third-party PAN block.
 
-We exercise the helper `_resolve_per_bottle_rate` against a seeded
-`distributor_margin_matrix` collection so we know the rate-lookup logic
-returns the correct entry under various date and city scenarios.
+Replaces test_stock_transfer_pricing.py for the resolver layer.
 """
 from __future__ import annotations
 
-import asyncio
 import os
 import sys
 import uuid
-from datetime import datetime, timezone, timedelta
 
 import pytest
 
@@ -20,154 +17,104 @@ from database import db  # noqa: E402
 from routes.distributor_stock_transfers import (  # noqa: E402
     _qualifies_for_challan,
     _resolve_per_bottle_rate,
+    _extract_pan,
 )
 
 
 TENANT_ID = f"test_tenant_{uuid.uuid4().hex[:8]}"
-DIST_ID = f"test_dist_{uuid.uuid4().hex[:8]}"
-SKU_ID = f"test_sku_{uuid.uuid4().hex[:8]}"
 
 
-async def _seed(entries: list[dict]):
-    await db.distributor_margin_matrix.delete_many({"tenant_id": TENANT_ID})
-    if entries:
-        await db.distributor_margin_matrix.insert_many(entries)
-
-
-async def _cleanup():
-    await db.distributor_margin_matrix.delete_many({"tenant_id": TENANT_ID})
-
-
-def _entry(**overrides) -> dict:
-    base = {
-        "id": str(uuid.uuid4()),
-        "tenant_id": TENANT_ID,
-        "distributor_id": DIST_ID,
-        "city": "Bangalore",
-        "sku_id": SKU_ID,
-        "sku_name": "Nyla 600ml",
-        "base_price": 20.0,
-        "margin_type": "percentage",
-        "margin_value": 10.0,
-        "transfer_price": 18.0,
-        "active_from": "2024-01-01",
-        "active_to": None,
-        "status": "active",
+async def _seed_sku(*, base_price=None, sku_id=None) -> str:
+    sku_id = sku_id or f"sku_{uuid.uuid4().hex[:8]}"
+    doc = {
+        "id": sku_id,
+        "sku_name": "Nyla 600ml Test",
+        "category": "Premium",
+        "unit": "600ml",
+        "is_active": True,
     }
-    base.update(overrides)
-    return base
+    if base_price is not None:
+        doc["base_price"] = base_price
+    await db.master_skus.insert_one(doc)
+    return sku_id
+
+
+async def _cleanup(sku_id: str):
+    await db.master_skus.delete_one({"id": sku_id})
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_resolves_active_entry():
-    await _seed([_entry()])
+async def test_resolves_from_base_price():
+    sku_id = await _seed_sku(base_price=18.5)
     try:
-        res = await _resolve_per_bottle_rate(TENANT_ID, DIST_ID, "Bangalore", SKU_ID, "2025-06-15")
+        res = await _resolve_per_bottle_rate(TENANT_ID, sku_id)
         assert res is not None
-        assert res["rate_per_bottle"] == 18.0
-        assert res["transfer_price"] == 18.0
+        assert res["rate_per_bottle"] == 18.5
+        assert res["source"] == "master_sku.base_price"
+        assert res["sku_id"] == sku_id
     finally:
-        await _cleanup()
+        await _cleanup(sku_id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_city_match_case_insensitive():
-    await _seed([_entry(city="Bangalore")])
+async def test_returns_none_when_base_price_missing():
+    sku_id = await _seed_sku(base_price=None)
     try:
-        res = await _resolve_per_bottle_rate(TENANT_ID, DIST_ID, "bangalore", SKU_ID, "2025-06-15")
-        assert res is not None
-        assert res["rate_per_bottle"] == 18.0
-    finally:
-        await _cleanup()
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_returns_none_for_unknown_city():
-    await _seed([_entry()])
-    try:
-        res = await _resolve_per_bottle_rate(TENANT_ID, DIST_ID, "Chennai", SKU_ID, "2025-06-15")
+        res = await _resolve_per_bottle_rate(TENANT_ID, sku_id)
         assert res is None
     finally:
-        await _cleanup()
+        await _cleanup(sku_id)
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_returns_none_when_no_active_entry():
-    await _seed([])
+async def test_returns_none_for_zero_or_negative_base_price():
+    sku_id = await _seed_sku(base_price=0)
     try:
-        res = await _resolve_per_bottle_rate(TENANT_ID, DIST_ID, "Bangalore", SKU_ID, "2025-06-15")
-        assert res is None
+        assert await _resolve_per_bottle_rate(TENANT_ID, sku_id) is None
     finally:
-        await _cleanup()
+        await _cleanup(sku_id)
+    sku_id2 = await _seed_sku(base_price=-5)
+    try:
+        assert await _resolve_per_bottle_rate(TENANT_ID, sku_id2) is None
+    finally:
+        await _cleanup(sku_id2)
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_date_range_excludes_expired():
-    await _seed([_entry(active_from="2024-01-01", active_to="2024-12-31")])
-    try:
-        res = await _resolve_per_bottle_rate(TENANT_ID, DIST_ID, "Bangalore", SKU_ID, "2025-06-15")
-        assert res is None
-    finally:
-        await _cleanup()
+async def test_returns_none_for_unknown_sku():
+    res = await _resolve_per_bottle_rate(TENANT_ID, "nonexistent_sku_id")
+    assert res is None
 
 
 @pytest.mark.asyncio(loop_scope="session")
-async def test_picks_most_recent_active_entry():
-    await _seed([
-        _entry(transfer_price=15.0, active_from="2024-01-01", active_to="2025-12-31"),
-        _entry(transfer_price=22.0, active_from="2026-01-01", active_to=None),
-    ])
+async def test_resolver_ignores_destination_distributor():
+    """Rate is destination-independent — same SKU returns same price
+    regardless of which destination is asked about."""
+    sku_id = await _seed_sku(base_price=42.0)
     try:
-        res = await _resolve_per_bottle_rate(TENANT_ID, DIST_ID, "Bangalore", SKU_ID, "2026-06-15")
-        assert res["rate_per_bottle"] == 22.0
+        r1 = await _resolve_per_bottle_rate(TENANT_ID, sku_id)
+        # The new signature doesn't even accept a destination — verify by signature.
+        assert r1["rate_per_bottle"] == 42.0
     finally:
-        await _cleanup()
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_falls_back_to_base_price_when_no_transfer_price():
-    await _seed([_entry(transfer_price=None, base_price=25.0)])
-    try:
-        res = await _resolve_per_bottle_rate(TENANT_ID, DIST_ID, "Bangalore", SKU_ID, "2025-06-15")
-        assert res is not None
-        assert res["rate_per_bottle"] == 25.0
-    finally:
-        await _cleanup()
-
-
-@pytest.mark.asyncio(loop_scope="session")
-async def test_ignores_inactive_entries():
-    await _seed([_entry(status="inactive")])
-    try:
-        res = await _resolve_per_bottle_rate(TENANT_ID, DIST_ID, "Bangalore", SKU_ID, "2025-06-15")
-        assert res is None
-    finally:
-        await _cleanup()
+        await _cleanup(sku_id)
 
 
 # ──────────────────────────────────────────────────────────────
-# Delivery-Challan vs Invoice decision (per Indian GST rules)
+# Challan vs Invoice rule (unchanged) — keeps regression coverage
 # ──────────────────────────────────────────────────────────────
 SELF = {"is_self_managed": True}
 THIRD = {"is_self_managed": False}
 
 
 def test_challan_when_same_gstin_self_managed():
-    """Both self-managed + identical GSTIN → Delivery Challan."""
     src = {**SELF, "gstin": "29ABCDE1234F1Z5"}
     dst = {**SELF, "gstin": "29ABCDE1234F1Z5"}
     assert _qualifies_for_challan(src, dst, {}, {}) is True
 
 
 def test_invoice_when_same_pan_but_different_gstin():
-    """Same legal entity, different state registrations (different GSTIN) → Invoice.
-
-    This is the behavior change requested 2026-05-27: PAN-only matching used to
-    qualify for a Delivery Challan, but the user clarified that inter-state
-    branches with different GSTINs need a Tax Invoice instead.
-    """
-    src = {**SELF, "gstin": "29ABCDE1234F1Z5"}  # Karnataka
-    dst = {**SELF, "gstin": "27ABCDE1234F1Z5"}  # Maharashtra (same PAN ABCDE1234F)
+    src = {**SELF, "gstin": "29ABCDE1234F1Z5"}
+    dst = {**SELF, "gstin": "27ABCDE1234F1Z5"}
     assert _qualifies_for_challan(src, dst, {}, {}) is False
 
 
@@ -184,11 +131,10 @@ def test_invoice_when_gstin_missing():
 
 
 def test_challan_uses_location_gstin_override():
-    """Location-level GSTIN takes precedence over the parent distributor's."""
     src_dist = {**SELF, "gstin": "29ABCDE1234F1Z5"}
     dst_dist = {**SELF, "gstin": "27ABCDE1234F1Z5"}
-    src_loc = {"gstin": "33ABCDE1234F1Z5"}  # overrides parent
-    dst_loc = {"gstin": "33ABCDE1234F1Z5"}  # overrides parent
+    src_loc = {"gstin": "33ABCDE1234F1Z5"}
+    dst_loc = {"gstin": "33ABCDE1234F1Z5"}
     assert _qualifies_for_challan(src_dist, dst_dist, src_loc, dst_loc) is True
 
 
@@ -196,3 +142,18 @@ def test_gstin_match_is_case_insensitive():
     src = {**SELF, "gstin": "29abcde1234f1z5"}
     dst = {**SELF, "gstin": "29ABCDE1234F1Z5"}
     assert _qualifies_for_challan(src, dst, {}, {}) is True
+
+
+# ──────────────────────────────────────────────────────────────
+# Third-party PAN block helper
+# ──────────────────────────────────────────────────────────────
+def test_extract_pan_extracts_positions_3_to_12():
+    assert _extract_pan("29ABCDE1234F1Z5") == "ABCDE1234F"
+
+
+def test_extract_pan_handles_missing_or_invalid():
+    # Function returns "" (falsy) for invalid / missing input — callers should
+    # treat empty string as "no PAN known".
+    assert _extract_pan(None) == ""
+    assert _extract_pan("") == ""
+    assert _extract_pan("XYZ") == ""

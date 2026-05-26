@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 176 validated the migration of Stock Transfer pricing from distributor_margin_matrix → master_skus.base_price AND the new cross-PAN block. Wrote 8 new live-API tests in test_iteration_176_base_price_and_cross_pan.py + kept 13 unit/in-process tests in test_stock_transfer_pricing.py — all 21 pass. Backend behaviour confirmed: (1) GET/POST/PUT /api/master-skus accept & return base_price on every row; (2) GET /resolve-rate signature is now ?sku_id&units_per_package only, returns ok:true with rate_per_bottle=base_price & rate_per_package=base_price×units, or ok:false with 'No Base Price set' message; (3) POST /api/distributor/stock-transfers/ returns 400 with cross-PAN explanation when source PAN ≠ dest PAN (live data: Surya 1 PAN AAFCJ4820K vs Surya Distributions PAN AAAAA1234A); (4) POST returns 400 with 'No Base Price set on these SKUs' when an item references a SKU without base_price; persisted items carry rate_source='master_sku.base_price'. Frontend confirmed: /sku-management Add-New-SKU dialog has the 'Base Price (₹ per bottle)' input with testid sku-base-price-input (entered & accepted '77.7'); /distributor/stock-transfers New Stock Transfer dialog header text now reads 'internal logistics only, no margin / different PAN (third-party distributor) are blocked — raise those via Stock In / auto-fetched from the SKU's Base Price', Rate per package shows AUTO badge.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/distributor/stock-transfers New Stock Transfer dialog", "issues": ["Rate-per-package field shows stale placeholder 'Pick destination + SKU' — rate now depends ONLY on SKU (destination is irrelevant for pricing per the new contract). Should read 'Pick SKU' or similar. Cosmetic, does not break flow."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_176_base_price_and_cross_pan.py",
+    "/app/backend/tests/test_stock_transfer_pricing.py",
+    "/app/test_reports/pytest/iteration_176_results.xml"
+  ],
+  "action_items": [
+    "(Cosmetic) Update Rate-per-package placeholder in StockTransfers.js from 'Pick destination + SKU' to 'Pick SKU' — destination no longer affects rate.",
+    "(Pre-existing, unrelated) Zoho 'Failed: Zoho Books is not connected for this tenant' continues to appear on every transfer row — acknowledged not in scope; Zoho not configured in this env."
+  ],
+  "critical_code_review_comments": [
+    "_resolve_per_bottle_rate (distributor_stock_transfers.py:252-289) cleanly drops margin_matrix dependency and only reads master_skus.base_price; correctly returns None for missing/zero/negative; tenant_id arg is now unused (lookup is global by sku.id) — consider either filtering by tenant_id on the master_skus query (if SKUs are tenant-scoped) or removing the parameter to avoid confusion.",
+    "Cross-PAN block (lines 710-723) runs AFTER stock + pricing checks, so a user with a third-party destination AND missing stock/price will see those errors first. If the intent is to direct users to Stock In ASAP, consider moving the PAN check to run earliest (just after distributor/location load).",
+    "TransferItem.rate is still a Pydantic field (line 64) accepted from clients but completely ignored. Either remove it from the model OR add a logger.warning when a non-zero client value is sent so we can detect stale frontends.",
+    "items_doc.rate_source is hard-coded to 'master_sku.base_price' on every line (line 772) — fine for now since the resolver only has one source, but if a fallback path is added later, populate from rinfo['source'] instead.",
+    "resolve_transfer_rate returns ok:false with HTTP 200 (line 316) — intentional and matches the UI contract (badge shows reason inline); good.",
+    "The `_extract_pan` helper relies on raw GSTIN slicing (positions 3-12) with no checksum validation — acceptable proxy for legal-entity match; documented in the docstring."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_176_base_price_and_cross_pan.py"
+  ],
+  "success_rate": {"backend": "100% (8/8 new live-API + 13/13 unit)", "frontend": "100% (SKU Base Price input + Stock Transfer dialog text/AUTO badge verified)"},
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123 — login returns session_token (NOT access_token).",
+  "seed_data_creation": "All test SKUs are prefixed 'TEST_iter176_' and deleted via API teardown inside each test. No real distributor/transfer docs created during this iteration (the cross-PAN test EXPECTS the 400, so the transfer is never written). Safe to leave; nothing to clean up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression for the new no-margin pricing = /app/backend/tests/test_stock_transfer_pricing.py (in-process) + /app/backend/tests/test_iteration_176_base_price_and_cross_pan.py (live HTTP). Both must run with cwd=/app/backend. The live-API test depends on at least two distributor/location records with distinct PANs in the tenant — Surya 1 (PAN AAFCJ4820K) and Surya Distributions / 1st Warehouse (PAN AAAAA1234A) — both currently exist and have positive stock. Login key is 'session_token'.",
+  "rca of the issue": "Not a bug-fix iteration — feature validation only. Pricing source moved from `distributor_margin_matrix.transfer_price` to `master_skus.base_price` (no margin). Cross-PAN POSTs now blocked with 400 because Stock Transfer is for internal logistics and third-party sales must go through Stock In where commission/settlement is computed. Both implementations verified end-to-end via pytest + live UI."
+}
