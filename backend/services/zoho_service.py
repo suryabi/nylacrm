@@ -1631,7 +1631,12 @@ async def create_delivery_challan_for_stock_transfer(
 
     payload = {
         "customer_id": customer_id,
-        "challan_type": "branch_transfer",
+        # Zoho Books accepts only: supply_of_liquid_gas, supply_on_approval,
+        # job_work, others. There is NO "branch_transfer" enum — that was
+        # rejected with API code 6 "Invalid value specified for the parameter".
+        # For inter-branch stock movement we use "others" (most generic) and
+        # encode the actual context in `notes` + `reference_number`.
+        "challan_type": "others",
         "reference_number": transfer.get("transfer_number"),
         "date": (transfer.get("transfer_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
         "line_items": line_items,
