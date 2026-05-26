@@ -35,7 +35,7 @@ from core.tenant import get_current_tenant_id
 from deps import get_current_user
 from services.zoho_service import (
     create_delivery_challan_for_stock_transfer,
-    create_invoice_for_delivery,
+    create_invoice_for_stock_transfer,
     fetch_delivery_challan_pdf,
     fetch_invoice_pdf,
     is_zoho_configured,
@@ -869,45 +869,13 @@ async def _try_push_to_zoho(transfer_doc: dict, src_dist: dict, dst_dist: dict) 
                 tenant_id=tenant_id, transfer=transfer_doc, dest_distributor=dst_dist,
             )
         else:
-            # Build a synthetic "delivery" + "account" payload so we can reuse the
-            # invoice builder. The destination distributor is the customer; rates
-            # come from per-line `rate` on the transfer items.
-            synthetic_delivery = {
-                "id": transfer_doc["id"],
-                "delivery_number": transfer_doc["transfer_number"],
-                "delivery_date": transfer_doc["transfer_date"],
-                "applied_credit_notes": [],
-            }
-            synthetic_account = {
-                "id": dst_dist.get("id"),
-                "account_name": dst_dist.get("distributor_name") or dst_dist.get("legal_entity_name"),
-                "legal_entity_name": dst_dist.get("legal_entity_name"),
-                "gstin": dst_dist.get("gstin"),
-                "primary_contact_name": dst_dist.get("primary_contact_name"),
-                "primary_contact_email": dst_dist.get("primary_contact_email"),
-                "primary_contact_mobile": dst_dist.get("primary_contact_mobile"),
-                "billing_address": dst_dist.get("billing_address"),
-                "delivery_address": dst_dist.get("registered_address"),
-                "zoho_contact_id": dst_dist.get("zoho_contact_id"),
-                "payment_terms_days": 0,
-                "sku_pricing": [
-                    {"sku": it["sku_name"], "price_per_unit": it["rate"]} for it in transfer_doc["items"]
-                ],
-            }
-            # Pass package-level qty to Zoho so the invoice reads "5 Crate-12" not "60 bottles".
-            items_for_invoice = [
-                {
-                    "sku_id": it["sku_id"],
-                    "sku_name": f"{it['sku_name']} · {it.get('packaging_type_name', '')}".strip(' ·'),
-                    "quantity": it["quantity"],
-                }
-                for it in transfer_doc["items"]
-            ]
-            mapping = await create_invoice_for_delivery(
-                tenant_id=tenant_id,
-                delivery=synthetic_delivery,
-                items=items_for_invoice,
-                account=synthetic_account,
+            # Stock Transfer invoice: rate comes from master_skus.base_price
+            # (already applied to each item.rate by create_stock_transfer). We
+            # use a DEDICATED builder — NOT create_invoice_for_delivery — so we
+            # don't accidentally inherit account-level sku_pricing lookups
+            # (which fail when the SKU display name carries a packaging suffix).
+            mapping = await create_invoice_for_stock_transfer(
+                tenant_id=tenant_id, transfer=transfer_doc, dest_distributor=dst_dist,
             )
 
         set_doc.update({

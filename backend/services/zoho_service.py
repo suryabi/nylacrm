@@ -1743,6 +1743,142 @@ async def create_delivery_challan_for_stock_transfer(
         {"$set": mapping_doc, "$setOnInsert": {"first_synced_at": now}},
         upsert=True,
     )
+
+    return mapping_doc
+
+
+async def create_invoice_for_stock_transfer(
+    *, tenant_id: str, transfer: dict, dest_distributor: dict
+) -> dict:
+    """Push a Nyla inter-branch stock transfer as a Zoho Books *Tax Invoice*.
+
+    Used when source & destination warehouses have DIFFERENT GSTINs of the SAME
+    legal entity (same PAN) — per CGST Schedule I a Tax Invoice is mandatory even
+    though no real sale happened. Per CGST Rule 30 the value is the SKU's
+    list / base price (no margin) — which is exactly what the transfer item's
+    `rate` already carries (computed from `master_skus.base_price`).
+
+    This function INTENTIONALLY does not consult `account.sku_pricing` — Stock
+    Transfer pricing is destination-independent and comes from the SKU master.
+
+    Sibling of `create_delivery_challan_for_stock_transfer`. Same persistence
+    pattern; persisted mapping uses `zoho_doc_type='invoice'`.
+    """
+    if not is_zoho_configured():
+        raise RuntimeError("Zoho Books integration is not configured (ZOHO_CLIENT_ID missing).")
+
+    # Idempotency — if this transfer was already pushed, return existing mapping.
+    existing_mapping = await db.zoho_invoice_mappings.find_one(
+        {"tenant_id": tenant_id, "source_type": "stock_transfer",
+         "source_id": transfer.get("id"), "status": "synced"},
+        {"_id": 0},
+    )
+    if existing_mapping and existing_mapping.get("zoho_invoice_id"):
+        logger.info(
+            f"Zoho invoice already synced for stock transfer "
+            f"{transfer.get('transfer_number')}; skipping re-push."
+        )
+        return existing_mapping
+
+    # Upsert contact for the destination distributor (Zoho needs a customer ref).
+    customer_id = await upsert_contact(tenant_id, {
+        "id": dest_distributor.get("id"),
+        "account_name": dest_distributor.get("distributor_name") or dest_distributor.get("legal_entity_name"),
+        "legal_entity_name": dest_distributor.get("legal_entity_name") or dest_distributor.get("distributor_name"),
+        "gstin": dest_distributor.get("gstin"),
+        "primary_contact_name": dest_distributor.get("primary_contact_name"),
+        "primary_contact_email": dest_distributor.get("primary_contact_email"),
+        "primary_contact_mobile": dest_distributor.get("primary_contact_mobile"),
+        "billing_address": dest_distributor.get("billing_address") or dest_distributor.get("registered_address"),
+        "delivery_address": dest_distributor.get("registered_address"),
+        "zoho_contact_id": dest_distributor.get("zoho_contact_id"),
+    })
+
+    # Build line items — quantity in PACKAGES (crates/cartons), rate per package
+    # (already = master_skus.base_price × units_per_package from create_stock_transfer).
+    line_items: list[dict] = []
+    for it in transfer.get("items") or []:
+        zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
+        base_name = (it.get("sku_name") or "").strip() or "Item"
+        pkg = (it.get("packaging_type_name") or "").strip()
+        display_name = f"{base_name} · {pkg}" if pkg else base_name
+        line_items.append({
+            "item_id": zoho_item_id,
+            "name": display_name,
+            "quantity": float(it.get("quantity", 0) or 0),
+            "rate": float(it.get("rate", 0) or 0),
+        })
+
+    if not line_items:
+        raise RuntimeError(f"Stock transfer {transfer.get('transfer_number')} has no items to push.")
+
+    notes_parts: list[str] = []
+    if transfer.get("vehicle_number"):
+        notes_parts.append(f"Vehicle: {transfer['vehicle_number']}")
+    notes_parts.append(
+        f"Inter-branch stock transfer "
+        f"{transfer.get('source_distributor_name', '')} ({transfer.get('source_location_name', '')}) "
+        f"→ {transfer.get('dest_distributor_name', '')} ({transfer.get('dest_location_name', '')})."
+    )
+    if transfer.get("notes"):
+        notes_parts.append(transfer["notes"])
+    notes = "\n".join(notes_parts).strip()
+
+    invoice_payload = {
+        "customer_id": customer_id,
+        "reference_number": transfer.get("transfer_number"),
+        "date": (transfer.get("transfer_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
+        "line_items": line_items,
+        "notes": notes,
+    }
+
+    # Optional per-tenant invoice template override (mirrors create_invoice_for_delivery).
+    tenant_creds = await get_credentials(tenant_id) or {}
+    invoice_tmpl = (tenant_creds.get("invoice_template_id") or "").strip()
+    if invoice_tmpl:
+        invoice_payload["template_id"] = invoice_tmpl
+
+    result = await _zoho_request("POST", "/books/v3/invoices", tenant_id=tenant_id, json=invoice_payload)
+    invoice = result.get("invoice") or {}
+    zoho_invoice_id = invoice.get("invoice_id")
+    zoho_invoice_number = invoice.get("invoice_number")
+
+    # Flip draft → sent so the invoice appears as an open receivable instantly.
+    if zoho_invoice_id:
+        try:
+            await _zoho_request(
+                "POST",
+                f"/books/v3/invoices/{zoho_invoice_id}/status/sent",
+                tenant_id=tenant_id,
+            )
+        except Exception as e:
+            logger.warning(
+                f"[zoho] Could not mark stock-transfer invoice {zoho_invoice_number} as sent: {e}. "
+                "It will stay in Drafts until sent manually."
+            )
+
+    creds = await get_credentials(tenant_id) or {}
+    zoho_invoice_url = invoice.get("invoice_url") or _zoho_books_url(zoho_invoice_id, creds)
+
+    now = datetime.now(timezone.utc).isoformat()
+    mapping_doc = {
+        "tenant_id": tenant_id,
+        "source_type": "stock_transfer",
+        "source_id": transfer.get("id"),
+        "source_number": transfer.get("transfer_number"),
+        "zoho_invoice_id": zoho_invoice_id,
+        "zoho_invoice_number": zoho_invoice_number,
+        "zoho_invoice_url": zoho_invoice_url,
+        "zoho_doc_type": "invoice",
+        "status": "synced",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.zoho_invoice_mappings.update_one(
+        {"tenant_id": tenant_id, "source_type": "stock_transfer", "source_id": transfer.get("id")},
+        {"$set": mapping_doc, "$setOnInsert": {"first_synced_at": now}},
+        upsert=True,
+    )
     return mapping_doc
 
 
