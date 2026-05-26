@@ -777,7 +777,18 @@ ${userEmail}`;
 
       // Wait for celebration to show briefly before navigating
       setTimeout(() => {
-        toast.success(`Account created: ${response.data.account_id}`);
+        if (response.data.already_existed) {
+          // Lead was linked to a pre-existing account — make this visible to the user
+          // so they understand we didn't create a duplicate. `matched_on` tells us
+          // whether the match was on GSTIN or on company+city.
+          const matched = response.data.matched_on === 'gstin' ? 'matching GSTIN' : 'matching company name & city';
+          toast.success(
+            `Lead linked to existing account ${response.data.account_id}`,
+            { description: `An account with ${matched} already existed — no duplicate created.`, duration: 7000 },
+          );
+        } else {
+          toast.success(`Account created: ${response.data.account_id}`);
+        }
         navigate(`/accounts/${response.data.account_id}`);
       }, 1500);
     } catch (error) {

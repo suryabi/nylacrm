@@ -1734,6 +1734,29 @@ async def create_account_assignment(
         if not location:
             raise HTTPException(status_code=400, detail="Invalid distributor location")
     
+    # ── DEDUP: don't allow the same (account, distributor, city) to be assigned twice. ──
+    # An active assignment for this exact triple already exists → return 409 with the
+    # existing assignment so the caller can surface a clear message and link the user
+    # to it instead of inserting a duplicate row.
+    existing_same = await db.account_distributor_assignments.find_one({
+        "tenant_id": tenant_id,
+        "account_id": data.account_id,
+        "distributor_id": distributor_id,
+        "status": "active",
+    }, {"_id": 0})
+    if existing_same:
+        # Match if the city aliases match (Bangalore <-> Bengaluru, etc.)
+        if cities_match(existing_same.get('servicing_city', ''), data.servicing_city):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Account '{existing_same.get('account_name')}' is already assigned to "
+                    f"distributor '{existing_same.get('distributor_name')}' for "
+                    f"'{existing_same.get('servicing_city')}'. Edit the existing assignment "
+                    "instead of creating a new one."
+                ),
+            )
+
     # Check for existing primary assignment for same account + city (alias-aware)
     if data.is_primary:
         existing_primaries = db.account_distributor_assignments.find({

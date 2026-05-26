@@ -5987,6 +5987,50 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
             return existing
         # Flag was set but no account found — clear and recreate (rare, self-healing)
 
+    # IDEMPOTENCY GUARD #1b: an account with this GSTIN / name+city may already
+    # exist from a different lead (or manual creation). Link & return it instead
+    # of creating a duplicate.
+    async def _existing_account_by_identity() -> Optional[dict]:
+        """Find an existing account that matches the lead by identity (no
+        cross-lead linkage). Match order: GSTIN → company+city (case-insensitive)."""
+        gstin = (lead.get('gstin') or lead.get('GSTIN') or '').strip().upper()
+        if gstin and len(gstin) >= 10:
+            found = await get_tdb().accounts.find_one(
+                {'gstin': {'$regex': f'^{gstin}$', '$options': 'i'}},
+                {'_id': 0},
+            )
+            if found:
+                return found
+        company = (lead.get('company') or '').strip()
+        city = (lead.get('city') or '').strip()
+        if company and city:
+            found = await get_tdb().accounts.find_one(
+                {
+                    'account_name': {'$regex': f'^{re.escape(company)}$', '$options': 'i'},
+                    'city': {'$regex': f'^{re.escape(city)}$', '$options': 'i'},
+                },
+                {'_id': 0},
+            )
+            if found:
+                return found
+        return None
+
+    duplicate = await _existing_account_by_identity()
+    if duplicate:
+        # Link this lead to the pre-existing account and mark it converted —
+        # this stops the same dedup work from running again on subsequent clicks.
+        await get_tdb().leads.update_one(
+            {'id': data.lead_id},
+            {'$set': {
+                'converted_to_account': True,
+                'account_id': duplicate.get('account_id') or duplicate.get('id'),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        duplicate['already_existed'] = True
+        duplicate['matched_on'] = 'gstin' if (lead.get('gstin') or lead.get('GSTIN')) else 'company_and_city'
+        return duplicate
+
     # Validate proposed SKU pricing exists
     proposed_pricing = lead.get('proposed_sku_pricing', [])
     if not proposed_pricing or len(proposed_pricing) == 0:
