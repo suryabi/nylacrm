@@ -57,7 +57,10 @@ class TransferItem(BaseModel):
     packaging_type_name: str  # "Crate - 12", "Carton - 6", etc.
     units_per_package: int = Field(..., gt=0)
     quantity: int = Field(..., gt=0, description="Number of packages (crates / cartons) to transfer")
-    rate: float = 0.0  # per-package rate (for E-way bill compliance); 0 allowed
+    # NOTE: Per-package rate is auto-derived from the destination distributor's
+    # commercials (distributor_margin_matrix.transfer_price × units_per_package).
+    # Any client-supplied value here is ignored — the server is the source of truth.
+    rate: float = 0.0
 
 
 class StockTransferCreate(BaseModel):
@@ -169,9 +172,118 @@ async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,
     return res
 
 
+async def _resolve_per_bottle_rate(
+    tenant_id: str,
+    distributor_id: str,
+    city: Optional[str],
+    sku_id: str,
+    transfer_date: Optional[str] = None,
+) -> Optional[dict]:
+    """Look up the per-bottle rate from the destination distributor's commercials
+    (distributor_margin_matrix). Returns a dict with keys
+    {rate_per_bottle, source_entry_id, base_price, transfer_price, margin_value} or None.
+
+    Selection rules:
+      • Match (tenant_id, distributor_id, sku_id, status='active') and the destination
+        location's city (case-insensitive).
+      • `transfer_date` (ISO YYYY-MM-DD) must fall within active_from..active_to (inclusive,
+        treating null bounds as open-ended).
+      • Prefer the entry with the latest `active_from` (most recent commercial wins).
+    """
+    if not (distributor_id and city and sku_id):
+        return None
+    date_str = (transfer_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10]
+    q = {
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "sku_id": sku_id,
+        "status": "active",
+        "city": {"$regex": f"^{city.strip()}$", "$options": "i"},
+    }
+    rows = await db.distributor_margin_matrix.find(q, {"_id": 0}).to_list(50)
+    candidates = []
+    for r in rows:
+        af = (r.get("active_from") or "1900-01-01")[:10]
+        at = (r.get("active_to") or "9999-12-31")[:10]
+        if af <= date_str <= at:
+            candidates.append(r)
+    if not candidates:
+        return None
+    # Most recent commercial wins
+    candidates.sort(key=lambda r: (r.get("active_from") or "1900-01-01"), reverse=True)
+    chosen = candidates[0]
+    # transfer_price is what factory bills the distributor (already nets out margin
+    # for margin_upfront, equals base_price for cost_based). Fall back to base_price.
+    rate_per_bottle = chosen.get("transfer_price")
+    if rate_per_bottle is None:
+        rate_per_bottle = chosen.get("base_price")
+    if rate_per_bottle is None:
+        return None
+    return {
+        "rate_per_bottle": float(rate_per_bottle),
+        "source_entry_id": chosen.get("id"),
+        "base_price": chosen.get("base_price"),
+        "transfer_price": chosen.get("transfer_price"),
+        "margin_type": chosen.get("margin_type"),
+        "margin_value": chosen.get("margin_value"),
+        "active_from": chosen.get("active_from"),
+        "active_to": chosen.get("active_to"),
+        "city": chosen.get("city"),
+    }
+
+
 # ──────────────────────────────────────────────────────────────
 # Endpoints
 # ──────────────────────────────────────────────────────────────
+@router.get("/resolve-rate")
+async def resolve_transfer_rate(
+    dest_distributor_id: str = Query(..., description="Destination distributor whose commercials apply"),
+    dest_location_id: str = Query(..., description="Destination warehouse — its city drives the lookup"),
+    sku_id: str = Query(...),
+    units_per_package: int = Query(..., gt=0),
+    transfer_date: Optional[str] = Query(None, description="ISO YYYY-MM-DD, defaults to today"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Look up the contracted (commercial) rate for a SKU at the destination warehouse's city.
+
+    Returns `{ ok, rate_per_bottle, rate_per_package, details }`. If no active commercial
+    matches, `ok=false` with a `reason` so the UI can render a clear error and block save.
+    """
+    tenant_id = get_current_tenant_id()
+    dest_loc = await _load_location(tenant_id, dest_location_id)
+    if dest_loc.get("distributor_id") != dest_distributor_id:
+        raise HTTPException(400, "Destination location does not belong to destination distributor.")
+    city = dest_loc.get("city")
+    if not city:
+        return {
+            "ok": False,
+            "reason": (
+                f"Destination warehouse '{dest_loc.get('location_name')}' has no city set — "
+                "add a city to the warehouse, or create a commercial for it before transferring."
+            ),
+        }
+    found = await _resolve_per_bottle_rate(tenant_id, dest_distributor_id, city, sku_id, transfer_date)
+    if not found:
+        # Try to be helpful — surface the SKU name and city so the user knows what to add.
+        sku_doc = await db.skus.find_one({"id": sku_id}, {"_id": 0, "name": 1}) or {}
+        return {
+            "ok": False,
+            "reason": (
+                f"No active commercial found for SKU '{sku_doc.get('name') or sku_id}' "
+                f"at city '{city}' for the destination distributor. Add an entry under "
+                "Distributors → Margin Matrix before creating this transfer."
+            ),
+            "city": city,
+        }
+    rate_per_pkg = round(float(found["rate_per_bottle"]) * int(units_per_package), 2)
+    return {
+        "ok": True,
+        "rate_per_bottle": round(float(found["rate_per_bottle"]), 4),
+        "rate_per_package": rate_per_pkg,
+        "details": found,
+    }
+
+
 @router.get("/eligible-sources")
 async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
     """Return distributor warehouses that have positive stock for at least one SKU."""
@@ -358,6 +470,35 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     challan_eligible = _qualifies_for_challan(src_dist, dst_dist, src_loc, dst_loc)
     zoho_doc_type = "delivery_challan" if challan_eligible else "invoice"
 
+    # ── Auto-resolve per-package rate from destination distributor commercials ──
+    # The user must not be allowed to type prices manually — pricing comes from
+    # distributor_margin_matrix for (dest_distributor_id, dest_location.city, sku_id).
+    transfer_date_str = (payload.transfer_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10]
+    dest_city = dst_loc.get("city")
+    resolved_rates: dict = {}  # sku_id -> {rate_per_bottle, rate_per_package, details}
+    missing_pricing: list[str] = []
+    for it in payload.items:
+        resolved = await _resolve_per_bottle_rate(
+            tenant_id, payload.dest_distributor_id, dest_city, it.sku_id, transfer_date_str,
+        )
+        if not resolved:
+            missing_pricing.append(
+                f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)} (city '{dest_city or '—'}')"
+            )
+        else:
+            resolved_rates[it.sku_id] = {
+                **resolved,
+                "rate_per_package": round(float(resolved["rate_per_bottle"]) * int(it.units_per_package), 2),
+            }
+    if missing_pricing:
+        raise HTTPException(
+            400,
+            "No active commercial / transfer-price found at destination for: "
+            + "; ".join(missing_pricing)
+            + ". Configure entries under Distributors → Margin Matrix for the destination "
+              "distributor + city before creating this transfer.",
+        )
+
     # ── Build transfer doc (status=draft until inventory + Zoho both succeed) ──
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
@@ -365,6 +506,8 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     items_doc = []
     for it in payload.items:
         quantity_units = int(it.quantity) * int(it.units_per_package)
+        rinfo = resolved_rates[it.sku_id]
+        per_pkg_rate = float(rinfo["rate_per_package"])
         items_doc.append({
             "sku_id": it.sku_id,
             "sku_name": it.sku_name or sku_name_lookup.get(it.sku_id),
@@ -373,8 +516,11 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
             "units_per_package": int(it.units_per_package),
             "quantity": int(it.quantity),               # in packages (crates / cartons)
             "quantity_units": quantity_units,           # bottles / raw units (for stock storage)
-            "rate": float(it.rate or 0),                # per-package rate
-            "line_total": round(int(it.quantity) * float(it.rate or 0), 2),
+            "rate": per_pkg_rate,                       # per-package rate (auto from commercials)
+            "rate_per_bottle": round(float(rinfo["rate_per_bottle"]), 4),
+            "rate_source": "distributor_margin_matrix",
+            "rate_source_entry_id": rinfo.get("source_entry_id"),
+            "line_total": round(int(it.quantity) * per_pkg_rate, 2),
         })
     transfer_doc = {
         "id": transfer_id,

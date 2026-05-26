@@ -57,9 +57,12 @@ function NewTransferDialog({ open, onClose, onCreated }) {
     notes: '',
     vehicle_number: '',
   });
-  // Each item: { sku_id, packaging_type_id, packaging_type_name, units_per_package, quantity, rate }
+  // Each item: { sku_id, packaging_type_id, packaging_type_name, units_per_package, quantity,
+  //              rate (per-package, auto), rate_per_bottle, rate_status: 'idle'|'loading'|'ok'|'missing',
+  //              rate_reason, rate_details }
   const [items, setItems] = useState([{
-    sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '', rate: '',
+    sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
+    rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
   }]);
   const [saving, setSaving] = useState(false);
   const [stockBySku, setStockBySku] = useState({}); // sku_id -> available units (at chosen source)
@@ -73,7 +76,10 @@ function NewTransferDialog({ open, onClose, onCreated }) {
       notes: '',
       vehicle_number: '',
     });
-    setItems([{ sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '', rate: '' }]);
+    setItems([{
+      sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
+      rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
+    }]);
     setStockBySku({});
     (async () => {
       try {
@@ -110,7 +116,8 @@ function NewTransferDialog({ open, onClose, onCreated }) {
 
   const addItemRow = () => setItems((p) => [
     ...p,
-    { sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '', rate: '' },
+    { sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
+      rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null },
   ]);
   const updateItem = (i, patch) => setItems((p) => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   const removeItem = (i) => setItems((p) => p.filter((_, idx) => idx !== i));
@@ -125,11 +132,70 @@ function NewTransferDialog({ open, onClose, onCreated }) {
       packaging_type_id: defaultPkg?.packaging_type_id || '',
       packaging_type_name: defaultPkg?.packaging_type_name || '',
       units_per_package: defaultPkg?.units_per_package || 0,
+      // Reset rate so the resolver re-runs.
+      rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
     });
   };
 
   const sourceObj = useMemo(() => sources.find((s) => s.location_id === form.source_location_id), [sources, form.source_location_id]);
   const targetObj = useMemo(() => targets.find((t) => t.location_id === form.dest_location_id), [targets, form.dest_location_id]);
+
+  // Resolve per-package rate from destination's commercials whenever the
+  // relevant inputs change. The user cannot type a price — pricing comes from
+  // distributor_margin_matrix (city + SKU + active date).
+  const resolveRateForItem = useCallback(async (idx, item) => {
+    if (!targetObj || !item.sku_id || !item.units_per_package) return;
+    updateItem(idx, { rate_status: 'loading', rate_reason: '' });
+    try {
+      const params = new URLSearchParams({
+        dest_distributor_id: targetObj.distributor_id,
+        dest_location_id: targetObj.location_id,
+        sku_id: item.sku_id,
+        units_per_package: String(item.units_per_package),
+        transfer_date: form.transfer_date,
+      });
+      const { data } = await axios.get(`${API}/distributor/stock-transfers/resolve-rate?${params}`, { headers: HEAD() });
+      if (data?.ok) {
+        updateItem(idx, {
+          rate: data.rate_per_package,
+          rate_per_bottle: data.rate_per_bottle,
+          rate_status: 'ok',
+          rate_reason: '',
+          rate_details: data.details || null,
+        });
+      } else {
+        updateItem(idx, {
+          rate: 0, rate_per_bottle: 0,
+          rate_status: 'missing',
+          rate_reason: data?.reason || 'No commercial configured.',
+          rate_details: null,
+        });
+      }
+    } catch (e) {
+      updateItem(idx, {
+        rate: 0, rate_per_bottle: 0,
+        rate_status: 'missing',
+        rate_reason: e.response?.data?.detail || 'Failed to look up rate.',
+        rate_details: null,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetObj, form.transfer_date]);
+
+  // Re-resolve whenever destination, SKU, packaging or transfer date changes.
+  useEffect(() => {
+    items.forEach((it, idx) => {
+      if (it.sku_id && it.units_per_package > 0 && targetObj) {
+        resolveRateForItem(idx, it);
+      }
+    });
+    // We intentionally only watch the *resolution inputs*, not `items` (rate-status
+    // updates would otherwise cause an infinite loop).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    targetObj?.location_id, form.transfer_date,
+    items.map((it) => `${it.sku_id}|${it.packaging_type_id}|${it.units_per_package}`).join(','),
+  ]);
 
   const docPreview = useMemo(() => {
     if (!sourceObj || !targetObj) return null;
@@ -141,7 +207,8 @@ function NewTransferDialog({ open, onClose, onCreated }) {
   }, [sourceObj, targetObj]);
 
   const canSubmit = form.source_location_id && form.dest_location_id && items.length > 0
-    && items.every((it) => it.sku_id && it.packaging_type_name && it.units_per_package > 0 && Number(it.quantity) > 0);
+    && items.every((it) => it.sku_id && it.packaging_type_name && it.units_per_package > 0
+      && Number(it.quantity) > 0 && it.rate_status === 'ok');
 
   const onSubmit = async () => {
     if (!canSubmit) { toast.error('Fill source, destination, SKU, packaging and quantity'); return; }
@@ -165,7 +232,8 @@ function NewTransferDialog({ open, onClose, onCreated }) {
             packaging_type_name: it.packaging_type_name,
             units_per_package: parseInt(it.units_per_package),
             quantity: parseInt(it.quantity),
-            rate: parseFloat(it.rate || 0),
+            // Rate is intentionally NOT sent — backend looks it up from the
+            // destination distributor's commercials (distributor_margin_matrix).
           };
         }),
       };
@@ -191,7 +259,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ArrowLeftRight className="h-5 w-5 text-emerald-600" /> New Stock Transfer</DialogTitle>
           <DialogDescription>
-            Move stock from one warehouse to another. If both warehouses are self-managed and share the same <b>PAN</b> (same legal entity — even across states), Zoho will record a <b>Delivery Challan</b>. Otherwise an Invoice is generated at the rates you enter.
+            Move stock from one warehouse to another. If both warehouses are self-managed and share the same <b>PAN</b> (same legal entity — even across states), Zoho will record a <b>Delivery Challan</b>. Otherwise an Invoice is generated. Rates are <b>auto-fetched from the destination distributor's commercials</b> (Distributor → Margin Matrix) — they cannot be edited here.
           </DialogDescription>
         </DialogHeader>
 
@@ -322,17 +390,32 @@ function NewTransferDialog({ open, onClose, onCreated }) {
                         )}
                       </div>
                       <div className="flex-1">
-                        <Label className="text-[10px] text-slate-500">Rate per {it.packaging_type_name || 'package'}</Label>
-                        <Input type="number" min="0" step="0.01" placeholder="0.00"
-                          value={it.rate}
-                          onChange={(e) => updateItem(i, { rate: e.target.value })}
-                          className="h-9 text-sm"
-                          data-testid={`item-rate-${i}`}
-                        />
+                        <Label className="text-[10px] text-slate-500 flex items-center gap-1">
+                          Rate per {it.packaging_type_name || 'package'}
+                          <span className="text-[9px] uppercase tracking-wider text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 rounded px-1 py-px">auto</span>
+                        </Label>
+                        <div className={`h-9 px-2 flex items-center text-sm rounded-md border bg-slate-50 ${
+                          it.rate_status === 'ok' ? 'border-emerald-200 text-slate-800'
+                          : it.rate_status === 'missing' ? 'border-red-300 text-red-700 bg-red-50'
+                          : 'border-slate-200 text-slate-400'
+                        }`} data-testid={`item-rate-auto-${i}`}>
+                          {it.rate_status === 'loading' ? (
+                            <span className="flex items-center gap-1.5 text-slate-500"><Loader2 className="h-3 w-3 animate-spin" /> Resolving…</span>
+                          ) : it.rate_status === 'ok' ? (
+                            <span className="tabular-nums">₹ {Number(it.rate).toFixed(2)}<span className="ml-1 text-[10px] text-slate-500">(₹ {Number(it.rate_per_bottle).toFixed(2)}/bottle)</span></span>
+                          ) : it.rate_status === 'missing' ? (
+                            <span className="text-[10px]">No commercial — set up first</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">Pick destination + SKU</span>
+                          )}
+                        </div>
+                        {it.rate_status === 'missing' && it.rate_reason && (
+                          <div className="text-[10px] text-red-600 mt-1" data-testid={`item-rate-reason-${i}`}>{it.rate_reason}</div>
+                        )}
                       </div>
                       <div className="w-28 text-right">
                         <Label className="text-[10px] text-slate-500">Line Total</Label>
-                        <p className="h-9 flex items-center justify-end text-sm font-semibold tabular-nums text-slate-700">
+                        <p className="h-9 flex items-center justify-end text-sm font-semibold tabular-nums text-slate-700" data-testid={`item-line-total-${i}`}>
                           ₹ {((parseInt(it.quantity) || 0) * (parseFloat(it.rate) || 0)).toFixed(2)}
                         </p>
                       </div>
