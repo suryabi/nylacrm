@@ -116,6 +116,7 @@ import LeadScoringModel from './pages/LeadScoringModel';
 // Distribution Module
 import DistributorList from './pages/DistributorList';
 import DistributorDetail from './pages/DistributorDetail';
+import StockTransfers from './pages/StockTransfers';
 import StockDashboard from './pages/StockDashboard';
 import TaskManagement from './pages/TaskManagement';
 import TaskDetail from './pages/TaskDetail';
@@ -356,6 +357,7 @@ function AppRouter() {
           <Route path="/distributors" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorList /></ProtectedRoute>} />
           <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
+          <Route path="/distributor/stock-transfers" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockTransfers /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockDashboard /></ProtectedRoute>} />
           <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><CostCards /></ProtectedRoute>} />
           

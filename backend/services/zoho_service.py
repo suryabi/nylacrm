@@ -1540,6 +1540,131 @@ async def record_sync_failure(
     )
 
 
+# ---------- Delivery Challan (inter-branch stock transfer) ----------
+
+async def create_delivery_challan_for_stock_transfer(
+    *, tenant_id: str, transfer: dict, dest_distributor: dict
+) -> dict:
+    """Push a Nyla inter-branch stock transfer as a Zoho Books *Delivery Challan*.
+
+    Used when both source and destination warehouses belong to self-managed
+    distributors AND share the same GSTIN (per Indian GST law: no taxable
+    supply, so no tax invoice — only a delivery challan).
+
+    Zoho endpoint: POST /books/v3/deliverychallans (India edition).
+    challan_type = "branch_transfer" — this is the Zoho enum for inter-branch
+    stock movements within the same legal entity.
+
+    `transfer` shape:
+        {
+          id, transfer_number, transfer_date, items: [{sku_id, sku_name, quantity, rate?}],
+          source_distributor_name, source_location_name, dest_location_name,
+          notes?, vehicle_number?, gstin
+        }
+    `dest_distributor` is the destination distributor doc (used to upsert the
+    Zoho contact for the challan).
+    """
+    if not is_zoho_configured():
+        raise RuntimeError("Zoho Books integration is not configured (ZOHO_CLIENT_ID missing).")
+
+    # Idempotency — if this transfer was already pushed, return the existing mapping.
+    existing_mapping = await db.zoho_invoice_mappings.find_one(
+        {"tenant_id": tenant_id, "source_type": "stock_transfer",
+         "source_id": transfer.get("id"), "status": "synced"},
+        {"_id": 0},
+    )
+    if existing_mapping and existing_mapping.get("zoho_invoice_id"):
+        logger.info(
+            f"Zoho delivery challan already synced for stock transfer "
+            f"{transfer.get('transfer_number')}; skipping re-push."
+        )
+        return existing_mapping
+
+    # Zoho requires a contact for any delivery challan. We synthesize a Zoho
+    # contact from the destination distributor — `upsert_contact` already
+    # handles dedup by email/name. For branch-transfer challans Zoho doesn't
+    # GST-charge the contact, so this is purely a routing identifier.
+    customer_id = await upsert_contact(tenant_id, {
+        "id": dest_distributor.get("id"),
+        "account_name": dest_distributor.get("distributor_name") or dest_distributor.get("legal_entity_name"),
+        "legal_entity_name": dest_distributor.get("legal_entity_name") or dest_distributor.get("distributor_name"),
+        "gstin": dest_distributor.get("gstin"),
+        "primary_contact_name": dest_distributor.get("primary_contact_name"),
+        "primary_contact_email": dest_distributor.get("primary_contact_email"),
+        "primary_contact_mobile": dest_distributor.get("primary_contact_mobile"),
+        "billing_address": dest_distributor.get("billing_address") or dest_distributor.get("registered_address"),
+        "delivery_address": dest_distributor.get("registered_address"),
+        # Use a dedicated `zoho_contact_id_self_managed_*` slot to avoid clobbering
+        # the regular customer mapping (these contacts are "self" contacts).
+        "zoho_contact_id": dest_distributor.get("zoho_contact_id"),
+    })
+
+    # Build line items. Stock transfers carry per-line rates that the user
+    # entered (for E-way bill compliance). Zero rate is allowed.
+    line_items: list[dict] = []
+    for it in transfer.get("items") or []:
+        zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
+        line_items.append({
+            "item_id": zoho_item_id,
+            "name": (it.get("sku_name") or "").strip() or "Item",
+            "quantity": float(it.get("quantity", 0) or 0),
+            "rate": float(it.get("rate", 0) or 0),
+        })
+
+    if not line_items:
+        raise RuntimeError(f"Stock transfer {transfer.get('transfer_number')} has no items to push.")
+
+    notes = transfer.get("notes") or ""
+    if transfer.get("vehicle_number"):
+        notes = (f"Vehicle: {transfer['vehicle_number']}\n" + notes).strip()
+    notes = (
+        f"Inter-branch stock transfer "
+        f"{transfer.get('source_distributor_name', '')} ({transfer.get('source_location_name', '')}) "
+        f"→ {transfer.get('dest_distributor_name', '')} ({transfer.get('dest_location_name', '')}).\n"
+        + notes
+    ).strip()
+
+    payload = {
+        "customer_id": customer_id,
+        "challan_type": "branch_transfer",
+        "reference_number": transfer.get("transfer_number"),
+        "date": (transfer.get("transfer_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
+        "line_items": line_items,
+        "notes": notes,
+    }
+
+    result = await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=payload)
+    challan = result.get("deliverychallan") or result.get("delivery_challan") or {}
+    zoho_challan_id = challan.get("deliverychallan_id") or challan.get("delivery_challan_id")
+    zoho_challan_number = challan.get("deliverychallan_number") or challan.get("delivery_challan_number")
+    challan_url = _zoho_books_url(zoho_challan_id, await get_credentials(tenant_id) or {})
+    if challan_url:
+        # The /invoices URL helper above hardcodes "/invoices/{id}". Re-target
+        # to the deliverychallans path so "View in Zoho" lands on the right page.
+        challan_url = challan_url.replace("/invoices/", "/deliverychallans/")
+
+    now = datetime.now(timezone.utc).isoformat()
+    mapping_doc = {
+        "tenant_id": tenant_id,
+        "source_type": "stock_transfer",
+        "source_id": transfer.get("id"),
+        "source_number": transfer.get("transfer_number"),
+        "zoho_invoice_id": zoho_challan_id,          # reuse `invoice` columns for cross-doc audit
+        "zoho_invoice_number": zoho_challan_number,
+        "zoho_invoice_url": challan_url,
+        "zoho_doc_type": "delivery_challan",
+        "status": "synced",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.zoho_invoice_mappings.update_one(
+        {"tenant_id": tenant_id, "source_type": "stock_transfer", "source_id": transfer.get("id")},
+        {"$set": mapping_doc, "$setOnInsert": {"first_synced_at": now}},
+        upsert=True,
+    )
+    return mapping_doc
+
+
 # ---------- Background sync orchestrator (3 retries, exponential backoff) ----------
 
 async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id: str) -> None:

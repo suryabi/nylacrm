@@ -209,4 +209,14 @@ routes_router.include_router(
 from .driver_app import router as driver_app_router
 routes_router.include_router(driver_app_router, prefix="/driver", tags=["Driver App"])
 
+# Distributor → Stock Transfers (inter-warehouse stock movement)
+# Self-managed + same-GSTIN transfers produce a Zoho Delivery Challan; everything
+# else produces a Zoho Invoice. See routes/distributor_stock_transfers.py.
+from .distributor_stock_transfers import router as distributor_stock_transfers_router
+routes_router.include_router(
+    distributor_stock_transfers_router,
+    prefix="/distributor/stock-transfers",
+    tags=["Distributor · Stock Transfers"],
+)
+
 __all__ = ['routes_router']

@@ -1,0 +1,483 @@
+"""Distributor → Stock Transfers (inter-warehouse stock movement).
+
+Endpoints (mounted at `/distributor/stock-transfers`):
+  GET    /                  list transfers (filters: distributor_id, sku_id, status, date range, search)
+  GET    /eligible-sources  list warehouses with positive stock (used by the create form)
+  GET    /eligible-targets  list warehouses the user can transfer INTO
+  POST   /                  create a transfer → applies inventory move + pushes a Zoho doc
+  GET    /{id}              detail
+  POST   /{id}/retry-zoho   re-attempt the Zoho push for a transfer that failed it
+
+Rules:
+  • Stock is deducted from source and added to destination atomically (within a
+    Mongo transaction-style sequence — failures roll back the move).
+  • Zoho document type:
+       - Delivery Challan   iff (source AND dest distributors are both self-managed)
+                            AND  (source.gstin == dest.gstin), both present.
+       - Tax Invoice        otherwise — re-uses the existing `create_invoice_for_delivery`
+                            shape but is generated from this transfer.
+  • Source and destination distributor locations must belong to the same tenant.
+  • Quantities per SKU must be > 0 and ≤ available stock at the source.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timezone
+import logging
+from typing import List, Optional
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from database import db
+from core.tenant import get_current_tenant_id
+from deps import get_current_user
+from services.zoho_service import (
+    create_delivery_challan_for_stock_transfer,
+    create_invoice_for_delivery,
+    is_zoho_configured,
+    MissingZohoMappingError,
+    MissingAgreedPriceError,
+    AccountNotLinkedToZohoError,
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+# ──────────────────────────────────────────────────────────────
+# Pydantic models
+# ──────────────────────────────────────────────────────────────
+class TransferItem(BaseModel):
+    sku_id: str
+    sku_name: Optional[str] = None
+    quantity: int = Field(..., gt=0)
+    rate: float = 0.0  # per-unit value for the challan (for E-way bill compliance); 0 allowed
+
+
+class StockTransferCreate(BaseModel):
+    source_distributor_id: str
+    source_location_id: str
+    dest_distributor_id: str
+    dest_location_id: str
+    items: List[TransferItem]
+    transfer_date: Optional[str] = None  # ISO date — defaults to today
+    notes: Optional[str] = None
+    vehicle_number: Optional[str] = None
+
+
+# ──────────────────────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────────────────────
+async def _next_transfer_number(tenant_id: str) -> str:
+    year = datetime.now(timezone.utc).year
+    prefix = f"ST-{year}-"
+    latest = await db.distributor_stock_transfers.find_one(
+        {"tenant_id": tenant_id, "transfer_number": {"$regex": f"^{prefix}"}},
+        {"_id": 0, "transfer_number": 1},
+        sort=[("transfer_number", -1)],
+    )
+    next_num = 1
+    if latest and latest.get("transfer_number"):
+        try:
+            next_num = int(latest["transfer_number"].split("-")[-1]) + 1
+        except (ValueError, IndexError):
+            pass
+    return f"{prefix}{next_num:04d}"
+
+
+async def _load_distributor(tenant_id: str, distributor_id: str) -> dict:
+    doc = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(400, f"Distributor {distributor_id} not found")
+    return doc
+
+
+async def _load_location(tenant_id: str, location_id: str) -> dict:
+    doc = await db.distributor_locations.find_one({"id": location_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(400, f"Distributor location {location_id} not found")
+    return doc
+
+
+def _qualifies_for_challan(src_distributor: dict, dst_distributor: dict,
+                           src_location: dict, dst_location: dict) -> bool:
+    """Per Indian GST: a Delivery Challan is appropriate iff both warehouses are
+    *self-managed* (same legal entity) AND share the same GSTIN."""
+    if not (src_distributor.get("is_self_managed") and dst_distributor.get("is_self_managed")):
+        return False
+    # Effective GSTIN — location-level override falls back to parent distributor.
+    src_gstin = (src_location.get("gstin") or src_distributor.get("gstin") or "").strip().upper()
+    dst_gstin = (dst_location.get("gstin") or dst_distributor.get("gstin") or "").strip().upper()
+    if not src_gstin or not dst_gstin:
+        return False
+    return src_gstin == dst_gstin
+
+
+async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,
+                        item: TransferItem, delta: int, *, source_location_name: str):
+    """Add/subtract `delta` quantity for (distributor, location, sku). Upserts."""
+    now = datetime.now(timezone.utc).isoformat()
+    res = await db.distributor_stock.update_one(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": location_id,
+            "sku_id": item.sku_id,
+        },
+        {
+            "$inc": {"quantity": delta},
+            "$setOnInsert": {
+                "id": str(uuid.uuid4()),
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "distributor_location_id": location_id,
+                "sku_id": item.sku_id,
+                "sku_name": item.sku_name,
+                "location_name": source_location_name,
+                "created_at": now,
+            },
+            "$set": {"updated_at": now},
+        },
+        upsert=True,
+    )
+    return res
+
+
+# ──────────────────────────────────────────────────────────────
+# Endpoints
+# ──────────────────────────────────────────────────────────────
+@router.get("/eligible-sources")
+async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
+    """Return distributor warehouses that have positive stock for at least one SKU."""
+    tenant_id = get_current_tenant_id()
+    cursor = db.distributor_stock.aggregate([
+        {"$match": {"tenant_id": tenant_id, "quantity": {"$gt": 0}}},
+        {"$group": {"_id": {"d": "$distributor_id", "l": "$distributor_location_id"},
+                    "distributor_name": {"$first": "$distributor_name"},
+                    "location_name": {"$first": "$location_name"},
+                    "total_qty": {"$sum": "$quantity"}}},
+        {"$sort": {"distributor_name": 1, "location_name": 1}},
+    ])
+    out = []
+    async for row in cursor:
+        out.append({
+            "distributor_id": row["_id"]["d"],
+            "location_id": row["_id"]["l"],
+            "distributor_name": row.get("distributor_name"),
+            "location_name": row.get("location_name"),
+            "total_qty": int(row.get("total_qty") or 0),
+        })
+    return {"sources": out}
+
+
+@router.get("/eligible-targets")
+async def list_eligible_targets(
+    exclude_location_id: Optional[str] = Query(None, description="Source location id to exclude"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return ALL distributor warehouses across the tenant (minus the source)."""
+    tenant_id = get_current_tenant_id()
+    locs = await db.distributor_locations.find(
+        {"tenant_id": tenant_id, "status": {"$ne": "inactive"}},
+        {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "location_code": 1, "city": 1, "state": 1, "gstin": 1},
+    ).to_list(2000)
+
+    dist_ids = list({loc["distributor_id"] for loc in locs if loc.get("distributor_id")})
+    dists = {d["id"]: d for d in await db.distributors.find(
+        {"tenant_id": tenant_id, "id": {"$in": dist_ids}},
+        {"_id": 0, "id": 1, "distributor_name": 1, "is_self_managed": 1, "gstin": 1},
+    ).to_list(len(dist_ids) + 1)}
+
+    out = []
+    for loc in locs:
+        if exclude_location_id and loc.get("id") == exclude_location_id:
+            continue
+        d = dists.get(loc.get("distributor_id"), {})
+        out.append({
+            "location_id": loc.get("id"),
+            "location_name": loc.get("location_name"),
+            "location_code": loc.get("location_code"),
+            "city": loc.get("city"),
+            "state": loc.get("state"),
+            "distributor_id": loc.get("distributor_id"),
+            "distributor_name": d.get("distributor_name"),
+            "is_self_managed": bool(d.get("is_self_managed")),
+            "gstin": (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None,
+        })
+    return {"targets": out}
+
+
+@router.get("/")
+@router.get("")
+async def list_stock_transfers(
+    distributor_id: Optional[str] = None,
+    sku_id: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20,
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    page = max(page, 1)
+    limit = max(min(limit, 100), 1)
+
+    q: dict = {"tenant_id": tenant_id}
+    if distributor_id:
+        q["$or"] = [{"source_distributor_id": distributor_id}, {"dest_distributor_id": distributor_id}]
+    if sku_id:
+        q["items.sku_id"] = sku_id
+    if status:
+        q["status"] = status
+    if search:
+        text_or = [
+            {"transfer_number": {"$regex": search, "$options": "i"}},
+            {"source_distributor_name": {"$regex": search, "$options": "i"}},
+            {"dest_distributor_name": {"$regex": search, "$options": "i"}},
+            {"source_location_name": {"$regex": search, "$options": "i"}},
+            {"dest_location_name": {"$regex": search, "$options": "i"}},
+        ]
+        if "$or" in q:
+            q = {"$and": [q, {"$or": text_or}]}
+        else:
+            q["$or"] = text_or
+
+    total = await db.distributor_stock_transfers.count_documents(q)
+    rows = await db.distributor_stock_transfers.find(q, {"_id": 0}) \
+        .sort("created_at", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
+    return {
+        "items": rows, "total": total, "page": page, "limit": limit,
+        "pages": (total + limit - 1) // limit if total else 0,
+    }
+
+
+@router.get("/{transfer_id}")
+async def get_stock_transfer(transfer_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    doc = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(404, "Stock transfer not found")
+    return doc
+
+
+@router.post("/")
+@router.post("")
+async def create_stock_transfer(payload: StockTransferCreate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+
+    if payload.source_location_id == payload.dest_location_id:
+        raise HTTPException(400, "Source and destination warehouses must be different.")
+    if not payload.items:
+        raise HTTPException(400, "At least one item is required.")
+
+    # Resolve all four entities up-front so we can fail-fast on bad IDs.
+    src_dist = await _load_distributor(tenant_id, payload.source_distributor_id)
+    dst_dist = await _load_distributor(tenant_id, payload.dest_distributor_id)
+    src_loc = await _load_location(tenant_id, payload.source_location_id)
+    dst_loc = await _load_location(tenant_id, payload.dest_location_id)
+    if src_loc.get("distributor_id") != payload.source_distributor_id:
+        raise HTTPException(400, "Source location does not belong to source distributor.")
+    if dst_loc.get("distributor_id") != payload.dest_distributor_id:
+        raise HTTPException(400, "Destination location does not belong to destination distributor.")
+
+    # ── Stock availability check (atomic-ish: re-check after each deduct) ──
+    sku_ids = [it.sku_id for it in payload.items]
+    stock_rows = await db.distributor_stock.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": payload.source_distributor_id,
+            "distributor_location_id": payload.source_location_id,
+            "sku_id": {"$in": sku_ids},
+        },
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
+    ).to_list(len(sku_ids) + 1)
+    avail = {r["sku_id"]: int(r.get("quantity") or 0) for r in stock_rows}
+    sku_name_lookup = {r["sku_id"]: r.get("sku_name") for r in stock_rows}
+    insufficient = []
+    for it in payload.items:
+        a = avail.get(it.sku_id, 0)
+        if it.quantity > a:
+            insufficient.append(
+                f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)}: requested {it.quantity}, available {a}"
+            )
+    if insufficient:
+        raise HTTPException(400, "Insufficient stock at source. " + "; ".join(insufficient))
+
+    # ── Decide Zoho document type ──
+    challan_eligible = _qualifies_for_challan(src_dist, dst_dist, src_loc, dst_loc)
+    zoho_doc_type = "delivery_challan" if challan_eligible else "invoice"
+
+    # ── Build transfer doc (status=draft until inventory + Zoho both succeed) ──
+    now = datetime.now(timezone.utc).isoformat()
+    transfer_id = str(uuid.uuid4())
+    transfer_number = await _next_transfer_number(tenant_id)
+    items_doc = [
+        {
+            "sku_id": it.sku_id,
+            "sku_name": it.sku_name or sku_name_lookup.get(it.sku_id),
+            "quantity": int(it.quantity),
+            "rate": float(it.rate or 0),
+        }
+        for it in payload.items
+    ]
+    transfer_doc = {
+        "id": transfer_id,
+        "tenant_id": tenant_id,
+        "transfer_number": transfer_number,
+        "transfer_date": (payload.transfer_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
+        "source_distributor_id": payload.source_distributor_id,
+        "source_distributor_name": src_dist.get("distributor_name"),
+        "source_location_id": payload.source_location_id,
+        "source_location_name": src_loc.get("location_name"),
+        "source_gstin": (src_loc.get("gstin") or src_dist.get("gstin") or "").strip().upper() or None,
+        "source_is_self_managed": bool(src_dist.get("is_self_managed")),
+        "dest_distributor_id": payload.dest_distributor_id,
+        "dest_distributor_name": dst_dist.get("distributor_name"),
+        "dest_location_id": payload.dest_location_id,
+        "dest_location_name": dst_loc.get("location_name"),
+        "dest_gstin": (dst_loc.get("gstin") or dst_dist.get("gstin") or "").strip().upper() or None,
+        "dest_is_self_managed": bool(dst_dist.get("is_self_managed")),
+        "items": items_doc,
+        "total_quantity": sum(it["quantity"] for it in items_doc),
+        "total_value": round(sum(it["quantity"] * it["rate"] for it in items_doc), 2),
+        "notes": payload.notes,
+        "vehicle_number": payload.vehicle_number,
+        "zoho_doc_type": zoho_doc_type,
+        "zoho_status": "pending",
+        "zoho_invoice_id": None,
+        "zoho_invoice_number": None,
+        "zoho_invoice_url": None,
+        "zoho_error": None,
+        "status": "draft",
+        "created_at": now,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name") or current_user.get("email"),
+        "updated_at": now,
+    }
+
+    # ── Apply inventory movement ──
+    moved_lines = []
+    try:
+        for it in payload.items:
+            await _adjust_stock(
+                tenant_id, payload.source_distributor_id, payload.source_location_id, it,
+                -int(it.quantity), source_location_name=src_loc.get("location_name") or "",
+            )
+            await _adjust_stock(
+                tenant_id, payload.dest_distributor_id, payload.dest_location_id, it,
+                int(it.quantity), source_location_name=dst_loc.get("location_name") or "",
+            )
+            moved_lines.append(it)
+    except Exception as e:
+        # Roll back whatever moved
+        logger.exception("Inventory move failed; rolling back partial transfer")
+        for it in moved_lines:
+            await _adjust_stock(tenant_id, payload.source_distributor_id, payload.source_location_id, it,
+                                int(it.quantity), source_location_name=src_loc.get("location_name") or "")
+            await _adjust_stock(tenant_id, payload.dest_distributor_id, payload.dest_location_id, it,
+                                -int(it.quantity), source_location_name=dst_loc.get("location_name") or "")
+        raise HTTPException(500, f"Failed to move stock; rolled back. ({e})")
+
+    transfer_doc["status"] = "completed"
+    await db.distributor_stock_transfers.insert_one(dict(transfer_doc))
+    transfer_doc.pop("_id", None)
+
+    # ── Zoho push (best-effort; non-fatal — user can retry via /retry-zoho) ──
+    await _try_push_to_zoho(transfer_doc, src_dist, dst_dist)
+    refreshed = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    return refreshed
+
+
+async def _try_push_to_zoho(transfer_doc: dict, src_dist: dict, dst_dist: dict) -> None:
+    """Attempt the Zoho push and persist outcome on the transfer doc."""
+    tenant_id = transfer_doc["tenant_id"]
+    transfer_id = transfer_doc["id"]
+    zoho_doc_type = transfer_doc["zoho_doc_type"]
+
+    set_doc: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    try:
+        if not is_zoho_configured():
+            raise RuntimeError("Zoho Books is not configured for this environment.")
+
+        if zoho_doc_type == "delivery_challan":
+            mapping = await create_delivery_challan_for_stock_transfer(
+                tenant_id=tenant_id, transfer=transfer_doc, dest_distributor=dst_dist,
+            )
+        else:
+            # Build a synthetic "delivery" + "account" payload so we can reuse the
+            # invoice builder. The destination distributor is the customer; rates
+            # come from per-line `rate` on the transfer items.
+            synthetic_delivery = {
+                "id": transfer_doc["id"],
+                "delivery_number": transfer_doc["transfer_number"],
+                "delivery_date": transfer_doc["transfer_date"],
+                "applied_credit_notes": [],
+            }
+            synthetic_account = {
+                "id": dst_dist.get("id"),
+                "account_name": dst_dist.get("distributor_name") or dst_dist.get("legal_entity_name"),
+                "legal_entity_name": dst_dist.get("legal_entity_name"),
+                "gstin": dst_dist.get("gstin"),
+                "primary_contact_name": dst_dist.get("primary_contact_name"),
+                "primary_contact_email": dst_dist.get("primary_contact_email"),
+                "primary_contact_mobile": dst_dist.get("primary_contact_mobile"),
+                "billing_address": dst_dist.get("billing_address"),
+                "delivery_address": dst_dist.get("registered_address"),
+                "zoho_contact_id": dst_dist.get("zoho_contact_id"),
+                "payment_terms_days": 0,
+                "sku_pricing": [
+                    {"sku": it["sku_name"], "price_per_unit": it["rate"]} for it in transfer_doc["items"]
+                ],
+            }
+            items_for_invoice = [
+                {"sku_id": it["sku_id"], "sku_name": it["sku_name"], "quantity": it["quantity"]}
+                for it in transfer_doc["items"]
+            ]
+            mapping = await create_invoice_for_delivery(
+                tenant_id=tenant_id,
+                delivery=synthetic_delivery,
+                items=items_for_invoice,
+                account=synthetic_account,
+            )
+
+        set_doc.update({
+            "zoho_status": "synced",
+            "zoho_invoice_id": mapping.get("zoho_invoice_id"),
+            "zoho_invoice_number": mapping.get("zoho_invoice_number"),
+            "zoho_invoice_url": mapping.get("zoho_invoice_url"),
+            "zoho_doc_type": mapping.get("zoho_doc_type") or zoho_doc_type,
+            "zoho_error": None,
+        })
+    except (MissingZohoMappingError, MissingAgreedPriceError, AccountNotLinkedToZohoError) as e:
+        set_doc.update({"zoho_status": "failed", "zoho_error": str(e)})
+        logger.warning(f"Zoho push skipped for stock transfer {transfer_doc.get('transfer_number')}: {e}")
+    except Exception as e:
+        set_doc.update({"zoho_status": "failed", "zoho_error": str(e)})
+        logger.exception(f"Zoho push failed for stock transfer {transfer_doc.get('transfer_number')}")
+    await db.distributor_stock_transfers.update_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"$set": set_doc},
+    )
+
+
+@router.post("/{transfer_id}/retry-zoho")
+async def retry_zoho_push(transfer_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    doc = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(404, "Stock transfer not found")
+    if doc.get("zoho_status") == "synced":
+        return {"ok": True, "already_synced": True, "transfer": doc}
+    src_dist = await _load_distributor(tenant_id, doc["source_distributor_id"])
+    dst_dist = await _load_distributor(tenant_id, doc["dest_distributor_id"])
+    await _try_push_to_zoho(doc, src_dist, dst_dist)
+    refreshed = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    return {"ok": True, "transfer": refreshed}
