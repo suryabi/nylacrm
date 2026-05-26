@@ -687,6 +687,21 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     if dst_loc.get("distributor_id") != payload.dest_distributor_id:
         raise HTTPException(400, "Destination location does not belong to destination distributor.")
 
+    # ── Block third-party (different PAN) transfers EARLY — they must go via Stock In ──
+    # Stock Transfer is for internal logistics only (same legal entity OR strictly
+    # no-margin moves). Real partner sales with margin must be raised as a Stock In
+    # primary shipment so distributor commission / settlement is tracked correctly.
+    src_pan = _extract_pan(src_loc.get("gstin") or src_dist.get("gstin"))
+    dst_pan = _extract_pan(dst_loc.get("gstin") or dst_dist.get("gstin"))
+    if src_pan and dst_pan and src_pan != dst_pan:
+        raise HTTPException(
+            400,
+            f"Stock Transfer is for internal logistics only — source PAN ({src_pan}) "
+            f"differs from destination PAN ({dst_pan}). This is a sale to a third-party "
+            "distributor: raise it via Distributors → Stock In so commission / settlement "
+            "and the contracted margin are applied correctly.",
+        )
+
     # ── Stock availability check (in raw units; storage is bottles-level) ──
     # The source warehouse may be either a regular distributor warehouse
     # (`distributor_stock`) or a factory warehouse (`factory_warehouse_stock`).
@@ -706,21 +721,6 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
             )
     if insufficient:
         raise HTTPException(400, "Insufficient stock at source. " + "; ".join(insufficient))
-
-    # ── Block third-party (different PAN) transfers — they must go via Stock In ──
-    # Stock Transfer is for internal logistics only (same legal entity OR strictly
-    # no-margin moves). Real partner sales with margin must be raised as a Stock In
-    # primary shipment so distributor commission / settlement is tracked correctly.
-    src_pan = _extract_pan(src_loc.get("gstin") or src_dist.get("gstin"))
-    dst_pan = _extract_pan(dst_loc.get("gstin") or dst_dist.get("gstin"))
-    if src_pan and dst_pan and src_pan != dst_pan:
-        raise HTTPException(
-            400,
-            f"Stock Transfer is for internal logistics only — source PAN ({src_pan}) "
-            f"differs from destination PAN ({dst_pan}). This is a sale to a third-party "
-            "distributor: raise it via Distributors → Stock In so commission / settlement "
-            "and the contracted margin are applied correctly.",
-        )
 
     # ── Decide Zoho document type ──
     challan_eligible = _qualifies_for_challan(src_dist, dst_dist, src_loc, dst_loc)

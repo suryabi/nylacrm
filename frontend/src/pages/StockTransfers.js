@@ -403,7 +403,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
                           ) : it.rate_status === 'missing' ? (
                             <span className="text-[10px]">No commercial — set up first</span>
                           ) : (
-                            <span className="text-[10px] text-slate-400">Pick destination + SKU</span>
+                            <span className="text-[10px] text-slate-400">Pick a SKU</span>
                           )}
                         </div>
                         {it.rate_status === 'missing' && it.rate_reason && (
