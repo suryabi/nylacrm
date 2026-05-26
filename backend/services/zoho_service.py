@@ -1600,15 +1600,20 @@ async def create_delivery_challan_for_stock_transfer(
     })
 
     # Build line items. Stock transfers carry per-line rates that the user
-    # entered (for E-way bill compliance). Zero rate is allowed.
+    # entered (for E-way bill compliance). Quantity is in PACKAGES (crates / cartons),
+    # NOT raw units. The packaging_type_name is appended to the line name so the
+    # challan is unambiguous (e.g. "Nyla 600ml · Crate - 12").
     line_items: list[dict] = []
     for it in transfer.get("items") or []:
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
+        base_name = (it.get("sku_name") or "").strip() or "Item"
+        pkg = (it.get("packaging_type_name") or "").strip()
+        display_name = f"{base_name} · {pkg}" if pkg else base_name
         line_items.append({
             "item_id": zoho_item_id,
-            "name": (it.get("sku_name") or "").strip() or "Item",
-            "quantity": float(it.get("quantity", 0) or 0),
-            "rate": float(it.get("rate", 0) or 0),
+            "name": display_name,
+            "quantity": float(it.get("quantity", 0) or 0),  # packages
+            "rate": float(it.get("rate", 0) or 0),          # per-package rate
         })
 
     if not line_items:

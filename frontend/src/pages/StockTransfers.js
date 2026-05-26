@@ -57,9 +57,12 @@ function NewTransferDialog({ open, onClose, onCreated }) {
     notes: '',
     vehicle_number: '',
   });
-  const [items, setItems] = useState([{ sku_id: '', quantity: '', rate: '' }]);
+  // Each item: { sku_id, packaging_type_id, packaging_type_name, units_per_package, quantity, rate }
+  const [items, setItems] = useState([{
+    sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '', rate: '',
+  }]);
   const [saving, setSaving] = useState(false);
-  const [stockBySku, setStockBySku] = useState({}); // sku_id -> available_qty (at chosen source)
+  const [stockBySku, setStockBySku] = useState({}); // sku_id -> available units (at chosen source)
 
   useEffect(() => {
     if (!open) return;
@@ -70,7 +73,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
       notes: '',
       vehicle_number: '',
     });
-    setItems([{ sku_id: '', quantity: '', rate: '' }]);
+    setItems([{ sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '', rate: '' }]);
     setStockBySku({});
     (async () => {
       try {
@@ -101,15 +104,29 @@ function NewTransferDialog({ open, onClose, onCreated }) {
           });
           setStockBySku(map);
         }
-      } catch {
-        // no-op
-      }
+      } catch { /* no-op */ }
     })();
   }, [form.source_location_id, sources]);
 
-  const addItemRow = () => setItems((p) => [...p, { sku_id: '', quantity: '', rate: '' }]);
+  const addItemRow = () => setItems((p) => [
+    ...p,
+    { sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '', rate: '' },
+  ]);
   const updateItem = (i, patch) => setItems((p) => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   const removeItem = (i) => setItems((p) => p.filter((_, idx) => idx !== i));
+
+  // When SKU changes, default to that SKU's default stock_out packaging.
+  const setItemSku = (i, skuId) => {
+    const sku = skus.find((s) => s.id === skuId);
+    const stockOutPkgs = sku?.packaging_config?.stock_out || [];
+    const defaultPkg = stockOutPkgs.find((p) => p.is_default) || stockOutPkgs[0];
+    updateItem(i, {
+      sku_id: skuId,
+      packaging_type_id: defaultPkg?.packaging_type_id || '',
+      packaging_type_name: defaultPkg?.packaging_type_name || '',
+      units_per_package: defaultPkg?.units_per_package || 0,
+    });
+  };
 
   const sourceObj = useMemo(() => sources.find((s) => s.location_id === form.source_location_id), [sources, form.source_location_id]);
   const targetObj = useMemo(() => targets.find((t) => t.location_id === form.dest_location_id), [targets, form.dest_location_id]);
@@ -118,19 +135,16 @@ function NewTransferDialog({ open, onClose, onCreated }) {
     if (!sourceObj || !targetObj) return null;
     const srcSelf = sourceObj.is_self_managed;
     const dstSelf = targetObj.is_self_managed;
-    // Indian GST: same legal entity = same PAN (positions 3–12 of GSTIN).
-    // A company holding registrations in multiple states will have different
-    // GSTINs (state-code prefix differs) but identical PAN.
     const samePan = sourceObj.pan && targetObj.pan && sourceObj.pan === targetObj.pan;
     if (srcSelf && dstSelf && samePan) return 'delivery_challan';
     return 'invoice';
   }, [sourceObj, targetObj]);
 
   const canSubmit = form.source_location_id && form.dest_location_id && items.length > 0
-    && items.every((it) => it.sku_id && Number(it.quantity) > 0);
+    && items.every((it) => it.sku_id && it.packaging_type_name && it.units_per_package > 0 && Number(it.quantity) > 0);
 
   const onSubmit = async () => {
-    if (!canSubmit) { toast.error('Fill source, destination and at least one SKU + quantity'); return; }
+    if (!canSubmit) { toast.error('Fill source, destination, SKU, packaging and quantity'); return; }
     if (!sourceObj || !targetObj) { toast.error('Pick valid source and destination'); return; }
     setSaving(true);
     try {
@@ -147,6 +161,9 @@ function NewTransferDialog({ open, onClose, onCreated }) {
           return {
             sku_id: it.sku_id,
             sku_name: sku?.sku_name || sku?.name || null,
+            packaging_type_id: it.packaging_type_id || null,
+            packaging_type_name: it.packaging_type_name,
+            units_per_package: parseInt(it.units_per_package),
             quantity: parseInt(it.quantity),
             rate: parseFloat(it.rate || 0),
           };
@@ -230,44 +247,96 @@ function NewTransferDialog({ open, onClose, onCreated }) {
               <Label>Items *</Label>
               <Button size="sm" variant="outline" onClick={addItemRow} data-testid="add-item-row-btn"><Plus className="h-3.5 w-3.5 mr-1" />Add Item</Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {items.map((it, i) => {
-                const avail = stockBySku[it.sku_id];
-                const over = avail !== undefined && Number(it.quantity) > avail;
+                const sku = skus.find((s) => s.id === it.sku_id);
+                const stockOutPkgs = sku?.packaging_config?.stock_out || [];
+                const availUnits = stockBySku[it.sku_id] ?? 0;
+                const availPackages = it.units_per_package > 0 ? Math.floor(availUnits / it.units_per_package) : 0;
+                const over = it.units_per_package > 0 && Number(it.quantity) > availPackages;
+                const totalUnits = (parseInt(it.quantity) || 0) * (parseInt(it.units_per_package) || 0);
                 return (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center" data-testid={`item-row-${i}`}>
-                    <div className="col-span-6">
-                      <Select value={it.sku_id} onValueChange={(v) => updateItem(i, { sku_id: v })}>
-                        <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Pick SKU" /></SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
-                          {skus.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.sku_name || s.name}
-                              {stockBySku[s.id] !== undefined && ` · avail ${stockBySku[s.id]}`}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2">
-                      <Input type="number" min="1" placeholder="Qty" value={it.quantity}
-                        onChange={(e) => updateItem(i, { quantity: e.target.value })}
-                        className={`h-9 text-xs ${over ? 'border-red-300 text-red-700' : ''}`}
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <Input type="number" min="0" step="0.01" placeholder="Rate / unit"
-                        value={it.rate}
-                        onChange={(e) => updateItem(i, { rate: e.target.value })}
-                        className="h-9 text-xs"
-                      />
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-600" onClick={() => removeItem(i)}>
+                  <div key={i} className="border rounded-lg p-3 bg-white" data-testid={`item-row-${i}`}>
+                    {/* Row 1: SKU + Packaging + Remove */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <Select value={it.sku_id} onValueChange={(v) => setItemSku(i, v)}>
+                          <SelectTrigger className="h-9 text-xs" data-testid={`item-sku-${i}`}><SelectValue placeholder="Pick SKU" /></SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {skus.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>{s.sku_name || s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-44">
+                        {stockOutPkgs.length > 0 ? (
+                          <select
+                            className="w-full h-9 px-2 border rounded-md text-xs bg-white"
+                            value={it.packaging_type_id || ''}
+                            onChange={(e) => {
+                              const pkg = stockOutPkgs.find((p) => p.packaging_type_id === e.target.value);
+                              if (pkg) updateItem(i, {
+                                packaging_type_id: pkg.packaging_type_id,
+                                packaging_type_name: pkg.packaging_type_name,
+                                units_per_package: pkg.units_per_package,
+                              });
+                            }}
+                            data-testid={`item-pkg-${i}`}
+                          >
+                            {stockOutPkgs.map((pkg) => (
+                              <option key={pkg.packaging_type_id} value={pkg.packaging_type_id}>{pkg.packaging_type_name}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-xs text-slate-400">— pick SKU first —</span>
+                        )}
+                      </div>
+                      <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-red-600" onClick={() => removeItem(i)}>
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
-                    {over && <div className="col-span-12 text-[10px] text-red-600 -mt-1">Insufficient stock — only {avail} available</div>}
+                    {/* Row 2: Avail | Qty | Rate | Subtotal */}
+                    <div className="flex items-start gap-3 mt-3">
+                      <div className="w-20 text-center">
+                        <Label className="text-[10px] text-slate-500">Avail</Label>
+                        {it.sku_id ? (
+                          <>
+                            <p className={`text-base font-bold tabular-nums leading-tight ${availPackages > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{availPackages}</p>
+                            <p className="text-[10px] text-slate-500 leading-tight">{it.packaging_type_name || 'pkg'}</p>
+                          </>
+                        ) : (
+                          <p className="text-base text-slate-300 mt-1">—</p>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <Label className="text-[10px] text-slate-500">Quantity (in {it.packaging_type_name || 'packages'}) *</Label>
+                        <Input type="number" min="1" placeholder="0" value={it.quantity}
+                          onChange={(e) => updateItem(i, { quantity: e.target.value })}
+                          className={`h-9 text-sm ${over ? 'border-red-300 text-red-700' : ''}`}
+                          data-testid={`item-qty-${i}`}
+                        />
+                        {over && <div className="text-[10px] text-red-600 mt-1">Only {availPackages} {it.packaging_type_name} available</div>}
+                        {totalUnits > 0 && !over && (
+                          <div className="text-[10px] text-slate-400 mt-1">= {totalUnits} bottles</div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <Label className="text-[10px] text-slate-500">Rate per {it.packaging_type_name || 'package'}</Label>
+                        <Input type="number" min="0" step="0.01" placeholder="0.00"
+                          value={it.rate}
+                          onChange={(e) => updateItem(i, { rate: e.target.value })}
+                          className="h-9 text-sm"
+                          data-testid={`item-rate-${i}`}
+                        />
+                      </div>
+                      <div className="w-28 text-right">
+                        <Label className="text-[10px] text-slate-500">Line Total</Label>
+                        <p className="h-9 flex items-center justify-end text-sm font-semibold tabular-nums text-slate-700">
+                          ₹ {((parseInt(it.quantity) || 0) * (parseFloat(it.rate) || 0)).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -390,8 +459,14 @@ export default function StockTransfers() {
                       <div className="ml-5 text-slate-500">{t.dest_location_name}{t.dest_gstin && <span className="ml-2 text-[10px] font-mono text-emerald-700">{t.dest_gstin}</span>}</div>
                     </td>
                     <td className="p-3 text-xs">
-                      <div className="flex items-center gap-1"><Package className="h-3.5 w-3.5 text-slate-400" /><b>{t.total_quantity}</b> units · {t.items?.length || 0} SKU{(t.items?.length || 0) !== 1 ? 's' : ''}</div>
-                      {t.vehicle_number && <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-1"><Truck className="h-3 w-3" /> {t.vehicle_number}</div>}
+                      <div className="flex items-center gap-1"><Package className="h-3.5 w-3.5 text-slate-400" /><b>{t.total_packages ?? t.total_quantity ?? 0}</b> packages · {t.items?.length || 0} SKU{(t.items?.length || 0) !== 1 ? 's' : ''}</div>
+                      <div className="text-[10px] text-slate-500 ml-5">
+                        {(t.items || []).slice(0, 2).map((it, idx) => (
+                          <div key={idx}>{it.quantity} {it.packaging_type_name || 'units'} · {it.sku_name}</div>
+                        ))}
+                        {(t.items || []).length > 2 && <div>+{t.items.length - 2} more…</div>}
+                      </div>
+                      {t.vehicle_number && <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-1 ml-5"><Truck className="h-3 w-3" /> {t.vehicle_number}</div>}
                     </td>
                     <td className="p-3"><DocBadge type={t.zoho_doc_type} /></td>
                     <td className="p-3">

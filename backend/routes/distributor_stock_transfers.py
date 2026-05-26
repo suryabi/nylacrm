@@ -51,8 +51,13 @@ router = APIRouter()
 class TransferItem(BaseModel):
     sku_id: str
     sku_name: Optional[str] = None
-    quantity: int = Field(..., gt=0)
-    rate: float = 0.0  # per-unit value for the challan (for E-way bill compliance); 0 allowed
+    # Packaging-type captured from the SKU's packaging_config.stock_out catalog.
+    # The user enters quantity in WHOLE PACKAGES (e.g. 5 crates), not units/bottles.
+    packaging_type_id: Optional[str] = None
+    packaging_type_name: str  # "Crate - 12", "Carton - 6", etc.
+    units_per_package: int = Field(..., gt=0)
+    quantity: int = Field(..., gt=0, description="Number of packages (crates / cartons) to transfer")
+    rate: float = 0.0  # per-package rate (for E-way bill compliance); 0 allowed
 
 
 class StockTransferCreate(BaseModel):
@@ -133,8 +138,9 @@ def _qualifies_for_challan(src_distributor: dict, dst_distributor: dict,
 
 
 async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,
-                        item: TransferItem, delta: int, *, source_location_name: str):
-    """Add/subtract `delta` quantity for (distributor, location, sku). Upserts."""
+                        item: TransferItem, delta_units: int, *,
+                        distributor_name: str, location_name: str):
+    """Add/subtract `delta_units` (raw units / bottles) for (distributor, location, sku)."""
     now = datetime.now(timezone.utc).isoformat()
     res = await db.distributor_stock.update_one(
         {
@@ -144,7 +150,7 @@ async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,
             "sku_id": item.sku_id,
         },
         {
-            "$inc": {"quantity": delta},
+            "$inc": {"quantity": delta_units},
             "$setOnInsert": {
                 "id": str(uuid.uuid4()),
                 "tenant_id": tenant_id,
@@ -152,7 +158,8 @@ async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,
                 "distributor_location_id": location_id,
                 "sku_id": item.sku_id,
                 "sku_name": item.sku_name,
-                "location_name": source_location_name,
+                "distributor_name": distributor_name,
+                "location_name": location_name,
                 "created_at": now,
             },
             "$set": {"updated_at": now},
@@ -321,7 +328,7 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     if dst_loc.get("distributor_id") != payload.dest_distributor_id:
         raise HTTPException(400, "Destination location does not belong to destination distributor.")
 
-    # ── Stock availability check (atomic-ish: re-check after each deduct) ──
+    # ── Stock availability check (in raw units; storage is bottles-level) ──
     sku_ids = [it.sku_id for it in payload.items]
     stock_rows = await db.distributor_stock.find(
         {
@@ -336,10 +343,13 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     sku_name_lookup = {r["sku_id"]: r.get("sku_name") for r in stock_rows}
     insufficient = []
     for it in payload.items:
-        a = avail.get(it.sku_id, 0)
-        if it.quantity > a:
+        a_units = avail.get(it.sku_id, 0)
+        avail_pkgs = a_units // it.units_per_package if it.units_per_package > 0 else 0
+        if it.quantity > avail_pkgs:
             insufficient.append(
-                f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)}: requested {it.quantity}, available {a}"
+                f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)}: "
+                f"requested {it.quantity} {it.packaging_type_name}, "
+                f"available {avail_pkgs} {it.packaging_type_name}"
             )
     if insufficient:
         raise HTTPException(400, "Insufficient stock at source. " + "; ".join(insufficient))
@@ -352,15 +362,20 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
     transfer_number = await _next_transfer_number(tenant_id)
-    items_doc = [
-        {
+    items_doc = []
+    for it in payload.items:
+        quantity_units = int(it.quantity) * int(it.units_per_package)
+        items_doc.append({
             "sku_id": it.sku_id,
             "sku_name": it.sku_name or sku_name_lookup.get(it.sku_id),
-            "quantity": int(it.quantity),
-            "rate": float(it.rate or 0),
-        }
-        for it in payload.items
-    ]
+            "packaging_type_id": it.packaging_type_id,
+            "packaging_type_name": it.packaging_type_name,
+            "units_per_package": int(it.units_per_package),
+            "quantity": int(it.quantity),               # in packages (crates / cartons)
+            "quantity_units": quantity_units,           # bottles / raw units (for stock storage)
+            "rate": float(it.rate or 0),                # per-package rate
+            "line_total": round(int(it.quantity) * float(it.rate or 0), 2),
+        })
     transfer_doc = {
         "id": transfer_id,
         "tenant_id": tenant_id,
@@ -381,8 +396,9 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
         "dest_pan": _extract_pan(dst_loc.get("gstin") or dst_dist.get("gstin")) or None,
         "dest_is_self_managed": bool(dst_dist.get("is_self_managed")),
         "items": items_doc,
-        "total_quantity": sum(it["quantity"] for it in items_doc),
-        "total_value": round(sum(it["quantity"] * it["rate"] for it in items_doc), 2),
+        "total_packages": sum(it["quantity"] for it in items_doc),
+        "total_units": sum(it["quantity_units"] for it in items_doc),
+        "total_value": round(sum(it["line_total"] for it in items_doc), 2),
         "notes": payload.notes,
         "vehicle_number": payload.vehicle_number,
         "zoho_doc_type": zoho_doc_type,
@@ -398,27 +414,32 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
         "updated_at": now,
     }
 
-    # ── Apply inventory movement ──
+    # ── Apply inventory movement (units-level) ──
     moved_lines = []
+    src_name = src_dist.get("distributor_name") or ""
+    dst_name = dst_dist.get("distributor_name") or ""
+    src_loc_name = src_loc.get("location_name") or ""
+    dst_loc_name = dst_loc.get("location_name") or ""
     try:
         for it in payload.items:
+            units = int(it.quantity) * int(it.units_per_package)
             await _adjust_stock(
                 tenant_id, payload.source_distributor_id, payload.source_location_id, it,
-                -int(it.quantity), source_location_name=src_loc.get("location_name") or "",
+                -units, distributor_name=src_name, location_name=src_loc_name,
             )
             await _adjust_stock(
                 tenant_id, payload.dest_distributor_id, payload.dest_location_id, it,
-                int(it.quantity), source_location_name=dst_loc.get("location_name") or "",
+                units, distributor_name=dst_name, location_name=dst_loc_name,
             )
-            moved_lines.append(it)
+            moved_lines.append((it, units))
     except Exception as e:
         # Roll back whatever moved
         logger.exception("Inventory move failed; rolling back partial transfer")
-        for it in moved_lines:
+        for (it, units) in moved_lines:
             await _adjust_stock(tenant_id, payload.source_distributor_id, payload.source_location_id, it,
-                                int(it.quantity), source_location_name=src_loc.get("location_name") or "")
+                                units, distributor_name=src_name, location_name=src_loc_name)
             await _adjust_stock(tenant_id, payload.dest_distributor_id, payload.dest_location_id, it,
-                                -int(it.quantity), source_location_name=dst_loc.get("location_name") or "")
+                                -units, distributor_name=dst_name, location_name=dst_loc_name)
         raise HTTPException(500, f"Failed to move stock; rolled back. ({e})")
 
     transfer_doc["status"] = "completed"
@@ -474,8 +495,13 @@ async def _try_push_to_zoho(transfer_doc: dict, src_dist: dict, dst_dist: dict) 
                     {"sku": it["sku_name"], "price_per_unit": it["rate"]} for it in transfer_doc["items"]
                 ],
             }
+            # Pass package-level qty to Zoho so the invoice reads "5 Crate-12" not "60 bottles".
             items_for_invoice = [
-                {"sku_id": it["sku_id"], "sku_name": it["sku_name"], "quantity": it["quantity"]}
+                {
+                    "sku_id": it["sku_id"],
+                    "sku_name": f"{it['sku_name']} · {it.get('packaging_type_name', '')}".strip(' ·'),
+                    "quantity": it["quantity"],
+                }
                 for it in transfer_doc["items"]
             ]
             mapping = await create_invoice_for_delivery(
