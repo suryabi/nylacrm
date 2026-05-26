@@ -916,6 +916,71 @@ async def retry_zoho_push(transfer_id: str, current_user: dict = Depends(get_cur
     return {"ok": True, "transfer": refreshed}
 
 
+@router.delete("/{transfer_id}")
+async def delete_stock_transfer(
+    transfer_id: str,
+    reverse_inventory: bool = Query(True, description="Add stock back to source, deduct from dest. Default True."),
+    current_user: dict = Depends(get_current_user),
+):
+    """Hard-delete a Stock Transfer. Reverses the inventory move by default
+    (re-credits the source warehouse and re-debits the destination), then
+    removes the persisted transfer doc + its Zoho mapping. The Zoho document
+    itself (Invoice / Delivery Challan) is NOT deleted from Zoho — that must be
+    voided manually in Zoho Books.
+
+    Intended for admin cleanup of bad data.
+    """
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    doc = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(404, "Stock transfer not found")
+
+    # Reverse inventory if requested (default). For each item: add units back
+    # to source, deduct from destination.
+    if reverse_inventory:
+        src_loc = await _load_location(tenant_id, doc["source_location_id"])
+        dst_loc = await _load_location(tenant_id, doc["dest_location_id"])
+        src_dist = await _load_distributor(tenant_id, doc["source_distributor_id"])
+        dst_dist = await _load_distributor(tenant_id, doc["dest_distributor_id"])
+        for it in doc.get("items", []):
+            units = int(it.get("quantity_units") or (int(it.get("quantity", 0)) * int(it.get("units_per_package", 1))))
+            ti = TransferItem(
+                sku_id=it["sku_id"],
+                sku_name=it.get("sku_name"),
+                packaging_type_id=it.get("packaging_type_id"),
+                packaging_type_name=it.get("packaging_type_name") or "package",
+                units_per_package=int(it.get("units_per_package") or 1),
+                quantity=int(it.get("quantity") or 1),
+            )
+            await _adjust_stock_for_location(
+                tenant_id, src_loc, ti, units,
+                distributor_name=src_dist.get("distributor_name") or "",
+            )
+            await _adjust_stock_for_location(
+                tenant_id, dst_loc, ti, -units,
+                distributor_name=dst_dist.get("distributor_name") or "",
+            )
+
+    # Delete the transfer + its Zoho mapping audit row (the Zoho doc itself stays).
+    await db.distributor_stock_transfers.delete_one(
+        {"id": transfer_id, "tenant_id": tenant_id},
+    )
+    await db.zoho_invoice_mappings.delete_one(
+        {"tenant_id": tenant_id, "source_type": "stock_transfer", "source_id": transfer_id},
+    )
+    return {
+        "ok": True,
+        "transfer_id": transfer_id,
+        "transfer_number": doc.get("transfer_number"),
+        "reversed_inventory": reverse_inventory,
+        "zoho_doc_voided": False,  # Reminder: void the Zoho doc manually in Zoho Books.
+        "zoho_invoice_id": doc.get("zoho_invoice_id"),
+    }
+
+
 
 @router.get("/{transfer_id}/eway-bill")
 async def get_eway_bill_payload(transfer_id: str, current_user: dict = Depends(get_current_user)):
