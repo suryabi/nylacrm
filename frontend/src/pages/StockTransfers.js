@@ -116,14 +116,14 @@ function NewTransferDialog({ open, onClose, onCreated }) {
 
   const docPreview = useMemo(() => {
     if (!sourceObj || !targetObj) return null;
-    // Frontend can't reliably know `is_self_managed` on source without an extra fetch; approximate.
-    // Source is shown via eligible-sources which doesn't include the flag. We rely on backend decision.
-    const srcSelf = sourceObj.is_self_managed; // may be undefined → treat as unknown
+    const srcSelf = sourceObj.is_self_managed;
     const dstSelf = targetObj.is_self_managed;
-    const sameGstin = targetObj.gstin && (sourceObj.gstin === targetObj.gstin);
-    if (srcSelf === false || dstSelf === false || !sameGstin) return 'invoice';
-    if (srcSelf === undefined) return null;
-    return 'delivery_challan';
+    // Indian GST: same legal entity = same PAN (positions 3–12 of GSTIN).
+    // A company holding registrations in multiple states will have different
+    // GSTINs (state-code prefix differs) but identical PAN.
+    const samePan = sourceObj.pan && targetObj.pan && sourceObj.pan === targetObj.pan;
+    if (srcSelf && dstSelf && samePan) return 'delivery_challan';
+    return 'invoice';
   }, [sourceObj, targetObj]);
 
   const canSubmit = form.source_location_id && form.dest_location_id && items.length > 0
@@ -174,7 +174,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ArrowLeftRight className="h-5 w-5 text-emerald-600" /> New Stock Transfer</DialogTitle>
           <DialogDescription>
-            Move stock from one warehouse to another. If both are self-managed and share the same GSTIN, Zoho will record a <b>Delivery Challan</b>. Otherwise an Invoice is generated at the rates you enter.
+            Move stock from one warehouse to another. If both warehouses are self-managed and share the same <b>PAN</b> (same legal entity — even across states), Zoho will record a <b>Delivery Challan</b>. Otherwise an Invoice is generated at the rates you enter.
           </DialogDescription>
         </DialogHeader>
 
@@ -217,10 +217,10 @@ function NewTransferDialog({ open, onClose, onCreated }) {
             <div className={`text-xs px-3 py-2 rounded-md border flex items-center gap-2 ${docPreview === 'delivery_challan' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
               <FileText className="h-3.5 w-3.5" />
               {docPreview === 'delivery_challan'
-                ? <>Will create a <b>Delivery Challan</b> in Zoho (self-managed → self-managed, GSTIN matches).</>
-                : docPreview === 'invoice'
-                  ? <>Will create a <b>Tax Invoice</b> in Zoho (different GSTIN or not both self-managed).</>
-                  : <>Document type will be decided server-side after validating source flags.</>}
+                ? <>Will create a <b>Delivery Challan</b> in Zoho — both warehouses are self-managed and share the same PAN ({sourceObj.pan}).</>
+                : <>Will create a <b>Tax Invoice</b> in Zoho ({sourceObj.pan && targetObj.pan && sourceObj.pan !== targetObj.pan
+                    ? `different PAN: ${sourceObj.pan} vs ${targetObj.pan}`
+                    : (!sourceObj.is_self_managed || !targetObj.is_self_managed) ? 'one or both warehouses are not self-managed' : 'PAN missing — set GSTIN on both distributors'}).</>}
             </div>
           )}
 
@@ -339,7 +339,7 @@ export default function StockTransfers() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
             <ArrowLeftRight className="h-6 w-6 text-emerald-600" /> Stock Transfers
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Move stock between distributor warehouses. Self-managed → self-managed transfers (same GSTIN) generate a Zoho Delivery Challan; everything else generates an Invoice.</p>
+          <p className="text-sm text-slate-500 mt-1">Move stock between distributor warehouses. Self-managed → self-managed transfers <b>(same PAN — same legal entity, even across states)</b> generate a Zoho Delivery Challan; everything else generates an Invoice.</p>
         </div>
         <Button onClick={() => setShowNew(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-stock-transfer-btn">
           <Plus className="h-4 w-4 mr-2" /> New Stock Transfer

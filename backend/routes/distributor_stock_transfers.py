@@ -100,18 +100,36 @@ async def _load_location(tenant_id: str, location_id: str) -> dict:
     return doc
 
 
+def _extract_pan(gstin: Optional[str]) -> str:
+    """Return the 10-character PAN embedded in a GSTIN (positions 3-12).
+    Returns '' if the GSTIN is missing or shorter than 12 chars.
+
+    Indian GSTIN format: <2-digit state code><10-char PAN><1-char entity><'Z'><checksum>.
+    Two branches of the SAME legal entity registered in different states share
+    the same PAN but have different state-code prefixes — so PAN matching is
+    the correct proxy for "same legal entity".
+    """
+    s = (gstin or "").strip().upper()
+    return s[2:12] if len(s) >= 12 else ""
+
+
 def _qualifies_for_challan(src_distributor: dict, dst_distributor: dict,
                            src_location: dict, dst_location: dict) -> bool:
     """Per Indian GST: a Delivery Challan is appropriate iff both warehouses are
-    *self-managed* (same legal entity) AND share the same GSTIN."""
+    *self-managed* (same legal entity) AND share the same PAN.
+
+    A company may hold different GSTINs in different states (state code differs)
+    but the PAN portion of the GSTIN (positions 3-12) stays identical. So we
+    compare PANs — not full GSTINs — to catch inter-state branch transfers.
+    """
     if not (src_distributor.get("is_self_managed") and dst_distributor.get("is_self_managed")):
         return False
     # Effective GSTIN — location-level override falls back to parent distributor.
-    src_gstin = (src_location.get("gstin") or src_distributor.get("gstin") or "").strip().upper()
-    dst_gstin = (dst_location.get("gstin") or dst_distributor.get("gstin") or "").strip().upper()
-    if not src_gstin or not dst_gstin:
+    src_pan = _extract_pan(src_location.get("gstin") or src_distributor.get("gstin"))
+    dst_pan = _extract_pan(dst_location.get("gstin") or dst_distributor.get("gstin"))
+    if not src_pan or not dst_pan:
         return False
-    return src_gstin == dst_gstin
+    return src_pan == dst_pan
 
 
 async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,
@@ -160,13 +178,31 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
         {"$sort": {"distributor_name": 1, "location_name": 1}},
     ])
     out = []
-    async for row in cursor:
+    rows = [row async for row in cursor]
+    # Enrich with is_self_managed / gstin / pan from parent docs
+    dist_ids = list({r["_id"]["d"] for r in rows if r["_id"].get("d")})
+    loc_ids = list({r["_id"]["l"] for r in rows if r["_id"].get("l")})
+    dists = {d["id"]: d for d in await db.distributors.find(
+        {"tenant_id": tenant_id, "id": {"$in": dist_ids}},
+        {"_id": 0, "id": 1, "is_self_managed": 1, "gstin": 1},
+    ).to_list(len(dist_ids) + 1)}
+    locs = {loc["id"]: loc for loc in await db.distributor_locations.find(
+        {"tenant_id": tenant_id, "id": {"$in": loc_ids}},
+        {"_id": 0, "id": 1, "gstin": 1},
+    ).to_list(len(loc_ids) + 1)}
+    for row in rows:
+        d = dists.get(row["_id"]["d"], {})
+        loc = locs.get(row["_id"]["l"], {})
+        gstin = (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None
         out.append({
             "distributor_id": row["_id"]["d"],
             "location_id": row["_id"]["l"],
             "distributor_name": row.get("distributor_name"),
             "location_name": row.get("location_name"),
             "total_qty": int(row.get("total_qty") or 0),
+            "is_self_managed": bool(d.get("is_self_managed")),
+            "gstin": gstin,
+            "pan": _extract_pan(gstin) or None,
         })
     return {"sources": out}
 
@@ -194,6 +230,7 @@ async def list_eligible_targets(
         if exclude_location_id and loc.get("id") == exclude_location_id:
             continue
         d = dists.get(loc.get("distributor_id"), {})
+        gstin = (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None
         out.append({
             "location_id": loc.get("id"),
             "location_name": loc.get("location_name"),
@@ -203,7 +240,8 @@ async def list_eligible_targets(
             "distributor_id": loc.get("distributor_id"),
             "distributor_name": d.get("distributor_name"),
             "is_self_managed": bool(d.get("is_self_managed")),
-            "gstin": (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None,
+            "gstin": gstin,
+            "pan": _extract_pan(gstin) or None,
         })
     return {"targets": out}
 
@@ -333,12 +371,14 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
         "source_location_id": payload.source_location_id,
         "source_location_name": src_loc.get("location_name"),
         "source_gstin": (src_loc.get("gstin") or src_dist.get("gstin") or "").strip().upper() or None,
+        "source_pan": _extract_pan(src_loc.get("gstin") or src_dist.get("gstin")) or None,
         "source_is_self_managed": bool(src_dist.get("is_self_managed")),
         "dest_distributor_id": payload.dest_distributor_id,
         "dest_distributor_name": dst_dist.get("distributor_name"),
         "dest_location_id": payload.dest_location_id,
         "dest_location_name": dst_loc.get("location_name"),
         "dest_gstin": (dst_loc.get("gstin") or dst_dist.get("gstin") or "").strip().upper() or None,
+        "dest_pan": _extract_pan(dst_loc.get("gstin") or dst_dist.get("gstin")) or None,
         "dest_is_self_managed": bool(dst_dist.get("is_self_managed")),
         "items": items_doc,
         "total_quantity": sum(it["quantity"] for it in items_doc),
