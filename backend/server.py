@@ -1922,6 +1922,7 @@ class SKUCreate(BaseModel):
     category: str
     unit: str
     description: Optional[str] = None
+    hsn_code: Optional[str] = None  # 4-8 digit HSN code for GST returns + E-way Bill JSON.
     base_price: Optional[float] = None  # ₹ per bottle. Used for Stock Transfer Schedule-I invoicing & E-way Bill valuation.
     allow_custom_mrp: bool = False
     is_active: bool = True
@@ -1935,6 +1936,7 @@ class SKUUpdate(BaseModel):
     category: Optional[str] = None
     unit: Optional[str] = None
     description: Optional[str] = None
+    hsn_code: Optional[str] = None  # set to "" to clear effectively
     base_price: Optional[float] = None  # ₹ per bottle (no margin); set to 0 to clear effectively
     allow_custom_mrp: Optional[bool] = None
     is_active: Optional[bool] = None
@@ -1995,6 +1997,7 @@ async def get_master_skus(
             'category': sku.get('category'),
             'unit': sku.get('unit'),
             'description': sku.get('description'),
+            'hsn_code': sku.get('hsn_code'),
             'base_price': sku.get('base_price'),
             'allow_custom_mrp': bool(sku.get('allow_custom_mrp', False)),
             'is_active': sku.get('is_active', True),
@@ -2040,6 +2043,7 @@ async def create_sku(
         'category': sku.category,
         'unit': sku.unit,
         'description': sku.description,
+        'hsn_code': doc.get('hsn_code'),
         'base_price': doc.get('base_price'),
         'allow_custom_mrp': bool(doc.get('allow_custom_mrp', False)),
         'is_active': sku.is_active,
@@ -2099,6 +2103,7 @@ async def update_sku(
         'category': updated.get('category'),
         'unit': updated.get('unit'),
         'description': updated.get('description'),
+        'hsn_code': updated.get('hsn_code'),
         'base_price': updated.get('base_price'),
         'allow_custom_mrp': bool(updated.get('allow_custom_mrp', False)),
         'is_active': updated.get('is_active', True),

@@ -60,6 +60,7 @@ export default function SKUManagement() {
     category: '',
     unit: '',
     description: '',
+    hsn_code: '',
     base_price: '',
     allow_custom_mrp: false,
     is_active: true,
@@ -120,6 +121,7 @@ export default function SKUManagement() {
     setEditingSku(null);
     setFormData({
       sku_name: '', external_sku_id: '', category: '', unit: '', description: '',
+      hsn_code: '',
       base_price: '',
       allow_custom_mrp: false,
       is_active: true, sort_order: skus.length + 1,
@@ -137,6 +139,7 @@ export default function SKUManagement() {
       category: sku.category || '',
       unit: sku.unit || '',
       description: sku.description || '',
+      hsn_code: sku.hsn_code || '',
       base_price: sku.base_price != null ? String(sku.base_price) : '',
       allow_custom_mrp: !!sku.allow_custom_mrp,
       is_active: sku.is_active !== false,
@@ -171,6 +174,11 @@ export default function SKUManagement() {
         if (!isNaN(num)) cleanedCogs[k] = num;
       });
       const payload = { ...formData, cogs_components_values: cleanedCogs };
+      // Coerce hsn_code: trim, store empty string as null so backend doesn't keep stale value
+      if (typeof payload.hsn_code === 'string') {
+        const trimmed = payload.hsn_code.trim();
+        payload.hsn_code = trimmed === '' ? null : trimmed;
+      }
       // Coerce base_price → number (or null to clear it)
       if (payload.base_price === '' || payload.base_price === null || payload.base_price === undefined) {
         payload.base_price = null;
@@ -528,6 +536,21 @@ export default function SKUManagement() {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 placeholder="Optional description"
                 data-testid="sku-description-input"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="hsn_code" className="flex items-center gap-2">
+                HSN Code
+                <span className="text-[10px] text-slate-400 font-normal">4–8 digit GST classification; used in GST returns &amp; E-way Bill JSON</span>
+              </Label>
+              <Input
+                id="hsn_code"
+                value={formData.hsn_code}
+                onChange={(e) => setFormData({ ...formData, hsn_code: e.target.value })}
+                placeholder="e.g. 22011010 (packaged drinking water)"
+                maxLength={8}
+                data-testid="sku-hsn-code-input"
               />
             </div>
 
