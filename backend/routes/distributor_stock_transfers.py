@@ -553,43 +553,54 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
         {"_id": 0, "id": 1, "distributor_name": 1, "is_self_managed": 1, "gstin": 1},
     ).to_list(len(dist_ids) + 1)} if dist_ids else {}
 
-    out = []
+    out: dict = {}  # keyed by location_id to dedupe when the same warehouse has rows in BOTH collections
     for row in rows_d:
+        lid = row["_id"]["l"]
         d = dists.get(row["_id"]["d"], {})
-        loc = locs.get(row["_id"]["l"], {})
+        loc = locs.get(lid, {})
         gstin = (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None
-        out.append({
-            "source_kind": "distributor",
+        bucket = out.setdefault(lid, {
+            "source_kind": "factory" if loc.get("is_factory") else "distributor",
             "distributor_id": row["_id"]["d"],
-            "location_id": row["_id"]["l"],
+            "location_id": lid,
             "distributor_name": row.get("distributor_name"),
             "location_name": row.get("location_name"),
-            "total_qty": int(row.get("total_qty") or 0),
+            "total_qty": 0,
             "is_self_managed": bool(d.get("is_self_managed")),
-            "is_factory": False,
+            "is_factory": bool(loc.get("is_factory")),
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
+        bucket["total_qty"] += int(row.get("total_qty") or 0)
     for row in rows_f:
-        loc = locs.get(row["_id"], {})
+        lid = row["_id"]
+        loc = locs.get(lid, {})
         if not loc:
-            continue  # orphan stock row — surface elsewhere via the Safety Dashboard
+            continue  # surfaced via /warehouse-stock-overview orphans
         d = dists.get(loc.get("distributor_id"), {})
         gstin = (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None
-        out.append({
+        bucket = out.setdefault(lid, {
             "source_kind": "factory",
             "distributor_id": loc.get("distributor_id"),
-            "location_id": row["_id"],
+            "location_id": lid,
             "distributor_name": d.get("distributor_name"),
             "location_name": row.get("warehouse_name") or loc.get("location_name"),
-            "total_qty": int(row.get("total_qty") or 0),
+            "total_qty": 0,
             "is_self_managed": bool(d.get("is_self_managed")),
             "is_factory": True,
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
-    out.sort(key=lambda r: (r.get("distributor_name") or "", r.get("location_name") or ""))
-    return {"sources": out}
+        bucket["total_qty"] += int(row.get("total_qty") or 0)
+        # Promote source_kind to 'factory' if this warehouse is actually a factory
+        # (the distributor_stock leg may have created the bucket first with kind='distributor').
+        if loc.get("is_factory"):
+            bucket["source_kind"] = "factory"
+            bucket["is_factory"] = True
+
+    rows_out = sorted(out.values(),
+                      key=lambda r: (r.get("distributor_name") or "", r.get("location_name") or ""))
+    return {"sources": rows_out}
 
 
 @router.get("/eligible-targets")
