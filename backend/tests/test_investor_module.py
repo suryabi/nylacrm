@@ -7,7 +7,7 @@ import requests
 import os
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://driver-crm-suite.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://crm-stock-transfer.preview.emergentagent.com')
 
 # Test credentials
 TEST_EMAIL = "surya.yadavalli@nylaairwater.earth"
