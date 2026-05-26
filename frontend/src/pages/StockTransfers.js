@@ -15,7 +15,7 @@ import {
 } from '../components/ui/select';
 import {
   ArrowLeftRight, Plus, Search, X, Loader2, Truck, AlertTriangle, ExternalLink,
-  RefreshCw, FileText, Package, Building2,
+  RefreshCw, FileText, Package, Building2, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -484,6 +484,31 @@ export default function StockTransfers() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Retry failed'); }
   };
 
+  const downloadEwayBill = async (transfer) => {
+    try {
+      const { data } = await axios.get(`${API}/distributor/stock-transfers/${transfer.id}/eway-bill`, { headers: HEAD() });
+      if (data?.warnings?.length) {
+        toast.warning(`E-way Bill JSON generated with ${data.warnings.length} warning(s) — review the payload before uploading.`, {
+          description: data.warnings.slice(0, 3).join(' · '),
+          duration: 6000,
+        });
+      } else {
+        toast.success(`E-way Bill JSON ready (₹ ${data?.totals?.grand_total?.toLocaleString('en-IN') || 0} ${data?.is_inter_state ? '· inter-state IGST' : '· intra-state CGST+SGST'})`);
+      }
+      const blob = new Blob([JSON.stringify(data.bulk_payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `eway-bill-${transfer.transfer_number}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to generate E-way Bill JSON');
+    }
+  };
+
   return (
     <div className="p-6 space-y-6" data-testid="stock-transfers-page">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -563,6 +588,17 @@ export default function StockTransfers() {
                         {t.zoho_status === 'failed' && (
                           <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => retryZoho(t.id)} title="Retry Zoho push" data-testid={`retry-zoho-${t.id}`}>
                             <RefreshCw className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {Number(t.total_value || 0) > 50000 && (
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-7 px-2 text-[10px] text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50"
+                            onClick={() => downloadEwayBill(t)}
+                            title={`Total ₹${Number(t.total_value).toLocaleString('en-IN')} — exceeds ₹50,000 threshold. Download E-way Bill JSON.`}
+                            data-testid={`eway-bill-btn-${t.id}`}
+                          >
+                            <Download className="h-3 w-3 mr-1" /> E-way Bill
                           </Button>
                         )}
                       </div>

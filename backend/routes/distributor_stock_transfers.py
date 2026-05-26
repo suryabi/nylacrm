@@ -40,6 +40,7 @@ from services.zoho_service import (
     MissingAgreedPriceError,
     AccountNotLinkedToZohoError,
 )
+from utils.eway_bill import build_eway_bill_payload
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -694,3 +695,58 @@ async def retry_zoho_push(transfer_id: str, current_user: dict = Depends(get_cur
         {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
     )
     return {"ok": True, "transfer": refreshed}
+
+
+
+@router.get("/{transfer_id}/eway-bill")
+async def get_eway_bill_payload(transfer_id: str, current_user: dict = Depends(get_current_user)):
+    """Return a ready-to-upload GSTN E-way Bill JSON payload for this transfer.
+
+    Response shape:
+      {
+        "transfer_number": "ST-2026-0007",
+        "required": true,                       # True iff grand total > ₹50,000
+        "is_inter_state": false,
+        "warnings": ["…"],                      # missing GSTIN / pincode / HSN / vehicle
+        "totals": {taxable, cgst, sgst, igst, grand_total},
+        "payload": { …GSTN single-row payload… },
+        "bulk_payload": { "version": "1.0.0123", "billLists": [ payload ] }
+      }
+
+    The bulk_payload is what gets uploaded to https://ewaybill.nic.in (Bulk Upload).
+    """
+    tenant_id = get_current_tenant_id()
+    transfer = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    if not transfer:
+        raise HTTPException(404, "Stock transfer not found")
+
+    src_dist = await _load_distributor(tenant_id, transfer["source_distributor_id"])
+    dst_dist = await _load_distributor(tenant_id, transfer["dest_distributor_id"])
+    src_loc = await _load_location(tenant_id, transfer["source_location_id"])
+    dst_loc = await _load_location(tenant_id, transfer["dest_location_id"])
+
+    sku_ids = [it.get("sku_id") for it in transfer.get("items", []) if it.get("sku_id")]
+    sku_rows = await db.master_skus.find(
+        {"id": {"$in": sku_ids}},
+        {"_id": 0, "id": 1, "sku_name": 1, "hsn_code": 1, "gst_percent": 1, "tax_percent": 1},
+    ).to_list(len(sku_ids) + 1) if sku_ids else []
+    skus_by_id = {r["id"]: r for r in sku_rows}
+
+    built = build_eway_bill_payload(transfer, src_dist, dst_dist, src_loc, dst_loc, skus_by_id)
+    payload = built["payload"]
+    meta = built["meta"]
+
+    return {
+        "transfer_number": transfer.get("transfer_number"),
+        "required": meta["required"],
+        "is_inter_state": meta["is_inter_state"],
+        "src_state_code": meta["src_state_code"],
+        "dst_state_code": meta["dst_state_code"],
+        "warnings": meta["warnings"],
+        "totals": meta["totals"],
+        "payload": payload,
+        # GSTN bulk-upload wrapper — same JSON, wrapped in an array.
+        "bulk_payload": {"version": "1.0.0123", "billLists": [payload]},
+    }
