@@ -141,6 +141,30 @@ function NewTransferDialog({ open, onClose, onCreated }) {
   const sourceObj = useMemo(() => sources.find((s) => s.location_id === form.source_location_id), [sources, form.source_location_id]);
   const targetObj = useMemo(() => targets.find((t) => t.location_id === form.dest_location_id), [targets, form.dest_location_id]);
 
+  // Stock Transfer is internal logistics only — source is restricted to
+  // self-managed warehouses (which includes factory warehouses since their
+  // parent distributor is_self_managed=true). This stops users from picking
+  // a third-party distributor as the source.
+  const filteredSources = useMemo(
+    () => sources.filter((s) => s.is_self_managed),
+    [sources]
+  );
+
+  // Destination must share the source's PAN — anything else would be a
+  // cross-PAN transfer (already blocked server-side) so we hide it here too
+  // for a cleaner picker. If no source is chosen yet we only show
+  // self-managed warehouses (matching the source picker's scope).
+  const filteredTargets = useMemo(() => {
+    const base = targets.filter((t) => t.is_self_managed);
+    if (!sourceObj) return base;
+    const srcPan = sourceObj.pan;
+    return base.filter((t) => {
+      if (t.location_id === sourceObj.location_id) return false;  // can't be same warehouse
+      if (!srcPan) return true;  // source has no PAN — fall back to showing all self-managed
+      return t.pan === srcPan;
+    });
+  }, [targets, sourceObj]);
+
   // Resolve per-package rate from the SKU's company-wide Base Price (master_skus.base_price).
   // Stock transfers have NO margin — the rate is independent of source/destination
   // distributor. If a SKU has no Base Price set, the user must add it under
@@ -264,11 +288,11 @@ function NewTransferDialog({ open, onClose, onCreated }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>Source warehouse *</Label>
-              <Select value={form.source_location_id} onValueChange={(v) => setForm({ ...form, source_location_id: v })}>
+              <Select value={form.source_location_id} onValueChange={(v) => setForm({ ...form, source_location_id: v, dest_location_id: '' })}>
                 <SelectTrigger data-testid="source-warehouse-select"><SelectValue placeholder="Pick a warehouse with stock" /></SelectTrigger>
                 <SelectContent>
-                  {sources.length === 0 && <SelectItem value="__none__" disabled>No warehouses with stock</SelectItem>}
-                  {sources.map((s) => (
+                  {filteredSources.length === 0 && <SelectItem value="__none__" disabled>No self-managed warehouses with stock</SelectItem>}
+                  {filteredSources.map((s) => (
                     <SelectItem key={s.location_id} value={s.location_id}>
                       {s.distributor_name} — {s.location_name} ({s.total_qty} units{s.is_factory ? ' · Factory' : ''})
                     </SelectItem>
@@ -281,7 +305,12 @@ function NewTransferDialog({ open, onClose, onCreated }) {
               <Select value={form.dest_location_id} onValueChange={(v) => setForm({ ...form, dest_location_id: v })} disabled={!form.source_location_id}>
                 <SelectTrigger data-testid="dest-warehouse-select"><SelectValue placeholder={form.source_location_id ? 'Pick destination' : 'Pick source first'} /></SelectTrigger>
                 <SelectContent>
-                  {targets.map((t) => (
+                  {filteredTargets.length === 0 && (
+                    <SelectItem value="__none__" disabled>
+                      {sourceObj ? `No other warehouses share PAN ${sourceObj.pan || '—'}` : 'Pick a source first'}
+                    </SelectItem>
+                  )}
+                  {filteredTargets.map((t) => (
                     <SelectItem key={t.location_id} value={t.location_id}>
                       {t.distributor_name} — {t.location_name}
                       {t.is_factory && ' · Factory'}
