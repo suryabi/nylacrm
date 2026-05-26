@@ -142,10 +142,10 @@ def _qualifies_for_challan(src_distributor: dict, dst_distributor: dict,
     return src_gstin == dst_gstin
 
 
-async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,
-                        item: TransferItem, delta_units: int, *,
-                        distributor_name: str, location_name: str):
-    """Add/subtract `delta_units` (raw units / bottles) for (distributor, location, sku)."""
+async def _adjust_distributor_stock(tenant_id: str, distributor_id: str, location_id: str,
+                                     item: TransferItem, delta_units: int, *,
+                                     distributor_name: str, location_name: str):
+    """Add/subtract `delta_units` (bottles) in `distributor_stock` for (distributor, location, sku)."""
     now = datetime.now(timezone.utc).isoformat()
     res = await db.distributor_stock.update_one(
         {
@@ -172,6 +172,81 @@ async def _adjust_stock(tenant_id: str, distributor_id: str, location_id: str,
         upsert=True,
     )
     return res
+
+
+async def _adjust_factory_stock(tenant_id: str, warehouse_location_id: str,
+                                 item: TransferItem, delta_units: int, *,
+                                 warehouse_name: str):
+    """Add/subtract `delta_units` (bottles) in `factory_warehouse_stock` for the warehouse + sku.
+
+    Mirrors how Production QC writes to this collection (warehouse_location_id +
+    sku_id is the natural key; `quantity` is bottle-level). `bottles_per_crate`
+    is best-effort populated from the transfer item's `units_per_package`.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    res = await db.factory_warehouse_stock.update_one(
+        {
+            "tenant_id": tenant_id,
+            "warehouse_location_id": warehouse_location_id,
+            "sku_id": item.sku_id,
+        },
+        {
+            "$inc": {"quantity": delta_units},
+            "$setOnInsert": {
+                "id": str(uuid.uuid4()),
+                "tenant_id": tenant_id,
+                "warehouse_location_id": warehouse_location_id,
+                "warehouse_name": warehouse_name,
+                "sku_id": item.sku_id,
+                "sku_name": item.sku_name,
+                "bottles_per_crate": int(item.units_per_package) if item.units_per_package else None,
+                "created_at": now,
+            },
+            "$set": {"updated_at": now},
+        },
+        upsert=True,
+    )
+    return res
+
+
+async def _adjust_stock_for_location(tenant_id: str, location: dict, item: TransferItem,
+                                      delta_units: int, *, distributor_name: str):
+    """Dispatch to the correct stock collection based on `location.is_factory`."""
+    if location.get("is_factory"):
+        return await _adjust_factory_stock(
+            tenant_id, location["id"], item, delta_units,
+            warehouse_name=location.get("location_name") or "",
+        )
+    return await _adjust_distributor_stock(
+        tenant_id, location["distributor_id"], location["id"], item, delta_units,
+        distributor_name=distributor_name, location_name=location.get("location_name") or "",
+    )
+
+
+async def _read_source_stock(tenant_id: str, source_loc: dict, sku_ids: list) -> dict:
+    """Return `{sku_id: {sku_id, sku_name, quantity}}` for the source warehouse,
+    pulling from either `factory_warehouse_stock` or `distributor_stock` based on
+    whether the source location is a factory warehouse."""
+    if source_loc.get("is_factory"):
+        rows = await db.factory_warehouse_stock.find(
+            {
+                "tenant_id": tenant_id,
+                "warehouse_location_id": source_loc["id"],
+                "sku_id": {"$in": sku_ids},
+            },
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
+        ).to_list(len(sku_ids) + 1)
+    else:
+        rows = await db.distributor_stock.find(
+            {
+                "tenant_id": tenant_id,
+                "distributor_id": source_loc["distributor_id"],
+                "distributor_location_id": source_loc["id"],
+                "sku_id": {"$in": sku_ids},
+            },
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
+        ).to_list(len(sku_ids) + 1)
+    return {r["sku_id"]: r for r in rows}
 
 
 async def _resolve_per_bottle_rate(
@@ -286,45 +361,234 @@ async def resolve_transfer_rate(
     }
 
 
+@router.get("/warehouse-stock-overview")
+async def warehouse_stock_overview(current_user: dict = Depends(get_current_user)):
+    """Cross-collection warehouse stock overview (safety dashboard).
+
+    Aggregates `distributor_stock` + `factory_warehouse_stock` keyed by warehouse
+    so admins can see every location's on-hand in one table. Flags rows whose
+    stock lives in the *wrong* collection (e.g. factory stock saved against a
+    distributor warehouse) and surfaces orphan rows pointing at deleted locations.
+    """
+    tenant_id = get_current_tenant_id()
+
+    locs = await db.distributor_locations.find(
+        {"tenant_id": tenant_id, "status": {"$ne": "inactive"}},
+        {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "is_factory": 1,
+         "city": 1, "state": 1, "gstin": 1},
+    ).to_list(2000)
+    loc_by_id = {loc["id"]: loc for loc in locs}
+
+    dist_ids = list({loc.get("distributor_id") for loc in locs if loc.get("distributor_id")})
+    dists = {d["id"]: d for d in await db.distributors.find(
+        {"tenant_id": tenant_id, "id": {"$in": dist_ids}},
+        {"_id": 0, "id": 1, "distributor_name": 1, "is_self_managed": 1},
+    ).to_list(len(dist_ids) + 1)} if dist_ids else {}
+
+    d_rows = await db.distributor_stock.find(
+        {"tenant_id": tenant_id, "quantity": {"$gt": 0}},
+        {"_id": 0, "distributor_location_id": 1, "sku_id": 1, "sku_name": 1, "quantity": 1},
+    ).to_list(20000)
+    f_rows = await db.factory_warehouse_stock.find(
+        {"tenant_id": tenant_id, "quantity": {"$gt": 0}},
+        {"_id": 0, "warehouse_location_id": 1, "sku_id": 1, "sku_name": 1, "quantity": 1,
+         "bottles_per_crate": 1},
+    ).to_list(20000)
+
+    warehouses: dict = {}
+    orphans: list = []
+    factory_total = 0
+    distributor_total = 0
+
+    def _bucket_for(lid: str, loc: dict) -> dict:
+        return warehouses.setdefault(lid, {
+            "location_id": lid,
+            "location_name": loc.get("location_name"),
+            "distributor_name": (dists.get(loc.get("distributor_id")) or {}).get("distributor_name"),
+            "is_factory": bool(loc.get("is_factory")),
+            "city": loc.get("city"), "state": loc.get("state"), "gstin": loc.get("gstin"),
+            "items_distributor": [], "items_factory": [], "total_bottles": 0,
+        })
+
+    for r in d_rows:
+        lid = r.get("distributor_location_id")
+        loc = loc_by_id.get(lid)
+        if not loc:
+            orphans.append({
+                "collection": "distributor_stock", "sku_id": r.get("sku_id"),
+                "sku_name": r.get("sku_name"), "bottles": int(r.get("quantity") or 0),
+                "hint": f"row points at unknown location_id={lid}",
+            })
+            continue
+        b = _bucket_for(lid, loc)
+        b["items_distributor"].append({
+            "sku_id": r.get("sku_id"), "sku_name": r.get("sku_name"),
+            "bottles": int(r.get("quantity") or 0),
+        })
+        b["total_bottles"] += int(r.get("quantity") or 0)
+        distributor_total += int(r.get("quantity") or 0)
+        if loc.get("is_factory"):
+            b.setdefault("warnings", []).append(
+                f"SKU '{r.get('sku_name')}' has {int(r.get('quantity') or 0)} bottles in distributor_stock "
+                "but this warehouse is marked Factory — expected factory_warehouse_stock."
+            )
+
+    for r in f_rows:
+        lid = r.get("warehouse_location_id")
+        loc = loc_by_id.get(lid)
+        if not loc:
+            orphans.append({
+                "collection": "factory_warehouse_stock", "sku_id": r.get("sku_id"),
+                "sku_name": r.get("sku_name"), "bottles": int(r.get("quantity") or 0),
+                "hint": f"row points at unknown location_id={lid}",
+            })
+            continue
+        b = _bucket_for(lid, loc)
+        b["items_factory"].append({
+            "sku_id": r.get("sku_id"), "sku_name": r.get("sku_name"),
+            "bottles": int(r.get("quantity") or 0),
+            "bottles_per_crate": r.get("bottles_per_crate"),
+        })
+        b["total_bottles"] += int(r.get("quantity") or 0)
+        factory_total += int(r.get("quantity") or 0)
+        if not loc.get("is_factory"):
+            b.setdefault("warnings", []).append(
+                f"SKU '{r.get('sku_name')}' has {int(r.get('quantity') or 0)} bottles in factory_warehouse_stock "
+                "but this warehouse is NOT marked Factory — expected distributor_stock."
+            )
+
+    # Include empty warehouses
+    for lid, loc in loc_by_id.items():
+        _bucket_for(lid, loc)
+
+    rows_out = sorted(
+        warehouses.values(),
+        key=lambda r: (not r["is_factory"], r.get("distributor_name") or "", r.get("location_name") or ""),
+    )
+
+    return {
+        "warehouses": rows_out,
+        "orphans": orphans,
+        "totals": {
+            "factory_bottles": factory_total,
+            "distributor_bottles": distributor_total,
+            "grand_bottles": factory_total + distributor_total,
+            "warehouse_count": len(rows_out),
+            "orphan_rows": len(orphans),
+        },
+    }
+
+
+@router.get("/location-stock")
+async def get_location_stock(
+    location_id: str = Query(..., description="Source warehouse location id"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return per-SKU on-hand stock (bottles) for a warehouse, transparently
+    pulling from `factory_warehouse_stock` if it's a factory warehouse,
+    otherwise from `distributor_stock`. Used by the New Stock Transfer dialog
+    so the source picker can show availability per SKU regardless of kind.
+    """
+    tenant_id = get_current_tenant_id()
+    loc = await _load_location(tenant_id, location_id)
+    if loc.get("is_factory"):
+        rows = await db.factory_warehouse_stock.find(
+            {"tenant_id": tenant_id, "warehouse_location_id": location_id},
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
+        ).to_list(2000)
+    else:
+        rows = await db.distributor_stock.find(
+            {
+                "tenant_id": tenant_id,
+                "distributor_id": loc.get("distributor_id"),
+                "distributor_location_id": location_id,
+            },
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
+        ).to_list(2000)
+    return {"stock": rows, "is_factory": bool(loc.get("is_factory"))}
+
+
 @router.get("/eligible-sources")
 async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
-    """Return distributor warehouses that have positive stock for at least one SKU."""
+    """Return warehouses (factory + distributor) with positive stock for at least one SKU.
+
+    Aggregates from BOTH stock collections:
+      • `distributor_stock`         → regular distributor warehouses (`is_factory=false`)
+      • `factory_warehouse_stock`   → factory / master warehouses    (`is_factory=true`)
+
+    Each row carries `source_kind ∈ ('distributor', 'factory')` so the UI can
+    badge and the create-transfer flow can route the inventory deduction.
+    """
     tenant_id = get_current_tenant_id()
-    cursor = db.distributor_stock.aggregate([
+
+    # 1) Distributor warehouse stock
+    rows_d = [r async for r in db.distributor_stock.aggregate([
         {"$match": {"tenant_id": tenant_id, "quantity": {"$gt": 0}}},
         {"$group": {"_id": {"d": "$distributor_id", "l": "$distributor_location_id"},
                     "distributor_name": {"$first": "$distributor_name"},
                     "location_name": {"$first": "$location_name"},
                     "total_qty": {"$sum": "$quantity"}}},
-        {"$sort": {"distributor_name": 1, "location_name": 1}},
-    ])
-    out = []
-    rows = [row async for row in cursor]
-    # Enrich with is_self_managed / gstin / pan from parent docs
-    dist_ids = list({r["_id"]["d"] for r in rows if r["_id"].get("d")})
-    loc_ids = list({r["_id"]["l"] for r in rows if r["_id"].get("l")})
-    dists = {d["id"]: d for d in await db.distributors.find(
-        {"tenant_id": tenant_id, "id": {"$in": dist_ids}},
-        {"_id": 0, "id": 1, "is_self_managed": 1, "gstin": 1},
-    ).to_list(len(dist_ids) + 1)}
+    ])]
+
+    # 2) Factory warehouse stock
+    rows_f = [r async for r in db.factory_warehouse_stock.aggregate([
+        {"$match": {"tenant_id": tenant_id, "quantity": {"$gt": 0}}},
+        {"$group": {"_id": "$warehouse_location_id",
+                    "warehouse_name": {"$first": "$warehouse_name"},
+                    "total_qty": {"$sum": "$quantity"}}},
+    ])]
+
+    # Collect every location_id we'll need to enrich (gstin / parent distributor)
+    loc_ids = list({r["_id"]["l"] for r in rows_d if r["_id"].get("l")}
+                   | {r["_id"] for r in rows_f if r["_id"]})
     locs = {loc["id"]: loc for loc in await db.distributor_locations.find(
         {"tenant_id": tenant_id, "id": {"$in": loc_ids}},
-        {"_id": 0, "id": 1, "gstin": 1},
-    ).to_list(len(loc_ids) + 1)}
-    for row in rows:
+        {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "gstin": 1, "is_factory": 1, "city": 1, "state": 1},
+    ).to_list(len(loc_ids) + 1)} if loc_ids else {}
+
+    dist_ids = list({r["_id"]["d"] for r in rows_d if r["_id"].get("d")}
+                    | {locs[r["_id"]]["distributor_id"] for r in rows_f if r["_id"] in locs})
+    dists = {d["id"]: d for d in await db.distributors.find(
+        {"tenant_id": tenant_id, "id": {"$in": dist_ids}},
+        {"_id": 0, "id": 1, "distributor_name": 1, "is_self_managed": 1, "gstin": 1},
+    ).to_list(len(dist_ids) + 1)} if dist_ids else {}
+
+    out = []
+    for row in rows_d:
         d = dists.get(row["_id"]["d"], {})
         loc = locs.get(row["_id"]["l"], {})
         gstin = (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None
         out.append({
+            "source_kind": "distributor",
             "distributor_id": row["_id"]["d"],
             "location_id": row["_id"]["l"],
             "distributor_name": row.get("distributor_name"),
             "location_name": row.get("location_name"),
             "total_qty": int(row.get("total_qty") or 0),
             "is_self_managed": bool(d.get("is_self_managed")),
+            "is_factory": False,
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
+    for row in rows_f:
+        loc = locs.get(row["_id"], {})
+        if not loc:
+            continue  # orphan stock row — surface elsewhere via the Safety Dashboard
+        d = dists.get(loc.get("distributor_id"), {})
+        gstin = (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None
+        out.append({
+            "source_kind": "factory",
+            "distributor_id": loc.get("distributor_id"),
+            "location_id": row["_id"],
+            "distributor_name": d.get("distributor_name"),
+            "location_name": row.get("warehouse_name") or loc.get("location_name"),
+            "total_qty": int(row.get("total_qty") or 0),
+            "is_self_managed": bool(d.get("is_self_managed")),
+            "is_factory": True,
+            "gstin": gstin,
+            "pan": _extract_pan(gstin) or None,
+        })
+    out.sort(key=lambda r: (r.get("distributor_name") or "", r.get("location_name") or ""))
     return {"sources": out}
 
 
@@ -333,11 +597,11 @@ async def list_eligible_targets(
     exclude_location_id: Optional[str] = Query(None, description="Source location id to exclude"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Return ALL distributor warehouses across the tenant (minus the source)."""
+    """Return ALL distributor and factory warehouses across the tenant (minus the source)."""
     tenant_id = get_current_tenant_id()
     locs = await db.distributor_locations.find(
         {"tenant_id": tenant_id, "status": {"$ne": "inactive"}},
-        {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "location_code": 1, "city": 1, "state": 1, "gstin": 1},
+        {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "location_code": 1, "city": 1, "state": 1, "gstin": 1, "is_factory": 1},
     ).to_list(2000)
 
     dist_ids = list({loc["distributor_id"] for loc in locs if loc.get("distributor_id")})
@@ -361,6 +625,7 @@ async def list_eligible_targets(
             "distributor_id": loc.get("distributor_id"),
             "distributor_name": d.get("distributor_name"),
             "is_self_managed": bool(d.get("is_self_managed")),
+            "is_factory": bool(loc.get("is_factory")),
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
@@ -443,18 +708,12 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
         raise HTTPException(400, "Destination location does not belong to destination distributor.")
 
     # ── Stock availability check (in raw units; storage is bottles-level) ──
+    # The source warehouse may be either a regular distributor warehouse
+    # (`distributor_stock`) or a factory warehouse (`factory_warehouse_stock`).
     sku_ids = [it.sku_id for it in payload.items]
-    stock_rows = await db.distributor_stock.find(
-        {
-            "tenant_id": tenant_id,
-            "distributor_id": payload.source_distributor_id,
-            "distributor_location_id": payload.source_location_id,
-            "sku_id": {"$in": sku_ids},
-        },
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
-    ).to_list(len(sku_ids) + 1)
-    avail = {r["sku_id"]: int(r.get("quantity") or 0) for r in stock_rows}
-    sku_name_lookup = {r["sku_id"]: r.get("sku_name") for r in stock_rows}
+    stock_map = await _read_source_stock(tenant_id, src_loc, sku_ids)
+    avail = {sku_id: int(r.get("quantity") or 0) for sku_id, r in stock_map.items()}
+    sku_name_lookup = {sku_id: r.get("sku_name") for sku_id, r in stock_map.items()}
     insufficient = []
     for it in payload.items:
         a_units = avail.get(it.sku_id, 0)
@@ -533,6 +792,8 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
         "source_distributor_name": src_dist.get("distributor_name"),
         "source_location_id": payload.source_location_id,
         "source_location_name": src_loc.get("location_name"),
+        "source_kind": "factory" if src_loc.get("is_factory") else "distributor",
+        "source_is_factory": bool(src_loc.get("is_factory")),
         "source_gstin": (src_loc.get("gstin") or src_dist.get("gstin") or "").strip().upper() or None,
         "source_pan": _extract_pan(src_loc.get("gstin") or src_dist.get("gstin")) or None,
         "source_is_self_managed": bool(src_dist.get("is_self_managed")),
@@ -540,6 +801,8 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
         "dest_distributor_name": dst_dist.get("distributor_name"),
         "dest_location_id": payload.dest_location_id,
         "dest_location_name": dst_loc.get("location_name"),
+        "dest_kind": "factory" if dst_loc.get("is_factory") else "distributor",
+        "dest_is_factory": bool(dst_loc.get("is_factory")),
         "dest_gstin": (dst_loc.get("gstin") or dst_dist.get("gstin") or "").strip().upper() or None,
         "dest_pan": _extract_pan(dst_loc.get("gstin") or dst_dist.get("gstin")) or None,
         "dest_is_self_managed": bool(dst_dist.get("is_self_managed")),
@@ -562,32 +825,27 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
         "updated_at": now,
     }
 
-    # ── Apply inventory movement (units-level) ──
+    # ── Apply inventory movement (units-level) — routes per-location to either
+    #     distributor_stock OR factory_warehouse_stock based on `is_factory`. ──
     moved_lines = []
     src_name = src_dist.get("distributor_name") or ""
     dst_name = dst_dist.get("distributor_name") or ""
-    src_loc_name = src_loc.get("location_name") or ""
-    dst_loc_name = dst_loc.get("location_name") or ""
     try:
         for it in payload.items:
             units = int(it.quantity) * int(it.units_per_package)
-            await _adjust_stock(
-                tenant_id, payload.source_distributor_id, payload.source_location_id, it,
-                -units, distributor_name=src_name, location_name=src_loc_name,
+            await _adjust_stock_for_location(
+                tenant_id, src_loc, it, -units, distributor_name=src_name,
             )
-            await _adjust_stock(
-                tenant_id, payload.dest_distributor_id, payload.dest_location_id, it,
-                units, distributor_name=dst_name, location_name=dst_loc_name,
+            await _adjust_stock_for_location(
+                tenant_id, dst_loc, it, units, distributor_name=dst_name,
             )
             moved_lines.append((it, units))
     except Exception as e:
         # Roll back whatever moved
         logger.exception("Inventory move failed; rolling back partial transfer")
         for (it, units) in moved_lines:
-            await _adjust_stock(tenant_id, payload.source_distributor_id, payload.source_location_id, it,
-                                units, distributor_name=src_name, location_name=src_loc_name)
-            await _adjust_stock(tenant_id, payload.dest_distributor_id, payload.dest_location_id, it,
-                                -units, distributor_name=dst_name, location_name=dst_loc_name)
+            await _adjust_stock_for_location(tenant_id, src_loc, it, units, distributor_name=src_name)
+            await _adjust_stock_for_location(tenant_id, dst_loc, it, -units, distributor_name=dst_name)
         raise HTTPException(500, f"Failed to move stock; rolled back. ({e})")
 
     transfer_doc["status"] = "completed"

@@ -103,9 +103,10 @@ function NewTransferDialog({ open, onClose, onCreated }) {
         setTargets(t.data?.targets || []);
         const src = sources.find((s) => s.location_id === form.source_location_id);
         if (src) {
-          const stockRes = await axios.get(`${API}/distributors/${src.distributor_id}/stock?location_id=${form.source_location_id}`, { headers: HEAD() }).catch(() => null);
+          // Unified endpoint reads from either distributor_stock or factory_warehouse_stock.
+          const stockRes = await axios.get(`${API}/distributor/stock-transfers/location-stock?location_id=${form.source_location_id}`, { headers: HEAD() }).catch(() => null);
           const map = {};
-          (stockRes?.data?.stock || stockRes?.data || []).forEach((s) => {
+          (stockRes?.data?.stock || []).forEach((s) => {
             map[s.sku_id] = s.quantity ?? s.qty ?? 0;
           });
           setStockBySku(map);
@@ -274,7 +275,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
                   {sources.length === 0 && <SelectItem value="__none__" disabled>No warehouses with stock</SelectItem>}
                   {sources.map((s) => (
                     <SelectItem key={s.location_id} value={s.location_id}>
-                      {s.distributor_name} — {s.location_name} ({s.total_qty} units)
+                      {s.distributor_name} — {s.location_name} ({s.total_qty} units{s.is_factory ? ' · Factory' : ''})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -288,6 +289,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
                   {targets.map((t) => (
                     <SelectItem key={t.location_id} value={t.location_id}>
                       {t.distributor_name} — {t.location_name}
+                      {t.is_factory && ' · Factory'}
                       {t.is_self_managed && ' · self-managed'}
                       {t.gstin && ` · GSTIN ${t.gstin}`}
                     </SelectItem>

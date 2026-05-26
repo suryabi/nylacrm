@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { 
   Package, Warehouse, Building2, MapPin, RefreshCw, 
   TrendingUp, TrendingDown, Search, Filter, BarChart3,
-  Boxes, ChevronDown, ChevronUp
+  Boxes, ChevronDown, ChevronUp, ShieldAlert, Factory,
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -25,6 +25,8 @@ export default function StockDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedLocations, setExpandedLocations] = useState({});
   const [distributors, setDistributors] = useState([]);
+  const [safetyData, setSafetyData] = useState(null);
+  const [safetyLoading, setSafetyLoading] = useState(false);
 
   // Fetch distributors list
   const fetchDistributors = useCallback(async () => {
@@ -69,6 +71,27 @@ export default function StockDashboard() {
   useEffect(() => {
     fetchStockData();
   }, [fetchStockData]);
+
+  // Safety / cross-collection warehouse overview (factory_warehouse_stock +
+  // distributor_stock unified into a single table so admins can spot mismatches).
+  const fetchSafetyData = useCallback(async () => {
+    setSafetyLoading(true);
+    try {
+      const { data } = await axios.get(`${API_URL}/api/distributor/stock-transfers/warehouse-stock-overview`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      });
+      setSafetyData(data);
+    } catch (e) {
+      toast.error('Failed to load safety overview');
+    } finally {
+      setSafetyLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchSafetyData();
+  }, [fetchSafetyData]);
 
   const toggleLocationExpand = (locationId) => {
     setExpandedLocations(prev => ({
@@ -232,6 +255,15 @@ export default function StockDashboard() {
           <TabsTrigger value="by-distributor" data-testid="tab-by-distributor">
             <Building2 className="h-4 w-4 mr-2" />
             By Distributor
+          </TabsTrigger>
+          <TabsTrigger value="safety-overview" data-testid="tab-safety-overview">
+            <ShieldAlert className="h-4 w-4 mr-2" />
+            Safety Overview
+            {(safetyData?.orphans?.length || 0) + (safetyData?.warehouses?.reduce((n, w) => n + (w.warnings?.length || 0), 0) || 0) > 0 && (
+              <Badge variant="destructive" className="ml-2 h-5 px-1.5 text-[10px]" data-testid="safety-issues-badge">
+                {(safetyData?.orphans?.length || 0) + (safetyData?.warehouses?.reduce((n, w) => n + (w.warnings?.length || 0), 0) || 0)}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -434,6 +466,119 @@ export default function StockDashboard() {
                   </CardContent>
                 </Card>
               ))
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Safety Overview — cross-collection (factory_warehouse_stock + distributor_stock) */}
+        <TabsContent value="safety-overview" data-testid="safety-overview-panel">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <ShieldAlert className="h-5 w-5 text-amber-600" />
+                      Cross-Collection Warehouse Stock
+                    </CardTitle>
+                    <CardDescription>
+                      Unified view of on-hand stock across BOTH <code className="text-[11px] bg-slate-100 px-1 py-0.5 rounded">factory_warehouse_stock</code> and <code className="text-[11px] bg-slate-100 px-1 py-0.5 rounded">distributor_stock</code>. Mismatches (stock in wrong collection) and orphan rows are flagged below.
+                    </CardDescription>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Total bottles</p>
+                    <p className="text-2xl font-bold tabular-nums" data-testid="safety-grand-total">
+                      {(safetyData?.totals?.grand_bottles || 0).toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      <span className="text-purple-700 font-semibold">{(safetyData?.totals?.factory_bottles || 0).toLocaleString('en-IN')}</span> factory ·{' '}
+                      <span className="text-blue-700 font-semibold">{(safetyData?.totals?.distributor_bottles || 0).toLocaleString('en-IN')}</span> distributor
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {safetyLoading ? (
+                  <div className="py-8 text-center"><RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div>
+                ) : (safetyData?.warehouses?.length || 0) === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground">No warehouses found.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="text-left p-2">Warehouse</th>
+                          <th className="text-left p-2">Distributor</th>
+                          <th className="text-left p-2">Kind</th>
+                          <th className="text-right p-2">Bottles</th>
+                          <th className="text-left p-2">SKUs</th>
+                          <th className="text-left p-2">Issues</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {safetyData.warehouses.map((w) => {
+                          const skuCount = (w.items_distributor?.length || 0) + (w.items_factory?.length || 0);
+                          return (
+                            <tr key={w.location_id} className="border-b hover:bg-slate-50" data-testid={`safety-row-${w.location_id}`}>
+                              <td className="p-2">
+                                <div className="font-medium">{w.location_name}</div>
+                                <div className="text-[11px] text-muted-foreground">{w.city || '—'}{w.state ? `, ${w.state}` : ''}{w.gstin ? ` · ${w.gstin}` : ''}</div>
+                              </td>
+                              <td className="p-2 text-xs">{w.distributor_name || '—'}</td>
+                              <td className="p-2">
+                                {w.is_factory ? (
+                                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px]"><Factory className="h-3 w-3 mr-1" />Factory</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]"><Warehouse className="h-3 w-3 mr-1" />Distributor</Badge>
+                                )}
+                              </td>
+                              <td className="p-2 text-right font-mono font-semibold tabular-nums">{(w.total_bottles || 0).toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-xs">{skuCount}</td>
+                              <td className="p-2">
+                                {(w.warnings || []).length === 0 ? (
+                                  <span className="text-emerald-600 text-xs">✓ OK</span>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {w.warnings.map((msg, idx) => (
+                                      <div key={idx} className="text-[11px] text-amber-700 flex items-start gap-1">
+                                        <ShieldAlert className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                        <span>{msg}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {(safetyData?.orphans?.length || 0) > 0 && (
+              <Card className="border-red-200 bg-red-50/30">
+                <CardHeader>
+                  <CardTitle className="text-red-700 text-base flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4" /> Orphan stock rows ({safetyData.orphans.length})
+                  </CardTitle>
+                  <CardDescription>Stock rows whose <code>location_id</code> no longer exists. Investigate and either reassign or delete.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1 text-xs">
+                    {safetyData.orphans.map((o, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-red-700">
+                        <code className="bg-red-100 px-1 rounded text-[10px]">{o.collection}</code>
+                        <span className="font-medium">{o.sku_name}</span>
+                        <span className="tabular-nums">— {o.bottles} bottles</span>
+                        <span className="text-red-500">· {o.hint}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
         </TabsContent>
