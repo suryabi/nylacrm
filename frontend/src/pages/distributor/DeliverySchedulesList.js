@@ -487,7 +487,7 @@ export default function DeliverySchedulesList() {
 
             <div className="space-y-1.5">
               <Label className="text-xs uppercase tracking-wider text-slate-500">
-                Vehicle {fleet.city && <span className="text-slate-400 normal-case ml-1">· filtered to {fleet.city}</span>}
+                Vehicle {fleet.city && <span className="text-slate-400 normal-case ml-1">· filtered to {fleet.city} or unassigned</span>}
               </Label>
               <Select
                 value={createForm.vehicle_id || '__none__'}

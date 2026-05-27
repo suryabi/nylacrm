@@ -63,6 +63,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
   const [items, setItems] = useState([{
     sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
     rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
+    batch_id: '', batch_code: '', batches_available: [], batches_loading: false,
   }]);
   const [saving, setSaving] = useState(false);
   const [stockBySku, setStockBySku] = useState({}); // sku_id -> available units (at chosen source)
@@ -79,6 +80,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
     setItems([{
       sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
       rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
+      batch_id: '', batch_code: '', batches_available: [], batches_loading: false,
     }]);
     setStockBySku({});
     (async () => {
@@ -118,7 +120,8 @@ function NewTransferDialog({ open, onClose, onCreated }) {
   const addItemRow = () => setItems((p) => [
     ...p,
     { sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
-      rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null },
+      rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
+      batch_id: '', batch_code: '', batches_available: [], batches_loading: false },
   ]);
   const updateItem = (i, patch) => setItems((p) => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   const removeItem = (i) => setItems((p) => p.filter((_, idx) => idx !== i));
@@ -164,6 +167,54 @@ function NewTransferDialog({ open, onClose, onCreated }) {
       return t.pan === srcPan;
     });
   }, [targets, sourceObj]);
+
+  // Source warehouse opt-in: if true, the user must pick a batch on every line.
+  const sourceTracksBatches = !!sourceObj?.track_batches;
+
+  // Fetch available batches for an item from the new /batches-available endpoint
+  // whenever the source warehouse + SKU is set AND the source tracks batches.
+  const loadBatchesForItem = useCallback(async (idx, item) => {
+    if (!sourceObj || !item.sku_id || !sourceTracksBatches) return;
+    updateItem(idx, { batches_loading: true });
+    try {
+      const params = new URLSearchParams({
+        location_id: sourceObj.location_id,
+        sku_id: item.sku_id,
+      });
+      const { data } = await axios.get(`${API}/distributor/stock-transfers/batches-available?${params}`, { headers: HEAD() });
+      const batches = data?.batches || [];
+      // FIFO default: pre-select the oldest batch (first in the list)
+      const first = batches[0];
+      updateItem(idx, {
+        batches_available: batches,
+        batches_loading: false,
+        // Only auto-pick if user hasn't already chosen something valid.
+        ...(item.batch_id && batches.some((b) => b.batch_id === item.batch_id) ? {} : {
+          batch_id: first?.batch_id || '',
+          batch_code: first?.batch_code || '',
+        }),
+      });
+    } catch (e) {
+      updateItem(idx, { batches_loading: false, batches_available: [] });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceObj, sourceTracksBatches]);
+
+  // Refresh batches whenever source warehouse or item SKU changes.
+  useEffect(() => {
+    if (!sourceTracksBatches) {
+      // Clear any stale picker state when the user switches to a non-tracked source.
+      setItems((p) => p.map((it) => ({ ...it, batch_id: '', batch_code: '', batches_available: [] })));
+      return;
+    }
+    items.forEach((it, idx) => {
+      if (it.sku_id) loadBatchesForItem(idx, it);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    sourceObj?.location_id, sourceTracksBatches,
+    items.map((it) => it.sku_id).join(','),
+  ]);
 
   // Resolve per-package rate from the SKU's company-wide Base Price (master_skus.base_price).
   // Stock transfers have NO margin — the rate is independent of source/destination
@@ -228,7 +279,8 @@ function NewTransferDialog({ open, onClose, onCreated }) {
 
   const canSubmit = form.source_location_id && form.dest_location_id && items.length > 0
     && items.every((it) => it.sku_id && it.packaging_type_name && it.units_per_package > 0
-      && Number(it.quantity) > 0 && it.rate_status === 'ok');
+      && Number(it.quantity) > 0 && it.rate_status === 'ok'
+      && (!sourceTracksBatches || it.batch_id));
 
   const onSubmit = async () => {
     if (!canSubmit) { toast.error('Fill source, destination, SKU, packaging and quantity'); return; }
@@ -252,6 +304,13 @@ function NewTransferDialog({ open, onClose, onCreated }) {
             packaging_type_name: it.packaging_type_name,
             units_per_package: parseInt(it.units_per_package),
             quantity: parseInt(it.quantity),
+            // Batch (when source tracks). batch_code is denormalised so the
+            // persisted line item carries the human-readable code, but the
+            // backend also re-hydrates it from the stock row.
+            ...(sourceTracksBatches && it.batch_id ? {
+              batch_id: it.batch_id,
+              batch_code: it.batch_code || null,
+            } : {}),
             // Rate is intentionally NOT sent — backend looks it up from the
             // destination distributor's commercials (distributor_margin_matrix).
           };
@@ -390,6 +449,42 @@ function NewTransferDialog({ open, onClose, onCreated }) {
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     </div>
+                    {/* Row 1.5: Batch picker — only when source warehouse has track_batches=true */}
+                    {sourceTracksBatches && it.sku_id && (
+                      <div className="flex items-start gap-3 mt-2">
+                        <div className="flex-1">
+                          <Label className="text-[10px] text-slate-500 flex items-center gap-1">
+                            Batch *
+                            <span className="text-[9px] uppercase tracking-wider text-amber-700 font-semibold bg-amber-50 border border-amber-200 rounded px-1 py-px">FIFO</span>
+                          </Label>
+                          {it.batches_loading ? (
+                            <div className="h-9 px-2 flex items-center text-xs text-slate-500">
+                              <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> Loading batches…
+                            </div>
+                          ) : it.batches_available.length === 0 ? (
+                            <div className="h-9 px-2 flex items-center text-xs text-red-600 bg-red-50 border border-red-200 rounded-md">
+                              No batches with stock at the source warehouse for this SKU.
+                            </div>
+                          ) : (
+                            <select
+                              className="w-full h-9 px-2 border rounded-md text-xs bg-white"
+                              value={it.batch_id || ''}
+                              onChange={(e) => {
+                                const b = it.batches_available.find((x) => x.batch_id === e.target.value);
+                                updateItem(i, { batch_id: e.target.value, batch_code: b?.batch_code || '' });
+                              }}
+                              data-testid={`item-batch-${i}`}
+                            >
+                              {it.batches_available.map((b) => (
+                                <option key={b.batch_id || 'legacy'} value={b.batch_id || ''}>
+                                  {b.batch_code} — {b.quantity} bottles{b.received_at ? ` · ${(b.received_at || '').slice(0, 10)}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     {/* Row 2: Avail | Qty | Rate | Subtotal */}
                     <div className="flex items-start gap-3 mt-3">
                       <div className="w-20 text-center">

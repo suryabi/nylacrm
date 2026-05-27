@@ -1679,7 +1679,14 @@ async def create_delivery_challan_for_stock_transfer(
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
         base_name = (it.get("sku_name") or "").strip() or "Item"
         pkg = (it.get("packaging_type_name") or "").strip()
-        display_name = f"{base_name} · {pkg}" if pkg else base_name
+        # Embed batch in line description so the printed Challan carries traceability.
+        batch_code = (it.get("batch_code") or "").strip()
+        parts = [base_name]
+        if pkg:
+            parts.append(pkg)
+        if batch_code:
+            parts.append(f"Batch {batch_code}")
+        display_name = " · ".join(parts)
         line_items.append({
             "item_id": zoho_item_id,
             "name": display_name,
@@ -1801,7 +1808,14 @@ async def create_invoice_for_stock_transfer(
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
         base_name = (it.get("sku_name") or "").strip() or "Item"
         pkg = (it.get("packaging_type_name") or "").strip()
-        display_name = f"{base_name} · {pkg}" if pkg else base_name
+        # Embed batch in line description so the printed PDF carries traceability.
+        batch_code = (it.get("batch_code") or "").strip()
+        parts = [base_name]
+        if pkg:
+            parts.append(pkg)
+        if batch_code:
+            parts.append(f"Batch {batch_code}")
+        display_name = " · ".join(parts)
         line_items.append({
             "item_id": zoho_item_id,
             "name": display_name,

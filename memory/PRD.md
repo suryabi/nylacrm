@@ -14,6 +14,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Bug fix: Fleet dropdowns empty in Delivery Schedule ✅ DONE
+- **Problem (PRODUCTION)**: Drivers and vehicles added in Admin → Fleet were not appearing in the Delivery Schedule's vehicle/driver picker. Root cause: `GET /api/distributor/delivery-schedules/fleet/{vehicles,drivers}` filtered with a strict `^{distributor.city}$` regex, so any vehicle/driver created without a city (the default state) was excluded.
+- **Fix** (`/app/backend/routes/distributor_delivery_schedules.py`): Introduced `_city_match_clause()` — inclusive filter that matches the distributor's city OR records with `city` null/blank/missing. Now vehicles/drivers without a city are treated as "available everywhere", which mirrors the Admin's intent when leaving the optional field empty.
+- **UI labels updated** to reflect new semantics: "filtered to {city} or unassigned" instead of "filtered to {city}" (`DeliveryScheduleDetail.js`, `DeliverySchedulesList.js`).
+- **Verified**: cURL test with Distributor user `john.distributor@test.com` — both endpoints now return all 2 vehicles + 3 drivers (vs zero before).
+
+
 ### 2026-05-27 — Stock Transfer pricing: `master_skus.base_price` + Cross-PAN block ✅ DONE
 - **Pricing source migrated**: Stock Transfer rate now comes from a new SKU-level field `master_skus.base_price` (the company-wide no-margin list price), NOT from `distributor_margin_matrix` anymore. Schedule-I / Rule 30 compliant per Indian GST law for branch transfers between distinct GSTINs of the same legal entity.
 - **Cross-PAN block**: `POST /api/distributor/stock-transfers/` now returns HTTP 400 when source PAN ≠ destination PAN with a clear message directing the user to use **Stock In** instead (where commission, settlement and margin are tracked). Runs before stock + pricing checks so the right error surfaces first.

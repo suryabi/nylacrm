@@ -152,6 +152,9 @@ class DistributorLocationCreate(BaseModel):
     email: Optional[str] = None
     is_default: Optional[bool] = False
     is_factory: Optional[bool] = False
+    # When True, every stock-in / stock-out / stock-transfer involving this
+    # warehouse REQUIRES a batch_id per line. Default False (feature opt-in).
+    track_batches: Optional[bool] = False
     status: Optional[str] = "active"
     # Google Places-derived geocoding fields. Populated when the user picks an
     # address from the Places autocomplete; used for "Open in Google Maps" and
@@ -174,6 +177,7 @@ class DistributorLocationUpdate(BaseModel):
     email: Optional[str] = None
     is_default: Optional[bool] = None
     is_factory: Optional[bool] = None
+    track_batches: Optional[bool] = None
     status: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
@@ -196,6 +200,7 @@ class DistributorLocation(BaseModel):
     email: Optional[str] = None
     is_default: bool = False
     is_factory: bool = False
+    track_batches: bool = False
     status: str = "active"
     lat: Optional[float] = None
     lng: Optional[float] = None

@@ -541,7 +541,7 @@ export default function DeliveryScheduleDetail() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card className="p-4">
           <Label className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-            <Truck className="h-3 w-3" /> Vehicle {fleet.city && <span className="text-slate-400 normal-case ml-1">· in {fleet.city}</span>}
+            <Truck className="h-3 w-3" /> Vehicle {fleet.city && <span className="text-slate-400 normal-case ml-1">· in {fleet.city} or unassigned</span>}
           </Label>
           <Select value={schedule.vehicle_id || '__none__'} onValueChange={(v) => changeVehicle(v === '__none__' ? '' : v)} disabled={!editable || busy}>
             <SelectTrigger className="mt-2" data-testid="assign-vehicle"><SelectValue placeholder="Pick vehicle" /></SelectTrigger>
@@ -559,7 +559,7 @@ export default function DeliveryScheduleDetail() {
         </Card>
         <Card className="p-4">
           <Label className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-            <User className="h-3 w-3" /> Driver {fleet.city && <span className="text-slate-400 normal-case ml-1">· in {fleet.city}</span>}
+            <User className="h-3 w-3" /> Driver {fleet.city && <span className="text-slate-400 normal-case ml-1">· in {fleet.city} or unassigned</span>}
           </Label>
           <Select value={schedule.driver_id || '__none__'} onValueChange={(v) => changeDriver(v === '__none__' ? '' : v)} disabled={!editable || busy}>
             <SelectTrigger className="mt-2" data-testid="assign-driver"><SelectValue placeholder="Pick driver" /></SelectTrigger>

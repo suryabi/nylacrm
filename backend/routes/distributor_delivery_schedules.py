@@ -140,28 +140,58 @@ async def _distance_matrix(origins: List[str], destinations: List[str]) -> Optio
 
 # ============ Fleet pickers (vehicles / drivers filtered by distributor's city) ============
 
+def _city_match_clause(city: Optional[str]) -> Optional[dict]:
+    """Build a Mongo filter that matches records in the given city OR records
+    with no city assigned (None / missing / blank). Vehicles & drivers without
+    a city are treated as "available everywhere" so admins aren't forced to
+    re-edit every record after adding a distributor.
+    Returns None if `city` is falsy (i.e. no filter needed at all)."""
+    if not city:
+        return None
+    return {
+        "$or": [
+            {"city": {"$regex": f"^{city}$", "$options": "i"}},
+            {"city": None},
+            {"city": ""},
+            {"city": {"$exists": False}},
+        ]
+    }
+
+
 @router.get("/fleet/vehicles")
 async def list_distributor_fleet_vehicles(current_user: dict = Depends(get_current_user)):
-    """Active vehicles in the distributor's city. Used by the schedule create dialog."""
+    """Active vehicles available to the distributor.
+
+    Filter is inclusive: a vehicle is shown if its `city` matches the
+    distributor's city (case-insensitive) OR if no city is set on the vehicle.
+    This avoids the common foot-gun where vehicles created without a city are
+    silently invisible in the schedule picker.
+    """
     tenant_id = get_current_tenant_id()
     distributor_id = _resolve_distributor_id(current_user)
     city = await _get_distributor_city(distributor_id, tenant_id)
     q: dict = {"tenant_id": tenant_id, "status": "active"}
-    if city:
-        q["city"] = {"$regex": f"^{city}$", "$options": "i"}
+    city_clause = _city_match_clause(city)
+    if city_clause:
+        q.update(city_clause)
     vehicles = await db.vehicles.find(q, {"_id": 0}).sort("registration_number", 1).to_list(500)
     return {"city": city, "vehicles": vehicles}
 
 
 @router.get("/fleet/drivers")
 async def list_distributor_fleet_drivers(current_user: dict = Depends(get_current_user)):
-    """Active drivers in the distributor's city. Used by the schedule create dialog."""
+    """Active drivers available to the distributor.
+
+    Filter is inclusive: a driver is shown if their `city` matches the
+    distributor's city (case-insensitive) OR if no city is set on the driver.
+    """
     tenant_id = get_current_tenant_id()
     distributor_id = _resolve_distributor_id(current_user)
     city = await _get_distributor_city(distributor_id, tenant_id)
     q: dict = {"tenant_id": tenant_id, "status": "active"}
-    if city:
-        q["city"] = {"$regex": f"^{city}$", "$options": "i"}
+    city_clause = _city_match_clause(city)
+    if city_clause:
+        q.update(city_clause)
     drivers = await db.drivers.find(q, {"_id": 0}).sort("full_name", 1).to_list(500)
     return {"city": city, "drivers": drivers}
 

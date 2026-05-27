@@ -61,8 +61,14 @@ class TransferItem(BaseModel):
     packaging_type_name: str  # "Crate - 12", "Carton - 6", etc.
     units_per_package: int = Field(..., gt=0)
     quantity: int = Field(..., gt=0, description="Number of packages (crates / cartons) to transfer")
-    # NOTE: Per-package rate is auto-derived from the destination distributor's
-    # commercials (distributor_margin_matrix.transfer_price × units_per_package).
+    # Optional batch identity. Required IFF the source warehouse has
+    # `track_batches=true` — see create_stock_transfer's validation. When set,
+    # the batch is recorded on the source deduction, the destination credit and
+    # the persisted line item, regardless of whether the destination warehouse
+    # tracks batches (so the chain of custody never breaks downstream).
+    batch_id: Optional[str] = None
+    batch_code: Optional[str] = None
+    # NOTE: Per-package rate is auto-derived from `master_skus.base_price`.
     # Any client-supplied value here is ignored — the server is the source of truth.
     rate: float = 0.0
 
@@ -148,30 +154,39 @@ def _qualifies_for_challan(src_distributor: dict, dst_distributor: dict,
 async def _adjust_distributor_stock(tenant_id: str, distributor_id: str, location_id: str,
                                      item: TransferItem, delta_units: int, *,
                                      distributor_name: str, location_name: str):
-    """Add/subtract `delta_units` (bottles) in `distributor_stock` for (distributor, location, sku)."""
+    """Add/subtract `delta_units` (bottles) in `distributor_stock` for
+    (distributor, location, sku[, batch]). When `item.batch_id` is set the
+    update key includes batch_id so each batch keeps its own row — critical
+    for batch-level traceability across the chain. When batch_id is None we
+    update the legacy aggregate row (existing behaviour preserved)."""
     now = datetime.now(timezone.utc).isoformat()
+    key: dict = {
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "distributor_location_id": location_id,
+        "sku_id": item.sku_id,
+    }
+    if item.batch_id:
+        key["batch_id"] = item.batch_id
+    else:
+        # Match the legacy row (no batch_id field set OR null)
+        key["batch_id"] = {"$in": [None]}
+    on_insert = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "distributor_location_id": location_id,
+        "sku_id": item.sku_id,
+        "sku_name": item.sku_name,
+        "distributor_name": distributor_name,
+        "location_name": location_name,
+        "batch_id": item.batch_id,
+        "batch_code": item.batch_code,
+        "created_at": now,
+    }
     res = await db.distributor_stock.update_one(
-        {
-            "tenant_id": tenant_id,
-            "distributor_id": distributor_id,
-            "distributor_location_id": location_id,
-            "sku_id": item.sku_id,
-        },
-        {
-            "$inc": {"quantity": delta_units},
-            "$setOnInsert": {
-                "id": str(uuid.uuid4()),
-                "tenant_id": tenant_id,
-                "distributor_id": distributor_id,
-                "distributor_location_id": location_id,
-                "sku_id": item.sku_id,
-                "sku_name": item.sku_name,
-                "distributor_name": distributor_name,
-                "location_name": location_name,
-                "created_at": now,
-            },
-            "$set": {"updated_at": now},
-        },
+        key,
+        {"$inc": {"quantity": delta_units}, "$setOnInsert": on_insert, "$set": {"updated_at": now}},
         upsert=True,
     )
     return res
@@ -180,33 +195,35 @@ async def _adjust_distributor_stock(tenant_id: str, distributor_id: str, locatio
 async def _adjust_factory_stock(tenant_id: str, warehouse_location_id: str,
                                  item: TransferItem, delta_units: int, *,
                                  warehouse_name: str):
-    """Add/subtract `delta_units` (bottles) in `factory_warehouse_stock` for the warehouse + sku.
-
-    Mirrors how Production QC writes to this collection (warehouse_location_id +
-    sku_id is the natural key; `quantity` is bottle-level). `bottles_per_crate`
-    is best-effort populated from the transfer item's `units_per_package`.
+    """Add/subtract `delta_units` (bottles) in `factory_warehouse_stock`.
+    Key includes `batch_id` when present so each batch's stock is tracked
+    independently; legacy rows (batch_id null) continue to aggregate.
     """
     now = datetime.now(timezone.utc).isoformat()
+    key: dict = {
+        "tenant_id": tenant_id,
+        "warehouse_location_id": warehouse_location_id,
+        "sku_id": item.sku_id,
+    }
+    if item.batch_id:
+        key["batch_id"] = item.batch_id
+    else:
+        key["batch_id"] = {"$in": [None]}
+    on_insert = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "warehouse_location_id": warehouse_location_id,
+        "warehouse_name": warehouse_name,
+        "sku_id": item.sku_id,
+        "sku_name": item.sku_name,
+        "batch_id": item.batch_id,
+        "batch_code": item.batch_code,
+        "bottles_per_crate": int(item.units_per_package) if item.units_per_package else None,
+        "created_at": now,
+    }
     res = await db.factory_warehouse_stock.update_one(
-        {
-            "tenant_id": tenant_id,
-            "warehouse_location_id": warehouse_location_id,
-            "sku_id": item.sku_id,
-        },
-        {
-            "$inc": {"quantity": delta_units},
-            "$setOnInsert": {
-                "id": str(uuid.uuid4()),
-                "tenant_id": tenant_id,
-                "warehouse_location_id": warehouse_location_id,
-                "warehouse_name": warehouse_name,
-                "sku_id": item.sku_id,
-                "sku_name": item.sku_name,
-                "bottles_per_crate": int(item.units_per_package) if item.units_per_package else None,
-                "created_at": now,
-            },
-            "$set": {"updated_at": now},
-        },
+        key,
+        {"$inc": {"quantity": delta_units}, "$setOnInsert": on_insert, "$set": {"updated_at": now}},
         upsert=True,
     )
     return res
@@ -226,30 +243,49 @@ async def _adjust_stock_for_location(tenant_id: str, location: dict, item: Trans
     )
 
 
-async def _read_source_stock(tenant_id: str, source_loc: dict, sku_ids: list) -> dict:
-    """Return `{sku_id: {sku_id, sku_name, quantity}}` for the source warehouse,
-    pulling from either `factory_warehouse_stock` or `distributor_stock` based on
-    whether the source location is a factory warehouse."""
+async def _read_source_stock(tenant_id: str, source_loc: dict, sku_ids: list,
+                              batch_ids: Optional[list] = None) -> dict:
+    """Return `{(sku_id, batch_id): {sku_name, batch_code, quantity}}` for the
+    source warehouse. Reads from `factory_warehouse_stock` for factory
+    warehouses, otherwise `distributor_stock`.
+
+    When `batch_ids` is provided the result is keyed by (sku_id, batch_id);
+    otherwise the key is sku_id (legacy aggregate) — the caller decides which
+    shape it needs based on the source warehouse's `track_batches` flag.
+    """
     if source_loc.get("is_factory"):
+        q: dict = {
+            "tenant_id": tenant_id,
+            "warehouse_location_id": source_loc["id"],
+            "sku_id": {"$in": sku_ids},
+        }
+        if batch_ids:
+            q["batch_id"] = {"$in": batch_ids}
         rows = await db.factory_warehouse_stock.find(
-            {
-                "tenant_id": tenant_id,
-                "warehouse_location_id": source_loc["id"],
-                "sku_id": {"$in": sku_ids},
-            },
-            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
-        ).to_list(len(sku_ids) + 1)
+            q, {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1, "batch_code": 1},
+        ).to_list(len(sku_ids) * 50 + 1)
     else:
+        q = {
+            "tenant_id": tenant_id,
+            "distributor_id": source_loc["distributor_id"],
+            "distributor_location_id": source_loc["id"],
+            "sku_id": {"$in": sku_ids},
+        }
+        if batch_ids:
+            q["batch_id"] = {"$in": batch_ids}
         rows = await db.distributor_stock.find(
-            {
-                "tenant_id": tenant_id,
-                "distributor_id": source_loc["distributor_id"],
-                "distributor_location_id": source_loc["id"],
-                "sku_id": {"$in": sku_ids},
-            },
-            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
-        ).to_list(len(sku_ids) + 1)
-    return {r["sku_id"]: r for r in rows}
+            q, {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1, "batch_code": 1},
+        ).to_list(len(sku_ids) * 50 + 1)
+    if batch_ids:
+        return {(r["sku_id"], r.get("batch_id")): r for r in rows}
+    # Legacy aggregate: collapse all batches for the sku
+    aggregated: dict = {}
+    for r in rows:
+        b = aggregated.setdefault(r["sku_id"], {"sku_id": r["sku_id"],
+                                                 "sku_name": r.get("sku_name"),
+                                                 "quantity": 0})
+        b["quantity"] += int(r.get("quantity") or 0)
+    return aggregated
 
 
 async def _resolve_per_bottle_rate(
@@ -451,6 +487,62 @@ async def warehouse_stock_overview(current_user: dict = Depends(get_current_user
     }
 
 
+@router.get("/batches-available")
+async def list_batches_available(
+    location_id: str = Query(..., description="Source warehouse location id"),
+    sku_id: str = Query(..., description="SKU whose batches we want to list"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return batches with positive stock at this warehouse for the given SKU.
+
+    Used by the New Stock Transfer dialog when source warehouse has
+    `track_batches=true`. Sorted by `received_at` ascending (FIFO — oldest
+    batch first) so the picker can default to the oldest.
+
+    Response: `{ track_batches, batches: [{batch_id, batch_code, quantity, received_at}] }`
+    """
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    loc = await _load_location(tenant_id, location_id)
+    track_batches = bool(loc.get("track_batches"))
+
+    if loc.get("is_factory"):
+        rows = await db.factory_warehouse_stock.find(
+            {"tenant_id": tenant_id, "warehouse_location_id": location_id,
+             "sku_id": sku_id, "quantity": {"$gt": 0}},
+            {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1},
+        ).to_list(500)
+    else:
+        rows = await db.distributor_stock.find(
+            {"tenant_id": tenant_id, "distributor_id": loc.get("distributor_id"),
+             "distributor_location_id": location_id, "sku_id": sku_id, "quantity": {"$gt": 0}},
+            {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1},
+        ).to_list(500)
+
+    # Hydrate batch_code from production_batches when we only have batch_id.
+    missing_codes = [r["batch_id"] for r in rows if r.get("batch_id") and not r.get("batch_code")]
+    if missing_codes:
+        batches = await db.production_batches.find(
+            {"tenant_id": tenant_id, "id": {"$in": missing_codes}},
+            {"_id": 0, "id": 1, "batch_code": 1, "created_at": 1},
+        ).to_list(len(missing_codes) + 1)
+        code_map = {b["id"]: b for b in batches}
+        for r in rows:
+            if r.get("batch_id") in code_map:
+                r["batch_code"] = code_map[r["batch_id"]].get("batch_code")
+                r.setdefault("created_at", code_map[r["batch_id"]].get("created_at"))
+
+    out = [{
+        "batch_id": r.get("batch_id"),
+        "batch_code": r.get("batch_code") or ("(legacy / no batch)" if not r.get("batch_id") else r.get("batch_id")),
+        "quantity": int(r.get("quantity") or 0),
+        "received_at": r.get("created_at"),
+    } for r in rows]
+    # FIFO — oldest first
+    out.sort(key=lambda r: (r.get("received_at") or "9999"))
+    return {"track_batches": track_batches, "batches": out}
+
+
 @router.get("/location-stock")
 async def get_location_stock(
     location_id: str = Query(..., description="Source warehouse location id"),
@@ -515,7 +607,7 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
                    | {r["_id"] for r in rows_f if r["_id"]})
     locs = {loc["id"]: loc for loc in await db.distributor_locations.find(
         {"tenant_id": tenant_id, "id": {"$in": loc_ids}},
-        {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "gstin": 1, "is_factory": 1, "city": 1, "state": 1},
+        {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "gstin": 1, "is_factory": 1, "track_batches": 1, "city": 1, "state": 1},
     ).to_list(len(loc_ids) + 1)} if loc_ids else {}
 
     dist_ids = list({r["_id"]["d"] for r in rows_d if r["_id"].get("d")}
@@ -540,6 +632,7 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
             "total_qty": 0,
             "is_self_managed": bool(d.get("is_self_managed")),
             "is_factory": bool(loc.get("is_factory")),
+            "track_batches": bool(loc.get("track_batches")),
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
@@ -560,6 +653,7 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
             "total_qty": 0,
             "is_self_managed": bool(d.get("is_self_managed")),
             "is_factory": True,
+            "track_batches": bool(loc.get("track_batches")),
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
@@ -705,23 +799,61 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
             "and the contracted margin are applied correctly.",
         )
 
+    # ── Batch tracking validation (Phase 1) ──
+    # If the source warehouse has `track_batches=true`, every line item must
+    # carry a `batch_id`. We then validate stock per-batch (not per-SKU).
+    src_tracks_batches = bool(src_loc.get("track_batches"))
+    if src_tracks_batches:
+        missing_batch = [it for it in payload.items if not it.batch_id]
+        if missing_batch:
+            names = [(it.sku_name or it.sku_id) for it in missing_batch]
+            raise HTTPException(
+                400,
+                f"Source warehouse '{src_loc.get('location_name')}' has batch tracking enabled — "
+                f"a batch must be selected for: {', '.join(names)}.",
+            )
+
     # ── Stock availability check (in raw units; storage is bottles-level) ──
     # The source warehouse may be either a regular distributor warehouse
     # (`distributor_stock`) or a factory warehouse (`factory_warehouse_stock`).
     sku_ids = [it.sku_id for it in payload.items]
-    stock_map = await _read_source_stock(tenant_id, src_loc, sku_ids)
-    avail = {sku_id: int(r.get("quantity") or 0) for sku_id, r in stock_map.items()}
-    sku_name_lookup = {sku_id: r.get("sku_name") for sku_id, r in stock_map.items()}
-    insufficient = []
-    for it in payload.items:
-        a_units = avail.get(it.sku_id, 0)
-        avail_pkgs = a_units // it.units_per_package if it.units_per_package > 0 else 0
-        if it.quantity > avail_pkgs:
-            insufficient.append(
-                f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)}: "
-                f"requested {it.quantity} {it.packaging_type_name}, "
-                f"available {avail_pkgs} {it.packaging_type_name}"
-            )
+    if src_tracks_batches:
+        batch_ids = [it.batch_id for it in payload.items if it.batch_id]
+        stock_map = await _read_source_stock(tenant_id, src_loc, sku_ids, batch_ids=batch_ids)
+        # stock_map keys are (sku_id, batch_id) when batch-tracked
+        avail = {k: int(v.get("quantity") or 0) for k, v in stock_map.items()}
+        sku_name_lookup = {k[0]: v.get("sku_name") for k, v in stock_map.items()}
+        # Hydrate batch_code from the stock row so the persisted transfer line is complete
+        for it in payload.items:
+            if it.batch_id and not it.batch_code:
+                row = stock_map.get((it.sku_id, it.batch_id))
+                if row and row.get("batch_code"):
+                    it.batch_code = row["batch_code"]
+        insufficient = []
+        for it in payload.items:
+            a_units = avail.get((it.sku_id, it.batch_id), 0)
+            avail_pkgs = a_units // it.units_per_package if it.units_per_package > 0 else 0
+            if it.quantity > avail_pkgs:
+                insufficient.append(
+                    f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)} "
+                    f"(batch {it.batch_code or it.batch_id}): "
+                    f"requested {it.quantity} {it.packaging_type_name}, "
+                    f"available {avail_pkgs} {it.packaging_type_name}"
+                )
+    else:
+        stock_map = await _read_source_stock(tenant_id, src_loc, sku_ids)
+        avail = {sku_id: int(r.get("quantity") or 0) for sku_id, r in stock_map.items()}
+        sku_name_lookup = {sku_id: r.get("sku_name") for sku_id, r in stock_map.items()}
+        insufficient = []
+        for it in payload.items:
+            a_units = avail.get(it.sku_id, 0)
+            avail_pkgs = a_units // it.units_per_package if it.units_per_package > 0 else 0
+            if it.quantity > avail_pkgs:
+                insufficient.append(
+                    f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)}: "
+                    f"requested {it.quantity} {it.packaging_type_name}, "
+                    f"available {avail_pkgs} {it.packaging_type_name}"
+                )
     if insufficient:
         raise HTTPException(400, "Insufficient stock at source. " + "; ".join(insufficient))
 
@@ -770,6 +902,8 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
             "units_per_package": int(it.units_per_package),
             "quantity": int(it.quantity),               # in packages (crates / cartons)
             "quantity_units": quantity_units,           # bottles / raw units (for stock storage)
+            "batch_id": it.batch_id,
+            "batch_code": it.batch_code,
             "rate": per_pkg_rate,                       # per-package rate (auto from master_skus.base_price)
             "rate_per_bottle": round(float(rinfo["rate_per_bottle"]), 4),
             "rate_source": "master_sku.base_price",
@@ -954,6 +1088,8 @@ async def delete_stock_transfer(
                 packaging_type_name=it.get("packaging_type_name") or "package",
                 units_per_package=int(it.get("units_per_package") or 1),
                 quantity=int(it.get("quantity") or 1),
+                batch_id=it.get("batch_id"),
+                batch_code=it.get("batch_code"),
             )
             await _adjust_stock_for_location(
                 tenant_id, src_loc, ti, units,

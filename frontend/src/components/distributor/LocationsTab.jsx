@@ -355,6 +355,20 @@ export default function LocationsTab({
                 Mark as Factory Warehouse
               </label>
             </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-indigo-50/60 border border-indigo-100">
+              <Checkbox
+                id="track_batches"
+                checked={!!newLocation.track_batches}
+                onCheckedChange={(checked) => setNewLocation(prev => ({ ...prev, track_batches: !!checked }))}
+                data-testid="location-track-batches-checkbox"
+              />
+              <label htmlFor="track_batches" className="text-sm font-medium text-slate-700 cursor-pointer">
+                Track batches on stock movements
+                <span className="block text-[10px] font-normal text-slate-500 mt-0.5">
+                  When ON, every stock-in / stock-out / stock-transfer involving this warehouse requires a batch.
+                </span>
+              </label>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => closeDialog(false)}>Cancel</Button>
