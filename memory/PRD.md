@@ -14,6 +14,19 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Fix: SKU rename leaves stale labels everywhere ✅ DONE
+- **Problem (PRODUCTION)**: User renamed SKUs in `master_skus`. Many transactional collections store a denormalised snapshot of `sku_name` at write time. After the rename, stock dashboards, deliveries, returns, transfers, invoices, batches, cost cards and reports all kept showing the old labels even though they were still pointing at the right rows by `sku_id`.
+- **Permanent fix #1 — auto-rehydration hook** (`/app/backend/server.py:2095` — `PUT /api/master-skus/{sku_id}`): when `sku_name` changes, walk every denormalised collection (17 of them) and update each item joined by `sku_id`. Future renames are now instant and complete. Failures are logged but don't block the rename.
+- **Fix #2 — one-shot migration endpoint** (`/app/backend/routes/admin_sku_migration.py`): `POST /api/admin/migrations/sku/rehydrate-sku-names?dry_run=true|false`. Tenant-scoped, admin-only. Returns a per-collection report of `examined / would_update or updated / unknown_sku_ids`. Idempotent.
+- **Fix #3 — one-click admin UI** (`/app/frontend/src/pages/SKUManagement.js`): new "Sync SKU names" button (testid `rehydrate-sku-names-btn`) in the SKU Management header, next to "Add New SKU". Confirms via dialog, calls the migration, toasts the totals.
+- **Verified in preview**:
+  - Dry-run reported 57 stale snapshots across 10 collections.
+  - Live run updated all 57. Re-run = 0 (idempotent).
+  - Renaming SKU via PUT /master-skus/{id} immediately rehydrated `factory_warehouse_stock.sku_name` and `distributor_stock_transfers.items[].sku_name`.
+- **Affected collections** (17): cost_cards, customer_returns, distributor_billing_config, distributor_delivery_items, distributor_manual_stock_entries, distributor_margin_matrix, distributor_shipment_items, distributor_stock, distributor_stock_transfers, factory_warehouse_stock, invoices, production_batch_deletions, production_batches, qc_routes, rejection_cost_mappings, target_allocations_v2, warehouse_transfers.
+
+
+
 ### 2026-05-29 — Bug fix #3: ACTUAL root cause — Fleet endpoints crashed (HTTP 500) on legacy string addresses ✅ DONE
 - **User-reported symptom**: empty vehicle/driver dropdowns. I'd been chasing the wrong cause for two iterations (null city, then operating coverage). The user shared a browser devtools screenshot showing the endpoint actually returns **HTTP 500**, not an empty list — frontend was rendering the "No active vehicles" fallback because the request failed.
 - **Real root cause**: `_get_distributor_city` did `(dist.get("billing_address") or {}).get("city")`. **11 of 17 distributors in this tenant** have `billing_address` stored as a **string** (legacy schema — values like `"afdaf"`, `"Test Address"`, `""`). When the string is truthy, `or {}` returns the string, then `.get("city")` raises `AttributeError: 'str' object has no attribute 'get'` → 500.

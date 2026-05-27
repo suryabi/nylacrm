@@ -197,6 +197,14 @@ from .admin_drivers import router as admin_drivers_router
 routes_router.include_router(admin_vehicles_router, prefix="/admin/vehicles", tags=["Admin · Vehicles"])
 routes_router.include_router(admin_drivers_router, prefix="/admin/drivers", tags=["Admin · Drivers"])
 
+# Admin → SKU Name Rehydration migration (one-shot maintenance)
+from .admin_sku_migration import router as admin_sku_migration_router
+routes_router.include_router(
+    admin_sku_migration_router,
+    prefix="/admin/migrations/sku",
+    tags=["Admin · Migrations · SKU"],
+)
+
 # Distributor → daily Delivery Schedules (vehicle + driver + ordered confirmed deliveries → PDF)
 from .distributor_delivery_schedules import router as distributor_delivery_schedules_router
 routes_router.include_router(

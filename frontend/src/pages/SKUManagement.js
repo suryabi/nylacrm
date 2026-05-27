@@ -10,7 +10,7 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Package, Plus, Pencil, Trash2, Loader2, Save, X, 
-  Search, Filter, ArrowUpDown, Check
+  Search, Filter, ArrowUpDown, Check, RefreshCcw
 } from 'lucide-react';
 import {
   Select,
@@ -71,6 +71,25 @@ export default function SKUManagement() {
 
   const API_URL = process.env.REACT_APP_BACKEND_URL;
   const getHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' });
+
+  // ── Rehydrate denormalised SKU names across all transactional collections.
+  // Used as a one-shot tool after a bulk SKU rename to refresh stale labels in
+  // stock rows, deliveries, returns, transfers, invoices, etc. New renames are
+  // already handled by an auto-rehydration hook on PUT /master-skus/{id}.
+  const [rehydrating, setRehydrating] = useState(false);
+  const handleRehydrateSkuNames = async () => {
+    if (!window.confirm("This will refresh every saved SKU name across stock, deliveries, returns, transfers, invoices and reports to match the current Master SKU list. Continue?")) return;
+    setRehydrating(true);
+    try {
+      const res = await axios.post(`${API_URL}/api/admin/migrations/sku/rehydrate-sku-names?dry_run=false`, {}, { headers: getHeaders() });
+      const t = res.data?.totals || {};
+      toast.success(`Rehydrated ${t.updated || 0} stale SKU labels across ${t.collections_touched || 0} collections.`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Rehydration failed. Check console.');
+    } finally {
+      setRehydrating(false);
+    }
+  };
 
   useEffect(() => {
     fetchSkus();
@@ -261,10 +280,25 @@ export default function SKUManagement() {
             <p className="text-muted-foreground">Manage your product catalog and SKU master list</p>
           </div>
         </div>
-        <Button onClick={handleOpenCreate} data-testid="create-sku-btn" className="bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-lg shadow-orange-200/50 dark:shadow-orange-900/30">
-          <Plus className="h-4 w-4 mr-2" />
-          Add New SKU
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleRehydrateSkuNames}
+            disabled={rehydrating}
+            data-testid="rehydrate-sku-names-btn"
+            title="Refresh saved SKU labels across stock, deliveries, returns, transfers and reports to match the current SKU master list."
+            className="border-slate-200 dark:border-slate-700"
+          >
+            {rehydrating
+              ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              : <RefreshCcw className="h-4 w-4 mr-2" />}
+            Sync SKU names
+          </Button>
+          <Button onClick={handleOpenCreate} data-testid="create-sku-btn" className="bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white shadow-lg shadow-orange-200/50 dark:shadow-orange-900/30">
+            <Plus className="h-4 w-4 mr-2" />
+            Add New SKU
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

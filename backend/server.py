@@ -2093,6 +2093,32 @@ async def update_sku(
     update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     await db.master_skus.update_one({'id': sku_id}, {'$set': update_dict})
+
+    # If the display name changed, refresh every denormalised snapshot of
+    # `sku_name` across transactional collections so downstream views (stock,
+    # deliveries, returns, transfers, invoices, …) stop showing the old label.
+    # master_skus is global — same renamed name should propagate to every
+    # tenant that uses this SKU.
+    new_name = update_dict.get('sku_name')
+    if new_name and new_name != existing.get('sku_name'):
+        try:
+            from routes.admin_sku_migration import COLLECTIONS as _SKU_DENORM_COLS
+            for col_name, shape in _SKU_DENORM_COLS:
+                if shape == "top":
+                    await db[col_name].update_many(
+                        {"sku_id": sku_id, "sku_name": {"$ne": new_name}},
+                        {"$set": {"sku_name": new_name}},
+                    )
+                else:  # items[]
+                    await db[col_name].update_many(
+                        {"items.sku_id": sku_id},
+                        {"$set": {"items.$[el].sku_name": new_name}},
+                        array_filters=[{"el.sku_id": sku_id, "el.sku_name": {"$ne": new_name}}],
+                    )
+        except Exception as e:
+            # Don't block the rename if rehydration partially fails — admin
+            # can always replay /admin/migrations/sku/rehydrate-sku-names.
+            logger.exception("SKU rename rehydration failed for sku_id=%s: %s", sku_id, e)
     
     updated = await db.master_skus.find_one({'id': sku_id}, {'_id': 0})
     return {
