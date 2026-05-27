@@ -4950,15 +4950,29 @@ async def update_lead(
         raise HTTPException(status_code=403, detail='Access denied')
     
     # Build update data - handle None values specially for fields that can be cleared
-    clearable_fields = {'next_followup_date', 'last_contacted_date', 'dotted_line_to', 'reports_to'}
+    # If a field is in `clearable_fields`, sending it as `null` from the client
+    # will write None to the DB (clear it). Other null fields are skipped so we
+    # don't accidentally blank values during a partial update.
+    clearable_fields = {
+        'next_followup_date', 'last_contacted_date', 'dotted_line_to', 'reports_to',
+        # Onboarding / closure planning fields — users need to be able to clear
+        # these after setting them once.
+        'onboarded_month', 'onboarded_year',
+        'target_closure_month', 'target_closure_year',
+    }
     update_data = {}
-    
+
+    # `model_dump(exclude_unset=True)` returns only the fields the client put in
+    # the request body, so we can distinguish "field not provided" from
+    # "field provided as null". Use that to decide whether a clearable field
+    # was explicitly set to null.
+    explicit = lead_update.model_dump(exclude_unset=True)
     for k, v in lead_update.model_dump().items():
-        # Include the field if it has a value, OR if it's a clearable field explicitly set to None
+        # Include the field if it has a value, OR if it's a clearable field
+        # that the client EXPLICITLY set to None.
         if v is not None:
             update_data[k] = v
-        elif k in clearable_fields:
-            # Allow setting these fields to None (to clear them)
+        elif k in clearable_fields and k in explicit:
             update_data[k] = None
     
     # Status transition validation

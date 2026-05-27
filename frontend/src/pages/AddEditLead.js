@@ -16,7 +16,7 @@ import {
 } from '../components/ui/select';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useMasterLocations } from '../hooks/useMasterLocations';
@@ -494,55 +494,115 @@ export default function AddEditLead() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="onboarded_month">Actual Onboarded Month</Label>
-              <Select value={formData.onboarded_month ? String(formData.onboarded_month) : ''} onValueChange={(v) => updateField('onboarded_month', v)}>
-                <SelectTrigger data-testid="lead-onboarded-month-select">
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[{v:'1',l:'January'},{v:'2',l:'February'},{v:'3',l:'March'},{v:'4',l:'April'},{v:'5',l:'May'},{v:'6',l:'June'},{v:'7',l:'July'},{v:'8',l:'August'},{v:'9',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}].map(m => (
-                    <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1">
+                <Select value={formData.onboarded_month ? String(formData.onboarded_month) : ''} onValueChange={(v) => updateField('onboarded_month', v)}>
+                  <SelectTrigger className="flex-1" data-testid="lead-onboarded-month-select">
+                    <SelectValue placeholder="Select month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[{v:'1',l:'January'},{v:'2',l:'February'},{v:'3',l:'March'},{v:'4',l:'April'},{v:'5',l:'May'},{v:'6',l:'June'},{v:'7',l:'July'},{v:'8',l:'August'},{v:'9',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}].map(m => (
+                      <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.onboarded_month && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => updateField('onboarded_month', '')}
+                    title="Clear"
+                    data-testid="clear-onboarded-month-btn"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="onboarded_year">Actual Onboarded Year</Label>
-              <Select value={formData.onboarded_year ? String(formData.onboarded_year) : ''} onValueChange={(v) => updateField('onboarded_year', v)}>
-                <SelectTrigger data-testid="lead-onboarded-year-select">
-                  <SelectValue placeholder="Select year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2024, 2025, 2026, 2027].map(y => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1">
+                <Select value={formData.onboarded_year ? String(formData.onboarded_year) : ''} onValueChange={(v) => updateField('onboarded_year', v)}>
+                  <SelectTrigger className="flex-1" data-testid="lead-onboarded-year-select">
+                    <SelectValue placeholder="Select year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2024, 2025, 2026, 2027].map(y => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.onboarded_year && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => updateField('onboarded_year', '')}
+                    title="Clear"
+                    data-testid="clear-onboarded-year-btn"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="target_closure_month">Target Closure Month</Label>
-              <Select value={formData.target_closure_month ? String(formData.target_closure_month) : ''} onValueChange={(v) => updateField('target_closure_month', v)}>
-                <SelectTrigger data-testid="lead-target-closure-month-select">
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[{v:'1',l:'January'},{v:'2',l:'February'},{v:'3',l:'March'},{v:'4',l:'April'},{v:'5',l:'May'},{v:'6',l:'June'},{v:'7',l:'July'},{v:'8',l:'August'},{v:'9',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}].map(m => (
-                    <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1">
+                <Select value={formData.target_closure_month ? String(formData.target_closure_month) : ''} onValueChange={(v) => updateField('target_closure_month', v)}>
+                  <SelectTrigger className="flex-1" data-testid="lead-target-closure-month-select">
+                    <SelectValue placeholder="Select month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[{v:'1',l:'January'},{v:'2',l:'February'},{v:'3',l:'March'},{v:'4',l:'April'},{v:'5',l:'May'},{v:'6',l:'June'},{v:'7',l:'July'},{v:'8',l:'August'},{v:'9',l:'September'},{v:'10',l:'October'},{v:'11',l:'November'},{v:'12',l:'December'}].map(m => (
+                      <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.target_closure_month && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => updateField('target_closure_month', '')}
+                    title="Clear"
+                    data-testid="clear-target-closure-month-btn"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="target_closure_year">Target Closure Year</Label>
-              <Select value={formData.target_closure_year ? String(formData.target_closure_year) : ''} onValueChange={(v) => updateField('target_closure_year', v)}>
-                <SelectTrigger data-testid="lead-target-closure-year-select">
-                  <SelectValue placeholder="Select year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[2024, 2025, 2026, 2027].map(y => (
-                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1">
+                <Select value={formData.target_closure_year ? String(formData.target_closure_year) : ''} onValueChange={(v) => updateField('target_closure_year', v)}>
+                  <SelectTrigger className="flex-1" data-testid="lead-target-closure-year-select">
+                    <SelectValue placeholder="Select year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[2024, 2025, 2026, 2027].map(y => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.target_closure_year && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => updateField('target_closure_year', '')}
+                    title="Clear"
+                    data-testid="clear-target-closure-year-btn"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </Card>

@@ -452,6 +452,17 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
         raise HTTPException(status_code=404, detail='Lead not found')
     
     update_data = {k: v for k, v in lead_update.model_dump().items() if v is not None}
+
+    # Allow the client to EXPLICITLY clear a nullable field by sending it as
+    # null. The dict-comp above drops every null (so unsent fields don't get
+    # blanked), but we want fields the user actively cleared from the UI to
+    # actually clear in the DB. `model_dump(exclude_unset=True)` only returns
+    # keys the client put in the request body — any explicit null in there
+    # is a deliberate clear and should overwrite the stored value.
+    explicit = lead_update.model_dump(exclude_unset=True)
+    for k, v in explicit.items():
+        if v is None:
+            update_data[k] = None
     
     # Use custom updated_at if provided (admin feature), otherwise use current time
     if 'updated_at' in update_data and update_data['updated_at']:
