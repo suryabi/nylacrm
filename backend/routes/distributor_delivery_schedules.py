@@ -476,6 +476,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 "id": r.get("id"),
                 "delivery_number": r.get("delivery_number"),
                 "status": r.get("status"),
+                "delivered_at": r.get("delivered_at"),
+                "delivered_by_name": r.get("delivered_by_name"),
                 "account_id": r.get("account_id"),
                 "customer_name": customer_name,
                 "delivery_address": addr or {},
@@ -1083,6 +1085,111 @@ async def approve_schedule(schedule_id: str, current_user: dict = Depends(get_cu
             "status": {"$in": ["confirmed", "delivery_assigned", "scheduled"]},
         },
         {"$set": {"status": "delivery_scheduled", "updated_at": now}}
+    )
+    s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
+    return await _enrich_schedule(s, tenant_id)
+
+
+@router.post("/{schedule_id}/start")
+async def start_schedule(schedule_id: str, current_user: dict = Depends(get_current_user)):
+    """Mark the delivery run as started — the truck has left the warehouse.
+
+    `approved` → `in_progress`. Records `started_at` + `started_by_name`.
+    Moves every underlying `distributor_delivery` that's still in a pre-dispatch
+    state to `on_the_way` so the per-stop UI can correctly show "On the way" /
+    "In-transit" pills.
+    """
+    tenant_id = get_current_tenant_id()
+    distributor_id = _resolve_distributor_id(current_user)
+    existing = await db.distributor_delivery_schedules.find_one(
+        {"id": schedule_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if existing.get("status") != "approved":
+        raise HTTPException(status_code=400, detail="Only approved schedules can be started")
+    if not existing.get("delivery_ids"):
+        raise HTTPException(status_code=400, detail="No deliveries on this schedule to start")
+
+    now = datetime.now(timezone.utc).isoformat()
+    actor_name = (
+        current_user.get("full_name")
+        or current_user.get("name")
+        or current_user.get("email")
+        or "Unknown"
+    )
+    await db.distributor_delivery_schedules.update_one(
+        {"id": schedule_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "in_progress",
+            "started_at": now,
+            "started_by": current_user.get("id"),
+            "started_by_name": actor_name,
+            "updated_at": now,
+        }}
+    )
+    # Lift underlying deliveries to `on_the_way` so the per-stop pill reflects
+    # the live state. Already-completed deliveries are untouched.
+    await db.distributor_deliveries.update_many(
+        {
+            "tenant_id": tenant_id,
+            "id": {"$in": existing["delivery_ids"]},
+            "status": {"$in": ["delivery_scheduled", "delivery_assigned", "scheduled", "confirmed"]},
+        },
+        {"$set": {"status": "on_the_way", "updated_at": now}}
+    )
+    s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
+    return await _enrich_schedule(s, tenant_id)
+
+
+@router.post("/{schedule_id}/finish")
+async def finish_schedule(schedule_id: str, current_user: dict = Depends(get_current_user)):
+    """Mark the delivery run as finished — the truck has returned to the warehouse.
+
+    `in_progress` → `completed`. Records `completed_at` + `completed_by_name`.
+    Does NOT auto-complete pending stops — the driver must have marked each one
+    individually via the per-stop "Mark delivered" action (which calls
+    `complete_delivery` and records `delivered_at` per delivery). Any stop still
+    not in `complete`/`delivered` is rendered as "Skipped" by the StopStatusPill.
+    """
+    tenant_id = get_current_tenant_id()
+    distributor_id = _resolve_distributor_id(current_user)
+    existing = await db.distributor_delivery_schedules.find_one(
+        {"id": schedule_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    if existing.get("status") != "in_progress":
+        raise HTTPException(status_code=400, detail="Only in-progress schedules can be finished")
+
+    now = datetime.now(timezone.utc).isoformat()
+    actor_name = (
+        current_user.get("full_name")
+        or current_user.get("name")
+        or current_user.get("email")
+        or "Unknown"
+    )
+    # Count delivered vs skipped before we lock the schedule, so the UI / audit
+    # log can see what the driver actually accomplished.
+    delivered_count = await db.distributor_deliveries.count_documents({
+        "tenant_id": tenant_id,
+        "id": {"$in": existing["delivery_ids"] or []},
+        "status": {"$in": ["complete", "delivered"]},
+    })
+    total = len(existing.get("delivery_ids") or [])
+    await db.distributor_delivery_schedules.update_one(
+        {"id": schedule_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "completed",
+            "completed_at": now,
+            "completed_by": current_user.get("id"),
+            "completed_by_name": actor_name,
+            "completed_delivered_count": delivered_count,
+            "completed_total_count": total,
+            "updated_at": now,
+        }}
     )
     s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
     return await _enrich_schedule(s, tenant_id)

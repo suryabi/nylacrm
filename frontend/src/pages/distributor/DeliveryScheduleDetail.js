@@ -6,7 +6,7 @@ import {
   ArrowLeft, Truck, User, Loader2, ChevronUp, ChevronDown, Plus, X,
   Download, CheckCircle2, XCircle, Calendar, Package, Phone, MapPin,
   GripVertical, Route, AlertTriangle, Sparkles, TrendingDown, Receipt, ExternalLink,
-  Printer,
+  Printer, Play, Flag,
 } from 'lucide-react';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -40,6 +40,13 @@ function fmtDate(iso) {
   if (!iso) return '—';
   try {
     return new Date(iso).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  } catch { return iso; }
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   } catch { return iso; }
 }
 
@@ -292,6 +299,63 @@ export default function DeliveryScheduleDetail() {
     }
   };
 
+  // Lifecycle actions: "Start" when the truck leaves the warehouse, "Finish"
+  // when it returns. Per-stop "Mark delivered" lives inside each stop card.
+  const [startOpen, setStartOpen] = useState(false);
+  const [finishOpen, setFinishOpen] = useState(false);
+  const [stopBusyId, setStopBusyId] = useState(null);
+
+  const startSchedule = async () => {
+    setBusy(true);
+    try {
+      const { data } = await axios.post(`${BASE}/${id}/start`, {}, { withCredentials: true });
+      setSchedule(data);
+      toast.success('Delivery run started. Drive safe!');
+      setStartOpen(false);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to start delivery run');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finishSchedule = async () => {
+    setBusy(true);
+    try {
+      const { data } = await axios.post(`${BASE}/${id}/finish`, {}, { withCredentials: true });
+      setSchedule(data);
+      const dn = data.completed_delivered_count ?? 0;
+      const tt = data.completed_total_count ?? (data.deliveries?.length || 0);
+      toast.success(`Delivery run finished — ${dn}/${tt} stop${tt === 1 ? '' : 's'} delivered.`);
+      setFinishOpen(false);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to finish delivery run');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const markStopDelivered = async (delivery) => {
+    if (!schedule?.distributor_id) {
+      toast.error('Distributor context missing.');
+      return;
+    }
+    setStopBusyId(delivery.id);
+    try {
+      await axios.post(
+        `${API_URL}/distributors/${schedule.distributor_id}/deliveries/${delivery.id}/complete`,
+        {},
+        { withCredentials: true },
+      );
+      toast.success(`Marked "${delivery.customer_name || 'stop'}" as delivered.`);
+      await fetchSchedule();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to mark stop as delivered');
+    } finally {
+      setStopBusyId(null);
+    }
+  };
+
   const downloadPDF = () => window.open(`${BASE}/${id}/pdf`, '_blank');
 
   // Combined bundle: driver schedule + all attached Zoho invoices in ONE PDF.
@@ -529,7 +593,17 @@ export default function DeliveryScheduleDetail() {
               <CheckCircle2 className="h-4 w-4 mr-1.5" /> Approve
             </Button>
           )}
-          {schedule.status !== 'cancelled' && (
+          {schedule.status === 'approved' && (
+            <Button onClick={() => setStartOpen(true)} disabled={busy} className="bg-amber-600 hover:bg-amber-700" data-testid="schedule-start-btn">
+              <Play className="h-4 w-4 mr-1.5" /> Start Delivery Run
+            </Button>
+          )}
+          {schedule.status === 'in_progress' && (
+            <Button onClick={() => setFinishOpen(true)} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700" data-testid="schedule-finish-btn">
+              <Flag className="h-4 w-4 mr-1.5" /> Finish Delivery Run
+            </Button>
+          )}
+          {schedule.status !== 'cancelled' && schedule.status !== 'completed' && (
             <Button variant="outline" onClick={() => setCancelOpen(true)} disabled={busy} className="text-red-600 hover:text-red-700 hover:bg-red-50" data-testid="schedule-cancel-btn">
               <XCircle className="h-4 w-4 mr-1.5" /> Cancel
             </Button>
@@ -612,7 +686,41 @@ export default function DeliveryScheduleDetail() {
             <span className="font-medium text-emerald-900">Approved by {schedule.approved_by_name}</span>
             {schedule.approved_at && (
               <span className="text-emerald-700 ml-1.5">
-                · {new Date(schedule.approved_at).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                · {fmtDateTime(schedule.approved_at)}
+              </span>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* Live run banner — surfaces driver-run start/finish timestamps. */}
+      {(schedule.started_at || schedule.completed_at) && (
+        <Card
+          className={`p-3 mb-4 flex items-center gap-2.5 ${schedule.status === 'completed' ? 'bg-slate-50 border-slate-300' : 'bg-amber-50 border-amber-200'}`}
+          data-testid="run-banner"
+        >
+          {schedule.status === 'completed'
+            ? <Flag className="h-4 w-4 text-slate-600 flex-shrink-0" />
+            : <Play className="h-4 w-4 text-amber-600 flex-shrink-0" />}
+          <div className="text-sm flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            {schedule.started_at && (
+              <span data-testid="run-started-stamp">
+                <span className="font-medium text-slate-900">Started</span>
+                <span className="text-slate-600 ml-1.5">{fmtDateTime(schedule.started_at)}</span>
+                {schedule.started_by_name && <span className="text-slate-500 ml-1">· {schedule.started_by_name}</span>}
+              </span>
+            )}
+            {schedule.started_at && schedule.completed_at && <span className="text-slate-400">·</span>}
+            {schedule.completed_at && (
+              <span data-testid="run-completed-stamp">
+                <span className="font-medium text-slate-900">Finished</span>
+                <span className="text-slate-600 ml-1.5">{fmtDateTime(schedule.completed_at)}</span>
+                {schedule.completed_by_name && <span className="text-slate-500 ml-1">· {schedule.completed_by_name}</span>}
+                {schedule.completed_total_count != null && (
+                  <span className="text-slate-500 ml-1">
+                    · {schedule.completed_delivered_count ?? 0}/{schedule.completed_total_count} delivered
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -765,6 +873,32 @@ export default function DeliveryScheduleDetail() {
                       )}
                       <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                     </button>
+
+                    {/* Mark-delivered action — only while the schedule is in_progress
+                        AND the stop hasn't been delivered yet. Visible inline on the
+                        compact row so the driver doesn't have to expand. */}
+                    {schedule.status === 'in_progress' && d.status !== 'complete' && d.status !== 'delivered' && (
+                      <div className="px-12 pb-3 pt-1 flex items-center gap-2" data-testid={`stop-mark-delivered-row-${d.id}`}>
+                        <Button
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); markStopDelivered(d); }}
+                          disabled={stopBusyId === d.id || busy}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                          data-testid={`stop-mark-delivered-${d.id}`}
+                        >
+                          {stopBusyId === d.id
+                            ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Marking…</>
+                            : <><CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Mark delivered</>}
+                        </Button>
+                        <span className="text-[11px] text-slate-500">Records the time at which delivery is complete.</span>
+                      </div>
+                    )}
+                    {(d.status === 'complete' || d.status === 'delivered') && d.delivered_at && (
+                      <div className="px-12 pb-3 pt-1 text-[11px] text-emerald-700 flex items-center gap-1.5" data-testid={`stop-delivered-at-${d.id}`}>
+                        <CheckCircle2 className="h-3 w-3" />
+                        <span>Delivered {fmtDateTime(d.delivered_at)}{d.delivered_by_name ? ` · by ${d.delivered_by_name}` : ''}</span>
+                      </div>
+                    )}
 
                     {/* Expander details */}
                     {isOpen && (
@@ -993,6 +1127,42 @@ export default function DeliveryScheduleDetail() {
             <AlertDialogCancel disabled={busy}>Keep schedule</AlertDialogCancel>
             <AlertDialogAction onClick={cancelSchedule} disabled={busy} className="bg-red-600 hover:bg-red-700 text-white" data-testid="cancel-confirm-btn">
               {busy ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Cancelling…</> : 'Cancel Schedule'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Start delivery run dialog */}
+      <AlertDialog open={startOpen} onOpenChange={setStartOpen}>
+        <AlertDialogContent data-testid="start-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start the delivery run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The truck is leaving the warehouse. Each stop on this schedule will switch to "On the way", and you'll be able to mark them delivered one by one as you reach them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Not yet</AlertDialogCancel>
+            <AlertDialogAction onClick={startSchedule} disabled={busy} className="bg-amber-600 hover:bg-amber-700 text-white" data-testid="start-confirm-btn">
+              {busy ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Starting…</> : <><Play className="h-4 w-4 mr-1.5" /> Start Run</>}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Finish delivery run dialog */}
+      <AlertDialog open={finishOpen} onOpenChange={setFinishOpen}>
+        <AlertDialogContent data-testid="finish-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Finish the delivery run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The truck has returned to the warehouse. The schedule will be locked as "Completed". Any stop you did not mark as delivered will be recorded as <span className="font-medium text-rose-700">skipped</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Not yet</AlertDialogCancel>
+            <AlertDialogAction onClick={finishSchedule} disabled={busy} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="finish-confirm-btn">
+              {busy ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Finishing…</> : <><Flag className="h-4 w-4 mr-1.5" /> Finish Run</>}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
