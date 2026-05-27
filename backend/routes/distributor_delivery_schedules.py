@@ -53,6 +53,33 @@ async def _get_distributor_city(distributor_id: str, tenant_id: str) -> Optional
     )
 
 
+async def _get_distributor_cities(distributor_id: str, tenant_id: str) -> list:
+    """Return EVERY city associated with the distributor — primary `city`,
+    billing/registered address cities, AND every active row in
+    `distributor_operating_coverage`. This is what the Fleet picker should
+    match against so vehicles/drivers in any city the distributor actually
+    operates in are visible (not just the head-office city).
+
+    De-duplicated, case-folded for comparison but original casings preserved.
+    """
+    primary = await _get_distributor_city(distributor_id, tenant_id)
+    coverage_rows = await db.distributor_operating_coverage.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "active"},
+        {"_id": 0, "city": 1},
+    ).to_list(500)
+
+    seen: set = set()
+    out: list = []
+    for c in ([primary] + [r.get("city") for r in coverage_rows]):
+        if not c:
+            continue
+        key = c.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(c.strip())
+    return out
+
+
 # ============ Distance helpers (Google Maps Distance Matrix) ==================
 
 def _address_to_query(addr) -> Optional[str]:
@@ -140,17 +167,23 @@ async def _distance_matrix(origins: List[str], destinations: List[str]) -> Optio
 
 # ============ Fleet pickers (vehicles / drivers filtered by distributor's city) ============
 
-def _city_match_clause(city: Optional[str]) -> Optional[dict]:
-    """Build a Mongo filter that matches records in the given city OR records
-    with no city assigned (None / missing / blank). Vehicles & drivers without
-    a city are treated as "available everywhere" so admins aren't forced to
-    re-edit every record after adding a distributor.
-    Returns None if `city` is falsy (i.e. no filter needed at all)."""
-    if not city:
+def _city_match_clause(cities) -> Optional[dict]:
+    """Build a Mongo filter that matches records in ANY of the given cities OR
+    records with no city assigned (None / missing / blank). Vehicles & drivers
+    without a city are treated as "available everywhere" so admins aren't
+    forced to re-edit every record after adding a distributor.
+
+    Accepts either a single city string (legacy) or a list of cities.
+    Returns None if `cities` is empty / falsy (i.e. no filter needed at all).
+    """
+    if isinstance(cities, str):
+        cities = [cities]
+    cities = [c for c in (cities or []) if c]
+    if not cities:
         return None
+    city_regexes = [{"city": {"$regex": f"^{c}$", "$options": "i"}} for c in cities]
     return {
-        "$or": [
-            {"city": {"$regex": f"^{city}$", "$options": "i"}},
+        "$or": city_regexes + [
             {"city": None},
             {"city": ""},
             {"city": {"$exists": False}},
@@ -162,38 +195,44 @@ def _city_match_clause(city: Optional[str]) -> Optional[dict]:
 async def list_distributor_fleet_vehicles(current_user: dict = Depends(get_current_user)):
     """Active vehicles available to the distributor.
 
-    Filter is inclusive: a vehicle is shown if its `city` matches the
-    distributor's city (case-insensitive) OR if no city is set on the vehicle.
-    This avoids the common foot-gun where vehicles created without a city are
-    silently invisible in the schedule picker.
+    Filter is inclusive: a vehicle is shown if its `city` matches ANY city the
+    distributor operates in (primary city OR an active row in
+    `distributor_operating_coverage`) OR if no city is set on the vehicle.
+    This avoids the foot-gun where vehicles in a city listed under operating
+    coverage are invisible because only the head-office `city` was being
+    matched.
     """
     tenant_id = get_current_tenant_id()
     distributor_id = _resolve_distributor_id(current_user)
-    city = await _get_distributor_city(distributor_id, tenant_id)
+    cities = await _get_distributor_cities(distributor_id, tenant_id)
     q: dict = {"tenant_id": tenant_id, "status": "active"}
-    city_clause = _city_match_clause(city)
+    city_clause = _city_match_clause(cities)
     if city_clause:
         q.update(city_clause)
     vehicles = await db.vehicles.find(q, {"_id": 0}).sort("registration_number", 1).to_list(500)
-    return {"city": city, "vehicles": vehicles}
+    # For UI labels we still surface the primary city (first in the list)
+    primary_city = cities[0] if cities else None
+    return {"city": primary_city, "cities": cities, "vehicles": vehicles}
 
 
 @router.get("/fleet/drivers")
 async def list_distributor_fleet_drivers(current_user: dict = Depends(get_current_user)):
     """Active drivers available to the distributor.
 
-    Filter is inclusive: a driver is shown if their `city` matches the
-    distributor's city (case-insensitive) OR if no city is set on the driver.
+    Same inclusive matching as `/fleet/vehicles`: matches against the
+    distributor's primary city + every active operating-coverage city, and
+    also includes drivers with no city assigned.
     """
     tenant_id = get_current_tenant_id()
     distributor_id = _resolve_distributor_id(current_user)
-    city = await _get_distributor_city(distributor_id, tenant_id)
+    cities = await _get_distributor_cities(distributor_id, tenant_id)
     q: dict = {"tenant_id": tenant_id, "status": "active"}
-    city_clause = _city_match_clause(city)
+    city_clause = _city_match_clause(cities)
     if city_clause:
         q.update(city_clause)
     drivers = await db.drivers.find(q, {"_id": 0}).sort("full_name", 1).to_list(500)
-    return {"city": city, "drivers": drivers}
+    primary_city = cities[0] if cities else None
+    return {"city": primary_city, "cities": cities, "drivers": drivers}
 
 
 # ============ Delivery Schedules ============

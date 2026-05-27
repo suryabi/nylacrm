@@ -14,6 +14,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Bug fix #2: Fleet pickers still empty when distributor uses Operating Coverage ✅ DONE
+- **Problem (PRODUCTION)**: After the May 29 fix, user `srinivasarao.yadavilli@nylaairwater.earth` still saw empty Vehicle/Driver dropdowns in **Create Delivery Schedule**, despite vehicles & drivers being registered with `city=Hyderabad`. Root cause: their distributor's primary `city` field is set to their **head-office** city (not Hyderabad). Hyderabad is registered as **Operating Coverage** in the separate `distributor_operating_coverage` collection. The fleet endpoint was only checking `distributor.city` / `billing_address.city` / `registered_address.city` — completely ignoring operating-coverage rows.
+- **Fix** (`/app/backend/routes/distributor_delivery_schedules.py`):
+  - New helper `_get_distributor_cities()` — returns **every** city the distributor operates in: primary `city` + billing/registered address cities + every `status='active'` row in `distributor_operating_coverage`. De-duplicated, case-folded.
+  - `_city_match_clause()` now accepts a list and matches records whose city equals ANY of the provided cities (case-insensitive) OR records with no city assigned.
+  - Both `GET /fleet/vehicles` and `GET /fleet/drivers` use the multi-city list. Response shape extended with `cities: [...]` alongside the existing `city` (primary, for backwards-compat label).
+- **Verified**: With test distributor "Brian" (primary city=Bangalore, operating coverage=[Gurugram, New Delhi, Noida, Bengaluru, Hyderabad]), the endpoint correctly returns vehicles/drivers from Hyderabad (in coverage) AND records with no city set, while still applying `status=active` and tenant filter. cURL test passed.
+
+
+
 ### 2026-05-29 — Phase 1 Batch Tracking for Stock Transfers ✅ VERIFIED
 - **Goal**: When a distributor warehouse has `track_batches=True`, Stock Transfers from that warehouse must require selecting a specific production batch per line item, deduct stock per-batch (not per-SKU aggregate), and propagate the batch identity to the destination warehouse + Zoho invoice/challan line description.
 - **Backend** (`/app/backend/routes/distributor_stock_transfers.py`):
