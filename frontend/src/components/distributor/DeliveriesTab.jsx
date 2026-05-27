@@ -907,34 +907,110 @@ export default function DeliveriesTab({
                               sees how many units are available in the batch *before* deciding
                               the delivery quantity. Only renders when the source warehouse
                               has track_batches=true. */}
-                          {sourceTracksBatches && item.sku_id && (
-                            <div className="mt-3 flex items-center gap-3">
-                              <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider w-16">Batch *</Label>
-                              <div className="flex-1">
-                                <select
-                                  className="w-full h-9 px-3 border-amber-300 border rounded-md text-sm bg-amber-50 dark:bg-amber-900/20"
-                                  value={item.batch_id || ''}
-                                  onChange={(e) => {
-                                    const bid = e.target.value;
-                                    const b = (batchesBySku[item.sku_id] || []).find(x => x.batch_id === bid);
-                                    updateDeliveryItem(item.id, 'batch_id', bid);
-                                    updateDeliveryItem(item.id, 'batch_code', b ? b.batch_code : '');
-                                  }}
-                                  data-testid={`delivery-batch-${item.id}`}
-                                >
-                                  <option value="">Select batch (FIFO recommended)…</option>
-                                  {(batchesBySku[item.sku_id] || []).map(b => (
-                                    <option key={b.batch_id} value={b.batch_id}>
-                                      {b.batch_code} — {b.quantity} units{b.received_at ? ` · ${b.received_at.slice(0,10)}` : ''}
-                                    </option>
-                                  ))}
-                                </select>
-                                {!(batchesBySku[item.sku_id] || []).length && (
-                                  <p className="text-xs text-red-600 mt-1">No batches available for this SKU at the source warehouse.</p>
+                          {sourceTracksBatches && item.sku_id && (() => {
+                            // FIFO: oldest batch first. Use `received_at` when present,
+                            // otherwise sort by batch_code so the order is at least stable.
+                            const rawBatches = batchesBySku[item.sku_id] || [];
+                            const sorted = [...rawBatches].sort((a, b) => {
+                              const ra = a.received_at || '';
+                              const rb = b.received_at || '';
+                              if (ra && rb) return ra.localeCompare(rb);
+                              if (ra) return -1;
+                              if (rb) return 1;
+                              return (a.batch_code || '').localeCompare(b.batch_code || '');
+                            });
+                            const oldestId = sorted[0]?.batch_id;
+
+                            const ageDays = (iso) => {
+                              if (!iso) return null;
+                              const t = Date.parse(iso);
+                              if (Number.isNaN(t)) return null;
+                              return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+                            };
+
+                            return (
+                              <div className="mt-3">
+                                <div className="flex items-baseline justify-between mb-1.5">
+                                  <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Package className="h-3 w-3" />
+                                    Batch <span className="text-red-500">*</span>
+                                    <span className="text-[10px] text-amber-600/70 font-normal normal-case">FIFO — oldest first</span>
+                                  </Label>
+                                  {sorted.length > 0 && (
+                                    <span className="text-[10px] text-slate-500">
+                                      {sorted.length} batch{sorted.length === 1 ? '' : 'es'} available
+                                    </span>
+                                  )}
+                                </div>
+
+                                {sorted.length === 0 ? (
+                                  <div className="rounded-lg border border-red-200 bg-red-50/70 px-3 py-2.5 text-xs text-red-700 flex items-center gap-2" data-testid={`delivery-no-batch-${item.id}`}>
+                                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                                    <span>No batches available for this SKU at the source warehouse.</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-wrap gap-2" data-testid={`delivery-batch-cards-${item.id}`}>
+                                    {sorted.map((b, bi) => {
+                                      const selected = item.batch_id === b.batch_id;
+                                      const isOldest = b.batch_id === oldestId && sorted.length > 1;
+                                      const days = ageDays(b.received_at);
+                                      const aging = days != null && days >= 60;  // visual nudge for ageing stock
+                                      return (
+                                        <button
+                                          type="button"
+                                          key={b.batch_id}
+                                          onClick={() => {
+                                            updateDeliveryItem(item.id, 'batch_id', b.batch_id);
+                                            updateDeliveryItem(item.id, 'batch_code', b.batch_code);
+                                          }}
+                                          data-testid={`delivery-batch-card-${item.id}-${bi}`}
+                                          className={[
+                                            "group relative flex flex-col items-start text-left rounded-xl border px-3 py-2 transition-all",
+                                            "min-w-[170px] max-w-[220px]",
+                                            selected
+                                              ? "border-amber-500 bg-gradient-to-br from-amber-50 to-orange-50 ring-2 ring-amber-400/40 shadow-sm"
+                                              : "border-slate-200 bg-white hover:border-amber-300 hover:bg-amber-50/40 hover:-translate-y-px hover:shadow-sm",
+                                          ].join(" ")}
+                                        >
+                                          {selected && (
+                                            <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-amber-500 text-white flex items-center justify-center shadow">
+                                              <CheckCircle2 className="h-3 w-3" />
+                                            </span>
+                                          )}
+                                          <div className="flex items-center gap-1.5 mb-1">
+                                            {isOldest && (
+                                              <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                                Oldest
+                                              </span>
+                                            )}
+                                            {aging && (
+                                              <span className="text-[9px] font-semibold uppercase tracking-wider text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded">
+                                                Aged {days}d
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="font-mono text-[13px] font-bold text-slate-900 leading-tight tracking-tight break-all">
+                                            {b.batch_code}
+                                          </div>
+                                          <div className="text-[10px] text-slate-500 mt-0.5">
+                                            {b.received_at
+                                              ? `Received ${b.received_at.slice(0, 10)}${days != null ? ` · ${days}d ago` : ''}`
+                                              : 'Date unavailable'}
+                                          </div>
+                                          <div className="mt-1.5 flex items-baseline gap-1">
+                                            <span className={`text-lg font-bold tabular-nums ${selected ? 'text-amber-700' : 'text-slate-800'}`}>
+                                              {(b.quantity || 0).toLocaleString()}
+                                            </span>
+                                            <span className="text-[10px] text-slate-500 uppercase tracking-wider">units</span>
+                                          </div>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                 )}
                               </div>
-                            </div>
-                          )}
+                            );
+                          })()}
                           {/* Row 2: Qty | Price | Disc | Amount — top-aligned with fixed spacers */}
                           <div className="flex items-start gap-3 mt-3">
                             <div className="w-24 flex-shrink-0">
