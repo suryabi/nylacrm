@@ -14,6 +14,19 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-27 — Admin → Batch Genealogy ✅ DONE
+- **Need**: FSSAI traceability + product recall scenarios. Pick any production batch, see its full lineage: Origin → Factory warehouse arrivals → Distributor shipments (Stock In) → Inter-warehouse Stock Transfers → Customer Deliveries (Stock Out) → Current resting stock → Mass balance reconciliation.
+- **Backend** (`/app/backend/routes/admin_batch_genealogy.py`, mounted at `/api/admin/batches/*`):
+  - `GET /search?q&limit` — paginated list of production batches by `batch_code` / `sku_name` (regex-escaped, case-insensitive).
+  - `GET /{batch_id}/genealogy` — returns `{batch, timeline, resting_stock, mass_balance}`. Timeline merges & sorts events from `warehouse_transfers`, `distributor_shipment_items`+`distributor_shipments`, `distributor_stock_transfers.items[]`, `distributor_delivery_items`+`distributor_deliveries`. Resting computed batch-aware (factory derived = arrivals − shipments out, distributor read from `distributor_stock` directly since it's batch-keyed). Mass balance surfaces drift = (transferred_to_warehouse − delivered_to_customers) − currently_resting.
+  - Admin-only (`CEO`, `Director`, `Admin`, `System Admin`) — distributors and other roles get 403. Tenant-scoped.
+- **Frontend** (`/app/frontend/src/pages/BatchGenealogy.js`):
+  - Route `/admin/batch-genealogy` → searchable batch picker (debounced 250ms).
+  - Route `/admin/batch-genealogy/:batchId` → detail view with batch header card, mass-balance card (Reconciled / Drift badge), gradient-iconed timeline, and resting-stock list per location.
+  - Sidebar entry "Batch Genealogy" added under Admin module → Product & SKU group (icon: `Layers`).
+- **Verified**: 10/10 backend pytest pass (`tests/test_iteration_178_batch_genealogy.py`); Playwright E2E confirms search → click-through → detail render → back navigation; admin gating verified (Distributor role gets 403 on both endpoints).
+
+
 ### 2026-05-29 — Phase 2 Batch Tracking: Stock IN + Stock OUT ✅ DONE
 - **Scope**: Extend batch tracking from Stock Transfers (Phase 1) to `create_shipment` (Stock In) and `create_delivery` (Stock Out). User chose **strict block** validation (consistent with Stock Transfers).
 - **Backend** (`/app/backend/models/distributor.py` + `routes/distributors.py`):

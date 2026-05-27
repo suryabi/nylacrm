@@ -29,6 +29,7 @@ Tenant-scoped, admin-only. Read-only — no writes.
 Useful for FSSAI traceability and product recall scenarios.
 """
 from typing import Optional, List
+import re
 from fastapi import APIRouter, HTTPException, Depends
 
 from database import db
@@ -61,9 +62,12 @@ async def search_batches(
     tenant_id = get_current_tenant_id()
     query = {"tenant_id": tenant_id}
     if q:
+        # Escape regex metachars — `q` is a user-supplied substring filter,
+        # not a regex contract.
+        safe = re.escape(q)
         query["$or"] = [
-            {"batch_code": {"$regex": q, "$options": "i"}},
-            {"sku_name": {"$regex": q, "$options": "i"}},
+            {"batch_code": {"$regex": safe, "$options": "i"}},
+            {"sku_name": {"$regex": safe, "$options": "i"}},
         ]
     rows = await db.production_batches.find(
         query,
