@@ -218,7 +218,10 @@ export default function DeliveriesTab({
 
   // Auto-select the only SKU in the account's pricing list when an item row is
   // added. If the account has exactly one SKU on file, every blank-sku row gets
-  // its sku_id + price filled in immediately so the user doesn't have to pick.
+  // its sku_id + price + default stock-out packaging filled in immediately so
+  // the user doesn't have to pick. Without setting packaging_units, the
+  // line-amount calc falls back to 1 unit/package and silently undercharges by
+  // a factor of `units_per_package` — see crates-of-12 bug.
   useEffect(() => {
     const accountSkus = selectedDeliveryAccount?.sku_pricing || [];
     if (accountSkus.length !== 1) return;
@@ -229,10 +232,13 @@ export default function DeliveriesTab({
     if (!matched) return;
     const blankItems = deliveryItems.filter(i => !i.sku_id);
     if (blankItems.length === 0) return;
+    const soPkg = matched.packaging_config?.stock_out || [];
+    const defPkg = soPkg.find(p => p.is_default) || soPkg[0];
     blankItems.forEach(i => {
       updateDeliveryItem(i.id, 'sku_id', matched.id);
       updateDeliveryItem(i.id, 'sku_name', matched.sku_name || matched.sku || '');
       updateDeliveryItem(i.id, 'unit_price', parseFloat(only.price_per_unit) || 0);
+      if (defPkg) updateDeliveryItem(i.id, 'packaging_units', String(defPkg.units_per_package));
     });
   }, [deliveryItems.length, selectedDeliveryAccount, skus]);  // eslint-disable-line react-hooks/exhaustive-deps
   
