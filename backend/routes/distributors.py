@@ -4025,11 +4025,12 @@ async def create_delivery(
     # Validate location
     location = await db.distributor_locations.find_one(
         {"id": data.distributor_location_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
-        {"_id": 0, "location_name": 1, "city": 1, "track_batches": 1}
+        {"_id": 0, "location_name": 1, "city": 1, "track_batches": 1, "is_factory": 1}
     )
     if not location:
         raise HTTPException(status_code=400, detail="Invalid distributor location")
     source_tracks_batches = bool(location.get("track_batches"))
+    source_is_factory = bool(location.get("is_factory"))
     
     # Validate account exists
     account = await db.accounts.find_one(
@@ -4061,6 +4062,74 @@ async def create_delivery(
                     + (f" and {len(missing_batch) - 5} more" if len(missing_batch) > 5 else "")
                 ),
             )
+
+    # ── Stock availability validation ─────────────────────────────────────
+    # Reject the delivery up-front if any line exceeds the on-hand quantity
+    # at the source warehouse. Without this, drivers could silently record
+    # deliveries that drive the inventory negative (or worse, leave it
+    # untouched if the deduction path fails to match a row).
+    #
+    # Same row-lookup convention as `complete_delivery`:
+    #   • factory source       → factory_warehouse_stock (warehouse_location_id)
+    #   • distributor source   → distributor_stock (distributor_location_id)
+    #   • track_batches=True   → row keyed by batch_id
+    #   • track_batches=False  → aggregated row
+    #
+    # Aggregate per (sku_id, batch_id) so multi-line deliveries of the same
+    # SKU/batch are summed before checking.
+    stock_demand: dict = {}
+    for item in data.items:
+        qty = int(item.quantity or 0)
+        if qty <= 0:
+            continue
+        key = (item.sku_id, item.batch_id if source_tracks_batches else None)
+        stock_demand[key] = stock_demand.get(key, 0) + qty
+
+    shortages: list = []
+    for (sku_id, batch_id), demand in stock_demand.items():
+        if source_is_factory:
+            stock_query = {
+                "tenant_id": tenant_id,
+                "warehouse_location_id": data.distributor_location_id,
+                "sku_id": sku_id,
+            }
+            stock_collection = db.factory_warehouse_stock
+        else:
+            stock_query = {
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "distributor_location_id": data.distributor_location_id,
+                "sku_id": sku_id,
+            }
+            stock_collection = db.distributor_stock
+        if source_tracks_batches and batch_id:
+            stock_query["batch_id"] = batch_id
+        elif source_tracks_batches:
+            # Legacy aggregate row (no batch_id stored).
+            stock_query["batch_id"] = {"$in": [None]}
+
+        rows = await stock_collection.find(
+            stock_query, {"_id": 0, "quantity": 1, "sku_name": 1, "batch_code": 1}
+        ).to_list(50)
+        on_hand = sum((r.get("quantity") or 0) for r in rows)
+
+        if demand > on_hand:
+            label = (rows[0].get("sku_name") if rows else None) or sku_id
+            batch_label = ""
+            if source_tracks_batches and batch_id:
+                bc = (rows[0].get("batch_code") if rows else None) or batch_id[:8]
+                batch_label = f" (batch {bc})"
+            shortages.append(f"{label}{batch_label}: need {demand}, have {on_hand}")
+
+    if shortages:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Not enough stock at '{location.get('location_name')}' — "
+                + "; ".join(shortages[:5])
+                + (f"; and {len(shortages) - 5} more" if len(shortages) > 5 else "")
+            ),
+        )
 
     # Generate delivery number
     delivery_number = await generate_delivery_number(tenant_id)
