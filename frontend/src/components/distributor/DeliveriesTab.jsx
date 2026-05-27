@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, Factory, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink } from 'lucide-react';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -903,16 +903,68 @@ export default function DeliveriesTab({
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
+                          {/* Batch picker — moved BEFORE the quantity row so the user
+                              sees how many units are available in the batch *before* deciding
+                              the delivery quantity. Only renders when the source warehouse
+                              has track_batches=true. */}
+                          {sourceTracksBatches && item.sku_id && (
+                            <div className="mt-3 flex items-center gap-3">
+                              <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider w-16">Batch *</Label>
+                              <div className="flex-1">
+                                <select
+                                  className="w-full h-9 px-3 border-amber-300 border rounded-md text-sm bg-amber-50 dark:bg-amber-900/20"
+                                  value={item.batch_id || ''}
+                                  onChange={(e) => {
+                                    const bid = e.target.value;
+                                    const b = (batchesBySku[item.sku_id] || []).find(x => x.batch_id === bid);
+                                    updateDeliveryItem(item.id, 'batch_id', bid);
+                                    updateDeliveryItem(item.id, 'batch_code', b ? b.batch_code : '');
+                                  }}
+                                  data-testid={`delivery-batch-${item.id}`}
+                                >
+                                  <option value="">Select batch (FIFO recommended)…</option>
+                                  {(batchesBySku[item.sku_id] || []).map(b => (
+                                    <option key={b.batch_id} value={b.batch_id}>
+                                      {b.batch_code} — {b.quantity} units{b.received_at ? ` · ${b.received_at.slice(0,10)}` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                                {!(batchesBySku[item.sku_id] || []).length && (
+                                  <p className="text-xs text-red-600 mt-1">No batches available for this SKU at the source warehouse.</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           {/* Row 2: Qty | Price | Disc | Amount — top-aligned with fixed spacers */}
                           <div className="flex items-start gap-3 mt-3">
                             <div className="w-24 flex-shrink-0">
                               <Label className="text-xs text-muted-foreground">Qty (pkgs)</Label>
                               <Input type="number" min="1" className="h-10 mt-1 text-base font-medium"
                                 value={item.quantity}
-                                onChange={(e) => updateDeliveryItem(item.id, 'quantity', e.target.value)} />
-                              <p className="text-xs text-blue-600 font-medium text-center mt-0.5 h-4">
-                                {totalUnits > 0 && pkgUnits > 1 ? `${totalUnits} units` : '\u00A0'}
-                              </p>
+                                onChange={(e) => updateDeliveryItem(item.id, 'quantity', e.target.value)}
+                                data-testid={`delivery-qty-${item.id}`} />
+                              {(() => {
+                                // Inline availability hint + over-stock warning.
+                                // Available units come from `batchesBySku` when a batch is
+                                // selected, else fall back to the existing "X units" math.
+                                const selectedBatch = sourceTracksBatches && item.batch_id
+                                  ? (batchesBySku[item.sku_id] || []).find(b => b.batch_id === item.batch_id)
+                                  : null;
+                                const availableUnits = selectedBatch ? (selectedBatch.quantity || 0) : null;
+                                const over = availableUnits != null && totalUnits > availableUnits;
+                                if (availableUnits != null) {
+                                  return (
+                                    <p className={`text-xs font-medium text-center mt-0.5 h-4 ${over ? 'text-red-600' : 'text-blue-600'}`}>
+                                      {totalUnits}/{availableUnits} units
+                                    </p>
+                                  );
+                                }
+                                return (
+                                  <p className="text-xs text-blue-600 font-medium text-center mt-0.5 h-4">
+                                    {totalUnits > 0 && pkgUnits > 1 ? `${totalUnits} units` : '\u00A0'}
+                                  </p>
+                                );
+                              })()}
                             </div>
                             <div className="flex-1 min-w-[100px]">
                               <Label className="text-xs text-muted-foreground flex items-center gap-1">
@@ -945,35 +997,23 @@ export default function DeliveriesTab({
                               <p className="h-4"></p>
                             </div>
                           </div>
-                          {/* Batch picker — only when source warehouse has track_batches=true. */}
-                          {sourceTracksBatches && item.sku_id && (
-                            <div className="mt-3 flex items-center gap-3">
-                              <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider w-16">Batch *</Label>
-                              <div className="flex-1">
-                                <select
-                                  className="w-full h-9 px-3 border-amber-300 border rounded-md text-sm bg-amber-50 dark:bg-amber-900/20"
-                                  value={item.batch_id || ''}
-                                  onChange={(e) => {
-                                    const bid = e.target.value;
-                                    const b = (batchesBySku[item.sku_id] || []).find(x => x.batch_id === bid);
-                                    updateDeliveryItem(item.id, 'batch_id', bid);
-                                    updateDeliveryItem(item.id, 'batch_code', b ? b.batch_code : '');
-                                  }}
-                                  data-testid={`delivery-batch-${item.id}`}
-                                >
-                                  <option value="">Select batch (FIFO recommended)…</option>
-                                  {(batchesBySku[item.sku_id] || []).map(b => (
-                                    <option key={b.batch_id} value={b.batch_id}>
-                                      {b.batch_code} — {b.quantity} units{b.received_at ? ` · ${b.received_at.slice(0,10)}` : ''}
-                                    </option>
-                                  ))}
-                                </select>
-                                {!(batchesBySku[item.sku_id] || []).length && (
-                                  <p className="text-xs text-red-600 mt-1">No batches available for this SKU at the source warehouse.</p>
-                                )}
-                              </div>
-                            </div>
-                          )}
+                          {/* Over-stock warning row — only when the user has set a qty that
+                              exceeds what the selected batch can fulfil. Prevents form
+                              submission to avoid the backend 400 round-trip. */}
+                          {(() => {
+                            const selectedBatch = sourceTracksBatches && item.batch_id
+                              ? (batchesBySku[item.sku_id] || []).find(b => b.batch_id === item.batch_id)
+                              : null;
+                            if (selectedBatch && totalUnits > (selectedBatch.quantity || 0)) {
+                              return (
+                                <p className="mt-1 text-xs text-red-600 flex items-center gap-1" data-testid={`delivery-over-stock-${item.id}`}>
+                                  <AlertCircle className="h-3 w-3" />
+                                  Quantity exceeds batch availability ({selectedBatch.quantity} units in {selectedBatch.batch_code}).
+                                </p>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
                         );
                       })}
