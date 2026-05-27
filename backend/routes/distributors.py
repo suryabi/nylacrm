@@ -4612,9 +4612,18 @@ async def complete_delivery(
         {"$set": update_data}
     )
     
-    # Deduct from distributor stock — batch-aware when the source warehouse
-    # tracks batches. The destination row was keyed by (loc, sku, batch_id)
-    # at shipment delivery time, so we deduct from the same key now.
+    # Deduct from the source warehouse stock — distributor_stock for a
+    # regular distributor location, factory_warehouse_stock when the source
+    # is a factory warehouse (is_factory=true). Without this branch the
+    # factory's at-hand never decremented after a direct factory→account
+    # delivery — a silent inventory-integrity bug.
+    src_loc = await db.distributor_locations.find_one(
+        {"id": delivery.get("distributor_location_id"), "tenant_id": tenant_id},
+        {"_id": 0, "is_factory": 1, "track_batches": 1, "location_name": 1},
+    )
+    src_is_factory = bool(src_loc and src_loc.get("is_factory"))
+    src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+
     items = await db.distributor_delivery_items.find(
         {"delivery_id": delivery_id, "tenant_id": tenant_id},
         {"_id": 0}
@@ -4622,22 +4631,37 @@ async def complete_delivery(
 
     for item in items:
         batch_id = item.get('batch_id')
-        stock_key = {
-            "tenant_id": tenant_id,
-            "distributor_id": distributor_id,
-            "distributor_location_id": delivery.get('distributor_location_id'),
-            "sku_id": item.get('sku_id'),
-        }
-        # Tracked batches deduct from the specific batch row; legacy aggregate
-        # rows (no batch_id stored) match `{"$in": [None]}`.
-        stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
-        await db.distributor_stock.update_one(
-            stock_key,
-            {
-                "$inc": {"quantity": -item.get('quantity', 0)},
-                "$set": {"updated_at": now}
+        qty = item.get('quantity', 0)
+
+        if src_is_factory:
+            stock_key = {
+                "tenant_id": tenant_id,
+                "warehouse_location_id": delivery.get('distributor_location_id'),
+                "sku_id": item.get('sku_id'),
             }
-        )
+            if src_tracks_batches and batch_id:
+                stock_key["batch_id"] = batch_id
+            await db.factory_warehouse_stock.update_one(
+                stock_key,
+                {"$inc": {"quantity": -qty}, "$set": {"updated_at": now}},
+            )
+        else:
+            stock_key = {
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "distributor_location_id": delivery.get('distributor_location_id'),
+                "sku_id": item.get('sku_id'),
+            }
+            # Tracked batches deduct from the specific batch row; legacy aggregate
+            # rows (no batch_id stored) match `{"$in": [None]}`.
+            stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+            await db.distributor_stock.update_one(
+                stock_key,
+                {
+                    "$inc": {"quantity": -qty},
+                    "$set": {"updated_at": now}
+                }
+            )
     
     logger.info(f"Delivery {delivery['delivery_number']} completed by {current_user['email']}")
     
