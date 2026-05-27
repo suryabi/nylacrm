@@ -519,24 +519,31 @@ async def list_batches_available(
             {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1},
         ).to_list(500)
 
-    # Hydrate batch_code from production_batches when we only have batch_id.
-    missing_codes = [r["batch_id"] for r in rows if r.get("batch_id") and not r.get("batch_code")]
-    if missing_codes:
+    # Hydrate batch_code + production_date from production_batches. We need
+    # `production_date` so the picker can show real age-since-produced, not
+    # just age-since-warehouse-receipt.
+    all_batch_ids = [r["batch_id"] for r in rows if r.get("batch_id")]
+    if all_batch_ids:
         batches = await db.production_batches.find(
-            {"tenant_id": tenant_id, "id": {"$in": missing_codes}},
-            {"_id": 0, "id": 1, "batch_code": 1, "created_at": 1},
-        ).to_list(len(missing_codes) + 1)
+            {"tenant_id": tenant_id, "id": {"$in": all_batch_ids}},
+            {"_id": 0, "id": 1, "batch_code": 1, "created_at": 1, "production_date": 1},
+        ).to_list(len(all_batch_ids) + 1)
         code_map = {b["id"]: b for b in batches}
         for r in rows:
-            if r.get("batch_id") in code_map:
-                r["batch_code"] = code_map[r["batch_id"]].get("batch_code")
-                r.setdefault("created_at", code_map[r["batch_id"]].get("created_at"))
+            pb = code_map.get(r.get("batch_id"))
+            if not pb:
+                continue
+            if not r.get("batch_code"):
+                r["batch_code"] = pb.get("batch_code")
+            r.setdefault("created_at", pb.get("created_at"))
+            r["production_date"] = pb.get("production_date")
 
     out = [{
         "batch_id": r.get("batch_id"),
         "batch_code": r.get("batch_code") or ("(legacy / no batch)" if not r.get("batch_id") else r.get("batch_id")),
         "quantity": int(r.get("quantity") or 0),
         "received_at": r.get("created_at"),
+        "production_date": r.get("production_date"),
     } for r in rows]
     # FIFO — oldest first
     out.sort(key=lambda r: (r.get("received_at") or "9999"))

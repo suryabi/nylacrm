@@ -908,24 +908,36 @@ export default function DeliveriesTab({
                               the delivery quantity. Only renders when the source warehouse
                               has track_batches=true. */}
                           {sourceTracksBatches && item.sku_id && (() => {
-                            // FIFO: oldest batch first. Use `received_at` when present,
-                            // otherwise sort by batch_code so the order is at least stable.
+                            // FIFO: oldest batch first. Prefer production_date,
+                            // fall back to received_at, finally batch_code.
                             const rawBatches = batchesBySku[item.sku_id] || [];
+                            const ageKey = (b) => b.production_date || b.received_at || '';
                             const sorted = [...rawBatches].sort((a, b) => {
-                              const ra = a.received_at || '';
-                              const rb = b.received_at || '';
-                              if (ra && rb) return ra.localeCompare(rb);
-                              if (ra) return -1;
-                              if (rb) return 1;
+                              const ka = ageKey(a);
+                              const kb = ageKey(b);
+                              if (ka && kb) return ka.localeCompare(kb);
+                              if (ka) return -1;
+                              if (kb) return 1;
                               return (a.batch_code || '').localeCompare(b.batch_code || '');
                             });
-                            const oldestId = sorted[0]?.batch_id;
 
                             const ageDays = (iso) => {
                               if (!iso) return null;
-                              const t = Date.parse(iso);
+                              // Accept date-only ('2026-05-27') or full ISO.
+                              const t = Date.parse(iso.length === 10 ? `${iso}T00:00:00Z` : iso);
                               if (Number.isNaN(t)) return null;
                               return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+                            };
+
+                            // Age tier → tinted chip. Fresh = green, warming up =
+                            // amber, near-expiry = rose. Thresholds match the
+                            // existing FIFO + recall conversations.
+                            const ageChip = (days) => {
+                              if (days == null) return { label: 'Age unknown', cls: 'text-slate-600 bg-slate-100 border-slate-200' };
+                              const label = days === 0 ? 'Today' : `${days} day${days === 1 ? '' : 's'} old`;
+                              if (days < 30)  return { label, cls: 'text-emerald-700 bg-emerald-100 border-emerald-200' };
+                              if (days < 60)  return { label, cls: 'text-amber-700 bg-amber-100 border-amber-200' };
+                              return                  { label, cls: 'text-rose-700 bg-rose-100 border-rose-200' };
                             };
 
                             return (
@@ -952,9 +964,10 @@ export default function DeliveriesTab({
                                   <div className="flex flex-wrap gap-2" data-testid={`delivery-batch-cards-${item.id}`}>
                                     {sorted.map((b, bi) => {
                                       const selected = item.batch_id === b.batch_id;
-                                      const isOldest = b.batch_id === oldestId && sorted.length > 1;
-                                      const days = ageDays(b.received_at);
-                                      const aging = days != null && days >= 60;  // visual nudge for ageing stock
+                                      const days = ageDays(ageKey(b));
+                                      const chip = ageChip(days);
+                                      const ageSource = b.production_date ? 'Produced' : 'Received';
+                                      const ageDate = b.production_date || (b.received_at ? b.received_at.slice(0, 10) : null);
                                       return (
                                         <button
                                           type="button"
@@ -977,24 +990,18 @@ export default function DeliveriesTab({
                                               <CheckCircle2 className="h-3 w-3" />
                                             </span>
                                           )}
-                                          <div className="flex items-center gap-1.5 mb-1">
-                                            {isOldest && (
-                                              <span className="text-[9px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded">
-                                                Oldest
-                                              </span>
-                                            )}
-                                            {aging && (
-                                              <span className="text-[9px] font-semibold uppercase tracking-wider text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded">
-                                                Aged {days}d
-                                              </span>
-                                            )}
-                                          </div>
+                                          <span
+                                            className={`inline-flex items-center text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border mb-1 ${chip.cls}`}
+                                            data-testid={`delivery-batch-age-${item.id}-${bi}`}
+                                          >
+                                            {chip.label}
+                                          </span>
                                           <div className="font-mono text-[13px] font-bold text-slate-900 leading-tight tracking-tight break-all">
                                             {b.batch_code}
                                           </div>
                                           <div className="text-[10px] text-slate-500 mt-0.5">
-                                            {b.received_at
-                                              ? `Received ${b.received_at.slice(0, 10)}${days != null ? ` · ${days}d ago` : ''}`
+                                            {ageDate
+                                              ? `${ageSource} ${ageDate}`
                                               : 'Date unavailable'}
                                           </div>
                                           <div className="mt-1.5 flex items-baseline gap-1">
