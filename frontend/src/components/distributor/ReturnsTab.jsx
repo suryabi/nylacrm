@@ -782,7 +782,23 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                     type="number"
                     min="1"
                     value={itemForm.quantity}
-                    onChange={(e) => setItemForm(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      // Allow the field to be cleared while typing — backspace must
+                      // work. We only coerce on blur (or when Add is clicked).
+                      if (raw === '') {
+                        setItemForm(prev => ({ ...prev, quantity: '' }));
+                        return;
+                      }
+                      const n = parseInt(raw, 10);
+                      setItemForm(prev => ({ ...prev, quantity: Number.isNaN(n) ? '' : n }));
+                    }}
+                    onBlur={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      if (!Number.isFinite(n) || n < 1) {
+                        setItemForm(prev => ({ ...prev, quantity: 1 }));
+                      }
+                    }}
                     className="h-9"
                   />
                 </div>
