@@ -14,6 +14,22 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Architectural fix: Account & Lead SKU Pricing now key on `sku_id` ✅ DONE
+- **Real complaint**: After yesterday's "Sync SKU names", the user noticed the SKU pricing rows on Accounts (and the proposed pricing on Leads) STILL showed the old labels and didn't surface in Stock Out dropdowns. Root cause exposed by inspection: `accounts.sku_pricing[]` and `leads.proposed_sku_pricing[]` stored ONLY the SKU name (`sku` field) with **no `sku_id`**. So once the master name changes, those rows are orphans — there's no stable key to join on.
+- **Fix #1 — schema upgrade**: Added `sku_id: Optional[str]` to `AccountSKUPricing` (both `routes/accounts.py` and `server.py` model). Lead → Account conversion now carries `sku_id` through.
+- **Fix #2 — frontend pickers** (`/app/frontend/src/pages/AccountDetail.js` + `pages/LeadDetail.js`):
+  - Both `<Select>`s now key on `sku_id` (option value = `sku.id`, not `sku.sku_name`).
+  - `handleSKUChange` writes `sku_id` AND mirrors current `sku_name` to the legacy `sku` field so server-side code that still reads `sku` keeps working.
+  - Each row shows the **resolved current name** looked up by `sku_id` (not the stored snapshot). Rows that have a stored name with no `sku_id` AND no matching current SKU are flagged inline with **"⚠ re-link"** — a clear signal to the user that this row was orphaned by a past rename and needs picking from the dropdown again.
+- **Fix #3 — extended migration** (`/app/backend/routes/admin_sku_migration.py`): `POST /api/admin/migrations/sku/rehydrate-sku-names` now has a Phase 2 that walks `accounts.sku_pricing[]`, `leads.proposed_sku_pricing[]`, and `sampling_trials.sku_plans[]`. For each row missing a `sku_id`, it matches the stored name against current `master_skus.sku_name` (case-insensitive). On match → backfills `sku_id` AND refreshes the name. On no match → row is listed in `orphans_sample[]` so the admin knows exactly which Account/Lead to open and fix.
+- **Fix #4 — auto-rehydration hook extended**: `PUT /master-skus/{id}` now also updates the name in `accounts.sku_pricing[]`, `leads.proposed_sku_pricing[]`, and `sampling_trials.sku_plans[]` for every row whose `sku_id` matches the renamed master.
+- **Verified end-to-end in preview**:
+  - Dry-run found 39 embedded rows that would be linked (21 accounts + 16 leads + 2 sampling trials).
+  - Live run linked all 39. Stored a stable `sku_id` on each.
+  - Renamed the test SKU via PUT → both `accounts.sku_pricing[].sku` AND `leads.proposed_sku_pricing[].sku` instantly reflected the new name. Restored.
+
+
+
 ### 2026-05-29 — Fix: SKU rename leaves stale labels everywhere ✅ DONE
 - **Problem (PRODUCTION)**: User renamed SKUs in `master_skus`. Many transactional collections store a denormalised snapshot of `sku_name` at write time. After the rename, stock dashboards, deliveries, returns, transfers, invoices, batches, cost cards and reports all kept showing the old labels even though they were still pointing at the right rows by `sku_id`.
 - **Permanent fix #1 — auto-rehydration hook** (`/app/backend/server.py:2095` — `PUT /api/master-skus/{sku_id}`): when `sku_name` changes, walk every denormalised collection (17 of them) and update each item joined by `sku_id`. Future renames are now instant and complete. Failures are logged but don't block the rename.

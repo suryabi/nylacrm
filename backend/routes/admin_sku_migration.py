@@ -52,6 +52,18 @@ COLLECTIONS = [
 ]
 
 
+# Embedded SKU references that store ONLY the name (no `sku_id`). For these
+# we backfill `sku_id` by matching the stored name against the current
+# `master_skus.sku_name` map, then refresh the name. Schema: per collection,
+# the path to the array and the per-element field names.
+#   collection, array_field, name_field
+EMBEDDED_NAME_ONLY = [
+    ("accounts", "sku_pricing", "sku"),
+    ("leads", "proposed_sku_pricing", "sku"),
+    ("sampling_trials", "sku_plans", "sku"),
+]
+
+
 def _ensure_admin(current_user: dict) -> None:
     role = (current_user.get("role") or "").strip()
     if role not in ALLOWED_ROLES:
@@ -179,6 +191,85 @@ async def rehydrate_sku_names(
             "unknown_sku_ids": sorted(unknown),
         }
 
+    # ─── Phase 2: backfill `sku_id` on name-only embedded arrays ───────────
+    # `accounts.sku_pricing[]`, `leads.proposed_sku_pricing[]`,
+    # `sampling_trials.sku_plans[]` historically stored only the SKU name
+    # (`sku` field). This means a rename orphans them — we cannot rehydrate
+    # the label and the dropdowns downstream can't resolve the row to a
+    # current SKU.
+    # Strategy: build {name_lower: sku_id} from master_skus, walk every
+    # embedded row, and if the row lacks `sku_id` AND its stored name still
+    # matches a current master SKU, set `sku_id` AND refresh `sku` to the
+    # current name. Rows whose name no longer matches anything are surfaced
+    # in the report as `orphans` so the admin knows which ones need manual
+    # remapping.
+    id_by_name_lower: dict = {}
+    for sid, sname in name_by_id.items():
+        key = (sname or "").strip().lower()
+        if key:
+            id_by_name_lower.setdefault(key, sid)
+
+    for col_name, array_field, name_field in EMBEDDED_NAME_ONLY:
+        col = db[col_name]
+        examined = 0
+        linked = 0  # rows we just gave a sku_id to
+        refreshed = 0  # rows whose name we refreshed
+        orphans: list = []
+
+        cursor = col.find(
+            {"tenant_id": tenant_id, array_field: {"$exists": True, "$ne": []}},
+            {"_id": 1, "id": 1, "name": 1, "account_name": 1, array_field: 1},
+        )
+        async for d in cursor:
+            arr = d.get(array_field) or []
+            if not isinstance(arr, list):
+                continue
+            new_arr = []
+            doc_changed = False
+            for entry in arr:
+                if not isinstance(entry, dict):
+                    new_arr.append(entry)
+                    continue
+                examined += 1
+                stored_id = entry.get("sku_id")
+                stored_name = (entry.get(name_field) or "").strip()
+                # Already linked → refresh name from master.
+                if stored_id and stored_id in name_by_id:
+                    fresh = name_by_id[stored_id]
+                    if stored_name != fresh:
+                        entry = {**entry, name_field: fresh}
+                        refreshed += 1
+                        doc_changed = True
+                else:
+                    # Try to backfill by current-name match.
+                    key = stored_name.lower()
+                    matched_id = id_by_name_lower.get(key) if key else None
+                    if matched_id:
+                        fresh = name_by_id[matched_id]
+                        entry = {**entry, "sku_id": matched_id, name_field: fresh}
+                        linked += 1
+                        doc_changed = True
+                    elif stored_name:
+                        orphans.append({
+                            "doc_id": d.get("id"),
+                            "doc_label": d.get("account_name") or d.get("name"),
+                            "stored_name": stored_name,
+                        })
+                new_arr.append(entry)
+            if doc_changed and not dry_run:
+                await col.update_one({"_id": d["_id"]}, {"$set": {array_field: new_arr}})
+
+        report["collections"][f"{col_name}.{array_field}[]"] = {
+            "shape": "embedded-name-only",
+            "examined": examined,
+            ("would_update" if dry_run else "updated"): linked + refreshed,
+            "linked_by_name_match": linked,
+            "refreshed_existing_link": refreshed,
+            "orphans_count": len(orphans),
+            # Cap to first 50 to keep the response small; full list is in logs.
+            "orphans_sample": orphans[:50],
+        }
+
     report["totals"] = {
         "examined": sum(c["examined"] for c in report["collections"].values()),
         ("would_update" if dry_run else "updated"): sum(
@@ -188,6 +279,9 @@ async def rehydrate_sku_names(
         "collections_touched": sum(
             1 for c in report["collections"].values()
             if c.get("would_update" if dry_run else "updated", 0) > 0
+        ),
+        "orphans_total": sum(
+            c.get("orphans_count", 0) for c in report["collections"].values()
         ),
     }
     return report

@@ -996,6 +996,7 @@ ${googleMapsLink}`;
 
   const handleAddSKU = () => {
     setSkuPricing([...skuPricing, {
+      sku_id: '',
       sku: '',
       price_per_unit: 0,
       mrp: '',
@@ -1005,16 +1006,34 @@ ${googleMapsLink}`;
     }]);
   };
 
+  // Resolve a pricing row's current display name from master_skus (via sku_id
+  // when present), with a fallback to the row's legacy `sku` string. Stable
+  // across SKU renames because we join on the immutable id.
+  const resolveSkuName = (row) => {
+    if (row?.sku_id) {
+      const m = masterSkus.find(s => s.id === row.sku_id);
+      if (m) return m.sku_name || m.sku;
+    }
+    return row?.sku || '';
+  };
+
+  // True when the row has a legacy name that no longer matches any current
+  // master SKU — i.e. the SKU was renamed and we can't auto-link this row.
+  const isOrphanRow = (row) =>
+    !row?.sku_id &&
+    !!row?.sku &&
+    !masterSkus.some(m => (m.sku_name || m.sku || '').toLowerCase() === String(row.sku).toLowerCase());
+
   // Helper: does the master SKU for a given pricing row allow custom MRP?
   // Used to conditionally show/enforce the MRP input cell.
-  const skuAllowsCustomMrp = (skuName) => {
-    if (!skuName) return false;
-    const ms = masterSkus.find(
-      m => (m.sku_name || m.sku || '').toLowerCase() === String(skuName).toLowerCase()
-    );
+  const skuAllowsCustomMrp = (row) => {
+    if (!row) return false;
+    const ms = row.sku_id
+      ? masterSkus.find(m => m.id === row.sku_id)
+      : masterSkus.find(m => (m.sku_name || m.sku || '').toLowerCase() === String(row.sku || '').toLowerCase());
     return !!(ms && ms.allow_custom_mrp);
   };
-  const anyRowAllowsCustomMrp = skuPricing.some(r => skuAllowsCustomMrp(r.sku));
+  const anyRowAllowsCustomMrp = skuPricing.some(r => skuAllowsCustomMrp(r));
 
   const handleRemoveSKU = (index) => {
     setSkuPricing(skuPricing.filter((_, i) => i !== index));
@@ -1022,13 +1041,21 @@ ${googleMapsLink}`;
 
   const handleSKUChange = (index, field, value) => {
     const updated = [...skuPricing];
-    // String-valued fields (sku id + date strings) must pass through unchanged;
-    // running parseFloat on "2026-05-18" wipes out the date.
-    const stringFields = ['sku', 'active_from', 'active_to'];
+    // String-valued fields (id, name, date strings) must pass through
+    // unchanged; parseFloat on "2026-05-18" wipes out the date.
+    const stringFields = ['sku', 'sku_id', 'active_from', 'active_to'];
     updated[index] = {
       ...updated[index],
       [field]: stringFields.includes(field) ? value : (parseFloat(value) || 0),
     };
+    // When the user picks an SKU from the dropdown we receive `sku_id`. Keep
+    // the legacy `sku` (display name) in sync so downstream code that still
+    // reads `sku` (server-side reports, invoices, etc.) shows the current
+    // master name.
+    if (field === 'sku_id') {
+      const m = masterSkus.find(s => s.id === value);
+      if (m) updated[index].sku = m.sku_name || m.sku || '';
+    }
     setSkuPricing(updated);
   };
 
@@ -1881,22 +1908,29 @@ ${googleMapsLink}`;
                         <td className="px-3 py-2">
                           {isEditing ? (
                             <Select
-                              value={item.sku}
-                              onValueChange={(val) => handleSKUChange(index, 'sku', val)}
+                              value={item.sku_id || ''}
+                              onValueChange={(val) => handleSKUChange(index, 'sku_id', val)}
                             >
-                              <SelectTrigger className="w-[200px]" data-testid={`sku-select-${index}`}>
-                                <SelectValue placeholder="Select SKU" />
+                              <SelectTrigger className="w-[220px]" data-testid={`sku-select-${index}`}>
+                                <SelectValue placeholder={isOrphanRow(item) ? `⚠ ${item.sku || 'Select SKU'} (re-link)` : 'Select SKU'}>
+                                  {item.sku_id ? resolveSkuName(item) : (isOrphanRow(item) ? `⚠ ${item.sku} (re-link)` : (item.sku || 'Select SKU'))}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 {masterSkus.map((skuItem) => (
-                                  <SelectItem key={skuItem.sku} value={skuItem.sku}>
-                                    {skuItem.sku}
+                                  <SelectItem key={skuItem.id} value={skuItem.id}>
+                                    {skuItem.sku_name || skuItem.sku}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           ) : (
-                            <span className="font-medium">{item.sku}</span>
+                            <span className="font-medium" title={item.sku_id ? `sku_id: ${item.sku_id}` : 'No sku_id linked'}>
+                              {resolveSkuName(item)}
+                              {isOrphanRow(item) && (
+                                <span className="ml-2 text-xs text-amber-700" title="This row no longer matches any current SKU. Edit the row and pick the correct one.">⚠ re-link</span>
+                              )}
+                            </span>
                           )}
                         </td>
                         <td className="px-3 py-2">
@@ -1913,7 +1947,7 @@ ${googleMapsLink}`;
                         </td>
                         {anyRowAllowsCustomMrp && (
                           <td className="px-3 py-2">
-                            {skuAllowsCustomMrp(item.sku) ? (
+                            {skuAllowsCustomMrp(item) ? (
                               isEditing ? (
                                 <Input
                                   type="number"

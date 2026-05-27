@@ -837,6 +837,8 @@ class LeadUpdate(BaseModel):
 
 class AccountSKUPricing(BaseModel):
     """SKU pricing and bottle credit for an account"""
+    # Stable id that survives master_skus name renames. Optional for legacy rows.
+    sku_id: Optional[str] = None
     sku: str
     price_per_unit: float = 0.0
     return_bottle_credit: float = 0.0
@@ -2103,6 +2105,7 @@ async def update_sku(
     if new_name and new_name != existing.get('sku_name'):
         try:
             from routes.admin_sku_migration import COLLECTIONS as _SKU_DENORM_COLS
+            from routes.admin_sku_migration import EMBEDDED_NAME_ONLY as _SKU_EMBED_COLS
             for col_name, shape in _SKU_DENORM_COLS:
                 if shape == "top":
                     await db[col_name].update_many(
@@ -2115,6 +2118,16 @@ async def update_sku(
                         {"$set": {"items.$[el].sku_name": new_name}},
                         array_filters=[{"el.sku_id": sku_id, "el.sku_name": {"$ne": new_name}}],
                     )
+            # Embedded name-only arrays (accounts.sku_pricing[],
+            # leads.proposed_sku_pricing[], sampling_trials.sku_plans[]).
+            # Only refresh rows already linked via `sku_id` — orphaned rows
+            # need the admin to re-link via the "Sync SKU names" tool first.
+            for col_name, array_field, name_field in _SKU_EMBED_COLS:
+                await db[col_name].update_many(
+                    {f"{array_field}.sku_id": sku_id},
+                    {"$set": {f"{array_field}.$[el].{name_field}": new_name}},
+                    array_filters=[{"el.sku_id": sku_id, f"el.{name_field}": {"$ne": new_name}}],
+                )
         except Exception as e:
             # Don't block the rename if rehydration partially fails — admin
             # can always replay /admin/migrations/sku/rehydrate-sku-names.

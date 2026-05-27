@@ -816,7 +816,7 @@ ${userEmail}`;
 
   // SKU Pricing handlers
   const handleAddProposedSKU = () => {
-    setProposedSkuPricing([...proposedSkuPricing, { sku: '', percentage: 0, price_per_unit: 0, return_bottle_credit: 0 }]);
+    setProposedSkuPricing([...proposedSkuPricing, { sku_id: '', sku: '', percentage: 0, price_per_unit: 0, return_bottle_credit: 0 }]);
     setIsEditingPricing(true);
   };
 
@@ -824,9 +824,34 @@ ${userEmail}`;
     setProposedSkuPricing(proposedSkuPricing.filter((_, i) => i !== index));
   };
 
+  // Resolve current SKU name from master_skus via stable `sku_id`. Falls back
+  // to the row's legacy `sku` string for rows created before sku_id existed.
+  const resolveProposedSkuName = (row) => {
+    if (row?.sku_id) {
+      const m = masterSkus.find(s => s.id === row.sku_id);
+      if (m) return m.sku_name || m.sku;
+    }
+    return row?.sku || '';
+  };
+  const isOrphanProposedRow = (row) =>
+    !row?.sku_id &&
+    !!row?.sku &&
+    !masterSkus.some(m => (m.sku_name || m.sku || '').toLowerCase() === String(row.sku).toLowerCase());
+
   const handleProposedSKUChange = (index, field, value) => {
     const updated = [...proposedSkuPricing];
-    updated[index] = { ...updated[index], [field]: field === 'sku' ? value : parseFloat(value) || 0 };
+    const stringFields = ['sku', 'sku_id'];
+    updated[index] = {
+      ...updated[index],
+      [field]: stringFields.includes(field) ? value : (parseFloat(value) || 0),
+    };
+    // When the user picks an SKU from the dropdown we get its id. Keep the
+    // legacy `sku` name field in sync so downstream code that still reads
+    // `sku` continues to show the right master name.
+    if (field === 'sku_id') {
+      const m = masterSkus.find(s => s.id === value);
+      if (m) updated[index].sku = m.sku_name || m.sku || '';
+    }
     setProposedSkuPricing(updated);
   };
 
@@ -1237,22 +1262,29 @@ ${userEmail}`;
                           <td className="px-3 py-2">
                             {isEditingPricing ? (
                               <Select
-                                value={item.sku}
-                                onValueChange={(val) => handleProposedSKUChange(index, 'sku', val)}
+                                value={item.sku_id || ''}
+                                onValueChange={(val) => handleProposedSKUChange(index, 'sku_id', val)}
                               >
-                                <SelectTrigger className="w-[160px]" data-testid={`proposed-sku-select-${index}`}>
-                                  <SelectValue placeholder="Select SKU" />
+                                <SelectTrigger className="w-[180px]" data-testid={`proposed-sku-select-${index}`}>
+                                  <SelectValue placeholder={isOrphanProposedRow(item) ? `⚠ ${item.sku || 'Select SKU'} (re-link)` : 'Select SKU'}>
+                                    {item.sku_id ? resolveProposedSkuName(item) : (isOrphanProposedRow(item) ? `⚠ ${item.sku} (re-link)` : (item.sku || 'Select SKU'))}
+                                  </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                   {masterSkus.map((skuItem) => (
-                                    <SelectItem key={skuItem.sku} value={skuItem.sku}>
-                                      {skuItem.sku}
+                                    <SelectItem key={skuItem.id} value={skuItem.id}>
+                                      {skuItem.sku_name || skuItem.sku}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             ) : (
-                              <span className="font-medium">{item.sku}</span>
+                              <span className="font-medium" title={item.sku_id ? `sku_id: ${item.sku_id}` : 'No sku_id linked'}>
+                                {resolveProposedSkuName(item)}
+                                {isOrphanProposedRow(item) && (
+                                  <span className="ml-2 text-xs text-amber-700" title="This row no longer matches any current SKU. Edit and re-link.">⚠ re-link</span>
+                                )}
+                              </span>
                             )}
                           </td>
                           <td className="px-3 py-2 text-center">

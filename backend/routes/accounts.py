@@ -34,6 +34,10 @@ def _account_match(account_id: str) -> dict:
 # ============= MODELS =============
 
 class AccountSKUPricing(BaseModel):
+    # Stable identifier that survives `master_skus.sku_name` renames. Optional
+    # for backwards compat with rows created before this field existed — the
+    # admin → "Sync SKU names" migration backfills it by current-name match.
+    sku_id: Optional[str] = None
     sku: str
     price_per_unit: float = 0.0
     return_bottle_credit: float = 0.0
@@ -197,6 +201,10 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     if lead.get('proposed_sku_pricing'):
         for sku_item in lead['proposed_sku_pricing']:
             sku_pricing.append({
+                # Carry `sku_id` if the lead row has it — this is the stable
+                # identifier that survives renames. The legacy `sku` (name)
+                # is still saved for backwards compat / display fallbacks.
+                'sku_id': sku_item.get('sku_id'),
                 'sku': sku_item.get('sku', ''),
                 'price_per_unit': sku_item.get('proposed_price', sku_item.get('price_per_unit', 0)),
                 'return_bottle_credit': sku_item.get('bottle_return_credit', sku_item.get('return_bottle_credit', 0)),
