@@ -39,6 +39,20 @@ def _resolve_distributor_id(current_user: dict) -> str:
     return distributor_id
 
 
+def _safe_addr_city(addr) -> Optional[str]:
+    """Extract `city` from an address field that may be either a dict
+    (modern schema) or a string (legacy schema). Returns None if nothing
+    usable is present. Never raises."""
+    if not addr:
+        return None
+    if isinstance(addr, dict):
+        v = addr.get("city")
+        return v if isinstance(v, str) and v.strip() else None
+    # Legacy string-format addresses don't carry a structured city field —
+    # silently skip rather than crash.
+    return None
+
+
 async def _get_distributor_city(distributor_id: str, tenant_id: str) -> Optional[str]:
     dist = await db.distributors.find_one(
         {"id": distributor_id, "tenant_id": tenant_id},
@@ -46,11 +60,10 @@ async def _get_distributor_city(distributor_id: str, tenant_id: str) -> Optional
     )
     if not dist:
         return None
-    return (
-        dist.get("city")
-        or (dist.get("billing_address") or {}).get("city")
-        or (dist.get("registered_address") or {}).get("city")
-    )
+    primary = dist.get("city")
+    if isinstance(primary, str) and primary.strip():
+        return primary.strip()
+    return _safe_addr_city(dist.get("billing_address")) or _safe_addr_city(dist.get("registered_address"))
 
 
 async def _get_distributor_cities(distributor_id: str, tenant_id: str) -> list:
@@ -61,6 +74,8 @@ async def _get_distributor_cities(distributor_id: str, tenant_id: str) -> list:
     operates in are visible (not just the head-office city).
 
     De-duplicated, case-folded for comparison but original casings preserved.
+    Hardened against legacy data where address fields may be strings, or where
+    coverage rows lack a `city`.
     """
     primary = await _get_distributor_city(distributor_id, tenant_id)
     coverage_rows = await db.distributor_operating_coverage.find(
@@ -70,13 +85,23 @@ async def _get_distributor_cities(distributor_id: str, tenant_id: str) -> list:
 
     seen: set = set()
     out: list = []
-    for c in ([primary] + [r.get("city") for r in coverage_rows]):
-        if not c:
+    candidates: list = []
+    if primary:
+        candidates.append(primary)
+    for r in coverage_rows:
+        c = r.get("city") if isinstance(r, dict) else None
+        if c:
+            candidates.append(c)
+    for c in candidates:
+        if not isinstance(c, str):
             continue
-        key = c.strip().lower()
-        if key and key not in seen:
+        stripped = c.strip()
+        if not stripped:
+            continue
+        key = stripped.lower()
+        if key not in seen:
             seen.add(key)
-            out.append(c.strip())
+            out.append(stripped)
     return out
 
 
@@ -175,13 +200,19 @@ def _city_match_clause(cities) -> Optional[dict]:
 
     Accepts either a single city string (legacy) or a list of cities.
     Returns None if `cities` is empty / falsy (i.e. no filter needed at all).
+    Regex specials in city names are escaped — defensive against names like
+    "Hyderabad (Sec.)" which would otherwise break the regex.
     """
+    import re as _re
     if isinstance(cities, str):
         cities = [cities]
-    cities = [c for c in (cities or []) if c]
+    cities = [c for c in (cities or []) if isinstance(c, str) and c.strip()]
     if not cities:
         return None
-    city_regexes = [{"city": {"$regex": f"^{c}$", "$options": "i"}} for c in cities]
+    city_regexes = [
+        {"city": {"$regex": f"^{_re.escape(c.strip())}$", "$options": "i"}}
+        for c in cities
+    ]
     return {
         "$or": city_regexes + [
             {"city": None},
@@ -198,21 +229,39 @@ async def list_distributor_fleet_vehicles(current_user: dict = Depends(get_curre
     Filter is inclusive: a vehicle is shown if its `city` matches ANY city the
     distributor operates in (primary city OR an active row in
     `distributor_operating_coverage`) OR if no city is set on the vehicle.
-    This avoids the foot-gun where vehicles in a city listed under operating
-    coverage are invisible because only the head-office `city` was being
-    matched.
     """
     tenant_id = get_current_tenant_id()
     distributor_id = _resolve_distributor_id(current_user)
-    cities = await _get_distributor_cities(distributor_id, tenant_id)
-    q: dict = {"tenant_id": tenant_id, "status": "active"}
-    city_clause = _city_match_clause(cities)
-    if city_clause:
-        q.update(city_clause)
-    vehicles = await db.vehicles.find(q, {"_id": 0}).sort("registration_number", 1).to_list(500)
-    # For UI labels we still surface the primary city (first in the list)
-    primary_city = cities[0] if cities else None
-    return {"city": primary_city, "cities": cities, "vehicles": vehicles}
+    try:
+        cities = await _get_distributor_cities(distributor_id, tenant_id)
+        q: dict = {"tenant_id": tenant_id, "status": "active"}
+        city_clause = _city_match_clause(cities)
+        if city_clause:
+            q.update(city_clause)
+        vehicles = await db.vehicles.find(q, {"_id": 0}).sort("registration_number", 1).to_list(500)
+        primary_city = cities[0] if cities else None
+        return {"city": primary_city, "cities": cities, "vehicles": vehicles}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "GET /fleet/vehicles failed for distributor_id=%s tenant_id=%s",
+            distributor_id, tenant_id,
+        )
+        # Fail-safe: return ALL active vehicles for the tenant so the picker
+        # is at least usable, with a soft warning the UI can surface.
+        try:
+            vehicles = await db.vehicles.find(
+                {"tenant_id": tenant_id, "status": "active"}, {"_id": 0}
+            ).sort("registration_number", 1).to_list(500)
+        except Exception:
+            vehicles = []
+        return {
+            "city": None,
+            "cities": [],
+            "vehicles": vehicles,
+            "warning": f"City filter unavailable: {type(e).__name__}. Showing all active vehicles.",
+        }
 
 
 @router.get("/fleet/drivers")
@@ -225,14 +274,34 @@ async def list_distributor_fleet_drivers(current_user: dict = Depends(get_curren
     """
     tenant_id = get_current_tenant_id()
     distributor_id = _resolve_distributor_id(current_user)
-    cities = await _get_distributor_cities(distributor_id, tenant_id)
-    q: dict = {"tenant_id": tenant_id, "status": "active"}
-    city_clause = _city_match_clause(cities)
-    if city_clause:
-        q.update(city_clause)
-    drivers = await db.drivers.find(q, {"_id": 0}).sort("full_name", 1).to_list(500)
-    primary_city = cities[0] if cities else None
-    return {"city": primary_city, "cities": cities, "drivers": drivers}
+    try:
+        cities = await _get_distributor_cities(distributor_id, tenant_id)
+        q: dict = {"tenant_id": tenant_id, "status": "active"}
+        city_clause = _city_match_clause(cities)
+        if city_clause:
+            q.update(city_clause)
+        drivers = await db.drivers.find(q, {"_id": 0}).sort("full_name", 1).to_list(500)
+        primary_city = cities[0] if cities else None
+        return {"city": primary_city, "cities": cities, "drivers": drivers}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "GET /fleet/drivers failed for distributor_id=%s tenant_id=%s",
+            distributor_id, tenant_id,
+        )
+        try:
+            drivers = await db.drivers.find(
+                {"tenant_id": tenant_id, "status": "active"}, {"_id": 0}
+            ).sort("full_name", 1).to_list(500)
+        except Exception:
+            drivers = []
+        return {
+            "city": None,
+            "cities": [],
+            "drivers": drivers,
+            "warning": f"City filter unavailable: {type(e).__name__}. Showing all active drivers.",
+        }
 
 
 # ============ Delivery Schedules ============

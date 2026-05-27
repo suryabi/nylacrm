@@ -14,6 +14,20 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Bug fix #3: ACTUAL root cause — Fleet endpoints crashed (HTTP 500) on legacy string addresses ✅ DONE
+- **User-reported symptom**: empty vehicle/driver dropdowns. I'd been chasing the wrong cause for two iterations (null city, then operating coverage). The user shared a browser devtools screenshot showing the endpoint actually returns **HTTP 500**, not an empty list — frontend was rendering the "No active vehicles" fallback because the request failed.
+- **Real root cause**: `_get_distributor_city` did `(dist.get("billing_address") or {}).get("city")`. **11 of 17 distributors in this tenant** have `billing_address` stored as a **string** (legacy schema — values like `"afdaf"`, `"Test Address"`, `""`). When the string is truthy, `or {}` returns the string, then `.get("city")` raises `AttributeError: 'str' object has no attribute 'get'` → 500.
+- **Fix** (`/app/backend/routes/distributor_delivery_schedules.py`):
+  - New `_safe_addr_city()` helper — accepts dict OR string, returns city only when the address is a dict with a string `city` value. Never raises.
+  - `_get_distributor_city` rewritten to use `_safe_addr_city()` + an `isinstance(primary, str)` guard on the primary city.
+  - `_get_distributor_cities` hardened: skips non-string city values defensively.
+  - `_city_match_clause` now uses `re.escape()` on each city before building the regex — defensive against city names with special chars like `"Hyderabad (Sec.)"`.
+  - Both `/fleet/vehicles` and `/fleet/drivers` wrapped in `try/except`: on unexpected exception, log full stack trace (`logger.exception`) and return **all active records** for the tenant with a `warning` field so the picker is at least usable instead of returning 500.
+- **Verified**: Reproduced the crash in preview by setting Brian's `billing_address = "Plot 123, Bangalore, KA"` (string). Pre-fix code would have crashed with AttributeError. Post-fix returns HTTP 200 with the proper vehicle/driver list.
+- **Lesson learned**: When user reports "I don't see X in dropdown", ALWAYS ask for the HTTP response (or browser console) first. Empty-array vs 500 vs auth-failure all look identical to the user but need totally different fixes.
+
+
+
 ### 2026-05-29 — Bug fix #2: Fleet pickers still empty when distributor uses Operating Coverage ✅ DONE
 - **Problem (PRODUCTION)**: After the May 29 fix, user `srinivasarao.yadavilli@nylaairwater.earth` still saw empty Vehicle/Driver dropdowns in **Create Delivery Schedule**, despite vehicles & drivers being registered with `city=Hyderabad`. Root cause: their distributor's primary `city` field is set to their **head-office** city (not Hyderabad). Hyderabad is registered as **Operating Coverage** in the separate `distributor_operating_coverage` collection. The fleet endpoint was only checking `distributor.city` / `billing_address.city` / `registered_address.city` — completely ignoring operating-coverage rows.
 - **Fix** (`/app/backend/routes/distributor_delivery_schedules.py`):
