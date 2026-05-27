@@ -1698,6 +1698,15 @@ async def create_delivery_challan_for_stock_transfer(
             "name": display_name,
             "quantity": float(it.get("quantity", 0) or 0),  # packages
             "rate": float(it.get("rate", 0) or 0),          # per-package rate
+            # Branch-transfer challan = NO GST. Same-GSTIN movement is not a
+            # taxable supply under Indian GST law. We zero the line-level tax
+            # to override any GST rate inherited from the Zoho item master
+            # (where the same SKU is rated at 18% for customer invoices).
+            "tax_id": "",
+            "tax_name": "",
+            "tax_type": "",
+            "tax_percentage": 0,
+            "item_tax_preferences": [],
         })
 
     if not line_items:
@@ -1725,6 +1734,13 @@ async def create_delivery_challan_for_stock_transfer(
         "date": (transfer.get("transfer_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
         "line_items": line_items,
         "notes": notes,
+        # Hard guarantee no GST is computed at document level for a same-GSTIN
+        # branch transfer (per Indian GST: no taxable supply, hence no tax).
+        # `is_inclusive_tax=false` + `gst_treatment="out_of_scope"` keeps the
+        # printed PDF clean of any CGST/SGST/IGST rows.
+        "is_inclusive_tax": False,
+        "gst_treatment": "out_of_scope",
+        "tax_total": 0,
     }
 
     result = await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=payload)
