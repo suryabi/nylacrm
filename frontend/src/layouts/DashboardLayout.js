@@ -254,6 +254,7 @@ const adminNavigationGroups = [
     items: [
       { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ADMIN_ONLY_ROLES },
       { name: 'Replace SKU', href: '/admin/sku-migrate', icon: ArrowLeftRight, moduleKey: 'sku_replace', roles: ADMIN_ONLY_ROLES },
+      { name: 'Batch Genealogy', href: '/admin/batch-genealogy', icon: Layers, roles: ADMIN_ONLY_ROLES },
     ],
   },
   {

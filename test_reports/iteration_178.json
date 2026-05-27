@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 178 — End-to-end validation of Admin → Batch Genealogy. 10/10 backend pytest tests pass (test_iteration_178_batch_genealogy.py): GET /api/admin/batches/search default (admin), q-filter (case-insensitive regex against batch_code+sku_name), limit clamp, 403 for Distributor role, 401 unauthenticated; GET /api/admin/batches/{id}/genealogy for both seeded batches (full + simple chain), 404 for invalid id, 403 for Distributor, and resting_stock shape (owner/qty/kind in {factory,distributor}). Frontend E2E (Playwright, admin@nylaairwater): /admin/batch-genealogy renders search picker (33 batches initially); search input 'TEST' debounces to 18 rows; clicking BATCH-VERIFY-A-001 navigates to /admin/batch-genealogy/d68a630a-… and renders all four cards (batch-header, mass-balance-card, timeline-card, resting-stock-card) with timeline events [produced, stock_transfer, stock_in] and the seeded Delhi/Brian distributor resting row (24 bottles); 'Back to search' returns to picker; Admin-module sidebar contains data-testid='sidebar-batch-genealogy' under Product & SKU group and navigates correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/batch-genealogy/{id} detail", "issues": ["BATCH-VERIFY-A-001 displays 'Drift -24' (mass balance: produced=0, transferred=0, delivered=0, resting=24). This is the feature working as designed — surfacing a legitimate data mismatch between production_batches.total_bottles and distributor_stock for this seed batch. Not a UI/code bug, but FYI: the seed row's total_bottles is 0 while 24 bottles sit at Delhi/Brian; the drift badge correctly flags the inconsistency. Consider whether seed data should be reconciled, or whether the empty-state copy could clarify when produced=0 means 'legacy/seeded stock without batch creation event'."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_178_batch_genealogy.py",
+    "/app/test_reports/pytest/iteration_178_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "admin_batch_genealogy.py:43-49 — _ensure_admin uses a small role allowlist {CEO,Director,Admin,System Admin}. Verified via test_search_403_for_distributor + test_genealogy_403_for_distributor that Distributor role gets 403. Clean and explicit.",
+    "admin_batch_genealogy.py:64-67 — regex search on batch_code+sku_name uses raw `q` without escaping. A user typing '.*' or '(?i)' will inject regex metachars. Not exploitable beyond DoS-via-pathological-regex, but consider `re.escape(q)` for defense-in-depth.",
+    "admin_batch_genealogy.py:76 — `limit` is clamped via max(1, min(limit,200)) which is correct, but FastAPI's path-level Query(ge=1, le=200) would surface 422 earlier and self-document the contract.",
+    "admin_batch_genealogy.py:319 — events.sort with fallback '9999-12-31' assumes ISO-string dates; mixing datetime objects from Mongo would TypeError. Current data is ISO strings via Pydantic serialization, but a defensive `str(e.get('at') or ...)` would harden it.",
+    "admin_batch_genealogy.py:367-368 — expected_resting = transferred_to_warehouse - delivered_to_customers. If transferred=0 but distributor_stock has legacy seed rows (BATCH-VERIFY-A case observed), drift goes negative. This is mathematically correct and the badge correctly flags it; consider documenting in the UI that drift<0 ⇒ 'untracked inbound (likely legacy/manual stock entry)'.",
+    "BatchGenealogy.js:148-151 — headers() reads localStorage.getItem('token') on every render; the rest of the app appears to use this same key consistently. Consistent with iteration 177 patterns.",
+    "BatchGenealogy.js:286-291 — Search debounce is 250ms via setTimeout, cleared on next keystroke. Verified live (typing 'TEST' → 18 results after ~900ms wait). Clean implementation.",
+    "DashboardLayout.js:257 — Batch Genealogy entry is correctly gated to ADMIN_ONLY_ROLES and placed under 'Product & SKU' group in adminNavigationGroups. Visible only when currentContext==='admin'. Verified live."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_178_batch_genealogy.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (search picker, debounce filter, click-through, detail render, mass balance, timeline, resting stock, back button, sidebar entry under Admin module — all verified)"},
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123 — POST /api/auth/login returns {session_token}. Distributor (for 403 verification): john.distributor@test.com / nyladist##.",
+  "seed_data_creation": "None. Used the two pre-seeded batches called out in the review request: d68a630a-…-c98b10c3 (BATCH-VERIFY-A-001, full chain with stock_transfer + stock_in events) and 821db50f-…-2136ce534 (TEST, simple chain with produced + factory_transfer).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run via: cd /app/backend && python -m pytest tests/test_iteration_178_batch_genealogy.py -v. Tests are session-scoped on token, so they're fast (~2s). The Drift -24 observed on BATCH-VERIFY-A-001 is expected for that seed (produced=0 but distributor_stock=24); pick any non-VERIFY batch (e.g., TEST/BATCH_123 with 6000 bottles) for a 'Reconciled' badge demo. Sidebar entry is gated to currentContext='admin' — switch via the top-left Module dropdown.",
+  "rca of the issue": "Not a bug-fix iteration — feature validation. Endpoint surface and admin gating both behave correctly. The only 'noisy' observation (Drift -24 on the seed batch) is the feature surfacing legitimate data inconsistency, which is precisely what mass-balance reconciliation is for. No code changes required."
+}

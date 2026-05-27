@@ -205,6 +205,14 @@ routes_router.include_router(
     tags=["Admin · Migrations · SKU"],
 )
 
+# Admin → Batch Genealogy (read-only lineage for any production batch)
+from .admin_batch_genealogy import router as admin_batch_genealogy_router
+routes_router.include_router(
+    admin_batch_genealogy_router,
+    prefix="/admin/batches",
+    tags=["Admin · Batch Genealogy"],
+)
+
 # Distributor → daily Delivery Schedules (vehicle + driver + ordered confirmed deliveries → PDF)
 from .distributor_delivery_schedules import router as distributor_delivery_schedules_router
 routes_router.include_router(
