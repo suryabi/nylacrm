@@ -14,6 +14,27 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Phase 1 Batch Tracking for Stock Transfers ✅ VERIFIED
+- **Goal**: When a distributor warehouse has `track_batches=True`, Stock Transfers from that warehouse must require selecting a specific production batch per line item, deduct stock per-batch (not per-SKU aggregate), and propagate the batch identity to the destination warehouse + Zoho invoice/challan line description.
+- **Backend** (`/app/backend/routes/distributor_stock_transfers.py`):
+  - `TransferItem` model carries optional `batch_id` + `batch_code`.
+  - `_adjust_distributor_stock` / `_adjust_factory_stock` upsert key includes `batch_id` when set, falls back to `{$in:[None]}` for legacy aggregate rows — keeps batched and legacy stock cleanly separated.
+  - `_read_source_stock` returns `(sku_id, batch_id)` keys when `batch_ids` is provided so per-batch insufficiency is detected.
+  - New endpoint `GET /batches-available?location_id=&sku_id=` returns `{track_batches, batches:[{batch_id, batch_code, quantity, received_at}]}` sorted FIFO (oldest first). Hydrates `batch_code` from `production_batches` if missing on the stock row.
+  - `GET /eligible-sources` & `/eligible-targets` expose `track_batches: bool` so the UI can decide.
+  - `create_stock_transfer` validates `batch_id` BEFORE the stock check when source tracks batches — returns HTTP 400 with warehouse name + missing SKU names. Stock check runs per (sku, batch).
+  - Zoho line description (`services/zoho_service.py:1683,1812`) appends `· Batch {batch_code}` for both Invoice and Delivery Challan flows so the printed document is traceable.
+- **Frontend** (`/app/frontend/src/pages/StockTransfers.js`):
+  - State carries `batch_id`, `batch_code`, `batches_available`, `batches_loading` per item.
+  - `fetchBatchesForItem` calls `/batches-available` when source + SKU are set on a tracked warehouse, auto-selects the FIFO-oldest batch.
+  - `sourceTracksBatches` derived from selected source; batch picker UI (`item-batch-${i}` testid) renders only when true.
+  - Submit disabled until each item with a tracking source has a `batch_id`.
+- **Frontend** (`/app/frontend/src/components/distributor/LocationsTab.jsx`): Location create/edit form has a `track_batches` checkbox so admins can opt-in per warehouse.
+- **Verified end-to-end** (29 May 2026): pre-seeded 2 batches at "Default master" (track_batches=true) → `/batches-available` returns both FIFO-sorted; POST without `batch_id` → 400 with helpful error; POST exceeding batch A's stock → 400 'Insufficient stock'; POST with valid `batch_id` → 200, transfer #ST-2026-0009 created, source batch A decremented 120→60, destination receives new factory_warehouse_stock row carrying the same batch_id + batch_code. UI: source dropdown lists tracked factory; after SKU pick, "Batch * FIFO" picker renders with `BATCH_CODE — N bottles · date` options. **Testing agent iteration 177: 7/7 backend tests pass + frontend smoke pass.** Zoho push fails in preview (no OAuth) — expected; production will push normally.
+- **Test file**: `/app/backend/tests/test_iteration_177_batch_tracking_and_fleet.py`
+
+
+
 ### 2026-05-29 — Bug fix: Fleet dropdowns empty in Delivery Schedule ✅ DONE
 - **Problem (PRODUCTION)**: Drivers and vehicles added in Admin → Fleet were not appearing in the Delivery Schedule's vehicle/driver picker. Root cause: `GET /api/distributor/delivery-schedules/fleet/{vehicles,drivers}` filtered with a strict `^{distributor.city}$` regex, so any vehicle/driver created without a city (the default state) was excluded.
 - **Fix** (`/app/backend/routes/distributor_delivery_schedules.py`): Introduced `_city_match_clause()` — inclusive filter that matches the distributor's city OR records with `city` null/blank/missing. Now vehicles/drivers without a city are treated as "available everywhere", which mirrors the Admin's intent when leaving the optional field empty.
