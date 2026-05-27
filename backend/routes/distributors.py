@@ -4860,6 +4860,13 @@ async def generate_customer_invoice(
     
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
+
+    # Attach line items — they live in a separate collection. Without this the
+    # PDF "Item Details" table is silently empty.
+    delivery["items"] = await db.distributor_delivery_items.find(
+        {"delivery_id": delivery_id, "tenant_id": tenant_id},
+        {"_id": 0},
+    ).to_list(500)
     
     # Get distributor
     distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id})

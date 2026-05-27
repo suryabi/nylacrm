@@ -986,9 +986,15 @@ async def create_invoice_for_delivery(
                 missing_skus.append(sku_name)
             continue
         qty = float(it.get("quantity", 0) or 0)
+        # Surface the production batch on the printed Zoho invoice/challan so
+        # customers + FSSAI auditors can trace what was delivered. Zoho prints
+        # `description` directly under the item name on the invoice template.
+        batch_code = (it.get("batch_code") or "").strip()
+        description = f"Batch: {batch_code}" if batch_code else ""
         line_items.append({
             "item_id": zoho_item_id,
             "name": sku_name,
+            "description": description,
             "quantity": qty,
             "rate": agreed,
             "discount": float(it.get("discount_percent", 0) or 0),

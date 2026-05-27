@@ -647,16 +647,37 @@ def generate_customer_invoice_pdf(
     # Calculate totals
     total_taxable = 0
     item_rows = [['#', 'SKU', 'HSN', 'Qty', 'Rate (₹)', 'Taxable Value (₹)']]
-    
+
+    # Paragraph style for the SKU cell — wraps + lets us stack the batch code
+    # underneath the SKU name in a smaller amber-coloured font.
+    sku_cell_style = ParagraphStyle(
+        'SkuCell',
+        parent=styles['Normal'],
+        fontName=_REGULAR_FONT,
+        fontSize=8,
+        leading=10,
+    )
+
     for idx, item in enumerate(items, 1):
         qty = item.get('quantity', 0)
         customer_price = item.get('customer_selling_price') or item.get('unit_price', 0)
         taxable_value = qty * customer_price
         total_taxable += taxable_value
-        
+
+        sku_text = item.get('sku_name') or item.get('sku_code', 'N/A')
+        batch_code = item.get('batch_code')
+        if batch_code:
+            sku_cell = Paragraph(
+                f'{sku_text}<br/>'
+                f'<font size="6.5" color="#92400E"><b>BATCH:</b> {batch_code}</font>',
+                sku_cell_style,
+            )
+        else:
+            sku_cell = Paragraph(sku_text, sku_cell_style)
+
         item_rows.append([
             str(idx),
-            item.get('sku_name') or item.get('sku_code', 'N/A'),
+            sku_cell,
             item.get('hsn_code', '-'),
             str(qty),
             f"{customer_price:,.2f}",
