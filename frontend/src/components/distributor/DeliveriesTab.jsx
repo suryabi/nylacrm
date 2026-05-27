@@ -226,9 +226,12 @@ export default function DeliveriesTab({
     const accountSkus = selectedDeliveryAccount?.sku_pricing || [];
     if (accountSkus.length !== 1) return;
     const only = accountSkus[0];
-    // `only.id` may not exist on legacy rows — resolve against master skus by name.
-    const matched = skus.find(s => s.id === only.id)
-      || skus.find(s => (s.sku_name || s.sku) === (only.sku || only.sku_name));
+    // Prefer `sku_id` (stable across master renames). Fall back to id, then
+    // to name match for legacy rows that haven't been re-linked yet.
+    const matched =
+      skus.find(s => s.id === only.sku_id) ||
+      skus.find(s => s.id === only.id) ||
+      skus.find(s => (s.sku_name || s.sku) === (only.sku || only.sku_name));
     if (!matched) return;
     const blankItems = deliveryItems.filter(i => !i.sku_id);
     if (blankItems.length === 0) return;
@@ -842,10 +845,14 @@ export default function DeliveriesTab({
                               <Select
                                 value={item.sku_id}
                                 onValueChange={(v) => {
-                                  const matchedSku = accountSkus.find(s => s.id === v) || skus.find(s => s.id === v);
+                                  const matchedSku = accountSkus.find(s => (s.id || s.sku_id) === v) || skus.find(s => s.id === v);
                                   updateDeliveryItem(item.id, 'sku_id', v);
                                   if (matchedSku) {
-                                    updateDeliveryItem(item.id, 'sku_name', matchedSku.name || matchedSku.sku_name);
+                                    // Always resolve display name from the master SKU (joined by id) so a rename
+                                    // shows the current name; fall back to the row's stored name only when we
+                                    // don't have a master row in hand.
+                                    const master = skus.find(s => s.id === v);
+                                    updateDeliveryItem(item.id, 'sku_name', master?.sku_name || master?.name || matchedSku.sku_name || matchedSku.sku || matchedSku.name);
                                     if (matchedSku.price_per_unit) updateDeliveryItem(item.id, 'unit_price', matchedSku.price_per_unit);
                                     // Auto-select default stock_out packaging
                                     const fullSku = skus.find(s => s.id === v);
@@ -857,11 +864,22 @@ export default function DeliveriesTab({
                               >
                                 <SelectTrigger className="h-10"><SelectValue placeholder="Select SKU" /></SelectTrigger>
                                 <SelectContent>
-                                  {allSkuOptions.map(sku => (
-                                    <SelectItem key={sku.id} value={sku.id}>
-                                      {sku.name || sku.sku_name}{sku.price_per_unit && ` - ₹${sku.price_per_unit}`}
-                                    </SelectItem>
-                                  ))}
+                                  {allSkuOptions.map(sku => {
+                                    // `account.sku_pricing[]` carries `sku_id` (no top-level `id`); the master
+                                    // SKU list carries `id`. Accept either as the stable identifier so a future
+                                    // master rename can't break the dropdown — the join is always by id.
+                                    const id = sku.id || sku.sku_id;
+                                    if (!id) return null;
+                                    // Show the current master name (joined by id) when available so a rename is
+                                    // reflected even if `account.sku_pricing[]` still carries the legacy name.
+                                    const master = skus.find(s => s.id === id);
+                                    const label = master?.sku_name || master?.name || sku.sku_name || sku.sku || sku.name;
+                                    return (
+                                      <SelectItem key={id} value={id}>
+                                        {label}{sku.price_per_unit && ` - ₹${sku.price_per_unit}`}
+                                      </SelectItem>
+                                    );
+                                  })}
                                 </SelectContent>
                               </Select>
                             </div>
