@@ -470,6 +470,11 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                     "quantity": pkg_count,
                     "packaging_label": pkg_label,
                     "units_per_package": upp,
+                    # Batch lineage — surfaced under the SKU on each stop card so
+                    # drivers can verify what they're loading matches the picked
+                    # batch. Populated only when the source warehouse tracks batches.
+                    "batch_id": line.get("batch_id"),
+                    "batch_code": line.get("batch_code"),
                 })
 
             deliveries.append({

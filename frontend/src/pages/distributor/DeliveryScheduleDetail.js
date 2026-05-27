@@ -934,7 +934,15 @@ export default function DeliveryScheduleDetail() {
                             <div className="space-y-1">
                               {d.items.map((it, i) => (
                                 <div key={i} className="flex items-center justify-between bg-slate-50 rounded-md px-2.5 py-1.5">
-                                  <span className="text-slate-700 truncate mr-2">{it.sku_name || 'Item'}</span>
+                                  <div className="min-w-0 mr-2">
+                                    <div className="text-slate-700 truncate">{it.sku_name || 'Item'}</div>
+                                    {it.batch_code && (
+                                      <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-mono font-medium text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded" data-testid={`stop-item-batch-${d.id}-${i}`}>
+                                        <Package className="h-2.5 w-2.5" />
+                                        {it.batch_code}
+                                      </div>
+                                    )}
+                                  </div>
                                   <span className="text-sm font-semibold text-slate-900 whitespace-nowrap flex items-baseline gap-1">
                                     {it.quantity}
                                     <span className="text-[10px] uppercase font-normal text-slate-400">{(it.packaging_label || 'crate')}{it.quantity === 1 ? '' : 's'}</span>

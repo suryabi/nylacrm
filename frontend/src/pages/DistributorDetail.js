@@ -3279,8 +3279,16 @@ export default function DistributorDetail() {
                       return (
                         <tr key={idx} className="border-b">
                           <td className="p-2">
-                            <span className="font-medium">{item.sku_name || item.sku_id}</span>
-                            <span className="text-xs text-muted-foreground ml-1">({commissionPct}%)</span>
+                            <div>
+                              <span className="font-medium">{item.sku_name || item.sku_id}</span>
+                              <span className="text-xs text-muted-foreground ml-1">({commissionPct}%)</span>
+                            </div>
+                            {item.batch_code && (
+                              <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-mono font-medium text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded" data-testid={`delivery-detail-item-batch-${idx}`}>
+                                <Package className="h-2.5 w-2.5" />
+                                {item.batch_code}
+                              </div>
+                            )}
                           </td>
                           <td className="p-2 text-right font-medium">{qty}</td>
                           <td className="p-2 text-right text-blue-700">₹{basePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
