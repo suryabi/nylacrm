@@ -1853,7 +1853,7 @@ async def transfer_to_warehouse(
     # Validate factory warehouse exists and is_factory
     warehouse = await db.distributor_locations.find_one(
         {"id": data.warehouse_location_id, "tenant_id": tenant_id, "is_factory": True, "status": "active"},
-        {"_id": 0, "id": 1, "location_name": 1, "city": 1, "distributor_id": 1}
+        {"_id": 0, "id": 1, "location_name": 1, "city": 1, "distributor_id": 1, "track_batches": 1}
     )
     if not warehouse:
         raise HTTPException(status_code=400, detail="Invalid factory warehouse location")
@@ -1867,26 +1867,36 @@ async def transfer_to_warehouse(
         {"$set": {"transferred_to_warehouse": new_transferred, "updated_at": now}}
     )
 
-    # 2. Upsert factory_warehouse_stock (per warehouse + sku)
+    # 2. Upsert factory_warehouse_stock (per warehouse + sku [+ batch when
+    #    the destination warehouse tracks batches]). Batch-keyed rows are
+    #    REQUIRED for shipments-out + deliveries to pick the right lineage.
     sku_id = batch.get("sku_id")
     sku_name = batch.get("sku_name")
-    existing_stock = await tdb.factory_warehouse_stock.find_one({
+    wh_tracks_batches = bool(warehouse.get("track_batches"))
+    stock_query = {
         "tenant_id": tenant_id,
         "warehouse_location_id": data.warehouse_location_id,
-        "sku_id": sku_id
-    })
+        "sku_id": sku_id,
+    }
+    if wh_tracks_batches:
+        stock_query["batch_id"] = batch_id
+    existing_stock = await tdb.factory_warehouse_stock.find_one(stock_query)
 
     if existing_stock:
         new_qty = existing_stock.get("quantity", 0) + data.quantity
+        set_doc = {
+            "quantity": new_qty,
+            # Keep bottles_per_crate in sync with the most recent batch so
+            # the dashboard can convert bottles → crates accurately.
+            "bottles_per_crate": batch.get("bottles_per_crate") or existing_stock.get("bottles_per_crate"),
+            "updated_at": now,
+        }
+        if wh_tracks_batches:
+            set_doc["batch_id"] = batch_id
+            set_doc["batch_code"] = batch.get("batch_code")
         await tdb.factory_warehouse_stock.update_one(
             {"id": existing_stock["id"]},
-            {"$set": {
-                "quantity": new_qty,
-                # Keep bottles_per_crate in sync with the most recent batch so
-                # the dashboard can convert bottles → crates accurately.
-                "bottles_per_crate": batch.get("bottles_per_crate") or existing_stock.get("bottles_per_crate"),
-                "updated_at": now,
-            }}
+            {"$set": set_doc}
         )
     else:
         stock_doc = {
@@ -1901,6 +1911,9 @@ async def transfer_to_warehouse(
             "created_at": now,
             "updated_at": now,
         }
+        if wh_tracks_batches:
+            stock_doc["batch_id"] = batch_id
+            stock_doc["batch_code"] = batch.get("batch_code")
         await tdb.factory_warehouse_stock.insert_one(stock_doc)
 
     # 3. Record transfer in history
