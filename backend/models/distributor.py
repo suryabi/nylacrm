@@ -359,6 +359,12 @@ class ShipmentItemCreate(BaseModel):
     discount_percent: Optional[float] = 0
     tax_percent: Optional[float] = 0
     remarks: Optional[str] = None
+    # Phase 2 batch tracking — required when the source factory warehouse has
+    # `track_batches=True`. Carries the specific production batch this line
+    # consumes from source and credits at destination. Optional for legacy
+    # callers / warehouses that don't track batches.
+    batch_id: Optional[str] = None
+    batch_code: Optional[str] = None
 
 
 class ShipmentItemUpdate(BaseModel):
@@ -478,6 +484,12 @@ class DeliveryItemCreate(BaseModel):
     discount_percent: Optional[float] = 0
     tax_percent: Optional[float] = 0
     remarks: Optional[str] = None
+    # Phase 2 batch tracking — required when the source distributor warehouse
+    # has `track_batches=True`. Carries the specific batch consumed for this
+    # line so we can decrement the right batch in `distributor_stock` and
+    # surface batch lineage on customer invoices.
+    batch_id: Optional[str] = None
+    batch_code: Optional[str] = None
 
 
 class DeliveryItemUpdate(BaseModel):

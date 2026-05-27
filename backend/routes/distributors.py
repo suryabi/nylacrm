@@ -2293,18 +2293,39 @@ async def create_shipment(
     
     # Validate source factory warehouse if provided
     source_warehouse_name = None
+    source_tracks_batches = False
     if data.source_warehouse_id:
         source_warehouse = await db.distributor_locations.find_one(
             {"id": data.source_warehouse_id, "tenant_id": tenant_id, "is_factory": True, "status": "active"},
-            {"_id": 0, "location_name": 1}
+            {"_id": 0, "location_name": 1, "track_batches": 1}
         )
         if not source_warehouse:
             raise HTTPException(status_code=400, detail="Invalid source factory warehouse")
         source_warehouse_name = source_warehouse.get('location_name')
-    
+        source_tracks_batches = bool(source_warehouse.get('track_batches'))
+
     # Validate items
     if not data.items or len(data.items) == 0:
         raise HTTPException(status_code=400, detail="At least one item is required")
+
+    # Phase 2 batch tracking: when the source factory warehouse has
+    # `track_batches=True`, every line MUST carry a `batch_id`. Reject the
+    # request up-front with a friendly error if any line is missing one.
+    if source_tracks_batches:
+        missing_batch = [
+            (item.sku_name or item.sku_id)
+            for item in data.items
+            if not item.batch_id
+        ]
+        if missing_batch:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Source warehouse '{source_warehouse_name}' tracks batches — "
+                    f"please pick a production batch for: {', '.join(missing_batch[:5])}"
+                    + (f" and {len(missing_batch) - 5} more" if len(missing_batch) > 5 else "")
+                ),
+            )
     
     # Generate shipment number
     shipment_number = await generate_shipment_number(tenant_id)
@@ -2348,7 +2369,11 @@ async def create_shipment(
             'unit_price': item_data.unit_price,
             'discount_percent': item_data.discount_percent or 0,
             'tax_percent': item_data.tax_percent or 0,
-            'remarks': item_data.remarks
+            'remarks': item_data.remarks,
+            # Batch identity (Phase 2). Always written so downstream code can
+            # rely on the field existing — None when source doesn't track batches.
+            'batch_id': item_data.batch_id,
+            'batch_code': item_data.batch_code,
         }
         
         # Calculate amounts
@@ -2527,41 +2552,63 @@ async def confirm_shipment(
     source_warehouse_id = shipment.get('source_warehouse_id')
     if source_warehouse_id:
         tdb = get_tenant_db()
-        # Get shipment items
+        # Check whether the source warehouse tracks batches — drives whether
+        # the per-batch stock check applies (batch-aware deduction) vs the
+        # legacy per-SKU aggregate.
+        src_loc = await db.distributor_locations.find_one(
+            {"id": source_warehouse_id, "tenant_id": tenant_id},
+            {"_id": 0, "track_batches": 1, "location_name": 1},
+        )
+        src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+
+        # Get shipment items (now also batch_id / batch_code)
         items = await db.distributor_shipment_items.find(
             {"shipment_id": shipment_id, "tenant_id": tenant_id},
-            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1, "batch_code": 1}
         ).to_list(500)
-        
-        # Validate stock availability before deducting
+
+        # Validate stock availability before deducting.
+        # When the source warehouse tracks batches, every item must carry a
+        # batch_id (we already enforced this on create) and we validate per
+        # (sku_id, batch_id) — not aggregated against the SKU's total.
         insufficient = []
         for item in items:
-            stock = await tdb.factory_warehouse_stock.find_one({
+            stock_query = {
                 "tenant_id": tenant_id,
                 "warehouse_location_id": source_warehouse_id,
-                "sku_id": item["sku_id"]
-            })
+                "sku_id": item["sku_id"],
+            }
+            if src_tracks_batches and item.get("batch_id"):
+                stock_query["batch_id"] = item["batch_id"]
+            stock = await tdb.factory_warehouse_stock.find_one(stock_query)
             available = stock.get("quantity", 0) if stock else 0
             if available < item["quantity"]:
-                insufficient.append(f"{item.get('sku_name', item['sku_id'])}: need {item['quantity']}, have {available}")
-        
+                label = item.get("sku_name") or item["sku_id"]
+                if item.get("batch_code"):
+                    label = f"{label} (batch {item['batch_code']})"
+                insufficient.append(f"{label}: need {item['quantity']}, have {available}")
+
         if insufficient:
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient stock in factory warehouse: {'; '.join(insufficient)}"
             )
-        
-        # Deduct stock for each SKU
+
+        # Deduct stock for each line. Same key shape as the validation — when
+        # tracking batches, deduct from the specific batch row only.
         for item in items:
+            update_query = {
+                "tenant_id": tenant_id,
+                "warehouse_location_id": source_warehouse_id,
+                "sku_id": item["sku_id"],
+            }
+            if src_tracks_batches and item.get("batch_id"):
+                update_query["batch_id"] = item["batch_id"]
             await tdb.factory_warehouse_stock.update_one(
-                {
-                    "tenant_id": tenant_id,
-                    "warehouse_location_id": source_warehouse_id,
-                    "sku_id": item["sku_id"]
-                },
+                update_query,
                 {"$inc": {"quantity": -item["quantity"]}, "$set": {"updated_at": now}}
             )
-        
+
         logger.info(f"Deducted stock from factory warehouse {source_warehouse_id} for shipment {shipment['shipment_number']}")
     
     await db.distributor_shipments.update_one(
@@ -2671,38 +2718,52 @@ async def mark_shipment_delivered(
         {"$set": update_data}
     )
     
-    # Update distributor stock (add to location inventory)
+    # Update distributor stock (add to location inventory). When the source
+    # factory tracked batches, the line carries the batch_id forward so the
+    # destination's `distributor_stock` row is keyed by (loc, sku, batch).
     items = await db.distributor_shipment_items.find(
         {"shipment_id": shipment_id, "tenant_id": tenant_id},
         {"_id": 0}
     ).to_list(500)
-    
+
     for item in items:
-        # Upsert stock record
+        batch_id = item.get('batch_id')
+        stock_key = {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": shipment.get('distributor_location_id'),
+            "sku_id": item.get('sku_id'),
+        }
+        # Add batch to the key so batched and legacy aggregate rows stay separate.
+        # `{"$in": [None]}` matches a stored None OR missing field, which is
+        # what aggregate-only legacy rows have.
+        stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+
+        set_on_insert = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": shipment.get('distributor_location_id'),
+            "sku_id": item.get('sku_id'),
+            "batch_id": batch_id,
+            "created_at": now,
+        }
+        set_fields = {
+            "sku_name": item.get('sku_name'),
+            "sku_code": item.get('sku_code'),
+            "distributor_name": shipment.get('distributor_name'),
+            "location_name": shipment.get('distributor_location_name'),
+            "updated_at": now,
+        }
+        if item.get('batch_code'):
+            set_fields["batch_code"] = item.get('batch_code')
+
         await db.distributor_stock.update_one(
-            {
-                "tenant_id": tenant_id,
-                "distributor_id": distributor_id,
-                "distributor_location_id": shipment.get('distributor_location_id'),
-                "sku_id": item.get('sku_id')
-            },
+            stock_key,
             {
                 "$inc": {"quantity": item.get('quantity', 0)},
-                "$set": {
-                    "sku_name": item.get('sku_name'),
-                    "sku_code": item.get('sku_code'),
-                    "distributor_name": shipment.get('distributor_name'),
-                    "location_name": shipment.get('distributor_location_name'),
-                    "updated_at": now
-                },
-                "$setOnInsert": {
-                    "id": str(uuid.uuid4()),
-                    "tenant_id": tenant_id,
-                    "distributor_id": distributor_id,
-                    "distributor_location_id": shipment.get('distributor_location_id'),
-                    "sku_id": item.get('sku_id'),
-                    "created_at": now
-                }
+                "$set": set_fields,
+                "$setOnInsert": set_on_insert,
             },
             upsert=True
         )
@@ -2724,37 +2785,46 @@ async def mark_shipment_delivered(
 
 
 def _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, qty_field, now):
-    """Helper: upsert distributor stock for delivered items using given quantity field."""
-    return [
-        db.distributor_stock.update_one(
-            {
-                "tenant_id": tenant_id,
-                "distributor_id": distributor_id,
-                "distributor_location_id": shipment.get('distributor_location_id'),
-                "sku_id": item.get('sku_id')
-            },
+    """Helper: upsert distributor stock for delivered items using given quantity field.
+    Batch-aware: keys on `(loc, sku, batch_id)` when the line carries a batch,
+    otherwise falls back to the aggregate per-SKU row used by legacy data."""
+    ops = []
+    for item in items:
+        batch_id = item.get('batch_id')
+        stock_key = {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": shipment.get('distributor_location_id'),
+            "sku_id": item.get('sku_id'),
+        }
+        stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+        set_fields = {
+            "sku_name": item.get('sku_name'),
+            "sku_code": item.get('sku_code'),
+            "distributor_name": shipment.get('distributor_name'),
+            "location_name": shipment.get('distributor_location_name'),
+            "updated_at": now,
+        }
+        if item.get('batch_code'):
+            set_fields["batch_code"] = item.get('batch_code')
+        ops.append(db.distributor_stock.update_one(
+            stock_key,
             {
                 "$inc": {"quantity": int(item.get(qty_field, 0) or 0)},
-                "$set": {
-                    "sku_name": item.get('sku_name'),
-                    "sku_code": item.get('sku_code'),
-                    "distributor_name": shipment.get('distributor_name'),
-                    "location_name": shipment.get('distributor_location_name'),
-                    "updated_at": now
-                },
+                "$set": set_fields,
                 "$setOnInsert": {
                     "id": str(uuid.uuid4()),
                     "tenant_id": tenant_id,
                     "distributor_id": distributor_id,
                     "distributor_location_id": shipment.get('distributor_location_id'),
                     "sku_id": item.get('sku_id'),
-                    "created_at": now
-                }
+                    "batch_id": batch_id,
+                    "created_at": now,
+                },
             },
-            upsert=True
-        )
-        for item in items
-    ]
+            upsert=True,
+        ))
+    return ops
 
 
 @router.post("/{distributor_id}/shipments/{shipment_id}/acknowledge")
@@ -3955,10 +4025,11 @@ async def create_delivery(
     # Validate location
     location = await db.distributor_locations.find_one(
         {"id": data.distributor_location_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
-        {"_id": 0, "location_name": 1, "city": 1}
+        {"_id": 0, "location_name": 1, "city": 1, "track_batches": 1}
     )
     if not location:
         raise HTTPException(status_code=400, detail="Invalid distributor location")
+    source_tracks_batches = bool(location.get("track_batches"))
     
     # Validate account exists
     account = await db.accounts.find_one(
@@ -3971,7 +4042,26 @@ async def create_delivery(
     # Validate items
     if not data.items or len(data.items) == 0:
         raise HTTPException(status_code=400, detail="At least one item is required")
-    
+
+    # Phase 2 batch tracking: when the source distributor warehouse has
+    # `track_batches=True`, every line MUST carry a `batch_id`. Reject up
+    # front with a clear list of missing SKUs.
+    if source_tracks_batches:
+        missing_batch = [
+            (item.sku_name or item.sku_id)
+            for item in data.items
+            if not item.batch_id
+        ]
+        if missing_batch:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Warehouse '{location.get('location_name')}' tracks batches — "
+                    f"please pick a production batch for: {', '.join(missing_batch[:5])}"
+                    + (f" and {len(missing_batch) - 5} more" if len(missing_batch) > 5 else "")
+                ),
+            )
+
     # Generate delivery number
     delivery_number = await generate_delivery_number(tenant_id)
     delivery_id = str(uuid.uuid4())
@@ -4057,7 +4147,12 @@ async def create_delivery(
             'base_price': item_data.base_price or base_price,
             'discount_percent': item_data.discount_percent or 0,
             'tax_percent': item_data.tax_percent or 0,
-            'remarks': item_data.remarks
+            'remarks': item_data.remarks,
+            # Phase 2 batch identity — None when the source warehouse doesn't
+            # track batches. Stored on every row so downstream code can rely
+            # on the field existing.
+            'batch_id': item_data.batch_id,
+            'batch_code': item_data.batch_code,
         }
         
         # Calculate amounts with margin and transfer price
@@ -4517,20 +4612,27 @@ async def complete_delivery(
         {"$set": update_data}
     )
     
-    # Deduct from distributor stock
+    # Deduct from distributor stock — batch-aware when the source warehouse
+    # tracks batches. The destination row was keyed by (loc, sku, batch_id)
+    # at shipment delivery time, so we deduct from the same key now.
     items = await db.distributor_delivery_items.find(
         {"delivery_id": delivery_id, "tenant_id": tenant_id},
         {"_id": 0}
     ).to_list(500)
-    
+
     for item in items:
+        batch_id = item.get('batch_id')
+        stock_key = {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": delivery.get('distributor_location_id'),
+            "sku_id": item.get('sku_id'),
+        }
+        # Tracked batches deduct from the specific batch row; legacy aggregate
+        # rows (no batch_id stored) match `{"$in": [None]}`.
+        stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
         await db.distributor_stock.update_one(
-            {
-                "tenant_id": tenant_id,
-                "distributor_id": distributor_id,
-                "distributor_location_id": delivery.get('distributor_location_id'),
-                "sku_id": item.get('sku_id')
-            },
+            stock_key,
             {
                 "$inc": {"quantity": -item.get('quantity', 0)},
                 "$set": {"updated_at": now}

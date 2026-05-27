@@ -1793,7 +1793,7 @@ async def list_factory_warehouses(current_user: dict = Depends(get_current_user)
     locations = await db.distributor_locations.find(
         {"tenant_id": tenant_id, "is_factory": True, "status": "active"},
         {"_id": 0, "id": 1, "location_name": 1, "location_code": 1, "city": 1,
-         "state": 1, "distributor_id": 1, "is_default": 1}
+         "state": 1, "distributor_id": 1, "is_default": 1, "track_batches": 1}
     ).sort("location_name", 1).to_list(100)
 
     # Enrich with distributor name

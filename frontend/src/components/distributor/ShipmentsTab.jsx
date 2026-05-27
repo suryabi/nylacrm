@@ -35,7 +35,12 @@ export default function ShipmentsTab({
   savingShipment,
   viewShipmentDetail,
   setDeleteTarget,
-  getShipmentStatusBadge
+  getShipmentStatusBadge,
+  // Phase 2 batch tracking — optional batch list keyed by sku_id for the
+  // currently-selected source warehouse. Empty map when the source warehouse
+  // doesn't track batches.
+  batchesBySku = {},
+  sourceTracksBatches = false,
 }) {
   return (
     <Card>
@@ -273,6 +278,35 @@ export default function ShipmentsTab({
                               <p className="h-4"></p>
                             </div>
                           </div>
+                          {/* Row 3: Batch picker — only shown when source warehouse tracks batches */}
+                          {sourceTracksBatches && item.sku_id && (
+                            <div className="mt-3 flex items-center gap-3">
+                              <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider w-16">Batch *</Label>
+                              <div className="flex-1">
+                                <select
+                                  className="w-full h-9 px-3 border-amber-300 border rounded-md text-sm bg-amber-50 dark:bg-amber-900/20"
+                                  value={item.batch_id || ''}
+                                  onChange={e => {
+                                    const bid = e.target.value;
+                                    const batch = (batchesBySku[item.sku_id] || []).find(b => b.batch_id === bid);
+                                    updateShipmentItem(item.id, 'batch_id', bid);
+                                    updateShipmentItem(item.id, 'batch_code', batch ? batch.batch_code : '');
+                                  }}
+                                  data-testid={`shipment-batch-${index}`}
+                                >
+                                  <option value="">Select batch (FIFO recommended)…</option>
+                                  {(batchesBySku[item.sku_id] || []).map(b => (
+                                    <option key={b.batch_id} value={b.batch_id}>
+                                      {b.batch_code} — {b.quantity} units{b.received_at ? ` · ${b.received_at.slice(0,10)}` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                                {!(batchesBySku[item.sku_id] || []).length && (
+                                  <p className="text-xs text-red-600 mt-1">No batches available for this SKU at source.</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                         );
                       })}

@@ -203,6 +203,11 @@ export default function DistributorDetail() {
   const [reviewingDiscrepancy, setReviewingDiscrepancy] = useState(false);
   const [factoryWarehouses, setFactoryWarehouses] = useState([]);
   const [warehouseStock, setWarehouseStock] = useState([]); // stock for selected source warehouse
+  // Phase 2: batches available per SKU at the selected source warehouse.
+  // Keyed by sku_id → list of {batch_id, batch_code, quantity, received_at}.
+  // Populated on-demand whenever a tracked source + an item's sku_id is set.
+  const [shipmentBatchesBySku, setShipmentBatchesBySku] = useState({});
+  const [deliveryBatchesBySku, setDeliveryBatchesBySku] = useState({});
   
   // Delivery state
   const [deliveries, setDeliveries] = useState([]);
@@ -493,6 +498,62 @@ export default function DistributorDetail() {
       setWarehouseStock([]);
     }
   }, [shipmentForm.source_warehouse_id, token]);
+
+  // Phase 2: when the source factory warehouse tracks batches, fetch the
+  // FIFO-ordered batch list per SKU as the user picks SKUs on each line. We
+  // re-use the existing `/distributor/stock-transfers/batches-available`
+  // endpoint — it handles both factory and distributor source locations.
+  const sourceFactoryTracksBatches = !!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches);
+  useEffect(() => {
+    if (!sourceFactoryTracksBatches || !shipmentForm.source_warehouse_id) {
+      setShipmentBatchesBySku({});
+      return;
+    }
+    const needed = Array.from(new Set(
+      (shipmentItems || [])
+        .map(i => i.sku_id)
+        .filter(sid => sid && !shipmentBatchesBySku[sid])
+    ));
+    if (!needed.length) return;
+    needed.forEach(sid => {
+      axios.get(
+        `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${shipmentForm.source_warehouse_id}&sku_id=${sid}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(res => {
+        setShipmentBatchesBySku(prev => ({ ...prev, [sid]: res.data.batches || [] }));
+      }).catch(() => {
+        setShipmentBatchesBySku(prev => ({ ...prev, [sid]: [] }));
+      });
+    });
+  }, [shipmentForm.source_warehouse_id, shipmentItems, sourceFactoryTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stock OUT — same idea. Source is a distributor warehouse; check its
+  // `track_batches` flag on the loaded `distributor.locations` array.
+  const sourceDistributorTracksBatches = !!(
+    (distributor?.locations || []).find(loc => loc.id === deliveryForm.distributor_location_id)?.track_batches
+  );
+  useEffect(() => {
+    if (!sourceDistributorTracksBatches || !deliveryForm.distributor_location_id) {
+      setDeliveryBatchesBySku({});
+      return;
+    }
+    const needed = Array.from(new Set(
+      (deliveryItems || [])
+        .map(i => i.sku_id)
+        .filter(sid => sid && !deliveryBatchesBySku[sid])
+    ));
+    if (!needed.length) return;
+    needed.forEach(sid => {
+      axios.get(
+        `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${deliveryForm.distributor_location_id}&sku_id=${sid}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(res => {
+        setDeliveryBatchesBySku(prev => ({ ...prev, [sid]: res.data.batches || [] }));
+      }).catch(() => {
+        setDeliveryBatchesBySku(prev => ({ ...prev, [sid]: [] }));
+      });
+    });
+  }, [deliveryForm.distributor_location_id, deliveryItems, sourceDistributorTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // Fetch deliveries
@@ -1286,7 +1347,12 @@ export default function DistributorDetail() {
             distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
             unit_price: parseFloat(item.unit_price),
             discount_percent: parseFloat(item.discount_percent) || 0,
-            tax_percent: 0
+            tax_percent: 0,
+            // Phase 2 batch identity — sent on every line. Backend will reject
+            // with HTTP 400 if the source warehouse tracks batches and any
+            // line is missing batch_id.
+            batch_id: item.batch_id || null,
+            batch_code: item.batch_code || null,
           };
         })
       };
@@ -1338,7 +1404,9 @@ export default function DistributorDetail() {
       distributor_margin: null,
       unit_price: 0,
       discount_percent: 0,
-      tax_percent: defaultGstPercent
+      tax_percent: defaultGstPercent,
+      batch_id: '',
+      batch_code: '',
     }]);
   };
 
@@ -1679,7 +1747,10 @@ export default function DistributorDetail() {
             unit_price: parseFloat(item.unit_price),
             customer_selling_price: parseFloat(item.unit_price),
             discount_percent: parseFloat(item.discount_percent) || 0,
-            tax_percent: 0
+            tax_percent: 0,
+            // Phase 2 batch identity
+            batch_id: item.batch_id || null,
+            batch_code: item.batch_code || null,
           };
         }),
         // Include credit notes if any
@@ -1734,7 +1805,9 @@ export default function DistributorDetail() {
       quantity: 1,
       unit_price: 0,
       discount_percent: 0,
-      tax_percent: 0
+      tax_percent: 0,
+      batch_id: '',
+      batch_code: '',
     }]);
   };
 
@@ -2640,6 +2713,8 @@ export default function DistributorDetail() {
             viewShipmentDetail={viewShipmentDetail}
             setDeleteTarget={setDeleteTarget}
             getShipmentStatusBadge={getShipmentStatusBadge}
+            sourceTracksBatches={!!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches)}
+            batchesBySku={shipmentBatchesBySku}
           />
         </TabsContent>
 
@@ -2683,6 +2758,8 @@ export default function DistributorDetail() {
             getDeliveryStatusBadge={getDeliveryStatusBadge}
             API_URL={API_URL}
             token={token}
+            sourceTracksBatches={sourceDistributorTracksBatches}
+            batchesBySku={deliveryBatchesBySku}
           />
         </TabsContent>
 

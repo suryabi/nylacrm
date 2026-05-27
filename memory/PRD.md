@@ -14,6 +14,28 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Phase 2 Batch Tracking: Stock IN + Stock OUT ✅ DONE
+- **Scope**: Extend batch tracking from Stock Transfers (Phase 1) to `create_shipment` (Stock In) and `create_delivery` (Stock Out). User chose **strict block** validation (consistent with Stock Transfers).
+- **Backend** (`/app/backend/models/distributor.py` + `routes/distributors.py`):
+  - `ShipmentItemCreate` and `DeliveryItemCreate` now carry optional `batch_id`, `batch_code`.
+  - `create_shipment`: when source factory warehouse has `track_batches=True`, every line MUST have `batch_id` — returns HTTP 400 with a friendly list of missing SKU names. Shipment items persist `batch_id` + `batch_code`.
+  - `confirm_shipment`: stock check + deduction now keyed on `(sku_id, batch_id)` when source tracks batches — per-batch insufficiency raises 400 with batch_code in the message.
+  - `mark_shipment_delivered` + `_apply_stock_on_delivery`: destination `distributor_stock` row is keyed on `(loc, sku, batch_id)`; batched stock and legacy aggregate rows stay cleanly separated.
+  - `create_delivery`: when source distributor location has `track_batches=True`, every line MUST have `batch_id`. Delivery items persist `batch_id` + `batch_code`.
+  - `complete_delivery`: deducts from the specific batch row (or legacy aggregate when no batch_id).
+- **Backend support**: `GET /production/factory-warehouses` now exposes `track_batches` so the Stock In modal can decide whether to show the batch picker without an extra fetch.
+- **Frontend** (`/app/frontend/src/pages/DistributorDetail.js` + `components/distributor/{ShipmentsTab,DeliveriesTab}.jsx`):
+  - Two new state maps: `shipmentBatchesBySku`, `deliveryBatchesBySku`. Effects fetch the FIFO batch list from `/distributor/stock-transfers/batches-available` whenever a tracked source + an item's SKU is set.
+  - Both modals show a per-line **"Batch * FIFO"** dropdown with options `BATCH_CODE — N units · YYYY-MM-DD`, gated on `sourceTracksBatches`. Inline error if no batches available for that SKU at source.
+  - Submit payloads now carry `batch_id` and `batch_code` on every item.
+  - `addShipmentItem` and `addDeliveryItem` seed `batch_id: ''`, `batch_code: ''`.
+- **Verified end-to-end via curl**:
+  - **Stock OUT** (Brian Hyderabad location with track_batches=true, batches A=150, B=300): no-batch payload → HTTP 400 ("Warehouse 'Hyderabad' tracks batches — please pick a production batch for…"); valid-batch payload → 200, item persisted with batch metadata, complete-delivery deducted from batch A specifically (150 → 90), batch B untouched.
+  - **Stock IN** (Default master factory with track_batches=true, batches BATCH-VERIFY-A=60, B=240): no-batch payload → HTTP 400; valid-batch payload → 200, item persisted, confirm-shipment deducted factory batch A (60 → 36), deliver-shipment created destination `distributor_stock` row carrying `batch_code=BATCH-VERIFY-A-001` qty=24.
+- **Test data cleaned up post-verification.**
+
+
+
 ### 2026-05-29 — Bulk re-link tool for orphan SKU pricing ✅ DONE
 - **Need**: Production has hundreds of accounts. Opening each one to manually re-link an orphan SKU pricing row is impractical. Admin asked for a single screen that lists every distinct orphan name once with a dropdown to pick the target SKU and applies the relink across every affected Account / Lead / Sampling Trial in one click.
 - **Backend** (`/app/backend/routes/admin_sku_migration.py`):
