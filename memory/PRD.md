@@ -14,6 +14,20 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Bulk re-link tool for orphan SKU pricing ✅ DONE
+- **Need**: Production has hundreds of accounts. Opening each one to manually re-link an orphan SKU pricing row is impractical. Admin asked for a single screen that lists every distinct orphan name once with a dropdown to pick the target SKU and applies the relink across every affected Account / Lead / Sampling Trial in one click.
+- **Backend** (`/app/backend/routes/admin_sku_migration.py`):
+  - `GET /api/admin/migrations/sku/orphan-pricing` — scans `accounts.sku_pricing[]`, `leads.proposed_sku_pricing[]`, and `sampling_trials.sku_plans[]` in one pass, groups orphan entries (no `sku_id`, stored name not in current `master_skus.sku_name` set) by their stored name. Returns one row per distinct orphan name with `account_rows`, `lead_rows`, `sampling_rows` counts plus sample reference names (up to 5 each). Also returns the full `master_skus` list for the dropdown picker. Tenant-scoped, admin-only.
+  - `POST /api/admin/migrations/sku/bulk-relink` — body `{mappings: [{stored_name, target_sku_id}, ...]}`. Walks each of the 3 collections once; for each orphan entry whose stored name matches a mapping (case-insensitive), sets `sku_id` to the target and refreshes the `sku` field to the target SKU's current name. Idempotent. Returns per-mapping counts.
+- **Frontend** (`/app/frontend/src/pages/SkuRelinkTool.js`, new):
+  - Route `/sku-management/relink` — table of orphans, filter input, per-row target-SKU dropdown, single "Apply re-links" button.
+  - Each row shows: warning icon + stored name in highlighted code block, account/lead/sampling row counts, sample reference names, dropdown of all current master SKUs (with category hint).
+  - Apply button shows `(N)` of picks, disabled until at least one pick is made, confirm dialog, toast on success, auto-refreshes list.
+- **Entry point**: New "Re-link orphans" button next to "Sync SKU names" in SKU Management header (testid `open-relink-tool-btn`).
+- **Verified end-to-end**: Seeded 2 orphan rows (1 account, 1 lead) → tool listed them with counts and sample references → applied bulk relink → re-fetch showed 0 orphans → restored test data.
+
+
+
 ### 2026-05-29 — Architectural fix: Account & Lead SKU Pricing now key on `sku_id` ✅ DONE
 - **Real complaint**: After yesterday's "Sync SKU names", the user noticed the SKU pricing rows on Accounts (and the proposed pricing on Leads) STILL showed the old labels and didn't surface in Stock Out dropdowns. Root cause exposed by inspection: `accounts.sku_pricing[]` and `leads.proposed_sku_pricing[]` stored ONLY the SKU name (`sku` field) with **no `sku_id`**. So once the master name changes, those rows are orphans — there's no stable key to join on.
 - **Fix #1 — schema upgrade**: Added `sku_id: Optional[str]` to `AccountSKUPricing` (both `routes/accounts.py` and `server.py` model). Lead → Account conversion now carries `sku_id` through.

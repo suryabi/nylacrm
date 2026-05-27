@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { skusAPI } from '../utils/api';
 import { Button } from '../components/ui/button';
@@ -10,7 +11,7 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Package, Plus, Pencil, Trash2, Loader2, Save, X, 
-  Search, Filter, ArrowUpDown, Check, RefreshCcw
+  Search, Filter, ArrowUpDown, Check, RefreshCcw, Link2
 } from 'lucide-react';
 import {
   Select,
@@ -39,6 +40,7 @@ const categoryColors = {
 };
 
 export default function SKUManagement() {
+  const navigate = useNavigate();
   const [skus, setSkus] = useState([]);
   const [categories, setCategories] = useState([]);
   const [packagingTypes, setPackagingTypes] = useState([]);
@@ -281,6 +283,16 @@ export default function SKUManagement() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate('/sku-management/relink')}
+            data-testid="open-relink-tool-btn"
+            title="Bulk-relink Account & Lead pricing rows that point at a renamed-away SKU name."
+            className="border-slate-200 dark:border-slate-700"
+          >
+            <Link2 className="h-4 w-4 mr-2" />
+            Re-link orphans
+          </Button>
           <Button
             variant="outline"
             onClick={handleRehydrateSkuNames}

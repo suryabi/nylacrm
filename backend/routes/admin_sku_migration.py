@@ -19,7 +19,8 @@ Safe to re-run: only records whose `sku_name` differs from the current
 Restricted to CEO / Director / Admin / System Admin.
 """
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel
 
 from database import db
 from deps import get_current_user
@@ -285,3 +286,245 @@ async def rehydrate_sku_names(
         ),
     }
     return report
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bulk re-link tool
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# When `rehydrate-sku-names` finds orphan pricing rows (stored name doesn't
+# match any current `master_skus.sku_name`), the admin needs a way to map
+# each distinct orphan name to the correct current SKU in one shot — rather
+# than opening every affected Account / Lead one by one. These two endpoints
+# back that workflow:
+#   • GET  /orphan-pricing → groups orphan rows by their stored name, counts
+#       how many Account / Lead / Sampling Trial rows reference each.
+#   • POST /bulk-relink → accepts {stored_name: target_sku_id} mappings and
+#       applies them across all three collections in one pass.
+#
+# Scope: tenant-scoped, admin-only. Idempotent (re-running with the same
+# mapping is a no-op).
+
+
+@router.get("/orphan-pricing")
+async def list_orphan_pricing(
+    current_user: dict = Depends(get_current_user),
+):
+    """List every embedded pricing row whose stored SKU name no longer matches
+    a current `master_skus.sku_name` AND which has no `sku_id` linked.
+
+    Grouped by the stored name so the admin sees one row per distinct orphan
+    name with counts across Accounts / Leads / Sampling Trials.
+    """
+    _ensure_admin(current_user)
+    tenant_id = get_current_tenant_id()
+
+    master_rows = await db.master_skus.find(
+        {}, {"_id": 0, "id": 1, "sku_name": 1, "category": 1, "unit": 1}
+    ).to_list(20000)
+    name_set = {
+        (r.get("sku_name") or "").strip().lower()
+        for r in master_rows
+        if r.get("sku_name")
+    }
+
+    def _is_orphan(entry: dict) -> bool:
+        if not isinstance(entry, dict):
+            return False
+        if entry.get("sku_id"):
+            return False  # already linked
+        name = (entry.get("sku") or "").strip()
+        if not name:
+            return False
+        return name.lower() not in name_set
+
+    group: dict = {}
+
+    def _bucket(stored_name: str) -> dict:
+        key = stored_name.strip().lower()
+        b = group.get(key)
+        if not b:
+            b = {
+                "stored_name": stored_name.strip(),
+                "account_rows": 0, "lead_rows": 0, "sampling_rows": 0,
+                "sample_account_names": [], "sample_lead_names": [],
+            }
+            group[key] = b
+        return b
+
+    async for a in db.accounts.find(
+        {"tenant_id": tenant_id, "sku_pricing.0": {"$exists": True}},
+        {"_id": 0, "account_name": 1, "sku_pricing": 1},
+    ):
+        for sp in a.get("sku_pricing") or []:
+            if _is_orphan(sp):
+                b = _bucket(sp.get("sku") or "")
+                b["account_rows"] += 1
+                if a.get("account_name") and a["account_name"] not in b["sample_account_names"] and len(b["sample_account_names"]) < 5:
+                    b["sample_account_names"].append(a["account_name"])
+
+    async for l_doc in db.leads.find(
+        {"tenant_id": tenant_id, "proposed_sku_pricing.0": {"$exists": True}},
+        {"_id": 0, "name": 1, "company": 1, "proposed_sku_pricing": 1},
+    ):
+        label = l_doc.get("company") or l_doc.get("name") or ""
+        for sp in l_doc.get("proposed_sku_pricing") or []:
+            if _is_orphan(sp):
+                b = _bucket(sp.get("sku") or "")
+                b["lead_rows"] += 1
+                if label and label not in b["sample_lead_names"] and len(b["sample_lead_names"]) < 5:
+                    b["sample_lead_names"].append(label)
+
+    async for s in db.sampling_trials.find(
+        {"tenant_id": tenant_id, "sku_plans.0": {"$exists": True}},
+        {"_id": 0, "sku_plans": 1},
+    ):
+        for sp in s.get("sku_plans") or []:
+            if _is_orphan(sp):
+                b = _bucket(sp.get("sku") or "")
+                b["sampling_rows"] += 1
+
+    orphans = sorted(
+        group.values(),
+        key=lambda b: -(b["account_rows"] + b["lead_rows"] + b["sampling_rows"]),
+    )
+
+    return {
+        "tenant_id": tenant_id,
+        "master_skus": [
+            {"id": r["id"], "sku_name": r.get("sku_name"),
+             "category": r.get("category"), "unit": r.get("unit")}
+            for r in master_rows
+            if r.get("id") and r.get("sku_name")
+        ],
+        "orphans": orphans,
+        "totals": {
+            "distinct_orphan_names": len(orphans),
+            "total_rows": sum(
+                b["account_rows"] + b["lead_rows"] + b["sampling_rows"]
+                for b in orphans
+            ),
+        },
+    }
+
+
+class BulkRelinkMapping(BaseModel):
+    stored_name: str
+    target_sku_id: str
+
+
+class BulkRelinkRequest(BaseModel):
+    mappings: List[BulkRelinkMapping]
+
+
+@router.post("/bulk-relink")
+async def bulk_relink(
+    payload: BulkRelinkRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Apply a batch of {stored_name → target_sku_id} relinks across every
+    embedded pricing array (accounts.sku_pricing[], leads.proposed_sku_pricing[],
+    sampling_trials.sku_plans[]).
+
+    For every entry whose stored `sku` (name) matches a mapping's
+    `stored_name` (case-insensitive) AND which currently has no `sku_id`, we
+    set `sku_id` to the mapping's `target_sku_id` and refresh `sku` to the
+    target SKU's current name. Rows already linked are skipped.
+    """
+    _ensure_admin(current_user)
+    tenant_id = get_current_tenant_id()
+
+    if not payload.mappings:
+        raise HTTPException(status_code=400, detail="No mappings provided.")
+
+    target_ids = list({m.target_sku_id for m in payload.mappings})
+    master_rows = await db.master_skus.find(
+        {"id": {"$in": target_ids}},
+        {"_id": 0, "id": 1, "sku_name": 1},
+    ).to_list(1000)
+    name_by_id = {
+        r["id"]: (r.get("sku_name") or "").strip()
+        for r in master_rows
+        if r.get("id") and r.get("sku_name")
+    }
+    missing = [tid for tid in target_ids if tid not in name_by_id]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown target_sku_id(s): {missing}",
+        )
+
+    plan: dict = {}
+    for m in payload.mappings:
+        key = m.stored_name.strip().lower()
+        if not key:
+            continue
+        plan[key] = (m.target_sku_id, name_by_id[m.target_sku_id])
+
+    EMBED = [
+        ("accounts", "sku_pricing"),
+        ("leads", "proposed_sku_pricing"),
+        ("sampling_trials", "sku_plans"),
+    ]
+
+    counters: dict = {key: {"accounts": 0, "leads": 0, "sampling_trials": 0} for key in plan}
+
+    for col_name, array_field in EMBED:
+        col = db[col_name]
+        cursor = col.find(
+            {"tenant_id": tenant_id, f"{array_field}.0": {"$exists": True}},
+            {"_id": 1, array_field: 1},
+        )
+        async for d in cursor:
+            arr = d.get(array_field) or []
+            if not isinstance(arr, list):
+                continue
+            new_arr = []
+            doc_changed = False
+            for entry in arr:
+                if not isinstance(entry, dict):
+                    new_arr.append(entry)
+                    continue
+                if entry.get("sku_id"):
+                    new_arr.append(entry)
+                    continue
+                stored_name = (entry.get("sku") or "").strip()
+                if not stored_name:
+                    new_arr.append(entry)
+                    continue
+                hit = plan.get(stored_name.lower())
+                if not hit:
+                    new_arr.append(entry)
+                    continue
+                target_id, target_name = hit
+                new_arr.append({**entry, "sku_id": target_id, "sku": target_name})
+                doc_changed = True
+                counters[stored_name.lower()][col_name] += 1
+            if doc_changed:
+                await col.update_one(
+                    {"_id": d["_id"]},
+                    {"$set": {array_field: new_arr}},
+                )
+
+    report: list = []
+    for m in payload.mappings:
+        key = m.stored_name.strip().lower()
+        c = counters.get(key, {"accounts": 0, "leads": 0, "sampling_trials": 0})
+        report.append({
+            "stored_name": m.stored_name,
+            "target_sku_id": m.target_sku_id,
+            "target_sku_name": name_by_id.get(m.target_sku_id),
+            "linked_in_accounts": c["accounts"],
+            "linked_in_leads": c["leads"],
+            "linked_in_sampling_trials": c["sampling_trials"],
+            "total_linked": c["accounts"] + c["leads"] + c["sampling_trials"],
+        })
+
+    return {
+        "tenant_id": tenant_id,
+        "mappings_applied": len(report),
+        "totals": {
+            "rows_relinked": sum(r["total_linked"] for r in report),
+        },
+        "results": report,
+    }
