@@ -7289,39 +7289,18 @@ async def get_stock_dashboard(
     )
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
-    
-    # === 1. STOCK IN: Shipments received (only delivered shipments) ===
-    delivered_shipment_ids = await db.distributor_shipments.distinct(
-        "id",
-        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "delivered"}
-    )
-    shipment_items = await db.distributor_shipment_items.find(
-        {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_shipment_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
-    ).to_list(50000)
-    
-    stock_in_by_sku = {}
-    for si in shipment_items:
-        sid = si.get('sku_id', '')
-        if sid not in stock_in_by_sku:
-            stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'), "qty": 0}
-        stock_in_by_sku[sid]["qty"] += si.get('quantity', 0)
 
-    # === 1b. FACTORY WAREHOUSE STOCK (from production transfers) ===
     tdb = get_tenant_db()
-    # Get factory warehouse IDs belonging to this distributor
-    factory_location_ids = await db.distributor_locations.distinct(
-        "id",
-        {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_factory": True, "status": "active"}
-    )
-    factory_wh_stock_by_sku = {}
-    factory_wh_by_location = {}  # location_id -> {location_name, skus: [...]}
-    total_factory_wh_stock = 0
 
-    # `bpc_by_sku` and `_to_crates` must be available outside the factory-WH
-    # block so the per-SKU aggregation (which runs unconditionally) can convert
-    # bottle-quantities (shipments, deliveries, returns) into crates. Defined
-    # here once and populated lazily as more SKUs are encountered downstream.
+    # ── Units helper ────────────────────────────────────────────────────────
+    # The dashboard displays everything in CRATES. Some data sources store
+    # bottles, some store crates, and master_skus often lacks bpc. We solve
+    # this by:
+    #   1. Reading the per-item `packaging_units` field when present (delivery
+    #      / shipment items always store it).
+    #   2. Falling back to `bpc_by_sku` (seeded from master_skus +
+    #      factory_warehouse_stock rows below) for sources that don't store
+    #      packaging_units (returns).
     bpc_by_sku: dict = {}
 
     def _to_crates(sku_id: str, bottles_qty, row_bpc=None) -> int:
@@ -7330,6 +7309,44 @@ async def get_stock_dashboard(
             return int(bottles_qty) // int(bpc) if int(bpc) > 0 else int(bottles_qty)
         except Exception:
             return int(bottles_qty)
+
+    def _bottle_to_crates(item: dict) -> int:
+        """Convert an item dict whose `quantity` is in bottles to crates,
+        preferring the per-item `packaging_units` field (most accurate)."""
+        bottles = int(item.get('quantity') or 0)
+        pu = int(item.get('packaging_units') or 0)
+        if pu > 0:
+            if not bpc_by_sku.get(item.get('sku_id')):
+                bpc_by_sku[item['sku_id']] = pu     # seed for downstream returns
+            return bottles // pu
+        return _to_crates(item.get('sku_id', ''), bottles)
+
+    # === 1. STOCK IN: Shipments received (only delivered shipments) ===
+    delivered_shipment_ids = await db.distributor_shipments.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "delivered"}
+    )
+    shipment_items = await db.distributor_shipment_items.find(
+        {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_shipment_ids}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
+    ).to_list(50000)
+    
+    stock_in_by_sku = {}
+    for si in shipment_items:
+        sid = si.get('sku_id', '')
+        if sid not in stock_in_by_sku:
+            stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'), "qty": 0}
+        stock_in_by_sku[sid]["qty"] += _bottle_to_crates(si)
+
+    # === 1b. FACTORY WAREHOUSE STOCK (from production transfers) ===
+    # Get factory warehouse IDs belonging to this distributor
+    factory_location_ids = await db.distributor_locations.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_factory": True, "status": "active"}
+    )
+    factory_wh_stock_by_sku = {}
+    factory_wh_by_location = {}  # location_id -> {location_name, skus: [...]}
+    total_factory_wh_stock = 0
 
     if factory_location_ids:
         fws_docs = await tdb.factory_warehouse_stock.find(
@@ -7356,13 +7373,24 @@ async def get_stock_dashboard(
                     default = next((p for p in pc if p.get("is_default")), None)
                     if default and default.get("units"):
                         bpc = default["units"]
-                bpc_by_sku[ms["id"]] = bpc or 1
+                # Only set when we have a real bpc — never poison the lookup
+                # with the "or 1" fallback (which would override more accurate
+                # row-level / item-level seeds done elsewhere).
+                if bpc:
+                    bpc_by_sku.setdefault(ms["id"], bpc)
 
         for fws in fws_docs:
             sid = fws.get("sku_id", "")
             bottles_qty = fws.get("quantity", 0)
             if bottles_qty <= 0:
                 continue
+            # Persist the row-level bpc back into the shared lookup so all the
+            # downstream bottles→crates conversions (deliveries, returns,
+            # pending out) agree with the factory_wh row's truth. Master SKU
+            # often lacks `bottles_per_crate`, leaving the lookup at 1 (which
+            # was the silent unit-mismatch bug on the dashboard).
+            if fws.get("bottles_per_crate") and not bpc_by_sku.get(sid):
+                bpc_by_sku[sid] = fws["bottles_per_crate"]
             crates_qty = _to_crates(sid, bottles_qty, fws.get("bottles_per_crate"))
             total_factory_wh_stock += crates_qty
             if sid not in factory_wh_stock_by_sku:
@@ -7381,7 +7409,7 @@ async def get_stock_dashboard(
     )
     delivery_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
     ).to_list(50000)
     
     stock_out_by_sku = {}
@@ -7389,7 +7417,7 @@ async def get_stock_dashboard(
         sid = di.get('sku_id', '')
         if sid not in stock_out_by_sku:
             stock_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
-        stock_out_by_sku[sid]["qty"] += di.get('quantity', 0)
+        stock_out_by_sku[sid]["qty"] += _bottle_to_crates(di)
 
     # === 2b. PENDING OUT — committed but not yet delivered ===
     # A scheduled (or in-progress) delivery has *reserved* stock even if the
@@ -7408,14 +7436,14 @@ async def get_stock_dashboard(
     )
     pending_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": pending_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
     ).to_list(50000)
     stock_pending_out_by_sku = {}
     for di in pending_items:
         sid = di.get('sku_id', '')
         if sid not in stock_pending_out_by_sku:
             stock_pending_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
-        stock_pending_out_by_sku[sid]["qty"] += di.get('quantity', 0)
+        stock_pending_out_by_sku[sid]["qty"] += _bottle_to_crates(di)
     
     # Weekly delivery data (last 12 weeks) for average calculation
     from datetime import timedelta
@@ -7534,7 +7562,8 @@ async def get_stock_dashboard(
                 default = next((p for p in pc if p.get("is_default")), None)
                 if default and default.get("units"):
                     bpc = default["units"]
-            bpc_by_sku[ms["id"]] = bpc or 1
+            if bpc:
+                bpc_by_sku.setdefault(ms["id"], bpc)
 
     sku_summaries = []
     total_stock_in = 0
@@ -7552,10 +7581,13 @@ async def get_stock_dashboard(
         fr_data = factory_return_by_sku.get(sid, {})
         fws_data = factory_wh_stock_by_sku.get(sid, {})
 
-        # Bottle-level inputs → convert to crates (factory_wh already in crates).
-        qty_in_shipments  = _to_crates(sid, si.get('qty', 0))
-        qty_out           = _to_crates(sid, so.get('qty', 0))           # delivered
-        qty_pending_out   = _to_crates(sid, po.get('qty', 0))           # scheduled/in_transit
+        # Bottle-level inputs → convert to crates. Shipment/delivery/pending
+        # were already converted at the aggregation step (using each item's
+        # `packaging_units`). Returns and factory-warehouse rows weren't,
+        # so do them now.
+        qty_in_shipments  = si.get('qty', 0)                            # already crates
+        qty_out           = so.get('qty', 0)                            # already crates
+        qty_pending_out   = po.get('qty', 0)                            # already crates
         qty_cust_returned = _to_crates(sid, cr_data.get('total', 0))
         qty_factory_returned = _to_crates(sid, fr_data.get('total', 0))
         qty_factory_wh    = fws_data.get('qty', 0)                       # already crates
