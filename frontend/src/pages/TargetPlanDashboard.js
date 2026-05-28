@@ -242,10 +242,10 @@ function CombinedProgressWidget({ timeline, plan, estimated }) {
             <div>
               <h4 className="font-semibold text-slate-700 flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
-                Customers On-boarded Revenue
+                Customers On-boarded Revenue (MRR)
               </h4>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Estimated revenue from won leads & active customers
+                Monthly Run Rate from won leads — sum of each lead's <code>monthly_bottles × proposed_sku_pricing</code>.
               </p>
             </div>
             <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">

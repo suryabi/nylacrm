@@ -574,7 +574,28 @@ async def get_target_planning_dashboard(
         won_leads_query['city'] = {'$in': cities}
 
     won_leads = await get_tdb().leads.find(won_leads_query, {'_id': 0}).to_list(1000)
-    estimated_revenue = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
+    # MRR — the plan target is a Monthly Run Rate, so "achieved" must also be
+    # MRR. We sum each won-lead's `estimated_monthly_revenue` (computed from
+    # `proposed_sku_pricing × monthly_bottles`). Falls back to recomputing
+    # on-the-fly when the cached field is missing, mirroring `list_leads`.
+    def _monthly_for(lead: dict) -> float:
+        est = (lead.get('opportunity_estimation') or {})
+        cached = est.get('estimated_monthly_revenue')
+        if cached:
+            return float(cached or 0)
+        monthly_bottles = est.get('final_monthly') or est.get('calculated_monthly') or 0
+        proposed = lead.get('proposed_sku_pricing') or []
+        if not (monthly_bottles and proposed):
+            return 0.0
+        total = 0.0
+        for sku in proposed:
+            pct = sku.get('percentage', 0)
+            ppu = sku.get('price_per_unit', 0)
+            qty = round((monthly_bottles * pct) / 100) if pct else 0
+            total += qty * ppu
+        return float(total)
+
+    estimated_revenue = sum(_monthly_for(lead) for lead in won_leads)
 
     invoices_query = {
         'invoice_date': {'$gte': plan['start_date'], '$lte': plan['end_date']}
@@ -619,7 +640,8 @@ async def get_target_planning_dashboard(
         if territory not in territory_breakdown:
             territory_breakdown[territory] = {'count': 0, 'value': 0}
         territory_breakdown[territory]['count'] += 1
-        territory_breakdown[territory]['value'] += lead.get('estimated_value', 0) or 0
+        # Use MRR contribution per lead, not the lifetime/estimated_value.
+        territory_breakdown[territory]['value'] += _monthly_for(lead)
 
     city_breakdown = {}
     for inv in invoices:
