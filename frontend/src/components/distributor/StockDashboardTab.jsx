@@ -119,7 +119,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" data-testid="stock-summary-cards">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" data-testid="stock-summary-cards">
         <SummaryCard
           label="Stock Received"
           value={fmt(t.stock_received)}
@@ -135,10 +135,19 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           testId="total-stock-delivered"
         />
         <SummaryCard
+          label="Scheduled / In-transit"
+          value={fmt(t.stock_pending_out || 0)}
+          icon={<Truck className="h-4 w-4" />}
+          color="amber"
+          sub="Committed, not yet out"
+          testId="total-stock-pending-out"
+        />
+        <SummaryCard
           label="Customer Returns"
           value={fmt(t.customer_returns)}
           icon={<RotateCcw className="h-4 w-4" />}
           color="amber"
+          sub="Not deliverable"
           testId="total-customer-returns"
         />
         <SummaryCard
@@ -261,6 +270,9 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <span className="text-emerald-600">Delivered</span>
                   </th>
                   <th className="text-right p-3">
+                    <span className="text-amber-600" title="Scheduled / on-the-way deliveries — already committed">Pending Out</span>
+                  </th>
+                  <th className="text-right p-3">
                     <span className="text-amber-600">Cust. Returns</span>
                   </th>
                   <th className="text-right p-3">
@@ -305,6 +317,9 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                         </td>
                         <td className="p-3 text-right text-blue-600 font-medium">{fmt(sku.stock_received)}</td>
                         <td className="p-3 text-right text-emerald-600 font-medium">{fmt(sku.stock_delivered)}</td>
+                        <td className={`p-3 text-right font-medium ${sku.stock_pending_out > 0 ? 'text-amber-600' : 'text-slate-300'}`} data-testid={`sku-pending-out-${sku.sku_id}`}>
+                          {sku.stock_pending_out > 0 ? fmt(sku.stock_pending_out) : '-'}
+                        </td>
                         <td className={`p-3 text-right font-medium ${sku.customer_returns > 0 ? 'text-amber-600' : 'text-slate-300'}`}>
                           {sku.customer_returns > 0 ? fmt(sku.customer_returns) : '-'}
                         </td>
@@ -329,7 +344,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                       </tr>
                       {isExpanded && hasReturns && (
                         <tr>
-                          <td colSpan={9} className="p-0">
+                          <td colSpan={10} className="p-0">
                             <div className="bg-slate-50/80 border-b px-6 py-3">
                               <div className="grid grid-cols-2 gap-6">
                                 {/* Customer Returns Breakdown */}
@@ -391,7 +406,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                 })}
                 {skus.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={10} className="text-center py-8 text-muted-foreground">
                       No stock data available for this distributor
                     </td>
                   </tr>
@@ -403,6 +418,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <td className="p-3 pl-4">Total ({data.sku_count} SKUs)</td>
                     <td className="p-3 text-right text-blue-700">{fmt(t.stock_received)}</td>
                     <td className="p-3 text-right text-emerald-700">{fmt(t.stock_delivered)}</td>
+                    <td className="p-3 text-right text-amber-700">{fmt(t.stock_pending_out || 0)}</td>
                     <td className="p-3 text-right text-amber-700">{fmt(t.customer_returns)}</td>
                     <td className="p-3 text-right text-purple-700">{fmt(t.factory_returns)}</td>
                     <td className="p-3 text-right text-teal-700">{fmt(t.factory_warehouse_stock)}</td>
