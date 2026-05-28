@@ -130,6 +130,11 @@ class AccountUpdate(BaseModel):
     # correctly. e.g. 0 = "Due on Receipt", 15 = "Net 15", 30 = "Net 30".
     payment_terms_days: Optional[int] = None
     payment_terms_label: Optional[str] = None
+    # Pre-activation billing route — `'company'` (we invoice → Zoho sync) or
+    # `'distributor'` (third-party distributor invoices). Exposed here so the
+    # operator can save the choice independently of the activation flow, since
+    # stock-out / invoice gates downstream depend on it.
+    billed_by: Optional[str] = Field(None, pattern='^(company|distributor)$')
 
 
 class PaginatedAccountsResponse(BaseModel):

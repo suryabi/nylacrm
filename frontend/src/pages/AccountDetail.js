@@ -241,6 +241,7 @@ export default function AccountDetail() {
   // Who bills this customer: 'company' (Nyla bills → register in Zoho)
   // or 'distributor' (third-party distributor bills → skip Zoho).
   const [billedBy, setBilledBy] = useState('company');
+  const [savingBilledBy, setSavingBilledBy] = useState(false);
   // Live activation-status from backend (auto-validated against data)
   const [activationStatus, setActivationStatus] = useState({
     gst_updated: false,
@@ -678,6 +679,9 @@ ${googleMapsLink}`;
       setSkuPricing(data.sku_pricing || []);
       setOnboardedMonth(data.onboarded_month || '');
       setOnboardedYear(data.onboarded_year || '');
+      // Seed the activation modal's `billedBy` radio from whatever's already
+      // persisted on the account so the user sees their previous choice.
+      setBilledBy(data.billed_by || 'company');
       // Default B2B → include, Retail → exclude when unset
       if (typeof data.include_in_gop_metrics === 'boolean') {
         setIncludeInGopMetrics(data.include_in_gop_metrics);
@@ -3250,6 +3254,40 @@ ${googleMapsLink}`;
               <p className="text-[11px] text-amber-800 bg-amber-100 border border-amber-200 rounded-md px-2.5 py-1.5">
                 Please confirm with your manager before choosing this option. It cannot be reversed without re-activation.
               </p>
+            )}
+
+            {/* Persist the billing choice independently of activation so that
+                downstream gates (Zoho invoice hide, stock-out screens) can rely
+                on it BEFORE the account is fully activated. The save button
+                only appears when the user has changed the radio from the
+                currently-persisted value. */}
+            {(account?.billed_by || 'company') !== billedBy && (
+              <div className="flex items-center justify-between bg-violet-50 border border-violet-200 rounded-md px-3 py-2" data-testid="billed-by-pending-row">
+                <span className="text-[11px] text-violet-800">
+                  Unsaved change — currently saved as <b>{(account?.billed_by || 'company') === 'distributor' ? 'Distributor' : 'Company'}</b>.
+                </span>
+                <Button
+                  size="sm"
+                  className="h-7 px-3 text-xs bg-violet-600 hover:bg-violet-700"
+                  disabled={savingBilledBy}
+                  onClick={async () => {
+                    setSavingBilledBy(true);
+                    try {
+                      await accountsAPI.update(id, { billed_by: billedBy });
+                      const fresh = await accountsAPI.getById(id);
+                      setAccount(fresh.data);
+                      toast.success(`Billing choice saved — ${billedBy === 'distributor' ? 'Distributor' : 'Company'}.`);
+                    } catch (e) {
+                      toast.error(e.response?.data?.detail || 'Failed to save billing choice');
+                    } finally {
+                      setSavingBilledBy(false);
+                    }
+                  }}
+                  data-testid="save-billed-by-btn"
+                >
+                  {savingBilledBy ? 'Saving…' : 'Save billing choice'}
+                </Button>
+              </div>
             )}
           </div>
 
