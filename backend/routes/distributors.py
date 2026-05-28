@@ -4086,6 +4086,65 @@ async def create_delivery(
         stock_demand[key] = stock_demand.get(key, 0) + qty
 
     shortages: list = []
+
+    # ── Pre-aggregate the "derived" view of on-hand for non-factory,
+    # non-batch-tracked sources. This mirrors the dashboard's formula
+    # (received − delivered − pending), so the guard NEVER disagrees with the
+    # dashboard the user just saw. Critical for distributors where
+    # `distributor_stock` rows may be missing/stale (legacy data, partial
+    # migrations) but the shipment/delivery history is intact.
+    derived_on_hand_by_sku: dict = {}
+    if not source_is_factory and not source_tracks_batches:
+        sku_ids_needed = list({sku for (sku, _) in stock_demand.keys() if sku})
+        if sku_ids_needed:
+            # Received = sum(delivered shipment_items at this location for these SKUs)
+            delivered_ship_ids = await db.distributor_shipments.distinct(
+                "id",
+                {
+                    "tenant_id": tenant_id,
+                    "distributor_id": distributor_id,
+                    "distributor_location_id": data.distributor_location_id,
+                    "status": "delivered",
+                },
+            )
+            for it in await db.distributor_shipment_items.find(
+                {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_ship_ids}, "sku_id": {"$in": sku_ids_needed}},
+                {"_id": 0, "sku_id": 1, "quantity": 1, "received_quantity": 1},
+            ).to_list(20000):
+                # `received_quantity` is the source of truth when acknowledgement
+                # was used; otherwise the dispatched `quantity`. Either way they
+                # match what the dashboard tallies as "received".
+                q = int(it.get("received_quantity") or it.get("quantity") or 0)
+                derived_on_hand_by_sku[it["sku_id"]] = derived_on_hand_by_sku.get(it["sku_id"], 0) + q
+            # Delivered out = sum(items on completed deliveries at this location)
+            done_delivery_ids = await db.distributor_deliveries.distinct(
+                "id",
+                {
+                    "tenant_id": tenant_id, "distributor_id": distributor_id,
+                    "distributor_location_id": data.distributor_location_id,
+                    "status": {"$in": ["delivered", "completed", "complete"]},
+                },
+            )
+            for it in await db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": {"$in": done_delivery_ids}, "sku_id": {"$in": sku_ids_needed}},
+                {"_id": 0, "sku_id": 1, "quantity": 1},
+            ).to_list(20000):
+                derived_on_hand_by_sku[it["sku_id"]] = derived_on_hand_by_sku.get(it["sku_id"], 0) - int(it.get("quantity") or 0)
+            # Pending out = scheduled / on-the-way deliveries at this location
+            pending_ids = await db.distributor_deliveries.distinct(
+                "id",
+                {
+                    "tenant_id": tenant_id, "distributor_id": distributor_id,
+                    "distributor_location_id": data.distributor_location_id,
+                    "status": {"$in": ["scheduled", "delivery_scheduled", "delivery_assigned", "on_the_way", "in_transit"]},
+                },
+            )
+            for it in await db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": {"$in": pending_ids}, "sku_id": {"$in": sku_ids_needed}},
+                {"_id": 0, "sku_id": 1, "quantity": 1},
+            ).to_list(20000):
+                derived_on_hand_by_sku[it["sku_id"]] = derived_on_hand_by_sku.get(it["sku_id"], 0) - int(it.get("quantity") or 0)
+
     for (sku_id, batch_id), demand in stock_demand.items():
         if source_is_factory:
             stock_query = {
@@ -4111,7 +4170,21 @@ async def create_delivery(
         rows = await stock_collection.find(
             stock_query, {"_id": 0, "quantity": 1, "sku_name": 1, "batch_code": 1}
         ).to_list(50)
-        on_hand = sum((r.get("quantity") or 0) for r in rows)
+        on_hand_rows = sum((r.get("quantity") or 0) for r in rows)
+
+        # When source is a non-batch distributor warehouse, take the MAX of
+        # the row-derived (`distributor_stock`) and the dashboard-derived
+        # view. Two reasons:
+        #   1. Some legacy distributor_stock rows were never populated, but
+        #      shipments/deliveries are intact — the dashboard is right.
+        #   2. We never want the guard to be MORE restrictive than the value
+        #      the user just saw on the dashboard. Otherwise the UX is "you
+        #      have 3,468 crates" and the API says "you have 0", which we
+        #      hit in production on 2026-05-28.
+        if not source_is_factory and not source_tracks_batches:
+            on_hand = max(on_hand_rows, derived_on_hand_by_sku.get(sku_id, 0))
+        else:
+            on_hand = on_hand_rows
 
         if demand > on_hand:
             label = (rows[0].get("sku_name") if rows else None) or sku_id
