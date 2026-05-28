@@ -1024,7 +1024,28 @@ export default function DeliveriesTab({
                               <Label className="text-xs text-muted-foreground">Qty (pkgs)</Label>
                               <Input type="number" min="1" className="h-10 mt-1 text-base font-medium"
                                 value={item.quantity}
-                                onChange={(e) => updateDeliveryItem(item.id, 'quantity', e.target.value)}
+                                onChange={(e) => {
+                                  updateDeliveryItem(item.id, 'quantity', e.target.value);
+                                  // FIFO auto-select: when the user types a quantity and no
+                                  // batch is picked yet, default to the oldest batch in stock.
+                                  // Mirrors the same sort the picker uses (production_date →
+                                  // received_at → batch_code). Saves a click on every line.
+                                  if (sourceTracksBatches && !item.batch_id && item.sku_id) {
+                                    const rb = batchesBySku[item.sku_id] || [];
+                                    const ak = (b) => b.production_date || b.received_at || '';
+                                    const oldest = [...rb].sort((a, b) => {
+                                      const ka = ak(a), kb = ak(b);
+                                      if (ka && kb) return ka.localeCompare(kb);
+                                      if (ka) return -1;
+                                      if (kb) return 1;
+                                      return (a.batch_code || '').localeCompare(b.batch_code || '');
+                                    })[0];
+                                    if (oldest) {
+                                      updateDeliveryItem(item.id, 'batch_id', oldest.batch_id);
+                                      updateDeliveryItem(item.id, 'batch_code', oldest.batch_code);
+                                    }
+                                  }
+                                }}
                                 data-testid={`delivery-qty-${item.id}`} />
                               {(() => {
                                 // Inline availability hint + over-stock warning.
@@ -1304,14 +1325,39 @@ export default function DeliveriesTab({
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowDeliveryDialog(false)}>Cancel</Button>
-                <Button
-                  onClick={handleCreateDeliveryWithCredits}
-                  disabled={savingDelivery || !deliveryForm.account_id || !deliveryForm.distributor_location_id || deliveryItems.length === 0}
-                  data-testid="save-delivery-btn"
-                >
-                  {savingDelivery ? 'Creating...' : 'Record Delivery'}
-                </Button>
+                {/* Aggregate over-stock guard — refuse to submit when any line
+                    requests more units than its selected batch holds. Mirrors
+                    the backend stock-availability validator so users never hit
+                    a 400 round-trip. */}
+                {(() => {
+                  const overLines = (deliveryItems || []).filter((it) => {
+                    if (!sourceTracksBatches || !it.batch_id) return false;
+                    const sel = (batchesBySku[it.sku_id] || []).find((b) => b.batch_id === it.batch_id);
+                    if (!sel) return false;
+                    const pu = parseInt(it.packaging_units) || 1;
+                    const tu = (parseInt(it.quantity) || 0) * pu;
+                    return tu > (sel.quantity || 0);
+                  });
+                  const hasOverStock = overLines.length > 0;
+                  return (
+                    <>
+                      {hasOverStock && (
+                        <div className="mr-auto flex items-center gap-1.5 text-xs text-red-600 font-medium" data-testid="over-stock-banner">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          {overLines.length} line{overLines.length === 1 ? '' : 's'} over batch availability — adjust qty before submitting.
+                        </div>
+                      )}
+                      <Button variant="outline" onClick={() => setShowDeliveryDialog(false)}>Cancel</Button>
+                      <Button
+                        onClick={handleCreateDeliveryWithCredits}
+                        disabled={savingDelivery || !deliveryForm.account_id || !deliveryForm.distributor_location_id || deliveryItems.length === 0 || hasOverStock}
+                        data-testid="save-delivery-btn"
+                      >
+                        {savingDelivery ? 'Creating...' : 'Record Delivery'}
+                      </Button>
+                    </>
+                  );
+                })()}
               </DialogFooter>
             </DialogContent>
           </Dialog>
