@@ -3558,14 +3558,45 @@ export default function DistributorDetail() {
                     link). While pending we offer a manual Retry. */}
                 <div className="flex gap-2 flex-wrap">
                   {/* When the account is billed by a third-party distributor we
-                      don't generate a Zoho invoice at all — surface a small
-                      explanatory pill instead of the action buttons. */}
+                      don't generate a Zoho invoice. Instead, on completed
+                      deliveries we issue an "External Billing Entry" (EBE)
+                      with EXT_NNNNN numbering — analytics-only, no
+                      receivables/aging. The PDF endpoint will lazily create
+                      the EBE row on first download. */}
                   {selectedDelivery.account_billed_by === 'distributor' ? (
-                    <div
-                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-slate-200 bg-slate-50 text-slate-600 text-xs"
-                      data-testid="zoho-skipped-distributor-billing"
-                    >
-                      Billing handled by third-party distributor — no Zoho invoice generated.
+                    <div className="flex items-center gap-2 flex-wrap" data-testid="external-billing-block">
+                      <div
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-violet-200 bg-violet-50 text-violet-800 text-xs"
+                        data-testid="external-billing-pill"
+                      >
+                        <Receipt className="h-3 w-3" />
+                        External Billing Entry
+                        {selectedDelivery.external_billing_entry_number && (
+                          <span className="font-mono font-medium ml-1">
+                            {selectedDelivery.external_billing_entry_number}
+                          </span>
+                        )}
+                      </div>
+                      {(selectedDelivery.status === 'complete' || selectedDelivery.status === 'completed' || selectedDelivery.status === 'delivered') ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadCustomerInvoice(selectedDelivery.id, selectedDelivery.delivery_number)}
+                          disabled={downloadingInvoice}
+                          className="text-violet-700 border-violet-300 hover:bg-violet-50"
+                          data-testid="download-external-billing-btn"
+                        >
+                          {downloadingInvoice ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating…</>
+                          ) : (
+                            <><Download className="h-4 w-4 mr-2" /> Download EBE PDF</>
+                          )}
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-slate-500">
+                          EBE will be generated when this stop is marked delivered.
+                        </span>
+                      )}
                     </div>
                   ) : (['delivered', 'complete', 'confirmed', 'scheduled', 'delivery_assigned', 'delivery_scheduled', 'on_the_way'].includes(selectedDelivery.status)) && (
                     selectedDelivery.zoho_invoice_url ? (

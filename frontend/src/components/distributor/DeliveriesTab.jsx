@@ -581,6 +581,43 @@ export default function DeliveriesTab({
             </button>
           </CollapsibleTrigger>
           <div className="flex items-center gap-2">
+            {/* Backfill External Billing Entries for historical completed
+                deliveries (distributor-billed accounts whose EBE was never
+                generated). Admin-only; idempotent. */}
+            {canManage && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(
+                      `${API_URL}/api/distributors/${distributor.id}/external-billing/backfill`,
+                      {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` },
+                      },
+                    );
+                    const data = await res.json();
+                    if (!res.ok) {
+                      alert(data?.detail || 'Backfill failed');
+                      return;
+                    }
+                    if ((data.created || 0) > 0) {
+                      alert(`Generated ${data.created} External Billing Entr${data.created === 1 ? 'y' : 'ies'}.`);
+                      fetchDeliveries?.();
+                    } else {
+                      alert(`All ${data.examined} completed deliveries already have an EBE.`);
+                    }
+                  } catch (e) {
+                    alert(`Backfill failed: ${e?.message || e}`);
+                  }
+                }}
+                className="text-violet-700 border-violet-200 hover:bg-violet-50"
+                data-testid="backfill-ebe-btn"
+              >
+                <Receipt className="h-4 w-4 mr-2" />
+                Generate Missing EBEs
+              </Button>
+            )}
             {/* Excel Download */}
             <Button 
               variant="outline" 

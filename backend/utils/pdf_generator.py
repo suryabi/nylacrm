@@ -438,7 +438,9 @@ def generate_customer_invoice_pdf(
     account_data: dict,
     distributor_data: dict,
     gst_percent: float = 18.0,
-    branding: dict = None
+    branding: dict = None,
+    is_external_billing: bool = False,
+    external_billing_number: str = None,
 ) -> bytes:
     """
     Generate a customer invoice PDF for a delivery with GST.
@@ -572,11 +574,29 @@ def generate_customer_invoice_pdf(
     story.append(Spacer(1, 15))
     
     # ============ TITLE ============
-    story.append(Paragraph("TAX INVOICE", title_style))
-    
-    # Generate invoice number from delivery number
-    invoice_number = f"INV-{delivery_data.get('delivery_number', 'N/A').replace('DEL-', '')}"
-    story.append(Paragraph(f"Invoice No: {invoice_number}", subtitle_style))
+    if is_external_billing:
+        # External Billing Entry — analytics-only record. The actual tax
+        # invoice is issued by the third-party distributor; we never collect.
+        story.append(Paragraph("EXTERNAL BILLING ENTRY", title_style))
+        invoice_number = external_billing_number or f"EXT-{delivery_data.get('delivery_number', 'N/A')}"
+        story.append(Paragraph(f"Reference No: {invoice_number}", subtitle_style))
+        # Warn the reader so this PDF is never mistaken for a legal tax invoice.
+        ebe_note_style = ParagraphStyle(
+            'EbeNote', parent=styles['Normal'], fontSize=8, alignment=TA_CENTER,
+            textColor=colors.HexColor('#92400E'), backColor=colors.HexColor('#FEF3C7'),
+            borderPadding=4, leading=10, spaceAfter=6,
+        )
+        story.append(Spacer(1, 4))
+        story.append(Paragraph(
+            "<b>For internal commercial tracking only.</b> Billing & collection "
+            "are handled directly by the distributor. This is NOT a tax invoice.",
+            ebe_note_style,
+        ))
+    else:
+        story.append(Paragraph("TAX INVOICE", title_style))
+        # Generate invoice number from delivery number
+        invoice_number = f"INV-{delivery_data.get('delivery_number', 'N/A').replace('DEL-', '')}"
+        story.append(Paragraph(f"Invoice No: {invoice_number}", subtitle_style))
     story.append(Spacer(1, 15))
     
     # ============ INVOICE DETAILS ============
@@ -703,24 +723,34 @@ def generate_customer_invoice_pdf(
     story.append(Spacer(1, 15))
     
     # ============ TAX SUMMARY ============
-    story.append(Paragraph("Tax Summary", header_style))
-    
-    # Calculate GST
-    cgst_rate = gst_percent / 2
-    sgst_rate = gst_percent / 2
-    cgst_amount = total_taxable * (cgst_rate / 100)
-    sgst_amount = total_taxable * (sgst_rate / 100)
-    total_tax = cgst_amount + sgst_amount
-    grand_total = total_taxable + total_tax
-    
-    summary_data = [
-        ['Description', 'Amount (₹)'],
-        ['Total Taxable Value', f"{total_taxable:,.2f}"],
-        [f'CGST @ {cgst_rate:.1f}%', f"{cgst_amount:,.2f}"],
-        [f'SGST @ {sgst_rate:.1f}%', f"{sgst_amount:,.2f}"],
-        ['', ''],
-        ['GRAND TOTAL', f"₹{grand_total:,.2f}"],
-    ]
+    if is_external_billing:
+        # EBE: gross only, no GST rows — distributor bills the customer.
+        summary_data = [
+            ['Description', 'Amount (₹)'],
+            ['Total Amount', f"{total_taxable:,.2f}"],
+            ['', ''],
+            ['GROSS TOTAL', f"₹{total_taxable:,.2f}"],
+        ]
+        story.append(Paragraph("Commercial Summary", header_style))
+    else:
+        story.append(Paragraph("Tax Summary", header_style))
+
+        # Calculate GST
+        cgst_rate = gst_percent / 2
+        sgst_rate = gst_percent / 2
+        cgst_amount = total_taxable * (cgst_rate / 100)
+        sgst_amount = total_taxable * (sgst_rate / 100)
+        total_tax = cgst_amount + sgst_amount
+        grand_total = total_taxable + total_tax
+
+        summary_data = [
+            ['Description', 'Amount (₹)'],
+            ['Total Taxable Value', f"{total_taxable:,.2f}"],
+            [f'CGST @ {cgst_rate:.1f}%', f"{cgst_amount:,.2f}"],
+            [f'SGST @ {sgst_rate:.1f}%', f"{sgst_amount:,.2f}"],
+            ['', ''],
+            ['GRAND TOTAL', f"₹{grand_total:,.2f}"],
+        ]
     
     summary_table = Table(summary_data, colWidths=[350, 130])
     summary_table.setStyle(TableStyle([

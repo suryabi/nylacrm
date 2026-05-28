@@ -4804,6 +4804,40 @@ async def complete_delivery(
                     "$set": {"updated_at": now}
                 }
             )
+
+    # If the account is billed by a third-party distributor, generate an
+    # External Billing Entry instead of a Zoho invoice. Idempotent — running
+    # complete_delivery again won't create a duplicate.
+    try:
+        account_doc = await db.accounts.find_one(
+            {"id": delivery.get("account_id"), "tenant_id": tenant_id},
+            {"_id": 0},
+        )
+        if account_doc and (account_doc.get("billed_by") or "company") == "distributor":
+            from services.external_billing import generate_external_billing_entry
+            distributor_doc = await db.distributors.find_one(
+                {"id": distributor_id, "tenant_id": tenant_id},
+                {"_id": 0, "id": 1, "distributor_name": 1},
+            )
+            # Refresh the delivery after the status flip so EBE captures the
+            # post-completion `delivered_at`.
+            fresh_delivery = await db.distributor_deliveries.find_one(
+                {"id": delivery_id, "tenant_id": tenant_id}, {"_id": 0},
+            )
+            await generate_external_billing_entry(
+                tenant_id=tenant_id,
+                delivery=fresh_delivery or delivery,
+                account=account_doc,
+                distributor=distributor_doc,
+                items=items,
+            )
+    except Exception as e:
+        # Failing the EBE side must not roll back the stock deduction — the
+        # delivery is already complete. Surface in logs for admin backfill.
+        logger.warning(
+            f"complete_delivery succeeded but EBE generation failed for "
+            f"delivery {delivery_id}: {e}"
+        )
     
     logger.info(f"Delivery {delivery['delivery_number']} completed by {current_user['email']}")
     
@@ -4971,7 +5005,28 @@ async def generate_customer_invoice(
     
     # Get GST rate from tenant settings (default 18%)
     gst_percent = settings.get('default_distributor_gst_percent', 18.0)
-    
+
+    # If the account is billed by a distributor, render this as an External
+    # Billing Entry (no GST, banner indicating it's not a tax invoice).
+    is_ebe = (account.get("billed_by") or "company") == "distributor"
+    ebe_number = None
+    if is_ebe:
+        # Reuse / lazily create the EBE so the printed number matches what we
+        # stored in the `invoices` table.
+        from services.external_billing import generate_external_billing_entry, get_existing_ebe
+        existing = await get_existing_ebe(tenant_id, delivery_id)
+        if existing:
+            ebe_number = existing.get("invoice_number")
+        else:
+            created = await generate_external_billing_entry(
+                tenant_id=tenant_id,
+                delivery=delivery,
+                account=account,
+                distributor=distributor,
+                items=delivery["items"],
+            )
+            ebe_number = (created or {}).get("invoice_number")
+
     # Generate PDF
     try:
         pdf_bytes = generate_customer_invoice_pdf(
@@ -4980,13 +5035,19 @@ async def generate_customer_invoice(
             account_data=account,
             distributor_data=distributor,
             gst_percent=gst_percent,
-            branding=branding
+            branding=branding,
+            is_external_billing=is_ebe,
+            external_billing_number=ebe_number,
         )
-        
+
         # Generate filename
-        invoice_number = f"INV-{delivery.get('delivery_number', 'N-A').replace('DEL-', '')}"
-        filename = f"customer_invoice_{invoice_number}.pdf"
-        
+        if is_ebe:
+            invoice_number = ebe_number or f"EXT-{delivery.get('delivery_number', 'N-A')}"
+            filename = f"external_billing_entry_{invoice_number}.pdf"
+        else:
+            invoice_number = f"INV-{delivery.get('delivery_number', 'N-A').replace('DEL-', '')}"
+            filename = f"customer_invoice_{invoice_number}.pdf"
+
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -4997,6 +5058,72 @@ async def generate_customer_invoice(
     except Exception as e:
         logger.error(f"Failed to generate customer invoice PDF: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate invoice: {str(e)}")
+
+
+@router.post("/{distributor_id}/external-billing/backfill")
+async def backfill_external_billing_entries(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """One-shot generator for historical completed deliveries whose accounts
+    are billed by a third-party distributor but never had an External Billing
+    Entry created (e.g., the delivery completed before this feature shipped).
+
+    Idempotent — only creates EBEs where none exist. Returns a count summary.
+    """
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+    from services.external_billing import generate_external_billing_entry, get_existing_ebe
+
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "distributor_name": 1},
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+
+    completed = await db.distributor_deliveries.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$in": ["delivered", "completed", "complete"]},
+        },
+        {"_id": 0},
+    ).to_list(10000)
+
+    created, skipped, errors = 0, 0, 0
+    for delivery in completed:
+        try:
+            account = await db.accounts.find_one(
+                {"id": delivery.get("account_id"), "tenant_id": tenant_id},
+                {"_id": 0},
+            )
+            if not account or (account.get("billed_by") or "company") != "distributor":
+                skipped += 1
+                continue
+            if await get_existing_ebe(tenant_id, delivery["id"]):
+                skipped += 1
+                continue
+            await generate_external_billing_entry(
+                tenant_id=tenant_id,
+                delivery=delivery,
+                account=account,
+                distributor=distributor,
+            )
+            created += 1
+        except Exception as e:
+            errors += 1
+            logger.warning(f"EBE backfill failed for delivery {delivery.get('id')}: {e}")
+
+    return {
+        "distributor_id": distributor_id,
+        "examined": len(completed),
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+    }
 
 
 
