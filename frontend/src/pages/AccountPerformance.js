@@ -74,15 +74,34 @@ export default function AccountPerformance() {
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [leadTypeFilter, setLeadTypeFilter] = useState('all');
+  const [businessCategoryFilter, setBusinessCategoryFilter] = useState('all');
+  const [businessCategories, setBusinessCategories] = useState([]);
 
   // Pagination (client-side — backend returns the full filtered set; usually 50-500 rows max)
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
   // Reset to page 1 whenever any filter changes
-  useEffect(() => { setPage(1); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter]);
+  useEffect(() => { setPage(1); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter, businessCategoryFilter]);
 
-  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter]);
+  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter, businessCategoryFilter]);
+
+  // Load business categories once for the dropdown (master list, tenant-scoped).
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/master/business-categories`, {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true,
+        });
+        setBusinessCategories(res.data?.categories || []);
+      } catch (e) {
+        // Non-blocking — filter just won't have options.
+        console.warn('Failed to load business categories', e);
+      }
+    })();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -94,7 +113,8 @@ export default function AccountPerformance() {
       if (stateFilter !== 'all') params.append('state', stateFilter);
       if (cityFilter !== 'all') params.append('city', cityFilter);
       if (leadTypeFilter !== 'all') params.append('lead_type', leadTypeFilter);
-      
+      if (businessCategoryFilter !== 'all') params.append('business_category', businessCategoryFilter);
+
       const res = await axios.get(`${API_URL}/reports/account-performance?${params}`, { 
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true 
@@ -112,6 +132,7 @@ export default function AccountPerformance() {
     setStateFilter('all');
     setCityFilter('all');
     setLeadTypeFilter('all');
+    setBusinessCategoryFilter('all');
   };
 
   const allTerritoryNames = masterTerritories.map(t => t.name);
@@ -156,7 +177,8 @@ export default function AccountPerformance() {
             territoryFilter !== 'all', 
             stateFilter !== 'all', 
             cityFilter !== 'all', 
-            leadTypeFilter !== 'all'
+            leadTypeFilter !== 'all',
+            businessCategoryFilter !== 'all'
           ].filter(Boolean).length}
           onReset={handleResetFilters}
           className="mb-6"
@@ -223,6 +245,22 @@ export default function AccountPerformance() {
                   <SelectItem value="all" className="rounded-lg">All Types</SelectItem>
                   {LEAD_TYPES.map(t => (
                     <SelectItem key={t} value={t} className="rounded-lg">{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+
+            <FilterItem label="Business Category" icon={Layers}>
+              <Select value={businessCategoryFilter} onValueChange={setBusinessCategoryFilter}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="business-category-filter">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl max-h-72">
+                  <SelectItem value="all" className="rounded-lg">All Categories</SelectItem>
+                  {businessCategories.map(bc => (
+                    <SelectItem key={bc.id || bc.name} value={bc.name} className="rounded-lg" data-testid={`business-category-option-${bc.name}`}>
+                      {bc.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

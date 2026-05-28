@@ -604,6 +604,7 @@ async def get_account_performance(
     state: Optional[str] = None,
     city: Optional[str] = None,
     lead_type: Optional[str] = None,
+    business_category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -630,6 +631,18 @@ async def get_account_performance(
             ]
         else:
             account_query['lead_type'] = lead_type
+    if business_category:
+        # Filter accounts by business category. Field name varies across
+        # legacy data — accounts collection uses `category`, while the lead-
+        # snapshot mirrors as `business_category` / `lead_business_category`.
+        # Check all three so the filter works regardless of import path.
+        account_query['$and'] = account_query.get('$and', []) + [{
+            '$or': [
+                {'category': business_category},
+                {'business_category': business_category},
+                {'lead_business_category': business_category},
+            ]
+        }]
     
     # Fetch all accounts matching filters
     accounts = await get_tdb().accounts.find(account_query, {'_id': 0}).to_list(500)
