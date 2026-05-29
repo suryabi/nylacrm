@@ -8,6 +8,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
+import { useTenantConfig } from '../context/TenantConfigContext';
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
@@ -19,18 +20,51 @@ import {
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// Fixed emerald/sage brand palette for data-viz — kept consistent regardless of the
-// per-module accent (which themes --primary), so the dashboard always reads on-brand.
-const ACCENT = '#0d9488';        // teal-600 lead accent
-const ACCENT_DARK = '#0f766e';   // teal-700
+// Brand-driven palette. `--primary` is set from the tenant's branding.primary_color,
+// so using it (and a ramp derived from it) keeps the dashboard matched to the brand theme.
+const PRIMARY = 'hsl(var(--primary))';
 const GRID = 'hsl(var(--border))';
 const AXIS = 'hsl(var(--muted-foreground))';
-// Cohesive emerald → teal → green ramp for multi-segment charts (reads well in both modes).
-const SERIES = ['#0f766e', '#0d9488', '#14b8a6', '#10b981', '#059669', '#22c55e',
-  '#0891b2', '#0ea5e9', '#2dd4bf', '#34d399', '#6ee7b7', '#5eead4'];
-const COMPARE_A = '#94a3b8';     // slate (baseline period)
+const COMPARE_A = '#94a3b8';     // neutral slate (baseline period)
 const POS = '#059669';           // emerald-600
 const NEG = '#e11d48';           // rose-600
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function hexToHSL(hex) {
+  let h = (hex || '').replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length !== 6) return { h: 174, s: 84, l: 30 };
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let hue = 0, sat = 0; const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: hue = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: hue = (b - r) / d + 2; break;
+      default: hue = (r - g) / d + 4;
+    }
+    hue *= 60;
+  }
+  return { h: Math.round(hue), s: Math.round(sat * 100), l: Math.round(l * 100) };
+}
+// Cohesive monochromatic-to-analogous ramp from the brand color for multi-segment charts.
+function brandRamp(hex, n) {
+  const base = hexToHSL(hex);
+  const startL = base.l < 34 ? base.l + 6 : base.l - 6;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const t = n <= 1 ? 0 : i / (n - 1);
+    const hh = Math.round((base.h + t * 16) % 360);
+    const ss = Math.round(clamp(base.s - t * 8, 38, 95));
+    const ll = Math.round(clamp(startL + t * 32, 26, 76));
+    out.push(`hsl(${hh} ${ss}% ${ll}%)`);
+  }
+  return out;
+}
 
 const GROUP_BY_OPTIONS = [
   { value: 'city', label: 'City' },
@@ -88,12 +122,12 @@ function StatCard({ label, value, sub, icon: Icon, accent = false, testid }) {
   return (
     <Card
       data-testid={testid}
-      className={`group relative flex flex-col justify-between rounded-xl border-border/60 bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${accent ? 'border-t-2 border-t-teal-600 dark:border-t-teal-500' : ''}`}
+      className={`group relative flex flex-col justify-between rounded-xl border-border/60 bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${accent ? 'border-t-2 border-t-primary' : ''}`}
     >
       <div className="flex items-start justify-between">
         <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</span>
         {Icon && (
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 transition-colors group-hover:bg-teal-500/15 dark:text-teal-400">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
             <Icon className="h-[18px] w-[18px]" />
           </span>
         )}
@@ -105,7 +139,7 @@ function StatCard({ label, value, sub, icon: Icon, accent = false, testid }) {
 }
 
 const Spinner = () => (
-  <div className="flex justify-center py-28"><Loader2 className="h-7 w-7 animate-spin text-teal-600 dark:text-teal-400" /></div>
+  <div className="flex justify-center py-28"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>
 );
 
 const Empty = ({ children, testid }) => (
@@ -127,6 +161,8 @@ const SectionTitle = ({ children }) => (
 
 // ───────────────────────── Breakdown ─────────────────────────
 function BreakdownView() {
+  const { branding } = useTenantConfig();
+  const series = useMemo(() => brandRamp(branding?.primary_color || '#0d9488', 12), [branding]);
   const [groupBy, setGroupBy] = useState('city');
   const [timeFilter, setTimeFilter] = useState('this_month');
   const [fromDate, setFromDate] = useState('');
@@ -220,8 +256,8 @@ function BreakdownView() {
                     <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 64 }} barCategoryGap="30%">
                       <defs>
                         <linearGradient id="raBarH" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor={ACCENT_DARK} stopOpacity={1} />
-                          <stop offset="100%" stopColor={ACCENT} stopOpacity={1} />
+                          <stop offset="0%" stopColor={PRIMARY} stopOpacity={0.78} />
+                          <stop offset="100%" stopColor={PRIMARY} stopOpacity={1} />
                         </linearGradient>
                       </defs>
                       <CartesianGrid stroke={GRID} strokeOpacity={0.5} strokeDasharray="3 3" horizontal={false} />
@@ -242,7 +278,7 @@ function BreakdownView() {
                     <ResponsiveContainer width="100%" height={380}>
                       <PieChart>
                         <Pie data={chartData} dataKey="gross" nameKey="name" cx="50%" cy="50%" innerRadius={78} outerRadius={116} paddingAngle={2} cornerRadius={4} stroke="none">
-                          {chartData.map((e, i) => <Cell key={i} fill={SERIES[i % SERIES.length]} />)}
+                          {chartData.map((e, i) => <Cell key={i} fill={series[i % series.length]} />)}
                         </Pie>
                         <Tooltip content={<ChartTooltip />} />
                       </PieChart>
@@ -255,7 +291,7 @@ function BreakdownView() {
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
                     {chartData.slice(0, 6).map((e, i) => (
                       <span key={e.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="h-2 w-2 rounded-full" style={{ background: SERIES[i % SERIES.length] }} />
+                        <span className="h-2 w-2 rounded-full" style={{ background: series[i % series.length] }} />
                         <span className="max-w-[120px] truncate">{e.name}</span>
                       </span>
                     ))}
@@ -283,7 +319,7 @@ function BreakdownView() {
                           <tr key={g.label} className="border-b border-border/40 transition-colors last:border-0 hover:bg-muted/30">
                             <td className="px-5 py-4 tabular-nums text-muted-foreground">{i + 1}</td>
                             <td className="px-5 py-4 font-medium text-foreground">
-                              <span className="mr-2.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: SERIES[i % SERIES.length] }} />
+                              <span className="mr-2.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: series[i % series.length] }} />
                               {g.label}
                             </td>
                             <td className="px-5 py-4 text-right font-semibold tabular-nums text-foreground">{formatCurrency(g.gross)}</td>
@@ -292,7 +328,7 @@ function BreakdownView() {
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-2.5">
                                 <div className="h-1.5 w-full max-w-[90px] overflow-hidden rounded-full bg-muted">
-                                  <div className="h-full rounded-full bg-teal-600 dark:bg-teal-500" style={{ width: `${Math.max(share, 2)}%` }} />
+                                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(share, 2)}%` }} />
                                 </div>
                                 <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{share.toFixed(1)}%</span>
                               </div>
@@ -422,7 +458,7 @@ function CompareView() {
                   <SectionTitle>{aLabel} vs {bLabel} — by {dimLabel}</SectionTitle>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: COMPARE_A }} />{aLabel}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: ACCENT }} />{bLabel}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: PRIMARY }} />{bLabel}</span>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={400}>
@@ -432,7 +468,7 @@ function CompareView() {
                     <YAxis tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} dx={-6} />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.45 }} />
                     <Bar dataKey="A" name={aLabel} fill={COMPARE_A} radius={[4, 4, 0, 0]} maxBarSize={28} />
-                    <Bar dataKey="B" name={bLabel} fill={ACCENT} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Bar dataKey="B" name={bLabel} fill={PRIMARY} radius={[4, 4, 0, 0]} maxBarSize={28} />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>
@@ -480,7 +516,7 @@ export default function RevenueAnalytics() {
     <div className="mx-auto max-w-[1400px] p-1 sm:p-2" data-testid="revenue-analytics-page">
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3.5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-teal-600 to-emerald-700 text-white shadow-sm">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
             <BarChart3 className="h-[22px] w-[22px]" />
           </div>
           <div>
@@ -495,14 +531,14 @@ export default function RevenueAnalytics() {
           <TabsTrigger
             value="breakdown"
             data-testid="ra-tab-breakdown"
-            className="rounded-none border-b-2 border-transparent px-1 py-3 font-medium text-muted-foreground transition-colors data-[state=active]:border-teal-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:border-teal-500"
+            className="rounded-none border-b-2 border-transparent px-1 py-3 font-medium text-muted-foreground transition-colors data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             <BarChart3 className="mr-2 h-4 w-4" /> Breakdown
           </TabsTrigger>
           <TabsTrigger
             value="compare"
             data-testid="ra-tab-compare"
-            className="rounded-none border-b-2 border-transparent px-1 py-3 font-medium text-muted-foreground transition-colors data-[state=active]:border-teal-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:border-teal-500"
+            className="rounded-none border-b-2 border-transparent px-1 py-3 font-medium text-muted-foreground transition-colors data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
           >
             <GitCompareArrows className="mr-2 h-4 w-4" /> Compare Months
           </TabsTrigger>

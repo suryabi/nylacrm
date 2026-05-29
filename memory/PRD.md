@@ -22,8 +22,8 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
   - **Charts**: minimal chrome (no axis lines, faint dashed grid), emerald gradient horizontal bars (`radius [0,4,4,0]`), donut `innerRadius 78/outerRadius 116` with center Gross Total + inline legend, custom card tooltip. Compare = slate (baseline) vs emerald (current) grouped bars.
   - **Tables**: flat (no zebra), refined hover, inline share-bar in the Share % column.
   - **Tabs**: underline-style active state.
-- **Key fix**: the app themes `--primary` per active module (Sales = red), which made bars/chips red while the donut stayed emerald. Switched all data-viz accents to a **fixed emerald/teal brand palette** (independent of module accent) so the dashboard always reads cohesive and on-brand.
-- **Verified (preview)**: light + dark mode, both Breakdown & Compare tabs render with live data; cohesive emerald palette; lint clean. Same endpoints + same data-testids → functionality identical to the previously-tested version.
+- **Brand matching (final)**: Data-viz accents now follow the tenant's **brand theme** — KPI chips, accent border, tabs, bars, donut and share bars all use `--primary` (set from `branding.primary_color` via `TenantConfigContext`). Multi-segment charts (donut, dots) use a runtime **brand-color ramp** (`brandRamp()` derives a cohesive monochromatic/analogous scale from the brand hex), so the whole dashboard stays on-brand regardless of the configured brand color (Nyla = red/orange; default teal). Up/down MoM trend keeps semantic green/red.
+- **Verified (preview)**: light + dark mode, both Breakdown & Compare tabs render with live data; fully brand-matched; lint clean. Same endpoints + same data-testids → functionality identical to the previously-tested version.
 - **⚠️ Action**: redeploy to see it in production.
 
 
