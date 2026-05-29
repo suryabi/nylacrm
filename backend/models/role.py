@@ -25,6 +25,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     # Reports
     "report_sales_overview": {"view": True, "create": False, "edit": False, "delete": False},
     "report_revenue": {"view": True, "create": False, "edit": False, "delete": False},
+    "report_revenue_analytics": {"view": True, "create": False, "edit": False, "delete": False},
     "report_sku_performance": {"view": True, "create": False, "edit": False, "delete": False},
     "report_resource_performance": {"view": True, "create": False, "edit": False, "delete": False},
     "report_account_performance": {"view": True, "create": False, "edit": False, "delete": False},
@@ -244,7 +245,7 @@ def get_default_roles(tenant_id: str) -> List[dict]:
 # Module categories for UI grouping
 MODULE_CATEGORIES = {
     "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "account_gop_metrics", "neck_tag_designer", "contacts", "invoices", "sales_portal"],
-    "Reports": ["report_sales_overview", "report_revenue", "report_sku_performance", "report_resource_performance", "report_account_performance"],
+    "Reports": ["report_sales_overview", "report_revenue", "report_revenue_analytics", "report_sku_performance", "report_resource_performance", "report_account_performance"],
     "Operations": ["lead_discovery", "target_planning", "performance_tracker", "investor_dashboard", "daily_status", "meeting_minutes", "personal_calendar", "status_summary"],
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model"],
     "Documents": ["company_documents", "files_documents"],
@@ -270,6 +271,7 @@ MODULE_LABELS = {
     "sales_portal": "Sales Portal",
     "report_sales_overview": "Sales Overview",
     "report_revenue": "Revenue Report",
+    "report_revenue_analytics": "Revenue Analytics",
     "report_sku_performance": "SKU Performance",
     "report_resource_performance": "Resource Performance",
     "report_account_performance": "Account Performance",

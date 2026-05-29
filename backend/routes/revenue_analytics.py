@@ -24,13 +24,44 @@ from typing import Optional, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from database import db
+from database import get_tenant_db
 from deps import get_current_user
-from core.tenant import get_current_tenant_id
 
 router = APIRouter()
 
+
+def get_tdb():
+    """Tenant-scoped DB handle (auto-injects tenant_id into every query),
+    identical to what reports.py uses so analytics totals reconcile exactly
+    with the trusted Revenue / Account-Performance reports."""
+    return get_tenant_db()
+
+
 GROUP_BY = Literal["city", "state", "territory", "business_category", "sku", "total"]
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Invoice value readers — handle BOTH internal (gross/net_invoice_value) and
+# external/Zoho payload shapes (gross_amount / net_amount / grand_total …).
+# Mirrors reports.py:_gross/_net so numbers match the existing reports.
+# ──────────────────────────────────────────────────────────────────────────
+def _gross(inv: dict) -> float:
+    return float(
+        inv.get("gross_invoice_value")
+        or inv.get("gross_amount")
+        or inv.get("grand_total")
+        or inv.get("total_amount")
+        or 0
+    )
+
+
+def _net(inv: dict) -> float:
+    v = inv.get("net_invoice_value")
+    if v is None:
+        v = inv.get("net_amount")
+    if v is not None:
+        return float(v)
+    return _gross(inv) - float(inv.get("credit_note_value") or inv.get("credit_note") or 0)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -91,109 +122,113 @@ def _group_label(account: dict, group_by: str) -> str:
     if group_by == "territory":
         return (account or {}).get("territory") or "Uncategorised"
     if group_by == "business_category":
-        return (account or {}).get("category") or (account or {}).get("business_category") or "Uncategorised"
+        return (account or {}).get("category") or (account or {}).get("business_category") or (account or {}).get("lead_business_category") or "Uncategorised"
     if group_by == "total":
         return "Total"
     return "Unknown"
 
 
 async def _aggregate(
-    tenant_id: str,
     from_date: str,
     to_date: str,
     group_by: str,
 ) -> list[dict]:
-    """Group invoice revenue. Returns `[{label, revenue, count}]` sorted desc."""
-    query = {
-        "tenant_id": tenant_id,
-        "invoice_date": {"$gte": from_date, "$lte": to_date},
-        # Both Zoho invoices (default `source` missing) AND EBE rows count.
-        # `cancelled` invoices are excluded.
-        "status": {"$ne": "cancelled"},
-    }
+    """Group invoice revenue over [from_date, to_date]. Tenant scoping is
+    automatic via get_tdb(). Returns `[{label, revenue, gross, count}]` sorted
+    by net revenue descending. `revenue` == net (post-credit-note) value, which
+    is the figure the Account-Performance report headlines."""
+    tdb = get_tdb()
+    invoice_query = {"invoice_date": {"$gte": from_date, "$lte": to_date}}
+    invoices = await tdb.invoices.find(invoice_query, {"_id": 0}).to_list(20000)
 
     if group_by == "sku":
-        # Sum line items grouped by sku. We use `customer_selling_price` →
-        # `unit_price` → `rate` in that fallback order to handle every line
-        # variant the codebase has emitted over the years.
-        invoices = await db.invoices.find(
-            query,
-            {"_id": 0, "items": 1, "gross_invoice_value": 1},
-        ).to_list(20000)
+        # Hydrate SKU display names for any line carrying a sku_id / sku_code.
         sku_ids: set = set()
         for inv in invoices:
             for it in (inv.get("items") or []):
-                sid = it.get("sku_id") or it.get("itemId") or it.get("sku_code")
+                sid = it.get("sku_id") or it.get("sku_code") or it.get("itemId")
                 if sid:
-                    sku_ids.add(sid)
-        # Hydrate names. Try id-keyed first, then itemId/sku_code legacy keys.
+                    sku_ids.add(str(sid))
         sku_name_map: dict[str, str] = {}
         if sku_ids:
-            cursor = db.master_skus.find(
-                {"tenant_id": tenant_id, "$or": [
+            async for s in tdb.master_skus.find(
+                {"$or": [
                     {"id": {"$in": list(sku_ids)}},
                     {"sku_code": {"$in": list(sku_ids)}},
                 ]},
                 {"_id": 0, "id": 1, "sku_name": 1, "sku_code": 1},
-            )
-            async for s in cursor:
+            ):
+                nm = s.get("sku_name") or s.get("sku_code")
                 if s.get("id"):
-                    sku_name_map[s["id"]] = s.get("sku_name") or s.get("sku_code")
+                    sku_name_map[str(s["id"])] = nm
                 if s.get("sku_code"):
-                    sku_name_map[s["sku_code"]] = s.get("sku_name") or s.get("sku_code")
+                    sku_name_map[str(s["sku_code"])] = nm
 
         groups: dict[str, dict] = {}
         for inv in invoices:
             for it in (inv.get("items") or []):
-                sid = it.get("sku_id") or it.get("itemId") or it.get("sku_code") or "Uncategorised"
-                label = (it.get("sku_name") or sku_name_map.get(sid) or sid)
+                sid = it.get("sku_id") or it.get("sku_code") or it.get("itemId")
+                sid = str(sid) if sid else None
+                label = (
+                    it.get("sku_name")
+                    or (sku_name_map.get(sid) if sid else None)
+                    or sid
+                    or "Uncategorised"
+                )
+                # Line revenue: prefer an explicit line total, else qty * rate.
                 try:
-                    qty = float(it.get("quantity") or 0)
-                    rate = float(it.get("customer_selling_price")
-                                 or it.get("unit_price")
-                                 or it.get("rate") or 0)
-                    revenue = qty * rate
+                    line_rev = it.get("net_amount")
+                    if line_rev is None:
+                        line_rev = it.get("line_total")
+                    if line_rev is None:
+                        line_rev = it.get("gross_amount")
+                    if line_rev is None:
+                        qty = float(it.get("quantity") or 0)
+                        rate = float(
+                            it.get("customer_selling_price")
+                            or it.get("unit_price")
+                            or it.get("rate")
+                            or 0
+                        )
+                        line_rev = qty * rate
+                    line_rev = float(line_rev or 0)
                 except (TypeError, ValueError):
-                    revenue = 0.0
-                grp = groups.setdefault(label, {"label": label, "revenue": 0.0, "count": 0})
-                grp["revenue"] += revenue
+                    line_rev = 0.0
+                grp = groups.setdefault(label, {"label": label, "revenue": 0.0, "gross": 0.0, "count": 0})
+                grp["revenue"] += line_rev
+                grp["gross"] += line_rev
                 grp["count"] += 1
         return sorted(groups.values(), key=lambda g: g["revenue"], reverse=True)
 
-    # Account-attribute group-bys — load all invoices + the accounts they
-    # reference, then aggregate in Python.
-    invoices = await db.invoices.find(
-        query,
-        {"_id": 0, "id": 1, "account_uuid": 1, "account_id": 1,
-         "gross_invoice_value": 1, "net_invoice_value": 1},
-    ).to_list(20000)
-
-    account_ids = list({
-        inv.get("account_uuid") or inv.get("account_id")
-        for inv in invoices
-        if inv.get("account_uuid") or inv.get("account_id")
-    })
-    accounts_map: dict[str, dict] = {}
-    if account_ids:
-        async for a in db.accounts.find(
-            {"$or": [{"id": {"$in": account_ids}}, {"account_id": {"$in": account_ids}}]},
-            {"_id": 0, "id": 1, "account_id": 1, "city": 1, "state": 1,
-             "territory": 1, "category": 1, "business_category": 1, "account_name": 1},
-        ):
-            if a.get("id"):
-                accounts_map[a["id"]] = a
-            if a.get("account_id"):
-                accounts_map[a["account_id"]] = a
+    # ── Account-attribute group-bys (city / state / territory / category) ──
+    # Load every account once into lookup maps, then match each invoice the
+    # same way the Account-Performance report does.
+    accounts = await tdb.accounts.find(
+        {},
+        {"_id": 0, "id": 1, "account_id": 1, "account_name": 1,
+         "city": 1, "state": 1, "territory": 1,
+         "category": 1, "business_category": 1, "lead_business_category": 1},
+    ).to_list(5000)
+    by_code = {a.get("account_id"): a for a in accounts if a.get("account_id")}
+    by_uuid = {a.get("id"): a for a in accounts if a.get("id")}
+    by_name = {(a.get("account_name") or "").strip().lower(): a for a in accounts if a.get("account_name")}
 
     groups: dict[str, dict] = {}
     for inv in invoices:
-        a = accounts_map.get(inv.get("account_uuid")) or accounts_map.get(inv.get("account_id")) or {}
-        label = _group_label(a, group_by)
-        # Net (post-credit-note) revenue is the truth for analytics. Fall back
-        # to gross if net is missing.
-        revenue = float(inv.get("net_invoice_value") or inv.get("gross_invoice_value") or 0)
-        grp = groups.setdefault(label, {"label": label, "revenue": 0.0, "count": 0})
-        grp["revenue"] += revenue
+        acc = None
+        acc_field = inv.get("account_id") or inv.get("account_uuid")
+        if acc_field:
+            acc = by_code.get(acc_field) or by_uuid.get(acc_field)
+        if not acc:
+            nm = (inv.get("account_name") or inv.get("customer_name") or "").strip().lower()
+            if nm:
+                acc = by_name.get(nm)
+        label = _group_label(acc or {}, group_by)
+        net = _net(inv)
+        gross = _gross(inv)
+        grp = groups.setdefault(label, {"label": label, "revenue": 0.0, "gross": 0.0, "count": 0})
+        grp["revenue"] += net
+        grp["gross"] += gross
         grp["count"] += 1
     return sorted(groups.values(), key=lambda g: g["revenue"], reverse=True)
 
@@ -208,9 +243,8 @@ async def revenue_analytics(
     _user: dict = Depends(get_current_user),
 ):
     """Revenue per group for one time window."""
-    tenant_id = get_current_tenant_id()
     fd, td = _window(time_filter, from_date, to_date)
-    groups = await _aggregate(tenant_id, fd, td, group_by)
+    groups = await _aggregate(fd, td, group_by)
 
     # Roll groups beyond `top_n` into a single "Others" bucket so the bar
     # chart doesn't degrade visually with 100 SKUs.
@@ -220,11 +254,13 @@ async def revenue_analytics(
         head.append({
             "label": f"Others ({len(tail)})",
             "revenue": sum(g["revenue"] for g in tail),
+            "gross": sum(g.get("gross", 0) for g in tail),
             "count": sum(g["count"] for g in tail),
             "is_others": True,
         })
 
     total_revenue = sum(g["revenue"] for g in groups)
+    total_gross = sum(g.get("gross", 0) for g in groups)
     total_count = sum(g["count"] for g in groups)
     return {
         "from": fd,
@@ -233,6 +269,7 @@ async def revenue_analytics(
         "groups": head,
         "raw_group_count": len(groups),
         "total_revenue": total_revenue,
+        "total_gross": total_gross,
         "total_invoice_count": total_count,
     }
 
@@ -253,12 +290,11 @@ async def revenue_compare(
     `group_by='total'` returns a single row with both period values, useful
     for the headline comparison number on the chart.
     """
-    tenant_id = get_current_tenant_id()
     a_from, a_to = _month_window(period_a_year, period_a_month)
     b_from, b_to = _month_window(period_b_year, period_b_month)
 
-    a_groups = await _aggregate(tenant_id, a_from, a_to, group_by)
-    b_groups = await _aggregate(tenant_id, b_from, b_to, group_by)
+    a_groups = await _aggregate(a_from, a_to, group_by)
+    b_groups = await _aggregate(b_from, b_to, group_by)
 
     a_map = {g["label"]: g for g in a_groups}
     b_map = {g["label"]: g for g in b_groups}
@@ -292,8 +328,8 @@ async def revenue_compare(
             "delta_pct": round(pct, 1),
         })
     if tail:
-        a_rev_t = sum((a_map.get(l) or {}).get("revenue", 0.0) for l in tail)
-        b_rev_t = sum((b_map.get(l) or {}).get("revenue", 0.0) for l in tail)
+        a_rev_t = sum((a_map.get(lbl) or {}).get("revenue", 0.0) for lbl in tail)
+        b_rev_t = sum((b_map.get(lbl) or {}).get("revenue", 0.0) for lbl in tail)
         rows.append({
             "label": f"Others ({len(tail)})",
             "a_revenue": a_rev_t,

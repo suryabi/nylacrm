@@ -17,7 +17,7 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles, BarChart3
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
@@ -45,6 +45,7 @@ const MODULE_CONFIG = {
     modules: [
       { key: 'report_sales_overview', label: 'Sales Overview', icon: Kanban, description: 'Sales dashboard overview' },
       { key: 'report_revenue', label: 'Revenue Report', icon: DollarSign, description: 'Revenue analytics' },
+      { key: 'report_revenue_analytics', label: 'Revenue Analytics', icon: BarChart3, description: 'Revenue by city / category / SKU / territory / state + MoM compare' },
       { key: 'report_sku_performance', label: 'SKU Performance', icon: Boxes, description: 'Product/SKU analysis' },
       { key: 'report_resource_performance', label: 'Resource Performance', icon: Users, description: 'Team performance metrics' },
       { key: 'report_account_performance', label: 'Account Performance', icon: Building2, description: 'Account-level analytics' },

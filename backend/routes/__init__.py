@@ -235,4 +235,10 @@ routes_router.include_router(
     tags=["Distributor · Stock Transfers"],
 )
 
+# Revenue Analytics — invoice revenue grouped by City / State / Territory /
+# Business Category / SKU, plus month-over-month comparison. Routes live under
+# /reports/* (no extra prefix). See routes/revenue_analytics.py.
+from .revenue_analytics import router as revenue_analytics_router
+routes_router.include_router(revenue_analytics_router, tags=["Revenue Analytics"])
+
 __all__ = ['routes_router']

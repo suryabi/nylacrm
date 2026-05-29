@@ -74,6 +74,7 @@ import DriverLogin from './pages/driver/DriverLogin';
 import { DriverSchedules, DriverScheduleDetail } from './pages/driver/DriverApp';
 import AccountDetail from './pages/AccountDetail';
 import AccountPerformance from './pages/AccountPerformance';
+import RevenueAnalytics from './pages/RevenueAnalytics';
 import InvoicesList from './pages/InvoicesList';
 import CustomerReturnsList from './pages/CustomerReturnsList';
 import TransportationCostCalculator from './pages/TransportationCostCalculator';
@@ -302,6 +303,7 @@ function AppRouter() {
           <Route path="/lead-discovery" element={<ProtectedRoute moduleKey="lead_discovery"><LeadDiscovery /></ProtectedRoute>} />
           <Route path="/cogs-calculator" element={<ProtectedRoute moduleKey="cogs_calculator"><COGSCalculator /></ProtectedRoute>} />
           <Route path="/sales-revenue" element={<ProtectedRoute moduleKey="report_revenue"><SalesRevenueDashboard /></ProtectedRoute>} />
+          <Route path="/revenue-analytics" element={<ProtectedRoute moduleKey="report_revenue_analytics"><RevenueAnalytics /></ProtectedRoute>} />
           <Route path="/sku-performance" element={<ProtectedRoute moduleKey="report_sku_performance"><SKUPerformance /></ProtectedRoute>} />
           <Route path="/resource-performance" element={<ProtectedRoute moduleKey="report_resource_performance"><ResourcePerformance /></ProtectedRoute>} />
           <Route path="/accounts" element={<ProtectedRoute moduleKey="accounts"><AccountsList /></ProtectedRoute>} />
