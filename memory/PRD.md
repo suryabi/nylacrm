@@ -15,11 +15,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 ### 2026-05-29 — Revenue Analytics: complete premium redesign (investor-grade) ✅ DONE
-- **Request**: Redesign Revenue Analytics with contemporary styling + beautiful charts; seen by investors & whole company — must feel amazing.
-- **Design**: Followed `design_agent_full_stack` blueprint (`/app/design_guidelines.json`) — "Midnight Teal & Glass" dark analytics-terminal theme: app bg `#050808`, gold/copper/bone accents (`#D4AF37`/`#B87333`/`#E5E4D7`), Cabinet Grotesk (headings) + Satoshi (body) + JetBrains Mono (numbers) via Fontshare CDN (added to `public/index.html`).
-- **Implementation** (`/app/frontend/src/pages/RevenueAnalytics.js`, full rewrite): self-contained dark surface (negative-margin bleed inside the light app shell, doesn't affect other pages). Flat gold underline tabs (framer-motion `layoutId` slider); sticky glassmorphism filter bar; glass KPI cards with gold top-hairline; gold-gradient horizontal bar chart with value LabelList; donut with center total; dense JetBrains-Mono tables with gold rank/values; framer-motion staggered entrance. Compare tab: paired grey-vs-gold bars + green/red MoM delta card. Custom glass tooltips, compact ₹ axis formatting (L/Cr).
-- **Unchanged**: same endpoints (`/api/reports/revenue-analytics`, `/api/reports/revenue-compare`), same data-testids → functionality identical to the tested version.
-- **Verified (preview)**: both tabs render with live data; dark dropdowns open & work; group-by switch (City→SKU) refetches + updates chart/labels; donut center total; MoM compare. Lint clean, no console errors. Screenshots captured.
+- **Request**: Redesign Revenue Analytics with contemporary styling + beautiful charts; seen by investors & whole company — must feel amazing. **Follow-up**: make it seamlessly match the overall app color/font theme and be minimalistic.
+- **Final design (theme-matched)**: Rebuilt `/app/frontend/src/pages/RevenueAnalytics.js` using the app's own design system — shadcn `Card`/`Tabs`/`Select`, theme tokens (`bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `hsl(var(--border))`, `hsl(var(--muted))`), Inter body + Plus Jakarta Sans headings (`font-heading`), and the app's emerald/teal palette (bars `#0d9488`, donut emerald/teal series, green/rose deltas). Clean white (light) / dark cards, minimal KPI cards with teal/emerald/slate icon chips, compact ₹ axis (K/L/Cr), theme-aware tooltip. Removed the earlier gold/dark-terminal styling and custom Fontshare fonts (reverted index.html).
+- **Adapts to both light & dark mode** automatically (verified in both). Same endpoints + same data-testids → functionality identical to the tested version.
+- **Verified (preview)**: both tabs render with live data in light AND dark mode; dropdowns work; group-by/time filters refetch; donut center total; MoM compare. Lint clean, no console errors.
 - **⚠️ Action**: redeploy to see it in production.
 
 
