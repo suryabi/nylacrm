@@ -2251,27 +2251,37 @@ async def delete_packaging_type(type_id: str, current_user: dict = Depends(get_c
 async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user)):
     """Get COGS data for all SKUs in a city.
 
-    Per-SKU master COGS values (set in SKU Management) are overlaid on each
-    city row so the calculator always reflects the SKU master. City-level
-    storage of these fields is no longer authoritative.
+    Source of truth = `master_skus` (where is_active != False). The endpoint:
+      • returns ONE row per *active* master SKU — never returns rows for SKUs
+        that were renamed away or deactivated;
+      • lazily backfills `sku_id` on legacy cogs_data rows so future lookups
+        can match by id, not name;
+      • auto-creates default rows for active SKUs that don't yet have one,
+        always stamping the master `sku_id`;
+      • overlays per-SKU master COGS values so renames in SKU Management
+        propagate automatically.
     """
-    
-    # Get active SKUs from master list (with their master COGS values)
+
+    tenant_id = get_current_tenant_id()
+
+    # Active master SKUs — the only source of truth for what shows up on the
+    # COGS screen. Anything else is legacy noise.
     await seed_default_skus()
     master_sku_docs = await db.master_skus.find(
         {'is_active': {'$ne': False}},
         {'_id': 0, 'id': 1, 'sku_name': 1, 'cogs_components_values': 1}
     ).to_list(200)
-    master_skus = [s['sku_name'] for s in master_sku_docs]
-    master_values_by_sku = {
-        s['sku_name']: (s.get('cogs_components_values') or {}) for s in master_sku_docs
+    active_id_set = {s['id'] for s in master_sku_docs}
+    active_name_to_id = {s['sku_name']: s['id'] for s in master_sku_docs}
+    master_name_by_id = {s['id']: s['sku_name'] for s in master_sku_docs}
+    master_values_by_id = {
+        s['id']: (s.get('cogs_components_values') or {}) for s in master_sku_docs
     }
-    master_id_by_sku = {s['sku_name']: s.get('id') for s in master_sku_docs}
 
     # Resolve which keys are master-managed (so we know what to overlay)
     try:
         comps = await db.cogs_components.find(
-            {'tenant_id': get_current_tenant_id()},
+            {'tenant_id': tenant_id},
             {'_id': 0, 'key': 1, 'unit': 1}
         ).to_list(200)
         master_managed_keys = {c['key'] for c in comps if c.get('unit') == 'rupee'}
@@ -2280,31 +2290,63 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
     # Always exclude calculator-owned system keys
     master_managed_keys -= {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}
 
-    cogs_data = await get_tdb().cogs_data.find({'city': city}, {'_id': 0}).to_list(100)
-    
-    # Create default data for SKUs that don't have data yet
-    existing_skus = [c['sku_name'] for c in cogs_data]
-    for sku in master_skus:
-        if sku not in existing_skus:
-            default_data = COGSData(sku_name=sku, city=city)
-            doc = default_data.model_dump()
-            doc['created_at'] = doc['created_at'].isoformat()
-            if doc.get('last_edited_at'):
-                doc['last_edited_at'] = doc['last_edited_at'].isoformat()
-            await get_tdb().cogs_data.insert_one(doc)
-            cogs_data.append(default_data.model_dump())
-    
+    # Pull all rows for this city. Some are legacy (no sku_id), some carry the
+    # current sku_id, some are orphans from renamed/deactivated SKUs.
+    cogs_rows = await get_tdb().cogs_data.find({'city': city}, {'_id': 0}).to_list(500)
+
+    # Backfill `sku_id` on legacy rows by name match (one-shot, persistent).
+    # This is what lets the canonical sku_id-based filter work going forward
+    # without forcing the user to rebuild every row.
+    rows_by_sku_id: dict = {}
+    for row in cogs_rows:
+        sid = row.get('master_sku_id') or row.get('sku_id')
+        if not sid:
+            sid = active_name_to_id.get(row.get('sku_name'))
+            if sid:
+                row['sku_id'] = sid
+                await get_tdb().cogs_data.update_one(
+                    {'id': row['id']},
+                    {'$set': {'sku_id': sid}}
+                )
+        if not sid or sid not in active_id_set:
+            # Orphan — SKU was renamed away / deactivated. Skip.
+            continue
+        # Always reflect the *current* master name (handles SKU renames).
+        row['sku_name'] = master_name_by_id[sid]
+        row['sku_id'] = sid
+        # If multiple legacy rows exist for the same SKU (rename history),
+        # the most-recent one wins.
+        existing = rows_by_sku_id.get(sid)
+        if existing is None or (row.get('last_edited_at') or '') > (existing.get('last_edited_at') or ''):
+            rows_by_sku_id[sid] = row
+
+    # Auto-create a default row for every active SKU that doesn't yet have one.
+    # Always stamps the canonical sku_id so we don't create another orphan.
+    for sid, sku_name in master_name_by_id.items():
+        if sid in rows_by_sku_id:
+            continue
+        default_data = COGSData(sku_name=sku_name, city=city)
+        doc = default_data.model_dump()
+        doc['sku_id'] = sid
+        doc['created_at'] = doc['created_at'].isoformat()
+        if doc.get('last_edited_at'):
+            doc['last_edited_at'] = doc['last_edited_at'].isoformat()
+        await get_tdb().cogs_data.insert_one(doc)
+        rows_by_sku_id[sid] = doc
+
+    cogs_data = list(rows_by_sku_id.values())
+
     # Get user names for last_edited_by
     user_ids = [c.get('last_edited_by') for c in cogs_data if c.get('last_edited_by')]
     users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     user_map = {u['id']: u['name'] for u in users}
-    
+
     # Overlay master values + add master_sku_id for client-side dispatch
     for data in cogs_data:
         if data.get('last_edited_by'):
             data['editor_name'] = user_map.get(data['last_edited_by'], 'Unknown')
-        sku_name = data.get('sku_name')
-        master_vals = master_values_by_sku.get(sku_name) or {}
+        sid = data['sku_id']
+        master_vals = master_values_by_id.get(sid) or {}
         # Overlay master-managed keys (legacy + custom contributors)
         for k, v in master_vals.items():
             if k in master_managed_keys or k not in {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}:
@@ -2315,7 +2357,7 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
                     cc = data.get('custom_components') or {}
                     cc[k] = v
                     data['custom_components'] = cc
-        data['master_sku_id'] = master_id_by_sku.get(sku_name)
+        data['master_sku_id'] = sid
         # Recompute total_cogs / derived fields based on overlaid values
         try:
             # COGS = master-managed components only (primary/secondary/manufacturing + custom).
@@ -2641,34 +2683,56 @@ async def delete_all_cogs_for_city(city: str, current_user: dict = Depends(get_c
 @api_router.post("/cogs/cleanup-invalid-skus")
 async def cleanup_invalid_skus(current_user: dict = Depends(get_current_user)):
     """
-    Remove all SKUs from COGS table that are not in the master SKU list.
-    Only CEO, Director, and System Admin can perform this action.
+    Delete every cogs_data row that doesn't belong to a *currently active*
+    master SKU.
+
+    Orphan detection is sku_id-based:
+      • Rows already carrying a `sku_id` are checked against the active master
+        SKU id set.
+      • Legacy rows without `sku_id` are matched by `sku_name`; matches are
+        backfilled in-place, non-matches are deleted.
+
+    Only CEO / Director / System Admin can run this.
     """
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
-    # Get all master SKU names (field is 'sku_name' in master_skus collection)
-    master_skus = await db.master_skus.find({'is_active': True}, {'sku_name': 1}).to_list(5000)
-    master_sku_names = set(sku['sku_name'] for sku in master_skus if sku.get('sku_name'))
-    
-    # Find all unique SKU names in COGS data
-    cogs_skus = await get_tdb().cogs_data.distinct('sku_name')
-    
-    # Find invalid SKUs (in COGS but not in master)
-    invalid_skus = [sku for sku in cogs_skus if sku not in master_sku_names]
-    
-    # Delete invalid SKU entries
-    if invalid_skus:
-        result = await get_tdb().cogs_data.delete_many({'sku_name': {'$in': invalid_skus}})
+
+    master_skus = await db.master_skus.find(
+        {'is_active': True},
+        {'_id': 0, 'id': 1, 'sku_name': 1},
+    ).to_list(5000)
+    active_ids = {s['id'] for s in master_skus if s.get('id')}
+    active_name_to_id = {s['sku_name']: s['id'] for s in master_skus if s.get('sku_name')}
+
+    rows = await get_tdb().cogs_data.find({}, {'_id': 0, 'id': 1, 'sku_id': 1, 'master_sku_id': 1, 'sku_name': 1}).to_list(20000)
+    orphan_ids: list = []
+    backfilled = 0
+    orphan_labels: list = []
+    for r in rows:
+        sid = r.get('sku_id') or r.get('master_sku_id')
+        if not sid and r.get('sku_name') in active_name_to_id:
+            # Legacy row but the SKU name is still valid — backfill.
+            sid = active_name_to_id[r['sku_name']]
+            await get_tdb().cogs_data.update_one(
+                {'id': r['id']}, {'$set': {'sku_id': sid}}
+            )
+            backfilled += 1
+            continue
+        if not sid or sid not in active_ids:
+            orphan_ids.append(r['id'])
+            orphan_labels.append(r.get('sku_name') or sid or '(unknown)')
+
+    deleted_count = 0
+    if orphan_ids:
+        result = await get_tdb().cogs_data.delete_many({'id': {'$in': orphan_ids}})
         deleted_count = result.deleted_count
-    else:
-        deleted_count = 0
-    
+
     return {
         'message': 'Cleanup completed',
-        'invalid_skus_found': invalid_skus,
+        'invalid_skus_found': sorted(set(orphan_labels)),
         'records_deleted': deleted_count,
-        'master_sku_count': len(master_sku_names)
+        'records_backfilled': backfilled,
+        'master_sku_count': len(active_ids),
     }
 
 # ============= GOOGLE OAUTH AUTH ROUTES =============

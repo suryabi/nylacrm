@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { DecimalInput } from '../components/ui/decimal-input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { Download, Save, Copy, Trash2 } from 'lucide-react';
+import { Download, Save, Copy, Trash2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 import { Checkbox } from '../components/ui/checkbox';
@@ -633,6 +633,40 @@ export default function COGSCalculator() {
             <Download className="h-4 w-4 mr-1 sm:mr-2" />
             <span className="hidden sm:inline">Download</span>
           </Button>
+          {/* Sync with the master SKU list: backfills sku_id on legacy rows
+              by name match, then deletes rows for SKUs that are no longer
+              active in SKU Management. Admin-only on the server side. */}
+          {canSeeCostDetails && (
+            <Button
+              onClick={async () => {
+                if (!window.confirm('This will remove COGS rows for SKUs that are no longer active in SKU Management. Continue?')) return;
+                try {
+                  const token = localStorage.getItem('token');
+                  const res = await fetch(`${API}/cogs/cleanup-invalid-skus`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  const data = await res.json();
+                  if (!res.ok) { alert(data?.detail || 'Cleanup failed'); return; }
+                  const parts = [];
+                  if (data.records_deleted) parts.push(`${data.records_deleted} orphan row${data.records_deleted === 1 ? '' : 's'} removed`);
+                  if (data.records_backfilled) parts.push(`${data.records_backfilled} legacy row${data.records_backfilled === 1 ? '' : 's'} re-linked`);
+                  alert(parts.length ? parts.join(', ') + '.' : 'Already in sync with SKU Management.');
+                  fetchData();
+                } catch (e) {
+                  alert(`Sync failed: ${e?.message || e}`);
+                }
+              }}
+              variant="outline"
+              className="rounded-full text-xs sm:text-sm hidden sm:flex border-violet-200 text-violet-700 hover:bg-violet-50"
+              size="sm"
+              data-testid="cogs-sync-master-btn"
+            >
+              <RefreshCw className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden md:inline">Sync with SKU Master</span>
+              <span className="md:hidden">Sync</span>
+            </Button>
+          )}
         </div>
       </div>
 
