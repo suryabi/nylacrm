@@ -5921,16 +5921,24 @@ async def match_invoice_to_lead(
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
-    # Update invoice
+    # Update invoice — link to the lead AND, when that lead has been converted
+    # to an account, stamp the stable CRM account ids so the account-detail page
+    # can match this invoice by ID (never by name).
+    inv_update = {
+        'lead_uuid': lead['id'],
+        'ca_lead_id': lead.get('lead_id'),
+        'status': 'matched',
+    }
+    linked_account = await get_tdb().accounts.find_one(
+        {'lead_id': lead['id']}, {'_id': 0, 'id': 1, 'account_id': 1}
+    )
+    if linked_account:
+        inv_update['account_uuid'] = linked_account.get('id')
+        inv_update['account_id'] = linked_account.get('account_id')
+
     await get_tdb().invoices.update_one(
         {'id': invoice_id},
-        {
-            '$set': {
-                'lead_uuid': lead['id'],
-                'ca_lead_id': lead.get('lead_id'),
-                'status': 'matched'
-            }
-        }
+        {'$set': inv_update}
     )
     
     # Recalculate lead totals

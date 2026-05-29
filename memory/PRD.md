@@ -14,6 +14,18 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Bug fix: Account-detail "Invoice Summary" showed no invoices (linkage + timezone) ✅ DONE
+- **Reported (PRODUCTION)**: Account-detail "Invoice Summary (This Month)" showed "No invoices found" even though the invoices existed and appeared on the global Invoices page (e.g., accounts ITLU-HYD-A26-002, VARM-HYD-A26-001 / "Varma Steels Pvt Ltd", INV-000818).
+- **Root cause**: Invoices synced from Zoho / matched to leads did NOT carry the stable CRM `account_id`/`account_uuid` (`match_invoice_to_lead` set only `lead_uuid`/`ca_lead_id`). The account-detail query's name fallback then failed because the Zoho name format differed from the CRM account name ("Pvt Ltd" vs "Private Limited"). Secondary: the `this_month` window was computed in UTC, not the tenant timezone (IST), which hides current-month invoices near month boundaries (not the cause here, but fixed).
+- **User directive**: match invoices to accounts by **Account ID**, never by names (names change).
+- **Fixes**:
+  - `routes/accounts.py`: new admin endpoint `POST /api/accounts/relink-invoices?dry_run=` — backfills the stable `account_uuid` + `account_id` onto invoices using ID keys (existing account id/uuid → Zoho customer id ↔ account.zoho_contact_id → lead link), with a **one-time normalized-name fallback** (`_norm_company_name`, unique-match only) to BOOTSTRAP the IDs onto legacy invoices. Reports updated / already_linked / unresolved / ambiguous + by-key breakdown. Idempotent.
+  - `server.py`: `match_invoice_to_lead` now also stamps `account_uuid`/`account_id` from the lead's linked account (forward-fix). Account-invoices `this_month`/`this_week`/etc. windows now computed in the tenant timezone (default Asia/Kolkata), mirroring server.py:5189.
+  - Frontend: `components/InvoiceRelinkTool.jsx` — admin "Relink Invoices to Accounts" card (Preview → Apply) in Tenant Settings → Settings; `accountsAPI.relinkInvoices` in utils/api.js.
+- **Verified**: preview end-to-end — a name-mismatched invoice (no CRM id) was invisible on its account page; after relink (matched via `name_normalized`) it became visible and carried the stable IDs. Tests: `tests/test_iteration_191_account_invoices_this_month_tz.py`, `tests/test_iteration_192_relink_invoices.py` (all pass).
+- **⚠️ Action for user**: REDEPLOY, then Tenant Settings → Settings → "Relink Invoices to Accounts" → Preview → Apply. Any `unresolved` invoices have no ID/name link and need their Zoho-customer mapping fixed (ties to the duplicate-customer fix).
+
+
 ### 2026-05-29 — Bug fix: Activating an account with a manually-mapped Zoho ID created a DUPLICATE Zoho customer ✅ DONE
 - **Problem (PRODUCTION)**: When an account already had a `zoho_contact_id` mapped manually (via "Link Zoho Customer"), activating it should re-sync that contact — but it created a brand-new Zoho Books customer instead.
 - **Root cause**: `services/zoho_service.py:upsert_contact()` searched Zoho only by email → then by exact contact_name. When neither matched (the mapped contact's email/name differed from the account's), `existing` stayed `None` and the function fell through to `POST /contacts` (create). It never consulted the account's already-stored `zoho_contact_id`.

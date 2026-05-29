@@ -31,6 +31,27 @@ def _account_match(account_id: str) -> dict:
     (`account_id`) — frontend URLs use either depending on the page."""
     return {'$or': [{'id': account_id}, {'account_id': account_id}]}
 
+
+# Common company-name suffixes/noise stripped before name-based reconciliation.
+_COMPANY_NOISE = {
+    'pvt', 'private', 'ltd', 'limited', 'llp', 'inc', 'incorporated', 'co',
+    'company', 'corp', 'corporation', 'enterprises', 'enterprise', 'and', 'the',
+}
+
+
+def _norm_company_name(name) -> str:
+    """Normalise a company name for one-time ID-bootstrap reconciliation:
+    lowercase, strip punctuation, drop common business suffixes (Pvt/Ltd/...),
+    collapse whitespace. So 'Varma Steels Pvt Ltd' == 'Varma Steels Private
+    Limited' == 'M/s Varma Steels Pvt. Ltd.'. Returns '' when nothing usable
+    remains (we never match on an empty token)."""
+    if not name:
+        return ''
+    s = re.sub(r'[^a-z0-9\s]', ' ', str(name).lower())
+    tokens = [t for t in s.split() if len(t) > 1 and t not in _COMPANY_NOISE and t != 'ms']
+    return ' '.join(tokens).strip()
+
+
 # ============= MODELS =============
 
 class AccountSKUPricing(BaseModel):
@@ -179,6 +200,133 @@ async def generate_account_id(company: str, city: str) -> str:
 
 
 # ============= ACCOUNT ROUTES =============
+
+@router.post("/relink-invoices")
+async def relink_invoices_to_accounts(
+    dry_run: bool = Query(False, description="Preview only; do not write any changes"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Backfill the stable CRM account linkage (`account_uuid` + `account_id`
+    code) onto every invoice using ID-based keys ONLY — never names.
+
+    Invoices synced from Zoho / matched to leads often carry the Zoho customer
+    id or a lead link but NOT the CRM account id, so the account-detail page
+    can't associate them. This re-stamps the canonical account id so matching is
+    deterministic going forward.
+
+    Resolution priority (first hit wins):
+      1) existing `account_uuid` already resolves to an account (leave as-is)
+      2) `account_id` resolves (by account UUID or human code)
+      3) `zoho_customer_id` / `zoho_contact_id` -> account.zoho_contact_id
+      4) `lead_uuid` -> account.lead_id
+      5) `ca_lead_id` (formatted lead id) -> lead -> account.lead_id
+    Anything matching none is reported under `unresolved`.
+    """
+    role = (current_user.get('role') or '').strip()
+    if role not in ('CEO', 'Admin', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO / Admin can relink invoices')
+
+    tdb = get_tdb()
+    accounts = await tdb.accounts.find(
+        {}, {'_id': 0, 'id': 1, 'account_id': 1, 'zoho_contact_id': 1, 'lead_id': 1, 'account_name': 1}
+    ).to_list(50000)
+    by_uuid, by_code, by_zoho, by_lead = {}, {}, {}, {}
+    by_norm_name: dict = {}
+    for a in accounts:
+        if a.get('id'):
+            by_uuid[a['id']] = a
+        if a.get('account_id'):
+            by_code[str(a['account_id']).lower()] = a
+        if a.get('zoho_contact_id'):
+            by_zoho[str(a['zoho_contact_id'])] = a
+        if a.get('lead_id'):
+            by_lead[a['lead_id']] = a
+        nn = _norm_company_name(a.get('account_name'))
+        if nn:
+            by_norm_name.setdefault(nn, []).append(a)
+
+    leads = await tdb.leads.find({}, {'_id': 0, 'id': 1, 'lead_id': 1}).to_list(100000)
+    lead_fmt_to_uuid = {
+        str(le['lead_id']).lower(): le.get('id') for le in leads if le.get('lead_id')
+    }
+
+    invoices = await tdb.invoices.find(
+        {}, {'_id': 0, 'id': 1, 'invoice_no': 1, 'account_id': 1, 'account_uuid': 1,
+             'zoho_customer_id': 1, 'zoho_contact_id': 1, 'lead_uuid': 1, 'ca_lead_id': 1,
+             'account_name': 1, 'customer_name': 1}
+    ).to_list(500000)
+
+    def resolve(inv):
+        au = inv.get('account_uuid')
+        if au and au in by_uuid:
+            return by_uuid[au], 'account_uuid'
+        aid = inv.get('account_id')
+        if aid:
+            if aid in by_uuid:
+                return by_uuid[aid], 'account_id_uuid'
+            if str(aid).lower() in by_code:
+                return by_code[str(aid).lower()], 'account_code'
+        z = inv.get('zoho_customer_id') or inv.get('zoho_contact_id')
+        if z and str(z) in by_zoho:
+            return by_zoho[str(z)], 'zoho_customer_id'
+        lu = inv.get('lead_uuid')
+        if lu and lu in by_lead:
+            return by_lead[lu], 'lead_uuid'
+        cl = inv.get('ca_lead_id')
+        if cl:
+            luid = lead_fmt_to_uuid.get(str(cl).lower())
+            if luid and luid in by_lead:
+                return by_lead[luid], 'ca_lead_id'
+        # LAST RESORT (one-time bootstrap only): normalized company name, but
+        # ONLY when it maps to exactly one account (never guess across dupes).
+        nn = _norm_company_name(inv.get('account_name') or inv.get('customer_name'))
+        if nn and nn in by_norm_name:
+            cands = by_norm_name[nn]
+            if len(cands) == 1:
+                return cands[0], 'name_normalized'
+            return None, 'ambiguous_name'
+        return None, None
+
+    scanned = len(invoices)
+    updated = 0
+    already_linked = 0
+    by_key: dict = {}
+    unresolved: list = []
+    ambiguous_name = 0
+
+    for inv in invoices:
+        acc, key = resolve(inv)
+        if not acc:
+            if key == 'ambiguous_name':
+                ambiguous_name += 1
+            unresolved.append(inv.get('invoice_no') or inv.get('id'))
+            continue
+        desired_uuid = acc.get('id')
+        desired_code = acc.get('account_id')
+        if inv.get('account_uuid') == desired_uuid and inv.get('account_id') == desired_code:
+            already_linked += 1
+            continue
+        updated += 1
+        by_key[key] = by_key.get(key, 0) + 1
+        if not dry_run:
+            await tdb.invoices.update_one(
+                {'id': inv.get('id')},
+                {'$set': {'account_uuid': desired_uuid, 'account_id': desired_code}},
+            )
+
+    return {
+        'dry_run': dry_run,
+        'scanned': scanned,
+        'updated': updated,
+        'already_linked': already_linked,
+        'unresolved_count': len(unresolved),
+        'ambiguous_name_count': ambiguous_name,
+        'by_key': by_key,
+        # Cap the list so the response stays small; count is authoritative.
+        'unresolved_sample': unresolved[:50],
+    }
+
+
 
 @router.post("/convert-lead")
 async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depends(get_current_user)):

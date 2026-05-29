@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
+import InvoiceRelinkTool from '../components/InvoiceRelinkTool';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -1753,6 +1754,9 @@ export default function TenantSettings() {
 
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-6">
+          {/* Data maintenance — relink invoices to accounts by ID */}
+          <InvoiceRelinkTool />
+
           {/* Google Workspace SSO */}
           <Card>
             <CardHeader>

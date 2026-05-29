@@ -96,6 +96,7 @@ export const accountsAPI = {
     return axios.get(`${API_URL}/accounts/${id}/invoices${queryString ? '?' + queryString : ''}`, { headers: getAuthHeaders() });
   },
   createInvoice: (id, data) => axios.post(`${API_URL}/accounts/${id}/invoices`, data, { headers: getAuthHeaders() }),
+  relinkInvoices: (dryRun = false) => axios.post(`${API_URL}/accounts/relink-invoices?dry_run=${dryRun}`, {}, { headers: getAuthHeaders() }),
 };
 
 // Invoices API
