@@ -15,6 +15,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-29 — Account Detail: editable Business Category ✅ DONE
+- **Request**: "I need an option to edit the business category in account detail."
+- **Backend** (`routes/accounts.py`): added `category: Optional[str]` to `AccountUpdate` (the model had no `extra=allow`, so the field had to be declared). The generic `update_account` loop now persists `category`. This is the same field Revenue Analytics / Account Performance group by (`account.category`), so edits flow straight into those reports.
+- **Frontend** (`pages/AccountDetail.js`): new "Business Category" `<Select>` (testid `edit-business-category`) in the account edit form (next to Lead Type), populated from `GET /api/master/business-categories`. Hydrates from `account.category` (falls back to `business_category`/`lead_business_category`), included in the save payload, reset on Cancel, and shown read-only (testid `account-business-category-display`). A legacy stored value not in the master list is preserved as a selectable option.
+- **Verified (preview)**: backend curl PUT `{category}` persists + returns; full UI round-trip — Edit → pick "Hospital" → Save → toast + read-only display shows "Hospital"; restored test account to "Restaurant". Lint clean (JS + py).
+- **⚠️ Action**: redeploy to use it in production.
+
+
+
 ### 2026-05-29 — Revenue Analytics: dark futuristic neon glassmorphism redesign ✅ DONE
 - **Request (verbatim)**: "change the revenue analytics to a premium modern analytics dashboard UI inspired by futuristic SaaS products... dark glassmorphism / neon gradient aesthetic." Dark theme default; deep navy bg (#080B1F/#101427) + blurred abstract orbs; translucent glass cards w/ blur + inner glow; neon accents (electric cyan #00F0FF, aqua #00D2FF, purple #B026FF, magenta #FF00FF); gradient KPI cards w/ glowing values + neon hover.
 - **Design**: `design_agent_full_stack` → "Electric & Neon Dashboard" blueprint (`/app/design_guidelines.json`). Fully rewrote `/app/frontend/src/pages/RevenueAnalytics.js`:

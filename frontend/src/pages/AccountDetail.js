@@ -226,6 +226,23 @@ export default function AccountDetail() {
   const [onboardedMonth, setOnboardedMonth] = useState('');
   const [onboardedYear, setOnboardedYear] = useState('');
   const [includeInGopMetrics, setIncludeInGopMetrics] = useState(true);
+  const [businessCategory, setBusinessCategory] = useState('');
+  const [businessCategories, setBusinessCategories] = useState([]);
+
+  // Load business categories once for the edit dropdown (master list, tenant-scoped).
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/master/business-categories`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setBusinessCategories(res.data?.categories || []);
+      } catch (e) {
+        console.warn('Failed to load business categories', e);
+      }
+    })();
+  }, []);
 
   // Account activation state
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
@@ -679,6 +696,7 @@ ${googleMapsLink}`;
       setSkuPricing(data.sku_pricing || []);
       setOnboardedMonth(data.onboarded_month || '');
       setOnboardedYear(data.onboarded_year || '');
+      setBusinessCategory(data.category || data.business_category || data.lead_business_category || '');
       // Seed the activation modal's `billedBy` radio from whatever's already
       // persisted on the account so the user sees their previous choice.
       setBilledBy(data.billed_by || 'company');
@@ -979,6 +997,7 @@ ${googleMapsLink}`;
       await accountsAPI.update(id, {
         account_name: accountName,
         lead_type: leadType,
+        category: businessCategory || null,
         contact_name: contactName || null,
         contact_number: contactNumber || null,
         gst_number: gstNumber || null,
@@ -1273,6 +1292,7 @@ ${googleMapsLink}`;
                 setIsEditing(false);
                 setAccountName(account.account_name || '');
                 setLeadType(account.lead_type || 'B2B');
+                setBusinessCategory(account.category || account.business_category || account.lead_business_category || '');
                 setContactName(account.contact_name || '');
                 setContactNumber(account.contact_number || '');
                 setSkuPricing(account.sku_pricing || []);
@@ -1500,6 +1520,24 @@ ${googleMapsLink}`;
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label>Business Category</Label>
+                  <Select value={businessCategory || undefined} onValueChange={setBusinessCategory}>
+                    <SelectTrigger data-testid="edit-business-category">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {businessCategory && !businessCategories.some((bc) => bc.name === businessCategory) && (
+                        <SelectItem value={businessCategory}>{businessCategory}</SelectItem>
+                      )}
+                      {businessCategories.map((bc) => (
+                        <SelectItem key={bc.id || bc.name} value={bc.name} data-testid={`edit-business-category-option-${bc.name}`}>
+                          {bc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Contact Name</Label>
                   <Input
                     value={contactName}
@@ -1599,6 +1637,10 @@ ${googleMapsLink}`;
                 <div>
                   <p className="text-sm text-muted-foreground">Lead Type</p>
                   <p className="font-medium" data-testid="account-lead-type-display">{account.lead_type || 'B2B'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Business Category</p>
+                  <p className="font-medium" data-testid="account-business-category-display">{account.category || account.business_category || account.lead_business_category || '-'}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Include in GOP Metrics</p>

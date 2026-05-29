@@ -129,6 +129,7 @@ class AccountCreate(BaseModel):
 class AccountUpdate(BaseModel):
     account_name: Optional[str] = None
     account_type: Optional[str] = None
+    category: Optional[str] = None
     contact_name: Optional[str] = None
     contact_number: Optional[str] = None
     gst_number: Optional[str] = None
