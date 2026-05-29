@@ -14,6 +14,19 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+
+### 2026-05-29 — Revenue Analytics: contemporary corporate-minimalist redesign ✅ DONE
+- **Request (verbatim)**: "the revenue analytics dashboard doesn't look contemporary. the tiles and KPIs and the graphs look very bland and rudimentary. Please include corporate minimalistic professional theme for this analytics dashboard."
+- **Design**: Used `design_agent_full_stack` → Swiss/high-contrast executive style adapted to the app's emerald/sage B2B theme (`/app/design_guidelines.json`). Rebuilt `/app/frontend/src/pages/RevenueAnalytics.js`:
+  - **KPI tiles**: flat bordered cards, hover lift (`-translate-y-0.5`), uppercase tracked labels, large `font-heading tracking-tighter` values, teal icon chips, teal top-accent border on the primary tile.
+  - **Charts**: minimal chrome (no axis lines, faint dashed grid), emerald gradient horizontal bars (`radius [0,4,4,0]`), donut `innerRadius 78/outerRadius 116` with center Gross Total + inline legend, custom card tooltip. Compare = slate (baseline) vs emerald (current) grouped bars.
+  - **Tables**: flat (no zebra), refined hover, inline share-bar in the Share % column.
+  - **Tabs**: underline-style active state.
+- **Key fix**: the app themes `--primary` per active module (Sales = red), which made bars/chips red while the donut stayed emerald. Switched all data-viz accents to a **fixed emerald/teal brand palette** (independent of module accent) so the dashboard always reads cohesive and on-brand.
+- **Verified (preview)**: light + dark mode, both Breakdown & Compare tabs render with live data; cohesive emerald palette; lint clean. Same endpoints + same data-testids → functionality identical to the previously-tested version.
+- **⚠️ Action**: redeploy to see it in production.
+
+
 ### 2026-05-29 — Revenue Analytics: gross revenue + more appealing bars ✅ DONE
 - **Request**: Show GROSS revenue (instead of net) across Revenue Analytics; make the bars more appealing.
 - **Backend** (`routes/revenue_analytics.py`): `_aggregate` now sorts groups by gross; `revenue-compare` now computes a_revenue/b_revenue/delta/delta_pct and period totals from **gross** (was net). Breakdown endpoint still returns both `total_gross` + `total_revenue`(net) and per-group `gross`+`revenue`.

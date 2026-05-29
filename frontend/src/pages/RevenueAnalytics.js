@@ -14,14 +14,21 @@ import {
 } from 'recharts';
 import {
   Loader2, TrendingUp, TrendingDown, Receipt, Layers,
-  BarChart3, GitCompareArrows, IndianRupee,
+  BarChart3, GitCompareArrows, IndianRupee, ArrowUpRight,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// Palette aligned with the app's emerald/teal theme.
-const ACCENT = '#0d9488';        // teal-600 (primary bars)
-const SERIES = ['#0d9488', '#10b981', '#0891b2', '#14b8a6', '#22c55e', '#0ea5e9', '#6366f1', '#64748b'];
+// Fixed emerald/sage brand palette for data-viz — kept consistent regardless of the
+// per-module accent (which themes --primary), so the dashboard always reads on-brand.
+const ACCENT = '#0d9488';        // teal-600 lead accent
+const ACCENT_DARK = '#0f766e';   // teal-700
+const GRID = 'hsl(var(--border))';
+const AXIS = 'hsl(var(--muted-foreground))';
+// Cohesive emerald → teal → green ramp for multi-segment charts (reads well in both modes).
+const SERIES = ['#0f766e', '#0d9488', '#14b8a6', '#10b981', '#059669', '#22c55e',
+  '#0891b2', '#0ea5e9', '#2dd4bf', '#34d399', '#6ee7b7', '#5eead4'];
+const COMPARE_A = '#94a3b8';     // slate (baseline period)
 const POS = '#059669';           // emerald-600
 const NEG = '#e11d48';           // rose-600
 
@@ -60,60 +67,62 @@ const compactAxis = (v) =>
 
 const authHeaders = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 
-const GRID = 'hsl(var(--border))';
-const AXIS = 'hsl(var(--muted-foreground))';
-
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg">
-      <p className="mb-1 font-semibold text-foreground">{label}</p>
+    <div className="rounded-lg border border-border bg-card px-3.5 py-2.5 text-xs shadow-lg">
+      <p className="mb-1.5 font-heading font-semibold text-foreground">{label}</p>
       {payload.map((p) => (
         <p key={p.dataKey} className="flex items-center gap-2 text-muted-foreground">
           <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color || p.fill }} />
           {p.name}
-          <span className="ml-auto pl-3 font-semibold tabular-nums text-foreground">{fullINR(p.value)}</span>
+          <span className="ml-auto pl-4 font-semibold tabular-nums text-foreground">{fullINR(p.value)}</span>
         </p>
       ))}
     </div>
   );
 };
 
-function StatCard({ label, value, sub, icon: Icon, tone = 'teal', testid }) {
-  const tones = {
-    teal: 'bg-teal-50 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300',
-    emerald: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
-    slate: 'bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300',
-  };
+// ───────────────────────── KPI tile ─────────────────────────
+function StatCard({ label, value, sub, icon: Icon, accent = false, testid }) {
   return (
-    <Card className="p-5" data-testid={testid}>
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    <Card
+      data-testid={testid}
+      className={`group relative flex flex-col justify-between rounded-xl border-border/60 bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${accent ? 'border-t-2 border-t-teal-600 dark:border-t-teal-500' : ''}`}
+    >
+      <div className="flex items-start justify-between">
+        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</span>
         {Icon && (
-          <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${tones[tone]}`}>
-            <Icon className="h-4 w-4" />
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 transition-colors group-hover:bg-teal-500/15 dark:text-teal-400">
+            <Icon className="h-[18px] w-[18px]" />
           </span>
         )}
       </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums text-foreground font-heading">{value}</p>
-      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+      <p className="mt-4 font-heading text-3xl font-semibold tracking-tighter tabular-nums text-foreground md:text-[2.1rem]">{value}</p>
+      {sub && <p className="mt-1.5 text-xs text-muted-foreground">{sub}</p>}
     </Card>
   );
 }
 
 const Spinner = () => (
-  <div className="flex justify-center py-24"><Loader2 className="h-7 w-7 animate-spin text-teal-600" /></div>
+  <div className="flex justify-center py-28"><Loader2 className="h-7 w-7 animate-spin text-teal-600 dark:text-teal-400" /></div>
 );
 
 const Empty = ({ children, testid }) => (
-  <Card className="p-14 text-center" data-testid={testid}>
-    <BarChart3 className="mx-auto mb-3 h-9 w-9 text-muted-foreground/40" />
+  <Card className="rounded-xl border-dashed border-border/60 bg-card p-16 text-center" data-testid={testid}>
+    <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+      <BarChart3 className="h-6 w-6 text-muted-foreground/50" />
+    </span>
     <p className="text-sm text-muted-foreground">{children}</p>
   </Card>
 );
 
 const FieldLabel = ({ children }) => (
-  <label className="mb-1.5 block text-xs font-medium text-muted-foreground">{children}</label>
+  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">{children}</label>
+);
+
+const SectionTitle = ({ children }) => (
+  <h3 className="font-heading text-base font-medium tracking-tight text-foreground">{children}</h3>
 );
 
 // ───────────────────────── Breakdown ─────────────────────────
@@ -154,72 +163,72 @@ function BreakdownView() {
 
   return (
     <div className="space-y-6">
-      <Card className="p-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <FieldLabel>Group by</FieldLabel>
-            <Select value={groupBy} onValueChange={setGroupBy}>
-              <SelectTrigger data-testid="ra-groupby-select"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {GROUP_BY_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value} data-testid={`ra-groupby-select-${o.value}`}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <FieldLabel>Time period</FieldLabel>
-            <Select value={timeFilter} onValueChange={setTimeFilter}>
-              <SelectTrigger data-testid="ra-timefilter-select"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {TIME_FILTERS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          {timeFilter === 'custom' && (
-            <>
-              <div>
-                <FieldLabel>From</FieldLabel>
-                <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} data-testid="ra-from-date" />
-              </div>
-              <div>
-                <FieldLabel>To</FieldLabel>
-                <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} data-testid="ra-to-date" />
-              </div>
-            </>
-          )}
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
+        <div className="min-w-[170px] flex-1">
+          <FieldLabel>Group by</FieldLabel>
+          <Select value={groupBy} onValueChange={setGroupBy}>
+            <SelectTrigger data-testid="ra-groupby-select"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {GROUP_BY_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value} data-testid={`ra-groupby-select-${o.value}`}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      </Card>
+        <div className="min-w-[170px] flex-1">
+          <FieldLabel>Time period</FieldLabel>
+          <Select value={timeFilter} onValueChange={setTimeFilter}>
+            <SelectTrigger data-testid="ra-timefilter-select"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TIME_FILTERS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        {timeFilter === 'custom' && (
+          <>
+            <div className="min-w-[150px] flex-1">
+              <FieldLabel>From</FieldLabel>
+              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} data-testid="ra-from-date" />
+            </div>
+            <div className="min-w-[150px] flex-1">
+              <FieldLabel>To</FieldLabel>
+              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} data-testid="ra-to-date" />
+            </div>
+          </>
+        )}
+      </div>
 
       {loading ? <Spinner /> : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Gross Revenue" value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} tone="teal" testid="ra-total-revenue" />
-            <StatCard label="Invoices" value={(data?.total_invoice_count || 0).toLocaleString('en-IN')} sub="Billed in period" icon={Receipt} tone="emerald" testid="ra-total-invoices" />
-            <StatCard label="Segments" value={(data?.raw_group_count || 0).toLocaleString('en-IN')} sub={`By ${dimLabel}`} icon={Layers} tone="slate" testid="ra-total-groups" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-6">
+            <StatCard label="Gross Revenue" value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} accent testid="ra-total-revenue" />
+            <StatCard label="Invoices" value={(data?.total_invoice_count || 0).toLocaleString('en-IN')} sub="Billed in period" icon={Receipt} testid="ra-total-invoices" />
+            <StatCard label="Segments" value={(data?.raw_group_count || 0).toLocaleString('en-IN')} sub={`By ${dimLabel}`} icon={Layers} testid="ra-total-groups" />
           </div>
 
           {groups.length === 0 ? (
             <Empty testid="ra-empty">No revenue recorded for the selected period.</Empty>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
-                <Card className="p-5 lg:col-span-3" data-testid="ra-bar-chart">
-                  <h3 className="mb-4 text-base font-semibold text-foreground font-heading">Revenue by {dimLabel}</h3>
-                  <ResponsiveContainer width="100%" height={380}>
-                    <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 64 }} barCategoryGap="28%">
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                <Card className="rounded-xl border-border/60 p-6 xl:col-span-7" data-testid="ra-bar-chart">
+                  <div className="mb-5 flex items-baseline justify-between">
+                    <SectionTitle>Revenue by {dimLabel}</SectionTitle>
+                    <span className="text-xs text-muted-foreground">Gross</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 64 }} barCategoryGap="30%">
                       <defs>
                         <linearGradient id="raBarH" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#0f766e" />
-                          <stop offset="100%" stopColor="#2dd4bf" />
+                          <stop offset="0%" stopColor={ACCENT_DARK} stopOpacity={1} />
+                          <stop offset="100%" stopColor={ACCENT} stopOpacity={1} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid stroke={GRID} strokeDasharray="3 3" horizontal={false} />
-                      <XAxis type="number" tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} />
+                      <CartesianGrid stroke={GRID} strokeOpacity={0.5} strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 12 }} dy={6} />
                       <YAxis type="category" dataKey="name" width={140} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 12 }} interval={0} />
-                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.4 }} />
-                      <Bar dataKey="gross" name="Gross Revenue" fill="url(#raBarH)" radius={[6, 6, 6, 6]} maxBarSize={34}
-                        background={{ fill: 'hsl(var(--muted))', radius: 6, fillOpacity: 0.5 }}>
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.45 }} />
+                      <Bar dataKey="gross" name="Gross Revenue" fill="url(#raBarH)" radius={[0, 4, 4, 0]} maxBarSize={30}>
                         <LabelList dataKey="gross" position="right" formatter={formatCurrency}
                           style={{ fill: AXIS, fontSize: 11, fontWeight: 600 }} />
                       </Bar>
@@ -227,52 +236,70 @@ function BreakdownView() {
                   </ResponsiveContainer>
                 </Card>
 
-                <Card className="p-5 lg:col-span-2" data-testid="ra-pie-chart">
-                  <h3 className="mb-4 text-base font-semibold text-foreground font-heading">Revenue Share</h3>
-                  <div className="relative">
+                <Card className="rounded-xl border-border/60 p-6 xl:col-span-5" data-testid="ra-pie-chart">
+                  <SectionTitle>Revenue Share</SectionTitle>
+                  <div className="relative mt-2">
                     <ResponsiveContainer width="100%" height={380}>
                       <PieChart>
-                        <Pie data={chartData} dataKey="gross" nameKey="name" cx="50%" cy="50%" innerRadius={82} outerRadius={120} paddingAngle={2} cornerRadius={5} stroke="none">
+                        <Pie data={chartData} dataKey="gross" nameKey="name" cx="50%" cy="50%" innerRadius={78} outerRadius={116} paddingAngle={2} cornerRadius={4} stroke="none">
                           {chartData.map((e, i) => <Cell key={i} fill={SERIES[i % SERIES.length]} />)}
                         </Pie>
                         <Tooltip content={<ChartTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-xs text-muted-foreground">Gross Total</span>
-                      <span className="mt-0.5 text-xl font-semibold tracking-tight text-foreground font-heading">{formatCurrency(totalGross)}</span>
+                      <span className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Gross Total</span>
+                      <span className="mt-1 font-heading text-2xl font-semibold tracking-tighter text-foreground">{formatCurrency(totalGross)}</span>
                     </div>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
+                    {chartData.slice(0, 6).map((e, i) => (
+                      <span key={e.name} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="h-2 w-2 rounded-full" style={{ background: SERIES[i % SERIES.length] }} />
+                        <span className="max-w-[120px] truncate">{e.name}</span>
+                      </span>
+                    ))}
                   </div>
                 </Card>
               </div>
 
-              <Card className="overflow-hidden p-0" data-testid="ra-table">
+              <Card className="overflow-hidden rounded-xl border-border/60 p-0" data-testid="ra-table">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-border text-muted-foreground">
-                        <th className="px-4 py-3 text-left font-medium">#</th>
-                        <th className="px-4 py-3 text-left font-medium">{dimLabel}</th>
-                        <th className="px-4 py-3 text-right font-medium">Gross Revenue</th>
-                        <th className="px-4 py-3 text-right font-medium">Net</th>
-                        <th className="px-4 py-3 text-right font-medium">Invoices</th>
-                        <th className="px-4 py-3 text-right font-medium">Share</th>
+                      <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <th className="px-5 py-3.5 text-left font-semibold">#</th>
+                        <th className="px-5 py-3.5 text-left font-semibold">{dimLabel}</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">Gross Revenue</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">Net</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">Invoices</th>
+                        <th className="px-5 py-3.5 text-left font-semibold">Share</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {groups.map((g, i) => (
-                        <tr key={g.label} className="border-b border-border/60 transition-colors hover:bg-muted/50">
-                          <td className="px-4 py-3 tabular-nums text-muted-foreground">{i + 1}</td>
-                          <td className="px-4 py-3 font-medium text-foreground">
-                            <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: SERIES[i % SERIES.length] }} />
-                            {g.label}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">{formatCurrency(g.gross)}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(g.revenue)}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{g.count}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{totalGross ? ((g.gross / totalGross) * 100).toFixed(1) : '0.0'}%</td>
-                        </tr>
-                      ))}
+                      {groups.map((g, i) => {
+                        const share = totalGross ? (g.gross / totalGross) * 100 : 0;
+                        return (
+                          <tr key={g.label} className="border-b border-border/40 transition-colors last:border-0 hover:bg-muted/30">
+                            <td className="px-5 py-4 tabular-nums text-muted-foreground">{i + 1}</td>
+                            <td className="px-5 py-4 font-medium text-foreground">
+                              <span className="mr-2.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: SERIES[i % SERIES.length] }} />
+                              {g.label}
+                            </td>
+                            <td className="px-5 py-4 text-right font-semibold tabular-nums text-foreground">{formatCurrency(g.gross)}</td>
+                            <td className="px-5 py-4 text-right tabular-nums text-muted-foreground">{formatCurrency(g.revenue)}</td>
+                            <td className="px-5 py-4 text-right tabular-nums text-muted-foreground">{g.count}</td>
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2.5">
+                                <div className="h-1.5 w-full max-w-[90px] overflow-hidden rounded-full bg-muted">
+                                  <div className="h-full rounded-full bg-teal-600 dark:bg-teal-500" style={{ width: `${Math.max(share, 2)}%` }} />
+                                </div>
+                                <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{share.toFixed(1)}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -330,7 +357,7 @@ function CompareView() {
   const dimLabel = GROUP_BY_OPTIONS.find((o) => o.value === groupBy)?.label;
 
   const monthSel = (label, value, onChange, testid) => (
-    <div>
+    <div className="min-w-[130px] flex-1">
       <FieldLabel>{label}</FieldLabel>
       <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
         <SelectTrigger data-testid={testid}><SelectValue /></SelectTrigger>
@@ -339,7 +366,7 @@ function CompareView() {
     </div>
   );
   const yearSel = (label, value, onChange, testid) => (
-    <div>
+    <div className="min-w-[100px] flex-1">
       <FieldLabel>{label}</FieldLabel>
       <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
         <SelectTrigger data-testid={testid}><SelectValue /></SelectTrigger>
@@ -350,38 +377,37 @@ function CompareView() {
 
   return (
     <div className="space-y-6">
-      <Card className="p-4">
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-          {monthSel('Period A — Month', aMonth, setAMonth, 'ra-cmp-a-month')}
-          {yearSel('Year', aYear, setAYear, 'ra-cmp-a-year')}
-          {monthSel('Period B — Month', bMonth, setBMonth, 'ra-cmp-b-month')}
-          {yearSel('Year', bYear, setBYear, 'ra-cmp-b-year')}
-          <div>
-            <FieldLabel>Group by</FieldLabel>
-            <Select value={groupBy} onValueChange={setGroupBy}>
-              <SelectTrigger data-testid="ra-cmp-groupby"><SelectValue /></SelectTrigger>
-              <SelectContent>{GROUP_BY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
+        {monthSel('Period A — Month', aMonth, setAMonth, 'ra-cmp-a-month')}
+        {yearSel('Year', aYear, setAYear, 'ra-cmp-a-year')}
+        {monthSel('Period B — Month', bMonth, setBMonth, 'ra-cmp-b-month')}
+        {yearSel('Year', bYear, setBYear, 'ra-cmp-b-year')}
+        <div className="min-w-[150px] flex-1">
+          <FieldLabel>Group by</FieldLabel>
+          <Select value={groupBy} onValueChange={setGroupBy}>
+            <SelectTrigger data-testid="ra-cmp-groupby"><SelectValue /></SelectTrigger>
+            <SelectContent>{GROUP_BY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+          </Select>
         </div>
-      </Card>
+      </div>
 
       {loading ? <Spinner /> : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label={aLabel} value={formatCurrency(data?.period_a?.total)} sub="Baseline period" icon={IndianRupee} tone="slate" testid="ra-cmp-a-total" />
-            <StatCard label={bLabel} value={formatCurrency(data?.period_b?.total)} sub="Comparison period" icon={IndianRupee} tone="teal" testid="ra-cmp-b-total" />
-            <Card className="p-5" data-testid="ra-cmp-delta">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Change (MoM)</span>
-                <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${up ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300'}`}>
-                  {up ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-6">
+            <StatCard label={`${aLabel} · Baseline`} value={formatCurrency(data?.period_a?.total)} sub="Baseline period" icon={IndianRupee} testid="ra-cmp-a-total" />
+            <StatCard label={`${bLabel} · Current`} value={formatCurrency(data?.period_b?.total)} sub="Comparison period" icon={IndianRupee} accent testid="ra-cmp-b-total" />
+            <Card className="group flex flex-col justify-between rounded-xl border-border/60 bg-card p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md" data-testid="ra-cmp-delta">
+              <div className="flex items-start justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Change (MoM)</span>
+                <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${up ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'}`}>
+                  {up ? <TrendingUp className="h-[18px] w-[18px]" /> : <TrendingDown className="h-[18px] w-[18px]" />}
                 </span>
               </div>
-              <p className="mt-3 text-2xl font-semibold tracking-tight tabular-nums font-heading" style={{ color: up ? POS : NEG }}>
+              <p className="mt-4 font-heading text-3xl font-semibold tracking-tighter tabular-nums md:text-[2.1rem]" style={{ color: up ? POS : NEG }}>
                 {up ? '+' : ''}{formatCurrency(delta)}
               </p>
-              <Badge variant="outline" className={`mt-2 ${up ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300' : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300'}`}>
+              <Badge variant="outline" className={`mt-2 w-fit gap-1 ${up ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300'}`}>
+                <ArrowUpRight className={`h-3 w-3 ${up ? '' : 'rotate-90'}`} />
                 {up ? '+' : ''}{data?.delta_pct ?? 0}% vs {aLabel}
               </Badge>
             </Card>
@@ -391,58 +417,48 @@ function CompareView() {
             <Empty testid="ra-cmp-empty">No revenue found for either period.</Empty>
           ) : (
             <>
-              <Card className="p-5" data-testid="ra-cmp-chart">
-                <div className="mb-4 flex items-center justify-between gap-4 flex-wrap">
-                  <h3 className="text-base font-semibold text-foreground font-heading">{aLabel} vs {bLabel} — by {dimLabel}</h3>
+              <Card className="rounded-xl border-border/60 p-6" data-testid="ra-cmp-chart">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+                  <SectionTitle>{aLabel} vs {bLabel} — by {dimLabel}</SectionTitle>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-slate-400" />{aLabel}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: COMPARE_A }} />{aLabel}</span>
                     <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: ACCENT }} />{bLabel}</span>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={6} barCategoryGap="24%">
-                    <defs>
-                      <linearGradient id="raCmpB" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#2dd4bf" />
-                        <stop offset="100%" stopColor="#0f766e" />
-                      </linearGradient>
-                      <linearGradient id="raCmpA" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#cbd5e1" />
-                        <stop offset="100%" stopColor="#94a3b8" />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} angle={-22} textAnchor="end" interval={0} height={60} tick={{ fill: AXIS, fontSize: 11 }} />
-                    <YAxis tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.4 }} />
-                    <Bar dataKey="A" name={aLabel} fill="url(#raCmpA)" radius={[6, 6, 0, 0]} maxBarSize={26} />
-                    <Bar dataKey="B" name={bLabel} fill="url(#raCmpB)" radius={[6, 6, 0, 0]} maxBarSize={26} />
+                  <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={6} barCategoryGap="26%">
+                    <CartesianGrid stroke={GRID} strokeOpacity={0.5} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} angle={-22} textAnchor="end" interval={0} height={60} tick={{ fill: AXIS, fontSize: 11 }} dy={6} />
+                    <YAxis tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} dx={-6} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.45 }} />
+                    <Bar dataKey="A" name={aLabel} fill={COMPARE_A} radius={[4, 4, 0, 0]} maxBarSize={28} />
+                    <Bar dataKey="B" name={bLabel} fill={ACCENT} radius={[4, 4, 0, 0]} maxBarSize={28} />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>
 
-              <Card className="overflow-hidden p-0" data-testid="ra-cmp-table">
+              <Card className="overflow-hidden rounded-xl border-border/60 p-0" data-testid="ra-cmp-table">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-border text-muted-foreground">
-                        <th className="px-4 py-3 text-left font-medium">{dimLabel}</th>
-                        <th className="px-4 py-3 text-right font-medium">{aLabel}</th>
-                        <th className="px-4 py-3 text-right font-medium">{bLabel}</th>
-                        <th className="px-4 py-3 text-right font-medium">Change</th>
-                        <th className="px-4 py-3 text-right font-medium">%</th>
+                      <tr className="border-b border-border/60 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <th className="px-5 py-3.5 text-left font-semibold">{dimLabel}</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">{aLabel}</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">{bLabel}</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">Change</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">%</th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map((r) => {
                         const rUp = r.delta >= 0;
                         return (
-                          <tr key={r.label} className="border-b border-border/60 transition-colors hover:bg-muted/50">
-                            <td className="px-4 py-3 font-medium text-foreground">{r.label}</td>
-                            <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(r.a_revenue)}</td>
-                            <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">{formatCurrency(r.b_revenue)}</td>
-                            <td className="px-4 py-3 text-right font-medium tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{formatCurrency(r.delta)}</td>
-                            <td className="px-4 py-3 text-right tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{r.delta_pct}%</td>
+                          <tr key={r.label} className="border-b border-border/40 transition-colors last:border-0 hover:bg-muted/30">
+                            <td className="px-5 py-4 font-medium text-foreground">{r.label}</td>
+                            <td className="px-5 py-4 text-right tabular-nums text-muted-foreground">{formatCurrency(r.a_revenue)}</td>
+                            <td className="px-5 py-4 text-right font-semibold tabular-nums text-foreground">{formatCurrency(r.b_revenue)}</td>
+                            <td className="px-5 py-4 text-right font-medium tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{formatCurrency(r.delta)}</td>
+                            <td className="px-5 py-4 text-right tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{r.delta_pct}%</td>
                           </tr>
                         );
                       })}
@@ -462,20 +478,34 @@ function CompareView() {
 export default function RevenueAnalytics() {
   return (
     <div className="mx-auto max-w-[1400px] p-1 sm:p-2" data-testid="revenue-analytics-page">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-teal-600 to-emerald-700 shadow-sm">
-          <BarChart3 className="h-6 w-6 text-white" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Revenue Analytics</h1>
-          <p className="text-sm text-muted-foreground">Invoice revenue by city, category, SKU, territory &amp; state — with month-over-month comparison.</p>
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-teal-600 to-emerald-700 text-white shadow-sm">
+            <BarChart3 className="h-[22px] w-[22px]" />
+          </div>
+          <div>
+            <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground md:text-3xl">Revenue Analytics</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">Invoice revenue by city, category, SKU, territory &amp; state — with month-over-month comparison.</p>
+          </div>
         </div>
       </div>
 
       <Tabs defaultValue="breakdown">
-        <TabsList className="mb-6">
-          <TabsTrigger value="breakdown" data-testid="ra-tab-breakdown"><BarChart3 className="mr-2 h-4 w-4" /> Breakdown</TabsTrigger>
-          <TabsTrigger value="compare" data-testid="ra-tab-compare"><GitCompareArrows className="mr-2 h-4 w-4" /> Compare Months</TabsTrigger>
+        <TabsList className="mb-6 h-auto w-full justify-start gap-6 rounded-none border-b border-border bg-transparent p-0">
+          <TabsTrigger
+            value="breakdown"
+            data-testid="ra-tab-breakdown"
+            className="rounded-none border-b-2 border-transparent px-1 py-3 font-medium text-muted-foreground transition-colors data-[state=active]:border-teal-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:border-teal-500"
+          >
+            <BarChart3 className="mr-2 h-4 w-4" /> Breakdown
+          </TabsTrigger>
+          <TabsTrigger
+            value="compare"
+            data-testid="ra-tab-compare"
+            className="rounded-none border-b-2 border-transparent px-1 py-3 font-medium text-muted-foreground transition-colors data-[state=active]:border-teal-600 data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:border-teal-500"
+          >
+            <GitCompareArrows className="mr-2 h-4 w-4" /> Compare Months
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="breakdown"><BreakdownView /></TabsContent>
         <TabsContent value="compare"><CompareView /></TabsContent>
