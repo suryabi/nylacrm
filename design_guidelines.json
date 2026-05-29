@@ -1,106 +1,151 @@
 {
-  "theme": "light",
-  "archetype": "3 (Pastel & Soft) mixed with Neo-Brutalism",
-  "design_philosophy": "A fresh, vibrant marketing-focused aesthetic moving away from typical sterile SaaS layouts. It uses soft pastels grounded by deep charcoal text and hard borders (Neo-brutalist twist) to create a structured, approachable, and creative 'marketing vibe' that remains intuitive for non-technical users.",
+  "theme": "Dark",
+  "archetype": "5 (Luxury / Premium Data)",
+  "vibe": "Board-room / Investor-deck grade. A sophisticated dark analytics terminal that feels like a Bloomberg terminal redesigned by a luxury watchmaker. Dense, high-contrast, optical clarity.",
   "colors": {
-    "background": "#FAF9F6",
-    "surface": "#FFFFFF",
-    "primary": "#FF6B6B",
-    "primary_foreground": "#FFFFFF",
-    "secondary": "#FDE74C",
-    "secondary_foreground": "#1C1C1C",
-    "accent": "#A8E6CF",
-    "accent_foreground": "#1C1C1C",
-    "text_primary": "#1C1C1C",
-    "text_secondary": "#4B5563",
-    "border": "#1C1C1C",
-    "muted": "#F3F4F6",
-    "workflow_statuses": {
-      "draft": { "bg": "#E2E8F0", "text": "#1C1C1C", "border": "#1C1C1C" },
-      "review": { "bg": "#FDE74C", "text": "#1C1C1C", "border": "#1C1C1C" },
-      "scheduled": { "bg": "#4EA8DE", "text": "#FFFFFF", "border": "#1C1C1C" },
-      "published": { "bg": "#A8E6CF", "text": "#1C1C1C", "border": "#1C1C1C" }
+    "background": {
+      "app": "#050808",
+      "card": "rgba(255, 255, 255, 0.02)",
+      "cardHover": "rgba(255, 255, 255, 0.04)"
     },
-    "platforms": {
-      "linkedin": "#0A66C2",
-      "whatsapp": "#25D366",
-      "youtube": "#FF0000",
-      "instagram": "#E1306C",
-      "facebook": "#1877F2"
+    "text": {
+      "primary": "#F8FAFC",
+      "secondary": "#94A3B8",
+      "muted": "#475569"
+    },
+    "border": {
+      "default": "rgba(255, 255, 255, 0.08)",
+      "focus": "#D4AF37"
+    },
+    "brand": {
+      "primary": "#D4AF37",
+      "secondary": "#B87333",
+      "accent": "#E5E4D7"
+    },
+    "status": {
+      "positive": "#10B981",
+      "negative": "#EF4444",
+      "warning": "#F59E0B"
+    },
+    "charts": {
+      "primary": "#D4AF37",
+      "comparisonA": "#94A3B8",
+      "comparisonB": "#D4AF37",
+      "donut": ["#D4AF37", "#B87333", "#E5E4D7", "#8A9A5B", "#475569"]
     }
   },
   "typography": {
-    "font_family": {
-      "heading": "'Outfit', sans-serif",
-      "body": "'Manrope', sans-serif"
+    "fonts": {
+      "headings": "'Cabinet Grotesk', sans-serif",
+      "body": "'Satoshi', sans-serif",
+      "data": "'JetBrains Mono', monospace"
     },
-    "hierarchy": {
-      "h1": "text-4xl sm:text-5xl font-black tracking-tight text-[#1C1C1C]",
-      "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-[#1C1C1C]",
-      "h3": "text-xl sm:text-2xl font-bold text-[#1C1C1C]",
-      "body": "text-base font-medium text-[#4B5563] leading-relaxed",
-      "small": "text-sm font-semibold uppercase tracking-widest text-[#4B5563]"
+    "scales": {
+      "h1": "text-4xl tracking-tighter font-medium",
+      "h2": "text-2xl tracking-tight font-medium",
+      "h3": "text-lg font-medium",
+      "kpi_value": "text-5xl tracking-tighter font-light",
+      "body": "text-sm leading-relaxed",
+      "label": "text-xs tracking-[0.1em] uppercase font-semibold text-secondary"
     }
   },
   "spacing_and_layout": {
-    "container_padding": "p-6 sm:p-8 lg:p-12",
-    "calendar_grid": "grid grid-cols-7 gap-0 border-l border-t border-[#1C1C1C]",
-    "calendar_cell": "min-h-[120px] p-2 border-r border-b border-[#1C1C1C] bg-white transition-colors hover:bg-muted/50",
-    "bento_spacing": "gap-6 sm:gap-8",
-    "radius": "rounded-xl"
+    "grid_system": "Control Room Grid (Dense, gap-6, 12-column base)",
+    "card_padding": "p-6",
+    "section_gap": "gap-8"
+  },
+  "surfaces_and_micro_themes": {
+    "cards": "Flat background (rgba(255,255,255,0.02)), 1px border (rgba(255,255,255,0.08)), rounded-none or rounded-sm, shadow-none. On hover: border-white/20, shadow-lg.",
+    "kpi_cards": "Use 'Tracing Beam' inspired top border. 1px solid #D4AF37 on top edge only to anchor the data.",
+    "filter_bar": "Glassmorphism (backdrop-blur-xl bg-[#050808]/70) sticky at top z-40, 1px border-b border-white/10, py-4."
   },
   "components": {
-    "cards": "bg-white border-2 border-[#1C1C1C] rounded-xl shadow-[4px_4px_0px_#1C1C1C] hover:shadow-[6px_6px_0px_#1C1C1C] transition-shadow duration-200",
-    "buttons": {
-      "primary": "bg-[#FF6B6B] text-white border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg",
-      "secondary": "bg-[#FDE74C] text-[#1C1C1C] border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg",
-      "outline": "bg-white text-[#1C1C1C] border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg"
+    "tabs": {
+      "customization": "Remove Vercel/Shadcn bubble look. Use underline style: transparent background, border-b border-white/10. Active tab gets text-brand-primary and border-b-2 border-brand-primary. font-headings text-lg.",
+      "test_id": "analytics-mode-tabs"
     },
-    "inputs": "bg-white border-2 border-[#1C1C1C] rounded-lg px-4 py-3 focus:ring-2 focus:ring-[#FF6B6B] focus:border-[#1C1C1C] font-medium transition-all shadow-[inset_2px_2px_0px_rgba(0,0,0,0.05)]",
-    "badges": "px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full border border-[#1C1C1C] flex items-center gap-1",
-    "sidebar": "w-64 border-r-2 border-[#1C1C1C] bg-white h-screen fixed top-0 left-0 p-6 flex flex-col gap-8 z-50"
+    "select": {
+      "customization": "Square edges (rounded-none), bg-transparent, border-white/10. text-sm. Hover: border-white/20.",
+      "test_id": "filter-select"
+    },
+    "table": {
+      "customization": "Dense rows. No alternating background. border-b border-white/5 on rows. Hover row: bg-white/5. Data font (JetBrains Mono) for numerical columns. Right-align numerical columns.",
+      "test_id": "data-table"
+    },
+    "kpi_card": {
+      "test_id": "kpi-metric-card"
+    }
   },
-  "iconography": {
-    "library": "@phosphor-icons/react",
-    "style": "duotone or bold for a playful but professional look",
-    "installation": "yarn add @phosphor-icons/react"
-  },
-  "interactions": {
-    "hover_states": "Elements should lift up (-translate-y-1) and cast a slightly larger hard shadow to emphasize the tactile Neo-Brutalist feel.",
-    "focus_states": "High contrast ring focus (focus:ring-2 focus:ring-[#FF6B6B] focus:outline-none).",
-    "transitions": "transition-all duration-200 ease-in-out"
-  },
-  "image_assets": {
-    "avatars": [
-      {
-        "url": "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwxfHxwcm9maWxlJTIwcG9ydHJhaXQlMjBwcm9mZXNzaW9uYWx8ZW58MHx8fHwxNzc1MTM4NTIzfDA&ixlib=rb-4.1.0&q=85",
-        "description": "User avatar for the top right profile dropdown."
+  "recharts_styling": {
+    "cartesian_grid": {
+      "stroke": "rgba(255,255,255,0.05)",
+      "strokeDasharray": "4 4",
+      "vertical": false
+    },
+    "axis": {
+      "tickFormatter": "Intl.NumberFormat('en-IN', { notation: 'compact', maximumFractionDigits: 1 }).format",
+      "axisLine": false,
+      "tickLine": false,
+      "style": { "fill": "#94A3B8", "fontSize": "12px", "fontFamily": "'JetBrains Mono', monospace" }
+    },
+    "tooltip": {
+      "contentStyle": {
+        "backgroundColor": "rgba(5, 8, 8, 0.9)",
+        "backdropFilter": "blur(12px)",
+        "border": "1px solid rgba(255,255,255,0.1)",
+        "borderRadius": "4px",
+        "fontFamily": "'JetBrains Mono', monospace",
+        "color": "#F8FAFC"
       },
-      {
-        "url": "https://images.unsplash.com/photo-1762522926157-bcc04bf0b10a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwzfHxwcm9maWxlJTIwcG9ydHJhaXQlMjBwcm9mZXNzaW9uYWx8ZW58MHx8fHwxNzc1MTM4NTIzfDA&ixlib=rb-4.1.0&q=85",
-        "description": "Team member avatar for post reviewer assignments."
-      }
-    ],
-    "content_thumbnails": [
-      {
-        "url": "https://images.unsplash.com/photo-1770368787714-4e5a5ea557fd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwyfHxzb2NpYWwlMjBtZWRpYSUyMGNvbnRlbnQlMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzc1MTM4NTI0fDA&ixlib=rb-4.1.0&q=85",
-        "description": "Example thumbnail for a planned social media reel/post in the review sheet."
-      }
-    ]
+      "itemStyle": { "color": "#F8FAFC" }
+    },
+    "bar": {
+      "radius": [0, 4, 4, 0],
+      "barSize": 24
+    },
+    "comparison_bar": {
+      "radius": [2, 2, 0, 0],
+      "barSize": 16
+    }
   },
-  "testing_attributes": {
-    "requirement": "All interactive elements must include data-testid. E.g., data-testid='calendar-next-month-btn', data-testid='new-post-modal-btn', data-testid='post-status-select'."
+  "modes": {
+    "breakdown": {
+      "layout": [
+        { "id": "filters", "span": "col-span-12", "description": "Group By and Time Period selects side-by-side in filter_bar." },
+        { "id": "kpi_net_revenue", "span": "col-span-12 md:col-span-4", "description": "Huge ₹ Net Revenue." },
+        { "id": "kpi_gross_revenue", "span": "col-span-12 md:col-span-4", "description": "Gross Revenue." },
+        { "id": "kpi_invoices", "span": "col-span-12 md:col-span-4", "description": "Invoice count." },
+        { "id": "main_chart", "span": "col-span-12 lg:col-span-8", "description": "Horizontal Bar Chart showing top N groups. Height: 400px." },
+        { "id": "share_chart", "span": "col-span-12 lg:col-span-4", "description": "Donut Chart with inner text showing total. Height: 400px." },
+        { "id": "data_table", "span": "col-span-12", "description": "Ranked table mapping to the charts." }
+      ]
+    },
+    "compare_months": {
+      "layout": [
+        { "id": "filters", "span": "col-span-12", "description": "Period A, Period B, Group By selectors in filter_bar." },
+        { "id": "kpi_period_a", "span": "col-span-12 md:col-span-4" },
+        { "id": "kpi_period_b", "span": "col-span-12 md:col-span-4" },
+        { "id": "kpi_delta", "span": "col-span-12 md:col-span-4", "description": "Shows absolute delta and %. Uses positive/negative status colors." },
+        { "id": "main_chart", "span": "col-span-12", "description": "Grouped Vertical Bar chart (Period A vs B per group). Height: 450px." },
+        { "id": "data_table", "span": "col-span-12", "description": "Delta table showing side-by-side values and variance." }
+      ]
+    }
+  },
+  "interactions_and_motion": {
+    "page_load": "Fade in with staggered upward translation (framer-motion, y: 20 -> 0, duration: 0.4s).",
+    "hover": "Row hover in tables dims other rows slightly (opacity-50) and highlights current row. Chart hover highlights specific bar/slice and dims rest."
+  },
+  "accessibility": {
+    "focus": "focus-visible:ring-2 focus-visible:ring-[#D4AF37] focus-visible:outline-none",
+    "aria": "Include aria-labels for all charts and custom tooltips."
   },
   "instructions_to_main_agent": [
-    "Install and use 'Outfit' (Headings) and 'Manrope' (Body) from Google Fonts.",
-    "Implement the layout with a fixed Left Sidebar and a Main Content area.",
-    "The primary view is the Marketing Calendar. Build a robust grid layout for the Monthly view. Implement a Weekly and Daily toggle as well.",
-    "Calendar cells must look like large bento boxes with 1px dark borders. Use absolute positioning inside relative cells for event pills if there are many, or simple flex columns.",
-    "For the 'Post Planning' feature, use a Shadcn Sheet (sliding in from the right) or Dialog to create/edit posts.",
-    "Ensure Multi-select is implemented properly for platforms (LinkedIn, Instagram, etc.), perhaps using command/combobox from Shadcn UI.",
-    "For Auto-Events (Global/Indian events), display them in the calendar cells as subtle, non-intrusive text/icons at the bottom of the date cell.",
-    "Embrace the Neo-Brutalist aesthetic. Use the specified custom shadow classes (`shadow-[4px_4px_0px_#1C1C1C]`) on cards and buttons instead of the default Shadcn soft shadows. Override Shadcn defaults to match this tactile, fresh marketing vibe.",
-    "Use Phosphor icons heavily to complement the modern, creative tone.",
-    "Ensure full responsive behavior for the calendar. On mobile, the month view might switch to a list view."
+    "Replace 'Inter' completely. Inject Cabinet Grotesk, Satoshi, and JetBrains Mono via Google Fonts or Fontshare CDN in index.html or global CSS.",
+    "Make the background of the main wrapper #050808.",
+    "Do NOT use heavy gradients or purple/teal washes. Keep it stark, dark, and illuminated by the Gold/Amber chart data.",
+    "Format all currency values as '₹X.XX L' or '₹X.XX Cr' using JetBrains Mono.",
+    "Build the 'Filter Bar' as a sticky glassmorphism nav below the main header.",
+    "For Shadcn Tabs, strip out the standard 'bg-muted' and rounded pill styles. Apply a classic flat underline tab style.",
+    "Ensure the charts have responsive containers."
   ]
 }
