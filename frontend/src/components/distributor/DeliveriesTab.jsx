@@ -349,6 +349,44 @@ export default function DeliveriesTab({
   const [selectedCreditNotes, setSelectedCreditNotes] = useState({}); // {credit_note_id: amount_to_apply}
   
   const totalPages = Math.ceil((deliveriesTotal || 0) / (deliveriesPageSize || 20));
+
+  // Column totals for the visible deliveries (mirrors the per-row math below).
+  const deliveryTotals = useMemo(() => {
+    const t = { items: 0, billing: 0, credit: 0, netBilling: 0, margin: 0, billable: 0, netBillable: 0 };
+    (deliveries || []).forEach((delivery) => {
+      const items = delivery.items || [];
+      const totalCreditApplied = delivery.total_credit_applied || 0;
+      const customerBilling = items.reduce((sum, item) => {
+        const qty = item.quantity || 0;
+        const price = item.customer_selling_price || item.unit_price || 0;
+        const disc = item.discount_percent || 0;
+        return sum + qty * price * (1 - disc / 100);
+      }, 0);
+      const netCustomerBilling = Math.max(0, customerBilling - totalCreditApplied);
+      const totalMarginAmount = items.reduce((sum, item) => {
+        const qty = item.quantity || 0;
+        const customerPrice = item.customer_selling_price || item.unit_price || 0;
+        const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+        return sum + qty * customerPrice * (commissionPct / 100);
+      }, 0);
+      const totalActualBillable = items.reduce((sum, item) => {
+        const qty = item.quantity || 0;
+        const customerPrice = item.customer_selling_price || item.unit_price || 0;
+        const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+        const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+        return sum + qty * newTransferPrice;
+      }, 0);
+      t.items += items.length;
+      t.billing += customerBilling;
+      t.credit += totalCreditApplied;
+      t.netBilling += netCustomerBilling;
+      t.margin += totalMarginAmount;
+      t.billable += totalActualBillable;
+      t.netBillable += totalActualBillable - totalCreditApplied;
+    });
+    return t;
+  }, [deliveries]);
+  const fmtINR = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   
   // Fetch available credit notes when account is selected
   useEffect(() => {
@@ -1689,6 +1727,23 @@ export default function DeliveriesTab({
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-emerald-300 bg-emerald-50/70 font-semibold" data-testid="deliveries-totals-row">
+                  <td className="p-3 text-slate-700" colSpan="2">
+                    Totals{totalPages > 1 ? ' (this page)' : ''} · {deliveries.length} {deliveries.length === 1 ? 'delivery' : 'deliveries'}
+                  </td>
+                  <td className="p-3 text-center text-slate-700" data-testid="totals-items">{deliveryTotals.items}</td>
+                  <td className="p-3 text-right bg-blue-50/40 text-slate-800" data-testid="totals-billing">₹{fmtINR(deliveryTotals.billing)}</td>
+                  <td className="p-3 text-right bg-blue-50/40 text-emerald-700" data-testid="totals-return-credit">
+                    {deliveryTotals.credit > 0 ? `-₹${fmtINR(deliveryTotals.credit)}` : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="p-3 text-right bg-blue-50/40 text-blue-700 font-bold" data-testid="totals-net-billing">₹{fmtINR(deliveryTotals.netBilling)}</td>
+                  <td className="p-3 text-right bg-purple-50/40 text-purple-600" data-testid="totals-margin">₹{fmtINR(deliveryTotals.margin)}</td>
+                  <td className="p-3 text-right bg-purple-50/40 text-slate-700" data-testid="totals-billable">₹{fmtINR(deliveryTotals.billable)}</td>
+                  <td className="p-3 text-right bg-purple-50/40 text-purple-700 font-bold" data-testid="totals-net-billable">₹{fmtINR(deliveryTotals.netBillable)}</td>
+                  <td className="p-3" colSpan="2"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 

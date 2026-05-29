@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-29 — Stock Out (Distributor → Customer): totals summary row ✅ DONE
+- **Request**: "include a summary row with totals" (deliveries table on the distributor detail → Stock Out section).
+- **Frontend** (`components/distributor/DeliveriesTab.jsx`): added a `<tfoot>` totals row (testid `deliveries-totals-row`) summing the visible deliveries across every numeric column — Items, Billing, Return Credit, Net Billing (customer) and Margin Amt, Billable, Net Billable (distributor). Computed via a `useMemo` (`deliveryTotals`) that mirrors the exact per-row math (qty × price × (1−disc), credit applied, commission %). Styled to match the table (emerald summary band; blue customer / purple distributor column tints; bold net values; per-cell testids `totals-*`). Label shows "Totals (this page) · N deliveries" when paginated, else "Totals · N deliveries".
+- **Verified (preview)**: distributor with 10 deliveries → footer shows Items 4, Billing ₹600.00, Net Billing ₹600.00, Margin ₹15.00, Billable ₹585.00, Net Billable ₹585.00 (math reconciles). Lint clean.
+- **⚠️ Action**: redeploy to use it in production.
+
+
+
 ### 2026-05-29 — Account Detail: editable Business Category ✅ DONE
 - **Request**: "I need an option to edit the business category in account detail."
 - **Backend** (`routes/accounts.py`): added `category: Optional[str]` to `AccountUpdate` (the model had no `extra=allow`, so the field had to be declared). The generic `update_account` loop now persists `category`. This is the same field Revenue Analytics / Account Performance group by (`account.category`), so edits flow straight into those reports.
