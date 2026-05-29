@@ -15,6 +15,20 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-29 — Revenue Analytics: dark futuristic neon glassmorphism redesign ✅ DONE
+- **Request (verbatim)**: "change the revenue analytics to a premium modern analytics dashboard UI inspired by futuristic SaaS products... dark glassmorphism / neon gradient aesthetic." Dark theme default; deep navy bg (#080B1F/#101427) + blurred abstract orbs; translucent glass cards w/ blur + inner glow; neon accents (electric cyan #00F0FF, aqua #00D2FF, purple #B026FF, magenta #FF00FF); gradient KPI cards w/ glowing values + neon hover.
+- **Design**: `design_agent_full_stack` → "Electric & Neon Dashboard" blueprint (`/app/design_guidelines.json`). Fully rewrote `/app/frontend/src/pages/RevenueAnalytics.js`:
+  - **Self-contained dark surface**: page wraps in a `rounded-3xl bg-[#080B1F] [color-scheme:dark]` container with 3 blurred neon orbs (purple/cyan/magenta), so it renders dark+immersive regardless of the host app's light/dark toggle. Sidebar/app chrome stay in their normal theme.
+  - **Glass cards**: `bg-[#101427]/60 backdrop-blur-2xl border-white/10` + inner-glow/soft shadow. KPI tiles use cyan/purple/teal gradient fills, glowing mono values (`text-shadow`), neon icon chips, hover lift + orb glow.
+  - **Charts (Recharts)**: cyan→purple neon gradient horizontal bar + `feGaussianBlur` glow filter; neon donut (cyan/purple/magenta/aqua/blue palette) w/ glowing center total; compare = cyan (A) vs purple (B) glowing gradient bars; glass tooltip; faint white grid, slate axes. Table on dark glass w/ neon cyan→purple inline share bars, mono numerics.
+  - shadcn Select/Input/Tabs overridden with dark-glass classes (translucent bg, white text, cyan focus ring, neon-glow active tab).
+  - Subtle entrance animations (`animate-in fade-in / slide-in`).
+- **Note**: This intentionally supersedes the prior brand-matched (emerald/brand) look per the user's new explicit direction; up/down MoM trend keeps semantic green/red (neon).
+- **Verified (preview)**: light app + this dark page, both Breakdown & Compare tabs render with live data, neon charts, working filters/selects; lint clean. Same endpoints + same data-testids → functionality identical.
+- **⚠️ Action**: redeploy to see it in production.
+
+
+
 ### 2026-05-29 — Revenue Analytics: contemporary corporate-minimalist redesign ✅ DONE
 - **Request (verbatim)**: "the revenue analytics dashboard doesn't look contemporary. the tiles and KPIs and the graphs look very bland and rudimentary. Please include corporate minimalistic professional theme for this analytics dashboard."
 - **Design**: Used `design_agent_full_stack` → Swiss/high-contrast executive style adapted to the app's emerald/sage B2B theme (`/app/design_guidelines.json`). Rebuilt `/app/frontend/src/pages/RevenueAnalytics.js`:
