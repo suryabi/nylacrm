@@ -14,6 +14,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Revenue Analytics: complete premium redesign (investor-grade) ✅ DONE
+- **Request**: Redesign Revenue Analytics with contemporary styling + beautiful charts; seen by investors & whole company — must feel amazing.
+- **Design**: Followed `design_agent_full_stack` blueprint (`/app/design_guidelines.json`) — "Midnight Teal & Glass" dark analytics-terminal theme: app bg `#050808`, gold/copper/bone accents (`#D4AF37`/`#B87333`/`#E5E4D7`), Cabinet Grotesk (headings) + Satoshi (body) + JetBrains Mono (numbers) via Fontshare CDN (added to `public/index.html`).
+- **Implementation** (`/app/frontend/src/pages/RevenueAnalytics.js`, full rewrite): self-contained dark surface (negative-margin bleed inside the light app shell, doesn't affect other pages). Flat gold underline tabs (framer-motion `layoutId` slider); sticky glassmorphism filter bar; glass KPI cards with gold top-hairline; gold-gradient horizontal bar chart with value LabelList; donut with center total; dense JetBrains-Mono tables with gold rank/values; framer-motion staggered entrance. Compare tab: paired grey-vs-gold bars + green/red MoM delta card. Custom glass tooltips, compact ₹ axis formatting (L/Cr).
+- **Unchanged**: same endpoints (`/api/reports/revenue-analytics`, `/api/reports/revenue-compare`), same data-testids → functionality identical to the tested version.
+- **Verified (preview)**: both tabs render with live data; dark dropdowns open & work; group-by switch (City→SKU) refetches + updates chart/labels; donut center total; MoM compare. Lint clean, no console errors. Screenshots captured.
+- **⚠️ Action**: redeploy to see it in production.
+
+
 ### 2026-05-29 — Bug fix: Account-detail "Invoice Summary" showed no invoices (linkage + timezone) ✅ DONE
 - **Reported (PRODUCTION)**: Account-detail "Invoice Summary (This Month)" showed "No invoices found" even though the invoices existed and appeared on the global Invoices page (e.g., accounts ITLU-HYD-A26-002, VARM-HYD-A26-001 / "Varma Steels Pvt Ltd", INV-000818).
 - **Root cause**: Invoices synced from Zoho / matched to leads did NOT carry the stable CRM `account_id`/`account_uuid` (`match_invoice_to_lead` set only `lead_uuid`/`ca_lead_id`). The account-detail query's name fallback then failed because the Zoho name format differed from the CRM account name ("Pvt Ltd" vs "Private Limited"). Secondary: the `this_month` window was computed in UTC, not the tenant timezone (IST), which hides current-month invoices near month boundaries (not the cause here, but fixed).
