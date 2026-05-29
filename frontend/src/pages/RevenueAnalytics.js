@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner';
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer,
+  CartesianGrid, Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts';
 import {
   Loader2, TrendingUp, TrendingDown, Receipt, Layers,
@@ -145,6 +145,7 @@ function BreakdownView() {
 
   const groups = data?.groups || [];
   const total = data?.total_revenue || 0;
+  const totalGross = data?.total_gross || 0;
   const dimLabel = GROUP_BY_OPTIONS.find((o) => o.value === groupBy)?.label;
   const chartData = useMemo(
     () => groups.map((g) => ({ name: g.label, revenue: g.revenue, gross: g.gross, count: g.count })),
@@ -193,7 +194,7 @@ function BreakdownView() {
       {loading ? <Spinner /> : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Net Revenue" value={formatCurrency(total)} sub={`Gross ${formatCurrency(data?.total_gross)}`} icon={IndianRupee} tone="teal" testid="ra-total-revenue" />
+            <StatCard label="Gross Revenue" value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} tone="teal" testid="ra-total-revenue" />
             <StatCard label="Invoices" value={(data?.total_invoice_count || 0).toLocaleString('en-IN')} sub="Billed in period" icon={Receipt} tone="emerald" testid="ra-total-invoices" />
             <StatCard label="Segments" value={(data?.raw_group_count || 0).toLocaleString('en-IN')} sub={`By ${dimLabel}`} icon={Layers} tone="slate" testid="ra-total-groups" />
           </div>
@@ -206,12 +207,22 @@ function BreakdownView() {
                 <Card className="p-5 lg:col-span-3" data-testid="ra-bar-chart">
                   <h3 className="mb-4 text-base font-semibold text-foreground font-heading">Revenue by {dimLabel}</h3>
                   <ResponsiveContainer width="100%" height={380}>
-                    <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 28 }}>
+                    <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 64 }} barCategoryGap="28%">
+                      <defs>
+                        <linearGradient id="raBarH" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#0f766e" />
+                          <stop offset="100%" stopColor="#2dd4bf" />
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid stroke={GRID} strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} />
                       <YAxis type="category" dataKey="name" width={140} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 12 }} interval={0} />
-                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.5 }} />
-                      <Bar dataKey="revenue" name="Net Revenue" fill={ACCENT} radius={[0, 4, 4, 0]} barSize={20} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.4 }} />
+                      <Bar dataKey="gross" name="Gross Revenue" fill="url(#raBarH)" radius={[6, 6, 6, 6]} maxBarSize={34}
+                        background={{ fill: 'hsl(var(--muted))', radius: 6, fillOpacity: 0.5 }}>
+                        <LabelList dataKey="gross" position="right" formatter={formatCurrency}
+                          style={{ fill: AXIS, fontSize: 11, fontWeight: 600 }} />
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </Card>
@@ -221,15 +232,15 @@ function BreakdownView() {
                   <div className="relative">
                     <ResponsiveContainer width="100%" height={380}>
                       <PieChart>
-                        <Pie data={chartData} dataKey="revenue" nameKey="name" cx="50%" cy="50%" innerRadius={80} outerRadius={120} paddingAngle={2} stroke="none">
+                        <Pie data={chartData} dataKey="gross" nameKey="name" cx="50%" cy="50%" innerRadius={82} outerRadius={120} paddingAngle={2} cornerRadius={5} stroke="none">
                           {chartData.map((e, i) => <Cell key={i} fill={SERIES[i % SERIES.length]} />)}
                         </Pie>
                         <Tooltip content={<ChartTooltip />} />
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-xs text-muted-foreground">Total</span>
-                      <span className="mt-0.5 text-xl font-semibold tracking-tight text-foreground font-heading">{formatCurrency(total)}</span>
+                      <span className="text-xs text-muted-foreground">Gross Total</span>
+                      <span className="mt-0.5 text-xl font-semibold tracking-tight text-foreground font-heading">{formatCurrency(totalGross)}</span>
                     </div>
                   </div>
                 </Card>
@@ -242,8 +253,8 @@ function BreakdownView() {
                       <tr className="border-b border-border text-muted-foreground">
                         <th className="px-4 py-3 text-left font-medium">#</th>
                         <th className="px-4 py-3 text-left font-medium">{dimLabel}</th>
-                        <th className="px-4 py-3 text-right font-medium">Net Revenue</th>
-                        <th className="px-4 py-3 text-right font-medium">Gross</th>
+                        <th className="px-4 py-3 text-right font-medium">Gross Revenue</th>
+                        <th className="px-4 py-3 text-right font-medium">Net</th>
                         <th className="px-4 py-3 text-right font-medium">Invoices</th>
                         <th className="px-4 py-3 text-right font-medium">Share</th>
                       </tr>
@@ -256,10 +267,10 @@ function BreakdownView() {
                             <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: SERIES[i % SERIES.length] }} />
                             {g.label}
                           </td>
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">{formatCurrency(g.revenue)}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(g.gross)}</td>
+                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-foreground">{formatCurrency(g.gross)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{formatCurrency(g.revenue)}</td>
                           <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{g.count}</td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{total ? ((g.revenue / total) * 100).toFixed(1) : '0.0'}%</td>
+                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{totalGross ? ((g.gross / totalGross) * 100).toFixed(1) : '0.0'}%</td>
                         </tr>
                       ))}
                     </tbody>
@@ -389,13 +400,23 @@ function CompareView() {
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={4}>
+                  <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={6} barCategoryGap="24%">
+                    <defs>
+                      <linearGradient id="raCmpB" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#2dd4bf" />
+                        <stop offset="100%" stopColor="#0f766e" />
+                      </linearGradient>
+                      <linearGradient id="raCmpA" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#cbd5e1" />
+                        <stop offset="100%" stopColor="#94a3b8" />
+                      </linearGradient>
+                    </defs>
                     <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} angle={-22} textAnchor="end" interval={0} height={60} tick={{ fill: AXIS, fontSize: 11 }} />
                     <YAxis tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.5 }} />
-                    <Bar dataKey="A" name={aLabel} fill="#94a3b8" radius={[3, 3, 0, 0]} barSize={16} />
-                    <Bar dataKey="B" name={bLabel} fill={ACCENT} radius={[3, 3, 0, 0]} barSize={16} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', fillOpacity: 0.4 }} />
+                    <Bar dataKey="A" name={aLabel} fill="url(#raCmpA)" radius={[6, 6, 0, 0]} maxBarSize={26} />
+                    <Bar dataKey="B" name={bLabel} fill="url(#raCmpB)" radius={[6, 6, 0, 0]} maxBarSize={26} />
                   </BarChart>
                 </ResponsiveContainer>
               </Card>

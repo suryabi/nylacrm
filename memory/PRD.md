@@ -14,7 +14,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-05-29 — Revenue Analytics: complete premium redesign (investor-grade) ✅ DONE
+### 2026-05-29 — Revenue Analytics: gross revenue + more appealing bars ✅ DONE
+- **Request**: Show GROSS revenue (instead of net) across Revenue Analytics; make the bars more appealing.
+- **Backend** (`routes/revenue_analytics.py`): `_aggregate` now sorts groups by gross; `revenue-compare` now computes a_revenue/b_revenue/delta/delta_pct and period totals from **gross** (was net). Breakdown endpoint still returns both `total_gross` + `total_revenue`(net) and per-group `gross`+`revenue`.
+- **Frontend** (`RevenueAnalytics.js`): headline metric switched to gross — KPI "Gross Revenue" (Net shown as sub), bar chart + donut ("Gross Total") + table primary column + share% all use gross; Net kept as secondary table column. Bars restyled: teal→emerald `linearGradient` fill, 6px rounded corners, subtle muted `background` track, and `LabelList` value labels on the breakdown chart; Compare chart uses gradient rounded bars (slate A / teal-emerald B), rounded `cornerRadius` donut.
+- **Verified (preview)**: gross headlined on both tabs, bars look polished in light & dark; backend tests `test_iteration_189` pass (13/1 skip); lint clean. data-testids unchanged.
+- **⚠️ Action**: redeploy.
+
+
 - **Request**: Redesign Revenue Analytics with contemporary styling + beautiful charts; seen by investors & whole company — must feel amazing. **Follow-up**: make it seamlessly match the overall app color/font theme and be minimalistic.
 - **Final design (theme-matched)**: Rebuilt `/app/frontend/src/pages/RevenueAnalytics.js` using the app's own design system — shadcn `Card`/`Tabs`/`Select`, theme tokens (`bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`, `hsl(var(--border))`, `hsl(var(--muted))`), Inter body + Plus Jakarta Sans headings (`font-heading`), and the app's emerald/teal palette (bars `#0d9488`, donut emerald/teal series, green/rose deltas). Clean white (light) / dark cards, minimal KPI cards with teal/emerald/slate icon chips, compact ₹ axis (K/L/Cr), theme-aware tooltip. Removed the earlier gold/dark-terminal styling and custom Fontshare fonts (reverted index.html).
 - **Adapts to both light & dark mode** automatically (verified in both). Same endpoints + same data-testids → functionality identical to the tested version.

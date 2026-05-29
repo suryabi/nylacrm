@@ -198,7 +198,7 @@ async def _aggregate(
                 grp["revenue"] += line_rev
                 grp["gross"] += line_rev
                 grp["count"] += 1
-        return sorted(groups.values(), key=lambda g: g["revenue"], reverse=True)
+        return sorted(groups.values(), key=lambda g: g.get("gross", 0), reverse=True)
 
     # ── Account-attribute group-bys (city / state / territory / category) ──
     # Load every account once into lookup maps, then match each invoice the
@@ -230,7 +230,7 @@ async def _aggregate(
         grp["revenue"] += net
         grp["gross"] += gross
         grp["count"] += 1
-    return sorted(groups.values(), key=lambda g: g["revenue"], reverse=True)
+    return sorted(groups.values(), key=lambda g: g.get("gross", 0), reverse=True)
 
 
 @router.get("/reports/revenue-analytics")
@@ -307,8 +307,8 @@ async def revenue_compare(
 
     def _key(label: str) -> float:
         return max(
-            (a_map.get(label) or {}).get("revenue", 0),
-            (b_map.get(label) or {}).get("revenue", 0),
+            (a_map.get(label) or {}).get("gross", 0),
+            (b_map.get(label) or {}).get("gross", 0),
         )
 
     union_labels.sort(key=_key, reverse=True)
@@ -317,8 +317,8 @@ async def revenue_compare(
     tail = union_labels[top_n:]
     rows = []
     for label in head:
-        a_rev = (a_map.get(label) or {}).get("revenue", 0.0)
-        b_rev = (b_map.get(label) or {}).get("revenue", 0.0)
+        a_rev = (a_map.get(label) or {}).get("gross", 0.0)
+        b_rev = (b_map.get(label) or {}).get("gross", 0.0)
         delta = b_rev - a_rev
         pct = ((delta / a_rev) * 100) if a_rev else (100.0 if b_rev else 0.0)
         rows.append({
@@ -329,8 +329,8 @@ async def revenue_compare(
             "delta_pct": round(pct, 1),
         })
     if tail:
-        a_rev_t = sum((a_map.get(lbl) or {}).get("revenue", 0.0) for lbl in tail)
-        b_rev_t = sum((b_map.get(lbl) or {}).get("revenue", 0.0) for lbl in tail)
+        a_rev_t = sum((a_map.get(lbl) or {}).get("gross", 0.0) for lbl in tail)
+        b_rev_t = sum((b_map.get(lbl) or {}).get("gross", 0.0) for lbl in tail)
         rows.append({
             "label": f"Others ({len(tail)})",
             "a_revenue": a_rev_t,
@@ -340,8 +340,8 @@ async def revenue_compare(
             "is_others": True,
         })
 
-    a_total = sum(g["revenue"] for g in a_groups)
-    b_total = sum(g["revenue"] for g in b_groups)
+    a_total = sum(g.get("gross", 0) for g in a_groups)
+    b_total = sum(g.get("gross", 0) for g in b_groups)
     delta_total = b_total - a_total
     return {
         "period_a": {"year": period_a_year, "month": period_a_month, "from": a_from, "to": a_to, "total": a_total},
