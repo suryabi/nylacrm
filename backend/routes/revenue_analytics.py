@@ -265,6 +265,7 @@ async def revenue_analytics(
     return {
         "from": fd,
         "to": td,
+        "time_filter": time_filter,
         "group_by": group_by,
         "groups": head,
         "raw_group_count": len(groups),

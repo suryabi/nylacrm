@@ -14,6 +14,17 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Revenue Analytics Dashboard (recharts) ✅ DONE
+- **Need**: Executives wanted a visual dashboard to slice invoice revenue by dimension and compare months.
+- **Backend** (`/app/backend/routes/revenue_analytics.py`, mounted in `routes/__init__.py` WITHOUT prefix → routes live at `/api/reports/*`):
+  - `GET /api/reports/revenue-analytics?time_filter=&group_by=&from_date=&to_date=&top_n=` — grouped revenue for one window. `group_by ∈ city | state | territory | business_category | sku`. `time_filter ∈ this_week | last_week | this_month | last_month | this_quarter | this_year | last_year | all_time | custom` (custom requires from/to → 400 otherwise). Returns `{from, to, time_filter, group_by, groups:[{label, revenue(net), gross, count}], raw_group_count, total_revenue, total_gross, total_invoice_count}`. Tail beyond `top_n` (default 15, max 200) rolls into an "Others" bucket.
+  - `GET /api/reports/revenue-compare?period_a_year=&period_a_month=&period_b_year=&period_b_month=&group_by=&top_n=` — month-over-month. Returns `{period_a, period_b, delta, delta_pct, rows:[{label, a_revenue, b_revenue, delta, delta_pct}]}`. Invalid month → 422.
+  - **Consistency**: uses `get_tenant_db()` (auto tenant-scope) + the same `_gross/_net` readers and invoice→account matching as the Account-Performance report, so `total_revenue` reconciles exactly with that report's net total (verified: ₹66,227 all-time).
+- **Frontend** (`/app/frontend/src/pages/RevenueAnalytics.js`, route `/revenue-analytics`): two tabs — **Breakdown** (group-by + time-period filters; Net Revenue / Invoices / Groups stat cards; horizontal bar chart + donut share + ranked table; default = City × This Month) and **Compare Months** (Period A vs B month/year selectors + group-by; two period totals + MoM Change card green/red; paired bar chart + delta table). Built with `recharts`.
+- **Permission gating** (per user: "controlled by Tenant settings, Role module access for each role"): new module key `report_revenue_analytics` added to `models/role.py` (`DEFAULT_MODULE_PERMISSIONS` default view:True, `MODULE_CATEGORIES['Reports']`, `MODULE_LABELS`). Sidebar entry under Dashboard → Reports submenu (`DashboardLayout.js`), route guarded by `ProtectedRoute moduleKey="report_revenue_analytics"`, tenant-level toggle added to Tenant Settings → Modules → Dashboard Reports, and a per-role checkbox auto-renders under Tenant Settings → Roles → Reports.
+- **Verified**: testing agent iteration 189 — backend 22/22 pytest pass (1 skip), frontend 100% (both tabs, dropdown refetch, custom dates, compare deltas, sidebar nav, tenant/role plumbing). Tests: `/app/backend/tests/test_iteration_189_revenue_analytics.py` (+ `_extra.py`).
+
+
 ### 2026-05-27 — Admin → Batch Genealogy ✅ DONE
 - **Need**: FSSAI traceability + product recall scenarios. Pick any production batch, see its full lineage: Origin → Factory warehouse arrivals → Distributor shipments (Stock In) → Inter-warehouse Stock Transfers → Customer Deliveries (Stock Out) → Current resting stock → Mass balance reconciliation.
 - **Backend** (`/app/backend/routes/admin_batch_genealogy.py`, mounted at `/api/admin/batches/*`):
