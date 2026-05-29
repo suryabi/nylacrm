@@ -6770,7 +6770,21 @@ async def get_account_invoices(
     # Apply time filter
     if time_filter and time_filter != 'lifetime':
         from datetime import timedelta
+        # Compute "now" in the TENANT's timezone (default Asia/Kolkata) so the
+        # window aligns with the LOCAL calendar the user sees. invoice_date is
+        # stored as a local (IST) 'YYYY-MM-DD' string; a UTC "now" can still
+        # report the PREVIOUS month until 05:30 IST, which made current-month
+        # invoices disappear from the account page near month boundaries.
         now = datetime.now(timezone.utc)
+        try:
+            from zoneinfo import ZoneInfo
+            _tenant = await db.tenants.find_one(
+                {'tenant_id': get_current_tenant_id()}, {'_id': 0, 'settings': 1}
+            )
+            _tz = ((_tenant or {}).get('settings') or {}).get('timezone') or 'Asia/Kolkata'
+            now = now.astimezone(ZoneInfo(_tz))
+        except Exception:
+            pass
         
         date_ranges = {
             'this_week': (now - timedelta(days=now.weekday()), now),
@@ -6821,7 +6835,14 @@ async def get_account_invoices(
     if total_count == 0 and time_filter == 'this_month':
         try:
             from datetime import timedelta as _td_dbg
+            from zoneinfo import ZoneInfo as _ZI_dbg
             _now_dbg = datetime.now(timezone.utc)
+            try:
+                _t_dbg = await db.tenants.find_one({'tenant_id': get_current_tenant_id()}, {'_id': 0, 'settings': 1})
+                _tz_dbg = ((_t_dbg or {}).get('settings') or {}).get('timezone') or 'Asia/Kolkata'
+                _now_dbg = _now_dbg.astimezone(_ZI_dbg(_tz_dbg))
+            except Exception:
+                pass
             _date_clause_dbg = {'$or': [
                 {'invoice_date': {'$gte': _now_dbg.replace(day=1).strftime('%Y-%m-%d'), '$lte': _now_dbg.strftime('%Y-%m-%d') + 'T23:59:59'}},
                 {'invoice_date': {'$gte': _now_dbg.replace(day=1, hour=0, minute=0, second=0, microsecond=0), '$lte': _now_dbg}},

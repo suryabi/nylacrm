@@ -14,6 +14,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-05-29 — Bug fix: Activating an account with a manually-mapped Zoho ID created a DUPLICATE Zoho customer ✅ DONE
+- **Problem (PRODUCTION)**: When an account already had a `zoho_contact_id` mapped manually (via "Link Zoho Customer"), activating it should re-sync that contact — but it created a brand-new Zoho Books customer instead.
+- **Root cause**: `services/zoho_service.py:upsert_contact()` searched Zoho only by email → then by exact contact_name. When neither matched (the mapped contact's email/name differed from the account's), `existing` stayed `None` and the function fell through to `POST /contacts` (create). It never consulted the account's already-stored `zoho_contact_id`.
+- **Fix**: Added a step-0 short-circuit at the top of `upsert_contact` — if `account.zoho_contact_id` is non-empty, set `existing = {contact_id: <mapped_id>}` and skip the email/name search entirely, so the function does a `PUT /contacts/{mapped_id}` (re-sync) and NEVER a create. Email search guarded with `and not existing`. Fix is centralized so all 3 callers (activation + 2 edit/resync paths in `routes/accounts.py`) benefit.
+- **Verified**: `/app/backend/tests/test_iteration_190_zoho_mapped_contact_resync.py` (3/3 pass, Zoho HTTP layer mocked): mapped id → single PUT, no POST, no search GET; no-mapped-id + no match → still creates (unchanged); no-mapped-id + email match → updates found contact.
+- **⚠️ Action**: this change must be REDEPLOYED to production by the user to take effect there (preview has no live Zoho OAuth connection).
+
+
 ### 2026-05-29 — Revenue Analytics Dashboard (recharts) ✅ DONE
 - **Need**: Executives wanted a visual dashboard to slice invoice revenue by dimension and compare months.
 - **Backend** (`/app/backend/routes/revenue_analytics.py`, mounted in `routes/__init__.py` WITHOUT prefix → routes live at `/api/reports/*`):

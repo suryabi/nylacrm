@@ -393,17 +393,28 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
     """Find-or-create a Zoho contact for a Nyla account. Returns the Zoho contact_id.
 
     Lookup order:
+      0) by the account's existing `zoho_contact_id` (manual mapping or prior
+         activation) — if present we UPDATE that exact contact, never create.
       1) by email (when account has one)
       2) by exact contact_name (case-insensitive on Zoho's side)
-    Falls through to create only if neither match.
+    Falls through to create only if none match.
     """
     email = (account.get("email") or "").strip()
     name = (account.get("account_name") or account.get("name") or "Unnamed Customer").strip()
 
     existing = None
 
+    # 0) If the account is ALREADY linked to a Zoho contact — either mapped
+    #    manually via the "Link Zoho Customer" action, or set on a prior
+    #    activation — re-sync THAT EXACT contact. We must never search by
+    #    email/name and risk falling through to create, which would spawn a
+    #    duplicate customer in Zoho Books.
+    mapped_id = (account.get("zoho_contact_id") or "").strip()
+    if mapped_id:
+        existing = {"contact_id": mapped_id}
+
     # 1) Try email
-    if email:
+    if email and not existing:
         try:
             search = await _zoho_request("GET", "/books/v3/contacts", tenant_id=tenant_id, params={"email": email})
             contacts = search.get("contacts", [])
