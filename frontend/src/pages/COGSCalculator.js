@@ -31,6 +31,17 @@ import {
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
+// Right-frozen result columns — kept pinned to the right edge so the key
+// outputs stay visible while the cost-input columns scroll horizontally
+// underneath. Order = left → right. Fixed widths let us compute each cell's
+// `right` offset (= total width of every frozen column to its right).
+const FROZEN_RIGHT_WIDTHS = [104, 124, 108, 104, 116, 120, 116];
+const frozenRightStyle = (idx) => {
+  const w = FROZEN_RIGHT_WIDTHS[idx];
+  const right = FROZEN_RIGHT_WIDTHS.slice(idx + 1).reduce((s, x) => s + x, 0);
+  return { width: w, minWidth: w, maxWidth: w, right };
+};
+
 export default function COGSCalculator() {
   const { user } = useAuth();
   const { cities } = useMasterLocations();
@@ -801,7 +812,7 @@ export default function COGSCalculator() {
                         />
                       </th>
                     )}
-                    <th className="text-left p-3 font-semibold sticky left-0 bg-secondary">SKU</th>
+                    <th className="text-left p-3 font-semibold sticky left-0 z-20 bg-secondary">SKU</th>
                     {orderedComponents.map((c) => {
                       const showCol = (c.unit === 'rupee' && !canSeeCostDetails) ? false : true;
                       if (!showCol) return null;
@@ -823,13 +834,13 @@ export default function COGSCalculator() {
                         </th>
                       );
                     })}
-                    <th className="text-right p-3 font-semibold bg-green-50">Total COGS (₹)</th>
-                    <th className="text-right p-3 font-semibold bg-green-50">Gross Margin (₹)</th>
-                    <th className="text-right p-3 font-semibold bg-green-50">Ex-Factory (₹)</th>
-                    <th className="text-right p-3 font-semibold bg-blue-50">Base Cost (₹)</th>
-                    <th className="text-right p-3 font-semibold bg-emerald-100">Min Landing (₹)</th>
-                    <th className="text-right p-3 font-semibold bg-purple-100">Actual Landing (₹)</th>
-                    <th className="text-left p-3 font-semibold">Last Edited</th>
+                    <th style={frozenRightStyle(0)} className="text-right px-2 py-3 font-semibold bg-green-50 sticky z-20">Total COGS (₹)</th>
+                    <th style={frozenRightStyle(1)} className="text-right px-2 py-3 font-semibold bg-green-50 sticky z-20">Gross Margin (₹)</th>
+                    <th style={frozenRightStyle(2)} className="text-right px-2 py-3 font-semibold bg-green-50 sticky z-20">Ex-Factory (₹)</th>
+                    <th style={frozenRightStyle(3)} className="text-right px-2 py-3 font-semibold bg-blue-50 sticky z-20">Base Cost (₹)</th>
+                    <th style={frozenRightStyle(4)} className="text-right px-2 py-3 font-semibold bg-emerald-100 sticky z-20">Min Landing (₹)</th>
+                    <th style={frozenRightStyle(5)} className="text-right px-2 py-3 font-semibold bg-purple-100 sticky z-20">Actual Landing (₹)</th>
+                    <th style={frozenRightStyle(6)} className="text-left px-2 py-3 font-semibold bg-secondary sticky z-20">Last Edited</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -844,7 +855,7 @@ export default function COGSCalculator() {
                           />
                         </td>
                       )}
-                      <td className="p-3 font-medium sticky left-0 bg-background">{row.sku_name}</td>
+                      <td className="p-3 font-medium sticky left-0 z-10 bg-background">{row.sku_name}</td>
                       {orderedComponents.map((c) => {
                         const showCol = (c.unit === 'rupee' && !canSeeCostDetails) ? false : true;
                         if (!showCol) return null;
@@ -887,14 +898,14 @@ export default function COGSCalculator() {
                       })}
                       {(() => { const d = computeDerived(row); return (
                         <>
-                          <td className="p-3 text-right font-bold text-primary bg-green-50">{d.totalCOGS.toFixed(2)}</td>
-                          <td className="p-3 text-right font-bold text-primary bg-green-50">{d.grossMarginRupees.toFixed(2)}</td>
-                          <td className="p-3 text-right font-bold text-primary bg-green-50">{d.exFactory.toFixed(2)}</td>
-                          <td className="p-3 text-right font-semibold text-blue-600 bg-blue-50">{d.baseCost.toFixed(2)}</td>
-                          <td className="p-3 text-right font-bold text-emerald-700 bg-emerald-100">{d.landingPrice.toFixed(2)}</td>
+                          <td style={frozenRightStyle(0)} className="px-2 py-3 text-right font-bold text-primary bg-green-50 sticky z-10">{d.totalCOGS.toFixed(2)}</td>
+                          <td style={frozenRightStyle(1)} className="px-2 py-3 text-right font-bold text-primary bg-green-50 sticky z-10">{d.grossMarginRupees.toFixed(2)}</td>
+                          <td style={frozenRightStyle(2)} className="px-2 py-3 text-right font-bold text-primary bg-green-50 sticky z-10">{d.exFactory.toFixed(2)}</td>
+                          <td style={frozenRightStyle(3)} className="px-2 py-3 text-right font-semibold text-blue-600 bg-blue-50 sticky z-10">{d.baseCost.toFixed(2)}</td>
+                          <td style={frozenRightStyle(4)} className="px-2 py-3 text-right font-bold text-emerald-700 bg-emerald-100 sticky z-10">{d.landingPrice.toFixed(2)}</td>
                         </>
                       ); })()}
-                      <td className="p-2 bg-purple-50/50">
+                      <td style={frozenRightStyle(5)} className="px-2 py-2 bg-purple-50 sticky z-10">
                         <DecimalInput
                           value={actualLandingPrices[row.id]}
                           onChange={(val) => updateActualLandingPrice(index, val)}
@@ -903,7 +914,7 @@ export default function COGSCalculator() {
                           data-testid={`actual-landing-price-${index}`}
                         />
                       </td>
-                      <td className="p-3 text-xs text-muted-foreground">
+                      <td style={frozenRightStyle(6)} className="px-2 py-3 text-xs text-muted-foreground bg-background sticky z-10 overflow-hidden text-ellipsis">
                         {row.editor_name || '-'}
                         {row.last_edited_at && (
                           <div className="text-xs">{new Date(row.last_edited_at).toLocaleDateString()}</div>

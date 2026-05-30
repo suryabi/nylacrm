@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-30 — COGS Calculator: freeze the result columns to the right ✅ DONE
+- **Request**: "since the COGS table is now wide, freeze the right-hand 'Total COGS → Min Landing' result columns" so the key outputs stay visible while scrolling the cost inputs. (Yes.)
+- **Frontend** (`pages/COGSCalculator.js`): the contiguous right block — **Total COGS, Gross Margin (₹), Ex-Factory, Base Cost, Min Landing, Actual Landing, Last Edited** — is now `position: sticky` pinned to the right edge (Excel-style freeze panes). Added `FROZEN_RIGHT_WIDTHS` + `frozenRightStyle(idx)` helper that assigns each frozen header/body cell a fixed width and a computed `right` offset (= total width of frozen columns to its right; rightmost = 0). Gave the frozen cells opaque backgrounds (kept their green/blue/emerald/purple tints; Actual Landing→`bg-purple-50`, Last Edited→`bg-background`) and z-index layering (`z-20` headers / `z-10` body). Also added `z-20`/`z-10` to the already-pinned left SKU column for consistent stacking. (Actual Landing + Last Edited are included so the frozen region stays flush to the right edge with no visual gap.)
+- **Verified (preview)**: screenshots at scrollLeft=0 and scrolled fully right (915px) — SKU stays pinned left, the result panel stays pinned right, and the cost-input columns (Primary/Cap/Manufacturing → Outbound Logistics/Distribution %/Gross Margin %) scroll through the middle window underneath. `scrollWidth 2465 / clientWidth 1550`. JS lint clean. Mobile card view untouched.
+- **⚠️ Action**: redeploy to see it in production.
+
+
 ### 2026-05-30 — COGS Calculator: no word-wrap + rows follow SKU Management order ✅ DONE
 - **Request**: "I want the view to be without any word wrap. Also, the rows should always follow the sort order of SKUs as per SKU Management." (screenshot of the COGS Calculator table where SKU names + column headers wrapped onto multiple lines and rows were in arbitrary order).
 - **Frontend** (`pages/COGSCalculator.js`): added `whitespace-nowrap` to the desktop `<table>` (line ~792). Since `white-space` is inherited, every header cell ("Manufacturing Variable Cost (₹)", "Outbound Logistics Cost (₹)", etc.) and SKU name ("Nyla – 660 ml / Sparkling") now stays on a single line; the existing `overflow-x-auto` wrapper provides horizontal scroll. Mobile card view untouched.
