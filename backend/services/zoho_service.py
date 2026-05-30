@@ -570,7 +570,32 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         contact_id = existing["contact_id"]
         try:
             await _zoho_request("PUT", f"/books/v3/contacts/{contact_id}", tenant_id=tenant_id, json=payload)
+            return contact_id
         except ZohoApiError as e:
+            # Zoho enforces a GLOBALLY-unique `contact_name` per organisation.
+            # When this already-linked contact's desired name collides with a
+            # DIFFERENT existing contact (typically a leftover duplicate created
+            # before the manual link), Zoho rejects the update with code 3062
+            # ("... already exists. Please specify a different name.").
+            # Since the account is already mapped to THIS contact_id, the right
+            # behaviour is to re-sync every other field and keep the contact's
+            # existing Zoho name — never create a new customer.
+            msg = (e.message or "")
+            is_dup_name = e.status_code == 400 and (
+                "3062" in msg or "already exists" in msg.lower()
+            )
+            if is_dup_name and "contact_name" in payload:
+                retry_payload = {k: v for k, v in payload.items() if k != "contact_name"}
+                try:
+                    await _zoho_request("PUT", f"/books/v3/contacts/{contact_id}", tenant_id=tenant_id, json=retry_payload)
+                    logger.warning(
+                        f"Zoho contact {contact_id}: name '{name}' collided with another "
+                        f"Zoho contact (code 3062). Re-synced all other fields and kept the "
+                        f"contact's existing name to avoid creating a duplicate."
+                    )
+                    return contact_id
+                except ZohoApiError:
+                    pass  # fall through to the detailed diagnostic raise below
             # Diagnostic dump — print every string field length in the payload
             # we sent to Zoho. Lets us instantly spot which sub-field tripped a
             # Zoho length validation when the error message is generic (e.g.
@@ -601,7 +626,6 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
                 f"{e.message}  ·  longest field: {longest[0]} ({longest[1]} chars)",
                 payload,
             ) from e
-        return contact_id
 
     result = await _zoho_request("POST", "/books/v3/contacts", tenant_id=tenant_id, json=payload)
     return result["contact"]["contact_id"]

@@ -15,6 +15,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-29 — Zoho resync fails with code 3062 on manually-linked account (FORGE BREU-HOUS) ✅ FIXED (needs redeploy)
+- **Symptom (production)**: Activating/re-syncing account FORGE BREU-HOUS (already manually linked to a Zoho contact) failed with `Zoho API 400 {"code":3062,"message":"The customer \"FORGE BREU-HOUS\" already exists. Please specify a different name."}`.
+- **Root cause**: The earlier short-circuit fix IS working — because the account carries a `zoho_contact_id`, `upsert_contact` correctly does `PUT /contacts/{mapped_id}` (the error's "· longest field" suffix only comes from the PUT branch). But Zoho enforces a **globally-unique `contact_name`**, and a leftover DUPLICATE contact in their Zoho already holds the name "FORGE BREU-HOUS", so the PUT (which sends `contact_name`) is rejected with 3062. It was NOT creating a new customer.
+- **Fix** (`services/zoho_service.py`, PUT branch of `upsert_contact`): on a 3062 / "already exists" error during the PUT of an already-linked contact, retry the PUT **without** `contact_name` — sync all other fields (addresses, GST, company_name, etc.) and keep the contact's existing Zoho name. Never falls through to create. Non-3062 errors still raise (with the field-length diagnostic).
+- **Tests**: `tests/test_iteration_193_zoho_dup_name_retry.py` (2 tests) — dup-name retry keeps the mapped id + drops contact_name on retry + still updates addresses; non-dup error still raises with no retry. All pass alongside iteration-190 regressions.
+- **Note for user**: a leftover duplicate "FORGE BREU-HOUS" contact almost certainly exists in their Zoho Books (the source of the name collision); resync now succeeds regardless, but they may want to delete/merge that duplicate in Zoho for cleanliness.
+- **⚠️ Action**: redeploy to fix in production.
+
+
+
 ### 2026-05-29 — Stock Out (Distributor → Customer): totals summary row ✅ DONE
 - **Request**: "include a summary row with totals" (deliveries table on the distributor detail → Stock Out section).
 - **Frontend** (`components/distributor/DeliveriesTab.jsx`): added a `<tfoot>` totals row (testid `deliveries-totals-row`) summing the visible deliveries across every numeric column — Items, Billing, Return Credit, Net Billing (customer) and Margin Amt, Billable, Net Billable (distributor). Computed via a `useMemo` (`deliveryTotals`) that mirrors the exact per-row math (qty × price × (1−disc), credit applied, commission %). Styled to match the table (emerald summary band; blue customer / purple distributor column tints; bold net values; per-cell testids `totals-*`). Label shows "Totals (this page) · N deliveries" when paginated, else "Totals · N deliveries".
