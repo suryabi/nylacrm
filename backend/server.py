@@ -2169,6 +2169,24 @@ async def delete_sku(
     
     return {'message': 'SKU deactivated successfully', 'id': sku_id}
 
+@api_router.delete("/master-skus/{sku_id}/permanent")
+async def hard_delete_sku(
+    sku_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Permanently delete an INACTIVE SKU. Restricted to CEO / Admin / System Admin."""
+    role = (current_user.get('role') or '').strip()
+    if role not in ('CEO', 'Admin', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and Admin can permanently delete SKUs')
+    existing = await db.master_skus.find_one({'id': sku_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="SKU not found")
+    if existing.get('is_active', True) is not False:
+        raise HTTPException(status_code=400, detail="Only inactive SKUs can be permanently deleted. Deactivate it first.")
+    await db.master_skus.delete_one({'id': sku_id})
+    return {'message': 'SKU permanently deleted', 'id': sku_id}
+
+
 @api_router.get("/sku-categories")
 async def get_sku_categories(current_user: dict = Depends(get_current_user)):
     """Get list of unique SKU categories"""

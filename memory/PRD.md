@@ -15,6 +15,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-30 — SKU Management: permanently delete inactive SKUs (CEO/Admin) ✅ DONE
+- **Request**: "provide an option to delete the inactive SKUs in SKU Management, CEO and admin should have access."
+- **Backend** (`server.py`): new `DELETE /api/master-skus/{sku_id}/permanent` — hard-deletes from `master_skus`, **only for inactive SKUs** (`is_active === false`; active → 400 "deactivate it first"), restricted to **CEO / Admin / System Admin** (else 403). (The existing `DELETE /master-skus/{id}` remains a soft delete/deactivate.)
+- **Frontend** (`pages/SKUManagement.js`): for inactive SKUs (shown via "Show Inactive"), CEO/Admin now see a red **Delete** button next to Reactivate (`useAuth().role` gate + `handlePermanentDelete` with a confirm warning). `skusAPI.deletePermanent` added.
+- **Verified (preview)**: curl — active SKU → 400, inactive SKU → 200 + removed, active untouched; screenshot — Delete button shows on inactive rows for CEO, not on active rows. Lint clean (py syntax + js).
+- **Note**: deleting an inactive SKU removes its external-code mapping, so any historical invoice line still using that code would become "unmapped" — re-map it via Tenant Settings → SKU Aliases if needed (the confirm dialog warns about this).
+- **⚠️ Action**: redeploy to use it in production.
+
+
+
 ### 2026-05-30 — Old vs current SKUs both appearing in reports (SKU consolidation) ✅ DONE (Part A + B, needs redeploy)
 - **Request**: SKU Management has the current SKUs, but Revenue Analytics, SKU Performance & Invoices show OLD SKUs too (e.g. same account "Cu2" shows one invoice with "Nyla – 660 ml / Silver" and another with "Nyla Air Water - 660 ml (Silver)"). Old SKUs aren't mapped to new.
 - **Root cause**: historical invoice line items carry stale denormalized `sku_name` and/or retired external codes (B500/B1000/A650). The SKU resolvers trusted the stored name **before** the external code, and had no alias map for retired codes/names → old SKUs shown verbatim as separate rows. (Production renamed master SKUs to the new format keeping the same `ext` codes B660/A660/etc.)

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { skusAPI } from '../utils/api';
+import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -41,6 +42,8 @@ const categoryColors = {
 
 export default function SKUManagement() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canHardDelete = ['CEO', 'Admin', 'System Admin'].includes(user?.role);
   const [skus, setSkus] = useState([]);
   const [categories, setCategories] = useState([]);
   const [packagingTypes, setPackagingTypes] = useState([]);
@@ -250,6 +253,21 @@ export default function SKUManagement() {
     }
   };
 
+  const handlePermanentDelete = async (sku) => {
+    if (!window.confirm(
+      `Permanently delete "${sku.sku_name || sku.sku}"?\n\nThis cannot be undone. Historical invoices are not changed, but this SKU will no longer appear in the master list or resolve old line items by its code.`
+    )) {
+      return;
+    }
+    try {
+      await skusAPI.deletePermanent(sku.id);
+      toast.success('SKU permanently deleted');
+      fetchSkus();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete SKU');
+    }
+  };
+
   // Filter SKUs
   const filteredSkus = skus.filter(sku => {
     const name = (sku.sku_name || sku.sku || '').toLowerCase();
@@ -455,16 +473,30 @@ export default function SKUManagement() {
                     </div>
                     <div className="flex items-center gap-2">
                       {sku.is_active === false ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleReactivate(sku)}
-                          className="text-green-600"
-                          data-testid={`reactivate-sku-${sku.id}`}
-                        >
-                          <Check className="h-4 w-4 mr-1" />
-                          Reactivate
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleReactivate(sku)}
+                            className="text-green-600"
+                            data-testid={`reactivate-sku-${sku.id}`}
+                          >
+                            <Check className="h-4 w-4 mr-1" />
+                            Reactivate
+                          </Button>
+                          {canHardDelete && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePermanentDelete(sku)}
+                              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                              data-testid={`permanent-delete-sku-${sku.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          )}
+                        </>
                       ) : (
                         <>
                           <Button

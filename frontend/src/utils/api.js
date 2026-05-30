@@ -126,6 +126,7 @@ export const skusAPI = {
   create: (data) => axios.post(`${API_URL}/master-skus`, data, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/master-skus/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/master-skus/${id}`, { headers: getAuthHeaders() }),
+  deletePermanent: (id) => axios.delete(`${API_URL}/master-skus/${id}/permanent`, { headers: getAuthHeaders() }),
   getCategories: () => axios.get(`${API_URL}/sku-categories`, { headers: getAuthHeaders() }),
 };
 
