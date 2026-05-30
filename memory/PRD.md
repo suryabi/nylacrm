@@ -15,6 +15,18 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-30 — System-generated invoices now ADD to the account's outstanding balance ✅ DONE (needs redeploy + one-time back-fill)
+- **Request**: "outstanding should be added up to the existing outstanding balance, if the invoices are generated from within the system (not from external source)." (Re: account showing a system invoice INV-001880 with ₹0 outstanding that didn't move the ₹7.85L balance.)
+- **Model recap**: invoices carry `source`. `external_api` (pushed by the external billing system) OVERWRITES `account.outstanding_balance` (unchanged). Company-billed invoices auto-generated from distributor deliveries carry `source: 'zoho_books'` and were historically saved with `outstanding=0` and never touched the balance.
+- **User decisions**: (1) the invoice in question = delivery-generated (Zoho); (2) per-invoice Outstanding column shows the new **running balance**; (3) **back-fill** existing ones; (4) payments/credit notes do NOT reduce it; (5) production.
+- **Going-forward fix** (`services/zoho_service.py` → `_ensure_mirror_invoice`): on the FIRST mirror of a delivery, add the invoice's net to `account.outstanding_balance` (atomic `$inc`) and stamp the invoice `outstanding` = the new running balance + `outstanding_counted: True`. Retries/re-syncs never double-count (guarded by existence check + flag). `external_api` and EBE (`external_billing`) untouched.
+- **Back-fill** (`routes/accounts.py` → `POST /accounts/maintenance/backfill-system-outstanding`, CEO/System Admin): idempotently adds each not-yet-counted `zoho_books` invoice's net to its account balance (chronological), stamps running balance, marks `outstanding_counted`. Re-runnable safely. Exposed via new **"Back-fill System Invoice Outstanding"** card in Tenant Settings → Settings (`components/OutstandingBackfillTool.jsx`).
+- **Tests/verification**: `tests/test_iteration_194_system_invoice_outstanding.py` (first mirror adds net; 3× re-sync = no double count) passes. Back-fill verified against preview via curl (counted ₹10,376, idempotent 2nd run = 0) with synthetic data cleaned up. UI button renders. Lint clean (py + js).
+- **Scope note**: covers delivery-generated `zoho_books` invoices (the confirmed case). The in-CRM manual "Create Invoice" path is NOT yet wired to increment — optional follow-up.
+- **⚠️ Action**: redeploy, then run **Tenant Settings → Settings → Run back-fill** once on production.
+
+
+
 ### 2026-05-29 — Zoho resync fails with code 3062 on manually-linked account (FORGE BREU-HOUS) ✅ FIXED (needs redeploy)
 - **Symptom (production)**: Activating/re-syncing account FORGE BREU-HOUS (already manually linked to a Zoho contact) failed with `Zoho API 400 {"code":3062,"message":"The customer \"FORGE BREU-HOUS\" already exists. Please specify a different name."}`.
 - **Root cause**: The earlier short-circuit fix IS working — because the account carries a `zoho_contact_id`, `upsert_contact` correctly does `PUT /contacts/{mapped_id}` (the error's "· longest field" suffix only comes from the PUT branch). But Zoho enforces a **globally-unique `contact_name`**, and a leftover DUPLICATE contact in their Zoho already holds the name "FORGE BREU-HOUS", so the PUT (which sends `contact_name`) is rejected with 3062. It was NOT creating a new customer.

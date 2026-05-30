@@ -913,6 +913,31 @@ async def _ensure_mirror_invoice(
     gross_total = sum(i["net_amount"] for i in items_list)
     creds = await get_credentials(tenant_id) or {}
     now = datetime.now(timezone.utc).isoformat()
+
+    # Company-billed (Zoho) invoices are generated WITHIN our system, so — unlike
+    # `external_api` invoices which OVERWRITE the running balance — their net must
+    # be ADDED to the account's existing outstanding balance. We do this exactly
+    # ONCE, on the first mirror of a delivery, so retries / re-syncs never
+    # double-count (guarded by the `outstanding_counted` flag + existence check).
+    existing_mirror = await db.invoices.find_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_delivery",
+         "source_id": delivery.get("id")},
+        {"_id": 0, "outstanding": 1, "outstanding_counted": 1},
+    )
+    if existing_mirror is None:
+        acct = await db.accounts.find_one(
+            {"tenant_id": tenant_id, "$or": [{"id": account_uuid}, {"account_id": account_uuid}]},
+            {"_id": 0, "outstanding_balance": 1},
+        )
+        prior_balance = float((acct or {}).get("outstanding_balance") or 0)
+        outstanding_value = round(prior_balance + gross_total, 2)  # new running balance
+        counted = True
+    else:
+        # Already mirrored — keep the previously-stamped running balance and never
+        # re-increment the account.
+        outstanding_value = float(existing_mirror.get("outstanding") or 0.0)
+        counted = bool(existing_mirror.get("outstanding_counted", False))
+
     invoice_doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -923,7 +948,8 @@ async def _ensure_mirror_invoice(
         "invoice_date": (delivery.get("delivery_date") or now)[:10],
         "gross_invoice_value": gross_total,
         "net_invoice_value": gross_total,
-        "outstanding": 0.0,
+        "outstanding": outstanding_value,
+        "outstanding_counted": counted,
         "items": items_list,
         "source": "zoho_books",
         "source_type": "distributor_delivery",
@@ -942,6 +968,13 @@ async def _ensure_mirror_invoice(
             {"$set": invoice_doc, "$setOnInsert": {"created_at": now}},
             upsert=True,
         )
+        if existing_mirror is None and gross_total:
+            # First mirror: add this invoice's net to the running outstanding balance.
+            await db.accounts.update_one(
+                {"tenant_id": tenant_id, "$or": [{"id": account_uuid}, {"account_id": account_uuid}]},
+                {"$inc": {"outstanding_balance": round(gross_total, 2)},
+                 "$set": {"updated_at": now}},
+            )
         logger.info(
             f"Mirrored Zoho invoice {zoho_invoice_number} into account "
             f"{account.get('account_name')} (delivery {delivery.get('delivery_number')})"

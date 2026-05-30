@@ -97,6 +97,7 @@ export const accountsAPI = {
   },
   createInvoice: (id, data) => axios.post(`${API_URL}/accounts/${id}/invoices`, data, { headers: getAuthHeaders() }),
   relinkInvoices: (dryRun = false) => axios.post(`${API_URL}/accounts/relink-invoices?dry_run=${dryRun}`, {}, { headers: getAuthHeaders() }),
+  backfillSystemOutstanding: () => axios.post(`${API_URL}/accounts/maintenance/backfill-system-outstanding`, {}, { headers: getAuthHeaders() }),
 };
 
 // Invoices API

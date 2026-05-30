@@ -928,6 +928,77 @@ async def delete_all_account_invoices(account_id: str, current_user: dict = Depe
     }
 
 
+@router.post("/maintenance/backfill-system-outstanding")
+async def backfill_system_outstanding(current_user: dict = Depends(get_current_user)):
+    """One-time, idempotent back-fill of outstanding for system-generated invoices.
+
+    System-generated (company-billed Zoho) invoices were historically saved with
+    `outstanding=0` and never added to the account's running balance. This adds
+    each such invoice's net to its account's `outstanding_balance` and stamps the
+    per-invoice running balance. External (`external_api`) and distributor EBE
+    (`external_billing`) invoices are intentionally excluded.
+
+    Safe to re-run: invoices already counted (`outstanding_counted=True`) are
+    skipped, so the balance is never double-counted. Restricted to CEO / System Admin.
+    """
+    role = (current_user.get('role') or '').strip()
+    if role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can run this back-fill')
+
+    tdb = get_tdb()
+    pending = await tdb.invoices.find(
+        {'source': 'zoho_books', 'outstanding_counted': {'$ne': True}},
+        {'_id': 0, 'id': 1, 'invoice_date': 1, 'created_at': 1,
+         'net_invoice_value': 1, 'account_id': 1, 'account_uuid': 1},
+    ).to_list(100000)
+
+    # Group by account (mirror invoices store the account UUID in `account_id`).
+    by_account: dict = {}
+    for inv in pending:
+        key = inv.get('account_uuid') or inv.get('account_id')
+        if key:
+            by_account.setdefault(key, []).append(inv)
+
+    accounts_updated = 0
+    invoices_counted = 0
+    total_added = 0.0
+    for acct_key, invs in by_account.items():
+        acct = await tdb.accounts.find_one(
+            {'$or': [{'id': acct_key}, {'account_id': acct_key}]},
+            {'_id': 0, 'id': 1, 'account_id': 1, 'outstanding_balance': 1},
+        )
+        if not acct:
+            continue
+        running = float(acct.get('outstanding_balance') or 0)
+        invs.sort(key=lambda i: (i.get('invoice_date') or i.get('created_at') or ''))
+        added_for_account = 0.0
+        for inv in invs:
+            net = float(inv.get('net_invoice_value') or 0)
+            running = round(running + net, 2)
+            added_for_account += net
+            await tdb.invoices.update_one(
+                {'id': inv.get('id')},
+                {'$set': {'outstanding': running, 'outstanding_counted': True}},
+            )
+            invoices_counted += 1
+        if added_for_account:
+            await tdb.accounts.update_one(
+                {'$or': [{'id': acct.get('id')}, {'account_id': acct.get('account_id')}]},
+                {'$set': {'outstanding_balance': round(running, 2),
+                          'updated_at': datetime.now(timezone.utc).isoformat()}},
+            )
+            accounts_updated += 1
+            total_added += added_for_account
+
+    return {
+        'ok': True,
+        'accounts_updated': accounts_updated,
+        'invoices_counted': invoices_counted,
+        'total_added': round(total_added, 2),
+    }
+
+
+
 
 
 @router.post("/{account_id}/invoices")

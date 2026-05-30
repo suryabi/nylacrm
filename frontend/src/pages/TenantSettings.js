@@ -22,6 +22,7 @@ import {
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
 import InvoiceRelinkTool from '../components/InvoiceRelinkTool';
+import OutstandingBackfillTool from '../components/OutstandingBackfillTool';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -1756,6 +1757,9 @@ export default function TenantSettings() {
         <TabsContent value="settings" className="space-y-6">
           {/* Data maintenance — relink invoices to accounts by ID */}
           <InvoiceRelinkTool />
+
+          {/* Data maintenance — back-fill outstanding for system-generated invoices */}
+          <OutstandingBackfillTool />
 
           {/* Google Workspace SSO */}
           <Card>
