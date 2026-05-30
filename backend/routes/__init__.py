@@ -205,6 +205,14 @@ routes_router.include_router(
     tags=["Admin · Migrations · SKU"],
 )
 
+# Admin → SKU Aliases (map retired SKU codes/names to current master SKUs)
+from .sku_aliases import router as sku_aliases_router
+routes_router.include_router(
+    sku_aliases_router,
+    prefix="/admin/sku-aliases",
+    tags=["Admin · SKU Aliases"],
+)
+
 # Admin → Batch Genealogy (read-only lineage for any production batch)
 from .admin_batch_genealogy import router as admin_batch_genealogy_router
 routes_router.include_router(

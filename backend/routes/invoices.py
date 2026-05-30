@@ -195,7 +195,18 @@ async def list_invoices(
                 gross = inv.get('gross_invoice_value') or inv.get('grand_total') or 0
                 credit = inv.get('credit_note_value') or 0
                 inv['net_invoice_value'] = gross - credit
-        
+
+        # Resolve each line item's SKU display name to the CURRENT master SKU
+        # (code-first + sku_aliases) so historical lines with stale names /
+        # retired codes show the current SKU everywhere.
+        from services.sku_resolver import build_sku_resolver
+        _resolver = await build_sku_resolver(tdb)
+        for inv in invoices:
+            if inv.get('items'):
+                inv['items'] = _resolver.enrich_items(inv['items'])
+            if inv.get('line_items'):
+                inv['line_items'] = _resolver.enrich_items(inv['line_items'])
+
         # Calculate summary - handle both old and new field names
         all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'grand_total': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1})
         all_invoices_for_summary = await all_invoices_cursor.to_list(10000)

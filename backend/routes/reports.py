@@ -249,6 +249,11 @@ async def get_sku_performance(
             if v:
                 ext_to_name[str(v).strip()] = name
 
+    # Shared resolver (code-first + sku_aliases) so historical line items with
+    # stale names / retired codes consolidate under the current SKU.
+    from services.sku_resolver import build_sku_resolver
+    resolver = await build_sku_resolver(get_tdb())
+
     # Get leads with interested SKUs (used as a fallback signal)
     leads_with_skus = await get_tdb().leads.find(
         {**lead_query, 'interested_skus': {'$exists': True, '$ne': []}},
@@ -275,20 +280,15 @@ async def get_sku_performance(
             return 0.0
 
     def _resolve_sku_name(item):
-        # Try enriched fields first, then external IDs
-        for k in ('sku_name', 'sku'):
-            v = item.get(k)
-            if v:
-                return v
+        # Code-first resolution + sku_aliases (shared resolver). Falls back to
+        # the legacy ext_to_name map if needed.
+        name = resolver.resolve(item)
+        if name:
+            return name
         for k in ('external_sku_id', 'external_item_id', 'itemId', 'item_id', 'sku_id'):
             v = item.get(k)
             if v and str(v).strip() in ext_to_name:
                 return ext_to_name[str(v).strip()]
-        # Fallback: surface the raw external code so admins can fix mappings
-        for k in ('external_sku_id', 'external_item_id', 'itemId', 'item_id'):
-            v = item.get(k)
-            if v:
-                return f"[Unmapped: {v}]"
         return None
 
     def _line_value(item):

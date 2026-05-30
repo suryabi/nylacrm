@@ -23,6 +23,7 @@ import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
 import InvoiceRelinkTool from '../components/InvoiceRelinkTool';
 import OutstandingBackfillTool from '../components/OutstandingBackfillTool';
+import SkuAliasTool from '../components/SkuAliasTool';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -1760,6 +1761,9 @@ export default function TenantSettings() {
 
           {/* Data maintenance — back-fill outstanding for system-generated invoices */}
           <OutstandingBackfillTool />
+
+          {/* Data maintenance — map old/retired SKU codes & names to current SKUs */}
+          <SkuAliasTool />
 
           {/* Google Workspace SSO */}
           <Card>

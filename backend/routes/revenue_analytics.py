@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from database import get_tenant_db
 from deps import get_current_user
+from services.sku_resolver import build_sku_resolver
 
 router = APIRouter()
 
@@ -142,39 +143,13 @@ async def _aggregate(
     invoices = await tdb.invoices.find(invoice_query, {"_id": 0}).to_list(20000)
 
     if group_by == "sku":
-        # Hydrate SKU display names for any line carrying a sku_id / sku_code.
-        sku_ids: set = set()
-        for inv in invoices:
-            for it in (inv.get("items") or []):
-                sid = it.get("sku_id") or it.get("sku_code") or it.get("itemId")
-                if sid:
-                    sku_ids.add(str(sid))
-        sku_name_map: dict[str, str] = {}
-        if sku_ids:
-            async for s in tdb.master_skus.find(
-                {"$or": [
-                    {"id": {"$in": list(sku_ids)}},
-                    {"sku_code": {"$in": list(sku_ids)}},
-                ]},
-                {"_id": 0, "id": 1, "sku_name": 1, "sku_code": 1},
-            ):
-                nm = s.get("sku_name") or s.get("sku_code")
-                if s.get("id"):
-                    sku_name_map[str(s["id"])] = nm
-                if s.get("sku_code"):
-                    sku_name_map[str(s["sku_code"])] = nm
-
+        # Code-first resolution + sku_aliases so historical line items with
+        # stale names / retired codes consolidate under the current SKU.
+        resolver = await build_sku_resolver(tdb)
         groups: dict[str, dict] = {}
         for inv in invoices:
             for it in (inv.get("items") or []):
-                sid = it.get("sku_id") or it.get("sku_code") or it.get("itemId")
-                sid = str(sid) if sid else None
-                label = (
-                    it.get("sku_name")
-                    or (sku_name_map.get(sid) if sid else None)
-                    or sid
-                    or "Uncategorised"
-                )
+                label = resolver.resolve(it) or "Uncategorised"
                 # Line revenue: prefer an explicit line total, else qty * rate.
                 try:
                     line_rev = it.get("net_amount")

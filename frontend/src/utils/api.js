@@ -257,3 +257,12 @@ export const meetingMinutesAPI = {
   update: (id, data) => axios.put(`${API_URL}/meeting-minutes/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/meeting-minutes/${id}`, { headers: getAuthHeaders() }),
 };
+
+
+// SKU Aliases (admin) — map retired SKU codes/names to current master SKUs
+export const skuAliasAPI = {
+  list: () => axios.get(`${API_URL}/admin/sku-aliases`, { headers: getAuthHeaders() }),
+  unmapped: () => axios.get(`${API_URL}/admin/sku-aliases/unmapped`, { headers: getAuthHeaders() }),
+  upsert: (data) => axios.post(`${API_URL}/admin/sku-aliases`, data, { headers: getAuthHeaders() }),
+  remove: (id) => axios.delete(`${API_URL}/admin/sku-aliases/${id}`, { headers: getAuthHeaders() }),
+};

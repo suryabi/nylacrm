@@ -6933,6 +6933,11 @@ async def get_account_invoices(
 
     return_pct = round((bottles_returned / bottles_delivered) * 100, 2) if bottles_delivered > 0 else 0.0
     
+    # Resolve each line item's SKU display name to the CURRENT master SKU
+    # (code-first + sku_aliases) so historic invoices show the current SKU.
+    from services.sku_resolver import build_sku_resolver
+    _sku_resolver = await build_sku_resolver(get_tdb())
+
     # Transform invoices to consistent format for frontend
     formatted_invoices = []
     for inv in invoices:
@@ -6945,7 +6950,7 @@ async def get_account_invoices(
             'credit_note': inv.get('credit_note_value', 0),
             'outstanding': inv.get('outstanding', 0),
             'status': inv.get('status', 'matched'),
-            'items': inv.get('line_items', inv.get('items', [])),
+            'items': _sku_resolver.enrich_items(inv.get('line_items', inv.get('items', []))),
             'received_at': inv.get('received_at'),
             'total_bottles': inv.get('total_bottles', 0),
             'total_cogs': inv.get('total_cogs', 0),
