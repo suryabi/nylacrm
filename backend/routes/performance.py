@@ -1569,20 +1569,30 @@ async def delete_sampling_trial(
 
 
 def _lead_estimated_monthly_revenue(lead: dict) -> float:
-    """Derive estimated monthly revenue from proposed_sku_pricing.
+    """Derive estimated monthly revenue for a lead.
 
-    Uses stored `estimated_monthly_revenue` if present; otherwise computes
-    using lead.estimation.final_monthly * pricing percentages.
+    The Opportunity Estimation flow saves the value at
+    `opportunity_estimation.estimated_monthly_revenue` (see routes/leads.py).
+    Prefer that; fall back to legacy locations, then compute from
+    proposed_sku_pricing * monthly bottles.
     """
-    stored = lead.get("estimated_monthly_revenue") or (lead.get("estimation") or {}).get("estimated_monthly_revenue")
+    opp = lead.get("opportunity_estimation") or {}
+    est = lead.get("estimation") or {}
+    stored = opp.get("estimated_monthly_revenue")
+    if stored is None:
+        stored = lead.get("estimated_monthly_revenue")
+    if stored is None:
+        stored = est.get("estimated_monthly_revenue")
     try:
         if stored is not None:
             return float(stored)
     except Exception:
         pass
     try:
-        est = lead.get("estimation") or {}
-        monthly_bottles = float(est.get("final_monthly") or est.get("calculated_monthly") or 0)
+        monthly_bottles = float(
+            opp.get("final_monthly") or opp.get("calculated_monthly")
+            or est.get("final_monthly") or est.get("calculated_monthly") or 0
+        )
         total = 0.0
         for sp in (lead.get("proposed_sku_pricing") or []):
             price = sp.get("price_per_unit")
@@ -1615,6 +1625,7 @@ async def _focus_leads_enrich(tenant_id: str, resource_ids: List[str]) -> List[d
             "estimated_value": 1,
             "estimated_monthly_revenue": 1,
             "estimation": 1,
+            "opportunity_estimation": 1,
             "proposed_sku_pricing": 1,
             "next_followup_date": 1,
         },

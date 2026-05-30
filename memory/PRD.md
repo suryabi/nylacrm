@@ -15,6 +15,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-30 — Performance Tracker → "Top Leads to Focus": Est. Monthly Revenue showed ₹0 ✅ FIXED (needs redeploy)
+- **Symptom (production)**: the "EST. MONTHLY REVENUE" column and "TOTAL EST. MONTHLY REVENUE" were ₹0 even though leads had an Opportunity Estimation.
+- **Root cause**: the Opportunity Estimation flow (`routes/leads.py`) saves the value at **`opportunity_estimation.estimated_monthly_revenue`**, but `routes/performance.py::_lead_estimated_monthly_revenue` only read top-level `estimated_monthly_revenue` / `estimation.*`, and `_focus_leads_enrich`'s projection didn't even fetch `opportunity_estimation` → it always fell through to a compute branch that yielded 0. Verified in DB: 3 leads had `opportunity_estimation.estimated_monthly_revenue` = 432768 / 250000 / 169200 while the read paths were `None`.
+- **Fix** (`routes/performance.py`): `_lead_estimated_monthly_revenue` now reads `opportunity_estimation.estimated_monthly_revenue` first (then legacy `estimated_monthly_revenue` / `estimation.*`, then computes from `proposed_sku_pricing × final_monthly`); added `opportunity_estimation` to the focus-leads projection. Backend-only; frontend already reads `estimated_monthly_revenue`.
+- **Verified**: live API now returns Patni Plaza EMR ₹250,000 (was 0); `tests/test_iteration_195_focus_leads_emr.py` (6 tests) passes. Lint clean.
+- **⚠️ Action**: redeploy to fix in production.
+
+
+
 ### 2026-05-30 — Revenue Analytics: ARR (Annual Run Rate) tile ✅ DONE
 - **Request**: "in the revenue analytics show the ARR (annual run rate) as an additional tile from the month selected."
 - **Frontend** (`pages/RevenueAnalytics.js`): added a 4th KPI tile **"Annual Run Rate"** to the Breakdown tab (magenta neon, gauge icon, testid `ra-arr`). ARR = selected-period **gross** annualized: named periods use a fixed multiplier (this/last month → ×12, week → ×52, quarter → ×4, year → ×1); custom / all-time annualize from the resolved window's day count (`365/days`, using the endpoint's `from`/`to`). Sub-label states the basis, e.g. "This Month gross × 12". KPI grid → `lg:grid-cols-4`.
