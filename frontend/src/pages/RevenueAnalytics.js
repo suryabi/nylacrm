@@ -264,6 +264,48 @@ function BreakdownView() {
             <Empty testid="ra-empty">No revenue recorded for the selected period.</Empty>
           ) : (
             <>
+              <div className={`${GLASS} overflow-hidden p-0`} data-testid="ra-table">
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 bg-white/[0.03] text-[11px] uppercase tracking-wider text-slate-400">
+                        <th className="px-5 py-3.5 text-left font-semibold">#</th>
+                        <th className="px-5 py-3.5 text-left font-semibold">{dimLabel}</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">Gross Revenue</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">Net</th>
+                        <th className="px-5 py-3.5 text-right font-semibold">Invoices</th>
+                        <th className="px-5 py-3.5 text-left font-semibold">Share</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groups.map((g, i) => {
+                        const share = totalGross ? (g.gross / totalGross) * 100 : 0;
+                        return (
+                          <tr key={g.label} className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.04]">
+                            <td className="px-5 py-4 font-mono tabular-nums text-slate-500">{i + 1}</td>
+                            <td className="px-5 py-4 font-medium text-slate-100">
+                              <span className="mr-2.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: DONUT[i % DONUT.length], boxShadow: `0 0 7px ${DONUT[i % DONUT.length]}` }} />
+                              {g.label}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono font-semibold tabular-nums text-white">{formatCurrency(g.gross)}</td>
+                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-400">{formatCurrency(g.revenue)}</td>
+                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-400">{g.count}</td>
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2.5">
+                                <div className="h-1.5 w-full max-w-[90px] overflow-hidden rounded-full bg-white/10">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-[#00F0FF] to-[#B026FF] shadow-[0_0_8px_rgba(0,240,255,0.5)]" style={{ width: `${Math.max(share, 2)}%` }} />
+                                </div>
+                                <span className="w-10 text-right font-mono text-xs tabular-nums text-slate-400">{share.toFixed(1)}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
                 <div className={`${GLASS} p-6 xl:col-span-7`} data-testid="ra-bar-chart">
                   <div className="mb-5 flex items-baseline justify-between">
@@ -309,48 +351,6 @@ function BreakdownView() {
                       </span>
                     ))}
                   </div>
-                </div>
-              </div>
-
-              <div className={`${GLASS} overflow-hidden p-0`} data-testid="ra-table">
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr className="border-b border-white/10 bg-white/[0.03] text-[11px] uppercase tracking-wider text-slate-400">
-                        <th className="px-5 py-3.5 text-left font-semibold">#</th>
-                        <th className="px-5 py-3.5 text-left font-semibold">{dimLabel}</th>
-                        <th className="px-5 py-3.5 text-right font-semibold">Gross Revenue</th>
-                        <th className="px-5 py-3.5 text-right font-semibold">Net</th>
-                        <th className="px-5 py-3.5 text-right font-semibold">Invoices</th>
-                        <th className="px-5 py-3.5 text-left font-semibold">Share</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {groups.map((g, i) => {
-                        const share = totalGross ? (g.gross / totalGross) * 100 : 0;
-                        return (
-                          <tr key={g.label} className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.04]">
-                            <td className="px-5 py-4 font-mono tabular-nums text-slate-500">{i + 1}</td>
-                            <td className="px-5 py-4 font-medium text-slate-100">
-                              <span className="mr-2.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: DONUT[i % DONUT.length], boxShadow: `0 0 7px ${DONUT[i % DONUT.length]}` }} />
-                              {g.label}
-                            </td>
-                            <td className="px-5 py-4 text-right font-mono font-semibold tabular-nums text-white">{formatCurrency(g.gross)}</td>
-                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-400">{formatCurrency(g.revenue)}</td>
-                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-400">{g.count}</td>
-                            <td className="px-5 py-4">
-                              <div className="flex items-center gap-2.5">
-                                <div className="h-1.5 w-full max-w-[90px] overflow-hidden rounded-full bg-white/10">
-                                  <div className="h-full rounded-full bg-gradient-to-r from-[#00F0FF] to-[#B026FF] shadow-[0_0_8px_rgba(0,240,255,0.5)]" style={{ width: `${Math.max(share, 2)}%` }} />
-                                </div>
-                                <span className="w-10 text-right font-mono text-xs tabular-nums text-slate-400">{share.toFixed(1)}%</span>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
                 </div>
               </div>
             </>
@@ -466,27 +466,6 @@ function CompareView() {
             <Empty testid="ra-cmp-empty">No revenue found for either period.</Empty>
           ) : (
             <>
-              <div className={`${GLASS} p-6`} data-testid="ra-cmp-chart">
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-                  <SectionTitle>{aLabel} vs {bLabel} — by {dimLabel}</SectionTitle>
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: NEON.cyan, boxShadow: `0 0 7px ${NEON.cyan}` }} />{aLabel}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: NEON.purple, boxShadow: `0 0 7px ${NEON.purple}` }} />{bLabel}</span>
-                  </div>
-                </div>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={6} barCategoryGap="26%">
-                    <ChartDefs />
-                    <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} angle={-22} textAnchor="end" interval={0} height={60} tick={{ fill: '#94A3B8', fontSize: 11 }} dy={6} />
-                    <YAxis tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} dx={-6} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                    <Bar dataKey="A" name={aLabel} fill="url(#raCmpA)" filter="url(#raNeonGlow)" radius={[5, 5, 0, 0]} maxBarSize={26} />
-                    <Bar dataKey="B" name={bLabel} fill="url(#raCmpB)" filter="url(#raNeonGlow)" radius={[5, 5, 0, 0]} maxBarSize={26} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
               <div className={`${GLASS} overflow-hidden p-0`} data-testid="ra-cmp-table">
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-sm">
@@ -515,6 +494,27 @@ function CompareView() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+
+              <div className={`${GLASS} p-6`} data-testid="ra-cmp-chart">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+                  <SectionTitle>{aLabel} vs {bLabel} — by {dimLabel}</SectionTitle>
+                  <div className="flex items-center gap-4 text-xs text-slate-400">
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: NEON.cyan, boxShadow: `0 0 7px ${NEON.cyan}` }} />{aLabel}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: NEON.purple, boxShadow: `0 0 7px ${NEON.purple}` }} />{bLabel}</span>
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={6} barCategoryGap="26%">
+                    <ChartDefs />
+                    <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} angle={-22} textAnchor="end" interval={0} height={60} tick={{ fill: '#94A3B8', fontSize: 11 }} dy={6} />
+                    <YAxis tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} dx={-6} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                    <Bar dataKey="A" name={aLabel} fill="url(#raCmpA)" filter="url(#raNeonGlow)" radius={[5, 5, 0, 0]} maxBarSize={26} />
+                    <Bar dataKey="B" name={bLabel} fill="url(#raCmpB)" filter="url(#raNeonGlow)" radius={[5, 5, 0, 0]} maxBarSize={26} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             </>
           )}

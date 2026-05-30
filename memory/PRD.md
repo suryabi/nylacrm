@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-30 — Revenue Analytics: table moved above charts ✅ DONE
+- **Request**: "in revenue analytics move table to the top and charts to the bottom."
+- **Frontend** (`pages/RevenueAnalytics.js`): reordered both tabs — Breakdown is now Filter → KPIs → **ranked table** → (bar + donut charts); Compare is now Filter → KPIs → **comparison table** → grouped bar chart. Pure JSX reorder; no data/testid changes.
+- **Verified (preview)**: DOM-order checks (`table-before-charts`, `table-before-chart`) + screenshots on both tabs. Lint clean.
+- **⚠️ Action**: redeploy to see it in production.
+
+
+
 ### 2026-05-30 — Revenue Analytics headline totals changed with group-by ✅ FIXED (needs redeploy)
 - **Symptom (production)**: switching the breakdown dimension changed the headline KPIs — group_by=SKU showed Gross ₹32.96L / Net ₹32.96L / 158 invoices, while group_by=Business Category showed Gross ₹34.29L / Net ₹28.29L / 132 invoices. Totals should be identical regardless of group-by.
 - **Root cause** (`routes/revenue_analytics.py`): the headline Gross/Net/Invoice-count were summed **from the grouped breakdown**, which aggregates differently per dimension — SKU iterates invoice **line items** (count = lines, net = gross, ex-tax), while City/Category/State/Territory iterate **invoices** (count = invoices, net = gross − credit notes). So the headline moved with group_by.
