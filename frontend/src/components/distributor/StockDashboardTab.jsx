@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import {
-  RefreshCw, Package, Truck, RotateCcw, Factory, AlertTriangle,
+  RefreshCw, Package, Truck, RotateCcw, Factory,
   TrendingUp, Clock, Droplets, ChevronDown, ChevronRight, BarChart3
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -119,7 +119,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3" data-testid="stock-summary-cards">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3" data-testid="stock-summary-cards">
         <SummaryCard
           label="Stock Received"
           value={fmt(t.stock_received)}
@@ -143,12 +143,20 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           testId="total-stock-pending-out"
         />
         <SummaryCard
-          label="Customer Returns"
-          value={fmt(t.customer_returns)}
+          label="Empty Bottles"
+          value={fmt(t.empty_bottles_returned || 0)}
+          icon={<RotateCcw className="h-4 w-4" />}
+          color="emerald"
+          sub="For recycling"
+          testId="total-empty-bottles"
+        />
+        <SummaryCard
+          label="Product Returns"
+          value={fmt(t.product_returns || 0)}
           icon={<RotateCcw className="h-4 w-4" />}
           color="amber"
-          sub="Not deliverable"
-          testId="total-customer-returns"
+          sub="Damaged / expired"
+          testId="total-product-returns"
         />
         <SummaryCard
           label="Factory Returns"
@@ -233,17 +241,28 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
       <Card data-testid="bottle-tracking-card">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            Bottle Tracking (Customer Returns)
+            <RotateCcw className="h-4 w-4 text-emerald-500" />
+            Empty Bottles &amp; Returns
           </CardTitle>
-          <CardDescription>Breakdown of returned bottles by category</CardDescription>
+          <CardDescription>
+            Empty &amp; FOC bottles cycle back for recycling; damaged &amp; expired are unsellable product returned to the factory.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <BottleCard label="Empty / Reusable" value={bt.empty_reusable} color="emerald" />
-            <BottleCard label="Damaged" value={bt.damaged} color="red" />
-            <BottleCard label="Expired" value={bt.expired} color="amber" />
-            <BottleCard label="Pending Factory Return" value={bt.pending_factory_return} color="purple" highlight />
+        <CardContent className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold text-emerald-700 mb-2 uppercase tracking-wide">Empty bottles (for recycling)</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <BottleCard label="Empty / Reusable" value={bt.empty_reusable} color="emerald" />
+              <BottleCard label="FOC / Promotional" value={bt.promotional} color="emerald" />
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-amber-700 mb-2 uppercase tracking-wide">Unsellable product (return to factory)</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <BottleCard label="Damaged" value={bt.damaged} color="red" />
+              <BottleCard label="Expired" value={bt.expired} color="amber" />
+              <BottleCard label="Pending Factory Return" value={bt.pending_factory_return} color="purple" highlight />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -273,7 +292,10 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <span className="text-amber-600" title="Scheduled / on-the-way deliveries — already committed">Pending Out</span>
                   </th>
                   <th className="text-right p-3">
-                    <span className="text-amber-600">Cust. Returns</span>
+                    <span className="text-emerald-600" title="Empty / Reusable + FOC bottles returned for recycling">Empty Bottles</span>
+                  </th>
+                  <th className="text-right p-3">
+                    <span className="text-amber-600" title="Damaged + Expired — unsellable product">Product Ret.</span>
                   </th>
                   <th className="text-right p-3">
                     <span className="text-purple-600">Factory Ret.</span>
@@ -320,8 +342,11 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                         <td className={`p-3 text-right font-medium ${sku.stock_pending_out > 0 ? 'text-amber-600' : 'text-slate-300'}`} data-testid={`sku-pending-out-${sku.sku_id}`}>
                           {sku.stock_pending_out > 0 ? fmt(sku.stock_pending_out) : '-'}
                         </td>
-                        <td className={`p-3 text-right font-medium ${sku.customer_returns > 0 ? 'text-amber-600' : 'text-slate-300'}`}>
-                          {sku.customer_returns > 0 ? fmt(sku.customer_returns) : '-'}
+                        <td className={`p-3 text-right font-medium ${sku.empty_bottles_returned > 0 ? 'text-emerald-600' : 'text-slate-300'}`} data-testid={`sku-empty-bottles-${sku.sku_id}`}>
+                          {sku.empty_bottles_returned > 0 ? fmt(sku.empty_bottles_returned) : '-'}
+                        </td>
+                        <td className={`p-3 text-right font-medium ${sku.product_returns > 0 ? 'text-amber-600' : 'text-slate-300'}`} data-testid={`sku-product-returns-${sku.sku_id}`}>
+                          {sku.product_returns > 0 ? fmt(sku.product_returns) : '-'}
                         </td>
                         <td className={`p-3 text-right font-medium ${sku.factory_returns > 0 ? 'text-purple-600' : 'text-slate-300'}`}>
                           {sku.factory_returns > 0 ? fmt(sku.factory_returns) : '-'}
@@ -344,22 +369,22 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                       </tr>
                       {isExpanded && hasReturns && (
                         <tr>
-                          <td colSpan={10} className="p-0">
+                          <td colSpan={11} className="p-0">
                             <div className="bg-slate-50/80 border-b px-6 py-3">
                               <div className="grid grid-cols-2 gap-6">
                                 {/* Customer Returns Breakdown */}
                                 {sku.customer_returns > 0 && (
                                   <div className="rounded-lg border border-amber-200 overflow-hidden">
                                     <div className="bg-amber-50 px-3 py-1.5 flex items-center justify-between border-b border-amber-200">
-                                      <span className="text-[11px] font-semibold text-amber-700">Customer Returns</span>
+                                      <span className="text-[11px] font-semibold text-amber-700">Returns (by reason)</span>
                                       <span className="text-[11px] font-bold text-amber-800">{fmt(sku.customer_returns)}</span>
                                     </div>
                                     <div className="divide-y divide-slate-100">
                                       {[
                                         { label: 'Empty / Reusable', val: sku.customer_returns_breakdown.empty_reusable, dot: 'bg-emerald-500' },
+                                        { label: 'FOC / Promotional', val: sku.customer_returns_breakdown.promotional, dot: 'bg-emerald-400' },
                                         { label: 'Damaged', val: sku.customer_returns_breakdown.damaged, dot: 'bg-red-500' },
                                         { label: 'Expired', val: sku.customer_returns_breakdown.expired, dot: 'bg-amber-500' },
-                                        { label: 'Promotional', val: sku.customer_returns_breakdown.promotional, dot: 'bg-slate-400' },
                                       ].filter(r => r.val > 0).map(r => (
                                         <div key={r.label} className="flex items-center justify-between px-3 py-1.5 text-xs">
                                           <span className="flex items-center gap-1.5 text-slate-600">
@@ -406,7 +431,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                 })}
                 {skus.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <td colSpan={11} className="text-center py-8 text-muted-foreground">
                       No stock data available for this distributor
                     </td>
                   </tr>
@@ -419,7 +444,8 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <td className="p-3 text-right text-blue-700">{fmt(t.stock_received)}</td>
                     <td className="p-3 text-right text-emerald-700">{fmt(t.stock_delivered)}</td>
                     <td className="p-3 text-right text-amber-700">{fmt(t.stock_pending_out || 0)}</td>
-                    <td className="p-3 text-right text-amber-700">{fmt(t.customer_returns)}</td>
+                    <td className="p-3 text-right text-emerald-700">{fmt(t.empty_bottles_returned || 0)}</td>
+                    <td className="p-3 text-right text-amber-700">{fmt(t.product_returns || 0)}</td>
                     <td className="p-3 text-right text-purple-700">{fmt(t.factory_returns)}</td>
                     <td className="p-3 text-right text-teal-700">{fmt(t.factory_warehouse_stock)}</td>
                     <td className="p-3 text-right text-indigo-800 text-base">{fmt(t.stock_at_hand)}</td>

@@ -7771,6 +7771,8 @@ async def get_stock_dashboard(
     total_stock_pending_out = 0
     total_at_hand = 0
     total_cust_returns = 0
+    total_empty_bottles_returned = 0
+    total_product_returns = 0
     total_factory_returns = 0
 
     for sid in all_sku_ids:
@@ -7839,6 +7841,17 @@ async def get_stock_dashboard(
                 "expired": _to_crates(sid, cr_data.get('expired', 0)),
                 "promotional": _to_crates(sid, cr_data.get('promotional', 0)),
             },
+            # Grouped view: Empty/Reusable + Promotional(FOC) are empty USED bottles
+            # cycling back for recycling (a returnable asset, NOT lost product);
+            # Damaged + Expired are genuinely unsellable finished goods.
+            "empty_bottles_returned": (
+                _to_crates(sid, cr_data.get('empty_reusable', 0))
+                + _to_crates(sid, cr_data.get('promotional', 0))
+            ),
+            "product_returns": (
+                _to_crates(sid, cr_data.get('damaged', 0))
+                + _to_crates(sid, cr_data.get('expired', 0))
+            ),
             "factory_returns": qty_factory_returned,
             "factory_returns_breakdown": {
                 "empty_reusable": _to_crates(sid, fr_data.get('empty_reusable', 0)),
@@ -7863,6 +7876,8 @@ async def get_stock_dashboard(
         total_stock_pending_out += s['stock_pending_out']
         total_at_hand += s['stock_at_hand']
         total_cust_returns += s['customer_returns']
+        total_empty_bottles_returned += s['empty_bottles_returned']
+        total_product_returns += s['product_returns']
         total_factory_returns += s['factory_returns']
     
     # Aggregate bottle tracking — these are in BOTTLES (kept as-is so the
@@ -7872,6 +7887,7 @@ async def get_stock_dashboard(
     total_empty = sum(cr_data.get('empty_reusable', 0) for cr_data in cust_return_by_sku.values())
     total_damaged = sum(cr_data.get('damaged', 0) for cr_data in cust_return_by_sku.values())
     total_expired = sum(cr_data.get('expired', 0) for cr_data in cust_return_by_sku.values())
+    total_promotional = sum(cr_data.get('promotional', 0) for cr_data in cust_return_by_sku.values())
     total_pending_factory = sum(cr_data.get('pending_factory', 0) for cr_data in cust_return_by_sku.values())
     
     return {
@@ -7884,12 +7900,15 @@ async def get_stock_dashboard(
             "stock_pending_out": total_stock_pending_out,
             "stock_at_hand": total_at_hand,
             "customer_returns": total_cust_returns,
+            "empty_bottles_returned": total_empty_bottles_returned,
+            "product_returns": total_product_returns,
             "factory_returns": total_factory_returns,
             "factory_warehouse_stock": total_factory_wh_stock,
             "pct_stock_at_hand": round((total_at_hand / total_stock_in * 100), 1) if total_stock_in > 0 else 0,
         },
         "bottle_tracking": {
             "empty_reusable": total_empty,
+            "promotional": total_promotional,
             "damaged": total_damaged,
             "expired": total_expired,
             "pending_factory_return": total_pending_factory,

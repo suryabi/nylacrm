@@ -15,6 +15,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-30 — Stock Dashboard: split "Customer Returns" into Empty Bottles vs Product Returns ✅ DONE (Option A)
+- **Request**: Customer returns have 4 types (Empty/Reusable, Damaged, Expired, FOC/Promotional). Empty + FOC are empty used bottles for recycling, NOT undeliverable/damaged stock — but the dashboard lumped all 4 into one amber "Customer Returns – Not deliverable" KPI, which was confusing. User approved **Option A** (reclassify display only; group Empty + FOC together).
+- **Backend** (`routes/distributors.py` → `get_stock_dashboard`): added per-SKU + `totals` fields `empty_bottles_returned` (= empty_reusable + promotional, in crates) and `product_returns` (= damaged + expired); added `promotional` to `bottle_tracking`. `customer_returns` total kept for back-compat. No change to `stock_at_hand`, settlements, or credit math.
+- **Frontend** (`components/distributor/StockDashboardTab.jsx`): replaced the single "Customer Returns" KPI with two — **Empty Bottles** (green, "For recycling") and **Product Returns** (amber, "Damaged / expired"); regrouped the "Empty Bottles & Returns" card into *Empty bottles (Empty/Reusable + FOC)* vs *Unsellable product (Damaged/Expired) + Pending Factory Return*; split the Stock-by-SKU "Cust. Returns" column into **Empty Bottles** + **Product Ret.** (header, rows, totals, colSpans updated). Summary grid → 8 cards.
+- **Verified (preview)**: live API returns the new grouped fields and they reconcile (distributor with 20 returns → 10 empty + 10 product; another → 1 empty + 0 product); screenshot shows the split across KPIs, bottle card, and SKU table. Lint clean (py + js).
+- **Scope note**: distributor Stock Dashboard only. Account-level "Return Bottles %" not touched (optional follow-up). No real "empty bottle stock ledger" yet (that was Option B — deferred).
+- **⚠️ Action**: redeploy to see it in production.
+
+
+
 ### 2026-05-30 — System-generated invoices now ADD to the account's outstanding balance ✅ DONE (needs redeploy + one-time back-fill)
 - **Request**: "outstanding should be added up to the existing outstanding balance, if the invoices are generated from within the system (not from external source)." (Re: account showing a system invoice INV-001880 with ₹0 outstanding that didn't move the ₹7.85L balance.)
 - **Model recap**: invoices carry `source`. `external_api` (pushed by the external billing system) OVERWRITES `account.outstanding_balance` (unchanged). Company-billed invoices auto-generated from distributor deliveries carry `source: 'zoho_books'` and were historically saved with `outstanding=0` and never touched the balance.
