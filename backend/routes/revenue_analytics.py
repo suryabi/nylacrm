@@ -208,6 +208,22 @@ async def _aggregate(
     return sorted(groups.values(), key=lambda g: g.get("gross", 0), reverse=True)
 
 
+async def _window_totals(from_date: str, to_date: str) -> tuple[float, float, int]:
+    """Headline totals for a time window, computed from the INVOICES themselves
+    (not from the grouped breakdown) so Gross / Net / Invoice-count are identical
+    regardless of the `group_by` dimension. Returns (gross, net, invoice_count)."""
+    tdb = get_tdb()
+    invoices = await tdb.invoices.find(
+        {"invoice_date": {"$gte": from_date, "$lte": to_date}},
+        {"_id": 0, "gross_invoice_value": 1, "gross_amount": 1, "grand_total": 1,
+         "total_amount": 1, "net_invoice_value": 1, "net_amount": 1,
+         "credit_note_value": 1, "credit_note": 1},
+    ).to_list(20000)
+    total_gross = sum(_gross(inv) for inv in invoices)
+    total_net = sum(_net(inv) for inv in invoices)
+    return total_gross, total_net, len(invoices)
+
+
 @router.get("/reports/revenue-analytics")
 async def revenue_analytics(
     time_filter: str = "this_month",
@@ -237,6 +253,11 @@ async def revenue_analytics(
     total_revenue = sum(g["revenue"] for g in groups)
     total_gross = sum(g.get("gross", 0) for g in groups)
     total_count = sum(g["count"] for g in groups)
+    # Headline KPIs are computed from the invoices in the window — INDEPENDENT of
+    # group_by — so Gross / Net / Invoice-count never change when you switch the
+    # breakdown dimension. (group_by only re-slices the breakdown above.) The
+    # per-group sums above remain for the breakdown chart/table only.
+    headline_gross, headline_net, headline_count = await _window_totals(fd, td)
     return {
         "from": fd,
         "to": td,
@@ -244,9 +265,14 @@ async def revenue_analytics(
         "group_by": group_by,
         "groups": head,
         "raw_group_count": len(groups),
-        "total_revenue": total_revenue,
-        "total_gross": total_gross,
-        "total_invoice_count": total_count,
+        "total_revenue": headline_net,
+        "total_gross": headline_gross,
+        "total_invoice_count": headline_count,
+        # Sum of the breakdown rows (differs from the headline for SKU, which is
+        # product-line revenue ex-tax) — kept for debugging/reconciliation.
+        "breakdown_gross": total_gross,
+        "breakdown_revenue": total_revenue,
+        "breakdown_count": total_count,
     }
 
 

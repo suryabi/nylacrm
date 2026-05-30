@@ -15,6 +15,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-30 — Revenue Analytics headline totals changed with group-by ✅ FIXED (needs redeploy)
+- **Symptom (production)**: switching the breakdown dimension changed the headline KPIs — group_by=SKU showed Gross ₹32.96L / Net ₹32.96L / 158 invoices, while group_by=Business Category showed Gross ₹34.29L / Net ₹28.29L / 132 invoices. Totals should be identical regardless of group-by.
+- **Root cause** (`routes/revenue_analytics.py`): the headline Gross/Net/Invoice-count were summed **from the grouped breakdown**, which aggregates differently per dimension — SKU iterates invoice **line items** (count = lines, net = gross, ex-tax), while City/Category/State/Territory iterate **invoices** (count = invoices, net = gross − credit notes). So the headline moved with group_by.
+- **Fix**: new `_window_totals(fd, td)` computes the headline **from the invoices in the window** (gross = Σ invoice gross, net = Σ invoice net, count = #invoices), **independent of group_by**. The endpoint now returns these for `total_gross`/`total_revenue`/`total_invoice_count`; the per-group sums are kept only for the breakdown (exposed as `breakdown_*` for reconciliation).
+- **Verified (preview)**: headline identical across sku/business_category/city/state/territory (e.g. 66228/66228/5) while the SKU breakdown legitimately differs (8 line items vs 5 invoices). `tests/test_iteration_197_revenue_headline_totals.py` (2) + iteration-189 regression pass. Lint clean. Backend-only — frontend already reads these fields.
+- **Note**: the SKU breakdown rows may sum to slightly less than the headline Gross (SKU = product-line revenue ex-tax; headline = full invoice gross) — expected.
+- **⚠️ Action**: redeploy to fix in production.
+
+
+
 ### 2026-05-30 — SKU Management: permanently delete inactive SKUs (CEO/Admin) ✅ DONE
 - **Request**: "provide an option to delete the inactive SKUs in SKU Management, CEO and admin should have access."
 - **Backend** (`server.py`): new `DELETE /api/master-skus/{sku_id}/permanent` — hard-deletes from `master_skus`, **only for inactive SKUs** (`is_active === false`; active → 400 "deactivate it first"), restricted to **CEO / Admin / System Admin** (else 403). (The existing `DELETE /master-skus/{id}` remains a soft delete/deactivate.)
