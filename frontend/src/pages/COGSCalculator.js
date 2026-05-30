@@ -789,7 +789,7 @@ export default function COGSCalculator() {
 
             {/* Desktop Table View */}
             <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm whitespace-nowrap">
                 <thead className="bg-secondary">
                   <tr className="border-b">
                     {canDelete && (

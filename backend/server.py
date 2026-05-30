@@ -2287,13 +2287,21 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
     await seed_default_skus()
     master_sku_docs = await db.master_skus.find(
         {'is_active': {'$ne': False}},
-        {'_id': 0, 'id': 1, 'sku_name': 1, 'cogs_components_values': 1}
+        {'_id': 0, 'id': 1, 'sku_name': 1, 'cogs_components_values': 1, 'category': 1, 'sort_order': 1}
     ).to_list(200)
     active_id_set = {s['id'] for s in master_sku_docs}
     active_name_to_id = {s['sku_name']: s['id'] for s in master_sku_docs}
     master_name_by_id = {s['id']: s['sku_name'] for s in master_sku_docs}
     master_values_by_id = {
         s['id']: (s.get('cogs_components_values') or {}) for s in master_sku_docs
+    }
+    # Per-SKU ordering metadata so the COGS table mirrors SKU Management's
+    # display order: category (alphabetical) → sort_order (asc) → name.
+    master_meta_by_id = {
+        s['id']: {
+            'category': (s.get('category') or 'Other'),
+            'sort_order': (s.get('sort_order') if s.get('sort_order') is not None else 0),
+        } for s in master_sku_docs
     }
 
     # Resolve which keys are master-managed (so we know what to overlay)
@@ -2365,6 +2373,11 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
             data['editor_name'] = user_map.get(data['last_edited_by'], 'Unknown')
         sid = data['sku_id']
         master_vals = master_values_by_id.get(sid) or {}
+        # Defensive: legacy/corrupt rows may store `custom_components` as a list
+        # (or other non-dict). Coerce to a dict so the overlay + reads below
+        # never crash with "list indices must be integers".
+        if not isinstance(data.get('custom_components'), dict):
+            data['custom_components'] = {}
         # Overlay master-managed keys (legacy + custom contributors)
         for k, v in master_vals.items():
             if k in master_managed_keys or k not in {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}:
@@ -2404,6 +2417,19 @@ async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user
             data['minimum_landing_price'] = round(landing, 2)
         except Exception:
             pass
+
+    # Order rows to mirror SKU Management's display: category (alphabetical,
+    # case-insensitive) → sort_order (asc) → SKU name. Rows whose master SKU
+    # lacks a category fall under "Other" (same as SKU Management).
+    def _sku_sort_key(d):
+        meta = master_meta_by_id.get(d.get('sku_id')) or {}
+        cat = str(meta.get('category') or 'Other').lower()
+        try:
+            order = float(meta.get('sort_order') or 0)
+        except (TypeError, ValueError):
+            order = 0.0
+        return (cat, order, str(d.get('sku_name') or '').lower())
+    cogs_data.sort(key=_sku_sort_key)
 
     return {'cogs_data': cogs_data}
 

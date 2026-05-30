@@ -15,6 +15,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-30 — COGS Calculator: no word-wrap + rows follow SKU Management order ✅ DONE
+- **Request**: "I want the view to be without any word wrap. Also, the rows should always follow the sort order of SKUs as per SKU Management." (screenshot of the COGS Calculator table where SKU names + column headers wrapped onto multiple lines and rows were in arbitrary order).
+- **Frontend** (`pages/COGSCalculator.js`): added `whitespace-nowrap` to the desktop `<table>` (line ~792). Since `white-space` is inherited, every header cell ("Manufacturing Variable Cost (₹)", "Outbound Logistics Cost (₹)", etc.) and SKU name ("Nyla – 660 ml / Sparkling") now stays on a single line; the existing `overflow-x-auto` wrapper provides horizontal scroll. Mobile card view untouched.
+- **Backend** (`server.py` → `get_cogs_data`): the returned `cogs_data` is now sorted to mirror SKU Management's display order — **category (alphabetical, case-insensitive) → sort_order (asc) → sku_name**. Added `category` + `sort_order` to the `master_skus` projection, built `master_meta_by_id`, and `cogs_data.sort(key=_sku_sort_key)` before returning. Missing category falls under "Other" (same fallback SKU Management uses).
+- **Bonus fix** (same endpoint): coerce a row's `custom_components` to `{}` when it's stored as a non-dict (legacy list). This was crashing `GET /api/cogs/{city}` with HTTP 500 (`TypeError: list indices must be integers`) for corrupt rows — the same legacy-data class the previous session fixed for the PUT endpoint. Page now loads for those rows.
+- **Verified (preview)**: curl — COGS `/Bengaluru` order now byte-for-byte matches the SKU-Management-sorted master list (PET → 600ml Silver → 330ml Silver → 660ml Gold → 330ml Gold → 660ml Sparkling → 330ml Sparkling → 24 Brand). Screenshot — headers + SKU names on single lines, table scrolls horizontally. JS lint clean; COGS pytest 9/10 (the 1 failure is a pre-existing out-of-date landing-price assertion unrelated to this change).
+- **⚠️ Action**: redeploy to see it in production.
+
+
 ### 2026-05-30 — Revenue Analytics: table moved above charts ✅ DONE
 - **Request**: "in revenue analytics move table to the top and charts to the bottom."
 - **Frontend** (`pages/RevenueAnalytics.js`): reordered both tabs — Breakdown is now Filter → KPIs → **ranked table** → (bar + donut charts); Compare is now Filter → KPIs → **comparison table** → grouped bar chart. Pure JSX reorder; no data/testid changes.
