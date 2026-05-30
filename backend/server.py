@@ -2422,8 +2422,10 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
     # Merge custom_components dict (don't replace whole dict — patch keys)
     if 'custom_components' in update_data:
         patch = update_data.pop('custom_components') or {}
-        existing_cc = (await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0, 'custom_components': 1}) or {}).get('custom_components') or {}
-        merged = {**existing_cc, **{k: float(v) for k, v in patch.items()}}
+        existing_cc = (await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0, 'custom_components': 1}) or {}).get('custom_components')
+        if not isinstance(existing_cc, dict):
+            existing_cc = {}  # guard against legacy/corrupt non-dict values
+        merged = {**existing_cc, **{k: float(v) for k, v in patch.items() if v is not None}}
         update_data['custom_components'] = merged
 
     # Look up the cogs_data row's sku_name so we can dispatch master keys to SKU master
@@ -2455,7 +2457,9 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
         if master_patch:
             sku_doc = await db.master_skus.find_one({'sku_name': sku_name}, {'_id': 0, 'id': 1, 'cogs_components_values': 1})
             if sku_doc:
-                existing_master = sku_doc.get('cogs_components_values') or {}
+                existing_master = sku_doc.get('cogs_components_values')
+                if not isinstance(existing_master, dict):
+                    existing_master = {}  # guard against legacy/corrupt non-dict values
                 merged_master = {**existing_master, **master_patch}
                 await db.master_skus.update_one(
                     {'id': sku_doc['id']},
@@ -2476,7 +2480,9 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
             margin = update_data.get('gross_margin', existing.get('gross_margin', 0))
             logistics = update_data.get('outbound_logistics_cost', existing.get('outbound_logistics_cost', 0))
             distribution = update_data.get('distribution_cost', existing.get('distribution_cost', 0))
-            cc = update_data.get('custom_components', existing.get('custom_components', {})) or {}
+            cc = update_data.get('custom_components', existing.get('custom_components', {}))
+            if not isinstance(cc, dict):
+                cc = {}  # guard against legacy/corrupt non-dict values
 
             # Resolve master config for active components & units
             try:
@@ -10752,7 +10758,7 @@ else:
 # Regex to allow any subdomain under our known production/preview domains.
 # This covers:
 #   - https://*.emergent.host (Emergent native deployment URLs)
-#   - https://*.emergentagent.com and https://batch-genealogy-1.preview.emergentagent.com (preview URLs)
+#   - https://*.emergentagent.com and https://stock-analytics-pro-3.preview.emergentagent.com (preview URLs)
 #   - https://*.nylaairwater.earth (custom tenant domains)
 #   - https://*.briefingiq.com (external integration partner)
 cors_origin_regex = (
