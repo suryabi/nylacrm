@@ -12,7 +12,7 @@ import {
 } from 'recharts';
 import {
   Loader2, TrendingUp, TrendingDown, Receipt, Layers,
-  BarChart3, GitCompareArrows, IndianRupee,
+  BarChart3, GitCompareArrows, IndianRupee, Gauge,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -48,6 +48,22 @@ const TIME_FILTERS = [
 ];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Annual Run Rate = selected-period gross annualized to a full year.
+// Named periods use a fixed multiplier (month → ×12); custom / all-time
+// annualize from the actual number of days in the resolved window.
+const ARR_FACTORS = {
+  this_week: 52, last_week: 52, this_month: 12, last_month: 12,
+  this_quarter: 4, this_year: 1, last_year: 1,
+};
+function arrFactor(timeFilter, fromISO, toISO) {
+  if (ARR_FACTORS[timeFilter]) return ARR_FACTORS[timeFilter];
+  if (fromISO && toISO) {
+    const days = (new Date(toISO) - new Date(fromISO)) / 86400000 + 1;
+    return days > 0 ? 365 / days : 0;
+  }
+  return 0;
+}
 
 const fullINR = (n) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
 function formatCurrency(value) {
@@ -91,8 +107,9 @@ function StatCard({ label, value, sub, icon: Icon, gradient = 'cyan', testid }) 
     cyan: 'from-[#00F0FF]/20 to-[#00D2FF]/[0.04]',
     purple: 'from-[#B026FF]/20 to-[#FF00FF]/[0.04]',
     teal: 'from-[#00F0FF]/18 to-[#38BDF8]/[0.04]',
+    magenta: 'from-[#FF00FF]/20 to-[#B026FF]/[0.04]',
   };
-  const glow = { cyan: NEON.cyan, purple: NEON.purple, teal: NEON.aqua }[gradient];
+  const glow = { cyan: NEON.cyan, purple: NEON.purple, teal: NEON.aqua, magenta: NEON.magenta }[gradient];
   return (
     <div
       data-testid={testid}
@@ -188,6 +205,10 @@ function BreakdownView() {
   const total = data?.total_revenue || 0;
   const totalGross = data?.total_gross || 0;
   const dimLabel = GROUP_BY_OPTIONS.find((o) => o.value === groupBy)?.label;
+  const arr = arrFactor(timeFilter, data?.from, data?.to) * totalGross;
+  const arrSub = ARR_FACTORS[timeFilter]
+    ? `${TIME_FILTERS.find((o) => o.value === timeFilter)?.label} gross × ${ARR_FACTORS[timeFilter]}`
+    : 'Annualized from period';
   const chartData = useMemo(
     () => groups.map((g) => ({ name: g.label, revenue: g.revenue, gross: g.gross, count: g.count })),
     [groups]
@@ -232,8 +253,9 @@ function BreakdownView() {
 
       {loading ? <Spinner /> : (
         <>
-          <div className="grid grid-cols-1 gap-4 duration-500 animate-in fade-in-50 slide-in-from-bottom-2 sm:grid-cols-3 md:gap-6">
+          <div className="grid grid-cols-1 gap-4 duration-500 animate-in fade-in-50 slide-in-from-bottom-2 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
             <StatCard label="Gross Revenue" value={formatCurrency(totalGross)} sub={`Net ${formatCurrency(total)}`} icon={IndianRupee} gradient="cyan" testid="ra-total-revenue" />
+            <StatCard label="Annual Run Rate" value={formatCurrency(arr)} sub={arrSub} icon={Gauge} gradient="magenta" testid="ra-arr" />
             <StatCard label="Invoices" value={(data?.total_invoice_count || 0).toLocaleString('en-IN')} sub="Billed in period" icon={Receipt} gradient="purple" testid="ra-total-invoices" />
             <StatCard label="Segments" value={(data?.raw_group_count || 0).toLocaleString('en-IN')} sub={`By ${dimLabel}`} icon={Layers} gradient="teal" testid="ra-total-groups" />
           </div>
