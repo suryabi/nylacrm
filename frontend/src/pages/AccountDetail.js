@@ -197,6 +197,8 @@ export default function AccountDetail() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [pricingEditing, setPricingEditing] = useState(false); // inline edit of just the SKU Pricing section
+  const [savingPricing, setSavingPricing] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   const [lastMonthSummary, setLastMonthSummary] = useState(null); // for Month-over-Month delta
   const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -1009,6 +1011,7 @@ ${googleMapsLink}`;
       });
       toast.success('Account updated successfully');
       setIsEditing(false);
+      setPricingEditing(false);
       fetchAccount();
     } catch (error) {
       toast.error('Failed to update account');
@@ -1018,6 +1021,9 @@ ${googleMapsLink}`;
   };
 
   const handleAddSKU = () => {
+    // Adding a SKU implicitly opens the inline pricing editor (so the row is
+    // editable even when the user hasn't entered full account-edit mode).
+    if (!isEditing) setPricingEditing(true);
     setSkuPricing([...skuPricing, {
       sku_id: '',
       sku: '',
@@ -1027,6 +1033,31 @@ ${googleMapsLink}`;
       active_from: new Date().toISOString().slice(0, 10),
       active_to: '',
     }]);
+  };
+
+  // Save ONLY the SKU Pricing section (partial account update) — lets users
+  // add/edit pricing directly from the section without the global Edit Account
+  // flow. The backend only persists non-null fields, so other account data is
+  // untouched.
+  const handleSavePricing = async () => {
+    setSavingPricing(true);
+    try {
+      await accountsAPI.update(id, {
+        sku_pricing: skuPricing.map((r) => ({ ...r, mrp: (r.mrp === '' || r.mrp == null) ? null : r.mrp })),
+      });
+      toast.success('SKU pricing updated');
+      setPricingEditing(false);
+      fetchAccount();
+    } catch (error) {
+      toast.error('Failed to update SKU pricing');
+    } finally {
+      setSavingPricing(false);
+    }
+  };
+
+  const handleCancelPricing = () => {
+    setSkuPricing(account?.sku_pricing || []);
+    setPricingEditing(false);
   };
 
   // Resolve a pricing row's current display name from master_skus (via sku_id
@@ -1057,6 +1088,9 @@ ${googleMapsLink}`;
     return !!(ms && ms.allow_custom_mrp);
   };
   const anyRowAllowsCustomMrp = skuPricing.some(r => skuAllowsCustomMrp(r));
+  // Rows are editable when the whole account is in edit mode OR the user has
+  // opened the section-level inline pricing editor.
+  const skuEditing = isEditing || pricingEditing;
 
   const handleRemoveSKU = (index) => {
     setSkuPricing(skuPricing.filter((_, i) => i !== index));
@@ -1298,6 +1332,7 @@ ${googleMapsLink}`;
               className="flex-1 sm:flex-none h-9 sm:h-10 text-xs sm:text-sm"
               onClick={() => {
                 setIsEditing(false);
+                setPricingEditing(false);
                 setAccountName(account.account_name || '');
                 setLeadType(account.lead_type || 'B2B');
                 setBusinessCategory(account.category || account.business_category || account.lead_business_category || '');
@@ -1914,19 +1949,47 @@ ${googleMapsLink}`;
           <Card className="p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <h2 className="text-base sm:text-lg font-semibold">SKU Pricing</h2>
-              {isEditing && (
-                <Button size="sm" variant="outline" onClick={handleAddSKU} data-testid="add-sku-btn">
-                  <Plus className="h-4 w-4 mr-1" /> Add SKU
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {skuEditing && (
+                  <Button size="sm" variant="outline" onClick={handleAddSKU} data-testid="add-sku-btn">
+                    <Plus className="h-4 w-4 mr-1" /> Add SKU
+                  </Button>
+                )}
+                {/* Section-level inline edit — only when NOT in the global
+                    account edit flow (that flow has its own Save button). */}
+                {!isEditing && (
+                  pricingEditing ? (
+                    <>
+                      <Button size="sm" variant="ghost" onClick={handleCancelPricing} data-testid="cancel-pricing-btn">
+                        Cancel
+                      </Button>
+                      <Button size="sm" onClick={handleSavePricing} disabled={savingPricing} data-testid="save-pricing-btn">
+                        {savingPricing ? (
+                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving...</>
+                        ) : (
+                          <><Save className="h-4 w-4 mr-1" /> Save</>
+                        )}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => setPricingEditing(true)} data-testid="edit-pricing-btn">
+                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit Pricing
+                    </Button>
+                  )
+                )}
+              </div>
             </div>
             
             {skuPricing.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>No SKU pricing configured</p>
-                {isEditing && (
+                {skuEditing ? (
                   <Button size="sm" variant="outline" onClick={handleAddSKU} className="mt-2">
                     Add First SKU
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={handleAddSKU} className="mt-2" data-testid="add-first-sku-btn">
+                    <Plus className="h-4 w-4 mr-1" /> Add SKU
                   </Button>
                 )}
               </div>
@@ -1944,7 +2007,7 @@ ${googleMapsLink}`;
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active From</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active To</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Status</th>
-                      {isEditing && <th className="w-10"></th>}
+                      {skuEditing && <th className="w-10"></th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -1960,7 +2023,7 @@ ${googleMapsLink}`;
                       return (
                       <tr key={index} className={isExpired || isFuture ? 'opacity-70' : ''} data-testid={`sku-pricing-row-${index}`}>
                         <td className="px-3 py-2">
-                          {isEditing ? (
+                          {skuEditing ? (
                             <Select
                               value={item.sku_id || ''}
                               onValueChange={(val) => handleSKUChange(index, 'sku_id', val)}
@@ -1988,7 +2051,7 @@ ${googleMapsLink}`;
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          {isEditing ? (
+                          {skuEditing ? (
                             <Input
                               type="number"
                               value={item.price_per_unit}
@@ -2002,7 +2065,7 @@ ${googleMapsLink}`;
                         {anyRowAllowsCustomMrp && (
                           <td className="px-3 py-2">
                             {skuAllowsCustomMrp(item) ? (
-                              isEditing ? (
+                              skuEditing ? (
                                 <Input
                                   type="number"
                                   min="0"
@@ -2026,7 +2089,7 @@ ${googleMapsLink}`;
                           </td>
                         )}
                         <td className="px-3 py-2">
-                          {isEditing ? (
+                          {skuEditing ? (
                             <Input
                               type="number"
                               value={item.return_bottle_credit}
@@ -2038,7 +2101,7 @@ ${googleMapsLink}`;
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          {isEditing ? (
+                          {skuEditing ? (
                             <Input
                               type="date"
                               value={item.active_from || ''}
@@ -2051,7 +2114,7 @@ ${googleMapsLink}`;
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          {isEditing ? (
+                          {skuEditing ? (
                             <Input
                               type="date"
                               value={item.active_to || ''}
@@ -2069,7 +2132,7 @@ ${googleMapsLink}`;
                             {pill.label}
                           </span>
                         </td>
-                        {isEditing && (
+                        {skuEditing && (
                           <td className="px-3 py-2">
                             <Button
                               size="icon"
