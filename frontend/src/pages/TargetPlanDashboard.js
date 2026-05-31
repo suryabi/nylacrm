@@ -93,8 +93,8 @@ const getNameAvatar = (name) => {
   const seed = (n || '?').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
   return { initials, bgColor: TP_AVATAR_COLORS[seed % TP_AVATAR_COLORS.length] };
 };
-const TP_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'];
+const TP_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fmtPlanMonth = (dateStr) => {
   if (!dateStr) return '';
   const [y, m] = dateStr.split('-').map(Number);

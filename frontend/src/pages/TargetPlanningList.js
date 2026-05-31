@@ -118,8 +118,8 @@ const getNameAvatar = (name) => {
 // Consistent computed plan title: "<Month / YY>" (single month) or
 // "<Start Month / YY> - <End Month / YY>" (multi-month). Parsed from the
 // YYYY-MM-DD strings directly to avoid any timezone drift.
-const TP_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'];
+const TP_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fmtPlanMonth = (dateStr) => {
   if (!dateStr) return '';
   const [y, m] = dateStr.split('-').map(Number);
