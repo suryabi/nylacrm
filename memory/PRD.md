@@ -15,6 +15,18 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-31 — SKU master MRP + Account SKU-pricing blank-MRP crash fix ✅ DONE
+- **Request**: "Add MRP for SKUs under SKU Management for each SKU. If customer MRP is allowed for a SKU, it will be visible on the Account Detail page under SKU Pricing; otherwise not visible (as now). MRP editable for every SKU. Also fix: adding a SKU on the account page throws 'unable to parse the string' when MRP isn't set." User chose **(a)** SKU MRP pre-fills the account MRP as a default that's still per-account editable.
+- **New feature — master MRP per SKU**:
+  - Backend (`server.py`): added `mrp: Optional[float]` to `SKUCreate` + `SKUUpdate` and to the GET/POST/PUT `master-skus` responses. (`base_price` untouched.)
+  - SKU Management UI (`SKUManagement.js`): new "MRP (₹)" input below Base Price (editable for every SKU), wired into create/edit form-state + save payload (coerced to number or null). `data-testid="sku-mrp-input"`.
+  - Account Detail (`AccountDetail.js`): on selecting a SKU for a pricing row, the row's MRP now **pre-fills from the SKU's master MRP** when that SKU has `allow_custom_mrp` ON and a master MRP set (option a — still editable per account). The MRP column visibility rule (only shown when a row's SKU allows custom MRP) is unchanged.
+- **Bug fix — "unable to parse the string"**: a freshly-added SKU row sent `mrp: ''` (empty string), which `Optional[float]` couldn't parse → 422 on account save. Added `field_validator(mode='before')` on `AccountSKUPricing` (`routes/accounts.py`) coercing blank `mrp`→None and blank `price_per_unit`/`return_bottle_credit`→0.0. Also coerce empty MRP→null in the Account Detail save payload (defense in depth).
+- **Bonus (known dropped-field bug)**: added `lead_type` + `include_in_gop_metrics` to `AccountUpdate` so they persist on Account edit (the frontend was already sending them; they were silently dropped).
+- **Verified (preview)**: curl — SKU PUT `mrp=45.5` persists & GET returns it (base_price intact); full E2E PUT `/api/accounts/{id}` with an empty-MRP row → **HTTP 200** (was the crash); screenshots — SKU edit modal shows MRP field, and a new account SKU row auto-fills MRP=45.5. New pytest `tests/test_iteration_198_sku_mrp.py` (5 tests, all pass). Backend/JS lint clean.
+- **⚠️ Action**: redeploy to push to production.
+
+
 ### 2026-05-30 — COGS Calculator: freeze the result columns to the right ✅ DONE → ❌ REVERTED (user request)
 - **Reverted 2026-05-31**: user said "In COGS calculator do not freeze the right side columns." Removed all sticky/frozen styling from the result block (Total COGS → Min Landing, Actual Landing, Last Edited) and the helper constants; result columns now scroll naturally with the table. The SKU column stays pinned left (original behavior) and the no-word-wrap + SKU-Management ordering changes remain in place. JS lint clean; verified via screenshot (result columns scroll, not pinned).
 - ~~Request: freeze the right-hand result columns so outputs stay visible while scrolling cost inputs.~~ (superseded)

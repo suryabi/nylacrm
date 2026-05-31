@@ -5,7 +5,7 @@ Multi-tenant aware - all queries automatically filter by tenant_id
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from typing import List, Optional
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 import uuid
 import re
 import base64
@@ -74,6 +74,24 @@ class AccountSKUPricing(BaseModel):
     active_from: Optional[str] = None
     active_to: Optional[str] = None
 
+    # The Account Detail page sends '' (empty string) for an untouched MRP /
+    # numeric field when a new SKU row is added. Coerce blanks BEFORE float
+    # validation so the save never crashes with "unable to parse string as a
+    # number". MRP → None (optional), price/credit → 0.0.
+    @field_validator('mrp', mode='before')
+    @classmethod
+    def _blank_mrp_to_none(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ''):
+            return None
+        return v
+
+    @field_validator('price_per_unit', 'return_bottle_credit', mode='before')
+    @classmethod
+    def _blank_num_to_zero(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ''):
+            return 0.0
+        return v
+
 
 class DeliveryAddress(BaseModel):
     address_line1: Optional[str] = None
@@ -130,6 +148,8 @@ class AccountUpdate(BaseModel):
     account_name: Optional[str] = None
     account_type: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = None
+    include_in_gop_metrics: Optional[bool] = None
     contact_name: Optional[str] = None
     contact_number: Optional[str] = None
     gst_number: Optional[str] = None

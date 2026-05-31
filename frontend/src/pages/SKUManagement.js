@@ -67,6 +67,7 @@ export default function SKUManagement() {
     description: '',
     hsn_code: '',
     base_price: '',
+    mrp: '',
     allow_custom_mrp: false,
     is_active: true,
     sort_order: 0,
@@ -147,6 +148,7 @@ export default function SKUManagement() {
       sku_name: '', external_sku_id: '', category: '', unit: '', description: '',
       hsn_code: '',
       base_price: '',
+      mrp: '',
       allow_custom_mrp: false,
       is_active: true, sort_order: skus.length + 1,
       packaging_config: { production: [], stock_in: [], stock_out: [] },
@@ -165,6 +167,7 @@ export default function SKUManagement() {
       description: sku.description || '',
       hsn_code: sku.hsn_code || '',
       base_price: sku.base_price != null ? String(sku.base_price) : '',
+      mrp: sku.mrp != null ? String(sku.mrp) : '',
       allow_custom_mrp: !!sku.allow_custom_mrp,
       is_active: sku.is_active !== false,
       sort_order: sku.sort_order || 0,
@@ -209,6 +212,13 @@ export default function SKUManagement() {
       } else {
         const bp = parseFloat(payload.base_price);
         payload.base_price = isNaN(bp) ? null : bp;
+      }
+      // Coerce mrp → number (or null to clear it)
+      if (payload.mrp === '' || payload.mrp === null || payload.mrp === undefined) {
+        payload.mrp = null;
+      } else {
+        const m = parseFloat(payload.mrp);
+        payload.mrp = isNaN(m) ? null : m;
       }
 
       if (editingSku) {
@@ -646,6 +656,23 @@ export default function SKUManagement() {
                 onChange={(e) => setFormData({ ...formData, base_price: e.target.value })}
                 placeholder="e.g. 20.00"
                 data-testid="sku-base-price-input"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="mrp" className="flex items-center gap-2">
+                MRP (₹)
+                <span className="text-[10px] text-slate-400 font-normal">Maximum Retail Price. Pre-fills the account's MRP when "Allow custom MRP" is on for this SKU</span>
+              </Label>
+              <Input
+                id="mrp"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.mrp}
+                onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
+                placeholder="e.g. 40.00"
+                data-testid="sku-mrp-input"
               />
             </div>
 

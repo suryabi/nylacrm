@@ -1002,7 +1002,7 @@ ${googleMapsLink}`;
         contact_number: contactNumber || null,
         gst_number: gstNumber || null,
         next_follow_up: nextFollowUp || null,
-        sku_pricing: skuPricing,
+        sku_pricing: skuPricing.map((r) => ({ ...r, mrp: (r.mrp === '' || r.mrp == null) ? null : r.mrp })),
         onboarded_month: onboardedMonth ? parseInt(onboardedMonth) : null,
         onboarded_year: onboardedYear ? parseInt(onboardedYear) : null,
         include_in_gop_metrics: includeInGopMetrics,
@@ -1077,7 +1077,15 @@ ${googleMapsLink}`;
     // master name.
     if (field === 'sku_id') {
       const m = masterSkus.find(s => s.id === value);
-      if (m) updated[index].sku = m.sku_name || m.sku || '';
+      if (m) {
+        updated[index].sku = m.sku_name || m.sku || '';
+        // Pre-fill the account's MRP from the SKU's master MRP as a sensible
+        // default — the user can still override it per customer. Only when the
+        // SKU allows custom MRP and a master MRP value is set.
+        if (m.allow_custom_mrp && m.mrp != null && m.mrp !== '') {
+          updated[index].mrp = m.mrp;
+        }
+      }
     }
     setSkuPricing(updated);
   };

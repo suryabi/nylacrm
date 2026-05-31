@@ -1926,6 +1926,7 @@ class SKUCreate(BaseModel):
     description: Optional[str] = None
     hsn_code: Optional[str] = None  # 4-8 digit HSN code for GST returns + E-way Bill JSON.
     base_price: Optional[float] = None  # ₹ per bottle. Used for Stock Transfer Schedule-I invoicing & E-way Bill valuation.
+    mrp: Optional[float] = None  # ₹ Maximum Retail Price. Default MRP for the SKU; pre-fills account-level MRP when custom MRP is allowed.
     allow_custom_mrp: bool = False
     is_active: bool = True
     sort_order: int = 0
@@ -1940,6 +1941,7 @@ class SKUUpdate(BaseModel):
     description: Optional[str] = None
     hsn_code: Optional[str] = None  # set to "" to clear effectively
     base_price: Optional[float] = None  # ₹ per bottle (no margin); set to 0 to clear effectively
+    mrp: Optional[float] = None  # ₹ Maximum Retail Price (default for the SKU); set to 0 to clear effectively
     allow_custom_mrp: Optional[bool] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
@@ -2001,6 +2003,7 @@ async def get_master_skus(
             'description': sku.get('description'),
             'hsn_code': sku.get('hsn_code'),
             'base_price': sku.get('base_price'),
+            'mrp': sku.get('mrp'),
             'allow_custom_mrp': bool(sku.get('allow_custom_mrp', False)),
             'is_active': sku.get('is_active', True),
             'sort_order': sku.get('sort_order', 0),
@@ -2047,6 +2050,7 @@ async def create_sku(
         'description': sku.description,
         'hsn_code': doc.get('hsn_code'),
         'base_price': doc.get('base_price'),
+        'mrp': doc.get('mrp'),
         'allow_custom_mrp': bool(doc.get('allow_custom_mrp', False)),
         'is_active': sku.is_active,
         'sort_order': sku.sort_order,
@@ -2144,6 +2148,7 @@ async def update_sku(
         'description': updated.get('description'),
         'hsn_code': updated.get('hsn_code'),
         'base_price': updated.get('base_price'),
+        'mrp': updated.get('mrp'),
         'allow_custom_mrp': bool(updated.get('allow_custom_mrp', False)),
         'is_active': updated.get('is_active', True),
         'sort_order': updated.get('sort_order', 0),
