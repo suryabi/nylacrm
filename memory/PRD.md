@@ -15,6 +15,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-31 — Target Planning: consistent computed plan titles (initials + month period) ✅ DONE
+- **Request**: Plan names were inconsistent (everyone typed their own). Replace the displayed name with a consistent format: a 2-letter initials avatar (like the Leads list) + the month period — single month → `Month / YY` (e.g. "June / 26"); multi-month → `Start Month / YY - End Month / YY`.
+- **Decisions**: initials = **assigned user**, falling back to the **creator** when unassigned; the typed name is **hidden in all displays** (field kept in the form, value still stored); applied to **both the list tiles and the plan detail header** (+ breadcrumb).
+- **Frontend** (`pages/TargetPlanningList.js`, `pages/TargetPlanDashboard.js`): added shared helpers `getNameAvatar` (color-hashed initials, Leads-list style), `fmtPlanMonth`/`getPlanPeriodLabel` (parses YYYY-MM-DD directly to avoid TZ drift), `getPlanOwnerName`. Card title and detail `<h1>` now render the initials avatar + computed period label (testids `plan-title-{id}`, `plan-detail-title`, `plan-owner-avatar`).
+- **Backend** (`routes/target_planning.py`): added `_backfill_owner_names()` — lazily resolves & persists missing `created_by_name`/`assigned_to_name` from the users collection (batched) in the list + dashboard endpoints, so legacy plans show real initials instead of "?".
+- **Verified (preview)**: screenshots — list shows "SY · April / 26" and "SA · January / 26 - December / 26"; detail header shows "SA · March / 26 - August / 26"; backfill cleared all missing names (0 remaining). 9/9 pytest pass, Py + JS lint clean. Redeploy to push to production.
+
+
+
 ### 2026-05-31 — Target Planning: assign plan to a user + group by assigned user ✅ DONE
 - **Request**: Add an option to assign a target plan to a specific user, and group the dashboard tiles by the **assigned** user (instead of the creator).
 - **Backend** (`routes/target_planning.py`): added `assigned_to` to `TargetPlanCreateV2` + `TargetPlanUpdateV2`; new `_resolve_user_name()` looks up the tenant user and stores a denormalized `assigned_to_name`. Create resolves & stores `assigned_to`/`assigned_to_name`; PUT re-resolves whenever `assigned_to` changes (empty string `""` clears the assignment → both null).

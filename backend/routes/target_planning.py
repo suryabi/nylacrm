@@ -30,6 +30,34 @@ async def _resolve_user_name(user_id):
     return None
 
 
+async def _backfill_owner_names(plans):
+    """Fill missing created_by_name / assigned_to_name for legacy plans from the
+    users collection (one batch) and persist them back, so the UI can render
+    consistent initials and group-by-assignee reliably."""
+    missing_ids = set()
+    for p in plans:
+        if p.get('created_by') and not p.get('created_by_name'):
+            missing_ids.add(p['created_by'])
+        if p.get('assigned_to') and not p.get('assigned_to_name'):
+            missing_ids.add(p['assigned_to'])
+    if not missing_ids:
+        return
+    users = await get_tenant_db().users.find(
+        {'id': {'$in': list(missing_ids)}}, {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+    ).to_list(1000)
+    name_map = {u['id']: (u.get('name') or u.get('email')) for u in users}
+    for p in plans:
+        update = {}
+        if p.get('created_by') and not p.get('created_by_name') and name_map.get(p['created_by']):
+            p['created_by_name'] = name_map[p['created_by']]
+            update['created_by_name'] = p['created_by_name']
+        if p.get('assigned_to') and not p.get('assigned_to_name') and name_map.get(p['assigned_to']):
+            p['assigned_to_name'] = name_map[p['assigned_to']]
+            update['assigned_to_name'] = p['assigned_to_name']
+        if update:
+            await db.target_plans_v2.update_one({'id': p['id']}, {'$set': update})
+
+
 # ============= Pydantic Models =============
 
 class TargetPlanCreateV2(BaseModel):
@@ -152,6 +180,9 @@ async def get_target_planning_list(
         query['status'] = status
 
     plans = await db.target_plans_v2.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+
+    # Backfill denormalized owner names for legacy plans (consistent UI titles)
+    await _backfill_owner_names(plans)
 
     for plan in plans:
         start = datetime.fromisoformat(plan['start_date'])
@@ -566,6 +597,9 @@ async def get_target_planning_dashboard(
     plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
     if not plan:
         raise HTTPException(status_code=404, detail="Target plan not found")
+
+    # Backfill owner names so the detail header renders consistent initials
+    await _backfill_owner_names([plan])
 
     start_date = datetime.fromisoformat(plan['start_date'])
     end_date = datetime.fromisoformat(plan['end_date'])

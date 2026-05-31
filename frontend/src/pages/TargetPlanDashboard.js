@@ -78,6 +78,39 @@ const formatCurrency = (amount, short = false) => {
   return `₹${amount.toLocaleString('en-IN')}`;
 };
 
+// ---- Consistent computed plan title (initials avatar + month period) ----
+const TP_AVATAR_COLORS = [
+  'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500',
+  'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-red-500',
+  'bg-cyan-500', 'bg-amber-500', 'bg-emerald-500', 'bg-violet-500'
+];
+const getNameAvatar = (name) => {
+  const n = (name || '').trim();
+  const parts = n.split(/\s+/).filter(Boolean);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (n.slice(0, 2).toUpperCase() || '?');
+  const seed = (n || '?').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return { initials, bgColor: TP_AVATAR_COLORS[seed % TP_AVATAR_COLORS.length] };
+};
+const TP_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+const fmtPlanMonth = (dateStr) => {
+  if (!dateStr) return '';
+  const [y, m] = dateStr.split('-').map(Number);
+  return `${TP_MONTHS[(m || 1) - 1]} / ${String(y).slice(-2)}`;
+};
+const getPlanPeriodLabel = (plan) => {
+  if (!plan?.start_date || !plan?.end_date) return plan?.name || 'Target Plan';
+  const [sy, sm] = plan.start_date.split('-').map(Number);
+  const [ey, em] = plan.end_date.split('-').map(Number);
+  const single = sy === ey && sm === em;
+  return single
+    ? fmtPlanMonth(plan.start_date)
+    : `${fmtPlanMonth(plan.start_date)} - ${fmtPlanMonth(plan.end_date)}`;
+};
+const getPlanOwnerName = (plan) => plan?.assigned_to_name || plan?.created_by_name || '';
+
 // Rank colors for leaderboard
 const getRankStyle = (rank) => {
   if (rank === 1) return { 
@@ -2139,7 +2172,7 @@ export default function TargetPlanDashboard() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Breadcrumb */}
-      <AppBreadcrumb context={{ planName: plan?.name || 'Plan Dashboard' }} />
+      <AppBreadcrumb context={{ planName: plan ? getPlanPeriodLabel(plan) : 'Plan Dashboard' }} />
       
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -2149,7 +2182,20 @@ export default function TargetPlanDashboard() {
           </Button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{plan.name}</h1>
+              {(() => {
+                const owner = getPlanOwnerName(plan);
+                const av = getNameAvatar(owner);
+                return (
+                  <span
+                    className={`w-9 h-9 rounded-full ${av.bgColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}
+                    title={owner || 'Unassigned'}
+                    data-testid="plan-owner-avatar"
+                  >
+                    {av.initials}
+                  </span>
+                );
+              })()}
+              <h1 className="text-2xl font-bold" data-testid="plan-detail-title">{getPlanPeriodLabel(plan)}</h1>
               <Badge className={plan.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}>
                 {plan.status}
               </Badge>

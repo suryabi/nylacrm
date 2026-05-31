@@ -99,6 +99,44 @@ const getInitials = (name) => {
   return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 };
 
+// Color-hashed initials avatar (matches the Leads list style)
+const AVATAR_COLORS = [
+  'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500',
+  'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-red-500',
+  'bg-cyan-500', 'bg-amber-500', 'bg-emerald-500', 'bg-violet-500'
+];
+const getNameAvatar = (name) => {
+  const n = (name || '').trim();
+  const parts = n.split(/\s+/).filter(Boolean);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (n.slice(0, 2).toUpperCase() || '?');
+  const seed = (n || '?').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return { initials, bgColor: AVATAR_COLORS[seed % AVATAR_COLORS.length] };
+};
+
+// Consistent computed plan title: "<Month / YY>" (single month) or
+// "<Start Month / YY> - <End Month / YY>" (multi-month). Parsed from the
+// YYYY-MM-DD strings directly to avoid any timezone drift.
+const TP_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+const fmtPlanMonth = (dateStr) => {
+  if (!dateStr) return '';
+  const [y, m] = dateStr.split('-').map(Number);
+  return `${TP_MONTHS[(m || 1) - 1]} / ${String(y).slice(-2)}`;
+};
+const getPlanPeriodLabel = (plan) => {
+  if (!plan?.start_date || !plan?.end_date) return plan?.name || 'Target Plan';
+  const [sy, sm] = plan.start_date.split('-').map(Number);
+  const [ey, em] = plan.end_date.split('-').map(Number);
+  const single = sy === ey && sm === em;
+  return single
+    ? fmtPlanMonth(plan.start_date)
+    : `${fmtPlanMonth(plan.start_date)} - ${fmtPlanMonth(plan.end_date)}`;
+};
+// Initials owner = assigned user, falling back to the creator when unassigned
+const getPlanOwnerName = (plan) => plan?.assigned_to_name || plan?.created_by_name || '';
+
 export default function TargetPlanningList() {
   const navigate = useNavigate();
   const { planId: editParamId } = useParams();
@@ -408,7 +446,21 @@ export default function TargetPlanningList() {
                       <Badge className={getStatusBadge(plan.status)}>{plan.status}</Badge>
                       {plan.status === 'locked' && <Lock className="h-3 w-3 text-amber-600" />}
                     </div>
-                    <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">{plan.name}</h3>
+                    <h3 className="font-semibold text-lg group-hover:text-primary transition-colors flex items-center gap-2" data-testid={`plan-title-${plan.id}`}>
+                      {(() => {
+                        const owner = getPlanOwnerName(plan);
+                        const av = getNameAvatar(owner);
+                        return (
+                          <span
+                            className={`w-7 h-7 rounded-full ${av.bgColor} flex items-center justify-center text-white text-[11px] font-semibold shrink-0`}
+                            title={owner || 'Unassigned'}
+                          >
+                            {av.initials}
+                          </span>
+                        );
+                      })()}
+                      <span>{getPlanPeriodLabel(plan)}</span>
+                    </h3>
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
