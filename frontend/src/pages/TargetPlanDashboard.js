@@ -2140,12 +2140,12 @@ export default function TargetPlanDashboard() {
             </Button>
           )}
           {plan.status === 'active' && (
-            <Button variant="outline" className="border-zinc-200" onClick={() => handlePlanStatusChange('completed')}>
+            <Button variant="outline" className="border-zinc-200" onClick={() => handlePlanStatusChange('completed')} data-testid="mark-completed-btn">
               <CheckCircle className="h-4 w-4 mr-2" /> Mark Completed
             </Button>
           )}
           {(plan.status === 'active' || plan.status === 'completed') && (
-            <Button variant="outline" className="border-zinc-200 text-zinc-600" onClick={() => handlePlanStatusChange('draft')}>
+            <Button variant="outline" className="border-zinc-200 text-zinc-600" onClick={() => handlePlanStatusChange('draft')} data-testid="revert-to-draft-btn">
               Revert to Draft
             </Button>
           )}

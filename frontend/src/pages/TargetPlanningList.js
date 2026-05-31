@@ -34,7 +34,8 @@ import {
   CheckCircle2,
   Send,
   Ban,
-  Users
+  Users,
+  UserCheck
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -42,6 +43,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
+import { cn } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -121,9 +124,12 @@ const getPlanOwnerName = (plan) => plan?.assigned_to_name || plan?.created_by_na
 export default function TargetPlanningList() {
   const navigate = useNavigate();
   const { planId: editParamId } = useParams();
+  const { user } = useAuth();
   const [plans, setPlans] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [assignedToMe, setAssignedToMe] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState(null);
@@ -341,10 +347,30 @@ export default function TargetPlanningList() {
     return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
   };
 
+  // ---- Filters: status + assigned-to-me ----
+  const matchesAssignee = (p) => !assignedToMe || (!!user?.id && p.assigned_to === user.id);
+  const matchesStatus = (p) => statusFilter === 'all' || (p.status || 'draft') === statusFilter;
+
+  // Counts respect the assignee filter so the status tabs reflect the visible set
+  const assigneeBase = plans.filter(matchesAssignee);
+  const statusCount = (val) =>
+    val === 'all' ? assigneeBase.length : assigneeBase.filter((p) => (p.status || 'draft') === val).length;
+
+  const STATUS_TABS = [
+    { value: 'all', label: 'All' },
+    { value: 'active', label: 'Active' },
+    { value: 'draft', label: 'Draft' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'inactive', label: 'Inactive' },
+  ];
+
+  const filteredPlans = plans.filter((p) => matchesAssignee(p) && matchesStatus(p));
+  const clearFilters = () => { setStatusFilter('all'); setAssignedToMe(false); };
+
   // Group plans by the user they are assigned to (alphabetical; Unassigned last)
   const UNASSIGNED = 'Unassigned';
   const groupedPlans = Object.entries(
-    plans.reduce((acc, p) => {
+    filteredPlans.reduce((acc, p) => {
       const key = p.assigned_to_name || UNASSIGNED;
       (acc[key] = acc[key] || []).push(p);
       return acc;
@@ -380,6 +406,46 @@ export default function TargetPlanningList() {
         </Button>
       </div>
 
+      {/* Filter bar */}
+      {plans.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-8" data-testid="tp-filter-bar">
+          <div className="inline-flex items-center gap-1 bg-zinc-100/80 p-1 rounded-lg w-full sm:w-auto overflow-x-auto">
+            {STATUS_TABS.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => setStatusFilter(s.value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap',
+                  statusFilter === s.value
+                    ? 'bg-white text-zinc-900 shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-800'
+                )}
+                data-testid={`status-filter-${s.value}`}
+              >
+                {s.label}
+                <span className={cn('text-xs', statusFilter === s.value ? 'text-zinc-400' : 'text-zinc-400')}>
+                  {statusCount(s.value)}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <Button
+            variant="outline"
+            onClick={() => setAssignedToMe((v) => !v)}
+            className={cn(
+              'sm:ml-auto border-zinc-200 shrink-0',
+              assignedToMe && 'bg-zinc-900 text-white border-zinc-900 hover:bg-zinc-800 hover:text-white'
+            )}
+            data-testid="assigned-to-me-toggle"
+            aria-pressed={assignedToMe}
+          >
+            <UserCheck className="h-4 w-4 mr-2" /> Assigned to me
+          </Button>
+        </div>
+      )}
+
       {/* Plans Grid */}
       {plans.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 px-4 text-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50">
@@ -388,6 +454,17 @@ export default function TargetPlanningList() {
           <p className="text-sm text-zinc-500 max-w-sm mb-6">Create your first target plan to start tracking revenue goals across territories, cities, and resources.</p>
           <Button onClick={handleOpenCreateDialog} className="bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm">
             <Plus className="h-4 w-4 mr-2" /> Create Target Plan
+          </Button>
+        </div>
+      ) : groupedPlans.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 px-4 text-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50" data-testid="tp-no-matches">
+          <Target className="size-12 text-zinc-300 mb-4" />
+          <h3 className="text-lg font-medium text-zinc-900 mb-2">No plans match these filters</h3>
+          <p className="text-sm text-zinc-500 max-w-sm mb-6">
+            {assignedToMe ? 'No plans are assigned to you' : 'No plans'} with the selected status. Try changing the filters.
+          </p>
+          <Button variant="outline" onClick={clearFilters} className="border-zinc-200" data-testid="clear-filters-btn">
+            Clear filters
           </Button>
         </div>
       ) : (
