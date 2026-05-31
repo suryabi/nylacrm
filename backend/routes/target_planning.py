@@ -18,6 +18,18 @@ def get_tdb():
     return get_tenant_db()
 
 
+async def _resolve_user_name(user_id):
+    """Resolve a tenant user's display name from their id (None-safe)."""
+    if not user_id:
+        return None
+    u = await get_tenant_db().users.find_one(
+        {'id': user_id}, {'_id': 0, 'name': 1, 'email': 1}
+    )
+    if u:
+        return u.get('name') or u.get('email')
+    return None
+
+
 # ============= Pydantic Models =============
 
 class TargetPlanCreateV2(BaseModel):
@@ -28,6 +40,7 @@ class TargetPlanCreateV2(BaseModel):
     total_amount: float
     milestones: int = 4
     description: Optional[str] = None
+    assigned_to: Optional[str] = None  # user id this plan is assigned to
 
 
 class TargetPlanUpdateV2(BaseModel):
@@ -39,6 +52,7 @@ class TargetPlanUpdateV2(BaseModel):
     milestones: Optional[int] = None
     description: Optional[str] = None
     status: Optional[str] = None
+    assigned_to: Optional[str] = None  # '' clears the assignment
 
 
 class TargetAllocationCreateV2(BaseModel):
@@ -200,6 +214,8 @@ async def create_target_planning(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new target plan (v2)"""
+    assigned_to = plan.assigned_to or None
+    assigned_to_name = await _resolve_user_name(assigned_to)
     plan_data = {
         'id': str(uuid.uuid4()),
         'name': plan.name,
@@ -211,6 +227,8 @@ async def create_target_planning(
         'allocated_amount': 0,
         'description': plan.description,
         'status': 'draft',
+        'assigned_to': assigned_to,
+        'assigned_to_name': assigned_to_name,
         'created_by': current_user['id'],
         'created_by_name': current_user.get('name', current_user.get('email')),
         'created_at': datetime.now(timezone.utc).isoformat(),
@@ -370,6 +388,12 @@ async def update_target_planning(
         raise HTTPException(status_code=404, detail="Target plan not found")
 
     update_data = {k: v for k, v in plan_update.model_dump().items() if v is not None}
+    # Resolve the assignee's display name whenever assignment changes.
+    # An empty string clears the assignment.
+    if 'assigned_to' in update_data:
+        aid = update_data['assigned_to'] or None
+        update_data['assigned_to'] = aid
+        update_data['assigned_to_name'] = await _resolve_user_name(aid)
     update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
 
     await db.target_plans_v2.update_one({'id': plan_id}, {'$set': update_data})

@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-31 — Target Planning: assign plan to a user + group by assigned user ✅ DONE
+- **Request**: Add an option to assign a target plan to a specific user, and group the dashboard tiles by the **assigned** user (instead of the creator).
+- **Backend** (`routes/target_planning.py`): added `assigned_to` to `TargetPlanCreateV2` + `TargetPlanUpdateV2`; new `_resolve_user_name()` looks up the tenant user and stores a denormalized `assigned_to_name`. Create resolves & stores `assigned_to`/`assigned_to_name`; PUT re-resolves whenever `assigned_to` changes (empty string `""` clears the assignment → both null).
+- **Frontend** (`pages/TargetPlanningList.js`): added an **"Assign To"** dropdown (Unassigned + all active users from `GET /api/users?is_active=true`) to the Create/Edit Plan dialog (`plan-assignee-select`); `assigned_to` flows through the create/update payload. Grouping now keys on `assigned_to_name` (was `created_by_name`), with the **"Unassigned"** bucket sorted last. (Supersedes the earlier "group by creator" entry.)
+- **Verified (preview)**: `tests/test_iteration_201_target_assignee.py` (4 tests — create-with-assignee resolves name, reassign updates name, unassign clears, create-without is unassigned) + the iteration-200 suite all pass (9/9). Frontend E2E screenshots — Assign To dropdown lists Unassigned + 38 users; assigning a plan moved it out of "Unassigned" into the assignee's group with a "Target plan updated" toast. Test plan reset. Py+JS lint clean. Redeploy to push to production.
+
+
+
 ### 2026-05-31 — Target Planning list: group by creator + status color coding + Inactivate ✅ DONE
 - **Request**: Group target plan tiles by the user who created them; add subtle status-based color coding to the tiles (draft/active/inactive); add an "Inactivate" action.
 - **Frontend only** (`pages/TargetPlanningList.js`): (1) tiles are now grouped under a per-creator header (avatar initials + name + plan count) keyed on `created_by_name` (legacy plans without it bucket under "Unknown User"); (2) `getStatusTile()` adds a subtle left-border accent + faint tint per status — draft (slate), active (emerald), completed (blue), inactive (zinc); status badge map gained `inactive`; (3) the card dropdown gained **Inactivate** (Ban icon, on `active` plans → sets `status='inactive'`) and **Reactivate** (on `inactive` plans → `status='active'`), and `inactive` was added to the "Revert to Draft" condition. Status-change toasts now read activated/inactivated/marked completed/reverted to draft. New testids: `plan-group-{creator}`, `inactivate-plan-{id}`, `reactivate-plan-{id}`.

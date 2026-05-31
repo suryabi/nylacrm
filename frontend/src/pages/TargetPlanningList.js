@@ -103,6 +103,7 @@ export default function TargetPlanningList() {
   const navigate = useNavigate();
   const { planId: editParamId } = useParams();
   const [plans, setPlans] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -114,11 +115,13 @@ export default function TargetPlanningList() {
     goal_type: 'run_rate',  // "run_rate" or "cumulative"
     total_amount: '',
     milestones: '4',
-    description: ''
+    description: '',
+    assigned_to: ''
   });
 
   useEffect(() => {
     fetchPlans();
+    fetchUsers();
   }, []);
 
   useEffect(() => {
@@ -147,6 +150,22 @@ export default function TargetPlanningList() {
       console.error('Error fetching plans:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_URL}/users?is_active=true`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : (data.data || []);
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setUsers(list);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
     }
   };
 
@@ -180,7 +199,7 @@ export default function TargetPlanningList() {
         toast.success(isEdit ? 'Target plan updated' : 'Target plan created');
         setShowCreateDialog(false);
         setEditingPlanId(null);
-        setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '' });
+        setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '', assigned_to: '' });
         if (isEdit) {
           if (editParamId) {
             navigate('/target-planning', { replace: true });
@@ -210,14 +229,15 @@ export default function TargetPlanningList() {
       goal_type: plan.goal_type || 'run_rate',
       total_amount: plan.total_amount != null ? String(plan.total_amount) : '',
       milestones: plan.milestones != null ? String(plan.milestones) : '4',
-      description: plan.description || ''
+      description: plan.description || '',
+      assigned_to: plan.assigned_to || ''
     });
     setShowCreateDialog(true);
   };
 
   const handleOpenCreateDialog = () => {
     setEditingPlanId(null);
-    setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '' });
+    setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '', assigned_to: '' });
     setShowCreateDialog(true);
   };
 
@@ -302,14 +322,19 @@ export default function TargetPlanningList() {
     return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
   };
 
-  // Group plans by the user who created them (alphabetical by creator name)
+  // Group plans by the user they are assigned to (alphabetical; Unassigned last)
+  const UNASSIGNED = 'Unassigned';
   const groupedPlans = Object.entries(
     plans.reduce((acc, p) => {
-      const key = p.created_by_name || 'Unknown User';
+      const key = p.assigned_to_name || UNASSIGNED;
       (acc[key] = acc[key] || []).push(p);
       return acc;
     }, {})
-  ).sort((a, b) => a[0].localeCompare(b[0]));
+  ).sort((a, b) => {
+    if (a[0] === UNASSIGNED) return 1;
+    if (b[0] === UNASSIGNED) return -1;
+    return a[0].localeCompare(b[0]);
+  });
 
   if (loading) {
     return (
@@ -629,6 +654,27 @@ export default function TargetPlanningList() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">Target will be split into equal milestone periods</p>
+            </div>
+
+            <div>
+              <Label className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Assign To</Label>
+              <Select
+                value={formData.assigned_to || '__unassigned__'}
+                onValueChange={(v) => setFormData({ ...formData, assigned_to: v === '__unassigned__' ? '' : v })}
+              >
+                <SelectTrigger className="mt-1" data-testid="plan-assignee-select">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id} data-testid={`assignee-option-${u.id}`}>
+                      {u.name}{u.role ? <span className="text-muted-foreground"> · {u.role}</span> : null}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Plans are grouped by their assigned user on the dashboard</p>
             </div>
 
             <div>
