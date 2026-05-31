@@ -68,30 +68,61 @@ async def list_sku_aliases(current_user: dict = Depends(get_current_user)):
 async def list_unmapped_skus(current_user: dict = Depends(get_current_user)):
     """Scan every invoice line item and return the distinct identifiers that do
     NOT resolve to a current master SKU (after applying existing aliases),
-    grouped with usage counts + a few sample invoices."""
+    grouped with usage counts, revenue + unit impact, and a few sample
+    invoices (sorted by revenue impact, descending)."""
     _ensure_admin(current_user)
     tdb = get_tdb()
     resolver = await build_sku_resolver(tdb)
 
+    def _num(v) -> float:
+        if v is None:
+            return 0.0
+        try:
+            return float(str(v).replace('%', '').replace(',', '').strip())
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _line_value(it: dict) -> float:
+        if it.get('net_amount') is not None:
+            return _num(it.get('net_amount'))
+        if it.get('gross_amount') is not None:
+            return _num(it.get('gross_amount'))
+        qty = _num(it.get('quantity'))
+        rate = _num(it.get('rate'))
+        disc = _num(it.get('discount_percent') or it.get('discount'))
+        if disc > 100:
+            disc = disc / 100.0
+        return qty * rate * max(0.0, 1.0 - disc / 100.0)
+
     agg: dict = {}
     async for inv in tdb.invoices.find(
-        {"items.0": {"$exists": True}}, {"_id": 0, "invoice_no": 1, "invoice_number": 1, "items": 1}
+        {"$or": [{"items.0": {"$exists": True}}, {"line_items.0": {"$exists": True}}]},
+        {"_id": 0, "invoice_no": 1, "invoice_number": 1, "items": 1, "line_items": 1},
     ):
         inv_no = inv.get("invoice_no") or inv.get("invoice_number") or ""
-        for it in (inv.get("items") or []):
+        for it in (inv.get("items") or inv.get("line_items") or []):
+            if not isinstance(it, dict):
+                continue
             key = resolver.unmapped_key(it)
             if not key:
                 continue
             atype, value = key
             entry = agg.setdefault(
                 f"{atype}::{value}",
-                {"alias_value": value, "alias_type": atype, "count": 0, "sample_invoices": []},
+                {"alias_value": value, "alias_type": atype, "count": 0,
+                 "revenue": 0.0, "units": 0.0, "sample_invoices": []},
             )
             entry["count"] += 1
+            entry["revenue"] += _line_value(it)
+            entry["units"] += _num(it.get("quantity"))
             if inv_no and inv_no not in entry["sample_invoices"] and len(entry["sample_invoices"]) < 5:
                 entry["sample_invoices"].append(inv_no)
 
-    unmapped = sorted(agg.values(), key=lambda e: e["count"], reverse=True)
+    for e in agg.values():
+        e["revenue"] = round(e["revenue"], 2)
+        e["units"] = round(e["units"], 2)
+
+    unmapped = sorted(agg.values(), key=lambda e: e["revenue"], reverse=True)
     return {"unmapped": unmapped, "skus": await _current_skus(tdb)}
 
 

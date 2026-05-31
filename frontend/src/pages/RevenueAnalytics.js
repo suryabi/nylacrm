@@ -13,6 +13,7 @@ import {
 import {
   Loader2, TrendingUp, TrendingDown, Receipt, Layers,
   BarChart3, GitCompareArrows, IndianRupee, Gauge,
+  Scale, ChevronDown, AlertTriangle,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -174,6 +175,106 @@ const ChartDefs = () => (
   </defs>
 );
 
+// ─────────── Revenue Reconciliation (Gross → SKU Performance bridge) ───────────
+const RecRow = ({ label, hint, value, accent }) => (
+  <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 transition-colors hover:bg-white/[0.03]">
+    <div className="min-w-0">
+      <p className={`text-sm font-medium ${accent || 'text-slate-200'}`}>{label}</p>
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+    </div>
+    <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-slate-100">{fullINR(value)}</span>
+  </div>
+);
+
+function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
+  const [open, setOpen] = useState(true);
+  const [rec, setRec] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (timeFilter === 'custom' && (!fromDate || !toDate)) return;
+    setLoading(true);
+    try {
+      const params = { time_filter: timeFilter };
+      if (timeFilter === 'custom') { params.from_date = fromDate; params.to_date = toDate; }
+      const res = await axios.get(`${API_URL}/reports/revenue-reconciliation`, { ...authHeaders(), params });
+      setRec(res.data);
+    } catch (e) {
+      setRec(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [timeFilter, fromDate, toDate]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <div className={`${GLASS} overflow-hidden`} data-testid="ra-reconciliation">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/[0.03]"
+        data-testid="ra-reconciliation-toggle"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5">
+            <Scale className="h-[18px] w-[18px] text-[#00F0FF]" style={{ filter: 'drop-shadow(0 0 8px #00F0FF)' }} />
+          </span>
+          <div>
+            <SectionTitle>Revenue Reconciliation</SectionTitle>
+            <p className="text-xs text-slate-400">How Gross ties out to SKU Performance — every rupee accounted for</p>
+          </div>
+        </div>
+        <ChevronDown className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="border-t border-white/10 px-5 py-5">
+          {loading || !rec ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-[#00F0FF]" /></div>
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <RecRow label="Product line revenue" accent="text-[#00F0FF]"
+                  hint='Sum of SKU line items — matches the SKU Performance "Achieved" total'
+                  value={rec.product_line_revenue} />
+                <RecRow label="+ Tax & other charges"
+                  hint="GST / shipping / round-off carried on invoices (not attributable to a SKU)"
+                  value={rec.tax_and_charges} />
+                <RecRow label="+ Invoices without SKU lines"
+                  hint={`${rec.invoices_without_sku_lines_count} invoice(s) billed with no product line (e.g. External Billing Entries)`}
+                  value={rec.invoices_without_sku_lines} />
+                {Math.abs(rec.unidentified_line_revenue) >= 1 && (
+                  <RecRow label="+ Lines without a SKU identifier"
+                    hint="Line items carrying neither a SKU code nor a name"
+                    value={rec.unidentified_line_revenue} />
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-[#00F0FF]/30 bg-[#00F0FF]/[0.06] px-4 py-3">
+                <p className="text-sm font-semibold text-white">= Gross Revenue (Revenue Analytics)</p>
+                <span className="shrink-0 font-mono text-base font-bold tabular-nums text-white"
+                  style={{ textShadow: '0 0 14px rgba(0,240,255,0.5)' }} data-testid="ra-rec-gross">{fullINR(rec.gross)}</span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3 text-sm">
+                <span className="text-slate-400">Less Credit Notes&nbsp;
+                  <span className="font-mono text-slate-300">{fullINR(rec.credit_notes)}</span>
+                </span>
+                <span className="text-slate-300">Net Revenue&nbsp;
+                  <span className="ml-1 font-mono text-base font-semibold text-white">{fullINR(rec.net)}</span>
+                </span>
+              </div>
+              {rec.unmapped_line_revenue >= 1 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2.5 text-xs text-amber-200" data-testid="ra-rec-unmapped">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span>{fullINR(rec.unmapped_line_revenue)} of product revenue ({rec.unmapped_identifier_count} old/unmapped SKU{rec.unmapped_identifier_count === 1 ? '' : 's'}) is shown under retired names. Map them in <span className="font-semibold">Tenant Settings → SKU Aliases</span> for clean per-SKU reporting (this does not change the totals above).</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ───────────────────────── Breakdown ─────────────────────────
 function BreakdownView() {
   const [groupBy, setGroupBy] = useState('city');
@@ -259,6 +360,8 @@ function BreakdownView() {
             <StatCard label="Invoices" value={(data?.total_invoice_count || 0).toLocaleString('en-IN')} sub="Billed in period" icon={Receipt} gradient="purple" testid="ra-total-invoices" />
             <StatCard label="Segments" value={(data?.raw_group_count || 0).toLocaleString('en-IN')} sub={`By ${dimLabel}`} icon={Layers} gradient="teal" testid="ra-total-groups" />
           </div>
+
+          <ReconciliationPanel timeFilter={timeFilter} fromDate={fromDate} toDate={toDate} />
 
           {groups.length === 0 ? (
             <Empty testid="ra-empty">No revenue recorded for the selected period.</Empty>

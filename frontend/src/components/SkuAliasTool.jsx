@@ -103,10 +103,18 @@ export const SkuAliasTool = () => {
                 return (
                   <div key={key} className="flex flex-wrap items-center gap-2 rounded-lg border p-3" data-testid={`unmapped-${u.alias_value}`}>
                     <div className="min-w-[180px] flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-sm">{u.alias_value}</span>
                         <Badge variant="outline" className="text-[10px]">{u.alias_type}</Badge>
+                        {u.revenue != null && (
+                          <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px]" data-testid={`unmapped-revenue-${u.alias_value}`}>
+                            ₹{Math.round(u.revenue).toLocaleString('en-IN')}
+                          </Badge>
+                        )}
                         <Badge variant="secondary" className="text-[10px]">{u.count} line{u.count === 1 ? '' : 's'}</Badge>
+                        {u.units != null && u.units > 0 && (
+                          <Badge variant="secondary" className="text-[10px]">{Math.round(u.units).toLocaleString('en-IN')} unit{Math.round(u.units) === 1 ? '' : 's'}</Badge>
+                        )}
                       </div>
                       {u.sample_invoices?.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-0.5">e.g. {u.sample_invoices.slice(0, 3).join(', ')}</p>

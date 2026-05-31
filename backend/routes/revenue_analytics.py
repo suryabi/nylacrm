@@ -353,3 +353,112 @@ async def revenue_compare(
         "rows": rows,
         "raw_group_count": len(union_labels),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Revenue reconciliation — bridges the Revenue-Analytics headline GROSS (full
+# invoice totals) to the SKU-Performance "Achieved" figure (product line-item
+# revenue). They legitimately differ by tax/charges + invoices that carry no
+# SKU line items (e.g. External Billing Entries). This returns the exact bridge
+# over the SAME invoice window the Revenue-Analytics page uses.
+# ──────────────────────────────────────────────────────────────────────────
+def _rec_parse_num(v) -> float:
+    if v is None:
+        return 0.0
+    try:
+        return float(str(v).replace('%', '').replace(',', '').strip())
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _skuperf_line_value(item: dict) -> float:
+    """Identical to reports.py get_sku_performance._line_value so the
+    reconciliation's product-line revenue matches the SKU-Performance total."""
+    if item.get('net_amount') is not None:
+        return _rec_parse_num(item.get('net_amount'))
+    if item.get('gross_amount') is not None:
+        return _rec_parse_num(item.get('gross_amount'))
+    qty = _rec_parse_num(item.get('quantity'))
+    rate = _rec_parse_num(item.get('rate'))
+    disc = _rec_parse_num(item.get('discount_percent') or item.get('discount'))
+    if disc > 100:
+        disc = disc / 100.0
+    return qty * rate * max(0.0, 1.0 - disc / 100.0)
+
+
+@router.get("/reports/revenue-reconciliation")
+async def revenue_reconciliation(
+    time_filter: str = "this_month",
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    _user: dict = Depends(get_current_user),
+):
+    """Bridge Revenue-Analytics GROSS → SKU-Performance product-line revenue:
+
+        Gross  =  Product line revenue (SKU Perf)
+                + Tax & other charges
+                + Invoices without SKU line items
+                + Lines without a SKU identifier
+        Net    =  Gross − Credit notes
+
+    Also surfaces how much product-line revenue is still attributed to
+    unmapped/old SKU names (a subset of product line revenue) so it can link to
+    the SKU Aliases tool. Computed over the same invoice window the
+    Revenue-Analytics headline uses, so `gross`/`net` match it exactly.
+    """
+    fd, td = _window(time_filter, from_date, to_date)
+    tdb = get_tdb()
+    resolver = await build_sku_resolver(tdb)
+    invoices = await tdb.invoices.find(
+        {"invoice_date": {"$gte": fd, "$lte": td}}, {"_id": 0}
+    ).to_list(20000)
+
+    gross_total = net_total = 0.0
+    product = tax_charges = no_item = unidentified = 0.0
+    no_item_count = 0
+    unmapped_rev = 0.0
+    unmapped_keys: set = set()
+
+    for inv in invoices:
+        g = _gross(inv)
+        gross_total += g
+        net_total += _net(inv)
+        items = inv.get("items") or inv.get("line_items") or []
+        if not items:
+            no_item += g
+            no_item_count += 1
+            continue
+        all_line = 0.0
+        resolvable_line = 0.0
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            lv = _skuperf_line_value(it)
+            all_line += lv
+            if resolver.resolve(it):
+                resolvable_line += lv
+            uk = resolver.unmapped_key(it)
+            if uk:
+                unmapped_rev += lv
+                unmapped_keys.add(f"{uk[0]}::{uk[1]}")
+        product += resolvable_line
+        unidentified += (all_line - resolvable_line)
+        tax_charges += (g - all_line)
+
+    credit_notes = gross_total - net_total
+    return {
+        "from": fd,
+        "to": td,
+        "time_filter": time_filter,
+        "invoice_count": len(invoices),
+        "gross": round(gross_total, 2),
+        "net": round(net_total, 2),
+        "credit_notes": round(credit_notes, 2),
+        "product_line_revenue": round(product, 2),
+        "tax_and_charges": round(tax_charges, 2),
+        "invoices_without_sku_lines": round(no_item, 2),
+        "invoices_without_sku_lines_count": no_item_count,
+        "unidentified_line_revenue": round(unidentified, 2),
+        "unmapped_line_revenue": round(unmapped_rev, 2),
+        "unmapped_identifier_count": len(unmapped_keys),
+    }
