@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-31 — Driver Login: "Remember me on this device" (skip re-typing credentials) ✅ DONE
+- **Request**: On the Driver login page, add an option to remember the password so drivers don't have to enter mobile number + password each time.
+- **Frontend only** (`pages/driver/DriverLogin.js`): added a **"Remember me on this device"** checkbox (default ON, `data-testid="driver-remember-me"`). On successful login, when checked, the driver's phone + password are saved to `localStorage` (`driver_remember_me`, `driver_saved_phone`, `driver_saved_password`); when unchecked, they're cleared. On page mount, if remember-me is on, the phone + password fields are **pre-filled** so the driver signs in with a single tap. The session token already persists via AuthContext, so this removes the typing burden when a session expires and they land back on login. No backend / auth-protocol / hashing / token change.
+- **Note**: password is stored in plain `localStorage` on the driver's own device (acceptable for this low-sensitivity, system-generated driver password per the explicit request).
+- **Verified (preview)**: screenshots — checkbox renders default-checked; after seeding saved creds + reload, phone (`9876500011`) and password (8 chars) pre-fill and the box stays checked; unchecking toggles correctly. JS lint clean. Redeploy to push to production.
+
+
+
 ### 2026-05-31 — Account Detail → SKU Pricing: inline Add/Edit without global Edit Account ✅ DONE
 - **Request**: In the Account Detail page, give Add and Edit options to the **SKU Pricing** section at all times, so the user doesn't have to click "Edit Account" (top-right) just to change pricing.
 - **Frontend** (`pages/AccountDetail.js`): added a section-level inline editor — a new `pricingEditing` state + `skuEditing = isEditing || pricingEditing` flag drives the table cells. The SKU Pricing card header now always shows an **"Edit Pricing"** button (and on empty state an **"Add SKU"** button); clicking it makes rows editable inline and reveals **Add SKU / Cancel / Save**. New `handleSavePricing` does a partial `PUT /api/accounts/{id}` sending **only `sku_pricing`** (MRP blank→null coercion), `handleCancelPricing` reverts from `account.sku_pricing`. `handleAddSKU` auto-opens the inline editor. The global Edit Account flow is unchanged (section controls hide while it's active; both flows reset `pricingEditing`). New testids: `edit-pricing-btn`, `save-pricing-btn`, `cancel-pricing-btn`, `add-first-sku-btn`.

@@ -7,8 +7,16 @@ import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
+import { Checkbox } from '../../components/ui/checkbox';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+// localStorage keys for the "remember me" convenience on shared/personal driver
+// devices — persists the phone + password so the driver doesn't have to retype
+// them when their session expires and they land back on this page.
+const RM_FLAG = 'driver_remember_me';
+const RM_PHONE = 'driver_saved_phone';
+const RM_PASS = 'driver_saved_password';
 
 /**
  * Driver mobile-web login.
@@ -21,7 +29,20 @@ export default function DriverLogin() {
   const { user, loading: authLoading } = useAuth();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
+
+  // Pre-fill saved credentials so the driver can sign in with a single tap.
+  useEffect(() => {
+    const remembered = localStorage.getItem(RM_FLAG) !== 'false'; // default ON
+    setRememberMe(remembered);
+    if (remembered) {
+      const savedPhone = localStorage.getItem(RM_PHONE) || '';
+      const savedPass = localStorage.getItem(RM_PASS) || '';
+      if (savedPhone) setPhone(savedPhone);
+      if (savedPass) setPassword(savedPass);
+    }
+  }, []);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -54,6 +75,16 @@ export default function DriverLogin() {
       );
       if (data?.session_token) {
         localStorage.setItem('token', data.session_token);
+      }
+      // Remember me: persist (or clear) the driver's credentials for next time.
+      if (rememberMe) {
+        localStorage.setItem(RM_FLAG, 'true');
+        localStorage.setItem(RM_PHONE, phone);
+        localStorage.setItem(RM_PASS, password);
+      } else {
+        localStorage.setItem(RM_FLAG, 'false');
+        localStorage.removeItem(RM_PHONE);
+        localStorage.removeItem(RM_PASS);
       }
       toast.success(`Welcome ${data.user?.name || 'Driver'}`);
       // Force AuthContext to re-hydrate by navigating with a full reload.
@@ -107,6 +138,20 @@ export default function DriverLogin() {
                 data-testid="driver-login-password"
               />
             </div>
+          </div>
+          <div className="flex items-center gap-2 pt-0.5">
+            <Checkbox
+              id="driver-remember-me"
+              checked={rememberMe}
+              onCheckedChange={(v) => setRememberMe(v === true)}
+              data-testid="driver-remember-me"
+            />
+            <Label
+              htmlFor="driver-remember-me"
+              className="text-sm font-normal text-slate-600 cursor-pointer select-none"
+            >
+              Remember me on this device
+            </Label>
           </div>
           <Button type="submit" disabled={loading} className="w-full h-12" data-testid="driver-login-submit">
             {loading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Signing in…</> : 'Sign In'}
