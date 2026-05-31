@@ -556,11 +556,11 @@ function CompareView() {
                   {up ? <TrendingUp className="h-[18px] w-[18px]" style={{ filter: `drop-shadow(0 0 8px ${POS})` }} /> : <TrendingDown className="h-[18px] w-[18px]" style={{ filter: `drop-shadow(0 0 8px ${NEG})` }} />}
                 </span>
               </div>
-              <p className="relative mt-4 font-mono text-3xl font-semibold tracking-tighter tabular-nums md:text-[2.15rem]" style={{ color: up ? POS : NEG, textShadow: `0 0 20px ${up ? POS : NEG}66` }}>
-                {up ? '+' : ''}{formatCurrency(delta)}
+              <p className="relative mt-4 font-mono text-3xl font-semibold tracking-tighter tabular-nums md:text-[2.15rem]" style={{ color: up ? POS : NEG, textShadow: `0 0 20px ${up ? POS : NEG}66` }} data-testid="ra-cmp-delta-pct">
+                {up ? '+' : ''}{data?.delta_pct ?? 0}%
               </p>
-              <span className="relative mt-2 inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium" style={{ color: up ? POS : NEG, borderColor: `${up ? POS : NEG}55`, background: `${up ? POS : NEG}1a` }}>
-                {up ? '+' : ''}{data?.delta_pct ?? 0}% vs {aLabel}
+              <span className="relative mt-2 inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium" style={{ color: up ? POS : NEG, borderColor: `${up ? POS : NEG}55`, background: `${up ? POS : NEG}1a` }} data-testid="ra-cmp-delta-amount">
+                {up ? '+' : ''}{formatCurrency(delta)} vs {aLabel}
               </span>
             </div>
           </div>
