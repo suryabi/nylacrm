@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -25,7 +24,6 @@ import {
   Plus,
   Target,
   Calendar,
-  IndianRupee,
   ArrowRight,
   MoreVertical,
   Pencil,
@@ -33,15 +31,10 @@ import {
   Copy,
   Lock,
   Loader2,
-  TrendingUp,
-  Clock,
   CheckCircle2,
-  Receipt,
-  Banknote,
   Send,
   Ban,
-  Users,
-  ChevronRight
+  Users
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -72,23 +65,11 @@ const formatCurrency = (amount, short = false) => {
 
 const getStatusBadge = (status) => {
   const styles = {
-    draft: 'bg-gray-100 text-gray-700',
-    active: 'bg-green-100 text-green-700',
-    completed: 'bg-blue-100 text-blue-700',
-    inactive: 'bg-zinc-200 text-zinc-600',
-    locked: 'bg-amber-100 text-amber-700'
-  };
-  return styles[status] || styles.draft;
-};
-
-// Subtle status-based tile accent (left border + faint tint)
-const getStatusTile = (status) => {
-  const styles = {
-    draft: 'border-l-4 border-l-slate-300 bg-slate-50/50',
-    active: 'border-l-4 border-l-emerald-400 bg-emerald-50/40',
-    completed: 'border-l-4 border-l-blue-400 bg-blue-50/40',
-    inactive: 'border-l-4 border-l-zinc-400 bg-zinc-100/60',
-    locked: 'border-l-4 border-l-amber-400 bg-amber-50/40'
+    draft: 'bg-slate-50 text-slate-700 border border-slate-200/60',
+    active: 'bg-emerald-50 text-emerald-700 border border-emerald-200/60',
+    completed: 'bg-blue-50 text-blue-700 border border-blue-200/60',
+    inactive: 'bg-zinc-100 text-zinc-600 border border-zinc-200',
+    locked: 'bg-amber-50 text-amber-700 border border-amber-200/60'
   };
   return styles[status] || styles.draft;
 };
@@ -383,92 +364,93 @@ export default function TargetPlanningList() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="max-w-[1600px] mx-auto px-6 py-8 md:px-8 md:py-10">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-10">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Target className="h-7 w-7 text-primary" />
-            Target Planning
-          </h1>
-          <p className="text-muted-foreground mt-1">Create and manage revenue targets across territories, cities, and resources</p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-900">Target Planning</h1>
+          <p className="text-sm text-zinc-500 mt-2 max-w-xl">Create and manage revenue targets across territories, cities, and resources.</p>
         </div>
-        <Button onClick={handleOpenCreateDialog} data-testid="create-plan-btn">
+        <Button
+          onClick={handleOpenCreateDialog}
+          className="bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm active:scale-95 transition-transform shrink-0"
+          data-testid="create-plan-btn"
+        >
           <Plus className="h-4 w-4 mr-2" /> New Target Plan
         </Button>
       </div>
 
       {/* Plans Grid */}
       {plans.length === 0 ? (
-        <Card className="p-12 text-center">
-          <Target className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No Target Plans Yet</h3>
-          <p className="text-muted-foreground mb-4">Create your first target plan to start tracking revenue goals</p>
-          <Button onClick={handleOpenCreateDialog}>
+        <div className="flex flex-col items-center justify-center py-24 px-4 text-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50">
+          <Target className="size-12 text-zinc-300 mb-4" />
+          <h3 className="text-lg font-medium text-zinc-900 mb-2">No Target Plans Yet</h3>
+          <p className="text-sm text-zinc-500 max-w-sm mb-6">Create your first target plan to start tracking revenue goals across territories, cities, and resources.</p>
+          <Button onClick={handleOpenCreateDialog} className="bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm">
             <Plus className="h-4 w-4 mr-2" /> Create Target Plan
           </Button>
-        </Card>
+        </div>
       ) : (
-        <div className="space-y-10">
+        <div>
           {groupedPlans.map(([creator, creatorPlans]) => (
-            <div key={creator} data-testid={`plan-group-${creator}`}>
-              {/* Created-by group header */}
-              <div className="flex items-center gap-3 mb-4 pb-2 border-b">
-                <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+            <div key={creator} className="mt-10 first:mt-0" data-testid={`plan-group-${creator}`}>
+              {/* Assigned-user group header */}
+              <div className="flex items-center gap-3 py-4 mb-5 border-b border-zinc-100">
+                <div className="size-8 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-semibold">
                   {getInitials(creator)}
                 </div>
-                <h2 className="text-base font-semibold text-slate-800">{creator}</h2>
-                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" /> {creatorPlans.length} {creatorPlans.length === 1 ? 'plan' : 'plans'}
-                </span>
+                <h2 className="text-lg font-medium tracking-tight text-zinc-900">{creator}</h2>
+                <span className="text-sm text-zinc-400">{creatorPlans.length} {creatorPlans.length === 1 ? 'plan' : 'plans'}</span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {creatorPlans.map((plan) => {
             const progress = calculateProgress(plan);
             const allocationPercent = plan.total_amount > 0 
-              ? Math.round((plan.allocated_amount / plan.total_amount) * 100) 
+              ? Math.round(((plan.allocated_amount || 0) / plan.total_amount) * 100) 
               : 0;
             const currentMonth = plan.current_month;
             const currentMonthPercent = currentMonth && plan.total_amount > 0
-              ? Math.round((currentMonth.invoice_value / plan.total_amount) * 100)
+              ? Math.round(((currentMonth.invoice_value || 0) / plan.total_amount) * 100)
               : 0;
 
             return (
-              <Card 
-                key={plan.id} 
-                className={`p-5 hover:shadow-lg transition-shadow cursor-pointer group ${getStatusTile(plan.status)}`}
+              <div
+                key={plan.id}
+                className="group relative flex flex-col bg-white rounded-xl border border-zinc-200 p-6 cursor-pointer transition-all duration-200 hover:border-zinc-300 hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] hover:-translate-y-0.5"
                 onClick={() => navigate(`/target-planning/${plan.id}`)}
                 data-testid={`plan-card-${plan.id}`}
               >
-                <div className="flex items-start justify-between mb-4 gap-2">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-lg group-hover:text-primary transition-colors flex items-center gap-2 flex-wrap" data-testid={`plan-title-${plan.id}`}>
-                      {(() => {
-                        const owner = getPlanOwnerName(plan);
-                        const av = getNameAvatar(owner);
-                        return (
-                          <span
-                            className={`w-7 h-7 rounded-full ${av.bgColor} flex items-center justify-center text-white text-[11px] font-semibold shrink-0`}
-                            title={owner || 'Unassigned'}
-                          >
-                            {av.initials}
-                          </span>
-                        );
-                      })()}
-                      <span>{getPlanPeriodLabel(plan)}</span>
-                      <Badge variant="outline" className="font-medium text-xs text-slate-600 bg-white/70" data-testid={`plan-owner-pill-${plan.id}`}>
+                <div className="flex items-start justify-between gap-3 mb-5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {(() => {
+                      const owner = getPlanOwnerName(plan);
+                      const av = getNameAvatar(owner);
+                      return (
+                        <span
+                          className={`size-9 rounded-full ${av.bgColor} flex items-center justify-center text-white text-xs font-semibold shadow-sm shrink-0`}
+                          title={owner || 'Unassigned'}
+                        >
+                          {av.initials}
+                        </span>
+                      );
+                    })()}
+                    <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg font-semibold tracking-tight text-zinc-900" data-testid={`plan-title-${plan.id}`}>
+                        {getPlanPeriodLabel(plan)}
+                      </h3>
+                      <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium" data-testid={`plan-owner-pill-${plan.id}`}>
                         {getPlanOwnerName(plan) || 'Unassigned'}
-                      </Badge>
-                    </h3>
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Badge className={`${getStatusBadge(plan.status)} uppercase text-[10px] font-bold tracking-wide`} data-testid={`plan-status-pill-${plan.id}`}>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getStatusBadge(plan.status)}`} data-testid={`plan-status-pill-${plan.id}`}>
                       {plan.status}
-                    </Badge>
+                    </span>
                     {plan.status === 'locked' && <Lock className="h-3 w-3 text-amber-600" />}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <Button variant="ghost" size="icon" className="size-8 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -531,67 +513,64 @@ export default function TargetPlanningList() {
                   </div>
                 </div>
 
-                {/* Duration & Target */}
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} - {new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                    <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{calculateDuration(plan.start_date, plan.end_date)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Target className="h-4 w-4 text-primary" />
-                    <span className="text-xl font-bold">{formatCurrency(plan.total_amount)}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {plan.goal_type === 'cumulative' ? 'total target' : '/month goal'}
-                    </span>
-                  </div>
-                  <Badge variant="outline" className="text-[10px]">
-                    {plan.goal_type === 'cumulative' ? 'Cumulative' : 'Monthly Run Rate'}
-                  </Badge>
+                {/* Meta: date range */}
+                <div className="flex items-center gap-2 text-xs text-zinc-500 mb-5">
+                  <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                  <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} - {new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  <span className="text-zinc-300">·</span>
+                  <span>{calculateDuration(plan.start_date, plan.end_date)}</span>
                 </div>
 
-                {/* Progress Bars */}
-                <div className="space-y-3 mb-4">
-                  {/* Time Progress */}
+                {/* Metric */}
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold tracking-tighter text-zinc-900">{formatCurrency(plan.total_amount)}</span>
+                  <span className="text-xs text-zinc-500">{plan.goal_type === 'cumulative' ? 'total target' : '/ month goal'}</span>
+                </div>
+                <div className="mt-2">
+                  <span className="inline-flex items-center text-[10px] font-medium uppercase tracking-wider text-zinc-500 border border-zinc-200 rounded px-2 py-0.5">
+                    {plan.goal_type === 'cumulative' ? 'Cumulative' : 'Monthly Run Rate'}
+                  </span>
+                </div>
+
+                {/* Progress section */}
+                <div className="flex flex-col gap-3 mt-auto pt-6 border-t border-zinc-100">
                   <div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Time Elapsed</span>
-                      <span>{progress}%</span>
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                      <span>Time Elapsed</span>
+                      <span className="text-zinc-700">{progress}%</span>
                     </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${progress}%` }} />
-                    </div>
-                  </div>
-                  
-                  {/* Allocation Progress */}
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                      <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Allocated</span>
-                      <span>{formatCurrency(plan.allocated_amount, true)} ({allocationPercent}%)</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${allocationPercent >= 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, allocationPercent)}%` }} />
+                    <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
                     </div>
                   </div>
 
-                  {/* Current Month Achievement */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                      <span>Allocated</span>
+                      <span className="text-zinc-700">{formatCurrency(plan.allocated_amount, true)} · {allocationPercent}%</span>
+                    </div>
+                    <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ease-out ${allocationPercent >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, allocationPercent)}%` }} />
+                    </div>
+                  </div>
+
                   {currentMonth && (
                     <div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                        <span className="flex items-center gap-1"><Receipt className="h-3 w-3" /> {currentMonth.month}</span>
-                        <span>{formatCurrency(currentMonth.invoice_value, true)} ({currentMonthPercent}%)</span>
+                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                        <span>{currentMonth.month}</span>
+                        <span className="text-zinc-700">{formatCurrency(currentMonth.invoice_value, true)} · {currentMonthPercent}%</span>
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${currentMonthPercent >= 100 ? 'bg-green-600' : currentMonthPercent >= 50 ? 'bg-teal-500' : 'bg-purple-500'}`} style={{ width: `${Math.min(100, currentMonthPercent)}%` }} />
+                      <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out" style={{ width: `${Math.min(100, currentMonthPercent)}%` }} />
                       </div>
                     </div>
                   )}
-                </div>
 
-                <div className="flex items-center justify-end text-sm text-primary font-medium group-hover:underline">
-                  View Details <ArrowRight className="h-4 w-4 ml-1" />
+                  <div className="mt-1 flex items-center text-sm font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                    View Details <ArrowRight className="h-4 w-4 ml-1" />
+                  </div>
                 </div>
-              </Card>
+              </div>
             );
           })}
               </div>

@@ -15,6 +15,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-31 — Target Planning list: 3-letter months + full minimalist redesign ✅ DONE
+- **Request**: Use the first 3 letters of the month (avoid overlap), and redesign the whole Target Planning list page to be professional, contemporary and minimalistic.
+- **3-letter months**: `TP_MONTHS` now `Jan…Dec` in both `pages/TargetPlanningList.js` and `pages/TargetPlanDashboard.js` → titles like "Apr / 26" and "Jan / 26 - Dec / 26".
+- **Redesign** (`pages/TargetPlanningList.js`, design blueprint via design agent → `/app/design_guidelines.json`): Swiss/minimalist light theme — `max-w-[1600px]` container with generous spacing; large `tracking-tight` page title + dark `bg-zinc-900` CTA; group headers with a thin bottom border; **4-col** responsive grid (`xl:grid-cols-4`). Cards rebuilt as crisp white `rounded-xl border border-zinc-200` tiles (removed the old colored left-border tint) with hover lift + soft shadow; header = color initials avatar + period title + subtle owner pill + UPPERCASE status pill (refined tokens) + ghost ⋯ menu; big `text-3xl tracking-tighter` ₹ metric + outline goal-type tag; **thin `h-1`** progress bars with tiny uppercase labels; "View Details →" fades in on hover. Polished dashed empty state. Removed unused imports (Card, Clock, TrendingUp, Receipt, IndianRupee, Banknote, ChevronRight) + dropped the now-unused `getStatusTile` helper.
+- **Bug fix**: guarded the Allocated/Current-month % math against undefined (`allocated_amount || 0`) — was rendering "NAN%".
+- **Verified (preview)**: screenshots — clean redesigned grid, 3-letter months, owner + status pills, hover "View Details" reveal, "₹0 · 0%" (no NaN). JS lint clean. Redeploy to push to production.
+
+
+
 ### 2026-05-31 — Target Planning: owner-name pill + UPPERCASE status pill ✅ DONE
 - **Request**: Show the full owner name (assigned user; creator if unassigned) as a pill next to the plan title, and show the status (ACTIVE/DRAFT/…) in uppercase as a pill in the top-right corner.
 - **Frontend** (`pages/TargetPlanningList.js`, `pages/TargetPlanDashboard.js`): card header restructured — title row now shows the initials avatar + computed period + an outline **owner-name pill** (`getPlanOwnerName` → assigned_to_name || created_by_name || "Unassigned"); the **status pill** moved to the top-right cluster (next to the ⋯ menu), styled `uppercase` via `getStatusBadge(status)` colors (ACTIVE=green, DRAFT=gray, INACTIVE=zinc, COMPLETED=blue). Mirrored on the plan detail header (owner pill + uppercase status pill). New testids: `plan-owner-pill-{id}`, `plan-status-pill-{id}`, `plan-owner-pill`, `plan-detail-status-pill`.
