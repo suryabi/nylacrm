@@ -39,6 +39,8 @@ import {
   Receipt,
   Banknote,
   Send,
+  Ban,
+  Users,
   ChevronRight
 } from 'lucide-react';
 import {
@@ -73,9 +75,28 @@ const getStatusBadge = (status) => {
     draft: 'bg-gray-100 text-gray-700',
     active: 'bg-green-100 text-green-700',
     completed: 'bg-blue-100 text-blue-700',
+    inactive: 'bg-zinc-200 text-zinc-600',
     locked: 'bg-amber-100 text-amber-700'
   };
   return styles[status] || styles.draft;
+};
+
+// Subtle status-based tile accent (left border + faint tint)
+const getStatusTile = (status) => {
+  const styles = {
+    draft: 'border-l-4 border-l-slate-300 bg-slate-50/50',
+    active: 'border-l-4 border-l-emerald-400 bg-emerald-50/40',
+    completed: 'border-l-4 border-l-blue-400 bg-blue-50/40',
+    inactive: 'border-l-4 border-l-zinc-400 bg-zinc-100/60',
+    locked: 'border-l-4 border-l-amber-400 bg-amber-50/40'
+  };
+  return styles[status] || styles.draft;
+};
+
+const getInitials = (name) => {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
 };
 
 export default function TargetPlanningList() {
@@ -208,7 +229,8 @@ export default function TargetPlanningList() {
         body: JSON.stringify({ status: newStatus })
       });
       if (response.ok) {
-        toast.success(`Target plan ${newStatus === 'active' ? 'published' : 'updated'}`);
+        const labels = { active: 'activated', inactive: 'inactivated', completed: 'marked completed', draft: 'reverted to draft' };
+        toast.success(`Target plan ${labels[newStatus] || 'updated'}`);
         fetchPlans();
       } else {
         const error = await response.json().catch(() => ({}));
@@ -280,6 +302,15 @@ export default function TargetPlanningList() {
     return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
   };
 
+  // Group plans by the user who created them (alphabetical by creator name)
+  const groupedPlans = Object.entries(
+    plans.reduce((acc, p) => {
+      const key = p.created_by_name || 'Unknown User';
+      (acc[key] = acc[key] || []).push(p);
+      return acc;
+    }, {})
+  ).sort((a, b) => a[0].localeCompare(b[0]));
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -315,8 +346,21 @@ export default function TargetPlanningList() {
           </Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {plans.map((plan) => {
+        <div className="space-y-10">
+          {groupedPlans.map(([creator, creatorPlans]) => (
+            <div key={creator} data-testid={`plan-group-${creator}`}>
+              {/* Created-by group header */}
+              <div className="flex items-center gap-3 mb-4 pb-2 border-b">
+                <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                  {getInitials(creator)}
+                </div>
+                <h2 className="text-base font-semibold text-slate-800">{creator}</h2>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Users className="h-3.5 w-3.5" /> {creatorPlans.length} {creatorPlans.length === 1 ? 'plan' : 'plans'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {creatorPlans.map((plan) => {
             const progress = calculateProgress(plan);
             const allocationPercent = plan.total_amount > 0 
               ? Math.round((plan.allocated_amount / plan.total_amount) * 100) 
@@ -329,7 +373,7 @@ export default function TargetPlanningList() {
             return (
               <Card 
                 key={plan.id} 
-                className="p-5 hover:shadow-lg transition-shadow cursor-pointer group"
+                className={`p-5 hover:shadow-lg transition-shadow cursor-pointer group ${getStatusTile(plan.status)}`}
                 onClick={() => navigate(`/target-planning/${plan.id}`)}
                 data-testid={`plan-card-${plan.id}`}
               >
@@ -367,7 +411,25 @@ export default function TargetPlanningList() {
                           <CheckCircle2 className="h-4 w-4 mr-2" /> Mark Completed
                         </DropdownMenuItem>
                       )}
-                      {(plan.status === 'active' || plan.status === 'completed') && (
+                      {plan.status === 'active' && (
+                        <DropdownMenuItem
+                          className="text-zinc-700"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'inactive'); }}
+                          data-testid={`inactivate-plan-${plan.id}`}
+                        >
+                          <Ban className="h-4 w-4 mr-2" /> Inactivate
+                        </DropdownMenuItem>
+                      )}
+                      {plan.status === 'inactive' && (
+                        <DropdownMenuItem
+                          className="text-green-700"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'active'); }}
+                          data-testid={`reactivate-plan-${plan.id}`}
+                        >
+                          <Send className="h-4 w-4 mr-2" /> Reactivate
+                        </DropdownMenuItem>
+                      )}
+                      {(plan.status === 'active' || plan.status === 'completed' || plan.status === 'inactive') && (
                         <DropdownMenuItem
                           onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'draft'); }}
                         >
@@ -450,6 +512,9 @@ export default function TargetPlanningList() {
               </Card>
             );
           })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-31 — Target Planning list: group by creator + status color coding + Inactivate ✅ DONE
+- **Request**: Group target plan tiles by the user who created them; add subtle status-based color coding to the tiles (draft/active/inactive); add an "Inactivate" action.
+- **Frontend only** (`pages/TargetPlanningList.js`): (1) tiles are now grouped under a per-creator header (avatar initials + name + plan count) keyed on `created_by_name` (legacy plans without it bucket under "Unknown User"); (2) `getStatusTile()` adds a subtle left-border accent + faint tint per status — draft (slate), active (emerald), completed (blue), inactive (zinc); status badge map gained `inactive`; (3) the card dropdown gained **Inactivate** (Ban icon, on `active` plans → sets `status='inactive'`) and **Reactivate** (on `inactive` plans → `status='active'`), and `inactive` was added to the "Revert to Draft" condition. Status-change toasts now read activated/inactivated/marked completed/reverted to draft. New testids: `plan-group-{creator}`, `inactivate-plan-{id}`, `reactivate-plan-{id}`.
+- **Backend**: no change — `PUT /api/target-planning/{id}` already accepts any `status` string and the list endpoint already returns `created_by_name`.
+- **Verified (preview)**: screenshots — plans grouped under Surya Yadavalli / System Admin / Unknown User; active tile green, draft tiles slate; opened the active plan's menu → Inactivate → toast "Target plan inactivated" + tile turned zinc/"inactive"; Reactivate restored it to "active". JS lint clean. Redeploy to push to production.
+
+
+
 ### 2026-05-31 — Target Planning: Monthly Target Allocation table (City × Month) ✅ DONE
 - **Request**: In Target Planning, let users split each city's total sales target across the individual months of the plan's period (e.g. Jun–Sep → 4 month columns). Cities as rows, months as columns, editable cells; validate each city's monthly sum == its total target, show Total/Allocated/Balance per city + grand totals, and block final submission until balanced.
 - **User choices**: 1a new **"Monthly Allocation" tab** in the plan detail; rows = the plan's existing **City allocations** (each city's Total = its allocation `amount`); **no auto-split** (manual entry); same city under two territories shows as **two rows** (territory-labelled); scope = **table + validation + save now**, actual-vs-target performance tracking is a follow-up.
