@@ -2196,7 +2196,10 @@ export default function TargetPlanDashboard() {
                 );
               })()}
               <h1 className="text-2xl font-bold" data-testid="plan-detail-title">{getPlanPeriodLabel(plan)}</h1>
-              <Badge className={plan.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}>
+              <Badge variant="outline" className="font-medium text-xs text-slate-600 bg-white" data-testid="plan-owner-pill">
+                {getPlanOwnerName(plan) || 'Unassigned'}
+              </Badge>
+              <Badge className={`uppercase text-[10px] font-bold tracking-wide ${plan.status === 'active' ? 'bg-emerald-100 text-emerald-700' : plan.status === 'inactive' ? 'bg-zinc-200 text-zinc-600' : plan.status === 'completed' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`} data-testid="plan-detail-status-pill">
                 {plan.status}
               </Badge>
               <Badge variant="outline" className="ml-1 bg-slate-50">

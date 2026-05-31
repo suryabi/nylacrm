@@ -440,13 +440,9 @@ export default function TargetPlanningList() {
                 onClick={() => navigate(`/target-planning/${plan.id}`)}
                 data-testid={`plan-card-${plan.id}`}
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge className={getStatusBadge(plan.status)}>{plan.status}</Badge>
-                      {plan.status === 'locked' && <Lock className="h-3 w-3 text-amber-600" />}
-                    </div>
-                    <h3 className="font-semibold text-lg group-hover:text-primary transition-colors flex items-center gap-2" data-testid={`plan-title-${plan.id}`}>
+                <div className="flex items-start justify-between mb-4 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-lg group-hover:text-primary transition-colors flex items-center gap-2 flex-wrap" data-testid={`plan-title-${plan.id}`}>
                       {(() => {
                         const owner = getPlanOwnerName(plan);
                         const av = getNameAvatar(owner);
@@ -460,14 +456,22 @@ export default function TargetPlanningList() {
                         );
                       })()}
                       <span>{getPlanPeriodLabel(plan)}</span>
+                      <Badge variant="outline" className="font-medium text-xs text-slate-600 bg-white/70" data-testid={`plan-owner-pill-${plan.id}`}>
+                        {getPlanOwnerName(plan) || 'Unassigned'}
+                      </Badge>
                     </h3>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Badge className={`${getStatusBadge(plan.status)} uppercase text-[10px] font-bold tracking-wide`} data-testid={`plan-status-pill-${plan.id}`}>
+                      {plan.status}
+                    </Badge>
+                    {plan.status === 'locked' && <Lock className="h-3 w-3 text-amber-600" />}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(plan); }}>
                         <Pencil className="h-4 w-4 mr-2" /> Edit Plan
@@ -523,7 +527,8 @@ export default function TargetPlanningList() {
                         <Trash2 className="h-4 w-4 mr-2" /> Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
-                  </DropdownMenu>
+                    </DropdownMenu>
+                  </div>
                 </div>
 
                 {/* Duration & Target */}

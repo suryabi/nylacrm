@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-31 — Target Planning: owner-name pill + UPPERCASE status pill ✅ DONE
+- **Request**: Show the full owner name (assigned user; creator if unassigned) as a pill next to the plan title, and show the status (ACTIVE/DRAFT/…) in uppercase as a pill in the top-right corner.
+- **Frontend** (`pages/TargetPlanningList.js`, `pages/TargetPlanDashboard.js`): card header restructured — title row now shows the initials avatar + computed period + an outline **owner-name pill** (`getPlanOwnerName` → assigned_to_name || created_by_name || "Unassigned"); the **status pill** moved to the top-right cluster (next to the ⋯ menu), styled `uppercase` via `getStatusBadge(status)` colors (ACTIVE=green, DRAFT=gray, INACTIVE=zinc, COMPLETED=blue). Mirrored on the plan detail header (owner pill + uppercase status pill). New testids: `plan-owner-pill-{id}`, `plan-status-pill-{id}`, `plan-owner-pill`, `plan-detail-status-pill`.
+- **Verified (preview)**: screenshots — list cards show "Surya Yadavalli"/"System Admin" owner pills + ACTIVE/DRAFT uppercase pills top-right; detail header shows "System Admin" + DRAFT. JS lint clean (both files). No backend change. Redeploy to push to production.
+
+
+
 ### 2026-05-31 — Target Planning: consistent computed plan titles (initials + month period) ✅ DONE
 - **Request**: Plan names were inconsistent (everyone typed their own). Replace the displayed name with a consistent format: a 2-letter initials avatar (like the Leads list) + the month period — single month → `Month / YY` (e.g. "June / 26"); multi-month → `Start Month / YY - End Month / YY`.
 - **Decisions**: initials = **assigned user**, falling back to the **creator** when unassigned; the typed name is **hidden in all displays** (field kept in the form, value still stored); applied to **both the list tiles and the plan detail header** (+ breadcrumb).
