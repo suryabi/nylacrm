@@ -4,7 +4,7 @@ Provides target plans, allocations, city achievement, and dashboard analytics.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List, Dict
 from datetime import datetime, timezone, timedelta
 import uuid
 
@@ -57,6 +57,16 @@ class TargetAllocationCreateV2(BaseModel):
 
 class TargetAllocationUpdateV2(BaseModel):
     amount: Optional[float] = None
+
+
+class MonthlyAllocationRowV2(BaseModel):
+    allocation_id: str
+    monthly: Dict[str, float] = {}
+
+
+class MonthlyAllocationSaveV2(BaseModel):
+    rows: List[MonthlyAllocationRowV2] = []
+    finalize: bool = False
 
 
 # Sales roles for resource filtering
@@ -684,3 +694,176 @@ async def get_target_planning_dashboard(
         'allocations': territories_with_children,
         'all_allocations': all_allocations
     }
+
+
+
+# ============= Monthly Allocation (City × Month matrix) =============
+
+def _plan_months(start_str: str, end_str: str):
+    """Return the list of calendar months spanned by [start, end] inclusive."""
+    start = datetime.fromisoformat(start_str)
+    end = datetime.fromisoformat(end_str)
+    months = []
+    current = start.replace(day=1)
+    while current <= end:
+        months.append({
+            'key': current.strftime('%Y-%m'),
+            'label': current.strftime('%b %Y'),
+            'short': current.strftime('%b'),
+            'month_num': current.month,
+            'year': current.year,
+        })
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+    return months
+
+
+async def _build_monthly_allocation(plan: dict):
+    """Build the city × month allocation matrix for a plan."""
+    plan_id = plan['id']
+    months = _plan_months(plan['start_date'], plan['end_date'])
+    month_keys = [m['key'] for m in months]
+
+    city_allocs = await db.target_allocations_v2.find(
+        {'plan_id': plan_id, 'level': 'city'}, {'_id': 0}
+    ).to_list(500)
+    territory_allocs = await db.target_allocations_v2.find(
+        {'plan_id': plan_id, 'level': 'territory'}, {'_id': 0}
+    ).to_list(500)
+    terr_by_id = {t['id']: t for t in territory_allocs}
+
+    rows = []
+    month_totals = {k: 0.0 for k in month_keys}
+    grand_target = 0.0
+    grand_allocated = 0.0
+
+    for a in city_allocs:
+        stored = a.get('monthly_allocation') or {}
+        monthly = {k: round(float(stored.get(k, 0) or 0), 2) for k in month_keys}
+        allocated_total = round(sum(monthly.values()), 2)
+        total_target = round(float(a.get('amount', 0) or 0), 2)
+        balance = round(total_target - allocated_total, 2)
+        terr_name = (
+            a.get('territory_name')
+            or terr_by_id.get(a.get('parent_allocation_id'), {}).get('territory_name')
+            or '—'
+        )
+        for k in month_keys:
+            month_totals[k] += monthly[k]
+        grand_target += total_target
+        grand_allocated += allocated_total
+        rows.append({
+            'allocation_id': a['id'],
+            'city': a.get('city') or '—',
+            'state': a.get('state'),
+            'territory_id': a.get('parent_allocation_id') or a.get('territory_id'),
+            'territory_name': terr_name,
+            'total_target': total_target,
+            'monthly': monthly,
+            'allocated_total': allocated_total,
+            'balance': balance,
+            'is_balanced': abs(balance) < 0.01,
+        })
+
+    rows.sort(key=lambda r: ((r['territory_name'] or '').lower(), (r['city'] or '').lower()))
+    is_balanced = len(rows) > 0 and all(r['is_balanced'] for r in rows)
+
+    return {
+        'plan_id': plan_id,
+        'plan_name': plan.get('name'),
+        'start_date': plan['start_date'],
+        'end_date': plan['end_date'],
+        'months': months,
+        'rows': rows,
+        'month_totals': {k: round(v, 2) for k, v in month_totals.items()},
+        'grand_target': round(grand_target, 2),
+        'grand_allocated': round(grand_allocated, 2),
+        'grand_balance': round(grand_target - grand_allocated, 2),
+        'is_balanced': is_balanced,
+        'finalized': bool(plan.get('monthly_allocation_finalized')),
+        'finalized_at': plan.get('monthly_allocation_finalized_at'),
+    }
+
+
+@router.get("/target-planning/{plan_id}/monthly-allocation")
+async def get_monthly_allocation(
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Return the city × month monthly-target allocation matrix for a plan."""
+    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+    return await _build_monthly_allocation(plan)
+
+
+@router.put("/target-planning/{plan_id}/monthly-allocation")
+async def save_monthly_allocation(
+    plan_id: str,
+    payload: MonthlyAllocationSaveV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Persist the monthly-target allocation. Drafts save freely; finalize is
+    blocked unless every city's monthly cells sum exactly to its total target."""
+    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+
+    month_keys = {m['key'] for m in _plan_months(plan['start_date'], plan['end_date'])}
+    city_allocs = {
+        a['id']: a
+        for a in await db.target_allocations_v2.find(
+            {'plan_id': plan_id, 'level': 'city'}, {'_id': 0}
+        ).to_list(500)
+    }
+
+    sanitized = {}
+    mismatches = []
+    for row in payload.rows:
+        a = city_allocs.get(row.allocation_id)
+        if not a:
+            continue  # ignore rows that don't belong to this plan
+        clean = {
+            k: round(float(v or 0), 2)
+            for k, v in (row.monthly or {}).items()
+            if k in month_keys
+        }
+        sanitized[row.allocation_id] = clean
+        total_target = round(float(a.get('amount', 0) or 0), 2)
+        allocated = round(sum(clean.values()), 2)
+        balance = round(total_target - allocated, 2)
+        if abs(balance) >= 0.01:
+            mismatches.append({
+                'allocation_id': a['id'],
+                'city': a.get('city'),
+                'total_target': total_target,
+                'allocated': allocated,
+                'balance': balance,
+            })
+
+    if payload.finalize and mismatches:
+        raise HTTPException(status_code=400, detail={
+            'message': 'Monthly allocation must match each city\'s total target before submitting. Fix the highlighted rows.',
+            'mismatches': mismatches,
+        })
+
+    now = datetime.now(timezone.utc).isoformat()
+    for alloc_id, clean in sanitized.items():
+        await db.target_allocations_v2.update_one(
+            {'id': alloc_id, 'plan_id': plan_id},
+            {'$set': {'monthly_allocation': clean, 'updated_at': now}}
+        )
+
+    plan_update = {'updated_at': now}
+    if payload.finalize:
+        plan_update['monthly_allocation_finalized'] = True
+        plan_update['monthly_allocation_finalized_at'] = now
+    else:
+        plan_update['monthly_allocation_finalized'] = False
+        plan_update['monthly_allocation_finalized_at'] = None
+    await db.target_plans_v2.update_one({'id': plan_id}, {'$set': plan_update})
+
+    fresh = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    return await _build_monthly_allocation(fresh)

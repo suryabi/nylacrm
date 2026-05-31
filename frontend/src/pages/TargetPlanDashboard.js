@@ -52,6 +52,9 @@ import {
   Users,
   ChevronRight,
   Send,
+  AlertTriangle,
+  Save,
+  CalendarDays,
   X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -1801,6 +1804,258 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
   );
 }
 
+// ============= Monthly Allocation Tab (City × Month matrix) =============
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+function MonthlyAllocationTab({ planId }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [data, setData] = useState(null);
+  const [cells, setCells] = useState({}); // { allocation_id: { monthKey: string } }
+
+  const seedCells = (d) => {
+    const c = {};
+    (d.rows || []).forEach((r) => {
+      c[r.allocation_id] = {};
+      (d.months || []).forEach((m) => {
+        const v = r.monthly?.[m.key];
+        c[r.allocation_id][m.key] = v ? String(v) : '';
+      });
+    });
+    setCells(c);
+  };
+
+  const fetchMatrix = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/target-planning/${planId}/monthly-allocation`, {
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setData(d);
+        seedCells(d);
+      } else {
+        toast.error('Failed to load monthly allocation');
+      }
+    } catch (e) {
+      toast.error('Failed to load monthly allocation');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (planId) fetchMatrix();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planId]);
+
+  const months = data?.months || [];
+  const rows = data?.rows || [];
+
+  const setCell = (allocId, monthKey, val) => {
+    if (val !== '' && !/^\d*\.?\d*$/.test(val)) return; // numeric only
+    setCells((prev) => ({
+      ...prev,
+      [allocId]: { ...(prev[allocId] || {}), [monthKey]: val },
+    }));
+  };
+
+  const cellNum = (allocId, monthKey) => parseFloat(cells[allocId]?.[monthKey]) || 0;
+  const rowAllocated = (r) => round2(months.reduce((s, m) => s + cellNum(r.allocation_id, m.key), 0));
+  const rowBalance = (r) => round2(r.total_target - rowAllocated(r));
+  const isRowBalanced = (r) => Math.abs(rowBalance(r)) < 0.01;
+  const monthTotal = (mk) => round2(rows.reduce((s, r) => s + cellNum(r.allocation_id, mk), 0));
+  const grandTarget = round2(rows.reduce((s, r) => s + (r.total_target || 0), 0));
+  const grandAllocated = round2(rows.reduce((s, r) => s + rowAllocated(r), 0));
+  const grandBalance = round2(grandTarget - grandAllocated);
+  const allBalanced = rows.length > 0 && rows.every(isRowBalanced);
+
+  const buildPayload = (finalize) => ({
+    finalize,
+    rows: rows.map((r) => ({
+      allocation_id: r.allocation_id,
+      monthly: months.reduce((acc, m) => {
+        acc[m.key] = cellNum(r.allocation_id, m.key);
+        return acc;
+      }, {}),
+    })),
+  });
+
+  const save = async (finalize) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/target-planning/${planId}/monthly-allocation`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(buildPayload(finalize)),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(finalize ? 'Monthly allocation submitted' : 'Draft saved');
+        setData(d);
+        seedCells(d);
+      } else {
+        const detail = d?.detail;
+        if (detail && typeof detail === 'object' && detail.message) toast.error(detail.message);
+        else toast.error(typeof detail === 'string' ? detail : 'Failed to save monthly allocation');
+      }
+    } catch (e) {
+      toast.error('Failed to save monthly allocation');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <Card className="p-10 text-center">
+        <CalendarDays className="h-10 w-10 mx-auto mb-3 text-slate-300" />
+        <p className="font-medium text-slate-700">No city allocations yet</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Add territory & city allocations first — each city's total target then becomes a row here to split across months.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4" data-testid="monthly-allocation-tab">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Total Target</p>
+          <p className="text-xl font-bold mt-1" data-testid="ma-grand-target">{formatCurrency(grandTarget, true)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Allocated</p>
+          <p className="text-xl font-bold mt-1 text-blue-600" data-testid="ma-grand-allocated">{formatCurrency(grandAllocated, true)}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Balance</p>
+          <p className={cn('text-xl font-bold mt-1', Math.abs(grandBalance) < 0.01 ? 'text-emerald-600' : 'text-rose-600')} data-testid="ma-grand-balance">
+            {formatCurrency(grandBalance, true)}
+          </p>
+        </Card>
+        <Card className="p-4 flex flex-col justify-center">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Status</p>
+          {allBalanced ? (
+            <span className="mt-1 inline-flex items-center gap-1.5 text-emerald-700 font-semibold text-sm" data-testid="ma-status">
+              <CheckCircle className="h-4 w-4" /> Balanced{data?.finalized ? ' · Submitted' : ''}
+            </span>
+          ) : (
+            <span className="mt-1 inline-flex items-center gap-1.5 text-rose-700 font-semibold text-sm" data-testid="ma-status">
+              <AlertTriangle className="h-4 w-4" /> Unbalanced
+            </span>
+          )}
+        </Card>
+      </div>
+
+      {/* Matrix table */}
+      <Card className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm whitespace-nowrap" data-testid="monthly-allocation-table">
+            <thead className="bg-muted/50">
+              <tr>
+                <th className="sticky left-0 z-10 bg-muted/50 text-left px-4 py-3 font-medium min-w-[200px]">City</th>
+                <th className="text-right px-3 py-3 font-medium">Total Target</th>
+                {months.map((m) => (
+                  <th key={m.key} className="text-right px-3 py-3 font-medium min-w-[120px]">{m.label}</th>
+                ))}
+                <th className="text-right px-3 py-3 font-medium">Allocated</th>
+                <th className="text-right px-4 py-3 font-medium">Balance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rows.map((r) => {
+                const balanced = isRowBalanced(r);
+                const bal = rowBalance(r);
+                return (
+                  <tr key={r.allocation_id} className={cn(!balanced && 'bg-rose-50/40')} data-testid={`ma-row-${r.allocation_id}`}>
+                    <td className="sticky left-0 z-10 bg-white px-4 py-2.5">
+                      <div className="font-medium text-slate-900">{r.city}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="h-3 w-3" /> {r.territory_name}
+                      </div>
+                    </td>
+                    <td className="text-right px-3 py-2.5 font-medium text-slate-700">{formatCurrency(r.total_target)}</td>
+                    {months.map((m) => (
+                      <td key={m.key} className="px-2 py-2">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          value={cells[r.allocation_id]?.[m.key] ?? ''}
+                          onChange={(e) => setCell(r.allocation_id, m.key, e.target.value)}
+                          placeholder="0"
+                          className="h-9 text-right w-[110px] ml-auto"
+                          data-testid={`ma-cell-${r.allocation_id}-${m.key}`}
+                        />
+                      </td>
+                    ))}
+                    <td className="text-right px-3 py-2.5 font-semibold text-blue-600" data-testid={`ma-row-allocated-${r.allocation_id}`}>
+                      {formatCurrency(rowAllocated(r))}
+                    </td>
+                    <td className="text-right px-4 py-2.5" data-testid={`ma-row-balance-${r.allocation_id}`}>
+                      <span className={cn('inline-flex items-center gap-1 font-semibold', balanced ? 'text-emerald-600' : 'text-rose-600')}>
+                        {!balanced && <AlertTriangle className="h-3.5 w-3.5" />}
+                        {formatCurrency(bal)}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot className="bg-muted/40 font-semibold">
+              <tr>
+                <td className="sticky left-0 z-10 bg-muted/40 px-4 py-3">Grand Total</td>
+                <td className="text-right px-3 py-3">{formatCurrency(grandTarget)}</td>
+                {months.map((m) => (
+                  <td key={m.key} className="text-right px-3 py-3 text-slate-700" data-testid={`ma-month-total-${m.key}`}>
+                    {formatCurrency(monthTotal(m.key))}
+                  </td>
+                ))}
+                <td className="text-right px-3 py-3 text-blue-600">{formatCurrency(grandAllocated)}</td>
+                <td className="text-right px-4 py-3">
+                  <span className={cn(Math.abs(grandBalance) < 0.01 ? 'text-emerald-600' : 'text-rose-600')}>
+                    {formatCurrency(grandBalance)}
+                  </span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </Card>
+
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
+        {!allBalanced && (
+          <p className="text-sm text-rose-600 flex items-center gap-1.5 sm:mr-auto" data-testid="ma-blocked-hint">
+            <AlertTriangle className="h-4 w-4" />
+            Each city's monthly allocation must equal its total target before you can submit.
+          </p>
+        )}
+        <Button variant="outline" onClick={() => save(false)} disabled={saving} data-testid="ma-save-draft-btn">
+          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+          Save Draft
+        </Button>
+        <Button onClick={() => save(true)} disabled={saving || !allBalanced} className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="ma-submit-btn">
+          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+          Submit Allocation
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+
 export default function TargetPlanDashboard() {
   const { planId } = useParams();
   const navigate = useNavigate();
@@ -1940,18 +2195,36 @@ export default function TargetPlanDashboard() {
       {/* Combined Progress & Revenue Widget */}
       <CombinedProgressWidget timeline={timeline} plan={plan} estimated={estimated_revenue} />
 
-      {/* Monthly Performance Table - Only for Run Rate */}
-      {goalType === 'run_rate' && monthly_breakdown && monthly_breakdown.length > 0 && (
-        <MonthlyPerformanceTable monthlyData={monthly_breakdown} plan={plan} />
-      )}
+      {/* Tabs: Allocations vs Monthly Allocation */}
+      <Tabs defaultValue="allocations" className="mt-6">
+        <TabsList>
+          <TabsTrigger value="allocations" className="flex items-center gap-2" data-testid="tab-allocations">
+            <BarChart3 className="h-4 w-4" /> Allocations
+          </TabsTrigger>
+          <TabsTrigger value="monthly" className="flex items-center gap-2" data-testid="tab-monthly-allocation">
+            <CalendarDays className="h-4 w-4" /> Monthly Allocation
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Hierarchical Allocations Section - Full Width */}
-      <HierarchicalAllocationSection 
-        planId={planId} 
-        allocations={allocations} 
-        onUpdate={fetchDashboard}
-        plan={plan}
-      />
+        <TabsContent value="allocations" className="mt-4 space-y-6">
+          {/* Monthly Performance Table - Only for Run Rate */}
+          {goalType === 'run_rate' && monthly_breakdown && monthly_breakdown.length > 0 && (
+            <MonthlyPerformanceTable monthlyData={monthly_breakdown} plan={plan} />
+          )}
+
+          {/* Hierarchical Allocations Section - Full Width */}
+          <HierarchicalAllocationSection 
+            planId={planId} 
+            allocations={allocations} 
+            onUpdate={fetchDashboard}
+            plan={plan}
+          />
+        </TabsContent>
+
+        <TabsContent value="monthly" className="mt-4">
+          <MonthlyAllocationTab planId={planId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
