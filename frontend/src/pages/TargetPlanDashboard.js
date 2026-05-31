@@ -2170,24 +2170,24 @@ export default function TargetPlanDashboard() {
   const goalType = plan.goal_type || 'run_rate';
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="max-w-[1600px] mx-auto px-6 py-8 md:px-8 md:py-10">
       {/* Breadcrumb */}
       <AppBreadcrumb context={{ planName: plan ? getPlanPeriodLabel(plan) : 'Plan Dashboard' }} />
       
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/target-planning')} className="p-2 rounded-xl hover:bg-slate-100">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mt-4 mb-8">
+        <div className="flex items-start gap-3 min-w-0">
+          <Button variant="ghost" size="icon" onClick={() => navigate('/target-planning')} className="size-9 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 shrink-0 mt-0.5">
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
               {(() => {
                 const owner = getPlanOwnerName(plan);
                 const av = getNameAvatar(owner);
                 return (
                   <span
-                    className={`w-9 h-9 rounded-full ${av.bgColor} flex items-center justify-center text-white text-sm font-bold shrink-0`}
+                    className={`size-9 rounded-full ${av.bgColor} flex items-center justify-center text-white text-sm font-semibold shadow-sm shrink-0`}
                     title={owner || 'Unassigned'}
                     data-testid="plan-owner-avatar"
                   >
@@ -2195,46 +2195,38 @@ export default function TargetPlanDashboard() {
                   </span>
                 );
               })()}
-              <h1 className="text-2xl font-bold" data-testid="plan-detail-title">{getPlanPeriodLabel(plan)}</h1>
-              <Badge variant="outline" className="font-medium text-xs text-slate-600 bg-white" data-testid="plan-owner-pill">
+              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-zinc-900" data-testid="plan-detail-title">{getPlanPeriodLabel(plan)}</h1>
+              <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium" data-testid="plan-owner-pill">
                 {getPlanOwnerName(plan) || 'Unassigned'}
-              </Badge>
-              <Badge className={`uppercase text-[10px] font-bold tracking-wide ${plan.status === 'active' ? 'bg-emerald-100 text-emerald-700' : plan.status === 'inactive' ? 'bg-zinc-200 text-zinc-600' : plan.status === 'completed' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`} data-testid="plan-detail-status-pill">
+              </span>
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${plan.status === 'active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' : plan.status === 'inactive' ? 'bg-zinc-100 text-zinc-600 border border-zinc-200' : plan.status === 'completed' ? 'bg-blue-50 text-blue-700 border border-blue-200/60' : 'bg-slate-50 text-slate-700 border border-slate-200/60'}`} data-testid="plan-detail-status-pill">
                 {plan.status}
-              </Badge>
-              <Badge variant="outline" className="ml-1 bg-slate-50">
-                {goalType === 'cumulative' ? 'Cumulative Target' : 'Monthly Run Rate'}
-              </Badge>
+              </span>
             </div>
-            <p className="text-muted-foreground flex items-center gap-2 mt-1">
-              <Target className="h-4 w-4" />
-              {plan.milestones || 4} Milestones
-            </p>
+            <div className="flex items-center gap-3 mt-2 text-sm text-zinc-500">
+              <span className="inline-flex items-center gap-1.5"><Target className="h-3.5 w-3.5 text-zinc-400" /> {plan.milestones || 4} Milestones</span>
+              <span className="text-zinc-300">·</span>
+              <span>{goalType === 'cumulative' ? 'Cumulative Target' : 'Monthly Run Rate'}</span>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {plan.status === 'draft' && (
             <Button
               onClick={() => handlePlanStatusChange('active')}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm"
               data-testid="publish-plan-detail-btn"
             >
               <Send className="h-4 w-4 mr-2" /> Publish Plan
             </Button>
           )}
           {plan.status === 'active' && (
-            <Button
-              variant="outline"
-              onClick={() => handlePlanStatusChange('completed')}
-            >
+            <Button variant="outline" className="border-zinc-200" onClick={() => handlePlanStatusChange('completed')}>
               <CheckCircle className="h-4 w-4 mr-2" /> Mark Completed
             </Button>
           )}
           {(plan.status === 'active' || plan.status === 'completed') && (
-            <Button
-              variant="outline"
-              onClick={() => handlePlanStatusChange('draft')}
-            >
+            <Button variant="outline" className="border-zinc-200 text-zinc-600" onClick={() => handlePlanStatusChange('draft')}>
               Revert to Draft
             </Button>
           )}
@@ -2245,17 +2237,17 @@ export default function TargetPlanDashboard() {
       <CombinedProgressWidget timeline={timeline} plan={plan} estimated={estimated_revenue} />
 
       {/* Tabs: Allocations vs Monthly Allocation */}
-      <Tabs defaultValue="allocations" className="mt-6">
-        <TabsList>
-          <TabsTrigger value="allocations" className="flex items-center gap-2" data-testid="tab-allocations">
+      <Tabs defaultValue="allocations" className="mt-8">
+        <TabsList className="bg-zinc-100/80 p-1 rounded-lg h-auto">
+          <TabsTrigger value="allocations" className="flex items-center gap-2 rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-allocations">
             <BarChart3 className="h-4 w-4" /> Allocations
           </TabsTrigger>
-          <TabsTrigger value="monthly" className="flex items-center gap-2" data-testid="tab-monthly-allocation">
+          <TabsTrigger value="monthly" className="flex items-center gap-2 rounded-md data-[state=active]:bg-white data-[state=active]:shadow-sm" data-testid="tab-monthly-allocation">
             <CalendarDays className="h-4 w-4" /> Monthly Allocation
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="allocations" className="mt-4 space-y-6">
+        <TabsContent value="allocations" className="mt-6 space-y-6">
           {/* Monthly Performance Table - Only for Run Rate */}
           {goalType === 'run_rate' && monthly_breakdown && monthly_breakdown.length > 0 && (
             <MonthlyPerformanceTable monthlyData={monthly_breakdown} plan={plan} />
@@ -2270,7 +2262,7 @@ export default function TargetPlanDashboard() {
           />
         </TabsContent>
 
-        <TabsContent value="monthly" className="mt-4">
+        <TabsContent value="monthly" className="mt-6">
           <MonthlyAllocationTab planId={planId} />
         </TabsContent>
       </Tabs>
