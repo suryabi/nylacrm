@@ -5,7 +5,6 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Progress } from '../components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   Dialog,
@@ -31,17 +30,13 @@ import { toast } from 'sonner';
 import {
   Target,
   ArrowLeft,
-  Calendar,
   IndianRupee,
-  Clock,
   TrendingUp,
   Receipt,
   Plus,
   Trash2,
   Loader2,
   CheckCircle,
-  Trophy,
-  Medal,
   MapPin,
   Building2,
   Percent,
@@ -54,8 +49,7 @@ import {
   Send,
   AlertTriangle,
   Save,
-  CalendarDays,
-  X
+  CalendarDays
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
@@ -111,223 +105,166 @@ const getPlanPeriodLabel = (plan) => {
 };
 const getPlanOwnerName = (plan) => plan?.assigned_to_name || plan?.created_by_name || '';
 
-// Rank colors for leaderboard
-const getRankStyle = (rank) => {
-  if (rank === 1) return { 
-    bg: 'bg-gradient-to-br from-violet-500 to-purple-600', 
-    border: 'border-violet-400', 
-    text: 'text-white', 
-    icon: Trophy,
-    headerBg: 'bg-gradient-to-r from-violet-600 to-purple-700'
-  };
-  if (rank === 2) return { 
-    bg: 'bg-gradient-to-br from-cyan-500 to-teal-600', 
-    border: 'border-cyan-400', 
-    text: 'text-white', 
-    icon: Medal,
-    headerBg: 'bg-gradient-to-r from-cyan-600 to-teal-700'
-  };
-  if (rank === 3) return { 
-    bg: 'bg-gradient-to-br from-rose-500 to-pink-600', 
-    border: 'border-rose-400', 
-    text: 'text-white', 
-    icon: Medal,
-    headerBg: 'bg-gradient-to-r from-rose-600 to-pink-700'
-  };
-  return { 
-    bg: 'bg-gradient-to-br from-slate-500 to-slate-600', 
-    border: 'border-slate-300', 
-    text: 'text-white', 
-    icon: null,
-    headerBg: 'bg-gradient-to-r from-slate-600 to-slate-700'
-  };
-};
-
-// Combined Progress & Revenue Widget - Modern Contemporary Design
+// Combined Progress & Revenue Widget — Swiss / minimalist
 function CombinedProgressWidget({ timeline, plan, estimated }) {
   const { total_days, days_elapsed, days_remaining, progress_percent, milestones } = timeline;
   const [selectedMilestone, setSelectedMilestone] = useState(null);
   const goalType = plan.goal_type || 'run_rate';
 
   const formatAmount = (amount) => {
+    if (!amount) return '₹0';
     if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)} Cr`;
     if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)} L`;
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
-  // Calculate achievement status
   const achievementPercent = estimated?.percent || 0;
-  const getAchievementColor = () => {
-    if (achievementPercent >= 100) return 'from-emerald-500 to-green-600';
-    if (achievementPercent >= 75) return 'from-teal-500 to-cyan-600';
-    if (achievementPercent >= 50) return 'from-amber-500 to-orange-500';
-    return 'from-rose-500 to-red-500';
-  };
+  const achievementColor =
+    achievementPercent >= 100 ? 'bg-emerald-500'
+    : achievementPercent >= 75 ? 'bg-teal-500'
+    : achievementPercent >= 50 ? 'bg-amber-500'
+    : 'bg-rose-500';
+
+  const timeStats = [
+    { label: 'Elapsed', value: days_elapsed, muted: false },
+    { label: 'Remaining', value: days_remaining, muted: false },
+    { label: 'Total Days', value: total_days, muted: true },
+  ];
 
   return (
-    <Card className="mb-6 overflow-hidden border-0 shadow-lg">
-      {/* Gradient Header */}
-      <div className="bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 p-6 text-white">
-        <div className="flex items-start justify-between mb-6">
+    <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+      {/* Top: target + time stats */}
+      <div className="p-6 md:p-8">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
           <div>
-            <h3 className="text-lg font-semibold opacity-80 mb-1">Target Progress</h3>
-            <p className="text-3xl font-bold">{formatAmount(plan.total_amount)}</p>
-            <p className="text-sm opacity-60 mt-1">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
               {goalType === 'cumulative' ? 'Total Target' : 'Monthly Run Rate Target'}
             </p>
+            <p className="text-3xl font-semibold tracking-tighter text-zinc-900 mt-1.5">{formatAmount(plan.total_amount)}</p>
           </div>
-          
-          {/* Time Stats */}
-          <div className="flex gap-6">
-            <div className="text-center">
-              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center mb-1">
-                <span className="text-xl font-bold text-emerald-400">{days_elapsed}</span>
+
+          <div className="flex items-center gap-8 sm:gap-10">
+            {timeStats.map((s) => (
+              <div key={s.label}>
+                <p className={cn('text-2xl font-semibold tracking-tight', s.muted ? 'text-zinc-400' : 'text-zinc-900')}>{s.value}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mt-0.5">{s.label}</p>
               </div>
-              <p className="text-[10px] opacity-60 uppercase tracking-wider">Completed</p>
-            </div>
-            <div className="text-center">
-              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center mb-1">
-                <span className="text-xl font-bold text-amber-400">{days_remaining}</span>
-              </div>
-              <p className="text-[10px] opacity-60 uppercase tracking-wider">Remaining</p>
-            </div>
-            <div className="text-center">
-              <div className="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center mb-1">
-                <span className="text-xl font-bold">{total_days}</span>
-              </div>
-              <p className="text-[10px] opacity-60 uppercase tracking-wider">Total Days</p>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* Timeline Progress Bar */}
-        <div className="relative pb-12">
-          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full transition-all duration-700"
+        {/* Timeline progress */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">
+            <span>Time Elapsed</span>
+            <span className="text-zinc-900">{Math.round(progress_percent)}%</span>
+          </div>
+          <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 rounded-full transition-all duration-500 ease-out"
               style={{ width: `${Math.min(100, progress_percent)}%` }}
             />
           </div>
-          
+
           {/* Milestones */}
-          <div className="relative h-12 mt-2">
-            {milestones?.map((milestone, idx) => {
-              const position = ((milestone.days / total_days) * 100);
-              const isActive = selectedMilestone === milestone.milestone;
-              const isFirst = idx === 0;
-              const isLast = idx === milestones.length - 1;
-              
-              // Adjust position for first and last to prevent overflow
-              const adjustedPosition = isLast ? Math.min(position, 95) : isFirst ? Math.max(position, 5) : position;
-              
-              return (
-                <div 
-                  key={milestone.milestone}
-                  className={cn(
-                    "absolute flex flex-col items-center cursor-pointer group transition-transform",
-                    isActive && "scale-110"
-                  )}
-                  style={{ 
-                    left: `${adjustedPosition}%`, 
-                    top: '0',
-                    transform: 'translateX(-50%)'
-                  }}
-                  onClick={() => setSelectedMilestone(isActive ? null : milestone.milestone)}
-                >
-                  <div className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-lg",
-                    milestone.is_completed 
-                      ? "bg-emerald-500 text-white" 
-                      : milestone.is_current 
-                        ? "bg-blue-500 text-white ring-2 ring-blue-300 ring-offset-2 ring-offset-slate-800" 
-                        : "bg-slate-600 text-white/70"
-                  )}>
-                    {milestone.is_completed ? '✓' : milestone.milestone}
-                  </div>
-                  
-                  <p className={cn(
-                    "text-[10px] mt-1 whitespace-nowrap",
-                    milestone.is_completed ? "text-emerald-400" : milestone.is_current ? "text-blue-300" : "text-white/50"
-                  )}>
-                    {milestone.date_label}
-                  </p>
+          {milestones?.length > 0 && (
+            <div className="relative h-10 mt-3">
+              {milestones.map((milestone, idx) => {
+                const position = ((milestone.days / total_days) * 100);
+                const isActive = selectedMilestone === milestone.milestone;
+                const isFirst = idx === 0;
+                const isLast = idx === milestones.length - 1;
+                const adjustedPosition = isLast ? Math.min(position, 96) : isFirst ? Math.max(position, 4) : position;
 
-                  {isActive && (
-                    <div className="absolute bottom-full mb-2 bg-white text-slate-800 text-xs rounded-lg px-3 py-2 shadow-xl z-20">
-                      <p className="font-semibold">Milestone {milestone.milestone}</p>
-                      <p>Target: {formatAmount(milestone.target_amount)}</p>
+                return (
+                  <div
+                    key={milestone.milestone}
+                    className={cn('absolute flex flex-col items-center cursor-pointer', isActive && 'z-20')}
+                    style={{ left: `${adjustedPosition}%`, top: 0, transform: 'translateX(-50%)' }}
+                    onClick={() => setSelectedMilestone(isActive ? null : milestone.milestone)}
+                  >
+                    <div className={cn(
+                      'size-5 rounded-full flex items-center justify-center text-[10px] font-bold border transition-all',
+                      milestone.is_completed
+                        ? 'bg-emerald-500 text-white border-emerald-500'
+                        : milestone.is_current
+                          ? 'bg-blue-500 text-white border-blue-500 ring-2 ring-blue-200'
+                          : 'bg-white text-zinc-400 border-zinc-200'
+                    )}>
+                      {milestone.is_completed ? '✓' : milestone.milestone}
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                    <p className={cn(
+                      'text-[10px] mt-1 whitespace-nowrap',
+                      milestone.is_current ? 'text-blue-600 font-medium' : milestone.is_completed ? 'text-emerald-600' : 'text-zinc-400'
+                    )}>
+                      {milestone.date_label}
+                    </p>
+                    {isActive && (
+                      <div className="absolute bottom-full mb-2 bg-zinc-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg whitespace-nowrap">
+                        <p className="font-semibold">Milestone {milestone.milestone}</p>
+                        <p className="text-zinc-300">Target: {formatAmount(milestone.target_amount)}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-        {/* Date Range - Positioned below milestones */}
-        <div className="flex justify-between text-xs opacity-60 -mt-2">
-          <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-          <span>{new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          {/* Date range */}
+          <div className="flex justify-between text-xs text-zinc-400 mt-2">
+            <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            <span>{new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          </div>
         </div>
       </div>
 
-      {/* Revenue Section - Only for Cumulative */}
+      {/* Revenue section — only for cumulative */}
       {goalType === 'cumulative' && estimated && (
-        <div className="p-6 bg-gradient-to-br from-slate-50 to-white">
-          <div className="flex items-center justify-between mb-4">
+        <div className="border-t border-zinc-100 p-6 md:p-8 bg-zinc-50/50">
+          <div className="flex items-start justify-between gap-4 mb-5">
             <div>
-              <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+              <h4 className="text-sm font-semibold tracking-tight text-zinc-900 flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-emerald-500" />
                 Customers On-boarded Revenue (MRR)
               </h4>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Monthly Run Rate from won leads — sum of each lead's <code>monthly_bottles × proposed_sku_pricing</code>.
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Monthly Run Rate from won leads.
               </p>
             </div>
-            <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">
+            <span className="text-xs bg-white border border-zinc-200 text-zinc-600 px-2 py-1 rounded-md font-medium shrink-0">
               {estimated.won_leads_count} Customers
-            </Badge>
+            </span>
           </div>
 
-          {/* Revenue Progress */}
-          <div className="relative h-4 bg-slate-100 rounded-full overflow-hidden mb-4">
-            <div 
-              className={cn("h-full rounded-full transition-all duration-700 bg-gradient-to-r", getAchievementColor())}
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">
+            <span>Achieved</span>
+            <span className={cn(achievementPercent >= 100 ? 'text-emerald-600' : 'text-zinc-900')}>{achievementPercent}%</span>
+          </div>
+          <div className="h-1 bg-zinc-100 rounded-full overflow-hidden mb-6">
+            <div
+              className={cn('h-full rounded-full transition-all duration-500 ease-out', achievementColor)}
               style={{ width: `${Math.min(100, achievementPercent)}%` }}
             />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className={cn(
-                "text-xs font-bold",
-                achievementPercent > 50 ? "text-white" : "text-slate-600"
-              )}>
-                {achievementPercent}% achieved
-              </span>
-            </div>
           </div>
 
-          {/* Revenue Stats */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100">
-              <p className="text-2xl font-bold text-emerald-600">{formatAmount(estimated.achieved)}</p>
-              <p className="text-xs text-emerald-700/70 font-medium mt-1">Achieved</p>
+          <div className="grid grid-cols-3 gap-6">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Achieved</p>
+              <p className="text-xl font-semibold tracking-tighter text-emerald-600 mt-1">{formatAmount(estimated.achieved)}</p>
             </div>
-            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-slate-50 to-gray-50 border border-slate-100">
-              <p className="text-2xl font-bold text-slate-600">{formatAmount(estimated.remaining)}</p>
-              <p className="text-xs text-slate-500 font-medium mt-1">Remaining</p>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Remaining</p>
+              <p className="text-xl font-semibold tracking-tighter text-zinc-700 mt-1">{formatAmount(estimated.remaining)}</p>
             </div>
-            <div className="text-center p-4 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
-              <p className={cn(
-                "text-2xl font-bold",
-                achievementPercent >= 100 ? "text-emerald-600" : achievementPercent >= 50 ? "text-blue-600" : "text-amber-600"
-              )}>
-                {achievementPercent}%
-              </p>
-              <p className="text-xs text-blue-700/70 font-medium mt-1">Achievement</p>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Achievement</p>
+              <p className={cn('text-xl font-semibold tracking-tighter mt-1', achievementPercent >= 100 ? 'text-emerald-600' : achievementPercent >= 50 ? 'text-blue-600' : 'text-amber-600')}>{achievementPercent}%</p>
             </div>
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -350,34 +287,31 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
   let cumulativeRevenue = 0;
 
   return (
-    <Card className="p-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
+    <Card className="p-6 md:p-8 rounded-xl border-zinc-200 shadow-none">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="font-semibold text-lg flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            Monthly Performance
-          </h3>
-          <p className="text-xs text-muted-foreground mt-1">
+          <h3 className="text-lg font-semibold tracking-tight text-zinc-900">Monthly Performance</h3>
+          <p className="text-sm text-zinc-500 mt-0.5">
             Track monthly revenue growth towards target run rate
           </p>
         </div>
         <div className="text-right">
-          <span className="text-muted-foreground text-sm">Target Run Rate:</span>
-          <p className="font-bold text-primary text-xl">{formatCurrency(target, true)}/month</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Target Run Rate</p>
+          <p className="text-xl font-semibold tracking-tighter text-zinc-900 mt-0.5">{formatCurrency(target, true)}<span className="text-sm font-normal text-zinc-400">/mo</span></p>
         </div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b text-left">
-              <th className="pb-3 font-semibold text-sm text-muted-foreground">Month</th>
-              <th className="pb-3 font-semibold text-sm text-muted-foreground text-right">
+            <tr className="border-b border-zinc-200 text-left">
+              <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Month</th>
+              <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-right">
                 <span className="flex items-center justify-end gap-1">
                   <Receipt className="h-3 w-3" /> Revenue Added
                 </span>
               </th>
-              <th className="pb-3 font-semibold text-sm text-muted-foreground text-center">% of Target Run Rate Achieved</th>
+              <th className="pb-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500 text-center">% of Target Run Rate Achieved</th>
             </tr>
           </thead>
           <tbody>
@@ -392,44 +326,44 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
                 <tr 
                   key={idx} 
                   className={cn(
-                    "border-b last:border-0",
-                    month.is_current && "bg-blue-50"
+                    "border-b border-zinc-100 last:border-0",
+                    month.is_current && "bg-blue-50/50"
                   )}
                 >
                   <td className="py-3">
                     <div className="flex items-center gap-2">
                       <span className={cn(
-                        "font-medium",
+                        "font-medium text-zinc-900",
                         month.is_current && "text-blue-700"
                       )}>
                         {month.month}
                       </span>
                       {month.is_current && (
-                        <Badge className="bg-blue-100 text-blue-700 text-[10px]">Current</Badge>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/60">Current</span>
                       )}
                     </div>
                   </td>
                   <td className="py-3 text-right">
-                    <span className="font-semibold">{formatCurrency(month.invoice_value, true)}</span>
+                    <span className="font-semibold text-zinc-900">{formatCurrency(month.invoice_value, true)}</span>
                   </td>
                   <td className="py-3">
                     <div className="flex items-center gap-2 justify-center">
-                      <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="w-24 h-1 bg-zinc-100 rounded-full overflow-hidden">
                         <div 
                           className={cn(
-                            "h-full rounded-full",
-                            runRateAchievedPercent >= 100 ? "bg-green-500" : 
+                            "h-full rounded-full transition-all duration-500 ease-out",
+                            runRateAchievedPercent >= 100 ? "bg-emerald-500" : 
                             runRateAchievedPercent >= 75 ? "bg-teal-500" :
-                            runRateAchievedPercent >= 50 ? "bg-amber-500" : "bg-red-400"
+                            runRateAchievedPercent >= 50 ? "bg-amber-500" : "bg-rose-400"
                           )}
                           style={{ width: `${Math.min(100, runRateAchievedPercent)}%` }}
                         />
                       </div>
                       <span className={cn(
                         "text-sm font-semibold w-14",
-                        runRateAchievedPercent >= 100 ? "text-green-600" : 
+                        runRateAchievedPercent >= 100 ? "text-emerald-600" : 
                         runRateAchievedPercent >= 75 ? "text-teal-600" :
-                        runRateAchievedPercent >= 50 ? "text-amber-600" : "text-red-500"
+                        runRateAchievedPercent >= 50 ? "text-amber-600" : "text-rose-500"
                       )}>
                         {runRateAchievedPercent}%
                       </span>
@@ -440,17 +374,17 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
             })}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 bg-gray-50 font-semibold">
-              <td className="py-3">Total Revenue (Run Rate)</td>
-              <td className="py-3 text-right">
+            <tr className="border-t-2 border-zinc-200 bg-zinc-50 font-semibold">
+              <td className="py-3 text-zinc-900">Total Revenue (Run Rate)</td>
+              <td className="py-3 text-right text-zinc-900">
                 {formatCurrency(cumulativeRevenue || filteredMonthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0), true)}
               </td>
               <td className="py-3 text-center">
                 <span className={cn(
                   "font-bold",
                   (target > 0 && (filteredMonthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0) / target) * 100 >= 100) 
-                    ? "text-green-600" 
-                    : "text-primary"
+                    ? "text-emerald-600" 
+                    : "text-zinc-900"
                 )}>
                   {target > 0 ? Math.round((filteredMonthlyData.reduce((sum, m) => sum + (m.invoice_value || 0), 0) / target) * 100) : 0}% of Target
                 </span>
@@ -460,84 +394,74 @@ function MonthlyPerformanceTable({ monthlyData, plan }) {
         </table>
       </div>
       
-      <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-        <p className="text-sm text-blue-700">
-          <strong>Run Rate Goal:</strong> Build up monthly recurring revenue to reach {formatCurrency(target, true)}/month by the end of the period.
+      <div className="mt-5 p-3 bg-zinc-50 rounded-lg border border-zinc-200">
+        <p className="text-sm text-zinc-600">
+          <strong className="text-zinc-900 font-semibold">Run Rate Goal:</strong> Build up monthly recurring revenue to reach {formatCurrency(target, true)}/month by the end of the period.
         </p>
       </div>
     </Card>
   );
 }
 
-// Compact Territory Card (like subscription plan cards) - Modern gradient design
+// Territory Card — Swiss / minimalist
 function TerritoryCard({ allocation, rank, planId, onAddCity, onEditCity, onDeleteCity, onDelete, onOpenCityDetail, planStartDate, planEndDate }) {
-  const style = getRankStyle(rank);
-  const Icon = style.icon;
   const children = allocation.children || [];
   const totalAllocatedToChildren = children.reduce((sum, c) => sum + (c.amount || 0), 0);
   const remaining = allocation.amount - totalAllocatedToChildren;
-  const percentDistributed = allocation.amount > 0 ? ((totalAllocatedToChildren / allocation.amount) * 100).toFixed(0) : 0;
+  const percentDistributed = allocation.amount > 0 ? Math.round((totalAllocatedToChildren / allocation.amount) * 100) : 0;
 
   return (
-    <div className={cn(
-      "flex flex-col rounded-2xl transition-all hover:shadow-2xl hover:-translate-y-1 overflow-hidden shadow-lg",
-      "border-0"
-    )}>
-      {/* Header with gradient */}
-      <div className={cn("p-5", style.bg)}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center font-bold shrink-0">
-              {Icon ? <Icon className="h-5 w-5 text-white" /> : <span className="text-white text-lg">{rank}</span>}
-            </div>
-            <div>
-              <h3 className="font-bold text-lg text-white flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 opacity-80" />
-                {allocation.territory_name}
-              </h3>
-              <p className="text-xs text-white/60">Territory #{rank}</p>
+    <div className="group flex flex-col bg-white rounded-xl border border-zinc-200 overflow-hidden transition-all duration-200 hover:border-zinc-300 hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)]">
+      {/* Header */}
+      <div className="p-5 border-b border-zinc-100">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="size-9 rounded-lg bg-zinc-100 text-zinc-500 flex items-center justify-center shrink-0">
+              <MapPin className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="font-semibold tracking-tight text-zinc-900 truncate">{allocation.territory_name}</h3>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Territory #{rank}</p>
             </div>
           </div>
-          <Button 
-            size="icon" 
-            variant="ghost" 
-            className="h-8 w-8 text-white/70 hover:text-white hover:bg-white/20 rounded-lg"
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-8 rounded-md text-zinc-400 hover:text-rose-600 hover:bg-rose-50 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={() => onDelete && onDelete(allocation)}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
-        
-        <div className="text-center py-3">
-          <p className="text-4xl font-bold text-white">{formatCurrency(allocation.amount, true)}</p>
-          <p className="text-xs text-white/60 mt-1">Territory Target</p>
-        </div>
 
-        {/* Distribution Progress */}
-        <div className="mt-3 bg-white/10 rounded-xl p-3">
-          <div className="flex justify-between text-xs mb-2">
-            <span className="font-medium text-white/80">{percentDistributed}% distributed to cities</span>
-            <span className={remaining > 0 ? 'text-amber-300' : 'text-emerald-300'}>
-              {formatCurrency(remaining, true)} available
+        <p className="text-2xl font-semibold tracking-tighter text-zinc-900">{formatCurrency(allocation.amount, true)}</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mt-0.5">Territory Target</p>
+
+        {/* Distribution */}
+        <div className="mt-4">
+          <div className="flex justify-between text-xs mb-1.5">
+            <span className="text-zinc-500">{percentDistributed}% distributed</span>
+            <span className={remaining > 0 ? 'text-amber-600 font-medium' : 'text-emerald-600 font-medium'}>
+              {formatCurrency(remaining, true)} left
             </span>
           </div>
-          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-white/80 rounded-full transition-all duration-500"
-              style={{ width: `${percentDistributed}%` }}
+          <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${Math.min(100, percentDistributed)}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* City List */}
-      <div className="flex-1 bg-white p-4">
+      {/* City list */}
+      <div className="flex-1 p-5">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">City Allocations</p>
-          <Button 
-            size="sm" 
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">City Allocations</p>
+          <Button
+            size="sm"
             variant="outline"
-            className="h-7 text-xs rounded-lg"
+            className="h-7 text-xs rounded-md border-zinc-200"
             onClick={() => onAddCity && onAddCity(allocation)}
             disabled={remaining <= 0}
           >
@@ -546,12 +470,12 @@ function TerritoryCard({ allocation, rank, planId, onAddCity, onEditCity, onDele
         </div>
 
         {children.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground text-sm border-2 border-dashed rounded-xl bg-slate-50">
-            <Building2 className="h-8 w-8 mx-auto mb-2 opacity-30" />
+          <div className="text-center py-8 text-zinc-400 text-sm border border-dashed border-zinc-200 rounded-lg bg-zinc-50/50">
+            <Building2 className="h-7 w-7 mx-auto mb-2 text-zinc-300" />
             <p>No cities allocated yet</p>
           </div>
         ) : (
-          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
             {children.map((city) => (
               <CityAllocationRow 
                 key={city.id} 
@@ -602,39 +526,40 @@ function CityAllocationRow({ city, parentAmount, parentTerritory, planId, onEdit
 
   return (
     <div 
-      className="p-2 rounded-lg border bg-gray-50/50 hover:bg-gray-100/50 group cursor-pointer transition-all hover:shadow-sm"
+      className="p-3 rounded-lg border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50 group cursor-pointer transition-all"
       onClick={() => onOpenDetail && onOpenDetail(city, parentTerritory)}
       data-testid={`city-allocation-${city.city?.toLowerCase().replace(/\s+/g, '-')}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 flex-1 min-w-0">
-          <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span className="font-medium text-sm truncate">{city.city}</span>
-          <span className="text-xs text-muted-foreground shrink-0">({percentOfParent}%)</span>
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          <Building2 className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+          <span className="font-medium text-sm text-zinc-900 truncate">{city.city}</span>
+          <span className="text-xs text-zinc-400 shrink-0">({percentOfParent}%)</span>
+          <ChevronRight className="h-3.5 w-3.5 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" />
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={onEdit}>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+          <Button size="icon" variant="ghost" className="size-6 text-zinc-400 hover:text-zinc-700" onClick={onEdit}>
             <Pencil className="h-3 w-3" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:text-red-700" onClick={onDelete}>
+          <Button size="icon" variant="ghost" className="size-6 text-zinc-400 hover:text-rose-600" onClick={onDelete}>
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
       </div>
       
-      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-        <div className="bg-white rounded px-2 py-1 border">
-          <p className="text-muted-foreground">Allocated</p>
-          <p className="font-semibold text-blue-600">{formatCurrency(city.amount, true)}</p>
+      <div className="mt-2.5 flex items-center gap-5">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Allocated</p>
+          <p className="font-semibold text-sm text-zinc-900 mt-0.5">{formatCurrency(city.amount, true)}</p>
         </div>
-        <div className="bg-white rounded px-2 py-1 border">
-          <p className="text-muted-foreground">Achieved</p>
+        <div className="h-8 w-px bg-zinc-100" />
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Achieved</p>
           {loading ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="h-3 w-3 animate-spin mt-1 text-zinc-400" />
           ) : (
-            <p className={cn("font-semibold", parseFloat(achievedPercent) >= 100 ? "text-green-600" : parseFloat(achievedPercent) >= 50 ? "text-amber-600" : "text-red-500")}>
-              {formatCurrency(achieved, true)} <span className="text-[10px] text-muted-foreground">({achievedPercent}%)</span>
+            <p className={cn("font-semibold text-sm mt-0.5", parseFloat(achievedPercent) >= 100 ? "text-emerald-600" : parseFloat(achievedPercent) >= 50 ? "text-amber-600" : "text-rose-500")}>
+              {formatCurrency(achieved, true)} <span className="text-[10px] font-normal text-zinc-400">({achievedPercent}%)</span>
             </p>
           )}
         </div>
@@ -687,25 +612,25 @@ function AllocationItemWithProgress({ allocation, type, cityAmount, planStartDat
   };
 
   const progressColor = parseFloat(achievedPercent) >= 100 
-    ? 'bg-green-500' 
+    ? 'bg-emerald-500' 
     : parseFloat(achievedPercent) >= 50 
       ? 'bg-amber-500' 
-      : 'bg-red-400';
+      : 'bg-rose-400';
 
-  const iconBg = isResource ? 'bg-blue-100' : 'bg-emerald-100';
+  const iconBg = isResource ? 'bg-blue-50' : 'bg-emerald-50';
   const iconColor = isResource ? 'text-blue-600' : 'text-emerald-600';
   const amountColor = isResource ? 'text-blue-600' : 'text-emerald-600';
 
   return (
-    <div className="p-3 rounded-lg border bg-white group">
+    <div className="p-3 rounded-lg border border-zinc-200 bg-white group">
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
-          <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", iconBg)}>
+          <div className={cn("size-8 rounded-full flex items-center justify-center", iconBg)}>
             {isResource ? <User className={cn("h-4 w-4", iconColor)} /> : <Package className={cn("h-4 w-4", iconColor)} />}
           </div>
           <div>
-            <p className="font-medium text-sm">{name}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="font-medium text-sm text-zinc-900">{name}</p>
+            <p className="text-xs text-zinc-400">
               {cityPercent}% of city target
             </p>
           </div>
@@ -716,7 +641,7 @@ function AllocationItemWithProgress({ allocation, type, cityAmount, planStartDat
             {loading ? (
               <Loader2 className="h-3 w-3 animate-spin ml-auto" />
             ) : (
-              <p className={cn("text-xs", parseFloat(achievedPercent) >= 100 ? "text-green-600" : parseFloat(achievedPercent) >= 50 ? "text-amber-600" : "text-red-500")}>
+              <p className={cn("text-xs", parseFloat(achievedPercent) >= 100 ? "text-emerald-600" : parseFloat(achievedPercent) >= 50 ? "text-amber-600" : "text-rose-500")}>
                 {formatCurrency(achieved, true)} ({achievedPercent}%)
               </p>
             )}
@@ -724,7 +649,7 @@ function AllocationItemWithProgress({ allocation, type, cityAmount, planStartDat
           <Button 
             size="icon" 
             variant="ghost" 
-            className="h-7 w-7 opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700"
+            className="size-7 opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-rose-600"
             onClick={onDelete}
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -734,13 +659,13 @@ function AllocationItemWithProgress({ allocation, type, cityAmount, planStartDat
       
       {/* Progress Bar */}
       <div className="mt-2">
-        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+        <div className="flex justify-between text-[10px] text-zinc-400 mb-1">
           <span>Achievement</span>
           <span>{achievedPercent}%</span>
         </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
           <div 
-            className={cn("h-full rounded-full transition-all duration-500", progressColor)}
+            className={cn("h-full rounded-full transition-all duration-500 ease-out", progressColor)}
             style={{ width: `${Math.min(parseFloat(achievedPercent), 100)}%` }}
           />
         </div>
@@ -1477,67 +1402,61 @@ function HierarchicalAllocationSection({ planId, allocations, onUpdate, plan }) 
   const territoryAllocations = allocations.filter(a => a.level === 'territory' || !a.level).sort((a, b) => (b.amount || 0) - (a.amount || 0));
 
   return (
-    <Card className="p-6">
+    <Card className="p-6 md:p-8 rounded-xl border-zinc-200 shadow-none">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="font-semibold text-lg flex items-center gap-2">
-            <Building2 className="h-5 w-5 text-primary" />
-            Territory Allocations
-          </h3>
-          <p className="text-sm text-muted-foreground">Distribute targets across territories and cities</p>
+          <h3 className="text-lg font-semibold tracking-tight text-zinc-900">Territory Allocations</h3>
+          <p className="text-sm text-zinc-500 mt-0.5">Distribute targets across territories and cities</p>
         </div>
         <Button 
           size="sm" 
+          className="bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm"
           onClick={() => openAddDialog(null)} 
           data-testid="add-allocation-btn"
           disabled={getAvailableTerritories().length === 0 || remaining <= 0}
         >
-          <Plus className="h-4 w-4 mr-1" /> Add Territory
+          <Plus className="h-4 w-4 mr-1.5" /> Add Territory
         </Button>
       </div>
 
       {/* Allocation Summary */}
-      <div className="grid grid-cols-4 gap-4 mb-6 p-4 bg-muted/30 rounded-lg">
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground">Total Target</p>
-          <p className="text-xl font-bold">{formatCurrency(plan.total_amount, true)}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground">Allocated</p>
-          <p className="text-xl font-bold text-green-600">{formatCurrency(totalAllocated, true)}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground">Remaining</p>
-          <p className={cn("text-xl font-bold", remaining > 0 ? "text-amber-600" : "text-green-600")}>
-            {formatCurrency(remaining, true)}
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground">Progress</p>
-          <p className={cn("text-xl font-bold", parseFloat(allocatedPercent) >= 100 ? "text-green-600" : "text-blue-600")}>
-            {allocatedPercent}%
-          </p>
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-zinc-100 rounded-xl overflow-hidden border border-zinc-200 mb-6">
+        {[
+          { label: 'Total Target', value: formatCurrency(plan.total_amount, true), color: 'text-zinc-900' },
+          { label: 'Allocated', value: formatCurrency(totalAllocated, true), color: 'text-emerald-600' },
+          { label: 'Remaining', value: formatCurrency(remaining, true), color: remaining > 0 ? 'text-amber-600' : 'text-emerald-600' },
+          { label: 'Progress', value: `${allocatedPercent}%`, color: parseFloat(allocatedPercent) >= 100 ? 'text-emerald-600' : 'text-blue-600' },
+        ].map((s) => (
+          <div key={s.label} className="bg-white px-4 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">{s.label}</p>
+            <p className={cn('text-2xl font-semibold tracking-tighter mt-1', s.color)}>{s.value}</p>
+          </div>
+        ))}
       </div>
 
       {/* Progress Bar */}
-      <div className="mb-6">
-        <Progress value={Math.min(100, parseFloat(allocatedPercent))} className="h-3" />
-        <p className="text-xs text-muted-foreground mt-1 text-center">
+      <div className="mb-8">
+        <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out"
+            style={{ width: `${Math.min(100, parseFloat(allocatedPercent))}%` }}
+          />
+        </div>
+        <p className="text-xs text-zinc-400 mt-2 text-center">
           {formatCurrency(totalAllocated)} of {formatCurrency(plan.total_amount)} allocated
         </p>
       </div>
 
       {/* Territory Cards - Side by Side Grid */}
       {territoryAllocations.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-          <Target className="h-10 w-10 mx-auto mb-3 opacity-50" />
-          <p className="font-medium">No territories allocated yet</p>
-          <p className="text-sm">Add territories to distribute the target</p>
+        <div className="flex flex-col items-center justify-center text-center py-16 px-4 border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
+          <Target className="size-10 text-zinc-300 mb-3" />
+          <p className="font-medium text-zinc-900">No territories allocated yet</p>
+          <p className="text-sm text-zinc-500 mt-1">Add territories to distribute the target</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {territoryAllocations.map((territory, idx) => (
             <TerritoryCard
               key={territory.id}
@@ -1950,76 +1869,76 @@ function MonthlyAllocationTab({ planId }) {
 
   if (rows.length === 0) {
     return (
-      <Card className="p-10 text-center">
-        <CalendarDays className="h-10 w-10 mx-auto mb-3 text-slate-300" />
-        <p className="font-medium text-slate-700">No city allocations yet</p>
-        <p className="text-sm text-muted-foreground mt-1">
-          Add territory & city allocations first — each city's total target then becomes a row here to split across months.
+      <div className="flex flex-col items-center justify-center text-center py-16 px-4 border border-dashed border-zinc-200 rounded-xl bg-zinc-50/50">
+        <CalendarDays className="size-10 text-zinc-300 mb-3" />
+        <p className="font-medium text-zinc-900">No city allocations yet</p>
+        <p className="text-sm text-zinc-500 mt-1 max-w-sm">
+          Add territory &amp; city allocations first — each city's total target then becomes a row here to split across months.
         </p>
-      </Card>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4" data-testid="monthly-allocation-tab">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="p-4">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Total Target</p>
-          <p className="text-xl font-bold mt-1" data-testid="ma-grand-target">{formatCurrency(grandTarget, true)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Allocated</p>
-          <p className="text-xl font-bold mt-1 text-blue-600" data-testid="ma-grand-allocated">{formatCurrency(grandAllocated, true)}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Balance</p>
-          <p className={cn('text-xl font-bold mt-1', Math.abs(grandBalance) < 0.01 ? 'text-emerald-600' : 'text-rose-600')} data-testid="ma-grand-balance">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-zinc-100 rounded-xl overflow-hidden border border-zinc-200">
+        <div className="bg-white px-4 py-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Total Target</p>
+          <p className="text-2xl font-semibold tracking-tighter text-zinc-900 mt-1" data-testid="ma-grand-target">{formatCurrency(grandTarget, true)}</p>
+        </div>
+        <div className="bg-white px-4 py-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Allocated</p>
+          <p className="text-2xl font-semibold tracking-tighter text-blue-600 mt-1" data-testid="ma-grand-allocated">{formatCurrency(grandAllocated, true)}</p>
+        </div>
+        <div className="bg-white px-4 py-4">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Balance</p>
+          <p className={cn('text-2xl font-semibold tracking-tighter mt-1', Math.abs(grandBalance) < 0.01 ? 'text-emerald-600' : 'text-rose-600')} data-testid="ma-grand-balance">
             {formatCurrency(grandBalance, true)}
           </p>
-        </Card>
-        <Card className="p-4 flex flex-col justify-center">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Status</p>
+        </div>
+        <div className="bg-white px-4 py-4 flex flex-col justify-center">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Status</p>
           {allBalanced ? (
-            <span className="mt-1 inline-flex items-center gap-1.5 text-emerald-700 font-semibold text-sm" data-testid="ma-status">
+            <span className="mt-1.5 inline-flex items-center gap-1.5 text-emerald-700 font-semibold text-sm" data-testid="ma-status">
               <CheckCircle className="h-4 w-4" /> Balanced{data?.finalized ? ' · Submitted' : ''}
             </span>
           ) : (
-            <span className="mt-1 inline-flex items-center gap-1.5 text-rose-700 font-semibold text-sm" data-testid="ma-status">
+            <span className="mt-1.5 inline-flex items-center gap-1.5 text-rose-700 font-semibold text-sm" data-testid="ma-status">
               <AlertTriangle className="h-4 w-4" /> Unbalanced
             </span>
           )}
-        </Card>
+        </div>
       </div>
 
       {/* Matrix table */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden rounded-xl border-zinc-200 shadow-none">
         <div className="overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap" data-testid="monthly-allocation-table">
-            <thead className="bg-muted/50">
+            <thead className="bg-zinc-50 border-b border-zinc-200">
               <tr>
-                <th className="sticky left-0 z-10 bg-muted/50 text-left px-4 py-3 font-medium min-w-[200px]">City</th>
-                <th className="text-right px-3 py-3 font-medium">Total Target</th>
+                <th className="sticky left-0 z-10 bg-zinc-50 text-left px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500 min-w-[200px]">City</th>
+                <th className="text-right px-3 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Total Target</th>
                 {months.map((m) => (
-                  <th key={m.key} className="text-right px-3 py-3 font-medium min-w-[120px]">{m.label}</th>
+                  <th key={m.key} className="text-right px-3 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500 min-w-[120px]">{m.label}</th>
                 ))}
-                <th className="text-right px-3 py-3 font-medium">Allocated</th>
-                <th className="text-right px-4 py-3 font-medium">Balance</th>
+                <th className="text-right px-3 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Allocated</th>
+                <th className="text-right px-4 py-3 text-[10px] font-bold uppercase tracking-wider text-zinc-500">Balance</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-zinc-100">
               {rows.map((r) => {
                 const balanced = isRowBalanced(r);
                 const bal = rowBalance(r);
                 return (
                   <tr key={r.allocation_id} className={cn(!balanced && 'bg-rose-50/40')} data-testid={`ma-row-${r.allocation_id}`}>
                     <td className="sticky left-0 z-10 bg-white px-4 py-2.5">
-                      <div className="font-medium text-slate-900">{r.city}</div>
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                      <div className="font-medium text-zinc-900">{r.city}</div>
+                      <div className="text-xs text-zinc-400 flex items-center gap-1">
                         <MapPin className="h-3 w-3" /> {r.territory_name}
                       </div>
                     </td>
-                    <td className="text-right px-3 py-2.5 font-medium text-slate-700">{formatCurrency(r.total_target)}</td>
+                    <td className="text-right px-3 py-2.5 font-medium text-zinc-700">{formatCurrency(r.total_target)}</td>
                     {months.map((m) => (
                       <td key={m.key} className="px-2 py-2">
                         <Input
@@ -2028,7 +1947,7 @@ function MonthlyAllocationTab({ planId }) {
                           value={cells[r.allocation_id]?.[m.key] ?? ''}
                           onChange={(e) => setCell(r.allocation_id, m.key, e.target.value)}
                           placeholder="0"
-                          className="h-9 text-right w-[110px] ml-auto"
+                          className="h-9 text-right w-[110px] ml-auto border-zinc-200"
                           data-testid={`ma-cell-${r.allocation_id}-${m.key}`}
                         />
                       </td>
@@ -2046,12 +1965,12 @@ function MonthlyAllocationTab({ planId }) {
                 );
               })}
             </tbody>
-            <tfoot className="bg-muted/40 font-semibold">
+            <tfoot className="bg-zinc-50 border-t border-zinc-200 font-semibold">
               <tr>
-                <td className="sticky left-0 z-10 bg-muted/40 px-4 py-3">Grand Total</td>
-                <td className="text-right px-3 py-3">{formatCurrency(grandTarget)}</td>
+                <td className="sticky left-0 z-10 bg-zinc-50 px-4 py-3 text-zinc-900">Grand Total</td>
+                <td className="text-right px-3 py-3 text-zinc-900">{formatCurrency(grandTarget)}</td>
                 {months.map((m) => (
-                  <td key={m.key} className="text-right px-3 py-3 text-slate-700" data-testid={`ma-month-total-${m.key}`}>
+                  <td key={m.key} className="text-right px-3 py-3 text-zinc-700" data-testid={`ma-month-total-${m.key}`}>
                     {formatCurrency(monthTotal(m.key))}
                   </td>
                 ))}

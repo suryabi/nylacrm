@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend regression test of Swiss minimalist redesign on /target-planning/{planId}. Verified 3 plans (run_rate ACTIVE 7a23..., cumulative DRAFT 2c22..., 6-mo DRAFT 813f... with 5 territories). All key flows work: CombinedProgressWidget renders (TotalTarget, Elapsed/Remaining/Total Days, Time Elapsed progress bar, milestones markers), Cumulative MRR section renders Achieved/Remaining/Achievement, MonthlyPerformanceTable for run_rate works, TerritoryCard + CityAllocationRow render with progress + Allocated/Achieved, Add Territory dialog opens (when budget available), Add City dialog reachable, city drawer (Sheet) opens with Resources/SKUs tabs both clickable, MonthlyAllocation City x Month matrix renders with editable cells - typing 1000 into ma-cell updates ma-row-allocated and ma-row-balance live, summary band Total Target/Allocated/Balance/Status updates, Submit Allocation remains disabled while Unbalanced. Status buttons render correctly: DRAFT shows Publish Plan (publish-plan-detail-btn), ACTIVE shows Mark Completed + Revert to Draft (rendered text, no testid). No JS runtime/console errors (only 401s on unauth probes which are pre-login standard). Data NOT corrupted - no Save Draft clicked; existing plan data intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MINOR (non-blocking, pre-existing): Mark Completed button (line 2143) and Revert to Draft button (line 2148) in TargetPlanDashboard.js lack data-testid attributes. Recommend adding data-testid=\"mark-completed-btn\" and data-testid=\"revert-to-draft-btn\" to support automated testing of ACTIVE plan status transitions.",
+    "MINOR (pre-existing): TerritoryCard root element lacks data-testid=\"territory-card-{id}\" and Add City buttons lack data-testid=\"add-city-btn-{territoryId}\". Not regressions from this redesign but useful additions."
+  ],
+  "critical_code_review_comments": [
+    "TargetPlanDashboard.js is ~2191 lines and houses 8+ inner components. Recommend splitting CombinedProgressWidget, MonthlyPerformanceTable, TerritoryCard, CityAllocationRow, AllocationItemWithProgress, CityAllocationDetailDialog, HierarchicalAllocationSection and MonthlyAllocationTab into their own files under src/pages/target-plan/ or src/components/target-plan/ for maintainability.",
+    "No errors observed; the cleanup of unused imports (Progress, Clock, Trophy, Medal, X, Calendar) and removal of getRankStyle is clean."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "None. Edited a single monthly-allocation cell in-memory to 1000 then attempted to restore; never clicked Save Draft so no DB persistence occurred. Plan 813fbe91 remains in its original state.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Swiss redesign verified visually + functionally. Key live-update test: type into ma-cell-* triggers ma-row-allocated-*, ma-row-balance-*, and the summary band band update. Submit Allocation stays disabled when status=Unbalanced. Two minor missing data-testid (mark-completed-btn, revert-to-draft-btn) noted but pre-existing and out of scope for visual redesign.",
+  "rca of the issue": "No bug encountered. Redesign introduced no functional regression."
+}
