@@ -15,11 +15,9 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
-### 2026-05-30 — COGS Calculator: freeze the result columns to the right ✅ DONE
-- **Request**: "since the COGS table is now wide, freeze the right-hand 'Total COGS → Min Landing' result columns" so the key outputs stay visible while scrolling the cost inputs. (Yes.)
-- **Frontend** (`pages/COGSCalculator.js`): the contiguous right block — **Total COGS, Gross Margin (₹), Ex-Factory, Base Cost, Min Landing, Actual Landing, Last Edited** — is now `position: sticky` pinned to the right edge (Excel-style freeze panes). Added `FROZEN_RIGHT_WIDTHS` + `frozenRightStyle(idx)` helper that assigns each frozen header/body cell a fixed width and a computed `right` offset (= total width of frozen columns to its right; rightmost = 0). Gave the frozen cells opaque backgrounds (kept their green/blue/emerald/purple tints; Actual Landing→`bg-purple-50`, Last Edited→`bg-background`) and z-index layering (`z-20` headers / `z-10` body). Also added `z-20`/`z-10` to the already-pinned left SKU column for consistent stacking. (Actual Landing + Last Edited are included so the frozen region stays flush to the right edge with no visual gap.)
-- **Verified (preview)**: screenshots at scrollLeft=0 and scrolled fully right (915px) — SKU stays pinned left, the result panel stays pinned right, and the cost-input columns (Primary/Cap/Manufacturing → Outbound Logistics/Distribution %/Gross Margin %) scroll through the middle window underneath. `scrollWidth 2465 / clientWidth 1550`. JS lint clean. Mobile card view untouched.
-- **⚠️ Action**: redeploy to see it in production.
+### 2026-05-30 — COGS Calculator: freeze the result columns to the right ✅ DONE → ❌ REVERTED (user request)
+- **Reverted 2026-05-31**: user said "In COGS calculator do not freeze the right side columns." Removed all sticky/frozen styling from the result block (Total COGS → Min Landing, Actual Landing, Last Edited) and the helper constants; result columns now scroll naturally with the table. The SKU column stays pinned left (original behavior) and the no-word-wrap + SKU-Management ordering changes remain in place. JS lint clean; verified via screenshot (result columns scroll, not pinned).
+- ~~Request: freeze the right-hand result columns so outputs stay visible while scrolling cost inputs.~~ (superseded)
 
 
 ### 2026-05-30 — COGS Calculator: no word-wrap + rows follow SKU Management order ✅ DONE
