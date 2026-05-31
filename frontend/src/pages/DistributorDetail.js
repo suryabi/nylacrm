@@ -1798,7 +1798,9 @@ export default function DistributorDetail() {
   };
 
   const addDeliveryItem = () => {
-    setDeliveryItems(prev => [...prev, {
+    // Prepend so the newest line appears at the TOP of the list — the user can
+    // immediately fill it in without scrolling past previously-added items.
+    setDeliveryItems(prev => [{
       id: Date.now(),
       sku_id: '',
       sku_name: '',
@@ -1808,7 +1810,7 @@ export default function DistributorDetail() {
       tax_percent: 0,
       batch_id: '',
       batch_code: '',
-    }]);
+    }, ...prev]);
   };
 
   const updateDeliveryItem = (itemId, field, value) => {

@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-05-31 — Record Account Delivery modal: newest item on top + floating action buttons ✅ DONE
+- **Request**: In Record Delivery (distributor Stock Out → "Record Account Delivery"), (1) when clicking "Add Item" the newest line should appear at the **top** of the list (so the user doesn't scroll down to fill it), and (2) the **Record Delivery / Cancel** buttons should be **floating** (always visible) instead of requiring a scroll to the bottom.
+- **Fix #1 — prepend new items** (`pages/DistributorDetail.js` → `addDeliveryItem`): now prepends the new row (`[newItem, ...prev]`) so it renders directly under the "Add Item" button at the top. Safe because `updateDeliveryItem`/`removeDeliveryItem` key on `item.id` (not array index).
+- **Fix #2 — sticky footer** (`components/distributor/DeliveriesTab.jsx`): restructured the delivery `DialogContent` into a `flex flex-col` with a fixed `DialogHeader` (`shrink-0`), a scrollable body (`flex-1 overflow-y-auto min-h-0 -mx-6 px-6`), and a pinned `DialogFooter` (`shrink-0 border-t pt-4`). Header + action buttons now stay visible while only the items body scrolls. The over-stock guard banner in the footer is unchanged.
+- **Verified (preview)**: screenshot — added 3 items; newest "Select SKU" row sits at the top under "Add Item", and the Cancel/Record Delivery footer is pinned at the bottom with a top border while the body overflows. JS lint clean. Redeploy to push to production.
+
+
+
 ### 2026-05-31 — Compare Months: flip Change (MoM) card — % prominent, amount underneath ✅ DONE
 - **Request**: In Revenue Analytics → Compare Months, the "Change (MoM)" card showed the ₹ difference large with the % small underneath. Flipped it: the **% is now the large headline** (`text-3xl`) and the **₹ amount sits underneath** in the pill (`+₹X vs <Month>`). `pages/RevenueAnalytics.js` CompareView. Verified via screenshot (shows +100% large, +₹5.4K vs Apr 2026 below). The comparison table columns (Change / %) are unchanged. Redeploy to push to production.
 

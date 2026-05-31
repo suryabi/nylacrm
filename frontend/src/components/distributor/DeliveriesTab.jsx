@@ -678,14 +678,14 @@ export default function DeliveriesTab({
                     Record Delivery
                   </Button>
                 </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
+            <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+              <DialogHeader className="shrink-0">
                 <DialogTitle>Record Account Delivery</DialogTitle>
                 <DialogDescription>
                   Record a delivery from {distributor.distributor_name} to an account
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              <div className="space-y-4 py-4 flex-1 overflow-y-auto min-h-0 -mx-6 px-6">
                 {/* Account Selection - Searchable */}
                 <div className="space-y-2">
                   <Label>Account *</Label>
@@ -1399,7 +1399,7 @@ export default function DeliveriesTab({
                   />
                 </div>
               </div>
-              <DialogFooter>
+              <DialogFooter className="shrink-0 border-t pt-4">
                 {/* Aggregate over-stock guard — refuse to submit when any line
                     requests more units than its selected batch holds. Mirrors
                     the backend stock-availability validator so users never hit
