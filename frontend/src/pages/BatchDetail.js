@@ -131,6 +131,7 @@ export default function BatchDetail() {
   const [rejFilter, setRejFilter] = useState({ resource: '', date: '', reason: '', stage: '' });
   const [costMappings, setCostMappings] = useState([]);
   const [skuCogs, setSkuCogs] = useState({});
+  const [skus, setSkus] = useState([]);
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [editSaving, setEditSaving] = useState(false);
@@ -157,6 +158,7 @@ export default function BatchDetail() {
               axios.get(`${API_URL}/production/rejection-cost-mappings?sku_id=${encodeURIComponent(skuId)}`, { headers }),
             ]);
             if (skuRes.status === 'fulfilled') {
+              setSkus(skuRes.value.data?.skus || []);
               const me = (skuRes.value.data?.skus || []).find((s) => s.id === skuId);
               setSkuCogs(me?.cogs_components_values || {});
             }
@@ -190,6 +192,7 @@ export default function BatchDetail() {
     if (!batch) return;
     setEditForm({
       batch_code: batch.batch_code || '',
+      sku_id: batch.sku_id || '',
       production_date: batch.production_date || '',
       total_crates: batch.total_crates ?? 0,
       bottles_per_crate: batch.bottles_per_crate ?? 0,
@@ -202,6 +205,7 @@ export default function BatchDetail() {
   const saveEdit = async () => {
     const payload = {};
     if (editForm.batch_code !== batch.batch_code) payload.batch_code = editForm.batch_code.trim();
+    if (editForm.sku_id && editForm.sku_id !== batch.sku_id) payload.sku_id = editForm.sku_id;
     if (editForm.production_date !== batch.production_date) payload.production_date = editForm.production_date;
     if (Number(editForm.total_crates) !== Number(batch.total_crates)) payload.total_crates = Number(editForm.total_crates);
     if (Number(editForm.bottles_per_crate) !== Number(batch.bottles_per_crate)) payload.bottles_per_crate = Number(editForm.bottles_per_crate);
@@ -510,6 +514,23 @@ export default function BatchDetail() {
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
                   data-testid="edit-batch-code"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">SKU / Product</label>
+                <select
+                  value={editForm.sku_id || ''}
+                  onChange={(e) => setEditForm({ ...editForm, sku_id: e.target.value })}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  data-testid="edit-batch-sku"
+                >
+                  {!skus.some((s) => s.id === batch.sku_id) && batch.sku_id && (
+                    <option value={batch.sku_id}>{batch.sku_name || 'Current SKU'}</option>
+                  )}
+                  {skus.map((s) => (
+                    <option key={s.id} value={s.id}>{s.sku_name || s.sku || s.name}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400 mt-1">Changes the product this batch is recorded against.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">Production date</label>

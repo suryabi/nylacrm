@@ -91,6 +91,8 @@ class BatchUpdate(BaseModel):
     ph_value: Optional[float] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
 
 class RejectionCostMappingUpsert(BaseModel):
     sku_id: str
@@ -626,6 +628,16 @@ async def update_batch(batch_id: str, data: BatchUpdate, current_user: dict = De
         if dup:
             raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
         updates["batch_code"] = data.batch_code
+
+    # SKU can be corrected at any time (e.g. the wrong product was selected when
+    # the batch was created). master_skus is a GLOBAL collection. We validate the
+    # new SKU exists and sync the denormalised sku_name from the master record.
+    if data.sku_id is not None and data.sku_id != existing.get("sku_id"):
+        sku = await db.master_skus.find_one({"id": data.sku_id}, {"_id": 0})
+        if not sku:
+            raise HTTPException(status_code=404, detail="Selected SKU not found")
+        updates["sku_id"] = data.sku_id
+        updates["sku_name"] = sku.get("sku_name") or sku.get("name") or data.sku_name or existing.get("sku_name")
 
     # Crates/bottles_per_crate only editable while batch is still "created"
     # (after that, stage_balances + transfers are tied to the original count).

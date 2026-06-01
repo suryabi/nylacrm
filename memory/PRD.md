@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-01 — Production batch edit: editable SKU / Product ✅ DONE
+- **Request**: "In production batch edit, I should be able to edit the SKU also — currently it's not there."
+- **Backend** (`routes/production_qc.py`): added `sku_id` + `sku_name` to `BatchUpdate`; `update_batch` now accepts an `sku_id` change — validates it against the **global** `master_skus` collection (404 if not found) and syncs the denormalised `sku_name` from the master record. Editable at any batch status (it's a label correction). Note: does not auto-reconcile already-transferred factory-warehouse stock rows (out of scope for this change).
+- **Frontend** (`pages/BatchDetail.js`): added a "SKU / Product" `<select>` (`data-testid="edit-batch-sku"`) to the Edit Batch dialog (under Batch code), pre-selected to the current SKU and listing all active master SKUs (falls back to show the current SKU even if inactive); `saveEdit` sends `sku_id` only when changed. Stored the master-SKU list in a `skus` state from the existing `/master-skus` fetch.
+- **Verified (preview)**: curl — change SKU syncs `sku_name`, invalid SKU → 404, reverted; screenshots — dropdown renders pre-selected with 8 SKUs, and a full UI change→Save showed the "Batch updated" toast + header updating to the new SKU name (then reverted the test batch). Lints clean (py + js). **Redeploy to push to production.**
+
+
 ### 2026-06-01 — Configurable per-tenant idle (inactivity) auto-logout ✅ DONE
 - **Request**: "App times out at 20 min — it should time out only when idle, not while actively using. Also make the idle timeout configurable in tenant settings and honor it."
 - **Finding**: The timeout was *already* idle-based — `AuthContext` resets a single inactivity timer on every `mousedown/mousemove/keypress/scroll/touchstart/click`, so active users are never logged out; the backend session token itself lasts 7 days (not the cause). The only change needed was making the idle duration tenant-configurable.
