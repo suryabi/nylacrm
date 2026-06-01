@@ -11,6 +11,11 @@ import { skuAliasAPI } from '../utils/api';
 
 const skuLabel = (s) => `${s.sku_name}${s.external_sku_id ? ` (${s.external_sku_id})` : ''}`;
 
+const MODULE_LABELS = {
+  invoices: 'Invoices', production: 'Production', distribution: 'Distribution',
+  stock: 'Stock', accounts: 'Accounts', leads: 'Leads', returns: 'Returns', targets: 'Targets',
+};
+
 export const SkuAliasTool = () => {
   const [loading, setLoading] = useState(true);
   const [unmapped, setUnmapped] = useState([]);
@@ -45,8 +50,13 @@ export const SkuAliasTool = () => {
         alias_value: item.alias_value,
         alias_type: item.alias_type,
         target_sku_id: target,
+        apply_to_records: true,
       });
-      toast.success(`Mapped "${item.alias_value}" → ${res.data.target_sku_name}`);
+      const n = res.data?.rewrite?.total || 0;
+      toast.success(
+        `Mapped "${item.alias_value}" → ${res.data.target_sku_name}` +
+        (n ? ` · updated ${n} record${n === 1 ? '' : 's'}` : '')
+      );
       await load();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save alias');
@@ -73,28 +83,29 @@ export const SkuAliasTool = () => {
           SKU Aliases (old → current)
         </CardTitle>
         <CardDescription>
-          Historical invoices may reference retired SKU codes or old names. Map each leftover
-          identifier to a current SKU so Revenue Analytics, SKU Performance &amp; Invoices all show
-          the current SKU. This never edits your invoices — it&apos;s applied when reports are read.
+          Old SKUs can linger across <strong>Invoices, Production, Distribution, Stock, Accounts,
+          Leads, Returns &amp; Targets</strong>. Map each leftover identifier to a current SKU — this
+          re-points those records to the chosen SKU (so every module shows the current SKU) and keeps
+          an alias so reports stay consolidated.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <Button variant="outline" size="sm" onClick={load} disabled={loading} data-testid="sku-alias-refresh">
           {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-          Re-scan invoices
+          Re-scan all records
         </Button>
 
         {/* Unmapped identifiers */}
         <div>
           <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-            Unmapped SKUs found in invoices
+            Unmapped SKUs found across your records
             <Badge variant={unmapped.length ? 'destructive' : 'secondary'}>{unmapped.length}</Badge>
           </h4>
           {loading ? (
             <div className="py-8 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
           ) : unmapped.length === 0 ? (
             <p className="text-sm text-muted-foreground flex items-center gap-2" data-testid="sku-alias-all-mapped">
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" /> All invoice SKUs resolve to a current SKU. Nothing to map.
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" /> All SKUs across your records resolve to a current SKU. Nothing to map.
             </p>
           ) : (
             <div className="space-y-2" data-testid="sku-alias-unmapped-list">
@@ -116,6 +127,15 @@ export const SkuAliasTool = () => {
                           <Badge variant="secondary" className="text-[10px]">{Math.round(u.units).toLocaleString('en-IN')} unit{Math.round(u.units) === 1 ? '' : 's'}</Badge>
                         )}
                       </div>
+                      {u.sources && Object.keys(u.sources).length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 mt-1" data-testid={`unmapped-sources-${u.alias_value}`}>
+                          {Object.entries(u.sources).map(([mod, c]) => (
+                            <Badge key={mod} variant="outline" className="text-[10px] border-sky-200 bg-sky-50 text-sky-700">
+                              {MODULE_LABELS[mod] || mod} · {c}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                       {u.sample_invoices?.length > 0 && (
                         <p className="text-xs text-muted-foreground mt-0.5">e.g. {u.sample_invoices.slice(0, 3).join(', ')}</p>
                       )}
