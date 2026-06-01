@@ -146,6 +146,11 @@ class TenantSettings(BaseModel):
     # Configurable per tenant; default 5 minutes.
     gps_ping_interval_minutes: int = 5
 
+    # Auto-logout: log a user out after this many minutes of INACTIVITY (no mouse,
+    # keyboard, scroll or touch). The timer resets on any activity, so actively
+    # working users are never logged out. Configurable per tenant; default 20 min.
+    idle_timeout_minutes: int = 20
+
 
 # ============= INDUSTRY PROFILE SYSTEM =============
 

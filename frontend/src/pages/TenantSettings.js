@@ -238,6 +238,7 @@ export default function TenantSettings() {
     default_distributor_gst_percent: 18,
     check_in_radius_meters: 50,
     gps_ping_interval_minutes: 5,
+    idle_timeout_minutes: 20,
   });
   
   // Auth config for Google Workspace SSO
@@ -1969,6 +1970,28 @@ export default function TenantSettings() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   How often the Driver mobile app pushes GPS coordinates while a delivery is in progress. Distributor & admin live maps poll at this cadence too.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Idle Session Timeout
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="480"
+                    step="1"
+                    value={settings.idle_timeout_minutes ?? 20}
+                    onChange={(e) => setSettings(prev => ({ ...prev, idle_timeout_minutes: parseInt(e.target.value, 10) || 20 }))}
+                    className="max-w-[120px]"
+                    data-testid="input-idle-timeout"
+                  />
+                  <span className="text-muted-foreground">minutes</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Users are automatically logged out after this many minutes of inactivity (no mouse, keyboard, scroll or touch). The timer resets on any activity, so people actively working are never logged out. Range: 1–480 minutes.
                 </p>
               </div>
             </CardContent>

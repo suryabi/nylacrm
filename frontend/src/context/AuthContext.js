@@ -4,7 +4,16 @@ import axios from 'axios';
 const AuthContext = createContext();
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-const INACTIVITY_TIMEOUT = 20 * 60 * 1000; // 20 minutes in milliseconds
+
+const DEFAULT_IDLE_MINUTES = 20;
+// Idle (inactivity) auto-logout duration in ms. Driven by the tenant setting
+// `idle_timeout_minutes`, bridged via localStorage by TenantConfigContext.
+// Read at call time so changes apply on the next user activity without a reload.
+const getInactivityTimeoutMs = () => {
+  const raw = parseInt(localStorage.getItem('idleTimeoutMinutes'), 10);
+  const mins = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 480) : DEFAULT_IDLE_MINUTES;
+  return mins * 60 * 1000;
+};
 
 // Set up axios interceptor to include X-Tenant-ID header on all requests
 axios.interceptors.request.use((config) => {
@@ -35,7 +44,7 @@ export const AuthProvider = ({ children }) => {
       inactivityTimerRef.current = setTimeout(() => {
         // Auto logout due to inactivity
         logoutDueToInactivity();
-      }, INACTIVITY_TIMEOUT);
+      }, getInactivityTimeoutMs());
     }
   }, [user]);
 
@@ -179,8 +188,8 @@ export const AuthProvider = ({ children }) => {
     // Calculate time spent (exclude idle time if due to inactivity)
     let timeSpent = activeTime;
     if (dueToInactivity) {
-      // Don't count the last 20 minutes of inactivity
-      timeSpent = Math.max(0, activeTime - (INACTIVITY_TIMEOUT / 1000));
+      // Don't count the idle window leading up to the auto-logout
+      timeSpent = Math.max(0, activeTime - (getInactivityTimeoutMs() / 1000));
     }
     
     try {

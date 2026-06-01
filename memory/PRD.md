@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-01 — Configurable per-tenant idle (inactivity) auto-logout ✅ DONE
+- **Request**: "App times out at 20 min — it should time out only when idle, not while actively using. Also make the idle timeout configurable in tenant settings and honor it."
+- **Finding**: The timeout was *already* idle-based — `AuthContext` resets a single inactivity timer on every `mousedown/mousemove/keypress/scroll/touchstart/click`, so active users are never logged out; the backend session token itself lasts 7 days (not the cause). The only change needed was making the idle duration tenant-configurable.
+- **Backend** (`models/tenant.py`): added `idle_timeout_minutes: int = 20` to `TenantSettings` (persisted/returned via existing `PUT/GET /api/tenants/current/settings` + `/config`; no new endpoints).
+- **Frontend**: `TenantSettings.js` — new "Idle Session Timeout" field (1–480 min, `data-testid="input-idle-timeout"`) in Regional/Distribution settings, saved via the existing Save Regional Settings button. `TenantConfigContext.js` bridges the value to `localStorage['idleTimeoutMinutes']` on config load (because `AuthProvider` is the OUTER provider and can't consume tenant config). `AuthContext.js` now reads that value dynamically (`getInactivityTimeoutMs()`, clamped 1–480, default 20) for both the inactivity timer and the idle-time exclusion on logout — so changes take effect on the next user activity without a reload.
+- **Verified (preview)**: curl — field absent→defaults 20; PUT 15→GET 15→restored 20 (also restored the tenant's original gps interval=7 that the test touched). Screenshots — settings field renders with value 20; `localStorage.idleTimeoutMinutes = 20` confirmed after login. Lints clean (py + js). Frontend + 1-line model change — **redeploy to push to production**.
+
+
 ### 2026-05-31 — Target Planning list: "Assigned to me" + status filter bar ✅ DONE
 - **Request**: Add an "Assigned to me" / status filter bar to the Target Planning list page.
 - **Frontend only** (`pages/TargetPlanningList.js`): new Swiss-styled filter bar above the grid — a segmented **status control** (All / Active / Draft / Completed / Inactive, each with a live count) + an **"Assigned to me"** toggle (dark-filled when on, `UserCheck` icon). Filtering: `matchesStatus` (`status || 'draft'`) and `matchesAssignee` (`assigned_to === user.id`, via `useAuth()`); status-tab counts are computed on the assignee-filtered base so they reflect the visible set. Plans are then grouped (by `assigned_to_name`, Unassigned last) from the filtered set. New **filtered-empty state** ("No plans match these filters" + Clear filters) distinct from the global no-plans empty state. New testids: `tp-filter-bar`, `status-filter-{all|active|draft|completed|inactive}`, `assigned-to-me-toggle`, `tp-no-matches`, `clear-filters-btn`.

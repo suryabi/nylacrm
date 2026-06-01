@@ -211,6 +211,11 @@ export const TenantConfigProvider = ({ children }) => {
       const config = configResponse.data;
       setTenantConfig(config);
       setModules(config.modules || {});
+
+      // Bridge the tenant idle-timeout to AuthContext (a separate, outer provider
+      // that can't consume this context). AuthContext reads this from localStorage.
+      const idleMins = Number(config?.settings?.idle_timeout_minutes);
+      localStorage.setItem('idleTimeoutMinutes', String(idleMins > 0 ? idleMins : 20));
       
       // Set industry profile - handle both nested and flat formats
       const industryData = industryResponse.data || {};
@@ -391,6 +396,7 @@ export const TenantConfigProvider = ({ children }) => {
       date_format: tenantConfig?.settings?.date_format || 'DD/MM/YYYY',
       fiscal_year_start: tenantConfig?.settings?.fiscal_year_start || '04-01',
       default_distributor_gst_percent: tenantConfig?.settings?.default_distributor_gst_percent ?? 18,
+      idle_timeout_minutes: tenantConfig?.settings?.idle_timeout_minutes ?? 20,
     };
   }, [tenantConfig]);
 
