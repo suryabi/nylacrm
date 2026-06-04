@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-04 — Account Detail: "Zoho sync health" indicator + one-click re-sync ✅ DONE
+- **Request**: Add a small Zoho sync health indicator on the Account Detail page (last sync status + one-click "Re-sync to Zoho").
+- **Backend** (`routes/accounts.py`): new `POST /accounts/{account_id}/zoho-resync` — re-pushes the contact to Zoho via the existing `zoho_service.upsert_contact`, and records sync health on the account: `zoho_sync_status` ('synced'/'error'), `zoho_last_synced_at`, `zoho_last_sync_attempt_at`, `zoho_last_sync_error`. Rejects distributor-billed accounts (not in Zoho) and surfaces real errors as HTTP 400 (passes through Cloudflare). The same health fields are now also stamped on **activation success/failure** and on the **auto re-sync** in `update_account` (so silent edit-time failures are captured).
+- **Frontend** (`pages/AccountDetail.js`): the activated card now shows a color-coded **sync badge** (`data-testid="zoho-sync-badge"`) — emerald "Zoho Synced", rose "Zoho Sync Error", or grey "Not Synced to Zoho" (status falls back to inferring 'synced' from `zoho_contact_id` for legacy accounts). Adds a "Last synced <time>" line (`zoho-last-synced`) and, on failure, a rose error line showing the exact reason (`zoho-sync-error`). The "Re-sync to Zoho" button now calls the new endpoint directly (with a spinner/"Syncing…" state) instead of re-opening the activation dialog.
+- **Verified (preview)**: endpoint returns clean 400 JSON when Zoho isn't connected; screenshot shows the green "ZOHO SYNCED" badge + Re-sync button on an active company-billed account. Py + JS lint clean. (Live success/error paths require a connected Zoho — production only.) **Redeploy to push to production.**
+
+
+
 ### 2026-06-04 — Production 502 "Bad gateway" on /accounts/{id}/activate masked the real error ✅ FIXED (needs redeploy)
 - **Reported (PRODUCTION)**: `POST /api/accounts/CAFE-BEN-A26-001/activate` returned Cloudflare's branded `Error 502: origin_bad_gateway` (failed fast, ~891ms — not a timeout).
 - **Root cause**: the backend deliberately raised `HTTPException(status_code=502, ...)` for application-level **integration failures** (e.g. "Failed to sync customer to Zoho Books: <reason>"). 502/503/504 are **gateway-class** statuses — Cloudflare and the K8s ingress intercept any such response from the origin and replace it with their own generic "origin_bad_gateway" page, so the real, actionable `detail` (the actual Zoho error) never reached the user. The frontend already reads `err.response.data.detail`, so the message was simply being swallowed by the status code.

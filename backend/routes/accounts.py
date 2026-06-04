@@ -603,13 +603,25 @@ async def update_account(account_id: str, update: AccountUpdate, current_user: d
                             f"[zoho] Re-synced contact for account {updated.get('account_id')} "
                             f"after edits: {sorted(changed_zoho_fields)}"
                         )
+                        await tdb.accounts.update_one(_account_match(account_id), {'$set': {
+                            'zoho_sync_status': 'synced',
+                            'zoho_last_synced_at': datetime.now(timezone.utc).isoformat(),
+                            'zoho_last_sync_attempt_at': datetime.now(timezone.utc).isoformat(),
+                            'zoho_last_sync_error': None,
+                        }})
             except Exception as e:
                 # Never break the user's save because Zoho is down / mis-configured.
                 # The change is already in our DB — the user can hit save again
-                # later or manually re-sync.
+                # later or manually re-sync. We DO record the failure so the
+                # Account Detail "Zoho sync health" indicator can surface it.
                 _logger.warning(
                     f"[zoho] Auto re-sync failed for account {updated.get('account_id')}: {e}"
                 )
+                await tdb.accounts.update_one(_account_match(account_id), {'$set': {
+                    'zoho_sync_status': 'error',
+                    'zoho_last_sync_error': str(e),
+                    'zoho_last_sync_attempt_at': datetime.now(timezone.utc).isoformat(),
+                }})
 
     return updated
 
@@ -820,6 +832,73 @@ async def update_zoho_contact_id(
         'account_name': account.get('account_name'),
         'previous_zoho_contact_id': account.get('zoho_contact_id'),
         'zoho_contact_id': new_id,
+    }
+
+
+@router.post("/{account_id}/zoho-resync")
+async def resync_account_to_zoho(account_id: str, current_user: dict = Depends(get_current_user)):
+    """On-demand re-push of this account's contact details to Zoho Books.
+
+    Records the sync health on the account (`zoho_sync_status`,
+    `zoho_last_synced_at`, `zoho_last_sync_error`) so the Account Detail page can
+    surface a "Zoho sync health" indicator. Distributor-billed accounts are not
+    registered in Zoho and are rejected with a clear message.
+    """
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    billed_by = (account.get('billed_by') or 'company').lower()
+    if billed_by == 'distributor':
+        raise HTTPException(
+            status_code=400,
+            detail='This account is billed by a third-party distributor — it is not registered in Zoho Books.'
+        )
+
+    from services import zoho_service as zoho
+    if not zoho.is_zoho_configured():
+        raise HTTPException(
+            status_code=400,
+            detail='Zoho Books integration is not configured. Ask an admin to set ZOHO_CLIENT_ID/SECRET.'
+        )
+    tenant_id = get_current_tenant_id()
+    creds = await zoho.get_credentials(tenant_id)
+    if not creds:
+        raise HTTPException(
+            status_code=400,
+            detail='Zoho Books is not connected for this tenant. Go to Settings → Integrations → Zoho Books and click Connect.'
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        zoho_contact_id = await zoho.upsert_contact(tenant_id, account)
+    except Exception as e:
+        await tdb.accounts.update_one(_account_match(account_id), {'$set': {
+            'zoho_sync_status': 'error',
+            'zoho_last_sync_error': str(e),
+            'zoho_last_sync_attempt_at': now,
+            'updated_at': now,
+        }})
+        raise HTTPException(status_code=400, detail=f'Failed to sync customer to Zoho Books: {e}')
+
+    set_doc = {
+        'zoho_sync_status': 'synced',
+        'zoho_last_synced_at': now,
+        'zoho_last_sync_attempt_at': now,
+        'zoho_last_sync_error': None,
+        'updated_at': now,
+    }
+    if zoho_contact_id:
+        set_doc['zoho_contact_id'] = zoho_contact_id
+    await tdb.accounts.update_one(_account_match(account_id), {'$set': set_doc})
+
+    return {
+        'success': True,
+        'message': 'Synced to Zoho Books.',
+        'zoho_contact_id': zoho_contact_id or account.get('zoho_contact_id'),
+        'zoho_sync_status': 'synced',
+        'zoho_last_synced_at': now,
     }
 
 
@@ -1455,6 +1534,11 @@ async def activate_account(
         try:
             zoho_contact_id = await zoho.upsert_contact(tenant_id, account)
         except Exception as e:
+            await tdb.accounts.update_one(_account_match(account_id), {'$set': {
+                'zoho_sync_status': 'error',
+                'zoho_last_sync_error': str(e),
+                'zoho_last_sync_attempt_at': datetime.now(timezone.utc).isoformat(),
+            }})
             raise HTTPException(status_code=400, detail=f'Failed to sync customer to Zoho Books: {e}')
 
     now = datetime.now(timezone.utc).isoformat()
@@ -1469,6 +1553,11 @@ async def activate_account(
     }
     if zoho_contact_id:
         update_doc['zoho_contact_id'] = zoho_contact_id
+    if billed_by == 'company':
+        update_doc['zoho_sync_status'] = 'synced'
+        update_doc['zoho_last_synced_at'] = now
+        update_doc['zoho_last_sync_attempt_at'] = now
+        update_doc['zoho_last_sync_error'] = None
     await tdb.accounts.update_one(_account_match(account_id), {'$set': update_doc})
 
     if billed_by == 'distributor':

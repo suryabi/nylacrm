@@ -249,6 +249,7 @@ export default function AccountDetail() {
   // Account activation state
   const [activateDialogOpen, setActivateDialogOpen] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const [activationChecks, setActivationChecks] = useState({
     gst_updated: false,
     delivery_address_updated: false,
@@ -1222,6 +1223,27 @@ ${googleMapsLink}`;
 
   const allChecksDone = Object.values(activationChecks).every(Boolean);
 
+  // One-click re-sync of the account's contact details to Zoho Books. Records
+  // sync health (status / last-synced / error) on the account so the indicator
+  // updates inline.
+  const handleResyncZoho = async () => {
+    setResyncing(true);
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/accounts/${id}/zoho-resync`,
+        {},
+        { withCredentials: true }
+      );
+      toast.success(data.message || 'Synced to Zoho Books.');
+      fetchAccount();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Zoho sync failed.');
+      fetchAccount();  // refresh so the error status surfaces on the indicator
+    } finally {
+      setResyncing(false);
+    }
+  };
+
   const handleActivateAccount = async () => {
     if (!allChecksDone) return;
     setActivating(true);
@@ -1403,11 +1425,31 @@ ${googleMapsLink}`;
                       Billed by Company
                     </span>
                   )}
-                  {account.zoho_contact_id && (
-                    <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                      Zoho Synced
-                    </span>
-                  )}
+                  {account.billed_by !== 'distributor' && (() => {
+                    const syncStatus = account.zoho_sync_status || (account.zoho_contact_id ? 'synced' : 'never');
+                    if (syncStatus === 'error') {
+                      return (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-700 ring-1 ring-inset ring-rose-200" data-testid="zoho-sync-badge">
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                          Zoho Sync Error
+                        </span>
+                      );
+                    }
+                    if (syncStatus === 'synced') {
+                      return (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-200" data-testid="zoho-sync-badge">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Zoho Synced
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500 ring-1 ring-inset ring-slate-200" data-testid="zoho-sync-badge">
+                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                        Not Synced to Zoho
+                      </span>
+                    );
+                  })()}
                 </div>
                 <p className="text-base font-semibold text-slate-900 leading-tight">
                   Account active{account.activated_by_name ? ` — activated by ${account.activated_by_name}` : ''}
@@ -1426,6 +1468,14 @@ ${googleMapsLink}`;
                       <span className="font-mono text-slate-500">Zoho ID: {account.zoho_contact_id}</span>
                     </>
                   )}
+                  {account.billed_by !== 'distributor' && account.zoho_last_synced_at && (
+                    <>
+                      <span className="mx-1.5 text-slate-300">•</span>
+                      <span className="text-slate-500" data-testid="zoho-last-synced">
+                        Last synced {format(new Date(account.zoho_last_synced_at), 'dd MMM, hh:mm a')}
+                      </span>
+                    </>
+                  )}
                   {(user?.role === 'CEO' || user?.role === 'System Admin') && (
                     <button
                       type="button"
@@ -1439,6 +1489,12 @@ ${googleMapsLink}`;
                     </button>
                   )}
                 </p>
+                {account.billed_by !== 'distributor' && account.zoho_sync_status === 'error' && account.zoho_last_sync_error && (
+                  <p className="text-xs text-rose-600 mt-1 flex items-start gap-1.5" data-testid="zoho-sync-error">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.25} />
+                    <span>Last Zoho sync failed: {account.zoho_last_sync_error}</span>
+                  </p>
+                )}
               </div>
             </div>
             {account.billed_by !== 'distributor' && (
@@ -1446,11 +1502,16 @@ ${googleMapsLink}`;
                 variant="outline"
                 size="sm"
                 className="border-slate-300 text-slate-800 hover:bg-slate-50 hover:border-slate-400 h-9 px-4 font-medium whitespace-nowrap"
-                onClick={handleOpenActivateDialog}
+                onClick={handleResyncZoho}
+                disabled={resyncing}
                 data-testid="resync-account-btn"
               >
-                <Zap className="h-4 w-4 mr-2 text-emerald-600" />
-                Re-sync to Zoho
+                {resyncing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Zap className="h-4 w-4 mr-2 text-emerald-600" />
+                )}
+                {resyncing ? 'Syncing…' : 'Re-sync to Zoho'}
               </Button>
             )}
           </div>
