@@ -529,6 +529,7 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                   <option value="user">Assign to User</option>
                   <option value="department">Assign to Department</option>
                   <option value="role">Assign to Role</option>
+                  <option value="requestor">Assign to Requestor</option>
                 </select>
                 {t.auto_assign_mode === 'user' && (
                   <select
@@ -563,8 +564,11 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                     {roles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
                   </select>
                 )}
-                {t.auto_assign_mode && (
+                {['user', 'department', 'role'].includes(t.auto_assign_mode) && (
                   <p className="text-[10px] text-slate-400">Only one of User / Department / Role can be set.</p>
+                )}
+                {t.auto_assign_mode === 'requestor' && (
+                  <p className="text-[10px] text-slate-400">Assigns to the person who raised the request.</p>
                 )}
               </div>
               <div className="col-span-1 flex justify-end pt-1 gap-0.5">

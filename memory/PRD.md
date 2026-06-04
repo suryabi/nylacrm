@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-04 — State Machine transitions: "Assign to Requestor" auto-assign option ✅ DONE
+- **Request**: In the Marketing Request state machine, add an "Assign to Requestor" option to the transition's Auto-assign section.
+- **Backend** (`routes/state_machines.py`, `utils/sm_helpers.py`, `routes/marketing_requests.py`): `auto_assign_mode` now accepts `'requestor'` (added to `valid_modes`; exempted from the target-ID requirement since it resolves dynamically). `apply_auto_assign(transition, tenant_id, requestor_id)` gains a new `requestor` branch that resolves the document's creator (`created_by`) into the assignee; the trigger endpoint passes `doc.created_by`.
+- **Frontend** (`StateMachines.js`): added `<option value="requestor">Assign to Requestor</option>` to the Auto-assign mode dropdown; selecting it shows no extra picker (none needed) and a helper note "Assigns to the person who raised the request." Existing mutual-exclusivity note now only shows for User/Department/Role.
+- **Verified (preview)**: PUT persists `auto_assign_mode='requestor'` (validation passes without a target); UI dropdown shows the option and selecting it renders the helper text with no JS errors. Py + JS lint clean. End-to-end trigger assignment path verified by code (no marketing requests exist in preview to live-trigger). **Redeploy to push to production.**
+
+
+
 ### 2026-06-04 — Promo Stock-Out: add Employee recipient (sales team / staff) ✅ DONE
 - **Request**: Besides Contacts & Leads, internal **employees** (sales team and others) also take stock without an invoice — track it as a Delivery Challan. Add an Employee tab that populates only employees (no one else).
 - **Backend** (`models/distributor.py`, `routes/promo_dispatch.py`): `recipient_type` now also accepts `'employee'` with `employee_id`. Resolves the recipient from `db.users` (tenant-scoped), sets name = user name and "company" = `Role · Department`. **Guards** against non-staff: rejects `Distributor`/`Driver` roles with "Selected user is not an internal employee." Stores `employee_id` on the dispatch.

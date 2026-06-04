@@ -107,7 +107,7 @@ class Transition(BaseModel):
     to_state: str
     # Single-target auto-assignment. Mutually exclusive — at most one of
     # `user`, `department`, `role`. Empty string / None means no auto-assign.
-    auto_assign_mode: Optional[str] = None  # 'user' | 'department' | 'role' | None
+    auto_assign_mode: Optional[str] = None  # 'user' | 'department' | 'role' | 'requestor' | None
     auto_assign_user_id: Optional[str] = None
     auto_assign_department_id: Optional[str] = None
     auto_assign_role: Optional[str] = None
@@ -164,7 +164,7 @@ def _validate(states: List[State], actions: List[Action], transitions: List[Tran
             raise HTTPException(400, f"Action '{a.key}': kind must be positive/neutral/negative")
         action_keys.add(a.key)
     seen_pairs = set()
-    valid_modes = {None, "", "user", "department", "role"}
+    valid_modes = {None, "", "user", "department", "role", "requestor"}
     for idx, t in enumerate(transitions):
         if t.action_key not in action_keys:
             raise HTTPException(
@@ -194,7 +194,9 @@ def _validate(states: List[State], actions: List[Action], transitions: List[Tran
                 400,
                 f"Transition #{idx + 1}: auto-assign supports only ONE of user / department / role (got: {', '.join(provided)})",
             )
-        if t.auto_assign_mode and t.auto_assign_mode not in (None, ""):
+        # 'requestor' resolves dynamically per-document (the creator), so it
+        # needs no target ID. All other concrete modes require their target.
+        if t.auto_assign_mode and t.auto_assign_mode not in (None, "", "requestor"):
             wanted = next((val for name, val in targets if name == t.auto_assign_mode), None)
             if not wanted:
                 raise HTTPException(

@@ -104,7 +104,7 @@ async def resolve_department_name(tenant_id: str, dept_id: str) -> Optional[str]
     return (doc or {}).get("name")
 
 
-async def apply_auto_assign(transition: dict, tenant_id: str) -> dict:
+async def apply_auto_assign(transition: dict, tenant_id: str, requestor_id: Optional[str] = None) -> dict:
     """Resolve the auto-assign target into concrete user/department/role names.
     Returns a dict with keys: assigned_user_id, assigned_user_name, assigned_department_id,
     assigned_department_name, assigned_role, assignee_user_ids (for notifications).
@@ -158,7 +158,17 @@ async def apply_auto_assign(transition: dict, tenant_id: str) -> dict:
         )
         ids = [u["id"] async for u in cursor]
         result["assignee_user_ids"] = ids
-        result["assignee_label"] = f"{role} (role)"
+    elif mode == "requestor":
+        # Assign back to the person who raised the request (the doc creator).
+        if not requestor_id:
+            return result
+        u = await db.users.find_one({"id": requestor_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "email": 1})
+        if not u:
+            return result
+        result["assigned_user_id"] = u.get("id")
+        result["assigned_user_name"] = u.get("name") or u.get("email")
+        result["assignee_user_ids"] = [u["id"]]
+        result["assignee_label"] = f"{result['assigned_user_name']} (requestor)"
     return result
 
 

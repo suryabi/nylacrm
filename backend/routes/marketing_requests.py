@@ -460,7 +460,7 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
         raise HTTPException(500, f"Target state '{transition.get('to_state')}' not found in SM")
 
     # Apply auto-assign
-    assign = await apply_auto_assign(transition, tenant_id)
+    assign = await apply_auto_assign(transition, tenant_id, doc.get("created_by"))
 
     set_doc = {
         "current_state_key": target_state["key"],
