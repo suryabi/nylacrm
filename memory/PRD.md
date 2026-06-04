@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-04 — Promo Stock-Out: add Employee recipient (sales team / staff) ✅ DONE
+- **Request**: Besides Contacts & Leads, internal **employees** (sales team and others) also take stock without an invoice — track it as a Delivery Challan. Add an Employee tab that populates only employees (no one else).
+- **Backend** (`models/distributor.py`, `routes/promo_dispatch.py`): `recipient_type` now also accepts `'employee'` with `employee_id`. Resolves the recipient from `db.users` (tenant-scoped), sets name = user name and "company" = `Role · Department`. **Guards** against non-staff: rejects `Distributor`/`Driver` roles with "Selected user is not an internal employee." Stores `employee_id` on the dispatch.
+- **Frontend** (`PromoDispatchSection.jsx`): third **Employee** tab on the recipient toggle (`promo-recipient-employee-btn`) with a client-filtered employee search (`promo-employee-search`, `promo-employee-option-*`) hitting `/api/users?is_active=true` and excluding `Distributor`/`Driver` roles. Submit enables when a contact, lead, or employee is chosen.
+- **Verified (preview)**: curl e2e — employee dispatch DC-2606-0004 created ("Rahul Sharma" / "Regional Sales Manager · Sales"); Distributor-role user correctly rejected (400). Frontend: "Rahul" search shows 2 employees, "Distributor" search shows 0 (excluded), no JS errors. Py + JS lint clean. **Redeploy to push to production.**
+
+
+
 ### 2026-06-04 — Promo Stock-Out: "Batch is required" error — batch picker now resolves per selected From-Location ✅ FIXED (needs redeploy)
 - **Reported (PRODUCTION)**: Generating a promo challan failed with "Batch is required for SKU Nyla Air Water - 330 ml (Gold)" but the dialog never showed a batch picker. The backend requires a batch when the source location is a factory warehouse that tracks batches (`is_factory && track_batches`).
 - **Root cause**: `PromoDispatchSection` derived batch-tracking and batch lists from static props (`sourceTracksBatches`/`batchesBySku`) passed by the parent, which were tied to the *regular* delivery form's location — not the promo dialog's own `From Location` select. So picking a batch-tracking warehouse in the promo dialog never surfaced a picker, yet the backend still demanded a batch.

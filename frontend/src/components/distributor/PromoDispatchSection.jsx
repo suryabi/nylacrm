@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 
 const ADMIN_ROLES = ['CEO', 'Director', 'Admin', 'admin', 'Super Admin', 'super_admin', 'System Admin'];
+const NON_EMPLOYEE_ROLES = ['Distributor', 'Driver'];  // not internal staff — excluded from Employee picker
 
 let _rowSeq = 0;
 const newItem = () => ({ id: `pi-${++_rowSeq}`, sku_id: '', sku_name: '', quantity: 1, unit_price: 0, batch_id: '', batch_code: '' });
@@ -46,6 +47,9 @@ export default function PromoDispatchSection({
   const [leads, setLeads] = useState([]);
   const [leadSearch, setLeadSearch] = useState('');
   const [selectedLead, setSelectedLead] = useState(null);
+  const [employees, setEmployees] = useState([]);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [reasons, setReasons] = useState([]);
   // Batches available per SKU at the promo dialog's *selected* From-Location.
   const [batchMap, setBatchMap] = useState({});
@@ -69,6 +73,13 @@ export default function PromoDispatchSection({
     [distributorLocations, form.distributor_location_id],
   );
   const locTracksBatches = !!selectedLoc?.track_batches;
+
+  const filteredEmployees = useMemo(() => {
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return employees;
+    return employees.filter(u =>
+      [u.name, u.role, u.email].filter(Boolean).some(v => v.toLowerCase().includes(q)));
+  }, [employees, employeeSearch]);
   const [items, setItems] = useState([newItem()]);
 
   // Reasons manager dialog
@@ -133,18 +144,34 @@ export default function PromoDispatchSection({
     }
   }, [API_URL, authHeaders]);
 
+  // Internal employees only (sales team / staff) — excludes Distributor & Driver
+  // roles. /api/users has no search param, so we fetch once and filter locally.
+  const fetchEmployees = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/users?is_active=true`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.users || []);
+        setEmployees(list.filter(u => !NON_EMPLOYEE_ROLES.includes((u.role || '').trim())));
+      }
+    } catch (err) {
+      console.error('Error fetching employees:', err);
+    }
+  }, [API_URL, authHeaders]);
+
   // Load reasons + recipients when the create dialog opens
   useEffect(() => {
     if (showDialog) {
       fetchReasons(false);
       fetchContacts('');
       fetchLeads('');
+      fetchEmployees();
       // auto-select the only location
       if (distributorLocations.length === 1) {
         setForm(f => ({ ...f, distributor_location_id: distributorLocations[0].id }));
       }
     }
-  }, [showDialog, fetchReasons, fetchContacts, fetchLeads, distributorLocations]);
+  }, [showDialog, fetchReasons, fetchContacts, fetchLeads, fetchEmployees, distributorLocations]);
 
   // Debounced contact search
   useEffect(() => {
@@ -201,6 +228,8 @@ export default function PromoDispatchSection({
     setContactSearch('');
     setSelectedLead(null);
     setLeadSearch('');
+    setSelectedEmployee(null);
+    setEmployeeSearch('');
     setBatchMap({});
     setItems([newItem()]);
     setForm({
@@ -242,7 +271,9 @@ export default function PromoDispatchSection({
   const batchRequired = locTracksBatches;
   const itemsValid = items.length > 0 && items.every(i =>
     i.sku_id && (parseInt(i.quantity) || 0) > 0 && (!batchRequired || i.batch_id));
-  const recipientChosen = recipientType === 'lead' ? !!selectedLead : !!selectedContact;
+  const recipientChosen = recipientType === 'lead' ? !!selectedLead
+    : recipientType === 'employee' ? !!selectedEmployee
+    : !!selectedContact;
   const canSubmit = recipientChosen && !!form.distributor_location_id && !!form.reason && itemsValid;
 
   const handleCreate = async () => {
@@ -254,6 +285,7 @@ export default function PromoDispatchSection({
         recipient_type: recipientType,
         contact_id: recipientType === 'contact' ? selectedContact.id : null,
         lead_id: recipientType === 'lead' ? selectedLead.id : null,
+        employee_id: recipientType === 'employee' ? selectedEmployee.id : null,
         delivery_date: form.delivery_date,
         reason: form.reason,
         reference_number: form.reference_number || null,
@@ -369,7 +401,7 @@ export default function PromoDispatchSection({
                     <Gift className="h-5 w-5 text-fuchsia-600" />
                     Promotional Stock-Out (Delivery Challan)
                   </CardTitle>
-                  <CardDescription>Non-sale dispatches to Contacts or Leads — deducts stock, generates a challan. No invoice, no billing.</CardDescription>
+                  <CardDescription>Non-sale dispatches to Contacts, Leads or Employees — deducts stock, generates a challan. No invoice, no billing.</CardDescription>
                 </div>
               </button>
             </CollapsibleTrigger>
@@ -476,7 +508,7 @@ export default function PromoDispatchSection({
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-fuchsia-600" /> Promotional Stock-Out</DialogTitle>
             <DialogDescription>
-              Dispatch goods to a Contact or Lead for promotion / sampling. Stock is deducted and a Delivery Challan
+              Dispatch goods to a Contact, Lead or Employee for promotion / sampling. Stock is deducted and a Delivery Challan
               (marked <span className="font-medium">"Not for Sale"</span>) is generated. No invoice is created.
             </DialogDescription>
           </DialogHeader>
@@ -502,6 +534,14 @@ export default function PromoDispatchSection({
                     data-testid="promo-recipient-lead-btn"
                   >
                     Lead
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecipientType('employee')}
+                    className={`px-3 py-1 text-xs font-medium rounded transition-colors ${recipientType === 'employee' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                    data-testid="promo-recipient-employee-btn"
+                  >
+                    Employee
                   </button>
                 </div>
               </div>
@@ -552,7 +592,7 @@ export default function PromoDispatchSection({
                     </div>
                   </div>
                 )
-              ) : (
+              ) : recipientType === 'lead' ? (
                 selectedLead ? (
                   <div className="flex items-center justify-between p-3 rounded-md border border-fuchsia-200 bg-fuchsia-50/60" data-testid="promo-selected-lead">
                     <div className="flex-1 min-w-0">
@@ -594,6 +634,49 @@ export default function PromoDispatchSection({
                           >
                             <p className="font-medium text-sm">{l.company}</p>
                             <p className="text-xs text-muted-foreground">{[l.contact_person || l.name, l.city, l.phone].filter(Boolean).join(' • ')}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )
+              ) : (
+                selectedEmployee ? (
+                  <div className="flex items-center justify-between p-3 rounded-md border border-fuchsia-200 bg-fuchsia-50/60" data-testid="promo-selected-employee">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{selectedEmployee.name}</p>
+                      <p className="text-sm text-slate-600">
+                        {[selectedEmployee.role, selectedEmployee.email, selectedEmployee.phone].filter(Boolean).join(' • ')}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedEmployee(null); setEmployeeSearch(''); }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Search employees by name, role, email..."
+                      value={employeeSearch}
+                      onChange={(e) => setEmployeeSearch(e.target.value)}
+                      data-testid="promo-employee-search"
+                    />
+                    <div className="border rounded-md max-h-[180px] overflow-y-auto">
+                      {filteredEmployees.length === 0 ? (
+                        <div className="p-4 text-sm text-muted-foreground text-center">
+                          <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p>No employees found</p>
+                        </div>
+                      ) : (
+                        filteredEmployees.map((u) => (
+                          <div
+                            key={u.id}
+                            className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
+                            onClick={() => setSelectedEmployee(u)}
+                            data-testid={`promo-employee-option-${u.id}`}
+                          >
+                            <p className="font-medium text-sm">{u.name}</p>
+                            <p className="text-xs text-muted-foreground">{[u.role, Array.isArray(u.department) ? u.department.join(', ') : u.department, u.email].filter(Boolean).join(' • ')}</p>
                           </div>
                         ))
                       )}

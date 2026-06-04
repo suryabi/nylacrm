@@ -143,10 +143,10 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     if not loc:
         raise HTTPException(status_code=404, detail="Distributor location not found")
 
-    # Validate recipient — a CRM Contact OR a Lead (both can receive promo stock).
+    # Validate recipient — a CRM Contact, a Lead, or an internal Employee.
     recipient_type = (data.recipient_type or "contact").lower()
-    if recipient_type not in ("contact", "lead"):
-        raise HTTPException(status_code=400, detail="recipient_type must be 'contact' or 'lead'.")
+    if recipient_type not in ("contact", "lead", "employee"):
+        raise HTTPException(status_code=400, detail="recipient_type must be 'contact', 'lead' or 'employee'.")
     if recipient_type == "lead":
         if not data.lead_id:
             raise HTTPException(status_code=400, detail="lead_id is required when recipient_type is 'lead'.")
@@ -155,6 +155,20 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             raise HTTPException(status_code=404, detail="Lead not found")
         recipient_name = recipient.get("contact_person") or recipient.get("name") or recipient.get("company")
         recipient_company = recipient.get("company")
+        recipient_phone = recipient.get("phone")
+    elif recipient_type == "employee":
+        if not data.employee_id:
+            raise HTTPException(status_code=400, detail="employee_id is required when recipient_type is 'employee'.")
+        recipient = await db.users.find_one({"id": data.employee_id, "tenant_id": tenant_id}, {"_id": 0, "password": 0})
+        if not recipient:
+            raise HTTPException(status_code=404, detail="Employee not found")
+        if (recipient.get("role") or "") in ("Distributor", "Driver"):
+            raise HTTPException(status_code=400, detail="Selected user is not an internal employee.")
+        recipient_name = recipient.get("name")
+        dept = recipient.get("department")
+        if isinstance(dept, list):
+            dept = ", ".join(dept)
+        recipient_company = " · ".join([x for x in [recipient.get("role"), dept] if x])
         recipient_phone = recipient.get("phone")
     else:
         if not data.contact_id:
@@ -217,6 +231,7 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "recipient_type": recipient_type,
         "contact_id": data.contact_id if recipient_type == "contact" else None,
         "lead_id": data.lead_id if recipient_type == "lead" else None,
+        "employee_id": data.employee_id if recipient_type == "employee" else None,
         "contact_name": recipient_name,
         "contact_phone": recipient_phone,
         "contact_company": recipient_company,
