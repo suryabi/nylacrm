@@ -249,4 +249,9 @@ routes_router.include_router(
 from .revenue_analytics import router as revenue_analytics_router
 routes_router.include_router(revenue_analytics_router, tags=["Revenue Analytics"])
 
+# Promotional / Non-sale stock-outs to Contacts (Delivery Challan, no invoice).
+# Full paths declared in the router → mounts under /api. See routes/promo_dispatch.py
+from .promo_dispatch import router as promo_dispatch_router
+routes_router.include_router(promo_dispatch_router, tags=["Promotional Dispatch"])
+
 __all__ = ['routes_router']

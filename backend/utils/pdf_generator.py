@@ -848,3 +848,192 @@ def generate_customer_invoice_pdf(
     buffer.close()
     
     return pdf_bytes
+
+
+
+def generate_delivery_challan_pdf(
+    delivery_data: dict,
+    company_profile: dict,
+    contact_data: dict,
+    distributor_data: dict,
+    branding: dict = None,
+) -> bytes:
+    """Generate a Delivery Challan PDF for a NON-SALE promotional stock-out
+    dispatched to a CRM Contact. Shows indicative line values (for transport /
+    e-way reference) clearly marked "Not for Sale / No commercial value". This
+    is NOT a tax invoice and no payment is due."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4, rightMargin=18*mm, leftMargin=18*mm,
+        topMargin=15*mm, bottomMargin=20*mm,
+    )
+
+    styles = getSampleStyleSheet()
+    styles['Normal'].fontName = _REGULAR_FONT
+    styles['Heading1'].fontName = _BOLD_FONT
+    styles['Heading2'].fontName = _BOLD_FONT
+
+    title_style = ParagraphStyle('ChallanTitle', parent=styles['Heading1'], fontSize=22,
+                                 alignment=TA_CENTER, spaceAfter=4, textColor=colors.HexColor('#1E3A8A'))
+    subtitle_style = ParagraphStyle('ChallanSubtitle', parent=styles['Normal'], fontSize=11,
+                                    alignment=TA_CENTER, textColor=colors.gray)
+    header_style = ParagraphStyle('SecHeader', parent=styles['Heading2'], fontSize=11,
+                                  textColor=colors.HexColor('#1E3A8A'), spaceBefore=12, spaceAfter=6)
+    normal_style = ParagraphStyle('ChNormal', parent=styles['Normal'], fontSize=9, leading=12)
+    small_style = ParagraphStyle('ChSmall', parent=styles['Normal'], fontSize=8, leading=10, textColor=colors.gray)
+
+    story = []
+
+    # ===== Header =====
+    company_name = company_profile.get('legal_name') or company_profile.get('trade_name') or 'Company Name'
+    company_gstin = company_profile.get('gstin', '')
+    company_phone = company_profile.get('company_phone', '')
+    company_email = company_profile.get('company_email', '')
+    company_address = company_profile.get('principal_address', {}) or {}
+    addr_parts = [company_address.get(k) for k in ('building_name', 'road_street', 'locality', 'city', 'state') if company_address.get(k)]
+    if company_address.get('pin_code'):
+        addr_parts.append(f"PIN: {company_address.get('pin_code')}")
+    company_addr_str = ', '.join(addr_parts) if addr_parts else 'Address not configured'
+
+    logo_url = branding.get('logo_url') if branding else None
+    company_logo = fetch_logo_image(logo_url, max_width=80, max_height=50) if logo_url else None
+    header_left = company_logo or Paragraph(f"<b>{company_name}</b>", ParagraphStyle('CN', parent=styles['Normal'], fontSize=14, fontName=_BOLD_FONT))
+    company_info_text = f"""
+    <b>{company_name}</b><br/>
+    {company_addr_str}<br/>
+    {f'GSTIN: {company_gstin}' if company_gstin else ''}<br/>
+    {f'Phone: {company_phone}' if company_phone else ''} {f'| Email: {company_email}' if company_email else ''}
+    """
+    header_table = Table([[header_left, Paragraph(company_info_text.strip(), normal_style)]], colWidths=[100, 400])
+    header_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    story.append(header_table)
+    story.append(Spacer(1, 10))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor('#1E3A8A')))
+    story.append(Spacer(1, 12))
+
+    # ===== Title + Not-for-Sale banner =====
+    story.append(Paragraph("DELIVERY CHALLAN", title_style))
+    story.append(Paragraph(f"Challan No: {delivery_data.get('challan_number', 'N/A')}", subtitle_style))
+    banner_style = ParagraphStyle('NfsBanner', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER,
+                                  textColor=colors.HexColor('#92400E'), backColor=colors.HexColor('#FEF3C7'),
+                                  borderPadding=5, leading=11, spaceBefore=6, spaceAfter=6)
+    story.append(Spacer(1, 4))
+    story.append(Paragraph(
+        "<b>NOT FOR SALE — NO COMMERCIAL VALUE.</b> Goods dispatched free of charge for "
+        "promotional / sampling purposes. Values shown are indicative (for transport / e-way "
+        "reference) only. This is NOT a tax invoice; no payment is due.", banner_style))
+    story.append(Spacer(1, 10))
+
+    # ===== Meta (date / reason / reference) =====
+    def _fmt_date(d):
+        try:
+            return datetime.fromisoformat(str(d).replace('Z', '+00:00')).strftime('%d %b %Y')
+        except Exception:
+            return str(d or '')[:10]
+    meta_rows = [
+        [Paragraph("<b>Challan Date</b>", normal_style), Paragraph(_fmt_date(delivery_data.get('delivery_date')), normal_style),
+         Paragraph("<b>Purpose</b>", normal_style), Paragraph(str(delivery_data.get('promo_reason') or '-'), normal_style)],
+        [Paragraph("<b>Reference</b>", normal_style), Paragraph(str(delivery_data.get('reference_number') or '-'), normal_style),
+         Paragraph("<b>Vehicle</b>", normal_style), Paragraph(str(delivery_data.get('vehicle_number') or '-'), normal_style)],
+    ]
+    meta_table = Table(meta_rows, colWidths=[80, 180, 80, 160])
+    meta_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    story.append(meta_table)
+    story.append(Spacer(1, 12))
+
+    # ===== From / Dispatched To =====
+    loc_name = distributor_data.get('location_name') or distributor_data.get('distributor_name') or ''
+    from_text = f"<b>Dispatched From:</b><br/>{distributor_data.get('distributor_name', '')}<br/>{loc_name}"
+    c_lines = [f"<b>Dispatched To (Contact):</b>", f"<b>{contact_data.get('name', '')}</b>"]
+    if contact_data.get('company'):
+        c_lines.append(contact_data.get('company'))
+    addr = ', '.join([x for x in [contact_data.get('address'), contact_data.get('city'), contact_data.get('state')] if x])
+    if delivery_data.get('delivery_address'):
+        addr = delivery_data.get('delivery_address')
+    if addr:
+        c_lines.append(addr)
+    if contact_data.get('phone'):
+        c_lines.append(f"Phone: {contact_data.get('phone')}")
+    to_text = '<br/>'.join(c_lines)
+    party_table = Table([[Paragraph(from_text, normal_style), Paragraph(to_text, normal_style)]], colWidths=[250, 250])
+    party_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    story.append(party_table)
+    story.append(Spacer(1, 14))
+
+    # ===== Items =====
+    story.append(Paragraph("Items Dispatched", header_style))
+    item_rows = [["#", "Description", "Batch", "Qty", "Ind. Rate", "Ind. Value"]]
+    total_value = 0.0
+    total_qty = 0
+    for idx, it in enumerate(delivery_data.get('items', []), 1):
+        qty = it.get('quantity', 0) or 0
+        rate = float(it.get('unit_price', 0) or 0)
+        val = qty * rate
+        total_value += val
+        total_qty += qty
+        item_rows.append([
+            str(idx),
+            Paragraph(str(it.get('sku_name') or it.get('sku_id') or ''), normal_style),
+            str(it.get('batch_code') or '-'),
+            str(qty),
+            f"₹{rate:,.2f}",
+            f"₹{val:,.2f}",
+        ])
+    item_rows.append(["", "", Paragraph("<b>Total</b>", normal_style), str(total_qty), "", f"₹{total_value:,.2f}"])
+    items_table = Table(item_rows, colWidths=[24, 210, 70, 50, 70, 76])
+    items_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+        ('FONTNAME', (0, 0), (-1, 0), _BOLD_FONT),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#EFF6FF')),
+        ('FONTNAME', (0, -1), (-1, -1), _BOLD_FONT),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    story.append(items_table)
+    story.append(Spacer(1, 18))
+
+    # ===== Signatures =====
+    sign_table = Table([[
+        Paragraph("Receiver's Signature<br/><br/>_______________________", small_style),
+        Paragraph("For " + company_name + "<br/><br/>_______________________<br/>Authorised Signatory", small_style),
+    ]], colWidths=[250, 250])
+    sign_table.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('TOPPADDING', (0, 0), (-1, -1), 20)]))
+    story.append(sign_table)
+    story.append(Spacer(1, 10))
+
+    footer_text = (
+        "This Delivery Challan covers non-commercial movement of goods for promotional / sampling "
+        "purposes. It is not a tax invoice and confers no sale. "
+        f"Computer-generated on {datetime.now().strftime('%d %B %Y at %H:%M:%S')}."
+    )
+    story.append(Paragraph(footer_text, small_style))
+
+    doc.build(story)
+    pdf_bytes = buffer.getvalue()
+    buffer.close()
+    return pdf_bytes

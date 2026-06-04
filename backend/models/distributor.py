@@ -551,6 +551,34 @@ class AccountDeliveryCreate(BaseModel):
     credit_notes_to_apply: Optional[List[CreditNoteApplicationCreate]] = None
 
 
+class PromoDeliveryItemCreate(BaseModel):
+    """A line on a promotional / non-sale stock-out. `unit_price` is an
+    INDICATIVE value (for transport / e-way reference) — there is no sale."""
+    sku_id: str
+    sku_name: Optional[str] = None
+    quantity: int
+    unit_price: float = 0  # indicative value per unit (not a sale price)
+    batch_id: Optional[str] = None
+    batch_code: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+class PromoDeliveryCreate(BaseModel):
+    """A promotional / non-sale stock-out dispatched to a CRM Contact (not an
+    Account). Deducts stock, generates a Delivery Challan, never invoices."""
+    distributor_location_id: str
+    contact_id: str
+    delivery_date: str
+    reason: str                       # must match an active promo reason
+    reference_number: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    delivery_address: Optional[str] = None
+    remarks: Optional[str] = None
+    items: List[PromoDeliveryItemCreate]
+
+
 class AccountDeliveryUpdate(BaseModel):
     delivery_date: Optional[str] = None
     reference_number: Optional[str] = None
