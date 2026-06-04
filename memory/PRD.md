@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-04 — Promotional / Non-sale Stock-Out (Delivery Challan) — frontend UI ✅ DONE
+- **Request**: Stock out from a distributor to people saved as **Contacts** (promotion / sampling / networking) with NO sale — no invoice, no Zoho, no account balance, no revenue. Deduct stock and generate a PDF **Delivery Challan** with indicative/MRP values marked "Not for Sale". Reason from a master list; trigger inside the distributor Stock Out screen; tracking list + admin reasons manager. (Backend was already built & tested: `routes/promo_dispatch.py`.)
+- **Frontend** (`components/distributor/PromoDispatchSection.jsx`, new): self-contained collapsible section rendered inside `DeliveriesTab.jsx` between the customer Stock-Out (Section 1) and factory Stock-Out (Section 2). Features: contact search/select (`/api/contacts`), From-Location + Reason (`/api/admin/promo-reasons`) selects, date/reference/vehicle/driver/address fields, item rows (SKU select auto-fills indicative value from master `mrp`→`base_price`, editable; qty; live line/total value), batch picker shown only when the source tracks batches, tracking table of past challans with per-row PDF download (blob → new tab), and an admin-only **Reasons manager** dialog (add / deactivate / reactivate). Posts to `POST /api/distributors/{id}/promo-deliveries`. Fuchsia accent to visually distinguish from billable deliveries. All elements carry data-testids (`promo-*`).
+- **Verified**: curl e2e (create → DC-2606-0001, list, 24KB PDF) + frontend `testing_agent` iteration_181 — **100%**, all 8 scenarios pass (section placement, tracking table, full create flow generating DC-2606-0002 with success toast, PDF download 200, reasons add+deactivate, disabled-submit negative test, regression of Record Delivery + Factory Returns). JS lint clean. **Redeploy to push to production.**
+- **Note/Open product Q**: a SKU with no master MRP/base_price would generate a 0-value indicative challan (allowed today since values are indicative + editable).
+
+
+
 ### 2026-06-01 — System-wide SKU mapping (old → current), with physical re-point ✅ DONE
 - **Request**: Extend the SKU-alias mapping beyond invoices to Production, Distribution, Stock, Accounts & Leads — "wherever we have old SKUs, give the ability to map to a new SKU." User chose: (1b) the module screens themselves should show the remapped SKU, and (2) physically rewrite the records.
 - **Backend** (`routes/sku_aliases.py`): 
