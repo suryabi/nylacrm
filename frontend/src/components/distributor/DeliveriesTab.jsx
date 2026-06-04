@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink } from 'lucide-react';
+import PromoDispatchSection from './PromoDispatchSection';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -1815,6 +1816,17 @@ export default function DeliveriesTab({
       </CollapsibleContent>
     </Card>
     </Collapsible>
+
+    {/* Section 1b: Promotional / Non-sale Stock-Out (Delivery Challan) */}
+    <PromoDispatchSection
+      distributor={distributor}
+      canManage={canManage}
+      API_URL={API_URL}
+      token={token}
+      skus={skus}
+      sourceTracksBatches={sourceTracksBatches}
+      batchesBySku={batchesBySku}
+    />
 
     {/* Section 2: Distributor → Factory */}
     <Collapsible open={factorySectionOpen} onOpenChange={setFactorySectionOpen}>

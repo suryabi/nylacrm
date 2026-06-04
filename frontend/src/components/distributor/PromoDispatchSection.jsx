@@ -1,0 +1,657 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Badge } from '../ui/badge';
+import { Textarea } from '../ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
+import { toast } from 'sonner';
+import {
+  Plus, Trash2, Gift, RefreshCw, Package, FileText, X, Download, ChevronDown,
+  AlertCircle, Settings2, Users, Ban,
+} from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+
+const ADMIN_ROLES = ['CEO', 'Director', 'Admin', 'admin', 'Super Admin', 'super_admin', 'System Admin'];
+
+let _rowSeq = 0;
+const newItem = () => ({ id: `pi-${++_rowSeq}`, sku_id: '', sku_name: '', quantity: 1, unit_price: 0, batch_id: '', batch_code: '' });
+const fmtINR = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export default function PromoDispatchSection({
+  distributor,
+  canManage,
+  API_URL,
+  token,
+  skus = [],
+  sourceTracksBatches = false,
+  batchesBySku = {},
+}) {
+  const { user } = useAuth();
+  const isAdmin = ADMIN_ROLES.includes((user?.role || '').trim());
+
+  const [open, setOpen] = useState(false);
+  const [dispatches, setDispatches] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  // Create dialog
+  const [showDialog, setShowDialog] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [contacts, setContacts] = useState([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [selectedContact, setSelectedContact] = useState(null);
+  const [reasons, setReasons] = useState([]);
+  const distributorLocations = useMemo(
+    () => (distributor?.locations || []).filter(l => l.status === 'active'),
+    [distributor],
+  );
+  const [form, setForm] = useState({
+    distributor_location_id: '',
+    reason: '',
+    delivery_date: new Date().toISOString().split('T')[0],
+    reference_number: '',
+    vehicle_number: '',
+    driver_name: '',
+    driver_contact: '',
+    delivery_address: '',
+    remarks: '',
+  });
+  const [items, setItems] = useState([newItem()]);
+
+  // Reasons manager dialog
+  const [showReasonsMgr, setShowReasonsMgr] = useState(false);
+  const [newReasonName, setNewReasonName] = useState('');
+
+  const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+
+  const fetchDispatches = useCallback(async () => {
+    if (!distributor?.id) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setDispatches(data.dispatches || []);
+      }
+    } catch (err) {
+      console.error('Error fetching promo dispatches:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [distributor?.id, API_URL, authHeaders]);
+
+  useEffect(() => { if (open) fetchDispatches(); }, [open, fetchDispatches]);
+
+  const fetchReasons = useCallback(async (includeInactive = false) => {
+    try {
+      const res = await fetch(`${API_URL}/api/admin/promo-reasons${includeInactive ? '?include_inactive=true' : ''}`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setReasons(data.reasons || []);
+      }
+    } catch (err) {
+      console.error('Error fetching promo reasons:', err);
+    }
+  }, [API_URL, authHeaders]);
+
+  const fetchContacts = useCallback(async (search = '') => {
+    try {
+      const qs = `page=1&page_size=50${search ? `&search=${encodeURIComponent(search)}` : ''}`;
+      const res = await fetch(`${API_URL}/api/contacts?${qs}`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setContacts(data.contacts || []);
+      }
+    } catch (err) {
+      console.error('Error fetching contacts:', err);
+    }
+  }, [API_URL, authHeaders]);
+
+  // Load reasons + contacts when the create dialog opens
+  useEffect(() => {
+    if (showDialog) {
+      fetchReasons(false);
+      fetchContacts('');
+      // auto-select the only location
+      if (distributorLocations.length === 1) {
+        setForm(f => ({ ...f, distributor_location_id: distributorLocations[0].id }));
+      }
+    }
+  }, [showDialog, fetchReasons, fetchContacts, distributorLocations]);
+
+  // Debounced contact search
+  useEffect(() => {
+    if (!showDialog || selectedContact) return;
+    const t = setTimeout(() => fetchContacts(contactSearch), 300);
+    return () => clearTimeout(t);
+  }, [contactSearch, showDialog, selectedContact, fetchContacts]);
+
+  const resetForm = () => {
+    setSelectedContact(null);
+    setContactSearch('');
+    setItems([newItem()]);
+    setForm({
+      distributor_location_id: distributorLocations.length === 1 ? distributorLocations[0].id : '',
+      reason: '',
+      delivery_date: new Date().toISOString().split('T')[0],
+      reference_number: '',
+      vehicle_number: '',
+      driver_name: '',
+      driver_contact: '',
+      delivery_address: '',
+      remarks: '',
+    });
+  };
+
+  const updateItem = (id, field, value) => {
+    setItems(prev => prev.map(it => it.id === id ? { ...it, [field]: value } : it));
+  };
+
+  const onSelectSku = (id, skuId) => {
+    const master = skus.find(s => s.id === skuId);
+    setItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      const indicative = master ? (master.mrp ?? master.base_price ?? 0) : it.unit_price;
+      return {
+        ...it,
+        sku_id: skuId,
+        sku_name: master?.sku_name || master?.name || it.sku_name,
+        unit_price: indicative || 0,
+        batch_id: '',
+        batch_code: '',
+      };
+    }));
+  };
+
+  const totalQty = items.reduce((s, i) => s + (parseInt(i.quantity) || 0), 0);
+  const totalValue = items.reduce((s, i) => s + (parseInt(i.quantity) || 0) * (parseFloat(i.unit_price) || 0), 0);
+
+  const batchRequired = sourceTracksBatches;
+  const itemsValid = items.length > 0 && items.every(i =>
+    i.sku_id && (parseInt(i.quantity) || 0) > 0 && (!batchRequired || i.batch_id));
+  const canSubmit = !!selectedContact && !!form.distributor_location_id && !!form.reason && itemsValid;
+
+  const handleCreate = async () => {
+    if (!canSubmit) return;
+    setSaving(true);
+    try {
+      const payload = {
+        distributor_location_id: form.distributor_location_id,
+        contact_id: selectedContact.id,
+        delivery_date: form.delivery_date,
+        reason: form.reason,
+        reference_number: form.reference_number || null,
+        vehicle_number: form.vehicle_number || null,
+        driver_name: form.driver_name || null,
+        driver_contact: form.driver_contact || null,
+        delivery_address: form.delivery_address || null,
+        remarks: form.remarks || null,
+        items: items.filter(i => i.sku_id && (parseInt(i.quantity) || 0) > 0).map(i => ({
+          sku_id: i.sku_id,
+          sku_name: i.sku_name,
+          quantity: parseInt(i.quantity),
+          unit_price: parseFloat(i.unit_price) || 0,
+          batch_id: i.batch_id || null,
+          batch_code: i.batch_code || null,
+        })),
+      };
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || 'Delivery Challan generated');
+        setShowDialog(false);
+        resetForm();
+        fetchDispatches();
+      } else {
+        toast.error(data.detail || 'Failed to create promo dispatch');
+      }
+    } catch (err) {
+      console.error('Error creating promo dispatch:', err);
+      toast.error('Network error while creating promo dispatch');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const downloadChallan = async (dispatch) => {
+    setDownloadingId(dispatch.id);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/challan-pdf`,
+        { headers: authHeaders },
+      );
+      if (!res.ok) {
+        toast.error('Failed to download challan');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      console.error('Error downloading challan:', err);
+      toast.error('Failed to download challan');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  // Reasons manager
+  const addReason = async () => {
+    const name = newReasonName.trim();
+    if (!name) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/promo-reasons`, {
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setNewReasonName('');
+        fetchReasons(true);
+        toast.success('Reason added');
+      } else {
+        toast.error(data.detail || 'Failed to add reason');
+      }
+    } catch (err) {
+      toast.error('Network error');
+    }
+  };
+
+  const toggleReason = async (reason) => {
+    try {
+      if (reason.is_active) {
+        await fetch(`${API_URL}/api/admin/promo-reasons/${reason.id}`, { method: 'DELETE', headers: authHeaders });
+      } else {
+        await fetch(`${API_URL}/api/admin/promo-reasons/${reason.id}`, {
+          method: 'PUT',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_active: true }),
+        });
+      }
+      fetchReasons(true);
+    } catch (err) {
+      toast.error('Failed to update reason');
+    }
+  };
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card>
+        <CardHeader className="flex flex-col gap-4">
+          <div className="flex flex-row items-center justify-between">
+            <CollapsibleTrigger asChild>
+              <button className="flex items-center gap-2 text-left hover:text-emerald-700 transition-colors" data-testid="promo-section-trigger">
+                <ChevronDown className={`h-5 w-5 shrink-0 transition-transform duration-200 ${open ? '' : '-rotate-90'}`} />
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Gift className="h-5 w-5 text-fuchsia-600" />
+                    Promotional Stock-Out (Delivery Challan)
+                  </CardTitle>
+                  <CardDescription>Non-sale dispatches to Contacts — deducts stock, generates a challan. No invoice, no billing.</CardDescription>
+                </div>
+              </button>
+            </CollapsibleTrigger>
+            <div className="flex items-center gap-2">
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  onClick={() => { setShowReasonsMgr(true); fetchReasons(true); }}
+                  data-testid="manage-promo-reasons-btn"
+                >
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Reasons
+                </Button>
+              )}
+              {canManage && (
+                <Button
+                  className="bg-fuchsia-600 hover:bg-fuchsia-700"
+                  onClick={() => { resetForm(); setShowDialog(true); }}
+                  data-testid="create-promo-dispatch-btn"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Promo Stock-Out
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+
+        <CollapsibleContent>
+          <CardContent>
+            <div className="flex items-center justify-end mb-3">
+              <span className="text-sm text-muted-foreground mr-2">Total: <span className="font-medium">{dispatches.length}</span> challans</span>
+              <Button variant="ghost" size="sm" onClick={fetchDispatches}><RefreshCw className="h-4 w-4" /></Button>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : dispatches.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground" data-testid="promo-empty-state">
+                <Gift className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No promotional dispatches recorded</p>
+                <p className="text-sm">Hand out free / promo goods to Contacts without raising an invoice.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm" data-testid="promo-dispatches-table">
+                  <thead>
+                    <tr className="border-b-2 border-fuchsia-200 bg-gradient-to-r from-fuchsia-50 to-slate-50">
+                      <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Challan #</th>
+                      <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Contact</th>
+                      <th className="text-center p-3 font-semibold text-fuchsia-700 uppercase tracking-wider text-xs">Reason</th>
+                      <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">From</th>
+                      <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Units</th>
+                      <th className="text-right p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Indicative Value</th>
+                      <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Challan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dispatches.map((d) => (
+                      <tr key={d.id} className="border-b border-slate-100 hover:bg-fuchsia-50/40 transition-colors" data-testid={`promo-dispatch-row-${d.id}`}>
+                        <td className="p-3">
+                          <span className="font-semibold text-fuchsia-700">{d.challan_number}</span>
+                          <p className="text-xs text-slate-500 mt-0.5">{d.delivery_date ? new Date(d.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}</p>
+                        </td>
+                        <td className="p-3">
+                          <p className="font-medium text-slate-800">{d.contact_name}</p>
+                          {d.contact_company && <p className="text-xs text-slate-500">{d.contact_company}</p>}
+                        </td>
+                        <td className="p-3 text-center">
+                          <Badge className="bg-fuchsia-100 text-fuchsia-700 border border-fuchsia-200">{d.promo_reason}</Badge>
+                        </td>
+                        <td className="p-3 text-slate-700 text-sm">{d.location_name}</td>
+                        <td className="p-3 text-center">
+                          <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2 py-0.5 rounded-full">{d.total_quantity}</span>
+                        </td>
+                        <td className="p-3 text-right text-slate-700 tabular-nums">₹{fmtINR(d.total_indicative_value)}</td>
+                        <td className="p-3 text-center">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => downloadChallan(d)}
+                            disabled={downloadingId === d.id}
+                            data-testid={`download-challan-${d.id}`}
+                          >
+                            {downloadingId === d.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1" />}
+                            {downloadingId === d.id ? '' : 'PDF'}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+
+      {/* Create Promo Dispatch Dialog */}
+      <Dialog open={showDialog} onOpenChange={(o) => { setShowDialog(o); if (!o) resetForm(); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-fuchsia-600" /> Promotional Stock-Out</DialogTitle>
+            <DialogDescription>
+              Dispatch goods to a Contact for promotion / sampling. Stock is deducted and a Delivery Challan
+              (marked <span className="font-medium">"Not for Sale"</span>) is generated. No invoice is created.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4 flex-1 overflow-y-auto min-h-0 -mx-6 px-6">
+            {/* Contact selection */}
+            <div className="space-y-2">
+              <Label>Recipient Contact *</Label>
+              {selectedContact ? (
+                <div className="flex items-center justify-between p-3 rounded-md border border-fuchsia-200 bg-fuchsia-50/60" data-testid="promo-selected-contact">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{selectedContact.name}</p>
+                    <p className="text-sm text-slate-600">
+                      {[selectedContact.company, selectedContact.city, selectedContact.phone].filter(Boolean).join(' • ')}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => { setSelectedContact(null); setContactSearch(''); }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Search contacts by name, company, phone..."
+                    value={contactSearch}
+                    onChange={(e) => setContactSearch(e.target.value)}
+                    data-testid="promo-contact-search"
+                  />
+                  <div className="border rounded-md max-h-[180px] overflow-y-auto">
+                    {contacts.length === 0 ? (
+                      <div className="p-4 text-sm text-muted-foreground text-center">
+                        <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No contacts found</p>
+                      </div>
+                    ) : (
+                      contacts.map((c) => (
+                        <div
+                          key={c.id}
+                          className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
+                          onClick={() => {
+                            setSelectedContact(c);
+                            setForm(prev => ({ ...prev, delivery_address: prev.delivery_address || [c.address, c.city, c.state].filter(Boolean).join(', ') }));
+                          }}
+                          data-testid={`promo-contact-option-${c.id}`}
+                        >
+                          <p className="font-medium text-sm">{c.name}</p>
+                          <p className="text-xs text-muted-foreground">{[c.company, c.city, c.phone].filter(Boolean).join(' • ')}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Location & Reason */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>From Location *</Label>
+                <Select value={form.distributor_location_id} onValueChange={(v) => setForm(f => ({ ...f, distributor_location_id: v }))}>
+                  <SelectTrigger data-testid="promo-location-select"><SelectValue placeholder="Select warehouse/location" /></SelectTrigger>
+                  <SelectContent>
+                    {distributorLocations.map(loc => (
+                      <SelectItem key={loc.id} value={loc.id}>{loc.location_name} ({loc.city}){loc.is_default && ' ★'}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Reason *</Label>
+                <Select value={form.reason} onValueChange={(v) => setForm(f => ({ ...f, reason: v }))}>
+                  <SelectTrigger data-testid="promo-reason-select"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                  <SelectContent>
+                    {reasons.map(r => (<SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Date & Reference */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Dispatch Date *</Label>
+                <Input type="date" value={form.delivery_date} onChange={(e) => setForm(f => ({ ...f, delivery_date: e.target.value }))} data-testid="promo-date-input" />
+              </div>
+              <div className="space-y-2">
+                <Label>Reference Number</Label>
+                <Input placeholder="Optional" value={form.reference_number} onChange={(e) => setForm(f => ({ ...f, reference_number: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* Vehicle & Driver */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Vehicle Number</Label>
+                <Input placeholder="KA-01-AB-1234" value={form.vehicle_number} onChange={(e) => setForm(f => ({ ...f, vehicle_number: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Driver Name</Label>
+                <Input placeholder="Optional" value={form.driver_name} onChange={(e) => setForm(f => ({ ...f, driver_name: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Delivery Address</Label>
+              <Textarea rows={2} value={form.delivery_address} onChange={(e) => setForm(f => ({ ...f, delivery_address: e.target.value }))} placeholder="Defaults to the contact's address" />
+            </div>
+
+            {/* Items */}
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-base font-semibold">Items</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">Indicative values only (MRP) — marked "Not for Sale".</p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setItems(prev => [newItem(), ...prev])} data-testid="add-promo-item-btn">
+                  <Plus className="h-4 w-4 mr-1" /> Add Item
+                </Button>
+              </div>
+
+              {items.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground border rounded-md">
+                  <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No items added. Click "Add Item".</p>
+                </div>
+              ) : (
+                <div className="border rounded-lg divide-y divide-slate-200">
+                  {items.map((item, index) => {
+                    const lineValue = (parseInt(item.quantity) || 0) * (parseFloat(item.unit_price) || 0);
+                    const batches = batchesBySku[item.sku_id] || [];
+                    return (
+                      <div key={item.id} className={`px-4 py-3 ${index % 2 ? 'bg-slate-50' : 'bg-white'}`} data-testid={`promo-item-${index}`}>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <Select value={item.sku_id} onValueChange={(v) => onSelectSku(item.id, v)}>
+                              <SelectTrigger className="h-10" data-testid={`promo-sku-select-${index}`}><SelectValue placeholder="Select SKU" /></SelectTrigger>
+                              <SelectContent>
+                                {skus.filter(s => s.is_active !== false).map(s => (
+                                  <SelectItem key={s.id} value={s.id}>{s.sku_name || s.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button variant="ghost" size="sm" className="h-10 w-10 p-0 text-destructive flex-shrink-0" onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+
+                        {batchRequired && item.sku_id && (
+                          <div className="mt-3">
+                            <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
+                              <Package className="h-3 w-3" /> Batch <span className="text-red-500">*</span>
+                            </Label>
+                            {batches.length === 0 ? (
+                              <div className="rounded-lg border border-red-200 bg-red-50/70 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
+                                <AlertCircle className="h-3.5 w-3.5" /> No batches available for this SKU at the source.
+                              </div>
+                            ) : (
+                              <Select value={item.batch_id} onValueChange={(v) => {
+                                const b = batches.find(x => x.batch_id === v);
+                                updateItem(item.id, 'batch_id', v);
+                                updateItem(item.id, 'batch_code', b?.batch_code || '');
+                              }}>
+                                <SelectTrigger className="h-9" data-testid={`promo-batch-select-${index}`}><SelectValue placeholder="Select batch" /></SelectTrigger>
+                                <SelectContent>
+                                  {batches.map(b => (
+                                    <SelectItem key={b.batch_id} value={b.batch_id}>{b.batch_code} — {(b.quantity || 0).toLocaleString()} units</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-start gap-3 mt-3">
+                          <div className="w-24 flex-shrink-0">
+                            <Label className="text-xs text-muted-foreground">Qty (units)</Label>
+                            <Input type="number" min="1" className="h-10 mt-1 text-base font-medium" value={item.quantity}
+                              onChange={(e) => updateItem(item.id, 'quantity', e.target.value)} data-testid={`promo-qty-${index}`} />
+                          </div>
+                          <div className="flex-1 min-w-[100px]">
+                            <Label className="text-xs text-muted-foreground">Indicative Value/unit (₹)</Label>
+                            <Input type="number" min="0" step="0.01" className="h-10 mt-1 text-base" value={item.unit_price}
+                              onChange={(e) => updateItem(item.id, 'unit_price', e.target.value)} data-testid={`promo-price-${index}`} />
+                          </div>
+                          <div className="w-28 flex-shrink-0 text-right">
+                            <Label className="text-xs text-muted-foreground">Value</Label>
+                            <p className="text-base font-bold tabular-nums mt-2.5">₹{fmtINR(lineValue)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="px-4 py-3 flex items-center justify-between bg-fuchsia-50/40">
+                    <span className="text-sm font-semibold">Total · {totalQty} units</span>
+                    <span className="text-lg font-bold tabular-nums" data-testid="promo-grand-total">₹{fmtINR(totalValue)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Remarks</Label>
+              <Textarea rows={2} value={form.remarks} onChange={(e) => setForm(f => ({ ...f, remarks: e.target.value }))} placeholder="Additional notes..." />
+            </div>
+          </div>
+
+          <DialogFooter className="shrink-0 border-t pt-4">
+            <Button variant="outline" onClick={() => { setShowDialog(false); resetForm(); }}>Cancel</Button>
+            <Button className="bg-fuchsia-600 hover:bg-fuchsia-700" onClick={handleCreate} disabled={saving || !canSubmit} data-testid="save-promo-dispatch-btn">
+              {saving ? 'Generating...' : 'Generate Challan'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reasons Manager Dialog */}
+      <Dialog open={showReasonsMgr} onOpenChange={setShowReasonsMgr}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Promo Reasons</DialogTitle>
+            <DialogDescription>Manage the master list of reasons for promotional stock-outs.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Input placeholder="New reason name" value={newReasonName} onChange={(e) => setNewReasonName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') addReason(); }} data-testid="new-reason-input" />
+              <Button onClick={addReason} data-testid="add-reason-btn"><Plus className="h-4 w-4" /></Button>
+            </div>
+            <div className="border rounded-md divide-y max-h-[300px] overflow-y-auto">
+              {reasons.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground text-center">No reasons yet</div>
+              ) : reasons.map(r => (
+                <div key={r.id} className="flex items-center justify-between px-3 py-2" data-testid={`reason-row-${r.id}`}>
+                  <span className={`text-sm ${r.is_active ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{r.name}</span>
+                  <Button variant="ghost" size="sm" onClick={() => toggleReason(r)} title={r.is_active ? 'Deactivate' : 'Reactivate'}>
+                    {r.is_active ? <Ban className="h-4 w-4 text-red-500" /> : <RefreshCw className="h-4 w-4 text-emerald-600" />}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReasonsMgr(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Collapsible>
+  );
+}
