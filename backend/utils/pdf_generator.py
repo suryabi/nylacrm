@@ -954,7 +954,8 @@ def generate_delivery_challan_pdf(
     # ===== From / Dispatched To =====
     loc_name = distributor_data.get('location_name') or distributor_data.get('distributor_name') or ''
     from_text = f"<b>Dispatched From:</b><br/>{distributor_data.get('distributor_name', '')}<br/>{loc_name}"
-    c_lines = [f"<b>Dispatched To (Contact):</b>", f"<b>{contact_data.get('name', '')}</b>"]
+    _rtype = (delivery_data.get('recipient_type') or 'contact').title()
+    c_lines = [f"<b>Dispatched To ({_rtype}):</b>", f"<b>{contact_data.get('name', '')}</b>"]
     if contact_data.get('company'):
         c_lines.append(contact_data.get('company'))
     addr = ', '.join([x for x in [contact_data.get('address'), contact_data.get('city'), contact_data.get('state')] if x])

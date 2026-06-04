@@ -44,6 +44,10 @@ export default function PromoDispatchSection({
   const [contacts, setContacts] = useState([]);
   const [contactSearch, setContactSearch] = useState('');
   const [selectedContact, setSelectedContact] = useState(null);
+  const [recipientType, setRecipientType] = useState('contact');  // 'contact' | 'lead'
+  const [leads, setLeads] = useState([]);
+  const [leadSearch, setLeadSearch] = useState('');
+  const [selectedLead, setSelectedLead] = useState(null);
   const [reasons, setReasons] = useState([]);
   const distributorLocations = useMemo(
     () => (distributor?.locations || []).filter(l => l.status === 'active'),
@@ -111,28 +115,52 @@ export default function PromoDispatchSection({
     }
   }, [API_URL, authHeaders]);
 
-  // Load reasons + contacts when the create dialog opens
+  const fetchLeads = useCallback(async (search = '') => {
+    try {
+      const qs = `page=1&page_size=50${search ? `&search=${encodeURIComponent(search)}` : ''}`;
+      const res = await fetch(`${API_URL}/api/leads?${qs}`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        setLeads(data.data || data.leads || []);
+      }
+    } catch (err) {
+      console.error('Error fetching leads:', err);
+    }
+  }, [API_URL, authHeaders]);
+
+  // Load reasons + recipients when the create dialog opens
   useEffect(() => {
     if (showDialog) {
       fetchReasons(false);
       fetchContacts('');
+      fetchLeads('');
       // auto-select the only location
       if (distributorLocations.length === 1) {
         setForm(f => ({ ...f, distributor_location_id: distributorLocations[0].id }));
       }
     }
-  }, [showDialog, fetchReasons, fetchContacts, distributorLocations]);
+  }, [showDialog, fetchReasons, fetchContacts, fetchLeads, distributorLocations]);
 
   // Debounced contact search
   useEffect(() => {
-    if (!showDialog || selectedContact) return;
+    if (!showDialog || recipientType !== 'contact' || selectedContact) return;
     const t = setTimeout(() => fetchContacts(contactSearch), 300);
     return () => clearTimeout(t);
-  }, [contactSearch, showDialog, selectedContact, fetchContacts]);
+  }, [contactSearch, showDialog, recipientType, selectedContact, fetchContacts]);
+
+  // Debounced lead search
+  useEffect(() => {
+    if (!showDialog || recipientType !== 'lead' || selectedLead) return;
+    const t = setTimeout(() => fetchLeads(leadSearch), 300);
+    return () => clearTimeout(t);
+  }, [leadSearch, showDialog, recipientType, selectedLead, fetchLeads]);
 
   const resetForm = () => {
+    setRecipientType('contact');
     setSelectedContact(null);
     setContactSearch('');
+    setSelectedLead(null);
+    setLeadSearch('');
     setItems([newItem()]);
     setForm({
       distributor_location_id: distributorLocations.length === 1 ? distributorLocations[0].id : '',
@@ -173,7 +201,8 @@ export default function PromoDispatchSection({
   const batchRequired = sourceTracksBatches;
   const itemsValid = items.length > 0 && items.every(i =>
     i.sku_id && (parseInt(i.quantity) || 0) > 0 && (!batchRequired || i.batch_id));
-  const canSubmit = !!selectedContact && !!form.distributor_location_id && !!form.reason && itemsValid;
+  const recipientChosen = recipientType === 'lead' ? !!selectedLead : !!selectedContact;
+  const canSubmit = recipientChosen && !!form.distributor_location_id && !!form.reason && itemsValid;
 
   const handleCreate = async () => {
     if (!canSubmit) return;
@@ -181,7 +210,9 @@ export default function PromoDispatchSection({
     try {
       const payload = {
         distributor_location_id: form.distributor_location_id,
-        contact_id: selectedContact.id,
+        recipient_type: recipientType,
+        contact_id: recipientType === 'contact' ? selectedContact.id : null,
+        lead_id: recipientType === 'lead' ? selectedLead.id : null,
         delivery_date: form.delivery_date,
         reason: form.reason,
         reference_number: form.reference_number || null,
@@ -297,7 +328,7 @@ export default function PromoDispatchSection({
                     <Gift className="h-5 w-5 text-fuchsia-600" />
                     Promotional Stock-Out (Delivery Challan)
                   </CardTitle>
-                  <CardDescription>Non-sale dispatches to Contacts — deducts stock, generates a challan. No invoice, no billing.</CardDescription>
+                  <CardDescription>Non-sale dispatches to Contacts or Leads — deducts stock, generates a challan. No invoice, no billing.</CardDescription>
                 </div>
               </button>
             </CollapsibleTrigger>
@@ -404,59 +435,130 @@ export default function PromoDispatchSection({
           <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2"><Gift className="h-5 w-5 text-fuchsia-600" /> Promotional Stock-Out</DialogTitle>
             <DialogDescription>
-              Dispatch goods to a Contact for promotion / sampling. Stock is deducted and a Delivery Challan
+              Dispatch goods to a Contact or Lead for promotion / sampling. Stock is deducted and a Delivery Challan
               (marked <span className="font-medium">"Not for Sale"</span>) is generated. No invoice is created.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4 flex-1 overflow-y-auto min-h-0 -mx-6 px-6">
-            {/* Contact selection */}
+            {/* Recipient selection — Contact or Lead */}
             <div className="space-y-2">
-              <Label>Recipient Contact *</Label>
-              {selectedContact ? (
-                <div className="flex items-center justify-between p-3 rounded-md border border-fuchsia-200 bg-fuchsia-50/60" data-testid="promo-selected-contact">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-900 truncate">{selectedContact.name}</p>
-                    <p className="text-sm text-slate-600">
-                      {[selectedContact.company, selectedContact.city, selectedContact.phone].filter(Boolean).join(' • ')}
-                    </p>
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => { setSelectedContact(null); setContactSearch(''); }}>
-                    <X className="h-4 w-4" />
-                  </Button>
+              <div className="flex items-center justify-between">
+                <Label>Recipient *</Label>
+                <div className="inline-flex rounded-md border border-slate-200 p-0.5 bg-slate-50" data-testid="promo-recipient-type-toggle">
+                  <button
+                    type="button"
+                    onClick={() => setRecipientType('contact')}
+                    className={`px-3 py-1 text-xs font-medium rounded transition-colors ${recipientType === 'contact' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                    data-testid="promo-recipient-contact-btn"
+                  >
+                    Contact
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRecipientType('lead')}
+                    className={`px-3 py-1 text-xs font-medium rounded transition-colors ${recipientType === 'lead' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                    data-testid="promo-recipient-lead-btn"
+                  >
+                    Lead
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  <Input
-                    placeholder="Search contacts by name, company, phone..."
-                    value={contactSearch}
-                    onChange={(e) => setContactSearch(e.target.value)}
-                    data-testid="promo-contact-search"
-                  />
-                  <div className="border rounded-md max-h-[180px] overflow-y-auto">
-                    {contacts.length === 0 ? (
-                      <div className="p-4 text-sm text-muted-foreground text-center">
-                        <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p>No contacts found</p>
-                      </div>
-                    ) : (
-                      contacts.map((c) => (
-                        <div
-                          key={c.id}
-                          className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
-                          onClick={() => {
-                            setSelectedContact(c);
-                            setForm(prev => ({ ...prev, delivery_address: prev.delivery_address || [c.address, c.city, c.state].filter(Boolean).join(', ') }));
-                          }}
-                          data-testid={`promo-contact-option-${c.id}`}
-                        >
-                          <p className="font-medium text-sm">{c.name}</p>
-                          <p className="text-xs text-muted-foreground">{[c.company, c.city, c.phone].filter(Boolean).join(' • ')}</p>
+              </div>
+
+              {recipientType === 'contact' ? (
+                selectedContact ? (
+                  <div className="flex items-center justify-between p-3 rounded-md border border-fuchsia-200 bg-fuchsia-50/60" data-testid="promo-selected-contact">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{selectedContact.name}</p>
+                      <p className="text-sm text-slate-600">
+                        {[selectedContact.company, selectedContact.city, selectedContact.phone].filter(Boolean).join(' • ')}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedContact(null); setContactSearch(''); }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Search contacts by name, company, phone..."
+                      value={contactSearch}
+                      onChange={(e) => setContactSearch(e.target.value)}
+                      data-testid="promo-contact-search"
+                    />
+                    <div className="border rounded-md max-h-[180px] overflow-y-auto">
+                      {contacts.length === 0 ? (
+                        <div className="p-4 text-sm text-muted-foreground text-center">
+                          <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p>No contacts found</p>
                         </div>
-                      ))
-                    )}
+                      ) : (
+                        contacts.map((c) => (
+                          <div
+                            key={c.id}
+                            className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
+                            onClick={() => {
+                              setSelectedContact(c);
+                              setForm(prev => ({ ...prev, delivery_address: prev.delivery_address || [c.address, c.city, c.state].filter(Boolean).join(', ') }));
+                            }}
+                            data-testid={`promo-contact-option-${c.id}`}
+                          >
+                            <p className="font-medium text-sm">{c.name}</p>
+                            <p className="text-xs text-muted-foreground">{[c.company, c.city, c.phone].filter(Boolean).join(' • ')}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
+                )
+              ) : (
+                selectedLead ? (
+                  <div className="flex items-center justify-between p-3 rounded-md border border-fuchsia-200 bg-fuchsia-50/60" data-testid="promo-selected-lead">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">
+                        {selectedLead.contact_person || selectedLead.name || selectedLead.company}
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        {[selectedLead.company, selectedLead.city, selectedLead.phone].filter(Boolean).join(' • ')}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => { setSelectedLead(null); setLeadSearch(''); }}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Search leads by company, contact, phone..."
+                      value={leadSearch}
+                      onChange={(e) => setLeadSearch(e.target.value)}
+                      data-testid="promo-lead-search"
+                    />
+                    <div className="border rounded-md max-h-[180px] overflow-y-auto">
+                      {leads.length === 0 ? (
+                        <div className="p-4 text-sm text-muted-foreground text-center">
+                          <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p>No leads found</p>
+                        </div>
+                      ) : (
+                        leads.map((l) => (
+                          <div
+                            key={l.id}
+                            className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
+                            onClick={() => {
+                              setSelectedLead(l);
+                              setForm(prev => ({ ...prev, delivery_address: prev.delivery_address || [l.address, l.city, l.state].filter(Boolean).join(', ') }));
+                            }}
+                            data-testid={`promo-lead-option-${l.id}`}
+                          >
+                            <p className="font-medium text-sm">{l.company}</p>
+                            <p className="text-xs text-muted-foreground">{[l.contact_person || l.name, l.city, l.phone].filter(Boolean).join(' • ')}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )
               )}
             </div>
 

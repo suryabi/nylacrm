@@ -564,10 +564,13 @@ class PromoDeliveryItemCreate(BaseModel):
 
 
 class PromoDeliveryCreate(BaseModel):
-    """A promotional / non-sale stock-out dispatched to a CRM Contact (not an
-    Account). Deducts stock, generates a Delivery Challan, never invoices."""
+    """A promotional / non-sale stock-out dispatched to a CRM Contact **or** a
+    Lead (not an Account). Deducts stock, generates a Delivery Challan, never
+    invoices."""
     distributor_location_id: str
-    contact_id: str
+    recipient_type: str = 'contact'   # 'contact' | 'lead'
+    contact_id: Optional[str] = None
+    lead_id: Optional[str] = None
     delivery_date: str
     reason: str                       # must match an active promo reason
     reference_number: Optional[str] = None

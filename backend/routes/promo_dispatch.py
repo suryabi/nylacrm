@@ -143,10 +143,28 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     if not loc:
         raise HTTPException(status_code=404, detail="Distributor location not found")
 
-    # Validate contact
-    contact = await db.contacts.find_one({"id": data.contact_id, "tenant_id": tenant_id}, {"_id": 0})
-    if not contact:
-        raise HTTPException(status_code=404, detail="Contact not found")
+    # Validate recipient — a CRM Contact OR a Lead (both can receive promo stock).
+    recipient_type = (data.recipient_type or "contact").lower()
+    if recipient_type not in ("contact", "lead"):
+        raise HTTPException(status_code=400, detail="recipient_type must be 'contact' or 'lead'.")
+    if recipient_type == "lead":
+        if not data.lead_id:
+            raise HTTPException(status_code=400, detail="lead_id is required when recipient_type is 'lead'.")
+        recipient = await db.leads.find_one({"id": data.lead_id, "tenant_id": tenant_id}, {"_id": 0})
+        if not recipient:
+            raise HTTPException(status_code=404, detail="Lead not found")
+        recipient_name = recipient.get("contact_person") or recipient.get("name") or recipient.get("company")
+        recipient_company = recipient.get("company")
+        recipient_phone = recipient.get("phone")
+    else:
+        if not data.contact_id:
+            raise HTTPException(status_code=400, detail="contact_id is required when recipient_type is 'contact'.")
+        recipient = await db.contacts.find_one({"id": data.contact_id, "tenant_id": tenant_id}, {"_id": 0})
+        if not recipient:
+            raise HTTPException(status_code=404, detail="Contact not found")
+        recipient_name = recipient.get("name")
+        recipient_company = recipient.get("company")
+        recipient_phone = recipient.get("phone")
 
     # Validate reason against the active master list
     reason = (data.reason or "").strip()
@@ -184,7 +202,7 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     # ── Create dispatch header ──
     challan_number = await _generate_challan_number(tenant_id)
     dispatch_id = str(uuid.uuid4())
-    contact_addr = ", ".join([x for x in [contact.get("address"), contact.get("city"), contact.get("state")] if x])
+    contact_addr = ", ".join([x for x in [recipient.get("address"), recipient.get("city"), recipient.get("state")] if x])
     total_qty = sum(it.quantity for it in data.items)
     total_value = sum(it.quantity * float(it.unit_price or 0) for it in data.items)
 
@@ -196,10 +214,12 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "distributor_location_id": data.distributor_location_id,
         "location_name": loc.get("location_name"),
         "is_factory": src_is_factory,
-        "contact_id": data.contact_id,
-        "contact_name": contact.get("name"),
-        "contact_phone": contact.get("phone"),
-        "contact_company": contact.get("company"),
+        "recipient_type": recipient_type,
+        "contact_id": data.contact_id if recipient_type == "contact" else None,
+        "lead_id": data.lead_id if recipient_type == "lead" else None,
+        "contact_name": recipient_name,
+        "contact_phone": recipient_phone,
+        "contact_company": recipient_company,
         "contact_address": contact_addr,
         "promo_reason": valid.get("name"),
         "challan_number": challan_number,
@@ -321,12 +341,19 @@ async def promo_challan_pdf(distributor_id: str, dispatch_id: str, current_user:
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0}) or {}
     company_profile = (tenant.get("settings") or {}).get("company_profile") or tenant.get("company_profile") or {}
     branding = tenant.get("branding") or {}
-    contact = await db.contacts.find_one({"id": d.get("contact_id"), "tenant_id": tenant_id}, {"_id": 0}) or {}
+    # Build the recipient block from the stored dispatch fields (works for both
+    # Contact and Lead recipients without re-fetching).
+    contact_data = {
+        "name": d.get("contact_name"),
+        "company": d.get("contact_company"),
+        "phone": d.get("contact_phone"),
+        "address": d.get("contact_address"),
+    }
     distributor_data = {
         "distributor_name": d.get("distributor_name"),
         "location_name": d.get("location_name"),
     }
-    pdf_bytes = generate_delivery_challan_pdf(d, company_profile, contact, distributor_data, branding)
+    pdf_bytes = generate_delivery_challan_pdf(d, company_profile, contact_data, distributor_data, branding)
     filename = f"challan_{d.get('challan_number', dispatch_id)}.pdf"
     return Response(
         content=pdf_bytes, media_type="application/pdf",

@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-04 — Promotional Stock-Out now supports Leads (not just Contacts) ✅ DONE
+- **Request**: The promo / non-sale stock-out (Delivery Challan) in the Stock Out module should be sendable to **Leads** as well as Contacts.
+- **Backend** (`models/distributor.py`, `routes/promo_dispatch.py`, `utils/pdf_generator.py`): `PromoDeliveryCreate` now takes `recipient_type` ('contact'|'lead'), `contact_id` and `lead_id` (both optional, validated by type). The create endpoint resolves the recipient from `contacts` or `leads` (lead name = `contact_person` → `name` → `company`), stores `recipient_type`/`lead_id`, and keeps the existing `contact_*` display fields so the tracking table is unchanged. Challan PDF builds the recipient block from stored fields and labels it "Dispatched To (Lead/Contact)". Clear 400s for missing contact_id/lead_id.
+- **Frontend** (`components/distributor/PromoDispatchSection.jsx`): added a **Contact / Lead** segmented toggle in the dispatch dialog (`promo-recipient-type-toggle`) with a dedicated lead search/select (`promo-lead-search`, `promo-lead-option-*`) hitting `/api/leads`. Submit enabled when either a contact or a lead is chosen; payload sends `recipient_type` + the right id.
+- **Verified (preview)**: curl e2e — lead dispatch DC-2606-0003 created (recipient_type=lead, name resolved), 24KB challan PDF, and validation rejects lead without `lead_id`. Screenshot confirms the toggle + lead search render correctly. Py + JS lint clean. **Redeploy to push to production.**
+
+
+
 ### 2026-06-04 — Account Detail: "Zoho sync health" indicator + one-click re-sync ✅ DONE
 - **Request**: Add a small Zoho sync health indicator on the Account Detail page (last sync status + one-click "Re-sync to Zoho").
 - **Backend** (`routes/accounts.py`): new `POST /accounts/{account_id}/zoho-resync` — re-pushes the contact to Zoho via the existing `zoho_service.upsert_contact`, and records sync health on the account: `zoho_sync_status` ('synced'/'error'), `zoho_last_synced_at`, `zoho_last_sync_attempt_at`, `zoho_last_sync_error`. Rejects distributor-billed accounts (not in Zoho) and surfaces real errors as HTTP 400 (passes through Cloudflare). The same health fields are now also stamped on **activation success/failure** and on the **auto re-sync** in `update_account` (so silent edit-time failures are captured).
