@@ -118,7 +118,7 @@ async def google_status(current_user: dict = Depends(get_current_user)):
 @router.get("/google/connect")
 async def google_connect(current_user: dict = Depends(get_current_user)):
     if not _is_configured():
-        raise HTTPException(status_code=503, detail="Google Calendar integration not configured. Admin must set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.")
+        raise HTTPException(status_code=400, detail="Google Calendar integration not configured. Admin must set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.")
     state = f"{current_user['id']}:{get_current_tenant_id()}"
     params = {
         "client_id": GOOGLE_CLIENT_ID,
@@ -329,7 +329,7 @@ async def list_events(
 async def push_meeting_to_google(meeting_id: str, current_user: dict = Depends(get_current_user)):
     """Insert (or update) a CRM meeting as a Google Calendar event for the connected user."""
     if not _is_configured():
-        raise HTTPException(status_code=503, detail="Google Calendar not configured")
+        raise HTTPException(status_code=400, detail="Google Calendar not configured")
     token_doc = await _refresh_if_needed(current_user["id"])
     if not token_doc:
         raise HTTPException(status_code=400, detail="Not connected to Google Calendar")
@@ -369,7 +369,7 @@ async def push_meeting_to_google(meeting_id: str, current_user: dict = Depends(g
         )
 
     if resp.status_code not in (200, 201):
-        raise HTTPException(status_code=502, detail=f"Google Calendar API error: {resp.text[:200]}")
+        raise HTTPException(status_code=400, detail=f"Google Calendar API error: {resp.text[:200]}")
 
     event = resp.json()
     await tdb.meetings.update_one(
@@ -383,7 +383,7 @@ async def push_meeting_to_google(meeting_id: str, current_user: dict = Depends(g
 async def delete_meeting_from_google(meeting_id: str, current_user: dict = Depends(get_current_user)):
     """Delete the Google Calendar event previously created for this CRM meeting."""
     if not _is_configured():
-        raise HTTPException(status_code=503, detail="Google Calendar not configured")
+        raise HTTPException(status_code=400, detail="Google Calendar not configured")
     token_doc = await _refresh_if_needed(current_user["id"])
     if not token_doc:
         raise HTTPException(status_code=400, detail="Not connected to Google Calendar")
@@ -405,4 +405,4 @@ async def delete_meeting_from_google(meeting_id: str, current_user: dict = Depen
             {"$unset": {"google_event_id": "", "google_event_link": ""}},
         )
         return {"deleted": True}
-    raise HTTPException(status_code=502, detail=f"Google Calendar API error: {resp.text[:200]}")
+    raise HTTPException(status_code=400, detail=f"Google Calendar API error: {resp.text[:200]}")

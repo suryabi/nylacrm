@@ -485,7 +485,7 @@ async def ask_nyla(payload: AskPayload, current_user: dict = Depends(get_current
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         logger.exception("LLM call failed")
-        raise HTTPException(status_code=502, detail=f"AI service error: {e}")
+        raise HTTPException(status_code=400, detail=f"AI service error: {e}")
 
     # Persist message
     msg_id = str(uuid.uuid4())

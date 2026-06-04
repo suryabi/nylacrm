@@ -4621,7 +4621,7 @@ async def retry_delivery_zoho_push(
         raise HTTPException(status_code=400, detail=str(skip))
     except Exception as e:
         logger.exception(f"Manual Zoho push failed for delivery {delivery_id}")
-        raise HTTPException(status_code=502, detail=f"Zoho push failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Zoho push failed: {e}")
 
     # Read back to pick up zoho_invoice_url written by the sync
     fresh = await db.distributor_deliveries.find_one(
@@ -4630,7 +4630,7 @@ async def retry_delivery_zoho_push(
     ) or {}
     if not fresh.get('zoho_invoice_url'):
         raise HTTPException(
-            status_code=502,
+            status_code=400,
             detail="Zoho push completed but no invoice URL was produced. Most common causes: account has no Zoho contact ID, line items have no agreed price, or the source warehouse is not marked as Factory.",
         )
     return {
@@ -4692,10 +4692,10 @@ async def download_delivery_invoice_pdf(
             detail = f"{detail} Reason: {zoho_msg}"
         elif e.message:
             detail = f"{detail} Reason: {str(e.message)[:200]}"
-        raise HTTPException(status_code=502, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
     except Exception as e:
         logger.exception(f"Failed to download invoice PDF for delivery {delivery_id}")
-        raise HTTPException(status_code=502, detail=f"Failed to download invoice: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to download invoice: {e}")
 
     invoice_number = invoice_number or delivery.get("zoho_invoice_number") or zoho_id
     safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", invoice_number).strip("_") or "invoice"

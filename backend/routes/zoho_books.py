@@ -530,7 +530,7 @@ async def list_zoho_templates(
             params={"type": entity},
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Failed to fetch templates from Zoho: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to fetch templates from Zoho: {e}")
 
     templates = result.get("templates", []) or []
     # Slim down the response — frontend only needs id + name + is_default flag

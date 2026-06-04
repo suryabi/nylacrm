@@ -89,8 +89,8 @@ async def get_weather(latitude: float, longitude: float):
             response.raise_for_status()
             return response.json()
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Weather service timeout")
+        raise HTTPException(status_code=400, detail="Weather service timeout")
     except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Weather service error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Weather service error: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch weather: {str(e)}")

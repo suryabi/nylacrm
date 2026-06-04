@@ -669,7 +669,7 @@ async def retry_zoho_push(
         raise
     except Exception as e:
         logger.error(f"retry_zoho_push: failed to push CN {credit_note_id} to Zoho: {e}")
-        raise HTTPException(status_code=502, detail=f"Zoho push failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Zoho push failed: {e}")
 
 
 @router.get("/{distributor_id}/credit-notes")

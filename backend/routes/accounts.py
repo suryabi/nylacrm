@@ -1455,7 +1455,7 @@ async def activate_account(
         try:
             zoho_contact_id = await zoho.upsert_contact(tenant_id, account)
         except Exception as e:
-            raise HTTPException(status_code=502, detail=f'Failed to sync customer to Zoho Books: {e}')
+            raise HTTPException(status_code=400, detail=f'Failed to sync customer to Zoho Books: {e}')
 
     now = datetime.now(timezone.utc).isoformat()
     update_doc = {
@@ -1557,7 +1557,7 @@ async def _parse_gst_with_gemini(file_bytes: bytes, mime: str) -> dict:
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI parsing failed: {e}")
+        raise HTTPException(status_code=400, detail=f"AI parsing failed: {e}")
 
     text = (response or "").strip()
     if text.startswith("```"):
@@ -1568,12 +1568,12 @@ async def _parse_gst_with_gemini(file_bytes: bytes, mime: str) -> dict:
         data = _json.loads(text)
     except _json.JSONDecodeError as e:
         raise HTTPException(
-            status_code=502,
+            status_code=400,
             detail=f"AI returned unparseable JSON. Try a clearer scan of the GST certificate. ({e})"
         )
 
     if not isinstance(data, dict):
-        raise HTTPException(status_code=502, detail="AI did not return a JSON object.")
+        raise HTTPException(status_code=400, detail="AI did not return a JSON object.")
     return data
 
 
@@ -1690,7 +1690,7 @@ async def download_gst_certificate(
         from utils.storage import get_object as _disp_get
         content, content_type = await _disp_get(account['gst_certificate_path'])
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f'Could not retrieve GST certificate: {e}')
+        raise HTTPException(status_code=400, detail=f'Could not retrieve GST certificate: {e}')
     return _StreamingResponse(
         _io.BytesIO(content),
         media_type=account.get('gst_certificate_mime') or content_type,
@@ -1777,7 +1777,7 @@ async def get_place_details(
     async with _httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(url, headers=headers)
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Google Places error: {resp.text}")
+        raise HTTPException(status_code=400, detail=f"Google Places error: {resp.text}")
     data = resp.json()
     loc = (data.get('location') or {})
 
