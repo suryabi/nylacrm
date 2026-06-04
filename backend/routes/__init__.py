@@ -164,6 +164,9 @@ routes_router.include_router(master_departments_router, prefix="/master-departme
 routes_router.include_router(marketing_request_types_router, prefix="/marketing-request-types", tags=["Marketing Request Types"])
 routes_router.include_router(marketing_request_statuses_router, prefix="/marketing-request-statuses", tags=["Marketing Request Statuses"])
 
+from .notifications import router as notifications_router
+routes_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
+
 # Knowledge Base — "Ask Nyla" (admin uploads docs, all users can ask questions)
 routes_router.include_router(knowledge_base_router, tags=["Knowledge Base"])
 

@@ -113,6 +113,9 @@ class Transition(BaseModel):
     auto_assign_role: Optional[str] = None
     notify_all: bool = True  # notify everyone matching the auto-assign target
     comment_required: bool = False
+    # If True, notify the resolved assignee(s) (in-app + email) when this
+    # transition runs and assigns someone.
+    notify_assignee: bool = False
     # Permission gates: who can trigger this transition.
     # Empty list = anyone in the tenant. Admins (CEO/Director/admin) always bypass.
     allowed_role_keys: List[str] = Field(default_factory=list)

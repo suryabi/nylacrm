@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import AskNyla from '../components/widgets/AskNyla';
 import DistributorChatButton from '../components/DistributorChatButton';
+import NotificationBell from '../components/NotificationBell';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
   LayoutDashboard, Users, Building2, Store,
@@ -615,6 +616,7 @@ export default function DashboardLayout({ children }) {
                 <p className="text-sm font-medium text-white truncate">{user?.name}</p>
                 <p className="text-xs text-white/60 truncate capitalize">{user?.role?.replace('_', ' ')}</p>
               </div>
+              <NotificationBell />
             </div>
             
             {/* Theme Toggle */}

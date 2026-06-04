@@ -248,6 +248,7 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
           auto_assign_role: '',
           notify_all: true,
           comment_required: false,
+          notify_assignee: false,
           allowed_role_keys: [],
           allowed_department_ids: [],
           requestor_only: false,
@@ -603,6 +604,14 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                         data-testid={`txn-comment-required-${idx}`}
                       />
                       <span>Comment required when triggering</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <Checkbox
+                        checked={!!t.notify_assignee}
+                        onCheckedChange={(v) => updateTransition(idx, { notify_assignee: !!v })}
+                        data-testid={`txn-notify-assignee-${idx}`}
+                      />
+                      <span>Notify assignee (in-app + email when this transition assigns someone)</span>
                     </label>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -50,6 +50,8 @@ from models.marketing_request import (
     StoredFile, FileVersion, RequestComment, ProductionSubmission,
 )
 from routes.slack import post_event_message as slack_post_event
+from utils.notify import notify_users
+import os
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -497,6 +499,33 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
         {"$set": set_doc, "$push": {"comments": timeline_event}},
     )
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+
+    # Notify the resolved assignee(s) — in-app + email — when this transition
+    # opts in via "Notify assignee". Best-effort; never breaks the transition.
+    if transition.get("notify_assignee") and assign.get("assignee_user_ids"):
+        try:
+            actor_id = current_user.get("id")
+            recipients = [uid for uid in assign["assignee_user_ids"] if uid and uid != actor_id]
+            if recipients:
+                base = os.environ.get("APP_BASE_URL", "").rstrip("/")
+                link = f"{base}/marketing-requests/{request_id}"
+                state_label = target_state.get("label") or target_state["key"]
+                actor = current_user.get("name") or current_user.get("email") or "Someone"
+                await notify_users(
+                    tenant_id,
+                    recipients,
+                    title=f"{doc.get('request_number')}: assigned to you",
+                    body=(
+                        f"\"{doc.get('title', '')}\" moved to '{state_label}' and was assigned to you "
+                        f"by {actor}. Action may be required."
+                    ),
+                    link=link,
+                    kind="marketing_request_assignment",
+                    entity_type="marketing_request",
+                    entity_id=request_id,
+                )
+        except Exception:
+            logger.exception("Assignee notification failed for marketing request transition")
 
     # Slack notification (best-effort)
     try:
