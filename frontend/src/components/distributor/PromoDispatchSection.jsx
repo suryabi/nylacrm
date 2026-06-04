@@ -27,8 +27,6 @@ export default function PromoDispatchSection({
   API_URL,
   token,
   skus = [],
-  sourceTracksBatches = false,
-  batchesBySku = {},
 }) {
   const { user } = useAuth();
   const isAdmin = ADMIN_ROLES.includes((user?.role || '').trim());
@@ -49,6 +47,8 @@ export default function PromoDispatchSection({
   const [leadSearch, setLeadSearch] = useState('');
   const [selectedLead, setSelectedLead] = useState(null);
   const [reasons, setReasons] = useState([]);
+  // Batches available per SKU at the promo dialog's *selected* From-Location.
+  const [batchMap, setBatchMap] = useState({});
   const distributorLocations = useMemo(
     () => (distributor?.locations || []).filter(l => l.status === 'active'),
     [distributor],
@@ -64,6 +64,11 @@ export default function PromoDispatchSection({
     delivery_address: '',
     remarks: '',
   });
+  const selectedLoc = useMemo(
+    () => distributorLocations.find(l => l.id === form.distributor_location_id),
+    [distributorLocations, form.distributor_location_id],
+  );
+  const locTracksBatches = !!selectedLoc?.track_batches;
   const [items, setItems] = useState([newItem()]);
 
   // Reasons manager dialog
@@ -155,12 +160,48 @@ export default function PromoDispatchSection({
     return () => clearTimeout(t);
   }, [leadSearch, showDialog, recipientType, selectedLead, fetchLeads]);
 
+  // Fetch available batches for the *selected From-Location* whenever it or the
+  // chosen SKUs change (only if that location tracks batches). This mirrors the
+  // regular Stock-Out flow so the promo dialog shows the batch picker for the
+  // location the user actually picks (e.g. a factory warehouse).
+  useEffect(() => {
+    if (!showDialog || !form.distributor_location_id || !locTracksBatches) return;
+    const skuIds = [...new Set(items.map(i => i.sku_id).filter(Boolean))];
+    const missing = skuIds.filter(sid => !(sid in batchMap));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    Promise.all(missing.map(async (sid) => {
+      try {
+        const res = await fetch(
+          `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${form.distributor_location_id}&sku_id=${sid}`,
+          { headers: authHeaders },
+        );
+        if (res.ok) {
+          const d = await res.json();
+          return [sid, d.batches || []];
+        }
+      } catch (err) {
+        console.error('Error fetching batches:', err);
+      }
+      return [sid, []];
+    })).then((entries) => {
+      if (cancelled) return;
+      setBatchMap(prev => {
+        const next = { ...prev };
+        entries.forEach(([sid, b]) => { next[sid] = b; });
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [showDialog, form.distributor_location_id, locTracksBatches, items, batchMap, API_URL, authHeaders]);
+
   const resetForm = () => {
     setRecipientType('contact');
     setSelectedContact(null);
     setContactSearch('');
     setSelectedLead(null);
     setLeadSearch('');
+    setBatchMap({});
     setItems([newItem()]);
     setForm({
       distributor_location_id: distributorLocations.length === 1 ? distributorLocations[0].id : '',
@@ -198,7 +239,7 @@ export default function PromoDispatchSection({
   const totalQty = items.reduce((s, i) => s + (parseInt(i.quantity) || 0), 0);
   const totalValue = items.reduce((s, i) => s + (parseInt(i.quantity) || 0) * (parseFloat(i.unit_price) || 0), 0);
 
-  const batchRequired = sourceTracksBatches;
+  const batchRequired = locTracksBatches;
   const itemsValid = items.length > 0 && items.every(i =>
     i.sku_id && (parseInt(i.quantity) || 0) > 0 && (!batchRequired || i.batch_id));
   const recipientChosen = recipientType === 'lead' ? !!selectedLead : !!selectedContact;
@@ -226,7 +267,7 @@ export default function PromoDispatchSection({
           sku_name: i.sku_name,
           quantity: parseInt(i.quantity),
           unit_price: parseFloat(i.unit_price) || 0,
-          batch_id: i.batch_id || null,
+          batch_id: (i.batch_id && i.batch_id !== '__legacy__') ? i.batch_id : null,
           batch_code: i.batch_code || null,
         })),
       };
@@ -566,7 +607,11 @@ export default function PromoDispatchSection({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>From Location *</Label>
-                <Select value={form.distributor_location_id} onValueChange={(v) => setForm(f => ({ ...f, distributor_location_id: v }))}>
+                <Select value={form.distributor_location_id} onValueChange={(v) => {
+                  setForm(f => ({ ...f, distributor_location_id: v }));
+                  setBatchMap({});
+                  setItems(prev => prev.map(it => ({ ...it, batch_id: '', batch_code: '' })));
+                }}>
                   <SelectTrigger data-testid="promo-location-select"><SelectValue placeholder="Select warehouse/location" /></SelectTrigger>
                   <SelectContent>
                     {distributorLocations.map(loc => (
@@ -636,7 +681,7 @@ export default function PromoDispatchSection({
                 <div className="border rounded-lg divide-y divide-slate-200">
                   {items.map((item, index) => {
                     const lineValue = (parseInt(item.quantity) || 0) * (parseFloat(item.unit_price) || 0);
-                    const batches = batchesBySku[item.sku_id] || [];
+                    const batches = batchMap[item.sku_id] || [];
                     return (
                       <div key={item.id} className={`px-4 py-3 ${index % 2 ? 'bg-slate-50' : 'bg-white'}`} data-testid={`promo-item-${index}`}>
                         <div className="flex items-center gap-3">
@@ -666,14 +711,14 @@ export default function PromoDispatchSection({
                               </div>
                             ) : (
                               <Select value={item.batch_id} onValueChange={(v) => {
-                                const b = batches.find(x => x.batch_id === v);
+                                const b = batches.find(x => (x.batch_id || '__legacy__') === v);
                                 updateItem(item.id, 'batch_id', v);
                                 updateItem(item.id, 'batch_code', b?.batch_code || '');
                               }}>
                                 <SelectTrigger className="h-9" data-testid={`promo-batch-select-${index}`}><SelectValue placeholder="Select batch" /></SelectTrigger>
                                 <SelectContent>
                                   {batches.map(b => (
-                                    <SelectItem key={b.batch_id} value={b.batch_id}>{b.batch_code} — {(b.quantity || 0).toLocaleString()} units</SelectItem>
+                                    <SelectItem key={b.batch_id || '__legacy__'} value={b.batch_id || '__legacy__'}>{b.batch_code} — {(b.quantity || 0).toLocaleString()} units</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>

@@ -1824,8 +1824,6 @@ export default function DeliveriesTab({
       API_URL={API_URL}
       token={token}
       skus={skus}
-      sourceTracksBatches={sourceTracksBatches}
-      batchesBySku={batchesBySku}
     />
 
     {/* Section 2: Distributor → Factory */}
