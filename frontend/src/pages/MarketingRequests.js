@@ -67,19 +67,20 @@ function RequestTable({ rows, navigate }) {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="bg-emerald-50/30 border-b border-emerald-100/60">
-                {['Request', 'State', 'Assigned to', 'Due Date', 'Raised By'].map(h => (
+                {['Request', 'Lead', 'State', 'Assigned to', 'Due Date', 'Raised By'].map(h => (
                   <th key={h} className={TABLE_HEADER_CLASS}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={5} className="p-10 text-center text-slate-500">No requests in this view.</td></tr>
+                <tr><td colSpan={6} className="p-10 text-center text-slate-500">No requests in this view.</td></tr>
               ) : rows.map((req, i) => {
                 const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
                 const assignedTo = req.assigned_user_name
                   || req.assigned_department_name
                   || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
+                const leadLabel = req.lead_company || req.lead_name;
                 return (
                   <tr key={req.id} className={rowClass(i)} onClick={() => navigate(`/marketing-requests/${req.id}`)} data-testid={`mr-row-${req.id}`}>
                     <td className="p-4" style={{ maxWidth: 440 }}>
@@ -101,6 +102,18 @@ function RequestTable({ rows, navigate }) {
                           {req.requirement_details ? req.requirement_details.slice(0, 100) : ''}
                         </span>
                       </div>
+                    </td>
+                    <td className="p-4" data-testid={`mr-row-lead-${req.id}`}>
+                      {leadLabel ? (
+                        <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 pl-1.5 pr-2.5 py-1 max-w-[200px]">
+                          <div className="w-6 h-6 rounded-md bg-emerald-600 flex items-center justify-center shrink-0">
+                            <Users className="h-3.5 w-3.5 text-white" />
+                          </div>
+                          <span className="text-sm font-semibold text-emerald-800 truncate" title={leadLabel}>{leadLabel}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-300">No lead</span>
+                      )}
                     </td>
                     <td className="p-4">
                       <Badge variant="outline" style={stateBadgeStyle(req.current_state_color)} className="border">

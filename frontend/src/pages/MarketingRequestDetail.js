@@ -461,6 +461,20 @@ export default function MarketingRequestDetail() {
           style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1629197520635-16570fbd0bb3?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200)' }}
         />
         <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-emerald-500/40 blur-3xl pointer-events-none" />
+        {(req.lead_company || req.lead_name) && (
+          <div className="absolute top-5 right-5 z-10 hidden sm:flex items-center gap-3 rounded-2xl bg-white/15 backdrop-blur-md border border-white/25 px-4 py-2.5 max-w-[280px] shadow-lg" data-testid="mr-hero-lead">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Users className="h-5 w-5 text-white" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-wider text-emerald-100/90 font-semibold">Associated Lead</p>
+              <p className="text-sm font-bold text-white truncate">{req.lead_company || req.lead_name}</p>
+              {req.lead_company && req.lead_name && req.lead_company !== req.lead_name && (
+                <p className="text-[11px] text-emerald-50/80 truncate">{req.lead_name}</p>
+              )}
+            </div>
+          </div>
+        )}
         <div className="relative">
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/10 font-mono">
@@ -498,7 +512,7 @@ export default function MarketingRequestDetail() {
               <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-200" /> Role: {req.assigned_role}</span>
             )}
             {(req.lead_company || req.lead_name) && (
-              <span className="flex items-center gap-1.5" data-testid="mr-lead-tag">
+              <span className="flex items-center gap-1.5 sm:hidden" data-testid="mr-lead-tag">
                 <Users className="h-4 w-4 text-emerald-200" /> Lead: {req.lead_company || req.lead_name}
               </span>
             )}

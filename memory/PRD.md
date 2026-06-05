@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests: prominent Lead visibility ✅ DONE
+- **Request**: Show the associated lead clearly — in the detail banner's top-right corner, and prominently in the list so it's obvious which request maps to which lead.
+- **Detail** (`MarketingRequestDetail.js`): added a glassy "ASSOCIATED LEAD" card pinned to the hero's top-right (`mr-hero-lead`) with the lead company + contact name; the inline lead meta is now shown only on mobile (desktop uses the corner card).
+- **List** (`MarketingRequests.js`): added a dedicated **Lead** column — a green pill (Users icon + lead name) per row (`mr-row-lead-<id>`), with a subtle "No lead" fallback. colSpan updated to 6.
+- **Tested**: screenshots — list shows the Lead column with pills; detail shows the top-right associated-lead card.
+
+
 ### 2026-06-05 — Contemporary UI redesign: Marketing Request form + detail page ✅ DONE
 - **Request**: Form/upload controls looked rudimentary (native file inputs, native date picker, flat inputs); redesign the New Marketing Request form AND the detail page with a modern, user-friendly look. (Design blueprint by design_agent → `/app/design_guidelines.json`, "Soft Utility" emerald system.)
 - **New reusable component** `components/FileDropzone.jsx`: drag-and-drop upload surface (drag-over state, upload-cloud icon micro-interaction, click-to-browse, busy spinner).
