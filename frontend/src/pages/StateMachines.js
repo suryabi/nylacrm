@@ -215,6 +215,34 @@ export default function StateMachines() {
 function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workflowCatalog, users, departments, roles }) {
   const stateKeys = useMemo(() => (sm.states || []).map((s) => s.key), [sm.states]);
   const [expandedTxn, setExpandedTxn] = useState(null);
+  // Field registry for the workflow(s) this SM is attached to — powers the rule builder.
+  const [fieldCatalog, setFieldCatalog] = useState({ fields: [], operators_by_type: {}, required_field_types: ['text', 'number', 'date', 'select'] });
+
+  useEffect(() => {
+    const wfs = sm.applied_to || [];
+    if (!wfs.length) { setFieldCatalog((c) => ({ ...c, fields: [] })); return undefined; }
+    let cancelled = false;
+    Promise.all(
+      wfs.map((w) => axios.get(`${API}/state-machines/fields/catalog?workflow_key=${encodeURIComponent(w)}`, { headers: authHeaders() }).then((r) => r.data).catch(() => null)),
+    ).then((results) => {
+      if (cancelled) return;
+      const byKey = {}; let ops = {}; let rft = ['text', 'number', 'date', 'select'];
+      results.filter(Boolean).forEach((r) => {
+        (r.fields || []).forEach((f) => { byKey[f.key] = f; });
+        if (r.operators_by_type) ops = r.operators_by_type;
+        if (r.required_field_types) rft = r.required_field_types;
+      });
+      setFieldCatalog({ fields: Object.values(byKey), operators_by_type: ops, required_field_types: rft });
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(sm.applied_to)]);
+
+  const fieldType = (key) => fieldCatalog.fields.find((f) => f.key === key)?.type || 'text';
+  const opsForField = (key) => fieldCatalog.operators_by_type[fieldType(key)] || [];
+  const opNeedsValue = (key, op) => !!opsForField(key).find((o) => o.key === op)?.needs_value;
+  const enumOptionsFor = (key) => fieldCatalog.fields.find((f) => f.key === key)?.options || [];
+  const requestTypeOptions = fieldCatalog.fields.find((f) => f.key === 'request_type_name')?.options || [];
 
   const addState = () => {
     const key = `state_${(sm.states || []).length + 1}`;
@@ -265,6 +293,44 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
     const next = [...sm.transitions];
     next.splice(idx, 1);
     setSm({ ...sm, transitions: next });
+  };
+
+  // ── Guards (preconditions on existing data) ────────────────────────
+  const setGuards = (idx, guards) => updateTransition(idx, { guards });
+  const addGuardCond = (idx) => {
+    const g = sm.transitions[idx].guards || { match: 'all', conditions: [] };
+    const firstKey = fieldCatalog.fields[0]?.key || '';
+    const firstOp = (fieldCatalog.operators_by_type[fieldType(firstKey)] || [])[0]?.key || '';
+    setGuards(idx, { match: g.match || 'all', conditions: [...(g.conditions || []), { field: firstKey, op: firstOp, value: '', message: '' }] });
+  };
+  const updateGuardCond = (idx, ci, patch) => {
+    const g = sm.transitions[idx].guards || { match: 'all', conditions: [] };
+    const conds = [...(g.conditions || [])];
+    conds[ci] = { ...conds[ci], ...patch };
+    setGuards(idx, { ...g, match: g.match || 'all', conditions: conds });
+  };
+  const removeGuardCond = (idx, ci) => {
+    const g = sm.transitions[idx].guards || { match: 'all', conditions: [] };
+    const conds = (g.conditions || []).filter((_, i) => i !== ci);
+    setGuards(idx, conds.length ? { ...g, conditions: conds } : null);
+  };
+  // Convert an applies_when multiselect (by request type) ↔ stored shape
+  const appliesTypes = (rule) => rule?.applies_when?.request_type_name || [];
+  const setAppliesTypes = (arr) => (arr && arr.length ? { request_type_name: arr } : null);
+
+  // ── Required fields (new data captured on transition) ──────────────
+  const addReqField = (idx) => {
+    const cur = sm.transitions[idx].required_fields || [];
+    updateTransition(idx, { required_fields: [...cur, { key: `field_${cur.length + 1}`, label: 'New field', type: 'number', required: true, min: null, max: null, options: [] }] });
+  };
+  const updateReqField = (idx, fi, patch) => {
+    const cur = [...(sm.transitions[idx].required_fields || [])];
+    cur[fi] = { ...cur[fi], ...patch };
+    updateTransition(idx, { required_fields: cur });
+  };
+  const removeReqField = (idx, fi) => {
+    const cur = (sm.transitions[idx].required_fields || []).filter((_, i) => i !== fi);
+    updateTransition(idx, { required_fields: cur });
   };
 
   // ── Actions (per-workflow vocabulary) ──────────────────────────────
@@ -643,6 +709,147 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                     </div>
                   </div>
                   <p className="text-[10px] text-slate-400">Admins (CEO / Director / Admin) always bypass these gates. Ctrl/⌘+click to multi-select.</p>
+
+                  {/* ── Data rules: Guards + Required fields ───────────── */}
+                  <div className="pt-3 mt-2 border-t border-slate-200 space-y-4">
+                    {fieldCatalog.fields.length === 0 && (
+                      <p className="text-[11px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                        Attach this state machine to a workflow (below) to enable data-rules for its fields.
+                      </p>
+                    )}
+
+                    {/* Guards */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-slate-700">Preconditions (guards)</div>
+                          <div className="text-[10px] text-slate-400">Block this action unless the existing request data meets these rules.</div>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" disabled={!fieldCatalog.fields.length} onClick={() => addGuardCond(idx)} data-testid={`add-guard-${idx}`}>
+                          <Plus className="h-3 w-3 mr-1" /> Add rule
+                        </Button>
+                      </div>
+                      {(t.guards?.conditions || []).length > 0 && (
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="text-slate-500">Match</span>
+                          <select
+                            value={t.guards?.match || 'all'}
+                            onChange={(e) => setGuards(idx, { ...(t.guards || { conditions: [] }), match: e.target.value })}
+                            className="h-7 text-[11px] border border-slate-200 rounded px-1"
+                            data-testid={`guard-match-${idx}`}
+                          >
+                            <option value="all">ALL rules (AND)</option>
+                            <option value="any">ANY rule (OR)</option>
+                          </select>
+                        </div>
+                      )}
+                      {(t.guards?.conditions || []).map((c, ci) => (
+                        <div key={ci} className="rounded border border-slate-200 bg-white p-2 space-y-1.5" data-testid={`guard-row-${idx}-${ci}`}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <select
+                              value={c.field}
+                              onChange={(e) => { const k = e.target.value; const firstOp = (fieldCatalog.operators_by_type[fieldType(k)] || [])[0]?.key || ''; updateGuardCond(idx, ci, { field: k, op: firstOp, value: '' }); }}
+                              className="h-7 text-[11px] border border-slate-200 rounded px-1"
+                              data-testid={`guard-field-${idx}-${ci}`}
+                            >
+                              {fieldCatalog.fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                            </select>
+                            <select
+                              value={c.op}
+                              onChange={(e) => updateGuardCond(idx, ci, { op: e.target.value, value: '' })}
+                              className="h-7 text-[11px] border border-slate-200 rounded px-1"
+                              data-testid={`guard-op-${idx}-${ci}`}
+                            >
+                              {opsForField(c.field).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                            </select>
+                            {opNeedsValue(c.field, c.op) && (
+                              fieldType(c.field) === 'enum' ? (
+                                (c.op === 'in' || c.op === 'not_in') ? (
+                                  <select multiple value={c.value || []} onChange={(e) => updateGuardCond(idx, ci, { value: Array.from(e.target.selectedOptions).map((o) => o.value) })} className="text-[11px] border border-slate-200 rounded px-1 min-w-[120px]" data-testid={`guard-value-${idx}-${ci}`}>
+                                    {enumOptionsFor(c.field).map((o) => <option key={o} value={o}>{o}</option>)}
+                                  </select>
+                                ) : (
+                                  <select value={c.value || ''} onChange={(e) => updateGuardCond(idx, ci, { value: e.target.value })} className="h-7 text-[11px] border border-slate-200 rounded px-1" data-testid={`guard-value-${idx}-${ci}`}>
+                                    <option value="">—</option>
+                                    {enumOptionsFor(c.field).map((o) => <option key={o} value={o}>{o}</option>)}
+                                  </select>
+                                )
+                              ) : (
+                                <Input
+                                  type={['count_gte', 'count_lte', 'gt', 'gte', 'lt', 'lte'].includes(c.op) || (fieldType(c.field) === 'number') ? 'number' : (fieldType(c.field) === 'date' ? 'date' : 'text')}
+                                  value={c.value ?? ''}
+                                  onChange={(e) => updateGuardCond(idx, ci, { value: e.target.value })}
+                                  className="h-7 text-[11px] w-24"
+                                  data-testid={`guard-value-${idx}-${ci}`}
+                                />
+                              )
+                            )}
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600 ml-auto" onClick={() => removeGuardCond(idx, ci)}><Trash2 className="h-3 w-3" /></Button>
+                          </div>
+                          <Input
+                            value={c.message || ''}
+                            onChange={(e) => updateGuardCond(idx, ci, { message: e.target.value })}
+                            placeholder="Message shown when blocked (e.g. Upload at least 2 reference files)"
+                            className="h-7 text-[11px]"
+                            data-testid={`guard-message-${idx}-${ci}`}
+                          />
+                          {requestTypeOptions.length > 0 && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-[10px] text-slate-400 pt-1">Only for types:</span>
+                              <select multiple value={appliesTypes(c)} onChange={(e) => updateGuardCond(idx, ci, { applies_when: setAppliesTypes(Array.from(e.target.selectedOptions).map((o) => o.value)) })} className="text-[10px] border border-slate-200 rounded px-1 flex-1" size={2} data-testid={`guard-applies-${idx}-${ci}`}>
+                                {requestTypeOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Required fields */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-slate-700">Required information to capture</div>
+                          <div className="text-[10px] text-slate-400">Prompt the user for new data when they trigger this action.</div>
+                        </div>
+                        <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => addReqField(idx)} data-testid={`add-reqfield-${idx}`}>
+                          <Plus className="h-3 w-3 mr-1" /> Add field
+                        </Button>
+                      </div>
+                      {(t.required_fields || []).map((f, fi) => (
+                        <div key={fi} className="rounded border border-slate-200 bg-white p-2 space-y-1.5" data-testid={`reqfield-row-${idx}-${fi}`}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <Input value={f.label} onChange={(e) => updateReqField(idx, fi, { label: e.target.value })} placeholder="Label" className="h-7 text-[11px] w-40" data-testid={`reqfield-label-${idx}-${fi}`} />
+                            <Input value={f.key} onChange={(e) => updateReqField(idx, fi, { key: e.target.value.replace(/\s+/g, '_').toLowerCase() })} placeholder="key" className="h-7 text-[11px] w-28 font-mono" data-testid={`reqfield-key-${idx}-${fi}`} />
+                            <select value={f.type || 'text'} onChange={(e) => updateReqField(idx, fi, { type: e.target.value })} className="h-7 text-[11px] border border-slate-200 rounded px-1" data-testid={`reqfield-type-${idx}-${fi}`}>
+                              {(fieldCatalog.required_field_types || ['text', 'number', 'date', 'select']).map((tp) => <option key={tp} value={tp}>{tp}</option>)}
+                            </select>
+                            <label className="flex items-center gap-1 text-[10px]"><Checkbox checked={f.required !== false} onCheckedChange={(v) => updateReqField(idx, fi, { required: !!v })} /> required</label>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600 ml-auto" onClick={() => removeReqField(idx, fi)}><Trash2 className="h-3 w-3" /></Button>
+                          </div>
+                          {f.type === 'number' && (
+                            <div className="flex items-center gap-1.5 text-[10px]">
+                              <span className="text-slate-400">min</span>
+                              <Input type="number" value={f.min ?? ''} onChange={(e) => updateReqField(idx, fi, { min: e.target.value === '' ? null : Number(e.target.value) })} className="h-7 text-[11px] w-20" />
+                              <span className="text-slate-400">max</span>
+                              <Input type="number" value={f.max ?? ''} onChange={(e) => updateReqField(idx, fi, { max: e.target.value === '' ? null : Number(e.target.value) })} className="h-7 text-[11px] w-20" />
+                            </div>
+                          )}
+                          {f.type === 'select' && (
+                            <Input value={(f.options || []).join(', ')} onChange={(e) => updateReqField(idx, fi, { options: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="Options (comma separated)" className="h-7 text-[11px]" data-testid={`reqfield-options-${idx}-${fi}`} />
+                          )}
+                          {requestTypeOptions.length > 0 && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="text-[10px] text-slate-400 pt-1">Only for types:</span>
+                              <select multiple value={appliesTypes(f)} onChange={(e) => updateReqField(idx, fi, { applies_when: setAppliesTypes(Array.from(e.target.selectedOptions).map((o) => o.value)) })} className="text-[10px] border border-slate-200 rounded px-1 flex-1" size={2} data-testid={`reqfield-applies-${idx}-${fi}`}>
+                                {requestTypeOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

@@ -174,6 +174,10 @@ export default function MarketingRequestDetail() {
   const [fileToDelete, setFileToDelete] = useState(null);
   const [deletingFile, setDeletingFile] = useState(false);
 
+  // Required-field capture dialog (transitions that collect new data)
+  const [fieldTxn, setFieldTxn] = useState(null);
+  const [fieldValues, setFieldValues] = useState({});
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -190,15 +194,16 @@ export default function MarketingRequestDetail() {
   }, [id, navigate]);
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const runTransition = async (action_key, commentText) => {
+  const runTransition = async (action_key, commentText, fieldData) => {
     setSavingTxn(true);
     try {
       await axios.post(`${API}/marketing-requests/${id}/transition`,
-        { action_key, comment: commentText || null },
+        { action_key, comment: commentText || null, field_data: fieldData || null },
         { headers: HEAD() },
       );
       toast.success('Transition applied');
       setConfirmTxn(null);
+      setFieldTxn(null);
       setTxnComment('');
       fetchAll();
     } catch (e) {
@@ -207,12 +212,37 @@ export default function MarketingRequestDetail() {
   };
 
   const onActionClick = (t) => {
-    if (t.comment_required) {
+    // Guard gate — should be disabled already, but defend against direct clicks.
+    if (t.guards_ok === false) {
+      toast.error((t.block_reasons || []).join(' ') || 'This action is blocked by a workflow rule.');
+      return;
+    }
+    if ((t.required_fields || []).length > 0) {
+      const init = {};
+      (t.required_fields || []).forEach((f) => { init[f.key] = ''; });
+      setFieldValues(init);
+      setTxnComment('');
+      setFieldTxn(t);
+    } else if (t.comment_required) {
       setConfirmTxn(t);
       setTxnComment('');
     } else {
       runTransition(t.action_key, null);
     }
+  };
+
+  const submitFieldTxn = () => {
+    const fields = fieldTxn?.required_fields || [];
+    const missing = fields.filter((f) => f.required && (fieldValues[f.key] === '' || fieldValues[f.key] == null));
+    if (missing.length) {
+      toast.error(`Please fill: ${missing.map((f) => f.label).join(', ')}`);
+      return;
+    }
+    if (fieldTxn.comment_required && !txnComment.trim()) {
+      toast.error('A comment is required for this action.');
+      return;
+    }
+    runTransition(fieldTxn.action_key, txnComment || null, fieldValues);
   };
 
   const addComment = async () => {
@@ -385,19 +415,26 @@ export default function MarketingRequestDetail() {
           {allowedTransitions.length === 0 && blockedTransitions.length === 0 && (
             <span className="text-xs text-slate-500 italic">(terminal state — no transitions defined)</span>
           )}
-          {allowedTransitions.map((t) => (
-            <Button
-              key={`${t.action_key}-${t.to_state}`}
-              variant="outline"
-              size="sm"
-              onClick={() => onActionClick(t)}
-              disabled={savingTxn}
-              data-testid={`action-${t.action_key}-btn`}
-              title={`Moves to: ${t.to_state_label}`}
-            >
-              <ChevronRight className="h-3.5 w-3.5 mr-1" /> {t.action_label}
-            </Button>
-          ))}
+          {allowedTransitions.map((t) => {
+            const guardBlocked = t.guards_ok === false;
+            return (
+              <Button
+                key={`${t.action_key}-${t.to_state}`}
+                variant="outline"
+                size="sm"
+                onClick={() => onActionClick(t)}
+                disabled={savingTxn || guardBlocked}
+                data-testid={`action-${t.action_key}-btn`}
+                title={guardBlocked ? (t.block_reasons || []).join(' ') : `Moves to: ${t.to_state_label}`}
+                className={guardBlocked ? 'opacity-50' : ''}
+              >
+                <ChevronRight className="h-3.5 w-3.5 mr-1" /> {t.action_label}
+                {((t.required_fields || []).length > 0) && (
+                  <span className="ml-1 text-[9px] text-emerald-600" title="Requires additional info">●</span>
+                )}
+              </Button>
+            );
+          })}
           {blockedTransitions.map((t) => (
             <Button
               key={`${t.action_key}-${t.to_state}-blocked`}
@@ -621,6 +658,71 @@ export default function MarketingRequestDetail() {
               disabled={savingTxn || (confirmTxn?.comment_required && !txnComment.trim())}
               data-testid="transition-confirm-btn"
             >
+              {savingTxn ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Required-field capture dialog — for transitions that collect new data */}
+      <Dialog open={!!fieldTxn} onOpenChange={(o) => { if (!o) setFieldTxn(null); }}>
+        <DialogContent className="max-w-md" data-testid="transition-fields-dialog">
+          <DialogHeader>
+            <DialogTitle>{fieldTxn?.action_label}</DialogTitle>
+            <DialogDescription>
+              Moves to <span className="font-semibold">{fieldTxn?.to_state_label}</span>. Please provide the required information.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {(fieldTxn?.required_fields || []).map((f) => (
+              <div key={f.key}>
+                <Label>{f.label}{f.required ? ' *' : ''}</Label>
+                {f.type === 'number' && (
+                  <Input
+                    type="number"
+                    min={f.min ?? undefined}
+                    max={f.max ?? undefined}
+                    value={fieldValues[f.key] ?? ''}
+                    onChange={(e) => setFieldValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                    data-testid={`txn-field-${f.key}`}
+                  />
+                )}
+                {f.type === 'date' && (
+                  <Input
+                    type="date"
+                    value={fieldValues[f.key] ?? ''}
+                    onChange={(e) => setFieldValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                    data-testid={`txn-field-${f.key}`}
+                  />
+                )}
+                {f.type === 'select' && (
+                  <Select value={fieldValues[f.key] ?? ''} onValueChange={(v) => setFieldValues((p) => ({ ...p, [f.key]: v }))}>
+                    <SelectTrigger data-testid={`txn-field-${f.key}`}><SelectValue placeholder="Select…" /></SelectTrigger>
+                    <SelectContent>
+                      {(f.options || []).map((o) => (<SelectItem key={o} value={o}>{o}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {(!f.type || f.type === 'text') && (
+                  <Textarea
+                    rows={2}
+                    value={fieldValues[f.key] ?? ''}
+                    onChange={(e) => setFieldValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                    data-testid={`txn-field-${f.key}`}
+                  />
+                )}
+              </div>
+            ))}
+            {fieldTxn?.comment_required && (
+              <div>
+                <Label>Comment *</Label>
+                <Textarea rows={2} value={txnComment} onChange={(e) => setTxnComment(e.target.value)} data-testid="txn-field-comment" />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFieldTxn(null)}>Cancel</Button>
+            <Button onClick={submitFieldTxn} disabled={savingTxn} className="bg-emerald-600 hover:bg-emerald-700" data-testid="transition-fields-submit-btn">
               {savingTxn ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm'}
             </Button>
           </DialogFooter>

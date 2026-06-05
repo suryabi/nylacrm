@@ -44,6 +44,9 @@ from utils.sm_helpers import (
     find_transitions_from,
     user_can_trigger,
     apply_auto_assign,
+    evaluate_guards,
+    evaluate_required_fields,
+    applicable_required_fields,
 )
 from models.marketing_request import (
     MarketingRequestCreate, CommentCreate, VersionCreate, ProductionSubmitRequest,
@@ -465,8 +468,7 @@ async def available_transitions(request_id: str, current_user: dict = Depends(ge
     """Return the set of transitions the current user can trigger from this request's current state."""
     tenant_id = get_current_tenant_id()
     doc = await db.marketing_requests.find_one(
-        {"id": request_id, "tenant_id": tenant_id},
-        {"_id": 0, "current_state_key": 1, "state_machine_id": 1, "created_by": 1},
+        {"id": request_id, "tenant_id": tenant_id}, {"_id": 0},
     )
     if not doc:
         raise HTTPException(404, "Request not found")
@@ -477,6 +479,8 @@ async def available_transitions(request_id: str, current_user: dict = Depends(ge
     for t in transitions:
         allowed = await user_can_trigger(t, current_user, tenant_id, doc.get("created_by"))
         target_state = find_state(sm, t.get("to_state") or "")
+        guards_ok, block_reasons = evaluate_guards(t.get("guards"), doc)
+        req_fields = applicable_required_fields(t.get("required_fields"), doc)
         out.append({
             "action_key": t.get("action_key"),
             "action_label": t.get("action_label") or t.get("action_key"),
@@ -488,6 +492,9 @@ async def available_transitions(request_id: str, current_user: dict = Depends(ge
             "auto_assign_mode": t.get("auto_assign_mode"),
             "requestor_only": bool(t.get("requestor_only")),
             "allowed": allowed,
+            "guards_ok": guards_ok,
+            "block_reasons": block_reasons,
+            "required_fields": req_fields,
         })
     return {"current_state_key": doc.get("current_state_key"), "transitions": out}
 
@@ -498,6 +505,7 @@ async def available_transitions(request_id: str, current_user: dict = Depends(ge
 class TransitionRequest(BaseModel):
     action_key: str
     comment: Optional[str] = None
+    field_data: Optional[dict] = None
 
 
 @router.post("/{request_id}/transition")
@@ -519,9 +527,21 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
     if transition.get("comment_required") and not (payload.comment and payload.comment.strip()):
         raise HTTPException(400, "A comment is required for this transition.")
 
+    # Guard gate — preconditions on existing data (e.g. "≥ 2 reference files").
+    guards_ok, guard_reasons = evaluate_guards(transition.get("guards"), doc)
+    if not guards_ok:
+        raise HTTPException(400, " ".join(guard_reasons) or "This action is blocked by a workflow rule.")
+
+    # Required-field gate — capture new data (e.g. neck-tag quantity).
+    fields_ok, field_errors, captured = evaluate_required_fields(
+        transition.get("required_fields"), doc, payload.field_data,
+    )
+    if not fields_ok:
+        raise HTTPException(400, " ".join(field_errors) or "Required information is missing.")
+
     target_state = find_state(sm, transition.get("to_state") or "")
     if not target_state:
-        raise HTTPException(500, f"Target state '{transition.get('to_state')}' not found in SM")
+        raise HTTPException(400, f"Target state '{transition.get('to_state')}' not found in SM")
 
     # Apply auto-assign
     assign = await apply_auto_assign(transition, tenant_id, doc.get("created_by"))
@@ -543,9 +563,25 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
             set_doc["assigned_department_name"] = assign["assigned_department_name"]
         set_doc["assigned_role"] = assign["assigned_role"]
 
+    # Persist captured field values keyed by action (generic transition_data map).
+    if captured:
+        existing_td = doc.get("transition_data") or {}
+        existing_td[payload.action_key] = {
+            **captured,
+            "_captured_at": datetime.now(timezone.utc).isoformat(),
+            "_captured_by": current_user.get("name") or current_user.get("email"),
+        }
+        set_doc["transition_data"] = existing_td
+
     timeline_lines = [
         payload.comment or f"{transition.get('action_label') or transition['action_key']} → {target_state.get('label') or target_state['key']}",
     ]
+    if captured:
+        # Render captured values using the field labels.
+        label_by_key = {f.get("key"): f.get("label") or f.get("key") for f in (transition.get("required_fields") or [])}
+        captured_str = "; ".join(f"{label_by_key.get(k, k)}: {v}" for k, v in captured.items())
+        if captured_str:
+            timeline_lines.append(f"Captured — {captured_str}")
     if assign.get("assignee_label"):
         timeline_lines.append(f"Auto-assigned to {assign['assignee_label']}.")
 

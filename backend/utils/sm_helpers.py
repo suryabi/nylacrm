@@ -214,6 +214,242 @@ _DEFAULT_MR_TRANSITIONS = [
 ]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Generic guard / required-field engine (reusable across any workflow SM).
+#
+# Two concepts live on each transition:
+#   - guards          → boolean preconditions evaluated against the EXISTING
+#                       document (e.g. "references count >= 2"). Block the
+#                       transition if they fail.
+#   - required_fields → NEW data captured at transition time (e.g. neck-tag qty).
+#
+# Both support an optional `applies_when` filter so a rule only fires for
+# certain documents (e.g. request_type_name in ["Neck Tags"]).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Per-workflow catalog of fields a rule can reference. Drives the builder UI.
+FIELD_REGISTRY = {
+    "marketing_requests": [
+        {"key": "references", "label": "Reference files", "type": "file_list"},
+        {"key": "logo", "label": "Logo", "type": "file"},
+        {"key": "social_media_links", "label": "Social media links", "type": "string_list"},
+        {"key": "file_links", "label": "File links", "type": "string_list"},
+        {"key": "versions", "label": "Work versions", "type": "list"},
+        {"key": "requirement_details", "label": "Requirement details", "type": "text"},
+        {"key": "additional_comments", "label": "Additional comments", "type": "text"},
+        {"key": "short_timeline_reason", "label": "Short timeline reason", "type": "text"},
+        {"key": "requested_due_date", "label": "Requested due date", "type": "date"},
+        {"key": "request_type_name", "label": "Request type", "type": "enum"},
+        {"key": "assigned_department_name", "label": "Assigned department", "type": "enum"},
+        {"key": "lead_id", "label": "Linked lead", "type": "text"},
+        {"key": "production.quantity_required", "label": "Production quantity", "type": "number"},
+    ],
+}
+
+# Operators valid for each field type. Each carries `needs_value` so the UI
+# knows whether to render a value input.
+OPERATORS_BY_TYPE = {
+    "file": [
+        {"key": "exists", "label": "is uploaded", "needs_value": False},
+        {"key": "not_exists", "label": "is missing", "needs_value": False},
+    ],
+    "file_list": [
+        {"key": "count_gte", "label": "has at least (N)", "needs_value": True},
+        {"key": "count_lte", "label": "has at most (N)", "needs_value": True},
+        {"key": "not_empty", "label": "has any", "needs_value": False},
+        {"key": "is_empty", "label": "is empty", "needs_value": False},
+    ],
+    "string_list": [
+        {"key": "count_gte", "label": "has at least (N)", "needs_value": True},
+        {"key": "count_lte", "label": "has at most (N)", "needs_value": True},
+        {"key": "not_empty", "label": "has any", "needs_value": False},
+        {"key": "is_empty", "label": "is empty", "needs_value": False},
+    ],
+    "list": [
+        {"key": "count_gte", "label": "has at least (N)", "needs_value": True},
+        {"key": "count_lte", "label": "has at most (N)", "needs_value": True},
+        {"key": "not_empty", "label": "has any", "needs_value": False},
+        {"key": "is_empty", "label": "is empty", "needs_value": False},
+    ],
+    "number": [
+        {"key": "gte", "label": "≥", "needs_value": True},
+        {"key": "gt", "label": ">", "needs_value": True},
+        {"key": "lte", "label": "≤", "needs_value": True},
+        {"key": "lt", "label": "<", "needs_value": True},
+        {"key": "eq", "label": "=", "needs_value": True},
+        {"key": "ne", "label": "≠", "needs_value": True},
+        {"key": "exists", "label": "is set", "needs_value": False},
+    ],
+    "text": [
+        {"key": "not_empty", "label": "is filled in", "needs_value": False},
+        {"key": "is_empty", "label": "is empty", "needs_value": False},
+        {"key": "contains", "label": "contains", "needs_value": True},
+        {"key": "eq", "label": "equals", "needs_value": True},
+    ],
+    "enum": [
+        {"key": "in", "label": "is one of", "needs_value": True},
+        {"key": "not_in", "label": "is not one of", "needs_value": True},
+        {"key": "eq", "label": "equals", "needs_value": True},
+        {"key": "ne", "label": "not equals", "needs_value": True},
+    ],
+    "date": [
+        {"key": "not_empty", "label": "is set", "needs_value": False},
+        {"key": "before", "label": "is before", "needs_value": True},
+        {"key": "after", "label": "is after", "needs_value": True},
+    ],
+}
+
+# Field types valid for required-field capture (NEW data collected on transition).
+REQUIRED_FIELD_TYPES = ["text", "number", "date", "select"]
+
+
+def _resolve_path(doc: dict, path: str):
+    cur = doc
+    for part in (path or "").split("."):
+        if isinstance(cur, dict):
+            cur = cur.get(part)
+        else:
+            return None
+    return cur
+
+
+def _count(v) -> int:
+    if v is None:
+        return 0
+    if isinstance(v, (list, tuple, str)):
+        return len(v)
+    return 1
+
+
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _apply_op(val, op: str, target) -> bool:
+    if op == "exists":
+        return val not in (None, "", [], {})
+    if op == "not_exists":
+        return val in (None, "", [], {})
+    if op == "is_empty":
+        return not val
+    if op == "not_empty":
+        return bool(val)
+    if op == "count_gte":
+        return _count(val) >= int(_num(target) or 0)
+    if op == "count_lte":
+        return _count(val) <= int(_num(target) or 0)
+    if op in ("eq", "ne"):
+        # numeric compare when both look numeric, else string compare
+        a, b = _num(val), _num(target)
+        if a is not None and b is not None:
+            return (a == b) if op == "eq" else (a != b)
+        return (str(val) == str(target)) if op == "eq" else (str(val) != str(target))
+    if op in ("gt", "gte", "lt", "lte"):
+        a, b = _num(val), _num(target)
+        if a is None or b is None:
+            return False
+        return {"gt": a > b, "gte": a >= b, "lt": a < b, "lte": a <= b}[op]
+    if op == "contains":
+        return str(target or "") in str(val or "")
+    if op == "in":
+        return val in (target or [])
+    if op == "not_in":
+        return val not in (target or [])
+    if op == "before":
+        return bool(val) and str(val) < str(target)
+    if op == "after":
+        return bool(val) and str(val) > str(target)
+    return True  # unknown operator → don't block
+
+
+def applies_when(rule_when: Optional[dict], doc: dict) -> bool:
+    """A rule fires only when every field in `applies_when` matches the doc.
+    Value may be a scalar or a list (membership). Empty/None = always applies."""
+    if not rule_when:
+        return True
+    for field, allowed in rule_when.items():
+        val = _resolve_path(doc, field)
+        if isinstance(allowed, list):
+            if val not in allowed:
+                return False
+        elif val != allowed:
+            return False
+    return True
+
+
+def evaluate_guards(guards: Optional[dict], doc: dict):
+    """Return (passed: bool, reasons: List[str]) for a transition's guard block."""
+    if not guards:
+        return True, []
+    conditions = guards.get("conditions") or []
+    match = (guards.get("match") or "all").lower()
+    results, reasons = [], []
+    for c in conditions:
+        if not applies_when(c.get("applies_when"), doc):
+            continue
+        val = _resolve_path(doc, c.get("field") or "")
+        ok = _apply_op(val, c.get("op") or "", c.get("value"))
+        results.append(ok)
+        if not ok:
+            reasons.append(
+                c.get("message")
+                or f"Requires: {c.get('field')} {c.get('op')} {c.get('value')}"
+            )
+    if not results:
+        return True, []
+    passed = all(results) if match == "all" else any(results)
+    if passed:
+        return True, []
+    return False, reasons
+
+
+def applicable_required_fields(required_fields: Optional[list], doc: dict) -> list:
+    """Filter a transition's required_fields down to those that apply to this doc."""
+    out = []
+    for f in (required_fields or []):
+        if applies_when(f.get("applies_when"), doc):
+            out.append(f)
+    return out
+
+
+def evaluate_required_fields(required_fields: Optional[list], doc: dict, data: Optional[dict]):
+    """Validate captured field data. Returns (ok, errors, cleaned_values)."""
+    data = data or {}
+    errors, cleaned = [], {}
+    for f in applicable_required_fields(required_fields, doc):
+        key = f.get("key")
+        label = f.get("label") or key
+        ftype = f.get("type") or "text"
+        required = f.get("required", True)
+        raw = data.get(key)
+        if raw in (None, "", []):
+            if required:
+                errors.append(f"{label} is required.")
+            continue
+        if ftype == "number":
+            num = _num(raw)
+            if num is None:
+                errors.append(f"{label} must be a number.")
+                continue
+            if f.get("min") is not None and num < float(f["min"]):
+                errors.append(f"{label} must be ≥ {f['min']}.")
+            if f.get("max") is not None and num > float(f["max"]):
+                errors.append(f"{label} must be ≤ {f['max']}.")
+            cleaned[key] = num
+        elif ftype == "select":
+            opts = f.get("options") or []
+            if opts and raw not in opts:
+                errors.append(f"{label} must be one of: {', '.join(map(str, opts))}.")
+            else:
+                cleaned[key] = raw
+        else:
+            cleaned[key] = raw
+    return (len(errors) == 0), errors, cleaned
+
+
 async def ensure_default_marketing_request_sm(tenant_id: str) -> dict:
     """If no state machine is attached to `marketing_requests` for this tenant,
     seed a default one. Returns the attached SM."""

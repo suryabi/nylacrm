@@ -23,14 +23,15 @@ Routes (prefix `/state-machines`):
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Any
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
 
 from database import db
 from core.tenant import get_current_tenant_id
 from deps import get_current_user
+from utils.sm_helpers import FIELD_REGISTRY, OPERATORS_BY_TYPE, REQUIRED_FIELD_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -100,6 +101,35 @@ class Action(BaseModel):
     kind: str = "neutral"  # 'positive' | 'neutral' | 'negative'
 
 
+class GuardCondition(BaseModel):
+    """A single precondition evaluated against the EXISTING document."""
+    model_config = ConfigDict(extra="allow")
+    field: str
+    op: str
+    value: Optional[Any] = None
+    applies_when: Optional[dict] = None  # rule fires only for matching docs
+    message: Optional[str] = None        # shown when the guard blocks
+
+
+class Guards(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    match: str = "all"  # 'all' (AND) | 'any' (OR)
+    conditions: List[GuardCondition] = Field(default_factory=list)
+
+
+class RequiredField(BaseModel):
+    """NEW data captured at transition time."""
+    model_config = ConfigDict(extra="allow")
+    key: str
+    label: str
+    type: str = "text"  # text | number | date | select
+    required: bool = True
+    min: Optional[float] = None
+    max: Optional[float] = None
+    options: List[str] = Field(default_factory=list)
+    applies_when: Optional[dict] = None
+
+
 class Transition(BaseModel):
     action_key: str  # one of ACTION_CATALOG.key (or "custom")
     action_label: Optional[str] = None  # override / display text
@@ -122,6 +152,11 @@ class Transition(BaseModel):
     allowed_department_ids: List[str] = Field(default_factory=list)
     # If True, only the document's creator (e.g. the requestor) can trigger.
     requestor_only: bool = False
+    # Data-rule gates (generic, JSON-driven):
+    #   guards          → preconditions on existing data (block if unmet)
+    #   required_fields → new data captured at transition time
+    guards: Optional[Guards] = None
+    required_fields: List[RequiredField] = Field(default_factory=list)
 
 
 class StateMachineCreate(BaseModel):
@@ -260,6 +295,42 @@ async def roles_catalog(current_user: dict = Depends(get_current_user)):
 @router.get("/workflows/catalog")
 async def workflows_catalog(current_user: dict = Depends(get_current_user)):
     return {"workflows": WORKFLOW_CATALOG}
+
+
+@router.get("/fields/catalog")
+async def fields_catalog(
+    workflow_key: str = Query(..., description="Workflow key, e.g. marketing_requests"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Field registry for a workflow — powers the guard / required-field builder.
+    Returns each field with the operators valid for its type, plus resolved
+    `options` for enum fields (e.g. request types, departments) in this tenant."""
+    tenant_id = get_current_tenant_id()
+    fields = [dict(f) for f in (FIELD_REGISTRY.get(workflow_key) or [])]
+
+    # Resolve enum options dynamically per tenant.
+    enum_options: dict = {}
+    if workflow_key == "marketing_requests":
+        types = await db.marketing_request_types.find(
+            {"tenant_id": tenant_id}, {"_id": 0, "name": 1}
+        ).to_list(200)
+        enum_options["request_type_name"] = sorted({t["name"] for t in types if t.get("name")})
+        depts = await db.master_departments.find(
+            {"tenant_id": tenant_id}, {"_id": 0, "name": 1}
+        ).to_list(200)
+        enum_options["assigned_department_name"] = sorted({d["name"] for d in depts if d.get("name")})
+
+    for f in fields:
+        f["operators"] = OPERATORS_BY_TYPE.get(f["type"], [])
+        if f["type"] == "enum":
+            f["options"] = enum_options.get(f["key"], [])
+
+    return {
+        "workflow_key": workflow_key,
+        "fields": fields,
+        "operators_by_type": OPERATORS_BY_TYPE,
+        "required_field_types": REQUIRED_FIELD_TYPES,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
