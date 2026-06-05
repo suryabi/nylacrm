@@ -15,13 +15,15 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Calendar as CalendarPicker } from '../components/ui/calendar';
 import {
   ArrowLeft, Sparkles, Send, MessageSquare, Plus, Upload, FileText, X,
   Loader2, ExternalLink, ChevronRight, Truck, AlertTriangle, Clock,
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
   Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
-  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Check,
+  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -292,9 +294,8 @@ export default function MarketingRequestDetail() {
   const [fieldTxn, setFieldTxn] = useState(null);
   const [fieldValues, setFieldValues] = useState({});
 
-  // Estimated finished date inline editor
-  const [editingEst, setEditingEst] = useState(false);
-  const [estValue, setEstValue] = useState('');
+  // Estimated finished date popover editor
+  const [estOpen, setEstOpen] = useState(false);
   const [savingEst, setSavingEst] = useState(false);
 
   // Delete-request confirm state
@@ -334,17 +335,16 @@ export default function MarketingRequestDetail() {
     } finally { setSavingTxn(false); }
   };
 
-  const saveEstDate = async (clear = false) => {
+  const saveEstDate = async (isoOrNull) => {
     setSavingEst(true);
     try {
-      const v = clear ? null : (estValue || null);
       const { data } = await axios.patch(
         `${API}/marketing-requests/${id}/estimated-date`,
-        { estimated_finished_date: v },
+        { estimated_finished_date: isoOrNull },
         { headers: HEAD() },
       );
       setReq((p) => ({ ...p, estimated_finished_date: data.estimated_finished_date }));
-      setEditingEst(false);
+      setEstOpen(false);
       toast.success(data.estimated_finished_date ? 'Estimated finish date saved' : 'Estimated finish date cleared');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save date');
@@ -608,57 +608,44 @@ export default function MarketingRequestDetail() {
               <span className="flex items-center gap-1.5">
                 <Calendar className="h-4 w-4 text-emerald-500" /> Due {fmtDate(req.requested_due_date)}
               </span>
-              {editingEst ? (
-                <span className="flex items-center gap-1.5" data-testid="mr-est-date-editor">
-                  <CalendarCheck className="h-4 w-4 text-emerald-500" />
-                  <input
-                    type="date"
-                    value={estValue}
-                    onChange={(e) => setEstValue(e.target.value)}
-                    className="text-sm border border-slate-200 rounded-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                    data-testid="mr-est-date-input"
+              <Popover open={estOpen} onOpenChange={setEstOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className="flex items-center gap-1.5 group hover:text-emerald-700 transition-colors focus:outline-none"
+                    data-testid="mr-est-date-display"
+                  >
+                    <CalendarCheck className="h-4 w-4 text-emerald-500" />
+                    {req.estimated_finished_date
+                      ? <>Est. Finish <span className="text-slate-700 font-medium">{fmtDate(req.estimated_finished_date)}</span></>
+                      : <span className="text-emerald-600">Set est. finish date</span>}
+                    {savingEst
+                      ? <Loader2 className="h-3 w-3 animate-spin text-emerald-500" />
+                      : <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start" data-testid="mr-est-date-popover">
+                  <CalendarPicker
+                    mode="single"
+                    selected={req.estimated_finished_date ? parseISO(req.estimated_finished_date) : undefined}
+                    onSelect={(d) => { if (d) saveEstDate(format(d, 'yyyy-MM-dd')); }}
+                    initialFocus
                   />
-                  <button
-                    onClick={() => saveEstDate(false)}
-                    disabled={savingEst}
-                    className="p-1 rounded-md text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
-                    title="Save"
-                    data-testid="mr-est-date-save"
-                  >
-                    {savingEst ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  </button>
-                  <button
-                    onClick={() => setEditingEst(false)}
-                    className="p-1 rounded-md text-slate-400 hover:bg-slate-100"
-                    title="Cancel"
-                    data-testid="mr-est-date-cancel"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
                   {req.estimated_finished_date && (
-                    <button
-                      onClick={() => saveEstDate(true)}
-                      disabled={savingEst}
-                      className="text-xs text-red-500 hover:underline disabled:opacity-50"
-                      data-testid="mr-est-date-clear"
-                    >
-                      Clear
-                    </button>
+                    <div className="border-t border-slate-100 p-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => saveEstDate(null)}
+                        disabled={savingEst}
+                        data-testid="mr-est-date-clear"
+                      >
+                        <X className="h-4 w-4 mr-1" /> Clear date
+                      </Button>
+                    </div>
                   )}
-                </span>
-              ) : (
-                <button
-                  onClick={() => { setEstValue((req.estimated_finished_date || '').slice(0, 10)); setEditingEst(true); }}
-                  className="flex items-center gap-1.5 group hover:text-emerald-700 transition-colors"
-                  data-testid="mr-est-date-display"
-                >
-                  <CalendarCheck className="h-4 w-4 text-emerald-500" />
-                  {req.estimated_finished_date
-                    ? <>Est. Finish <span className="text-slate-700 font-medium">{fmtDate(req.estimated_finished_date)}</span></>
-                    : <span className="text-emerald-600">Set est. finish date</span>}
-                  <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-              )}
+                </PopoverContent>
+              </Popover>
               <span className="flex items-center gap-1.5">
                 <Clock className="h-4 w-4 text-emerald-500" /> Design {req.design_lead_time_days}d &middot; Production {req.production_lead_time_days}d
               </span>
