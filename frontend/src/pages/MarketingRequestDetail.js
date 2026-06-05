@@ -23,7 +23,7 @@ import {
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
   Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
-  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil,
+  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -333,6 +333,41 @@ export default function MarketingRequestDetail() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Transition failed');
     } finally { setSavingTxn(false); }
+  };
+
+  const copyComment = async (text) => {
+    const value = text || '';
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      toast.success('Comment copied');
+    } catch {
+      // Last-resort fallback
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        toast.success('Comment copied');
+      } catch {
+        toast.error('Could not copy');
+      }
+    }
   };
 
   const saveEstDate = async (isoOrNull) => {
@@ -899,13 +934,25 @@ export default function MarketingRequestDetail() {
                       <MessageSquare className="h-3.5 w-3.5 text-emerald-600" /> Comments ({(v.comments_thread || []).length})
                     </div>
                     {(v.comments_thread || []).map((c) => (
-                      <div key={c.id} className="text-xs bg-white border border-slate-200 rounded-md p-2" data-testid={`version-comment-${c.id}`}>
+                      <div key={c.id} className="group text-xs bg-white border border-slate-200 rounded-md p-2" data-testid={`version-comment-${c.id}`}>
                         <div className="flex items-center justify-between gap-2 mb-0.5">
                           <span className="font-medium text-slate-800 flex items-center gap-1.5">
                             <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-medium text-emerald-700">{getInitials(c.user_name)}</div>
                             {c.user_name}
                           </span>
-                          <span className="text-[10px] text-slate-500">{fmtDate(c.created_at, 'dd MMM, hh:mm a')}</span>
+                          <span className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => copyComment(c.text)}
+                              className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                              title="Copy comment"
+                              aria-label="Copy comment"
+                              data-testid={`version-comment-copy-${c.id}`}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                            <span className="text-[10px] text-slate-500">{fmtDate(c.created_at, 'dd MMM, hh:mm a')}</span>
+                          </span>
                         </div>
                         <p className="whitespace-pre-wrap pl-7 text-slate-700">{c.text}</p>
                       </div>
