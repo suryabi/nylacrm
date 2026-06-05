@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests: per-version comments + version approval ✅ DONE
+- **Request**: Each work version needs (1) multiple comments shown with the commenter's name, and (2) an approve/choose-a-version option that can be reverted and re-assigned to another version.
+- **Backend** (`models/marketing_request.py`, `routes/marketing_requests.py`): `FileVersion` gains `comments_thread: [VersionComment]` and approval fields (`is_approved`, `approved_by`, `approved_by_name`, `approved_at`). New endpoints: `POST /versions/{vid}/comments` (append threaded comment with user name/time), `POST /versions/{vid}/approve` (exclusive — approving one clears all others; sets request-level `approved_version_id`/`_name`; logs system timeline entry), `POST /versions/{vid}/unapprove` (revert). 
+- **Frontend** (`MarketingRequestDetail.js`): each version card shows an "Approved by {name}" badge + highlighted border when approved, an "Approve this version" / "Revert approval" toggle, a comments thread (avatar + name + timestamp), and an inline comment composer (Enter to send).
+- **Tested**: curl (2 comments with names; approve V1→approve V2 moves approval exclusively; revert clears) + screenshot (V1 approved badge, revert button, 2-comment thread, composer).
+
+
 ### 2026-06-05 — Marketing Requests: auto-incrementing Work Version numbers ✅ DONE
 - **Request**: Version number must auto-increment (manual entry caused duplicate/confusing labels).
 - **Backend** (`models/marketing_request.py`, `routes/marketing_requests.py`): `FileVersion` gains `version_no:int`; `VersionCreate.version_name` now optional and IGNORED. `add_version` computes `next_no = max(existing version_no)+1` (reconciled with count) and sets `version_name="V{n}"` server-side — the single source of truth, immune to duplicate/concurrent client input.

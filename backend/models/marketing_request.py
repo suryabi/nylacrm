@@ -108,6 +108,15 @@ class StoredFile(BaseModel):
     uploaded_by_name: Optional[str] = None
 
 
+class VersionComment(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None
+    user_name: str
+    text: str
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
 class FileVersion(BaseModel):
     model_config = ConfigDict(extra="allow")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -115,7 +124,12 @@ class FileVersion(BaseModel):
     version_name: str
     files: List[StoredFile] = []
     links: List[str] = []
-    comments: Optional[str] = None
+    comments: Optional[str] = None  # initial "what changed" note
+    comments_thread: List[VersionComment] = []  # ongoing discussion per version
+    is_approved: bool = False
+    approved_by: Optional[str] = None
+    approved_by_name: Optional[str] = None
+    approved_at: Optional[str] = None
     uploaded_by: str
     uploaded_by_name: str
     uploaded_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -230,6 +244,10 @@ class VersionCreate(BaseModel):
     file_ids: List[str] = []
     links: List[str] = []
     comments: Optional[str] = None
+
+
+class VersionCommentCreate(BaseModel):
+    text: str
 
 
 class ProductionSubmitRequest(BaseModel):

@@ -20,6 +20,7 @@ import {
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
   Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
+  CheckCircle2, RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -251,6 +252,9 @@ export default function MarketingRequestDetail() {
   const [fileToDelete, setFileToDelete] = useState(null);
   const [deletingFile, setDeletingFile] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
+  // Per-version comment composer + busy flags
+  const [verComment, setVerComment] = useState({}); // { [versionId]: text }
+  const [verBusy, setVerBusy] = useState({});       // { [versionId]: bool }
 
   // Required-field capture dialog (transitions that collect new data)
   const [fieldTxn, setFieldTxn] = useState(null);
@@ -362,6 +366,28 @@ export default function MarketingRequestDetail() {
       fetchAll();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to add version'); }
     finally { setSavingVersion(false); }
+  };
+
+  const addVersionComment = async (versionId) => {
+    const text = (verComment[versionId] || '').trim();
+    if (!text) return;
+    setVerBusy((p) => ({ ...p, [versionId]: true }));
+    try {
+      await axios.post(`${API}/marketing-requests/${id}/versions/${versionId}/comments`, { text }, { headers: HEAD() });
+      setVerComment((p) => ({ ...p, [versionId]: '' }));
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to add comment'); }
+    finally { setVerBusy((p) => ({ ...p, [versionId]: false })); }
+  };
+
+  const setVersionApproval = async (versionId, approve) => {
+    setVerBusy((p) => ({ ...p, [versionId]: true }));
+    try {
+      await axios.post(`${API}/marketing-requests/${id}/versions/${versionId}/${approve ? 'approve' : 'unapprove'}`, {}, { headers: HEAD() });
+      toast.success(approve ? 'Version approved' : 'Approval reverted');
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Action failed'); }
+    finally { setVerBusy((p) => ({ ...p, [versionId]: false })); }
   };
 
   const openProdDialog = async () => {
@@ -654,9 +680,16 @@ export default function MarketingRequestDetail() {
           ) : (
             <div className="space-y-3">
               {req.versions.map((v) => (
-                <div key={v.id} className="border border-emerald-100 rounded-lg p-3 bg-emerald-50/30">
+                <div key={v.id} className={`border rounded-lg p-3 ${v.is_approved ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200' : 'border-emerald-100 bg-emerald-50/30'}`} data-testid={`version-card-${v.id}`}>
                   <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                    <span className="font-semibold text-slate-900">{v.version_name}</span>
+                    <span className="font-semibold text-slate-900 flex items-center gap-2">
+                      {v.version_name}
+                      {v.is_approved && (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-1" data-testid={`version-approved-badge-${v.id}`}>
+                          <CheckCircle2 className="h-3 w-3" /> Approved{v.approved_by_name ? ` by ${v.approved_by_name}` : ''}
+                        </Badge>
+                      )}
+                    </span>
                     <span className="text-xs text-slate-500">
                       <span className="font-medium text-slate-700">{v.uploaded_by_name}</span> &middot; {fmtDate(v.uploaded_at, 'dd MMM yyyy, hh:mm a')}
                     </span>
@@ -670,6 +703,69 @@ export default function MarketingRequestDetail() {
                         <ExternalLink className="h-3 w-3 text-emerald-600" /> {l.length > 40 ? l.slice(0, 40) + '…' : l}
                       </a>
                     ))}
+                  </div>
+
+                  {/* Approve / Revert control */}
+                  <div className="mt-3 flex items-center gap-2">
+                    {v.is_approved ? (
+                      <Button
+                        size="sm" variant="outline"
+                        className="h-7 text-xs text-amber-700 border-amber-200 hover:bg-amber-50"
+                        onClick={() => setVersionApproval(v.id, false)}
+                        disabled={verBusy[v.id]}
+                        data-testid={`version-revert-btn-${v.id}`}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" /> Revert approval
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => setVersionApproval(v.id, true)}
+                        disabled={verBusy[v.id]}
+                        data-testid={`version-approve-btn-${v.id}`}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve this version
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Per-version comments thread */}
+                  <div className="mt-3 pt-3 border-t border-emerald-100/70 space-y-2">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                      <MessageSquare className="h-3.5 w-3.5 text-emerald-600" /> Comments ({(v.comments_thread || []).length})
+                    </div>
+                    {(v.comments_thread || []).map((c) => (
+                      <div key={c.id} className="text-xs bg-white border border-slate-200 rounded-md p-2" data-testid={`version-comment-${c.id}`}>
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
+                          <span className="font-medium text-slate-800 flex items-center gap-1.5">
+                            <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-medium text-emerald-700">{getInitials(c.user_name)}</div>
+                            {c.user_name}
+                          </span>
+                          <span className="text-[10px] text-slate-500">{fmtDate(c.created_at, 'dd MMM, hh:mm a')}</span>
+                        </div>
+                        <p className="whitespace-pre-wrap pl-7 text-slate-700">{c.text}</p>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <Input
+                        value={verComment[v.id] || ''}
+                        onChange={(e) => setVerComment((p) => ({ ...p, [v.id]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addVersionComment(v.id); } }}
+                        placeholder="Add a comment on this version…"
+                        className="h-8 text-xs"
+                        data-testid={`version-comment-input-${v.id}`}
+                      />
+                      <Button
+                        size="sm"
+                        className="h-8 bg-emerald-600 hover:bg-emerald-700"
+                        onClick={() => addVersionComment(v.id)}
+                        disabled={verBusy[v.id] || !(verComment[v.id] || '').trim()}
+                        data-testid={`version-comment-send-${v.id}`}
+                      >
+                        {verBusy[v.id] ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}

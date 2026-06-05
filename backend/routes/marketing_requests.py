@@ -51,6 +51,7 @@ from utils.sm_helpers import (
 from models.marketing_request import (
     MarketingRequestCreate, CommentCreate, VersionCreate, ProductionSubmitRequest,
     StoredFile, FileVersion, RequestComment, ProductionSubmission,
+    VersionComment, VersionCommentCreate,
 )
 from routes.slack import post_event_message as slack_post_event
 from utils.notify import notify_users
@@ -717,6 +718,120 @@ async def add_version(request_id: str, payload: VersionCreate, current_user: dic
          "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     return version
+
+
+def _find_version(versions: list, version_id: str) -> Optional[dict]:
+    for v in versions:
+        if v.get("id") == version_id:
+            return v
+    return None
+
+
+@router.post("/{request_id}/versions/{version_id}/comments")
+async def add_version_comment(request_id: str, version_id: str, payload: VersionCommentCreate, current_user: dict = Depends(get_current_user)):
+    """Append a comment to a specific work version's discussion thread."""
+    tenant_id = get_current_tenant_id()
+    if not (payload.text and payload.text.strip()):
+        raise HTTPException(400, "Comment text is required")
+    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Request not found")
+    versions = doc.get("versions") or []
+    version = _find_version(versions, version_id)
+    if not version:
+        raise HTTPException(404, "Version not found")
+
+    comment = VersionComment(
+        user_id=current_user.get("id"),
+        user_name=current_user.get("name") or current_user.get("email") or "User",
+        text=payload.text.strip(),
+    ).model_dump()
+    version.setdefault("comments_thread", []).append(comment)
+
+    await db.marketing_requests.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"$set": {"versions": versions, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return comment
+
+
+@router.post("/{request_id}/versions/{version_id}/approve")
+async def approve_version(request_id: str, version_id: str, current_user: dict = Depends(get_current_user)):
+    """Approve a single work version. Only one version can be approved at a time —
+    approving one automatically clears approval on the others."""
+    tenant_id = get_current_tenant_id()
+    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Request not found")
+    versions = doc.get("versions") or []
+    target = _find_version(versions, version_id)
+    if not target:
+        raise HTTPException(404, "Version not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    user_name = current_user.get("name") or current_user.get("email") or "User"
+    for v in versions:
+        if v.get("id") == version_id:
+            v["is_approved"] = True
+            v["approved_by"] = current_user.get("id")
+            v["approved_by_name"] = user_name
+            v["approved_at"] = now
+        else:
+            v["is_approved"] = False
+            v["approved_by"] = None
+            v["approved_by_name"] = None
+            v["approved_at"] = None
+
+    timeline = RequestComment(
+        user_id=current_user.get("id"), user_name=user_name,
+        text=f"Approved work version {target.get('version_name')}.", kind="system",
+    ).model_dump()
+    await db.marketing_requests.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"$set": {
+            "versions": versions,
+            "approved_version_id": version_id,
+            "approved_version_name": target.get("version_name"),
+            "updated_at": now,
+         },
+         "$push": {"comments": timeline}},
+    )
+    return await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+
+
+@router.post("/{request_id}/versions/{version_id}/unapprove")
+async def unapprove_version(request_id: str, version_id: str, current_user: dict = Depends(get_current_user)):
+    """Revert approval on a version, leaving no version approved."""
+    tenant_id = get_current_tenant_id()
+    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Request not found")
+    versions = doc.get("versions") or []
+    target = _find_version(versions, version_id)
+    if not target:
+        raise HTTPException(404, "Version not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    user_name = current_user.get("name") or current_user.get("email") or "User"
+    target["is_approved"] = False
+    target["approved_by"] = None
+    target["approved_by_name"] = None
+    target["approved_at"] = None
+
+    set_doc = {"versions": versions, "updated_at": now}
+    if doc.get("approved_version_id") == version_id:
+        set_doc["approved_version_id"] = None
+        set_doc["approved_version_name"] = None
+
+    timeline = RequestComment(
+        user_id=current_user.get("id"), user_name=user_name,
+        text=f"Reverted approval of work version {target.get('version_name')}.", kind="system",
+    ).model_dump()
+    await db.marketing_requests.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"$set": set_doc, "$push": {"comments": timeline}},
+    )
+    return await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
 
 
 # ──────────────────────────────────────────────────────────────
