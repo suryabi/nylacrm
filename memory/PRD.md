@@ -879,6 +879,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - The Reset Stock endpoint (`/api/production/factory-warehouse-stock/reset`) still cancels orphan `distributor_manual_stock_entries` rows as a cleanup, so old data is safe to wipe.
 - Verified: login 200, distributors list 200, stock-dashboard 200, factory reset audits 200, `/api/distributors/{id}/manual-stock-entries` returns 404 as expected.
 
+### 2026-06-05 — Design Request: editable Estimated Finished Date ✅ DONE
+- Backend: `PATCH /api/marketing-requests/{id}/estimated-date` sets/clears `estimated_finished_date` (ISO validation, 400 on bad input) and logs a `system` audit comment.
+- Frontend: inline editable pill in the detail-page hero ("Est. Finish" / "Set est. finish date") with date picker, save/cancel/clear. testids: `mr-est-date-display`, `mr-est-date-input`, `mr-est-date-save`, `mr-est-date-cancel`, `mr-est-date-clear`.
+- Verified via curl (set/verify/invalid/clear) + UI screenshot.
+
+
 
 ### 2026-05-18 — Stock-Out Delivery status flow + collapsible Live Map ✅ DONE
 - **New delivery lifecycle**: Draft → Confirmed → `delivery_assigned` (attached to schedule) → `delivery_scheduled` (schedule approved) → `on_the_way` (driver starts vehicle) → `complete` (driver marks stop delivered). Direct path from Stock Out screen: Confirmed → `complete`.

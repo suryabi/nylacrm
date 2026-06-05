@@ -548,6 +548,54 @@ async def get_request(request_id: str, current_user: dict = Depends(get_current_
     return doc
 
 
+class EstimatedDateUpdate(BaseModel):
+    estimated_finished_date: Optional[str] = None  # ISO date (YYYY-MM-DD) or null to clear
+
+
+@router.patch("/{request_id}/estimated-date")
+async def set_estimated_finished_date(
+    request_id: str,
+    payload: EstimatedDateUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Set/clear the team's estimated finished date for a request."""
+    tenant_id = get_current_tenant_id()
+    value = (payload.estimated_finished_date or "").strip() or None
+    if value:
+        try:
+            value = date.fromisoformat(value[:10]).isoformat()
+        except ValueError:
+            raise HTTPException(400, "estimated_finished_date must be an ISO date (YYYY-MM-DD)")
+
+    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Request not found")
+
+    user_name = current_user.get("name") or current_user.get("email") or "User"
+    note = (
+        f"Estimated finish date set to {value}" if value
+        else "Estimated finish date cleared"
+    )
+    audit = RequestComment(
+        user_id=current_user.get("id"),
+        user_name=user_name,
+        text=note,
+        kind="system",
+    ).model_dump()
+
+    await db.marketing_requests.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {
+            "$set": {
+                "estimated_finished_date": value,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "$push": {"comments": audit},
+        },
+    )
+    return {"estimated_finished_date": value}
+
+
 @router.get("/{request_id}/available-transitions")
 async def available_transitions(request_id: str, current_user: dict = Depends(get_current_user)):
     """Return the set of transitions the current user can trigger from this request's current state."""
