@@ -12,7 +12,7 @@ import {
 } from '../components/ui/select';
 import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
-  LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch, Download,
+  LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch, Download, Hourglass,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -37,6 +37,23 @@ const formatDate = (s, fmt = 'MMM d, yyyy') => {
   try { const d = parseISO(s); return isValid(d) ? format(d, fmt) : null; } catch { return null; }
 };
 const isOverdueDate = (s) => { if (!s) return false; try { const d = parseISO(s); return isValid(d) && isPast(d) && !isToday(d); } catch { return false; } };
+
+const ageDays = (s) => { try { return Math.max(0, Math.floor((Date.now() - parseISO(s).getTime()) / 86400000)); } catch { return null; } };
+const ageLabel = (s) => { const n = ageDays(s); if (n === null) return '—'; return n === 0 ? 'Today' : n === 1 ? '1 day' : `${n} days`; };
+const AgePill = ({ createdAt }) => {
+  const n = ageDays(createdAt);
+  if (n === null) return null;
+  const tier = n <= 2
+    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    : n <= 7
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : 'bg-red-50 text-red-600 border-red-200';
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${tier}`} title={`Age: ${ageLabel(createdAt)}`} data-testid="mr-row-age">
+      <Hourglass className="h-2.5 w-2.5" /> {ageLabel(createdAt)}
+    </span>
+  );
+};
 const stateBadgeStyle = (hex) => {
   if (!hex) return { background: '#f1f5f9', color: '#334155', borderColor: '#e2e8f0' };
   return { background: `${hex}1f`, color: hex, borderColor: `${hex}55` };
@@ -96,6 +113,7 @@ function RequestTable({ rows, navigate }) {
                             <Clock className="h-2.5 w-2.5 mr-0.5" /> Tight
                           </Badge>
                         )}
+                        <AgePill createdAt={req.created_at} />
                       </div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded font-mono">

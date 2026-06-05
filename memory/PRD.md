@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests: age pill + status-history (time-in-status) auditing ✅ DONE
+- **Request**: Show a request "age" pill in list + detail, and track how long the request spent in each status (shown in detail).
+- **Backend** (`routes/marketing_requests.py`): create now seeds `status_history: [{state_key,state_label,state_color,entered_at,by_user_id,by_user_name}]`; each transition `$push`es a new entry. Detail `GET /{request_id}` backfills a single synthesized entry (from `created_at` + current state, flagged `backfilled`) for requests predating tracking.
+- **Frontend**: shared `AgePill` (color tiers: ≤2d emerald, ≤7d amber, >7d red) shown in the list row (`mr-row-age`) and detail hero (`mr-age-pill`). New detail **Status History** card (`mr-status-history`): proportional color bar across statuses, aggregated time-in-status summary (`mr-status-agg-*`), and a chronological Journey timeline with per-segment durations (`fmtDuration`), entered-at, actor, and an "(ongoing)" marker for the current status. Backfill notice shown for legacy requests.
+- **Tested**: curl (create seeds 1 entry; transition → 2 entries with actor; old request → backfilled=True) + screenshots (list age pills; detail Status History card).
+
+
 ### 2026-06-05 — Marketing Requests: CSV export of filtered list ✅ DONE
 - **Request**: Export the currently-filtered list to CSV.
 - **Backend** (`routes/marketing_requests.py`): refactored query building into `_build_requests_query()` (shared by list + export); new `GET /marketing-requests/export` honours the same params (queue/search/state_key/request_type_id/assigned_department_id/created_by) and streams a CSV (Response, `text/csv`, attachment filename `marketing-requests-YYYYMMDD.csv`, up to 5000 rows). Columns: Request #, Type, State, Assigned Team, Assigned To, Lead, Requested Due Date, Raised By, Created At, Requirement Details. Route registered before `/{request_id}`.

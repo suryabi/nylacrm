@@ -311,6 +311,15 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
         # Legacy aliases for back-compat (frontend may still reference these)
         "status_key": initial["key"],
         "status_name": initial.get("label") or initial["key"],
+        # Structured status history for time-in-status auditing
+        "status_history": [{
+            "state_key": initial["key"],
+            "state_label": initial.get("label") or initial["key"],
+            "state_color": initial.get("color") or "#94a3b8",
+            "entered_at": datetime.now(timezone.utc).isoformat(),
+            "by_user_id": current_user.get("id"),
+            "by_user_name": current_user.get("name") or current_user.get("email"),
+        }],
         "versions": [],
         "comments": [],
         "production": None,
@@ -525,6 +534,17 @@ async def get_request(request_id: str, current_user: dict = Depends(get_current_
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Request not found")
+    # Backfill status history for requests created before history tracking existed.
+    if not doc.get("status_history"):
+        doc["status_history"] = [{
+            "state_key": doc.get("current_state_key"),
+            "state_label": doc.get("current_state_label") or doc.get("current_state_key"),
+            "state_color": doc.get("current_state_color") or "#94a3b8",
+            "entered_at": doc.get("created_at"),
+            "by_user_id": doc.get("created_by"),
+            "by_user_name": doc.get("created_by_name"),
+            "backfilled": True,
+        }]
     return doc
 
 
@@ -657,9 +677,19 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
         kind="status_change",
     ).model_dump()
 
+    history_entry = {
+        "state_key": target_state["key"],
+        "state_label": target_state.get("label") or target_state["key"],
+        "state_color": target_state.get("color") or "#94a3b8",
+        "entered_at": datetime.now(timezone.utc).isoformat(),
+        "by_user_id": current_user.get("id"),
+        "by_user_name": current_user.get("name") or current_user.get("email") or "User",
+    }
+
     await db.marketing_requests.update_one(
         {"id": request_id, "tenant_id": tenant_id},
-        {"$set": set_doc, "$push": {"comments": timeline_event}},
+        {"$set": set_doc,
+         "$push": {"comments": timeline_event, "status_history": history_entry}},
     )
     doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
 

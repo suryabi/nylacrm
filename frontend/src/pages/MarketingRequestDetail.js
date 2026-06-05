@@ -21,7 +21,7 @@ import {
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
   Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
-  CheckCircle2, RotateCcw,
+  CheckCircle2, RotateCcw, Hourglass, History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +39,35 @@ const getInitials = (name) => {
   const parts = name.trim().split(' ').filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return name.slice(0, 2).toUpperCase();
+};
+
+// Age + duration helpers
+const ageDays = (s) => { try { return Math.max(0, Math.floor((Date.now() - parseISO(s).getTime()) / 86400000)); } catch { return null; } };
+const ageLabel = (s) => { const n = ageDays(s); if (n === null) return '—'; return n === 0 ? 'Today' : n === 1 ? '1 day old' : `${n} days old`; };
+const fmtDuration = (ms) => {
+  if (ms < 0) ms = 0;
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  if (days >= 1) return `${days}d ${hours}h`;
+  if (hours >= 1) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+};
+
+// Age pill — color tiers: ≤2d emerald, ≤7d amber, >7d red.
+const AgePill = ({ createdAt, className = '' }) => {
+  const n = ageDays(createdAt);
+  if (n === null) return null;
+  const tier = n <= 2
+    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    : n <= 7
+      ? 'bg-amber-50 text-amber-700 border-amber-200'
+      : 'bg-red-50 text-red-600 border-red-200';
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${tier} ${className}`} title={`Created ${fmtDate(createdAt)}`} data-testid="mr-age-pill">
+      <Hourglass className="h-3 w-3" /> {ageLabel(createdAt)}
+    </span>
+  );
 };
 
 // Build inline styles from a hex color so the badge follows the SM-defined color.
@@ -425,6 +454,25 @@ export default function MarketingRequestDetail() {
   };
 
   const allowedTransitions = useMemo(() => transitions.filter(t => t.allowed), [transitions]);
+
+  const statusTimeline = useMemo(() => {
+    const hist = (req?.status_history || []).slice().sort((a, b) => new Date(a.entered_at) - new Date(b.entered_at));
+    const now = Date.now();
+    const segments = hist.map((h, i) => {
+      const start = new Date(h.entered_at).getTime();
+      const end = i < hist.length - 1 ? new Date(hist[i + 1].entered_at).getTime() : now;
+      return { ...h, start, end, ms: Math.max(0, end - start), ongoing: i === hist.length - 1 };
+    });
+    const total = segments.reduce((s, x) => s + x.ms, 0) || 1;
+    const aggMap = {};
+    segments.forEach((s) => {
+      if (!aggMap[s.state_key]) aggMap[s.state_key] = { state_key: s.state_key, state_label: s.state_label, state_color: s.state_color || '#94a3b8', ms: 0 };
+      aggMap[s.state_key].ms += s.ms;
+    });
+    const agg = Object.values(aggMap).sort((a, b) => b.ms - a.ms);
+    const backfilled = hist.some((h) => h.backfilled);
+    return { segments, total, agg, backfilled };
+  }, [req]);
   const blockedTransitions = useMemo(() => transitions.filter(t => !t.allowed), [transitions]);
 
   const confirmDeleteFile = async () => {
@@ -482,6 +530,7 @@ export default function MarketingRequestDetail() {
                   <Clock className="h-3 w-3 mr-1" /> Tight Timeline
                 </Badge>
               )}
+              <AgePill createdAt={req.created_at} />
             </div>
             <div className="flex items-start gap-3.5">
               <div className="hidden sm:flex h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
@@ -795,6 +844,71 @@ export default function MarketingRequestDetail() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Status history — time spent in each status */}
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]" data-testid="mr-status-history">
+        <CardContent className="p-5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <History className="h-4 w-4 text-emerald-600" /> Status History
+            </h2>
+            <AgePill createdAt={req.created_at} />
+          </div>
+
+          {/* Proportional bar */}
+          <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-slate-100" title="Time distribution across statuses">
+            {statusTimeline.segments.map((s, i) => (
+              <div
+                key={i}
+                style={{ width: `${(s.ms / statusTimeline.total) * 100}%`, backgroundColor: s.state_color || '#94a3b8' }}
+                title={`${s.state_label}: ${fmtDuration(s.ms)}`}
+              />
+            ))}
+          </div>
+
+          {/* Aggregated time-in-status (primary ask: days at each status) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {statusTimeline.agg.map((a) => (
+              <div key={a.state_key} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2" data-testid={`mr-status-agg-${a.state_key}`}>
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: a.state_color }} />
+                  <span className="text-sm text-slate-700 truncate">{a.state_label}</span>
+                </span>
+                <span className="text-sm font-semibold text-slate-900 shrink-0">{fmtDuration(a.ms)}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Chronological journey */}
+          <div className="pt-1">
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Journey</p>
+            <div className="space-y-0">
+              {statusTimeline.segments.map((s, i) => (
+                <div key={i} className="flex items-start gap-3" data-testid={`mr-status-segment-${i}`}>
+                  <div className="flex flex-col items-center">
+                    <span className="w-3 h-3 rounded-full mt-1 shrink-0 ring-2 ring-white" style={{ backgroundColor: s.state_color }} />
+                    {i < statusTimeline.segments.length - 1 && <span className="w-px flex-1 bg-slate-200 my-0.5 min-h-[24px]" />}
+                  </div>
+                  <div className="flex-1 pb-3 min-w-0">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-slate-800">{s.state_label}</span>
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                        {s.ongoing ? `${fmtDuration(s.ms)} (ongoing)` : fmtDuration(s.ms)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {fmtDate(s.entered_at, 'dd MMM yyyy, hh:mm a')}{s.by_user_name ? ` · ${s.by_user_name}` : ''}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {statusTimeline.backfilled && (
+              <p className="text-[11px] text-amber-600 mt-1">Detailed history wasn't tracked before this request's earlier transitions — showing time in the current status from creation.</p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
