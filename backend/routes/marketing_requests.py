@@ -351,6 +351,9 @@ async def list_requests(
     queue: str = "all",
     search: Optional[str] = None,
     state_key: Optional[str] = None,
+    request_type_id: Optional[str] = None,
+    assigned_department_id: Optional[str] = None,
+    created_by: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     sort: str = "-created_at",
@@ -374,6 +377,13 @@ async def list_requests(
         if user_role:
             ors.append({"assigned_role": {"$regex": f"^{user_role}$", "$options": "i"}})
         q["$or"] = ors
+    # Explicit filters (AND with the queue/search clauses)
+    if request_type_id:
+        q["request_type_id"] = request_type_id
+    if assigned_department_id:
+        q["assigned_department_id"] = assigned_department_id
+    if created_by:
+        q["created_by"] = created_by
     if state_key:
         q["current_state_key"] = state_key
     if search:

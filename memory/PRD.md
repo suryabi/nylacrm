@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests: server-side pagination + filters ✅ DONE
+- **Request**: Paginate the list and add filters by Requested By, Assigned Team, and Request Type.
+- **Backend** (`routes/marketing_requests.py` list): added `request_type_id`, `assigned_department_id`, `created_by` query params (AND-combined with existing queue/search/state); pagination already returned `total/page/pages/limit` (limit 20).
+- **Frontend** (`MarketingRequests.js`): added three Select filters — Request type (from `/marketing-request-types`), Assigned team (from `/master-departments`), Requested by (from `/users`) — plus a "Clear filters" button. Removed the buggy client-side `filteredItems` (re-filtered only the current page); search + all filters now drive a single debounced server fetch, reset to page 1 on change, sync to the URL (`type`/`dept`/`by`), and the result count + Prev/Next pager reflect server `total`/`pages`.
+- **Tested**: curl (type→8, dept(Design)→5, created_by→19, combined→1, all correctly scoped) + screenshot (Neck Tags filter → 8 results, all three dropdowns + Clear filters visible).
+
+
 ### 2026-06-05 — Marketing Request detail hero: light/minimalist restyle ✅ DONE
 - **Request**: The solid emerald banner didn't match the app's light theme / wasn't contemporary. Make it minimalistic, contemporary, visually appealing.
 - **Detail** (`MarketingRequestDetail.js`): replaced the saturated `bg-emerald-600` block with a **white surface** card (border + soft shadow) featuring a slim left emerald gradient accent bar, a subtle emerald corner glow, a gradient emerald icon tile next to a slate-900 title, soft-tinted badges (emerald request chip, red/amber outline alerts), emerald-tinted meta icons, and a clean emerald-50 "Associated Lead" card on the right (gradient avatar tile). Now visually consistent with the cards beneath it.

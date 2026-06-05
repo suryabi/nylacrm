@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
@@ -7,6 +7,9 @@ import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../components/ui/select';
 import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch,
@@ -163,10 +166,17 @@ export default function MarketingRequests() {
   const [queue, setQueue] = useState(sp.get('queue') || 'all');
   const [stateKey, setStateKey] = useState(sp.get('state') || '');
   const [search, setSearch] = useState(sp.get('q') || '');
+  const [requestTypeId, setRequestTypeId] = useState(sp.get('type') || '');
+  const [deptId, setDeptId] = useState(sp.get('dept') || '');
+  const [requestedBy, setRequestedBy] = useState(sp.get('by') || '');
   const [page, setPage] = useState(parseInt(sp.get('p') || '1'));
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
   const [counts, setCounts] = useState({ by_state: {}, queues: { my_raised: 0, my_assigned: 0, all: 0 }, states: [], state_machine_name: '' });
+  // Filter option sources
+  const [types, setTypes] = useState([]);
+  const [depts, setDepts] = useState([]);
+  const [users, setUsers] = useState([]);
 
   const fetchList = useCallback(async () => {
     setLoading(true);
@@ -174,12 +184,15 @@ export default function MarketingRequests() {
       const params = new URLSearchParams({ queue, page: String(page), limit: '20' });
       if (search) params.set('search', search);
       if (stateKey) params.set('state_key', stateKey);
+      if (requestTypeId) params.set('request_type_id', requestTypeId);
+      if (deptId) params.set('assigned_department_id', deptId);
+      if (requestedBy) params.set('created_by', requestedBy);
       const { data } = await axios.get(`${API}/marketing-requests?${params}`, { headers: HEAD() });
       setData(data || { items: [], total: 0, pages: 0 });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load requests');
     } finally { setLoading(false); }
-  }, [queue, page, search, stateKey]);
+  }, [queue, page, search, stateKey, requestTypeId, deptId, requestedBy]);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -188,7 +201,27 @@ export default function MarketingRequests() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { fetchList(); }, [queue, page, stateKey]); // eslint-disable-line
+  // Load filter option sources once
+  useEffect(() => {
+    (async () => {
+      try {
+        const [t, d, u] = await Promise.all([
+          axios.get(`${API}/marketing-request-types`, { headers: HEAD() }),
+          axios.get(`${API}/master-departments`, { headers: HEAD() }),
+          axios.get(`${API}/users`, { headers: HEAD() }),
+        ]);
+        setTypes(t.data?.types || (Array.isArray(t.data) ? t.data : []));
+        setDepts(d.data?.departments || []);
+        setUsers((Array.isArray(u.data) ? u.data : []).filter(x => x.is_active !== false));
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  // Debounced list fetch (covers search typing + every filter)
+  useEffect(() => {
+    const tm = setTimeout(() => fetchList(), 250);
+    return () => clearTimeout(tm);
+  }, [fetchList]);
   useEffect(() => { fetchCounts(); }, [fetchCounts]);
 
   useEffect(() => {
@@ -196,22 +229,21 @@ export default function MarketingRequests() {
     next.set('queue', queue);
     if (stateKey) next.set('state', stateKey);
     if (search) next.set('q', search);
+    if (requestTypeId) next.set('type', requestTypeId);
+    if (deptId) next.set('dept', deptId);
+    if (requestedBy) next.set('by', requestedBy);
     if (page > 1) next.set('p', String(page));
     setSp(next, { replace: true });
-  }, [queue, stateKey, search, page]); // eslint-disable-line
+  }, [queue, stateKey, search, requestTypeId, deptId, requestedBy, page]); // eslint-disable-line
 
   const switchQueue = (next) => { setQueue(next); setPage(1); };
   const switchState = (key) => { setStateKey(prev => prev === key ? '' : key); setPage(1); };
+  const onSearch = (v) => { setSearch(v); setPage(1); };
+  const setFilter = (setter) => (v) => { setter(v === '__all' ? '' : v); setPage(1); };
+  const clearFilters = () => { setRequestTypeId(''); setDeptId(''); setRequestedBy(''); setSearch(''); setPage(1); };
+  const hasFilters = !!(requestTypeId || deptId || requestedBy || search);
 
-  const filteredItems = useMemo(() => {
-    if (!search) return data.items || [];
-    const q = search.toLowerCase();
-    return (data.items || []).filter(r =>
-      (r.request_type_name || '').toLowerCase().includes(q) ||
-      (r.request_number || '').toLowerCase().includes(q) ||
-      (r.requirement_details || '').toLowerCase().includes(q),
-    );
-  }, [data.items, search]);
+  const items = data.items || [];
 
   const queueCount = (k) => counts?.queues?.[k] ?? 0;
   const stateCount = (k) => counts?.by_state?.[k] ?? 0;
@@ -283,18 +315,55 @@ export default function MarketingRequests() {
                   <Input
                     placeholder="Search by type, number or details…"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => onSearch(e.target.value)}
                     className="pl-9 w-64"
                     data-testid="mr-search-input"
                   />
                 </div>
-                {search && (
-                  <Button variant="ghost" size="sm" onClick={() => setSearch('')} className="text-red-500 hover:text-red-600 hover:bg-red-50">
-                    <X className="h-4 w-4 mr-1" /> Clear
+
+                {/* Request type filter */}
+                <Select value={requestTypeId || '__all'} onValueChange={setFilter(setRequestTypeId)}>
+                  <SelectTrigger className="w-[170px]" data-testid="mr-filter-type">
+                    <Tag className="h-3.5 w-3.5 text-emerald-600 mr-1.5 shrink-0" />
+                    <SelectValue placeholder="Request type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all">All types</SelectItem>
+                    {types.map(t => (<SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+
+                {/* Assigned team filter */}
+                <Select value={deptId || '__all'} onValueChange={setFilter(setDeptId)}>
+                  <SelectTrigger className="w-[180px]" data-testid="mr-filter-dept">
+                    <Users className="h-3.5 w-3.5 text-emerald-600 mr-1.5 shrink-0" />
+                    <SelectValue placeholder="Assigned team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all">All teams</SelectItem>
+                    {depts.map(d => (<SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+
+                {/* Requested by filter */}
+                <Select value={requestedBy || '__all'} onValueChange={setFilter(setRequestedBy)}>
+                  <SelectTrigger className="w-[180px]" data-testid="mr-filter-requestedby">
+                    <User className="h-3.5 w-3.5 text-emerald-600 mr-1.5 shrink-0" />
+                    <SelectValue placeholder="Requested by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all">Anyone</SelectItem>
+                    {users.map(u => (<SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+
+                {hasFilters && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="text-red-500 hover:text-red-600 hover:bg-red-50" data-testid="mr-clear-filters">
+                    <X className="h-4 w-4 mr-1" /> Clear filters
                   </Button>
                 )}
                 <div className="ml-auto text-xs text-slate-500">
-                  Showing {filteredItems.length} {filteredItems.length === 1 ? 'result' : 'results'}
+                  {data.total} {data.total === 1 ? 'result' : 'results'}
                 </div>
               </div>
 
@@ -302,7 +371,7 @@ export default function MarketingRequests() {
                 <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
               ) : (
                 <>
-                  <RequestTable rows={filteredItems} navigate={navigate} />
+                  <RequestTable rows={items} navigate={navigate} />
                   {data.pages > 1 && (
                     <div className="flex items-center justify-between text-xs text-slate-600 px-1">
                       <span>Page {data.page || page} of {data.pages} &middot; {data.total} total</span>
