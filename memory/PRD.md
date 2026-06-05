@@ -879,6 +879,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - The Reset Stock endpoint (`/api/production/factory-warehouse-stock/reset`) still cancels orphan `distributor_manual_stock_entries` rows as a cleanup, so old data is safe to wipe.
 - Verified: login 200, distributors list 200, stock-dashboard 200, factory reset audits 200, `/api/distributors/{id}/manual-stock-entries` returns 404 as expected.
 
+### 2026-06-05 — Delete Design Request with RBAC ✅ DONE
+- Backend: `DELETE /api/marketing-requests/{id}` — admin roles always allowed; other roles need explicit `marketing_requests.delete` permission (`_can_delete_request` looks up role in `db.roles`). Permanently deletes the request and removes all attached files (logo/references/version files) from storage + `marketing_request_files`.
+- Frontend: "Delete Request" button in detail header (guarded by new `hasActionPermission('marketing_requests','delete')` in TenantConfigContext) + confirmation dialog. testids: `mr-delete-request-btn`, `delete-request-dialog`, `delete-request-confirm-btn`, `delete-request-cancel-btn`.
+- Verified via curl: admin delete 200 → 404; distributor 403. UI screenshot confirms button + dialog.
+
+
 ### 2026-06-05 — Design Request: editable Estimated Finished Date ✅ DONE
 - Backend: `PATCH /api/marketing-requests/{id}/estimated-date` sets/clears `estimated_finished_date` (ISO validation, 400 on bad input) and logs a `system` audit comment.
 - Frontend: inline editable pill in the detail-page hero ("Est. Finish" / "Set est. finish date") with date picker, save/cancel/clear. testids: `mr-est-date-display`, `mr-est-date-input`, `mr-est-date-save`, `mr-est-date-cancel`, `mr-est-date-clear`.

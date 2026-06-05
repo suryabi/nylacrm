@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import { useTenantConfig } from '../context/TenantConfigContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -250,6 +251,8 @@ export default function MarketingRequestDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { hasActionPermission } = useTenantConfig();
+  const canDelete = hasActionPermission('marketing_requests', 'delete');
   const [req, setReq] = useState(null);
   const [transitions, setTransitions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -293,6 +296,10 @@ export default function MarketingRequestDetail() {
   const [editingEst, setEditingEst] = useState(false);
   const [estValue, setEstValue] = useState('');
   const [savingEst, setSavingEst] = useState(false);
+
+  // Delete-request confirm state
+  const [showDeleteReq, setShowDeleteReq] = useState(false);
+  const [deletingReq, setDeletingReq] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -342,6 +349,18 @@ export default function MarketingRequestDetail() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save date');
     } finally { setSavingEst(false); }
+  };
+
+  const confirmDeleteRequest = async () => {
+    setDeletingReq(true);
+    try {
+      await axios.delete(`${API}/marketing-requests/${id}`, { headers: HEAD() });
+      toast.success('Design request deleted');
+      navigate('/marketing-requests');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete request');
+      setDeletingReq(false);
+    }
   };
 
   const onActionClick = (t) => {
@@ -518,10 +537,21 @@ export default function MarketingRequestDetail() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6" data-testid="mr-detail-page">
-      <div>
+      <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => navigate('/marketing-requests')} data-testid="mr-back-btn">
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests
         </Button>
+        {canDelete && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDeleteReq(true)}
+            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+            data-testid="mr-delete-request-btn"
+          >
+            <Trash2 className="h-4 w-4 mr-2" /> Delete Request
+          </Button>
+        )}
       </div>
 
       {/* Hero header — light, contemporary surface with emerald accents */}
@@ -1242,6 +1272,29 @@ export default function MarketingRequestDetail() {
 
       {/* File preview lightbox */}
       <FilePreviewDialog file={previewFile} onClose={() => setPreviewFile(null)} />
+
+      {/* Delete request confirmation */}
+      <Dialog open={showDeleteReq} onOpenChange={(o) => { if (!o && !deletingReq) setShowDeleteReq(false); }}>
+        <DialogContent className="max-w-md" data-testid="delete-request-dialog">
+          <DialogHeader>
+            <DialogTitle>Delete this design request?</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-slate-700">{req.request_number}</span> — {req.request_type_name || 'Untyped Request'} and all its attached files will be permanently removed. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteReq(false)} disabled={deletingReq} data-testid="delete-request-cancel-btn">Cancel</Button>
+            <Button
+              onClick={confirmDeleteRequest}
+              disabled={deletingReq}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="delete-request-confirm-btn"
+            >
+              {deletingReq ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4 mr-2" /> Delete Request</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

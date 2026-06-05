@@ -29,6 +29,7 @@ import logging
 import uuid
 import csv
 import io
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, Response
 from pydantic import BaseModel
@@ -49,6 +50,7 @@ from utils.sm_helpers import (
     evaluate_guards,
     evaluate_required_fields,
     applicable_required_fields,
+    _is_admin,
 )
 from models.marketing_request import (
     MarketingRequestCreate, CommentCreate, VersionCreate, ProductionSubmitRequest,
@@ -109,6 +111,22 @@ def _user_departments_lower(user: dict) -> List[str]:
     if isinstance(d, str):
         d = [d]
     return [str(x).strip().lower() for x in d if x]
+
+
+async def _can_delete_request(tenant_id: str, user: dict) -> bool:
+    """Admin roles can always delete; other roles need the explicit
+    `marketing_requests.delete` permission configured in Role Management."""
+    if _is_admin(user):
+        return True
+    role_name = (user.get("role") or "").strip()
+    if not role_name:
+        return False
+    role = await db.roles.find_one(
+        {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(role_name)}$", "$options": "i"}},
+        {"_id": 0, "permissions": 1},
+    )
+    perms = (role or {}).get("permissions") or {}
+    return bool((perms.get("marketing_requests") or {}).get("delete"))
 
 
 # ──────────────────────────────────────────────────────────────
@@ -222,6 +240,50 @@ async def delete_request_file(request_id: str, file_id: str, current_user: dict 
 
     updated = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
     return updated
+
+
+@router.delete("/{request_id}")
+async def delete_request(request_id: str, current_user: dict = Depends(get_current_user)):
+    """Permanently delete a design (marketing) request and all its attached files.
+
+    Guarded by RBAC: admin roles always; other roles need the explicit
+    `marketing_requests.delete` permission.
+    """
+    tenant_id = get_current_tenant_id()
+    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Request not found")
+    if not await _can_delete_request(tenant_id, current_user):
+        raise HTTPException(403, "You don't have permission to delete design requests.")
+
+    # Collect every file id attached to this request (logo, references, version files).
+    file_ids: set = set()
+    logo = doc.get("logo")
+    if logo and logo.get("id"):
+        file_ids.add(logo["id"])
+    for r in (doc.get("references") or []):
+        if r.get("id"):
+            file_ids.add(r["id"])
+    for v in (doc.get("versions") or []):
+        for f in (v.get("files") or []):
+            if f.get("id"):
+                file_ids.add(f["id"])
+
+    # Best-effort: remove the underlying objects from storage, then the file records.
+    if file_ids:
+        rows = await db.marketing_request_files.find(
+            {"id": {"$in": list(file_ids)}, "tenant_id": tenant_id}, {"_id": 0, "path": 1}
+        ).to_list(len(file_ids))
+        for row in rows:
+            if row.get("path"):
+                try:
+                    await delete_object(row["path"])
+                except Exception:
+                    logger.exception("Storage delete failed for path %s during request delete", row.get("path"))
+        await db.marketing_request_files.delete_many({"id": {"$in": list(file_ids)}, "tenant_id": tenant_id})
+
+    await db.marketing_requests.delete_one({"id": request_id, "tenant_id": tenant_id})
+    return {"deleted": True, "id": request_id}
 
 
 # ──────────────────────────────────────────────────────────────

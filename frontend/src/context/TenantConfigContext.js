@@ -311,6 +311,19 @@ export const TenantConfigProvider = ({ children }) => {
     return modulePerms.view === true;
   }, [rolePermissions]);
 
+  // Check a specific action (view/create/edit/delete) permission for a module.
+  // Admin roles are always allowed. For non-admins, the action must be explicitly
+  // granted; when no role permissions are loaded, non-admin actions default to denied.
+  const hasActionPermission = useCallback((moduleKey, action) => {
+    const ADMIN_ROLES = ['ceo', 'director', 'system admin', 'system_admin', 'admin', 'tenant_admin'];
+    const role = (user?.role || '').trim().toLowerCase();
+    if (ADMIN_ROLES.includes(role)) return true;
+    if (!rolePermissions || Object.keys(rolePermissions).length === 0) return false;
+    const modulePerms = rolePermissions[moduleKey];
+    if (!modulePerms) return false;
+    return modulePerms[action] === true;
+  }, [rolePermissions, user]);
+
   // Check if a feature is available for the current tenant's industry
   const hasIndustryFeature = useCallback((featureKey) => {
     // Check multiple possible locations for features (handles different API response formats)
@@ -410,6 +423,7 @@ export const TenantConfigProvider = ({ children }) => {
       loading,
       isModuleEnabled,
       hasRolePermission,
+      hasActionPermission,
       hasIndustryFeature,
       getIndustryConfig,
       isRouteAccessible,
