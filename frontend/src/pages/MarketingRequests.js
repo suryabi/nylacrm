@@ -124,14 +124,12 @@ function RequestTable({ rows, navigate }) {
                     </TableCell>
                     <TableCell className="py-2 sm:py-4" data-testid={`mr-row-lead-${req.id}`}>
                       {leadLabel ? (
-                        <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 pl-1.5 pr-2.5 py-1 max-w-[200px]">
-                          <div className="w-6 h-6 rounded-md bg-emerald-600 flex items-center justify-center shrink-0">
-                            <Users className="h-3.5 w-3.5 text-white" />
-                          </div>
-                          <span className="text-xs sm:text-sm font-semibold text-emerald-800 truncate" title={leadLabel}>{leadLabel}</span>
+                        <div className="flex items-center gap-1.5 max-w-[200px]" title={leadLabel}>
+                          <Users className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          <span className="text-xs sm:text-sm text-slate-700 truncate">{leadLabel}</span>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-300">No lead</span>
+                        <span className="text-xs text-muted-foreground/40">—</span>
                       )}
                     </TableCell>
                     <TableCell className="py-2 sm:py-4">
