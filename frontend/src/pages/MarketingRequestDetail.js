@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
@@ -8,6 +8,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
+import { FileDropzone } from '../components/FileDropzone';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '../components/ui/dialog';
@@ -237,7 +238,6 @@ export default function MarketingRequestDetail() {
   const [newVLink, setNewVLink] = useState('');
   const [versionComment, setVersionComment] = useState('');
   const [savingVersion, setSavingVersion] = useState(false);
-  const versionFileInput = useRef(null);
 
   // Production submit dialog state
   const [showProd, setShowProd] = useState(false);
@@ -344,13 +344,14 @@ export default function MarketingRequestDetail() {
     });
     return res.data;
   };
-  const handleVersionFiles = async (e) => {
-    const files = Array.from(e.target.files || []);
+  const [versionBusy, setVersionBusy] = useState(false);
+  const handleVersionFiles = async (files) => {
+    setVersionBusy(true);
     for (const f of files) {
       try { const up = await uploadFile(f); setVersionFiles(p => [...p, up]); }
       catch { toast.error(`Failed to upload ${f.name}`); }
     }
-    if (versionFileInput.current) versionFileInput.current.value = '';
+    setVersionBusy(false);
   };
   const addVersion = async () => {
     setSavingVersion(true);
@@ -454,61 +455,66 @@ export default function MarketingRequestDetail() {
       </div>
 
       {/* Hero header */}
-      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)] overflow-hidden">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded font-mono">
+      <div className="relative overflow-hidden rounded-3xl bg-emerald-600 p-7 md:p-9 text-white shadow-lg" data-testid="mr-hero">
+        <div
+          className="absolute inset-0 opacity-[0.12] mix-blend-overlay bg-cover bg-center pointer-events-none"
+          style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1629197520635-16570fbd0bb3?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200)' }}
+        />
+        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-emerald-500/40 blur-3xl pointer-events-none" />
+        <div className="relative">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/10 font-mono">
               <Tag className="h-3 w-3" /> {req.request_number}
             </span>
             <Badge
               variant="outline"
               style={stateStyle}
-              className="border"
+              className="border-0 shadow-sm"
               data-testid="mr-current-state-badge"
             >
               {req.current_state_label || req.current_state_key}
             </Badge>
             {overdue && (
-              <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
+              <Badge className="text-xs bg-red-500 hover:bg-red-500 text-white border-0">
                 <AlertTriangle className="h-3 w-3 mr-1" /> Overdue
               </Badge>
             )}
             {req.short_timeline_reason && (
-              <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+              <Badge className="text-xs bg-amber-400 hover:bg-amber-400 text-amber-950 border-0">
                 <Clock className="h-3 w-3 mr-1" /> Tight Timeline
               </Badge>
             )}
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-            <Sparkles className="h-7 w-7 text-emerald-600 shrink-0" />
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight flex items-center gap-3">
+            <Sparkles className="h-7 w-7 text-emerald-100 shrink-0" />
             {req.request_type_name || 'Untyped Request'}
           </h1>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-4 text-sm text-slate-600">
-            <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-slate-400" /> {req.assigned_department_name || '—'}</span>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5 text-sm text-emerald-50/90">
+            <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-emerald-200" /> {req.assigned_department_name || '—'}</span>
             {req.assigned_user_name && (
-              <span className="flex items-center gap-1.5"><UserCircle className="h-4 w-4 text-slate-400" /> {req.assigned_user_name}</span>
+              <span className="flex items-center gap-1.5"><UserCircle className="h-4 w-4 text-emerald-200" /> {req.assigned_user_name}</span>
             )}
             {req.assigned_role && (
-              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-slate-400" /> Role: {req.assigned_role}</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-200" /> Role: {req.assigned_role}</span>
             )}
             {(req.lead_company || req.lead_name) && (
               <span className="flex items-center gap-1.5" data-testid="mr-lead-tag">
-                <Users className="h-4 w-4 text-slate-400" /> Lead: {req.lead_company || req.lead_name}
+                <Users className="h-4 w-4 text-emerald-200" /> Lead: {req.lead_company || req.lead_name}
               </span>
             )}
             <span className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-slate-400" /> Due {fmtDate(req.requested_due_date)}
+              <Calendar className="h-4 w-4 text-emerald-200" /> Due {fmtDate(req.requested_due_date)}
             </span>
             <span className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-slate-400" /> Lead Design {req.design_lead_time_days}d &middot; Production {req.production_lead_time_days}d
+              <Clock className="h-4 w-4 text-emerald-200" /> Design {req.design_lead_time_days}d &middot; Production {req.production_lead_time_days}d
             </span>
             <span className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-full bg-emerald-100 border border-white flex items-center justify-center text-[10px] font-medium text-emerald-700">{getInitials(req.created_by_name)}</div>
-              Raised by <span className="text-slate-800 font-medium">{req.created_by_name}</span>
+              <div className="w-6 h-6 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-[10px] font-semibold text-white">{getInitials(req.created_by_name)}</div>
+              Raised by <span className="text-white font-medium">{req.created_by_name}</span>
             </span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Action bar — driven by /available-transitions */}
       <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
@@ -917,11 +923,18 @@ export default function MarketingRequestDetail() {
               <span className="text-[11px] text-slate-400 ml-auto">Assigned automatically</span>
             </div>
             <div>
-              <Label>Files</Label>
-              <Input type="file" multiple ref={versionFileInput} onChange={handleVersionFiles} />
+              <Label className="mb-2 block">Files</Label>
+              <FileDropzone
+                onFiles={handleVersionFiles}
+                multiple
+                busy={versionBusy}
+                title="Drop work files here, or click to browse"
+                hint="Images, PDFs, decks — add as many as needed"
+                testId="version-files-dropzone"
+              />
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {versionFiles.map((f) => (
-                  <Badge key={f.id} variant="outline" className="text-xs bg-white">
+                  <Badge key={f.id} variant="outline" className="text-xs bg-white py-1">
                     {f.filename}
                     <button onClick={() => setVersionFiles(p => p.filter(x => x.id !== f.id))} className="ml-1.5"><X className="h-3 w-3" /></button>
                   </Badge>

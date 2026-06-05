@@ -1,18 +1,21 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { format } from 'date-fns';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
-import { Badge } from '../components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Calendar } from '../components/ui/calendar';
+import { FileDropzone } from '../components/FileDropzone';
 import {
-  ArrowLeft, Sparkles, Upload, X, Link as LinkIcon, AlertTriangle, Loader2, Plus,
-  Tag, ImageIcon, FileText, CalendarClock, Building2, Send, Users,
+  ArrowLeft, Sparkles, X, Link as LinkIcon, AlertTriangle, Loader2, Plus,
+  Tag, ImageIcon, FileText, CalendarClock, Building2, Send, Users, Trash2, CalendarIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -21,6 +24,56 @@ const HEAD = () => {
   const t = localStorage.getItem('token');
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
+
+// Contemporary form-control style tokens (emerald, soft glow focus)
+const INPUT_CLS = 'h-12 rounded-xl border-emerald-100 bg-white px-4 shadow-sm transition-all focus-visible:border-emerald-500 focus-visible:ring-4 focus-visible:ring-emerald-500/10';
+const TEXTAREA_CLS = 'rounded-xl border-emerald-100 bg-white px-4 py-3 shadow-sm transition-all focus-visible:border-emerald-500 focus-visible:ring-4 focus-visible:ring-emerald-500/10';
+const SELECT_CLS = 'h-12 rounded-xl border-emerald-100 bg-white px-4 shadow-sm transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10';
+const LABEL_CLS = 'text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5';
+const CAL_CLASSNAMES = { day_selected: 'bg-emerald-600 text-white hover:bg-emerald-600 focus:bg-emerald-600 rounded-lg shadow-sm', day_today: 'bg-emerald-50 text-emerald-700 font-semibold rounded-lg' };
+
+const isImg = (f) => (f?.content_type || '').startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f?.filename || '');
+
+// Repeatable URL list — stacked styled rows + dashed "Add link" button.
+const LinkListField = ({ label, placeholder, links, onChange, onAdd, onRemove, testPrefix }) => (
+  <div className="space-y-2">
+    <Label className={LABEL_CLS}>{label}</Label>
+    <div className="space-y-2">
+      {links.map((l, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 pl-3.5 rounded-xl focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all"
+        >
+          <LinkIcon className="h-4 w-4 text-emerald-500 shrink-0" />
+          <input
+            className="flex-1 border-0 bg-transparent outline-none text-sm text-slate-800 placeholder:text-slate-400"
+            placeholder={placeholder}
+            value={l}
+            onChange={(e) => onChange(i, e.target.value)}
+            data-testid={`${testPrefix}-input-${i}`}
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(i)}
+            className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            aria-label="Remove link"
+            data-testid={`${testPrefix}-remove-${i}`}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+    <button
+      type="button"
+      onClick={onAdd}
+      className="flex items-center justify-center gap-2 w-full py-2.5 px-4 text-sm font-medium text-emerald-700 bg-emerald-50/50 border border-dashed border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-300 transition-all"
+      data-testid={`${testPrefix}-add`}
+    >
+      <Plus className="h-4 w-4" /> Add link
+    </button>
+  </div>
+);
 
 export default function NewMarketingRequest() {
   const navigate = useNavigate();
@@ -42,12 +95,10 @@ export default function NewMarketingRequest() {
   });
   const [logoFile, setLogoFile] = useState(null);
   const [referenceFiles, setReferenceFiles] = useState([]);
-  const [socialLinks, setSocialLinks] = useState([]);
-  const [fileLinks, setFileLinks] = useState([]);
-  const [newSocialLink, setNewSocialLink] = useState('');
-  const [newFileLink, setNewFileLink] = useState('');
-  const refFileInput = useRef(null);
-  const logoFileInput = useRef(null);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const [refBusy, setRefBusy] = useState(false);
+  const [socialLinks, setSocialLinks] = useState(['']);
+  const [fileLinks, setFileLinks] = useState(['']);
 
   useEffect(() => {
     (async () => {
@@ -100,26 +151,34 @@ export default function NewMarketingRequest() {
     return res.data;
   };
 
-  const handleLogoChange = async (e) => {
-    const f = e.target.files?.[0];
+  const handleLogo = async (files) => {
+    const f = files[0];
     if (!f) return;
-    try { const up = await uploadFile(f); setLogoFile(up); toast.success(`Uploaded logo`); }
-    catch { toast.error('Logo upload failed'); }
-    if (logoFileInput.current) logoFileInput.current.value = '';
+    setLogoBusy(true);
+    try {
+      const up = await uploadFile(f);
+      setLogoFile({ ...up, _preview: isImg(up) ? URL.createObjectURL(f) : null });
+      toast.success('Logo uploaded');
+    } catch { toast.error('Logo upload failed'); }
+    finally { setLogoBusy(false); }
   };
 
-  const handleRefFilesChange = async (e) => {
-    const files = Array.from(e.target.files || []);
+  const handleRefFiles = async (files) => {
+    setRefBusy(true);
     for (const f of files) {
-      try { const up = await uploadFile(f); setReferenceFiles(prev => [...prev, up]); }
-      catch { toast.error(`Failed to upload ${f.name}`); }
+      try {
+        const up = await uploadFile(f);
+        setReferenceFiles(prev => [...prev, { ...up, _preview: isImg(up) ? URL.createObjectURL(f) : null }]);
+      } catch { toast.error(`Failed to upload ${f.name}`); }
     }
-    if (refFileInput.current) refFileInput.current.value = '';
+    setRefBusy(false);
   };
   const removeRefFile = (id) => setReferenceFiles(prev => prev.filter(f => f.id !== id));
 
-  const addSocialLink = () => { const v = newSocialLink.trim(); if (v) { setSocialLinks(p => [...p, v]); setNewSocialLink(''); } };
-  const addFileLink = () => { const v = newFileLink.trim(); if (v) { setFileLinks(p => [...p, v]); setNewFileLink(''); } };
+  // Repeatable link rows (always keep a trailing empty row for input)
+  const updateLink = (setter) => (idx, val) => setter(prev => prev.map((l, i) => (i === idx ? val : l)));
+  const addLinkRow = (setter) => () => setter(prev => [...prev, '']);
+  const removeLinkRow = (setter) => (idx) => setter(prev => (prev.length <= 1 ? [''] : prev.filter((_, i) => i !== idx)));
 
   const canSubmit = form.request_type_id && form.assigned_department_id && form.requested_due_date && form.requirement_details && (!isShortTimeline || form.short_timeline_reason.trim());
 
@@ -137,8 +196,8 @@ export default function NewMarketingRequest() {
         short_timeline_reason: isShortTimeline ? form.short_timeline_reason : null,
         logo_file_id: logoFile?.id || null,
         reference_file_ids: referenceFiles.map(f => f.id),
-        social_media_links: socialLinks,
-        file_links: fileLinks,
+        social_media_links: socialLinks.map(l => l.trim()).filter(Boolean),
+        file_links: fileLinks.map(l => l.trim()).filter(Boolean),
       };
       const { data } = await axios.post(`${API}/marketing-requests`, payload, { headers: HEAD() });
       toast.success(`Created ${data.request_number}`);
@@ -210,11 +269,11 @@ export default function NewMarketingRequest() {
         <CardContent className="p-6 space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+              <Label className={LABEL_CLS}>
                 <Building2 className="h-3.5 w-3.5" /> Assigned Department *
               </Label>
               <Select value={form.assigned_department_id} onValueChange={(v) => setForm({ ...form, assigned_department_id: v })}>
-                <SelectTrigger data-testid="mr-dept-select"><SelectValue placeholder="Choose a fulfilment team" /></SelectTrigger>
+                <SelectTrigger className={SELECT_CLS} data-testid="mr-dept-select"><SelectValue placeholder="Choose a fulfilment team" /></SelectTrigger>
                 <SelectContent>
                   {departments.map(d => (<SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>))}
                 </SelectContent>
@@ -222,25 +281,41 @@ export default function NewMarketingRequest() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+              <Label className={LABEL_CLS}>
                 <CalendarClock className="h-3.5 w-3.5" /> Requested Due Date *
               </Label>
-              <Input
-                type="date"
-                value={form.requested_due_date}
-                onChange={(e) => setForm({ ...form, requested_due_date: e.target.value })}
-                data-testid="mr-due-input"
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={`${SELECT_CLS} flex w-full items-center justify-start gap-3 text-left hover:border-emerald-300 ${form.requested_due_date ? 'text-slate-900' : 'text-slate-400'}`}
+                    data-testid="mr-due-input"
+                  >
+                    <CalendarIcon className="h-5 w-5 text-emerald-600" />
+                    {form.requested_due_date ? format(new Date(form.requested_due_date + 'T00:00:00'), 'EEE, dd MMM yyyy') : 'Pick a delivery date'}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 rounded-2xl border-emerald-100 shadow-xl" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={form.requested_due_date ? new Date(form.requested_due_date + 'T00:00:00') : undefined}
+                    onSelect={(d) => d && setForm({ ...form, requested_due_date: format(d, 'yyyy-MM-dd') })}
+                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))}
+                    classNames={CAL_CLASSNAMES}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
           {/* Lead this request is raised for (optional) */}
           <div className="space-y-2">
-            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+            <Label className={LABEL_CLS}>
               <Users className="h-3.5 w-3.5" /> Lead (optional)
             </Label>
             {selectedLead ? (
-              <div className="flex items-center justify-between p-3 rounded-lg border border-emerald-200 bg-emerald-50/60" data-testid="mr-selected-lead">
+              <div className="flex items-center justify-between p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60" data-testid="mr-selected-lead">
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900 truncate">
                     {selectedLead.company || selectedLead.contact_person || selectedLead.name}
@@ -256,13 +331,14 @@ export default function NewMarketingRequest() {
             ) : (
               <div className="space-y-2">
                 <Input
+                  className={INPUT_CLS}
                   placeholder="Search leads by company, contact, phone..."
                   value={leadSearch}
                   onChange={(e) => setLeadSearch(e.target.value)}
                   data-testid="mr-lead-search"
                 />
                 {leadSearch && (
-                  <div className="border rounded-lg max-h-[180px] overflow-y-auto">
+                  <div className="border border-emerald-100 rounded-xl max-h-[180px] overflow-y-auto shadow-sm">
                     {leads.length === 0 ? (
                       <div className="p-4 text-sm text-muted-foreground text-center">No leads found</div>
                     ) : (
@@ -286,12 +362,13 @@ export default function NewMarketingRequest() {
           </div>
 
           {isShortTimeline && (
-            <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 space-y-2">
+            <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 space-y-2">
               <div className="text-xs text-amber-800 flex items-center gap-1.5 font-medium">
                 <AlertTriangle className="h-4 w-4" /> Tighter than the minimum lead time ({minLeadDays} days, earliest {earliestDate}). Please explain why.
               </div>
               <Textarea
                 rows={2}
+                className={TEXTAREA_CLS}
                 placeholder="Why does this need a shorter turnaround? (required)"
                 value={form.short_timeline_reason}
                 onChange={(e) => setForm({ ...form, short_timeline_reason: e.target.value })}
@@ -301,9 +378,10 @@ export default function NewMarketingRequest() {
           )}
 
           <div className="space-y-2">
-            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Requirement Details *</Label>
+            <Label className={LABEL_CLS}>Requirement Details *</Label>
             <Textarea
               rows={5}
+              className={TEXTAREA_CLS}
               value={form.requirement_details}
               onChange={(e) => setForm({ ...form, requirement_details: e.target.value })}
               placeholder="Describe what you need, target audience, brand cues, do's/don'ts…"
@@ -313,31 +391,51 @@ export default function NewMarketingRequest() {
 
           {/* Logo */}
           <div className="space-y-2">
-            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+            <Label className={LABEL_CLS}>
               <ImageIcon className="h-3.5 w-3.5" /> Logo Upload
             </Label>
             {logoFile ? (
-              <div className="flex items-center justify-between bg-emerald-50/60 border border-emerald-100 rounded-md px-3 py-2 text-sm">
-                <span className="truncate flex items-center gap-2"><ImageIcon className="h-4 w-4 text-emerald-600" /> {logoFile.filename}</span>
-                <Button variant="ghost" size="sm" onClick={() => setLogoFile(null)}><X className="h-4 w-4" /></Button>
+              <div className="flex items-center gap-3 bg-white border border-emerald-100 rounded-xl p-3 shadow-sm">
+                <div className="w-12 h-12 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 overflow-hidden">
+                  {logoFile._preview ? <img src={logoFile._preview} alt={logoFile.filename} className="w-full h-full object-cover" /> : <ImageIcon className="h-5 w-5" />}
+                </div>
+                <span className="flex-1 truncate text-sm text-slate-700">{logoFile.filename}</span>
+                <Button variant="ghost" size="sm" className="text-slate-400 hover:text-red-500" onClick={() => setLogoFile(null)} data-testid="mr-logo-remove"><Trash2 className="h-4 w-4" /></Button>
               </div>
             ) : (
-              <Input type="file" accept="image/*" ref={logoFileInput} onChange={handleLogoChange} data-testid="mr-logo-input" />
+              <FileDropzone
+                onFiles={handleLogo}
+                accept="image/*"
+                busy={logoBusy}
+                title="Drop your logo here, or click to browse"
+                hint="PNG, JPG or SVG"
+                testId="mr-logo-dropzone"
+              />
             )}
           </div>
 
           {/* References */}
           <div className="space-y-2">
-            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+            <Label className={LABEL_CLS}>
               <FileText className="h-3.5 w-3.5" /> Reference Files
             </Label>
-            <Input type="file" multiple ref={refFileInput} onChange={handleRefFilesChange} data-testid="mr-references-input" />
+            <FileDropzone
+              onFiles={handleRefFiles}
+              multiple
+              busy={refBusy}
+              title="Drop reference files here, or click to browse"
+              hint="Add as many as you like — images, PDFs, decks…"
+              testId="mr-references-dropzone"
+            />
             {referenceFiles.length > 0 && (
-              <div className="space-y-1.5 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                 {referenceFiles.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between bg-slate-50 border rounded-md px-3 py-1.5 text-sm">
-                    <span className="truncate flex items-center gap-2"><FileText className="h-4 w-4 text-slate-500" /> {f.filename}</span>
-                    <Button variant="ghost" size="sm" onClick={() => removeRefFile(f.id)}><X className="h-4 w-4" /></Button>
+                  <div key={f.id} className="flex items-center gap-3 bg-white border border-emerald-100 rounded-xl p-2.5 shadow-sm" data-testid={`mr-ref-chip-${f.id}`}>
+                    <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 overflow-hidden">
+                      {f._preview ? <img src={f._preview} alt={f.filename} className="w-full h-full object-cover" /> : <FileText className="h-4 w-4" />}
+                    </div>
+                    <span className="flex-1 truncate text-sm text-slate-700">{f.filename}</span>
+                    <Button variant="ghost" size="sm" className="text-slate-400 hover:text-red-500" onClick={() => removeRefFile(f.id)}><Trash2 className="h-4 w-4" /></Button>
                   </div>
                 ))}
               </div>
@@ -346,47 +444,31 @@ export default function NewMarketingRequest() {
 
           {/* Social media + file links */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Social Media Links</Label>
-              <div className="flex gap-2">
-                <Input placeholder="https://instagram.com/…"
-                  value={newSocialLink} onChange={(e) => setNewSocialLink(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSocialLink(); } }} />
-                <Button type="button" variant="outline" size="sm" onClick={addSocialLink}><Plus className="h-4 w-4" /></Button>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {socialLinks.map((l, i) => (
-                  <Badge key={i} variant="outline" className="text-xs bg-white">
-                    <LinkIcon className="h-3 w-3 mr-1" /> {l}
-                    <button onClick={() => setSocialLinks(p => p.filter((_, j) => j !== i))} className="ml-1.5 hover:text-red-600"><X className="h-3 w-3" /></button>
-                  </Badge>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">File Links (Drive, etc.)</Label>
-              <div className="flex gap-2">
-                <Input placeholder="https://drive.google.com/…"
-                  value={newFileLink} onChange={(e) => setNewFileLink(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addFileLink(); } }} />
-                <Button type="button" variant="outline" size="sm" onClick={addFileLink}><Plus className="h-4 w-4" /></Button>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {fileLinks.map((l, i) => (
-                  <Badge key={i} variant="outline" className="text-xs bg-white">
-                    <LinkIcon className="h-3 w-3 mr-1" /> {l}
-                    <button onClick={() => setFileLinks(p => p.filter((_, j) => j !== i))} className="ml-1.5 hover:text-red-600"><X className="h-3 w-3" /></button>
-                  </Badge>
-                ))}
-              </div>
-            </div>
+            <LinkListField
+              label="Social Media Links"
+              placeholder="https://instagram.com/…"
+              links={socialLinks}
+              onChange={updateLink(setSocialLinks)}
+              onAdd={addLinkRow(setSocialLinks)}
+              onRemove={removeLinkRow(setSocialLinks)}
+              testPrefix="mr-social"
+            />
+            <LinkListField
+              label="File Links (Drive, etc.)"
+              placeholder="https://drive.google.com/…"
+              links={fileLinks}
+              onChange={updateLink(setFileLinks)}
+              onAdd={addLinkRow(setFileLinks)}
+              onRemove={removeLinkRow(setFileLinks)}
+              testPrefix="mr-filelink"
+            />
           </div>
 
           <div className="space-y-2">
-            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold">Additional Comments</Label>
+            <Label className={LABEL_CLS}>Additional Comments</Label>
             <Textarea
               rows={2}
+              className={TEXTAREA_CLS}
               value={form.additional_comments}
               onChange={(e) => setForm({ ...form, additional_comments: e.target.value })}
               placeholder="Anything else the team should know?"
