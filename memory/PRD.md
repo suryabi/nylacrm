@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests: CSV export of filtered list ✅ DONE
+- **Request**: Export the currently-filtered list to CSV.
+- **Backend** (`routes/marketing_requests.py`): refactored query building into `_build_requests_query()` (shared by list + export); new `GET /marketing-requests/export` honours the same params (queue/search/state_key/request_type_id/assigned_department_id/created_by) and streams a CSV (Response, `text/csv`, attachment filename `marketing-requests-YYYYMMDD.csv`, up to 5000 rows). Columns: Request #, Type, State, Assigned Team, Assigned To, Lead, Requested Due Date, Raised By, Created At, Requirement Details. Route registered before `/{request_id}`.
+- **Frontend** (`MarketingRequests.js`): "Export CSV" button (emerald outline + download icon) in the filter bar; downloads via authed blob using the active filters; disabled when 0 results.
+- **Tested**: curl (full export = 19 data rows + header w/ correct content-type & attachment; Neck Tags filter → 8 rows, all scoped) + screenshot (button visible).
+
+
 ### 2026-06-05 — Marketing Requests: server-side pagination + filters ✅ DONE
 - **Request**: Paginate the list and add filters by Requested By, Assigned Team, and Request Type.
 - **Backend** (`routes/marketing_requests.py` list): added `request_type_id`, `assigned_department_id`, `created_by` query params (AND-combined with existing queue/search/state); pagination already returned `total/page/pages/limit` (limit 20).

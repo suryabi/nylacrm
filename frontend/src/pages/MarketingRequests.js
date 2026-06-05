@@ -12,7 +12,7 @@ import {
 } from '../components/ui/select';
 import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
-  LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch,
+  LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -242,6 +242,28 @@ export default function MarketingRequests() {
   const setFilter = (setter) => (v) => { setter(v === '__all' ? '' : v); setPage(1); };
   const clearFilters = () => { setRequestTypeId(''); setDeptId(''); setRequestedBy(''); setSearch(''); setPage(1); };
   const hasFilters = !!(requestTypeId || deptId || requestedBy || search);
+  const [exporting, setExporting] = useState(false);
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ queue });
+      if (search) params.set('search', search);
+      if (stateKey) params.set('state_key', stateKey);
+      if (requestTypeId) params.set('request_type_id', requestTypeId);
+      if (deptId) params.set('assigned_department_id', deptId);
+      if (requestedBy) params.set('created_by', requestedBy);
+      const res = await axios.get(`${API}/marketing-requests/export?${params}`, { headers: HEAD(), responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `marketing-requests-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Export ready');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Export failed'); }
+    finally { setExporting(false); }
+  };
 
   const items = data.items || [];
 
@@ -362,8 +384,20 @@ export default function MarketingRequests() {
                     <X className="h-4 w-4 mr-1" /> Clear filters
                   </Button>
                 )}
-                <div className="ml-auto text-xs text-slate-500">
-                  {data.total} {data.total === 1 ? 'result' : 'results'}
+                <div className="ml-auto flex items-center gap-3">
+                  <span className="text-xs text-slate-500">
+                    {data.total} {data.total === 1 ? 'result' : 'results'}
+                  </span>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={exportCsv}
+                    disabled={exporting || data.total === 0}
+                    className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                    data-testid="mr-export-btn"
+                  >
+                    {exporting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+                    Export CSV
+                  </Button>
                 </div>
               </div>
 

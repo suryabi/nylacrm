@@ -27,6 +27,8 @@ from datetime import datetime, timezone, date, timedelta
 from typing import List, Optional
 import logging
 import uuid
+import csv
+import io
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, Response
 from pydantic import BaseModel
@@ -345,24 +347,8 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
 # ──────────────────────────────────────────────────────────────
 # List + counts (queues are simple filters; state filter via query)
 # ──────────────────────────────────────────────────────────────
-@router.get("")
-@router.get("/")
-async def list_requests(
-    queue: str = "all",
-    search: Optional[str] = None,
-    state_key: Optional[str] = None,
-    request_type_id: Optional[str] = None,
-    assigned_department_id: Optional[str] = None,
-    created_by: Optional[str] = None,
-    page: int = 1,
-    limit: int = 20,
-    sort: str = "-created_at",
-    current_user: dict = Depends(get_current_user),
-):
-    tenant_id = get_current_tenant_id()
-    page = max(page, 1)
-    limit = max(min(limit, 100), 1)
-
+def _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by):
+    """Shared Mongo query builder for the list + export endpoints."""
     q: dict = {"tenant_id": tenant_id}
     if queue == "my_raised":
         q["created_by"] = current_user.get("id")
@@ -372,7 +358,6 @@ async def list_requests(
         user_role = (current_user.get("role") or "").strip()
         ors: list = [{"assigned_user_id": current_user.get("id")}]
         if user_depts:
-            # match by case-insensitive department name
             ors.append({"assigned_department_name": {"$regex": f"^({'|'.join(user_depts)})$", "$options": "i"}})
         if user_role:
             ors.append({"assigned_role": {"$regex": f"^{user_role}$", "$options": "i"}})
@@ -396,6 +381,28 @@ async def list_requests(
             q = {"$and": [q, {"$or": text_ors}]}
         else:
             q["$or"] = text_ors
+    return q
+
+
+@router.get("")
+@router.get("/")
+async def list_requests(
+    queue: str = "all",
+    search: Optional[str] = None,
+    state_key: Optional[str] = None,
+    request_type_id: Optional[str] = None,
+    assigned_department_id: Optional[str] = None,
+    created_by: Optional[str] = None,
+    page: int = 1,
+    limit: int = 20,
+    sort: str = "-created_at",
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    page = max(page, 1)
+    limit = max(min(limit, 100), 1)
+
+    q = _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by)
 
     total = await db.marketing_requests.count_documents(q)
     sort_field = sort.lstrip("-+")
@@ -405,6 +412,53 @@ async def list_requests(
         "items": rows, "total": total, "page": page, "limit": limit,
         "pages": (total + limit - 1) // limit if total else 0,
     }
+
+
+@router.get("/export")
+async def export_requests(
+    queue: str = "all",
+    search: Optional[str] = None,
+    state_key: Optional[str] = None,
+    request_type_id: Optional[str] = None,
+    assigned_department_id: Optional[str] = None,
+    created_by: Optional[str] = None,
+    sort: str = "-created_at",
+    current_user: dict = Depends(get_current_user),
+):
+    """Export the currently-filtered requests as CSV (all matching rows)."""
+    tenant_id = get_current_tenant_id()
+    q = _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by)
+    sort_field = sort.lstrip("-+")
+    sort_dir = -1 if sort.startswith("-") else 1
+    rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).to_list(5000)
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Request #", "Type", "State", "Assigned Team", "Assigned To",
+        "Lead", "Requested Due Date", "Raised By", "Created At", "Requirement Details",
+    ])
+    for r in rows:
+        assigned_to = r.get("assigned_user_name") or (f"Role: {r['assigned_role']}" if r.get("assigned_role") else "")
+        writer.writerow([
+            r.get("request_number", ""),
+            r.get("request_type_name", ""),
+            r.get("current_state_label") or r.get("current_state_key", ""),
+            r.get("assigned_department_name", ""),
+            assigned_to,
+            r.get("lead_company") or r.get("lead_name") or "",
+            r.get("requested_due_date", ""),
+            r.get("created_by_name", ""),
+            (r.get("created_at", "") or "")[:10],
+            (r.get("requirement_details") or "").replace("\n", " ").strip(),
+        ])
+
+    filename = f"marketing-requests-{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/counts")
