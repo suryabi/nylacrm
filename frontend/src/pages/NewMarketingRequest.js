@@ -57,7 +57,11 @@ export default function NewMarketingRequest() {
           axios.get(`${API}/master-departments?kind=fulfilment`, { headers: HEAD() }),
         ]);
         setTypes(t.data?.types || []);
-        setDepartments(d.data?.departments || []);
+        const depts = d.data?.departments || [];
+        setDepartments(depts);
+        // Default the assigned department to "Design" when available.
+        const design = depts.find((x) => (x.name || '').trim().toLowerCase() === 'design');
+        if (design) setForm((prev) => (prev.assigned_department_id ? prev : { ...prev, assigned_department_id: design.id }));
       } catch {
         toast.error('Failed to load masters');
       }
