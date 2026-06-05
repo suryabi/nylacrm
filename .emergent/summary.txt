@@ -1,116 +1,109 @@
 <analysis>**original_problem_statement**: 
-The application requires tracking of Production QC, dynamic Distributor & Warehouse configuration, automated settlement generation, detailed reporting modules, and a driver app. Recent product requirements include deep Google Maps integration, Slack integration for Marketing Requests, Google Drive/MinIO integration for Lead/Account file uploads, Gemini SDK integration, a custom State Machine builder for managing workflow lifecycles, inter-warehouse distributor stock transfers, E-way bill generation, Zoho Books integration, and Batch Tracking for inventory traceability.
-
-**PRODUCT REQUIREMENTS:**
-- Driver mobile web app experience (live tracking, mark stops complete).
-- Streamline Lead Discovery using Google Maps address data.
-- Slack two-way integration for Marketing Requests.
-- State Machine module (Admin) to construct lifecycles.
-- Direct Google GenAI SDK integration for LLM requests (OCR, KB Q&A).
-- Distributor Inter-Warehouse Stock Transfers (pure internal logistics, no margins, PAN/GSTIN-aware Zoho Sync, E-way Bill generation).
-- **NEW**: Batch tracking and traceability for Stock Movements (Transfers, Shipments, Deliveries) for locations with  enabled.
+The application requires tracking of Production QC, dynamic Distributor & Warehouse configuration, automated settlement generation, detailed reporting modules, and a driver app. Recent product requirements include deep Google Maps integration, Slack integration for Marketing Requests, Google Drive/MinIO integration for Lead/Account file uploads, Gemini SDK integration, a custom State Machine builder, inter-warehouse distributor stock transfers, Zoho Books integration, Batch Tracking for inventory traceability, comprehensive Target Planning & Target allocations, and Promotional/Non-sale stock-out dispatches. 
+*(Recently heavily focused on UI/UX overhaul of the Marketing Requests module, transforming it into Design Requests with a rule engine, threaded version comments, contemporary styling, and RBAC-controlled deletions).*
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB) featuring Production QC tracking, Task Management, State Machine Marketing Requests, Lead management, and a robust Distributor module. The Distributor module now supports unified Factory/Distributor inventory views, strict same-PAN Stock Transfers with exact GSTIN matching for Zoho Delivery Challans vs Invoices (using ), automated E-way Bill JSON generation, direct Zoho PDF downloads, and deduplication for lead/account assignments.
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB). The Marketing Requests module was entirely overhauled in the last session and renamed to Design Requests. It now features a dynamic State Machine transition rule engine (supports data-capture via 'required fields' and conditions via 'guards'), contemporary Soft Utility UI with drag-and-drop file uploads, auto-incrementing work versions with threaded comments and exclusive approvals, CSV exports, status history timeline tracking, and consistent list views matching the Leads module. 
 
-**Last working item**:
-    - Last item agent was working: **Phase 1 of Batch Tracking for Stock Transfers**. The agent added the  boolean flag to distributor locations, built the  endpoint, updated  to process / and pass it to Zoho, and added the batch picker UI inside the  modal.
+**Last working item**: 
+    - Last item agent was working: Implementing the Delete action for Design Requests (underlying API/DB still uses ). The user requested that deletions be guarded by RBAC permissions, with CEO and system admin always having access. The agent just gathered context on  and  permission logic but did not write any code.
     - Status: IN PROGRESS
-    - Agent Testing Done: N (Backend endpoints were verified via bash, but end-to-end UI verification with the new batch picker is pending).
-    - Which testing method agent to use? both
+    - Agent Testing Done: N
+    - Which testing method agent to use? backend testing agent/ manual testing by curl + frontend testing agent / screenshot tool.
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
-  Issue 1: Verify and complete Phase 1 Batch Tracking for Stock Transfers (P0)
-     - Attempted fixes: Backend endpoints and schema are updated. Frontend React components ( and ) were updated to show the  toggle and batch picker.
-     - Next debug checklist: 
-       - Launch frontend, go to Stock Transfers.
-       - Ensure a source warehouse with  shows the batch dropdown for items.
-       - Ensure submitting a transfer correctly deducts stock from the *specific batch* in  and creates the Zoho invoice with the  in the line description.
-     - Why fix this issue and what will be achieved with the fix? Ensures full traceability of production batches through the logistics chain.
-     - Status: TESTING PENDING
-     - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? both
+  Issue 1: Gemini API Key returns 403 PERMISSION DENIED (P0)
+     - Attempted fixes: The user provided a key previously, but the associated Google Cloud project denied access.
+     - Next debug checklist: Await user providing a valid key from a brand new Google Cloud project.
+     - Why fix this issue and what will be achieved with the fix? Unblocks broken OCR and KB Q&A functionalities.
+     - Status: BLOCKED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? backend
      - Blocked on other issue: None
 
 **In progress Task List**: 
-  Task 1: Phase 2 of Batch Tracking (Stock Outs & Stock Ins) (P0)
-     - Where to resume: Expand the batch tracking logic just implemented for Stock Transfers into the  (Stock In) and  (Stock Out) flows.
-     - What will be achieved with this? End-to-end traceability requested by the user. If a warehouse tracks batches, shipments to it and deliveries from it must record the .
-     - Status: NOT STARTED
+  Task 1: Add Delete Design Request feature with RBAC (P0)
+     - Where to resume: 
+        1. **Backend**: Add a  endpoint in . Check permissions utilizing  from  (which covers CEO, system admin, etc.) OR specific module permission for .
+        2. **Frontend**: Add a Delete Request button in  (likely inside a header dropdown or near the top), guarded by checking  or . Use a confirmation modal, and on success navigate back to .
+     - What will be achieved with this? Authorized users can permanently remove incorrect or stale requests.
+     - Status: IN PROGRESS
      - Should Test frontend/backend/both after fix? both
-     - Blocked on something: Phase 1 (Stock Transfers batch tracking) must be fully verified first.
+     - Blocked on something: None.
+
+  Task 2: Gamma API Integration (P1)
+     - Where to resume: The user explicitly parked this. Implement only when requested.
+     - What will be achieved with this? Generate editable decks/PDFs via text or prompt mode from the CRM.
+     - Status: BLOCKED (Parked by User)
+     - Should Test frontend/backend/both after fix? both
+     - Blocked on something: User permission to resume.
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - P1: MinIO integration for object storage. Build  settings page (endpoint/key/secret/bucket) and replace Emergent storage. 
-    - P1: Instruct user to supply a new Gemini API Key. (The OCR/AI code uses  but the old key was revoked. Inform user to add it to ).
-    - P1: Auto-suggest Vehicle on distributor deliveries based on the customer's city.
+    - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
+    - P1: MinIO integration for object storage (Build  settings page).
+    - P1: Auto-suggest Vehicle on distributor deliveries based on customer city.
     - P1: KB Phase 2: Per-document permissions, embedding-based retrieval, Google Drive auto-sync.
-    - P1: Standardize  as the single source of truth for cities. Migrate all free-text  fields.
+    - P1: Standardize  as the single source of truth for cities.
     
     Future Tasks:
-    - P2: E-way Bill *Direct API Integration* (Currently generates a JSON payload. Upgrading to push directly to GST portal via API if user provides GSP credentials).
-    - P2: Vehicle expiry date tracking (insurance/fitness/PUC) and dashboard widget.
-    - P2: Task email notifications (Notify users via Resend).
+    - P2: Vehicle expiry date tracking (insurance/fitness/PUC) dashboard widget.
+    - P2: Task email notifications (Apply Resend notification system to general tasks).
     - P2: First-login Force Password Change Modal.
-    - P2: Email Invoice Sharing.
-    - P2: Settlement Period Auto-scheduling.
+    - P2: Apply new  component and contemporary styling to other heavy forms (Leads, Production Payload, Customer Returns).
+    - P2: Send scheduled weekly email digest of Design Requests list (CSV) via Resend to managers.
+    - P2: Add SLA/stuck alerts for requests sitting in a status beyond a configurable threshold.
     - P2: Continue refactoring  into modular routers.
 
 **Completed work in this session**
-- Stock Transfer pricing overhaul: Uses  (no margins) for pure internal logistics. Added  and  to SKU Management form (DONE).
-- Same-PAN strict validation: Stock Transfers are blocked for 3rd-party distributors (different PAN). Source/Destination UI dropdowns strictly filtered (DONE).
-- Zoho Delivery Challan fix: Requires exact GSTIN match (not just PAN). Fixed  enum bug causing API failures (DONE).
-- E-way Bill JSON Generator: Downloads EWB JSON payloads for transfers > ₹50,000 (DONE).
-- Invoice/Challan PDF Download: Direct stream from Zoho via the app UI (DONE).
-- Unified Factory & Distributor Stock: Factory warehouses now visible in Stock Transfers and the new Safety Overview dashboard (DONE).
-- Deduplication Guards: Prevented duplicate Account creation from Leads (by GSTIN/Name+City) and duplicate Account-Distributor assignments (DONE).
+- Marketing Request Files UI: Implemented logo/reference thumbnails, click-to-preview lightbox, download, and delete actions (). (DONE)
+- State Machine rule engine: Built dynamic  (preconditions) and  (data capture during transitions) in  logic, fully configurable via . (DONE)
+- Work Versions Enhancements: Auto-incrementing backend numbering (), threaded per-version comments, and exclusive version approve/revert flow. (DONE)
+- Contemporary UI Redesign: Created . Restyled form and detail page to minimalistic Soft Utility with emerald accents. Added Lead visibility banner. (DONE)
+- List Enhancements: Server-side pagination, Filters (Team, Type, Requester), and CSV Export. Matched list view styles/typography to . (DONE)
+- Age Pill & Status History: Days old tracking pill, and chronological Journey timeline panel recording duration in each state. (DONE)
+- Global Rename: Renamed UI labels from Marketing Requests to Design Requests across navigation, titles, and breadcrumbs. (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-   Issue 1: Gemini API calls returning 502 / 403 PERMISSION DENIED
-   - Debug checklist: Instruct the user to generate a new Gemini API key and save it securely in .
-   - Why to solve this issue and what will be achieved with this? OCR and Q&A features remain broken until a valid key is provided.
-   - Should Test frontend/backend/both after fix: backend
-   - Is recurring issue? N
+   None.
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: The user is actively deploying and testing on their Production URL (), but the agent's fixes are applied in the Preview environment. 
-  - Recurrence count: 20+
+  - Issue recurrence in previous fork: Production vs Preview testing confusion. The user deploys to production (https://crm.nylaairwater.earth) and tests there. 
+  - Recurrence count: 28+
   - Status: IN PROGRESS
-  - Note: You MUST explicitly remind the user to click Deploy to Github or Deploy to push changes to production after fixing bugs or adding features. **Do not give the user preview environment URLs.**
+  - Note: ALWAYS clarify if they are testing in preview or production when they report bugs. Never provide deployment URLs in your response.
 
 **Code Architecture**
-- : Monolithic backend handling Leads, Accounts, Master SKUs.
-- : Domain-specific modular routers (, , ).
-- : Dedicated file handling external Zoho Books pushes/PDF streaming.
-- : React views (, , ).
+- : Legacy monolith, actively being refactored.
+- : Domain routers (, , , ).
+- : Shared utilities ( handles SM logic & admin checking, ).
+- : React frontend with shadcn components.  handles client-side RBAC and module permissions.
 
 **Key Technical Concepts**
-- **Internal Logistics vs Sales**: Stock Transfers are internal logistics (no margin, uses , exact GSTIN=Delivery Challan, same-PAN diff-GSTIN=Tax Invoice). Stock Ins are actual sales to partners (uses margin-deducted prices).
-- **Batch Tracking**: Production batches must carry their identity (, ) through  and onto shipment/transfer documents if the warehouse has .
-- **E-way Bill Math**: Intra-state uses CGST/SGST; Inter-state uses IGST. Requires accurate HSN codes (now stored on the SKU master).
+- **Gateway Status Masking**: Cloudflare/Ingress intercepts 5xx codes. *Never* raise these exceptions for application-level integration/validation logic; use HTTP  with .
+- **State Machine Rule Engine**: Transitions now support JSON-driven  (e.g., must have > 2 files) and  (prompting dynamic forms). Evaluated in .
+- **RBAC Model**: Module-level permissions (). Backend checks role against  or specific permissions.
 
 **key DB schema**
-  - : 
-  - : 
-  - : 
+  - : {versions: [{id, version_no, files, comments: [{text, user}], approved_version}], status_history: [{status, timestamp, user}]}
+  - : {transitions: [{action_key, guards: {}, required_fields: []}]}
+  - : {name, permissions: {module_name: {view, create, edit, delete}}}
 
 **changes in tech stack**
-  - None
+  - Implemented  utilizing standard React drag-and-drop mechanisms for file uploads, replacing raw HTML file inputs.
 
 **All files of reference** 
-  -  
-  - 
-  - 
-  - 
-  - 
-  - 
+  -  (Must add DELETE route)
+  -  (Must add Delete button)
+  -  (Check  helper)
+  -  (Check how frontend determines permissions)
+  -  (Soft utility design rules created during this session)
 
 **Areas that need refactoring**: 
-  -  is over 10,600 lines and contains massive chunks of logic that should be broken down into individual routers (P2 task).
+  -  remains a monolith and requires continued migration.
 
 **key api endpoints**
   - 
@@ -118,48 +111,46 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) featuring Production Q
   - 
   - 
   - 
-  - 
 
 **Critical Info for New Agent** 
-  - **Environment Discrepancy**: You are in PREVIEW; user tests heavily in PRODUCTION. Do NOT share the preview URL with the user. Remind them to deploy if they wish to see fixes live.
-  - **Stock Flow Differences**: Do NOT conflate Stock Transfers with Stock In/Out. The backend logic enforces this (e.g., blocking 3rd-party PANs from Stock Transfers). Follow the business logic strictly.
+  - **Label vs Under-the-hood Naming**: The user requested a rename from Marketing Requests to Design Requests. This was done **ONLY on user-facing UI text** (sidebar, page titles, breadcrumbs). The routes (), API endpoints, database collections, and test-ids must remain exactly as  to avoid catastrophic breakage. 
+  - To implement the new Delete Request feature, strictly enforce RBAC. Users with roles in  (like , ) must always have access.
 
 **documents and test reports created in this job** 
-  - 
+  -  (Updated)
   - 
   - 
   - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - : when converting leads to accounts... do not create duplicate account. Likewise, when assigning accounts... do not add multiple times.
- - : (Implemented deduplication logic for both flows and returns 409 Conflict with friendly messages)
- - : during the stock out or stock transfer and stock in , the user should be able to select the batch also... This needs to be reflected in the invoces... help in reconciling
- - : (Researched and asked for clarification on whether all warehouses need this)
- - : for now, include this feature only for the stock outs and stock ins and stock transfers from the warehouses where flag is enabled.
- - : (Asked 3 follow-up questions via ask_human regarding field placement, UI labels, and mixed-flag transfers)
- - : (Answered yes to placing  flag on locations, using  in pickers, and propagating batch IDs even if destination doesn't track batches)
- - : **(LAST ACTION)** (Implemented Phase 1: Stock Transfer Batch Tracking backend and frontend, but context limit hit before final E2E verification).
+ - : Yes, please add export option. (DONE)
+ - : I want to also add a pill that shows the age of the request in both list and details view. Also, I would like to track the audit history... (DONE)
+ - : make the marketing requests view screen consistent as the leads in terms of font sizes and colors, filters, etc. (DONE)
+ - : marketing list page shows the lead name in the attached format but its not looking good. keep it simple or subtle elegant way (DONE)
+ - : Rename Marketing Requests to Design Requests (DONE)
+ - : There should be an option to delete the marketing request. who has permissions to perform this action should be contorlled by RBAC. CEO and system admin should have always the options (PENDING)
 
 **Project Health Check:**
-- Broken: LLM endpoints (OCR, KB) still 502/403 (needs valid Gemini key).
-- Mocked: None.
+Broken: None.
+Mocked: None.
 
 **3rd Party Integrations** 
- - Google GenAI SDK (Requires User's Gemini API Key in  - currently revoked)
  - Zoho Books (Requires User API Key)
+ - Google Maps API
+ - Slack API
  - Emergent Object Storage
- - Google Maps API (Requires )
- - Slack API (Requires  and User's Slack Bot Token/Secret)
+ - Resend (Requires User API Key)
+ - Gemini / Google GenAI SDK (Blocked - Needs new GCP Key)
+ - Gamma API (Blocked/Parked - Key provided, awaiting user go-ahead)
 
 **Testing status**
-  - Testing agent used after significant changes: YES (iterations 174, 175, 176)
+  - Testing agent used after significant changes: YES
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: , , .
-  - Known regressions: LLM functionalities broken until new Gemini key is provided securely.
+  - Test files created: None
+  - Known regressions: None
 
 **Credentials to test flow:**
-- Read  if auth is needed.
+Refer to 
 
 **What agent forgot to execute**
-- The agent built the UI and API for the Phase 1 Batch Tracking (Stock Transfers) but did not run a full UI smoke test/subagent test to verify the batch dropdown correctly renders and saves the  payload on .
-- Phase 2 (Stock Ins and Stock Outs batch tracking) has not been started.</analysis>
+- The agent gathered the necessary context for implementing the RBAC Delete button for Design Requests (Marketing Requests) but the session ended before writing any code. This must be the immediate starting point.</analysis>

@@ -18,7 +18,7 @@ import pytest
 import requests
 
 
-BASE_URL = os.environ.get("PUBLIC_BACKEND_URL", "https://distribution-core-2.preview.emergentagent.com")
+BASE_URL = os.environ.get("PUBLIC_BACKEND_URL", "https://design-requests-ui.preview.emergentagent.com")
 ADMIN_EMAIL = "surya.yadavalli@nylaairwater.earth"
 ADMIN_PASSWORD = "test123"
 
