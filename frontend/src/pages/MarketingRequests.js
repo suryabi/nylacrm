@@ -16,6 +16,7 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch, Download, Hourglass,
+  ChevronsUpDown, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -77,7 +78,17 @@ function StateChip({ state, count, isActive, onClick }) {
   );
 }
 
-function RequestTable({ rows, navigate }) {
+function RequestTable({ rows, navigate, sort, onSort }) {
+  const COLUMNS = [
+    { label: 'Request', field: 'request_number' },
+    { label: 'Lead', field: 'lead_company' },
+    { label: 'State', field: 'current_state_label' },
+    { label: 'Assigned to', field: 'assigned_user_name' },
+    { label: 'Due Date', field: 'requested_due_date' },
+    { label: 'Raised By', field: 'created_by_name' },
+  ];
+  const activeField = sort?.replace(/^-/, '');
+  const activeDesc = sort?.startsWith('-');
   return (
     <Card className="border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
       <CardContent className="p-0">
@@ -85,9 +96,23 @@ function RequestTable({ rows, navigate }) {
           <Table>
             <TableHeader>
               <TableRow className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50/50">
-                {['Request', 'Lead', 'State', 'Assigned to', 'Due Date', 'Raised By'].map(h => (
-                  <TableHead key={h} className="font-semibold text-xs sm:text-sm text-muted-foreground">{h}</TableHead>
-                ))}
+                {COLUMNS.map(({ label, field }) => {
+                  const isActive = activeField === field;
+                  return (
+                    <TableHead key={field} className="font-semibold text-xs sm:text-sm text-muted-foreground">
+                      <button
+                        type="button"
+                        onClick={() => onSort(field)}
+                        className={`inline-flex items-center gap-1 select-none hover:text-slate-900 dark:hover:text-slate-100 transition-colors ${isActive ? 'text-slate-900 dark:text-slate-100' : ''}`}
+                        data-testid={`mr-sort-${field}`}
+                      >
+                        {label}
+                        {!isActive && <ChevronsUpDown className="h-3 w-3 opacity-40" />}
+                        {isActive && (activeDesc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />)}
+                      </button>
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -183,6 +208,7 @@ export default function MarketingRequests() {
   const [requestTypeId, setRequestTypeId] = useState(sp.get('type') || '');
   const [deptId, setDeptId] = useState(sp.get('dept') || '');
   const [requestedBy, setRequestedBy] = useState(sp.get('by') || '');
+  const [sort, setSort] = useState(sp.get('sort') || '-created_at');
   const [page, setPage] = useState(parseInt(sp.get('p') || '1'));
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
@@ -201,12 +227,13 @@ export default function MarketingRequests() {
       if (requestTypeId) params.set('request_type_id', requestTypeId);
       if (deptId) params.set('assigned_department_id', deptId);
       if (requestedBy) params.set('created_by', requestedBy);
+      if (sort) params.set('sort', sort);
       const { data } = await axios.get(`${API}/marketing-requests?${params}`, { headers: HEAD() });
       setData(data || { items: [], total: 0, pages: 0 });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load requests');
     } finally { setLoading(false); }
-  }, [queue, page, search, stateKey, requestTypeId, deptId, requestedBy]);
+  }, [queue, page, search, stateKey, requestTypeId, deptId, requestedBy, sort]);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -246,15 +273,21 @@ export default function MarketingRequests() {
     if (requestTypeId) next.set('type', requestTypeId);
     if (deptId) next.set('dept', deptId);
     if (requestedBy) next.set('by', requestedBy);
+    if (sort && sort !== '-created_at') next.set('sort', sort);
     if (page > 1) next.set('p', String(page));
     setSp(next, { replace: true });
-  }, [queue, stateKey, search, requestTypeId, deptId, requestedBy, page]); // eslint-disable-line
+  }, [queue, stateKey, search, requestTypeId, deptId, requestedBy, page, sort]); // eslint-disable-line
 
   const switchQueue = (next) => { setQueue(next); setPage(1); };
   const switchState = (key) => { setStateKey(prev => prev === key ? '' : key); setPage(1); };
   const onSearch = (v) => { setSearch(v); setPage(1); };
   const setFilter = (setter) => (v) => { setter(v === '__all' ? '' : v); setPage(1); };
   const clearFilters = () => { setRequestTypeId(''); setDeptId(''); setRequestedBy(''); setSearch(''); setPage(1); };
+  // Toggle sort: same column flips asc/desc; new column starts ascending.
+  const onSort = (field) => {
+    setSort(prev => (prev === field ? `-${field}` : field));
+    setPage(1);
+  };
   const [exporting, setExporting] = useState(false);
 
   const exportCsv = async () => {
@@ -266,6 +299,7 @@ export default function MarketingRequests() {
       if (requestTypeId) params.set('request_type_id', requestTypeId);
       if (deptId) params.set('assigned_department_id', deptId);
       if (requestedBy) params.set('created_by', requestedBy);
+      if (sort) params.set('sort', sort);
       const res = await axios.get(`${API}/marketing-requests/export?${params}`, { headers: HEAD(), responseType: 'blob' });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
@@ -408,7 +442,7 @@ export default function MarketingRequests() {
                 <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
               ) : (
                 <>
-                  <RequestTable rows={items} navigate={navigate} />
+                  <RequestTable rows={items} navigate={navigate} sort={sort} onSort={onSort} />
                   {data.pages > 1 && (
                     <div className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground px-1">
                       <span>Page {data.page || page} of {data.pages} &middot; {data.total} total</span>
