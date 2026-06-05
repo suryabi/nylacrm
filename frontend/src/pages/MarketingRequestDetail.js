@@ -19,6 +19,7 @@ import {
   Loader2, ExternalLink, ChevronRight, Truck, AlertTriangle, Clock,
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
+  Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -44,26 +45,51 @@ const stateBadgeStyle = (hex) => {
   return { background: `${hex}1f`, color: hex, borderColor: `${hex}55` };
 };
 
-const FileChip = ({ f }) => (
-  <a
-    href={`${API}/marketing-requests/files/${f.id}`}
-    target="_blank" rel="noopener noreferrer"
-    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-emerald-100 bg-white text-slate-700 hover:bg-emerald-50/60 text-xs transition-colors"
-    data-testid={`file-chip-${f.id}`}
-  >
-    <FileText className="h-3.5 w-3.5 text-emerald-600" /> {f.filename}
-  </a>
-);
+// Classify a file by extension / content-type to choose an icon + preview mode.
+const fileKind = (f) => {
+  const name = (f?.filename || '').toLowerCase();
+  const ct = (f?.content_type || '').toLowerCase();
+  if (ct.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp)$/.test(name)) return 'image';
+  if (ct === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+  if (/\.(pptx?|key)$/.test(name) || ct.includes('presentation')) return 'ppt';
+  if (/\.(xlsx?|csv)$/.test(name) || ct.includes('spreadsheet') || ct === 'text/csv') return 'sheet';
+  if (/\.(docx?|rtf)$/.test(name) || ct.includes('word')) return 'doc';
+  if (/\.(mp4|mov|avi|webm|mkv)$/.test(name) || ct.startsWith('video/')) return 'video';
+  if (/\.(mp3|wav|ogg|aac|flac)$/.test(name) || ct.startsWith('audio/')) return 'audio';
+  if (/\.(zip|rar|7z|tar|gz)$/.test(name)) return 'archive';
+  return 'file';
+};
+const KIND_META = {
+  image: { Icon: FileImage, cls: 'text-emerald-500' },
+  pdf: { Icon: FileText, cls: 'text-red-500' },
+  ppt: { Icon: Presentation, cls: 'text-orange-500' },
+  sheet: { Icon: FileSpreadsheet, cls: 'text-green-600' },
+  doc: { Icon: FileText, cls: 'text-blue-500' },
+  video: { Icon: Film, cls: 'text-purple-500' },
+  audio: { Icon: Music, cls: 'text-pink-500' },
+  archive: { Icon: FileArchive, cls: 'text-amber-600' },
+  file: { Icon: File, cls: 'text-slate-400' },
+};
 
-const isImageFile = (f) =>
-  (f?.content_type || '').startsWith('image/') ||
-  /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f?.filename || '');
+const downloadFileBlob = async (f) => {
+  const res = await axios.get(`${API}/marketing-requests/files/${f.id}`, { headers: HEAD(), responseType: 'blob' });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = f.filename || 'download';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+};
 
-// Rich asset card: image thumbnail (auth-fetched), download + optional delete.
-const FileAsset = ({ f, canDelete, onDelete }) => {
+// Rich asset card: type-aware thumbnail/icon, click-to-preview, download + optional delete.
+const FileAsset = ({ f, canDelete, onDelete, onPreview }) => {
   const [thumb, setThumb] = useState(null);
   const [busy, setBusy] = useState(false);
-  const isImg = isImageFile(f);
+  const kind = fileKind(f);
+  const isImg = kind === 'image';
+  const { Icon, cls } = KIND_META[kind] || KIND_META.file;
 
   useEffect(() => {
     if (!isImg) return undefined;
@@ -80,21 +106,10 @@ const FileAsset = ({ f, canDelete, onDelete }) => {
     return () => { active = false; if (objUrl) URL.revokeObjectURL(objUrl); };
   }, [f.id, isImg]);
 
-  const handleDownload = async () => {
+  const handleDownload = async (e) => {
+    e?.stopPropagation();
     setBusy(true);
-    try {
-      const res = await axios.get(`${API}/marketing-requests/files/${f.id}`, { headers: HEAD(), responseType: 'blob' });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = f.filename || 'download';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Download failed');
-    } finally { setBusy(false); }
+    try { await downloadFileBlob(f); } catch { toast.error('Download failed'); } finally { setBusy(false); }
   };
 
   return (
@@ -102,13 +117,22 @@ const FileAsset = ({ f, canDelete, onDelete }) => {
       className="group relative w-32 rounded-lg border border-emerald-100 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow"
       data-testid={`file-asset-${f.id}`}
     >
-      <div className="h-24 flex items-center justify-center bg-slate-50 border-b border-emerald-50">
+      <button
+        type="button"
+        onClick={() => onPreview && onPreview(f)}
+        className="relative block w-full h-24 flex items-center justify-center bg-slate-50 border-b border-emerald-50 cursor-pointer"
+        title="Click to preview"
+        data-testid={`file-preview-${f.id}`}
+      >
         {isImg && thumb ? (
           <img src={thumb} alt={f.filename} className="h-full w-full object-contain" data-testid={`file-thumb-${f.id}`} />
         ) : (
-          <FileText className="h-8 w-8 text-emerald-500" />
+          <Icon className={`h-8 w-8 ${cls}`} />
         )}
-      </div>
+        <span className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 opacity-0 group-hover:opacity-100 transition-all">
+          <Eye className="h-5 w-5 text-white" />
+        </span>
+      </button>
       <div className="px-2 py-1.5">
         <p className="truncate text-[11px] text-slate-700" title={f.filename}>{f.filename}</p>
         <div className="flex items-center gap-1 mt-1.5">
@@ -125,7 +149,7 @@ const FileAsset = ({ f, canDelete, onDelete }) => {
             <Button
               size="sm" variant="outline"
               className="h-6 px-2 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
-              onClick={() => onDelete(f)}
+              onClick={(e) => { e.stopPropagation(); onDelete(f); }}
               data-testid={`file-delete-${f.id}`}
             >
               <Trash2 className="h-3 w-3" />
@@ -136,6 +160,60 @@ const FileAsset = ({ f, canDelete, onDelete }) => {
     </div>
   );
 };
+
+// Lightbox preview — inline for images & PDFs, graceful fallback for others.
+const FilePreviewDialog = ({ file, onClose }) => {
+  const [url, setUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const kind = file ? fileKind(file) : 'file';
+  const inlineable = kind === 'image' || kind === 'pdf';
+  const { Icon, cls } = KIND_META[kind] || KIND_META.file;
+
+  useEffect(() => {
+    if (!file || !inlineable) { setUrl(null); setLoading(false); return undefined; }
+    setLoading(true);
+    let objUrl;
+    let active = true;
+    axios
+      .get(`${API}/marketing-requests/files/${file.id}`, { headers: HEAD(), responseType: 'blob' })
+      .then((res) => { if (!active) return; objUrl = URL.createObjectURL(res.data); setUrl(objUrl); })
+      .catch(() => toast.error('Preview failed'))
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; if (objUrl) URL.revokeObjectURL(objUrl); };
+  }, [file?.id, inlineable]);
+
+  return (
+    <Dialog open={!!file} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl" data-testid="file-preview-dialog">
+        <DialogHeader>
+          <DialogTitle className="truncate pr-8 text-base">{file?.filename}</DialogTitle>
+        </DialogHeader>
+        <div className="min-h-[300px] max-h-[70vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-md">
+          {loading ? (
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+          ) : kind === 'image' && url ? (
+            <img src={url} alt={file?.filename} className="max-h-[68vh] w-auto object-contain" data-testid="preview-image" />
+          ) : kind === 'pdf' && url ? (
+            <iframe title="file-preview" src={url} className="w-full h-[68vh] border-0" data-testid="preview-pdf" />
+          ) : (
+            <div className="text-center p-10">
+              <Icon className={`h-14 w-14 mx-auto ${cls}`} />
+              <p className="mt-3 text-sm text-slate-600">Inline preview isn't available for this file type.</p>
+              <p className="text-xs text-slate-400">Download it to view the contents.</p>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => downloadFileBlob(file).catch(() => toast.error('Download failed'))} data-testid="preview-download-btn">
+            <Download className="h-4 w-4 mr-2" /> Download
+          </Button>
+          <Button onClick={onClose} className="bg-emerald-600 hover:bg-emerald-700" data-testid="preview-close-btn">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 
 export default function MarketingRequestDetail() {
   const { id } = useParams();
@@ -173,6 +251,7 @@ export default function MarketingRequestDetail() {
   // Delete-attachment confirm state
   const [fileToDelete, setFileToDelete] = useState(null);
   const [deletingFile, setDeletingFile] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
 
   // Required-field capture dialog (transitions that collect new data)
   const [fieldTxn, setFieldTxn] = useState(null);
@@ -481,9 +560,9 @@ export default function MarketingRequestDetail() {
                   <ImageIcon className="h-3 w-3" /> Brand Assets & References
                 </span>
                 <div className="flex flex-wrap gap-2.5 mt-2">
-                  {req.logo && <FileAsset f={req.logo} canDelete={!req.production} onDelete={setFileToDelete} />}
+                  {req.logo && <FileAsset f={req.logo} canDelete={!req.production} onDelete={setFileToDelete} onPreview={setPreviewFile} />}
                   {(req.references || []).map(f => (
-                    <FileAsset key={f.id} f={f} canDelete={!req.production} onDelete={setFileToDelete} />
+                    <FileAsset key={f.id} f={f} canDelete={!req.production} onDelete={setFileToDelete} onPreview={setPreviewFile} />
                   ))}
                 </div>
               </div>
@@ -586,8 +665,8 @@ export default function MarketingRequestDetail() {
                     </span>
                   </div>
                   {v.comments && <p className="text-xs text-slate-700 italic mb-2">{v.comments}</p>}
-                  <div className="flex flex-wrap gap-1.5">
-                    {(v.files || []).map(f => <FileChip key={f.id} f={f} />)}
+                  <div className="flex flex-wrap gap-2.5 items-start">
+                    {(v.files || []).map(f => <FileAsset key={f.id} f={f} onPreview={setPreviewFile} />)}
                     {(v.links || []).map((l, i) => (
                       <a key={i} href={l} target="_blank" rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-emerald-100 bg-white text-xs hover:bg-emerald-50/60">
@@ -846,6 +925,9 @@ export default function MarketingRequestDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* File preview lightbox */}
+      <FilePreviewDialog file={previewFile} onClose={() => setPreviewFile(null)} />
     </div>
   );
 }

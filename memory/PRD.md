@@ -15,6 +15,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests: Work Version file previews + type-aware thumbnails ✅ DONE
+- **Request**: In the Work Versions section, add a preview option and show thumbnails per file type (image → image thumbnail, others → type icon).
+- **Frontend** (`MarketingRequestDetail.js`): replaced the plain `FileChip` in Work Versions with the rich `FileAsset` card (now used for Brand Assets AND versions). `FileAsset` classifies files via `fileKind()` (image/pdf/ppt/sheet/doc/video/audio/archive) and renders an auth-fetched image thumbnail or a colored type icon. Added a click-to-preview `FilePreviewDialog` lightbox — inline `<img>` for images, `<iframe>` for PDFs, and a graceful "preview not available + Download" fallback for other types. Shared `downloadFileBlob()` helper. Default assigned department on the new-request form set to "Design" (`NewMarketingRequest.js`).
+- **Tested**: screenshots — version cards show image thumbnails + ppt icon; image opens inline in lightbox; pptx shows fallback + download.
+
+
 ### 2026-06-05 — State Machine transition RULE ENGINE (guards + required fields) ✅ DONE
 - **Request**: Business rules for transitions, handled dynamically against fields on the form — e.g. "≥2 files before submit", "enter number of tags for Neck Tags production". Must be generic (any rule, any field, any workflow's SM).
 - **Design**: Two JSON-driven rule types per transition — `guards` (preconditions on EXISTING data; block if unmet) and `required_fields` (NEW data captured at transition time). Both support `applies_when` (conditional by request type). A per-workflow **field registry** makes the builder dynamic without code.
