@@ -885,6 +885,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Verified via curl: admin delete 200 → 404; distributor 403. UI screenshot confirms button + dialog.
 
 
+### 2026-06-05 — Fix: Marketing request types not visible (resilient masters) ✅ DONE (needs prod redeploy)
+- Root cause: `marketing-request-types` (and `master-departments`) list query used exact `is_active: True`, dropping legacy records missing the flag; auto-seed only ran when collection was fully empty so it never restored them.
+- Fix: list query now `is_active: {"$ne": False}` (shows all but explicitly-deactivated); `_seed_default_types` is self-healing — re-adds missing default types by name on every GET. Verified preview returns 7 types.
+- NOTE: code fix in preview only — user must redeploy to apply to production, then open New Request form once to trigger reseed.
+
+
 ### 2026-06-05 — Design Request: editable Estimated Finished Date ✅ DONE
 - Backend: `PATCH /api/marketing-requests/{id}/estimated-date` sets/clears `estimated_finished_date` (ISO validation, 400 on bad input) and logs a `system` audit comment.
 - Frontend: inline editable pill in the detail-page hero ("Est. Finish" / "Set est. finish date") with date picker, save/cancel/clear. testids: `mr-est-date-display`, `mr-est-date-input`, `mr-est-date-save`, `mr-est-date-cancel`, `mr-est-date-clear`.

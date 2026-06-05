@@ -52,7 +52,7 @@ async def list_departments(
     await _seed_default_departments(tenant_id)
     q: dict = {"tenant_id": tenant_id}
     if not include_inactive:
-        q["is_active"] = True
+        q["is_active"] = {"$ne": False}
     if kind:
         q["kind"] = kind
     items = await db.master_departments.find(q, {"_id": 0}).sort("name", 1).to_list(500)
@@ -97,13 +97,22 @@ types_router = APIRouter()
 
 
 async def _seed_default_types(tenant_id: str) -> None:
-    existing = await db.marketing_request_types.count_documents({"tenant_id": tenant_id})
-    if existing > 0:
-        return
+    """Ensure the tenant has the default request types.
+
+    Self-healing: seeds any default type that is missing (matched by name,
+    case-insensitive) instead of only when the collection is completely empty.
+    This recovers tenants whose seeded masters became hidden after a schema
+    change (e.g. records missing the `is_active` flag).
+    """
+    existing = await db.marketing_request_types.find(
+        {"tenant_id": tenant_id}, {"_id": 0, "name": 1}
+    ).to_list(500)
+    existing_names = {(t.get("name") or "").strip().lower() for t in existing}
     docs = []
     for t in DEFAULT_REQUEST_TYPES:
-        doc = MarketingRequestType(tenant_id=tenant_id, is_default=True, **t).model_dump()
-        docs.append(doc)
+        if (t.get("name") or "").strip().lower() in existing_names:
+            continue
+        docs.append(MarketingRequestType(tenant_id=tenant_id, is_default=True, **t).model_dump())
     if docs:
         await db.marketing_request_types.insert_many(docs)
 
@@ -114,7 +123,10 @@ async def list_types(include_inactive: bool = False, current_user: dict = Depend
     await _seed_default_types(tenant_id)
     q: dict = {"tenant_id": tenant_id}
     if not include_inactive:
-        q["is_active"] = True
+        # Show everything except records explicitly deactivated. Legacy records
+        # missing the `is_active` field still surface (they would be dropped by
+        # an exact `is_active: True` match).
+        q["is_active"] = {"$ne": False}
     items = await db.marketing_request_types.find(q, {"_id": 0}).sort("name", 1).to_list(200)
     return {"types": items, "count": len(items)}
 
