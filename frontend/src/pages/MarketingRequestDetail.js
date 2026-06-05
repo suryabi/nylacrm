@@ -231,7 +231,6 @@ export default function MarketingRequestDetail() {
 
   // Version dialog state
   const [showVersion, setShowVersion] = useState(false);
-  const [versionName, setVersionName] = useState('');
   const [versionFiles, setVersionFiles] = useState([]);
   const [versionLinks, setVersionLinks] = useState([]);
   const [newVLink, setNewVLink] = useState('');
@@ -350,18 +349,16 @@ export default function MarketingRequestDetail() {
     if (versionFileInput.current) versionFileInput.current.value = '';
   };
   const addVersion = async () => {
-    if (!versionName.trim()) { toast.error('Version name required'); return; }
     setSavingVersion(true);
     try {
-      await axios.post(`${API}/marketing-requests/${id}/versions`, {
-        version_name: versionName.trim(),
+      const { data } = await axios.post(`${API}/marketing-requests/${id}/versions`, {
         file_ids: versionFiles.map(f => f.id),
         links: versionLinks,
         comments: versionComment || null,
       }, { headers: HEAD() });
-      toast.success(`Version "${versionName}" added`);
+      toast.success(`${data?.version_name || 'Version'} added`);
       setShowVersion(false);
-      setVersionName(''); setVersionFiles([]); setVersionLinks([]); setVersionComment('');
+      setVersionFiles([]); setVersionLinks([]); setVersionComment('');
       fetchAll();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to add version'); }
     finally { setSavingVersion(false); }
@@ -816,9 +813,12 @@ export default function MarketingRequestDetail() {
             <DialogDescription>Upload a new version of the work along with files, links and reviewer notes.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <Label>Version Name *</Label>
-              <Input value={versionName} onChange={(e) => setVersionName(e.target.value)} placeholder="e.g. v1, v2 - revised colors" />
+            <div className="flex items-center gap-2 rounded-md border border-emerald-100 bg-emerald-50/50 px-3 py-2">
+              <span className="text-xs text-slate-600">Version number</span>
+              <Badge variant="outline" className="bg-white text-emerald-700 border-emerald-200 font-semibold" data-testid="next-version-badge">
+                V{(req?.versions?.length || 0) + 1}
+              </Badge>
+              <span className="text-[11px] text-slate-400 ml-auto">Assigned automatically</span>
             </div>
             <div>
               <Label>Files</Label>
@@ -857,7 +857,7 @@ export default function MarketingRequestDetail() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowVersion(false)}>Cancel</Button>
-            <Button onClick={addVersion} disabled={savingVersion || !versionName.trim()} className="bg-emerald-600 hover:bg-emerald-700">
+            <Button onClick={addVersion} disabled={savingVersion} className="bg-emerald-600 hover:bg-emerald-700">
               {savingVersion ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…</> : <><Upload className="h-4 w-4 mr-2" /> Save Version</>}
             </Button>
           </DialogFooter>

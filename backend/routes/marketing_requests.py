@@ -693,9 +693,17 @@ async def add_version(request_id: str, payload: VersionCreate, current_user: dic
     if not doc:
         raise HTTPException(404, "Request not found")
 
+    # Server-assigned sequential version number — never trust client input,
+    # so concurrent/duplicate names can't cause confusion.
+    existing = doc.get("versions") or []
+    next_no = max([(v.get("version_no") or 0) for v in existing], default=0) + 1
+    if next_no <= len(existing):
+        next_no = len(existing) + 1
+
     files = await _stored_files_from_ids(tenant_id, payload.file_ids or [])
     version = FileVersion(
-        version_name=payload.version_name,
+        version_no=next_no,
+        version_name=f"V{next_no}",
         files=[StoredFile(**f) for f in files],
         links=payload.links or [],
         comments=payload.comments,

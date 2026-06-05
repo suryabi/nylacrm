@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests: auto-incrementing Work Version numbers ✅ DONE
+- **Request**: Version number must auto-increment (manual entry caused duplicate/confusing labels).
+- **Backend** (`models/marketing_request.py`, `routes/marketing_requests.py`): `FileVersion` gains `version_no:int`; `VersionCreate.version_name` now optional and IGNORED. `add_version` computes `next_no = max(existing version_no)+1` (reconciled with count) and sets `version_name="V{n}"` server-side — the single source of truth, immune to duplicate/concurrent client input.
+- **Frontend** (`MarketingRequestDetail.js`): removed the editable "Version Name" field from the Add Work Version dialog; replaced with a read-only "Version number → V{next}" badge ("Assigned automatically"). Save no longer requires a name.
+- **Tested**: curl (3 versions → V1/V2/V3 even when sending duplicate "v99" names) + screenshot (dialog shows next = V4 on a request with 3 versions).
+
+
 ### 2026-06-05 — Marketing Requests: Work Version file previews + type-aware thumbnails ✅ DONE
 - **Request**: In the Work Versions section, add a preview option and show thumbnails per file type (image → image thumbnail, others → type icon).
 - **Frontend** (`MarketingRequestDetail.js`): replaced the plain `FileChip` in Work Versions with the rich `FileAsset` card (now used for Brand Assets AND versions). `FileAsset` classifies files via `fileKind()` (image/pdf/ppt/sheet/doc/video/audio/archive) and renders an auth-fetched image thumbnail or a colored type icon. Added a click-to-preview `FilePreviewDialog` lightbox — inline `<img>` for images, `<iframe>` for PDFs, and a graceful "preview not available + Download" fallback for other types. Shared `downloadFileBlob()` helper. Default assigned department on the new-request form set to "Design" (`NewMarketingRequest.js`).

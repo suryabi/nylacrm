@@ -111,6 +111,7 @@ class StoredFile(BaseModel):
 class FileVersion(BaseModel):
     model_config = ConfigDict(extra="allow")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    version_no: int = 0          # server-assigned sequential number (1, 2, 3 …)
     version_name: str
     files: List[StoredFile] = []
     links: List[str] = []
@@ -225,7 +226,7 @@ class CommentCreate(BaseModel):
 
 
 class VersionCreate(BaseModel):
-    version_name: str
+    version_name: Optional[str] = None  # server auto-assigns "V{n}"; ignored if sent
     file_ids: List[str] = []
     links: List[str] = []
     comments: Optional[str] = None
