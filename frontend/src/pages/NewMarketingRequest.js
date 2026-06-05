@@ -134,7 +134,8 @@ export default function NewMarketingRequest() {
     return () => clearTimeout(t);
   }, [leadSearch, selectedLead]);
 
-  const selectedType = useMemo(() => types.find(t => t.id === form.request_type_id), [types, form.request_type_id]);  const minLeadDays = selectedType ? (selectedType.design_lead_time_days + selectedType.production_lead_time_days) : 0;
+  const selectedType = useMemo(() => types.find(t => t.id === form.request_type_id), [types, form.request_type_id]);
+  const minLeadDays = selectedType ? (selectedType.design_lead_time_days + selectedType.production_lead_time_days) : 0;
   const earliestDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + minLeadDays);

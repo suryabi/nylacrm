@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Contemporary UI redesign: Marketing Request form + detail page ✅ DONE
+- **Request**: Form/upload controls looked rudimentary (native file inputs, native date picker, flat inputs); redesign the New Marketing Request form AND the detail page with a modern, user-friendly look. (Design blueprint by design_agent → `/app/design_guidelines.json`, "Soft Utility" emerald system.)
+- **New reusable component** `components/FileDropzone.jsx`: drag-and-drop upload surface (drag-over state, upload-cloud icon micro-interaction, click-to-browse, busy spinner).
+- **New Marketing Request form** (`NewMarketingRequest.js`): rounded-xl emerald inputs/selects/textareas with soft-glow focus (INPUT_CLS/SELECT_CLS/TEXTAREA_CLS tokens); native date input → `Popover` + `Calendar` (emerald-styled, past dates disabled); native file inputs → `FileDropzone` for Logo + Reference files with thumbnail/icon chips + remove; repeatable links → stacked styled rows + dashed "Add link" button via new `LinkListField` component (`socialLinks`/`fileLinks` now string arrays, filtered on submit).
+- **Detail page** (`MarketingRequestDetail.js`): plain card hero → emerald **hero banner** (texture overlay, glass badges, meta row); Add Work Version dialog native file input → `FileDropzone`.
+- **Tested**: testing agent frontend regression (iteration_183) — 100% pass, created MR-2026-0018 end-to-end via the new controls; no regressions to version comments/approval, file preview, or transitions.
+
+
 ### 2026-06-05 — Marketing Requests: per-version comments + version approval ✅ DONE
 - **Request**: Each work version needs (1) multiple comments shown with the commenter's name, and (2) an approve/choose-a-version option that can be reverted and re-assigned to another version.
 - **Backend** (`models/marketing_request.py`, `routes/marketing_requests.py`): `FileVersion` gains `comments_thread: [VersionComment]` and approval fields (`is_approved`, `approved_by`, `approved_by_name`, `approved_at`). New endpoints: `POST /versions/{vid}/comments` (append threaded comment with user name/time), `POST /versions/{vid}/approve` (exclusive — approving one clears all others; sets request-level `approved_version_id`/`_name`; logs system timeline entry), `POST /versions/{vid}/unapprove` (revert). 
