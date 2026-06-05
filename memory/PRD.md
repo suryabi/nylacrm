@@ -885,6 +885,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Verified via curl: admin delete 200 → 404; distributor 403. UI screenshot confirms button + dialog.
 
 
+### 2026-06-05 — Admin UI: Design Request Types master management ✅ DONE (needs prod redeploy)
+- New page `MarketingRequestTypeMasters.js` at `/admin/request-types` (admin-only; CEO/Director/Admin/System Admin). Full CRUD over `marketing_request_types`: add, rename, edit Design/Production lead times, activate/deactivate (Switch), delete custom types (seeded defaults blocked from delete, can be deactivated). Uses existing backend endpoints (GET/POST/PATCH/DELETE /api/marketing-request-types).
+- Linked in sidebar under Master Data → "Design Request Types". Verified CRUD via curl + UI screenshot.
+
+
 ### 2026-06-05 — Fix: Marketing request types not visible (resilient masters) ✅ DONE (needs prod redeploy)
 - Root cause: `marketing-request-types` (and `master-departments`) list query used exact `is_active: True`, dropping legacy records missing the flag; auto-seed only ran when collection was fully empty so it never restored them.
 - Fix: list query now `is_active: {"$ne": False}` (shows all but explicitly-deactivated); `_seed_default_types` is self-healing — re-adds missing default types by name on every GET. Verified preview returns 7 types.

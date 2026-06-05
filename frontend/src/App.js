@@ -128,6 +128,7 @@ import InvestorDashboard from './pages/InvestorDashboard';
 // Marketing Module
 import MarketingCalendar from './pages/MarketingCalendar';
 import MarketingMasters from './pages/MarketingMasters';
+import MarketingRequestTypeMasters from './pages/MarketingRequestTypeMasters';
 import MarketingPostDetail from './pages/MarketingPostDetail';
 // New Marketing Requests Module (Sales -> Marketing -> Delivery)
 import MarketingRequests from './pages/MarketingRequests';
@@ -377,6 +378,7 @@ function AppRouter() {
           <Route path="/marketing-calendar" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingCalendar /></ProtectedRoute>} />
           <Route path="/marketing-post/:postId" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingPostDetail /></ProtectedRoute>} />
           <Route path="/marketing-masters" element={<ProtectedRoute moduleKey="marketing_masters"><MarketingMasters /></ProtectedRoute>} />
+          <Route path="/admin/request-types" element={<ProtectedRoute><MarketingRequestTypeMasters /></ProtectedRoute>} />
           {/* New Marketing Requests Module (Sales raises -> Marketing fulfils -> Delivery produces) */}
           <Route path="/marketing-requests" element={<ProtectedRoute><MarketingRequests /></ProtectedRoute>} />
           <Route path="/marketing-requests/new" element={<ProtectedRoute><NewMarketingRequest /></ProtectedRoute>} />

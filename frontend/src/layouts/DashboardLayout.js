@@ -264,6 +264,7 @@ const adminNavigationGroups = [
     items: [
       { name: 'Locations', href: '/master-locations', icon: MapPin, moduleKey: 'master_locations', roles: ADMIN_ONLY_ROLES },
       { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, moduleKey: 'lead_statuses', roles: ADMIN_ONLY_ROLES },
+      { name: 'Design Request Types', href: '/admin/request-types', icon: Tag, roles: ADMIN_ONLY_ROLES },
       { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ADMIN_ONLY_ROLES },
