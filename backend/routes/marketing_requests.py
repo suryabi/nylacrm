@@ -34,7 +34,7 @@ from pydantic import BaseModel
 from database import db
 from core.tenant import get_current_tenant_id
 from deps import get_current_user
-from utils.storage import put_object, get_object
+from utils.storage import put_object, get_object, delete_object
 from utils.sm_helpers import (
     ensure_default_marketing_request_sm,
     get_attached_state_machine,
@@ -164,6 +164,58 @@ async def download_file(file_id: str, current_user: dict = Depends(get_current_u
         raise HTTPException(502, f"Storage fetch failed: {e}")
     headers = {"Content-Disposition": f'inline; filename="{row.get("filename", "file")}"'}
     return Response(content=data, media_type=row.get("content_type") or ctype or "application/octet-stream", headers=headers)
+
+
+@router.delete("/{request_id}/files/{file_id}")
+async def delete_request_file(request_id: str, file_id: str, current_user: dict = Depends(get_current_user)):
+    """Detach a logo/reference file from a request and best-effort remove the underlying object.
+
+    Blocked once the request has been submitted for production (assets are locked).
+    """
+    tenant_id = get_current_tenant_id()
+    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Request not found")
+    if doc.get("production"):
+        raise HTTPException(400, "Files are locked — this request has been submitted for production.")
+
+    set_doc: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    removed_name = None
+    logo = doc.get("logo")
+    if logo and logo.get("id") == file_id:
+        set_doc["logo"] = None
+        removed_name = logo.get("filename") or "logo"
+    else:
+        refs = doc.get("references") or []
+        kept = [r for r in refs if r.get("id") != file_id]
+        if len(kept) != len(refs):
+            set_doc["references"] = kept
+            removed_name = next((r.get("filename") for r in refs if r.get("id") == file_id), "file")
+    if removed_name is None:
+        raise HTTPException(404, "File is not attached to this request")
+
+    comment = RequestComment(
+        user_id=current_user.get("id"),
+        user_name=current_user.get("name") or current_user.get("email") or "User",
+        text=f"Removed attachment '{removed_name}'.",
+        kind="system",
+    ).model_dump()
+    await db.marketing_requests.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"$set": set_doc, "$push": {"comments": comment}},
+    )
+
+    # Best-effort cleanup of the underlying object + file record (never breaks the request).
+    file_row = await _get_file(tenant_id, file_id)
+    if file_row:
+        try:
+            await delete_object(file_row.get("path"))
+        except Exception:
+            logger.exception("Storage delete failed for marketing-request file %s", file_id)
+        await db.marketing_request_files.delete_one({"id": file_id, "tenant_id": tenant_id})
+
+    updated = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    return updated
 
 
 # ──────────────────────────────────────────────────────────────

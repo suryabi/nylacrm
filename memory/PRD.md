@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests: logo/reference asset thumbnails + download + delete ✅ DONE
+- **Request**: Uploaded logo (and reference) assets should show an image thumbnail, a download button, and a delete button.
+- **Backend** (`routes/marketing_requests.py`): new `DELETE /marketing-requests/{request_id}/files/{file_id}` detaches the file from `logo`/`references`, logs a `system` comment, and best-effort removes the underlying object (`utils.storage.delete_object`) + `marketing_request_files` record. Locked (HTTP 400, not 5xx) once a production payload exists. 404 if the file isn't attached.
+- **Frontend** (`pages/MarketingRequestDetail.js`): new `FileAsset` card replaces `FileChip` in the Brand Assets section — auth-fetched image thumbnail (blob URL, falls back to file icon for non-images), download button (auth blob download with filename), and a delete button (shown only when `!req.production`) wired to a confirmation dialog. `FileChip` retained for Work Versions.
+- **Tested**: curl (delete logo ✓, re-delete 404 ✓, production-locked 400 ✓, remove-comment logged ✓) + screenshot of asset card with download/delete actions.
+
+
 ### 2026-06-04 — Marketing Requests: link a Lead to a request ✅ DONE
 - **Request**: Sales team should be able to select the Lead a marketing request is being raised for.
 - **Backend** (`models/marketing_request.py`, `routes/marketing_requests.py`): `MarketingRequestCreate` gains optional `lead_id`; on create it validates the lead (tenant-scoped) and stores `lead_id` + snapshot `lead_name` (`contact_person`→`name`→`company`) and `lead_company`. Detail/list return these fields (raw doc).

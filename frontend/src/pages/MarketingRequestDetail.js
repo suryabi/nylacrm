@@ -18,7 +18,7 @@ import {
   ArrowLeft, Sparkles, Send, MessageSquare, Plus, Upload, FileText, X,
   Loader2, ExternalLink, ChevronRight, Truck, AlertTriangle, Clock,
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
-  UserCircle, ShieldCheck, Users,
+  UserCircle, ShieldCheck, Users, Download, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -55,6 +55,88 @@ const FileChip = ({ f }) => (
   </a>
 );
 
+const isImageFile = (f) =>
+  (f?.content_type || '').startsWith('image/') ||
+  /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f?.filename || '');
+
+// Rich asset card: image thumbnail (auth-fetched), download + optional delete.
+const FileAsset = ({ f, canDelete, onDelete }) => {
+  const [thumb, setThumb] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const isImg = isImageFile(f);
+
+  useEffect(() => {
+    if (!isImg) return undefined;
+    let objUrl;
+    let active = true;
+    axios
+      .get(`${API}/marketing-requests/files/${f.id}`, { headers: HEAD(), responseType: 'blob' })
+      .then((res) => {
+        if (!active) return;
+        objUrl = URL.createObjectURL(res.data);
+        setThumb(objUrl);
+      })
+      .catch(() => {});
+    return () => { active = false; if (objUrl) URL.revokeObjectURL(objUrl); };
+  }, [f.id, isImg]);
+
+  const handleDownload = async () => {
+    setBusy(true);
+    try {
+      const res = await axios.get(`${API}/marketing-requests/files/${f.id}`, { headers: HEAD(), responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = f.filename || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Download failed');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div
+      className="group relative w-32 rounded-lg border border-emerald-100 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+      data-testid={`file-asset-${f.id}`}
+    >
+      <div className="h-24 flex items-center justify-center bg-slate-50 border-b border-emerald-50">
+        {isImg && thumb ? (
+          <img src={thumb} alt={f.filename} className="h-full w-full object-contain" data-testid={`file-thumb-${f.id}`} />
+        ) : (
+          <FileText className="h-8 w-8 text-emerald-500" />
+        )}
+      </div>
+      <div className="px-2 py-1.5">
+        <p className="truncate text-[11px] text-slate-700" title={f.filename}>{f.filename}</p>
+        <div className="flex items-center gap-1 mt-1.5">
+          <Button
+            size="sm" variant="outline"
+            className="h-6 px-2 text-[10px] flex-1"
+            onClick={handleDownload}
+            disabled={busy}
+            data-testid={`file-download-${f.id}`}
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+          </Button>
+          {canDelete && (
+            <Button
+              size="sm" variant="outline"
+              className="h-6 px-2 text-[10px] text-red-600 border-red-200 hover:bg-red-50"
+              onClick={() => onDelete(f)}
+              data-testid={`file-delete-${f.id}`}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function MarketingRequestDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -87,6 +169,10 @@ export default function MarketingRequestDetail() {
     assigned_delivery_department_id: '', production_notes: '',
   });
   const [savingProd, setSavingProd] = useState(false);
+
+  // Delete-attachment confirm state
+  const [fileToDelete, setFileToDelete] = useState(null);
+  const [deletingFile, setDeletingFile] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -207,6 +293,19 @@ export default function MarketingRequestDetail() {
 
   const allowedTransitions = useMemo(() => transitions.filter(t => t.allowed), [transitions]);
   const blockedTransitions = useMemo(() => transitions.filter(t => !t.allowed), [transitions]);
+
+  const confirmDeleteFile = async () => {
+    if (!fileToDelete) return;
+    setDeletingFile(true);
+    try {
+      await axios.delete(`${API}/marketing-requests/${id}/files/${fileToDelete.id}`, { headers: HEAD() });
+      toast.success('Attachment removed');
+      setFileToDelete(null);
+      fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to remove attachment');
+    } finally { setDeletingFile(false); }
+  };
 
   if (loading) return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>;
   if (!req) return null;
@@ -344,9 +443,11 @@ export default function MarketingRequestDetail() {
                 <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold flex items-center gap-1.5">
                   <ImageIcon className="h-3 w-3" /> Brand Assets & References
                 </span>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {req.logo && <FileChip f={req.logo} />}
-                  {(req.references || []).map(f => <FileChip key={f.id} f={f} />)}
+                <div className="flex flex-wrap gap-2.5 mt-2">
+                  {req.logo && <FileAsset f={req.logo} canDelete={!req.production} onDelete={setFileToDelete} />}
+                  {(req.references || []).map(f => (
+                    <FileAsset key={f.id} f={f} canDelete={!req.production} onDelete={setFileToDelete} />
+                  ))}
                 </div>
               </div>
             )}
@@ -616,6 +717,29 @@ export default function MarketingRequestDetail() {
             <Button variant="outline" onClick={() => setShowProd(false)}>Cancel</Button>
             <Button onClick={submitProduction} disabled={savingProd} className="bg-emerald-600 hover:bg-emerald-700">
               {savingProd ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…</> : <><Truck className="h-4 w-4 mr-2" /> Save</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete attachment confirm dialog */}
+      <Dialog open={!!fileToDelete} onOpenChange={(o) => { if (!o) setFileToDelete(null); }}>
+        <DialogContent className="max-w-sm" data-testid="delete-file-dialog">
+          <DialogHeader>
+            <DialogTitle>Remove attachment?</DialogTitle>
+            <DialogDescription>
+              "{fileToDelete?.filename}" will be permanently removed from this request. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFileToDelete(null)} data-testid="delete-file-cancel-btn">Cancel</Button>
+            <Button
+              onClick={confirmDeleteFile}
+              disabled={deletingFile}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="delete-file-confirm-btn"
+            >
+              {deletingFile ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Removing…</> : <><Trash2 className="h-4 w-4 mr-2" /> Remove</>}
             </Button>
           </DialogFooter>
         </DialogContent>
