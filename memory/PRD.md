@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — State Machine transition RULE ENGINE (guards + required fields) ✅ DONE
+- **Request**: Business rules for transitions, handled dynamically against fields on the form — e.g. "≥2 files before submit", "enter number of tags for Neck Tags production". Must be generic (any rule, any field, any workflow's SM).
+- **Design**: Two JSON-driven rule types per transition — `guards` (preconditions on EXISTING data; block if unmet) and `required_fields` (NEW data captured at transition time). Both support `applies_when` (conditional by request type). A per-workflow **field registry** makes the builder dynamic without code.
+- **Backend** (`utils/sm_helpers.py`): `FIELD_REGISTRY` (marketing_requests fields), `OPERATORS_BY_TYPE`, `REQUIRED_FIELD_TYPES`, and a generic evaluator — `evaluate_guards()`, `evaluate_required_fields()`, `applies_when()`, `applicable_required_fields()` (dot-path resolution, type-aware operators). `routes/state_machines.py`: `Transition` model gains `guards` + `required_fields`; new `GET /state-machines/fields/catalog?workflow_key=` returns fields + operators + dynamically-resolved enum options (request types, departments). `routes/marketing_requests.py`: `available-transitions` returns `guards_ok`/`block_reasons`/`required_fields`; `POST /{id}/transition` accepts `field_data`, enforces guards + required fields (HTTP 400 with message, never 5xx), and stores captured values in `transition_data`.
+- **Frontend** — Builder (`StateMachines.js`): expanded transition panel now has "Preconditions (guards)" + "Required information to capture" editors driven by the field catalog (field/operator/value/message + "Only for types" applies_when; required-field key/label/type/min/max/options). Consumer (`MarketingRequestDetail.js`): action buttons disabled with tooltip when a guard fails (+ defensive toast), and a dynamic required-field dialog (`transition-fields-dialog`) collects data before the transition.
+- **Tested**: curl (guard block/allow, required-field enforce, applies_when, success capture) + testing agent E2E (7/7 scenarios, builder + detail flows + regression). SM reverted to clean default. Test file: `/app/tests/test_rule_engine_e2e.py`.
+
+
 ### 2026-06-05 — Marketing Requests: logo/reference asset thumbnails + download + delete ✅ DONE
 - **Request**: Uploaded logo (and reference) assets should show an image thumbnail, a download button, and a delete button.
 - **Backend** (`routes/marketing_requests.py`): new `DELETE /marketing-requests/{request_id}/files/{file_id}` detaches the file from `logo`/`references`, logs a `system` comment, and best-effort removes the underlying object (`utils.storage.delete_object`) + `marketing_request_files` record. Locked (HTTP 400, not 5xx) once a production payload exists. 404 if the file isn't attached.
