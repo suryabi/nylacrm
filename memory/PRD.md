@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-04 — Marketing Requests: link a Lead to a request ✅ DONE
+- **Request**: Sales team should be able to select the Lead a marketing request is being raised for.
+- **Backend** (`models/marketing_request.py`, `routes/marketing_requests.py`): `MarketingRequestCreate` gains optional `lead_id`; on create it validates the lead (tenant-scoped) and stores `lead_id` + snapshot `lead_name` (`contact_person`→`name`→`company`) and `lead_company`. Detail/list return these fields (raw doc).
+- **Frontend**: `NewMarketingRequest.js` — new "Lead (optional)" searchable selector (debounced `/api/leads` search, `mr-lead-search` / `mr-lead-option-*`, selected chip with clear `mr-selected-lead`); `lead_id` added to the create payload. `MarketingRequestDetail.js` — shows a "Lead: {company}" tag (`mr-lead-tag`) in the meta row.
+- **Verified (preview)**: curl e2e — created MR-2026-0003 with `lead_id` → stored `lead_name`/`lead_company`, detail GET returns them (test request deleted after). Frontend smoke: lead search returns 15 results, selecting shows the chip, no JS errors. Py + JS lint clean. **Redeploy to push to production.**
+
+
+
 ### 2026-06-04 — Delivery Schedules: allow editing after approval (sends back for approval) ✅ DONE
 - **Request**: Allow editing a delivery schedule even after it's approved; doing so should reset its status back to "pending approval".
 - **Backend** (`routes/distributor_delivery_schedules.py`): editing is now permitted for `draft`/`confirmed`/**`approved`** schedules (still locked once `in_progress`/`completed`/`cancelled`). When an **approved** schedule is edited via update (date/vehicle/driver/notes/reorder), **attach-deliveries**, or **detach-delivery**, it is reset to `confirmed` (pending approval): the approval stamp (`approved_at`/`approved_by`/`approved_by_name`) is cleared, `reverted_from_approval_at`/`reverted_from_approval_by_name` are recorded, and the underlying deliveries are rolled back from the post-approval state (`scheduled`/`delivery_scheduled`) to the pre-approval `delivery_assigned` so re-approval re-applies cleanly. Added shared helpers `_approval_reset_fields` + `_revert_schedule_deliveries_to_pending` and `NON_EDITABLE_SCHEDULE_STATUSES`.

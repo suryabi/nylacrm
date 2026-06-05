@@ -185,6 +185,13 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
     if not dept_doc:
         raise HTTPException(400, "Assigned department not found")
 
+    # Optional lead this request is raised for
+    lead = None
+    if payload.lead_id:
+        lead = await db.leads.find_one({"id": payload.lead_id, "tenant_id": tenant_id}, {"_id": 0})
+        if not lead:
+            raise HTTPException(400, "Lead not found")
+
     # Lead-time guardrail
     try:
         due = date.fromisoformat(payload.requested_due_date[:10])
@@ -224,6 +231,9 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
         "assigned_user_id": None,
         "assigned_user_name": None,
         "assigned_role": None,
+        "lead_id": payload.lead_id,
+        "lead_name": (lead.get("contact_person") or lead.get("name") or lead.get("company")) if lead else None,
+        "lead_company": lead.get("company") if lead else None,
         "requested_due_date": payload.requested_due_date,
         "requirement_details": payload.requirement_details,
         "design_lead_time_days": int(type_doc.get("design_lead_time_days") or 0),

@@ -12,7 +12,7 @@ import {
 } from '../components/ui/select';
 import {
   ArrowLeft, Sparkles, Upload, X, Link as LinkIcon, AlertTriangle, Loader2, Plus,
-  Tag, ImageIcon, FileText, CalendarClock, Building2, Send,
+  Tag, ImageIcon, FileText, CalendarClock, Building2, Send, Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,6 +27,10 @@ export default function NewMarketingRequest() {
   const [types, setTypes] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  // Lead the request is being raised for (optional)
+  const [leads, setLeads] = useState([]);
+  const [leadSearch, setLeadSearch] = useState('');
+  const [selectedLead, setSelectedLead] = useState(null);
 
   const [form, setForm] = useState({
     request_type_id: '',
@@ -60,8 +64,22 @@ export default function NewMarketingRequest() {
     })();
   }, []);
 
-  const selectedType = useMemo(() => types.find(t => t.id === form.request_type_id), [types, form.request_type_id]);
-  const minLeadDays = selectedType ? (selectedType.design_lead_time_days + selectedType.production_lead_time_days) : 0;
+  // Debounced lead search (only while no lead is selected)
+  useEffect(() => {
+    if (selectedLead) return;
+    const t = setTimeout(async () => {
+      try {
+        const qs = `page=1&page_size=20${leadSearch ? `&search=${encodeURIComponent(leadSearch)}` : ''}`;
+        const { data } = await axios.get(`${API}/leads?${qs}`, { headers: HEAD() });
+        setLeads(data.data || data.leads || []);
+      } catch {
+        /* silent */
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [leadSearch, selectedLead]);
+
+  const selectedType = useMemo(() => types.find(t => t.id === form.request_type_id), [types, form.request_type_id]);  const minLeadDays = selectedType ? (selectedType.design_lead_time_days + selectedType.production_lead_time_days) : 0;
   const earliestDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + minLeadDays);
@@ -111,6 +129,7 @@ export default function NewMarketingRequest() {
         requested_due_date: form.requested_due_date,
         requirement_details: form.requirement_details,
         additional_comments: form.additional_comments || null,
+        lead_id: selectedLead?.id || null,
         short_timeline_reason: isShortTimeline ? form.short_timeline_reason : null,
         logo_file_id: logoFile?.id || null,
         reference_file_ids: referenceFiles.map(f => f.id),
@@ -209,6 +228,57 @@ export default function NewMarketingRequest() {
                 data-testid="mr-due-input"
               />
             </div>
+          </div>
+
+          {/* Lead this request is raised for (optional) */}
+          <div className="space-y-2">
+            <Label className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5" /> Lead (optional)
+            </Label>
+            {selectedLead ? (
+              <div className="flex items-center justify-between p-3 rounded-lg border border-emerald-200 bg-emerald-50/60" data-testid="mr-selected-lead">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-900 truncate">
+                    {selectedLead.company || selectedLead.contact_person || selectedLead.name}
+                  </p>
+                  <p className="text-sm text-slate-600 truncate">
+                    {[selectedLead.contact_person || selectedLead.name, selectedLead.city, selectedLead.phone].filter(Boolean).join(' • ')}
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedLead(null); setLeadSearch(''); }} data-testid="mr-clear-lead">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Input
+                  placeholder="Search leads by company, contact, phone..."
+                  value={leadSearch}
+                  onChange={(e) => setLeadSearch(e.target.value)}
+                  data-testid="mr-lead-search"
+                />
+                {leadSearch && (
+                  <div className="border rounded-lg max-h-[180px] overflow-y-auto">
+                    {leads.length === 0 ? (
+                      <div className="p-4 text-sm text-muted-foreground text-center">No leads found</div>
+                    ) : (
+                      leads.map((l) => (
+                        <button
+                          type="button"
+                          key={l.id}
+                          className="w-full text-left p-3 hover:bg-emerald-50 border-b last:border-b-0 transition-colors"
+                          onClick={() => setSelectedLead(l)}
+                          data-testid={`mr-lead-option-${l.id}`}
+                        >
+                          <p className="font-medium text-sm">{l.company}</p>
+                          <p className="text-xs text-muted-foreground">{[l.contact_person || l.name, l.city, l.phone].filter(Boolean).join(' • ')}</p>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {isShortTimeline && (

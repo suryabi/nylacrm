@@ -207,6 +207,8 @@ class MarketingRequestCreate(BaseModel):
     social_media_links: List[str] = []
     file_links: List[str] = []
     additional_comments: Optional[str] = None
+    # Optional lead this request is being raised for (sales team selects it)
+    lead_id: Optional[str] = None
     # file IDs returned from prior `/upload` calls
     logo_file_id: Optional[str] = None
     reference_file_ids: List[str] = []

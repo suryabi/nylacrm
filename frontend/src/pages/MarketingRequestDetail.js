@@ -18,7 +18,7 @@ import {
   ArrowLeft, Sparkles, Send, MessageSquare, Plus, Upload, FileText, X,
   Loader2, ExternalLink, ChevronRight, Truck, AlertTriangle, Clock,
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
-  UserCircle, ShieldCheck,
+  UserCircle, ShieldCheck, Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -259,6 +259,11 @@ export default function MarketingRequestDetail() {
             )}
             {req.assigned_role && (
               <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-slate-400" /> Role: {req.assigned_role}</span>
+            )}
+            {(req.lead_company || req.lead_name) && (
+              <span className="flex items-center gap-1.5" data-testid="mr-lead-tag">
+                <Users className="h-4 w-4 text-slate-400" /> Lead: {req.lead_company || req.lead_name}
+              </span>
             )}
             <span className="flex items-center gap-1.5">
               <Calendar className="h-4 w-4 text-slate-400" /> Due {fmtDate(req.requested_due_date)}
