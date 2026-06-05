@@ -498,7 +498,7 @@ export default function MarketingRequestDetail() {
     <div className="p-6 max-w-6xl mx-auto space-y-6" data-testid="mr-detail-page">
       <div>
         <Button variant="ghost" size="sm" onClick={() => navigate('/marketing-requests')} data-testid="mr-back-btn">
-          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Marketing Requests
+          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests
         </Button>
       </div>
 

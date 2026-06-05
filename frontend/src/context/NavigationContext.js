@@ -134,6 +134,9 @@ export const NavigationProvider = ({ children }) => {
     if (path.match(/^\/leads\/[^/]+\/edit$/)) return 'Edit Lead';
     if (path.match(/^\/accounts\/[^/]+$/)) return 'Account Details';
     if (path.match(/^\/target-planning\/[^/]+$/)) return 'Plan Dashboard';
+    if (path === '/marketing-requests') return 'Design Requests';
+    if (path === '/marketing-requests/new') return 'New Design Request';
+    if (path.match(/^\/marketing-requests\/[^/]+$/)) return 'Design Request Details';
     
     // Default: capitalize path segment
     const segments = path.split('/').filter(Boolean);

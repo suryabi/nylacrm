@@ -15,6 +15,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Renamed "Marketing Requests" → "Design Requests" (UI label) ✅ DONE
+- **Request**: Rename the module label to Design Requests.
+- **Frontend**: updated user-facing labels only — sidebar nav in all role variants (`DashboardLayout.js`), list page title (`MarketingRequests.js`), detail back button (`MarketingRequestDetail.js`), new-form title (`NewMarketingRequest.js`), and breadcrumb labels (`NavigationContext.js`: `/marketing-requests` → "Design Requests", `/new` → "New Design Request", detail → "Design Request Details"). Routes (`/marketing-requests`), API endpoints, data-testids, and file/variable names kept unchanged. The state machine's own name ("Marketing Request Lifecycle") is configurable data and was left as-is.
+- **Tested**: screenshot confirms "Design Requests" in nav/breadcrumb/title and no remaining "Marketing Requests" text on the page.
+
+
 ### 2026-06-05 — Marketing Requests list: visual consistency with Leads ✅ DONE
 - **Request**: Make the Marketing Requests view consistent with Leads (font sizes, colors, filters, etc.).
 - **Frontend** (`MarketingRequests.js`): adopted the shared Leads design system — `AppBreadcrumb`; header with gradient icon tile + `text-xl sm:text-2xl lg:text-3xl` title and muted subtitle (lifecycle · count); Export CSV + New Request actions in the header. Replaced the custom inline filter row with the standard `FilterContainer`/`FilterGrid columns={4}`/`FilterItem`/`FilterSearch`/`FilterSelect` (active-count + reset). Converted the bespoke `<table>` (with oversized `text-lg` titles + emerald header) to the shadcn `Table`/`TableHeader`/`TableHead`/`TableRow`/`TableCell` with Leads typography: `font-semibold text-xs sm:text-sm text-muted-foreground` headers, `text-primary text-xs sm:text-sm` name links, `py-2 sm:py-4` cells, slate borders + `hover:bg-slate-50`. Removed dead `TABLE_HEADER_CLASS`/`rowClass`/`MetricCard`. AgePill/lead pill/state badge retained.

@@ -218,7 +218,7 @@ export default function NewMarketingRequest() {
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-emerald-600" /> New Marketing Request
+            <Sparkles className="h-6 w-6 text-emerald-600" /> New Design Request
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">Pick a request type, set the timeline, describe the requirement.</p>
         </div>
