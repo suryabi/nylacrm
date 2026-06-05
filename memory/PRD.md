@@ -15,6 +15,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Request detail hero: light/minimalist restyle ✅ DONE
+- **Request**: The solid emerald banner didn't match the app's light theme / wasn't contemporary. Make it minimalistic, contemporary, visually appealing.
+- **Detail** (`MarketingRequestDetail.js`): replaced the saturated `bg-emerald-600` block with a **white surface** card (border + soft shadow) featuring a slim left emerald gradient accent bar, a subtle emerald corner glow, a gradient emerald icon tile next to a slate-900 title, soft-tinted badges (emerald request chip, red/amber outline alerts), emerald-tinted meta icons, and a clean emerald-50 "Associated Lead" card on the right (gradient avatar tile). Now visually consistent with the cards beneath it.
+- **Tested**: screenshot confirms the new light hero blends with the page theme.
+
+
 ### 2026-06-05 — Marketing Requests: prominent Lead visibility ✅ DONE
 - **Request**: Show the associated lead clearly — in the detail banner's top-right corner, and prominently in the list so it's obvious which request maps to which lead.
 - **Detail** (`MarketingRequestDetail.js`): added a glassy "ASSOCIATED LEAD" card pinned to the hero's top-right (`mr-hero-lead`) with the lead company + contact name; the inline lead meta is now shown only on mobile (desktop uses the corner card).

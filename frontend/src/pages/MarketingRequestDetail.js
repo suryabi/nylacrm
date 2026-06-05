@@ -454,79 +454,83 @@ export default function MarketingRequestDetail() {
         </Button>
       </div>
 
-      {/* Hero header */}
-      <div className="relative overflow-hidden rounded-3xl bg-emerald-600 p-7 md:p-9 text-white shadow-lg" data-testid="mr-hero">
-        <div
-          className="absolute inset-0 opacity-[0.12] mix-blend-overlay bg-cover bg-center pointer-events-none"
-          style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1629197520635-16570fbd0bb3?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200)' }}
-        />
-        <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-emerald-500/40 blur-3xl pointer-events-none" />
-        {(req.lead_company || req.lead_name) && (
-          <div className="absolute top-5 right-5 z-10 hidden sm:flex items-center gap-3 rounded-2xl bg-white/15 backdrop-blur-md border border-white/25 px-4 py-2.5 max-w-[280px] shadow-lg" data-testid="mr-hero-lead">
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              <Users className="h-5 w-5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-wider text-emerald-100/90 font-semibold">Associated Lead</p>
-              <p className="text-sm font-bold text-white truncate">{req.lead_company || req.lead_name}</p>
-              {req.lead_company && req.lead_name && req.lead_company !== req.lead_name && (
-                <p className="text-[11px] text-emerald-50/80 truncate">{req.lead_name}</p>
+      {/* Hero header — light, contemporary surface with emerald accents */}
+      <div className="relative overflow-hidden rounded-3xl bg-white border border-slate-200/70 p-6 md:p-8 shadow-[0_10px_40px_-15px_rgba(6,78,59,0.18)]" data-testid="mr-hero">
+        <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-emerald-100/40 blur-3xl pointer-events-none" />
+        <div className="absolute left-0 top-0 h-full w-1.5 bg-gradient-to-b from-emerald-400 to-emerald-600" />
+        <div className="relative flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 font-mono">
+                <Tag className="h-3 w-3" /> {req.request_number}
+              </span>
+              <Badge
+                variant="outline"
+                style={stateStyle}
+                className="border shadow-sm"
+                data-testid="mr-current-state-badge"
+              >
+                {req.current_state_label || req.current_state_key}
+              </Badge>
+              {overdue && (
+                <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">
+                  <AlertTriangle className="h-3 w-3 mr-1" /> Overdue
+                </Badge>
+              )}
+              {req.short_timeline_reason && (
+                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                  <Clock className="h-3 w-3 mr-1" /> Tight Timeline
+                </Badge>
               )}
             </div>
-          </div>
-        )}
-        <div className="relative">
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/10 font-mono">
-              <Tag className="h-3 w-3" /> {req.request_number}
-            </span>
-            <Badge
-              variant="outline"
-              style={stateStyle}
-              className="border-0 shadow-sm"
-              data-testid="mr-current-state-badge"
-            >
-              {req.current_state_label || req.current_state_key}
-            </Badge>
-            {overdue && (
-              <Badge className="text-xs bg-red-500 hover:bg-red-500 text-white border-0">
-                <AlertTriangle className="h-3 w-3 mr-1" /> Overdue
-              </Badge>
-            )}
-            {req.short_timeline_reason && (
-              <Badge className="text-xs bg-amber-400 hover:bg-amber-400 text-amber-950 border-0">
-                <Clock className="h-3 w-3 mr-1" /> Tight Timeline
-              </Badge>
-            )}
-          </div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight flex items-center gap-3">
-            <Sparkles className="h-7 w-7 text-emerald-100 shrink-0" />
-            {req.request_type_name || 'Untyped Request'}
-          </h1>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5 text-sm text-emerald-50/90">
-            <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-emerald-200" /> {req.assigned_department_name || '—'}</span>
-            {req.assigned_user_name && (
-              <span className="flex items-center gap-1.5"><UserCircle className="h-4 w-4 text-emerald-200" /> {req.assigned_user_name}</span>
-            )}
-            {req.assigned_role && (
-              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-200" /> Role: {req.assigned_role}</span>
-            )}
-            {(req.lead_company || req.lead_name) && (
-              <span className="flex items-center gap-1.5 sm:hidden" data-testid="mr-lead-tag">
-                <Users className="h-4 w-4 text-emerald-200" /> Lead: {req.lead_company || req.lead_name}
+            <div className="flex items-start gap-3.5">
+              <div className="hidden sm:flex h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
+                {req.request_type_name || 'Untyped Request'}
+              </h1>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5 text-sm text-slate-500 sm:pl-[62px]">
+              <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-emerald-500" /> {req.assigned_department_name || '—'}</span>
+              {req.assigned_user_name && (
+                <span className="flex items-center gap-1.5"><UserCircle className="h-4 w-4 text-emerald-500" /> {req.assigned_user_name}</span>
+              )}
+              {req.assigned_role && (
+                <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-500" /> Role: {req.assigned_role}</span>
+              )}
+              {(req.lead_company || req.lead_name) && (
+                <span className="flex items-center gap-1.5 lg:hidden" data-testid="mr-lead-tag">
+                  <Users className="h-4 w-4 text-emerald-500" /> Lead: {req.lead_company || req.lead_name}
+                </span>
+              )}
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-emerald-500" /> Due {fmtDate(req.requested_due_date)}
               </span>
-            )}
-            <span className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-emerald-200" /> Due {fmtDate(req.requested_due_date)}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Clock className="h-4 w-4 text-emerald-200" /> Design {req.design_lead_time_days}d &middot; Production {req.production_lead_time_days}d
-            </span>
-            <span className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-[10px] font-semibold text-white">{getInitials(req.created_by_name)}</div>
-              Raised by <span className="text-white font-medium">{req.created_by_name}</span>
-            </span>
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-emerald-500" /> Design {req.design_lead_time_days}d &middot; Production {req.production_lead_time_days}d
+              </span>
+              <span className="flex items-center gap-1.5">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-[10px] font-semibold text-emerald-700">{getInitials(req.created_by_name)}</div>
+                Raised by <span className="text-slate-700 font-medium">{req.created_by_name}</span>
+              </span>
+            </div>
           </div>
+
+          {(req.lead_company || req.lead_name) && (
+            <div className="hidden lg:flex items-center gap-3 rounded-2xl bg-emerald-50/70 border border-emerald-100 px-4 py-3 w-64 shrink-0" data-testid="mr-hero-lead">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shrink-0 shadow-sm shadow-emerald-600/20">
+                <Users className="h-5 w-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Associated Lead</p>
+                <p className="text-sm font-bold text-slate-900 truncate">{req.lead_company || req.lead_name}</p>
+                {req.lead_company && req.lead_name && req.lead_company !== req.lead_name && (
+                  <p className="text-[11px] text-slate-500 truncate">{req.lead_name}</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
