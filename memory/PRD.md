@@ -15,6 +15,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-05 — Marketing Requests list: visual consistency with Leads ✅ DONE
+- **Request**: Make the Marketing Requests view consistent with Leads (font sizes, colors, filters, etc.).
+- **Frontend** (`MarketingRequests.js`): adopted the shared Leads design system — `AppBreadcrumb`; header with gradient icon tile + `text-xl sm:text-2xl lg:text-3xl` title and muted subtitle (lifecycle · count); Export CSV + New Request actions in the header. Replaced the custom inline filter row with the standard `FilterContainer`/`FilterGrid columns={4}`/`FilterItem`/`FilterSearch`/`FilterSelect` (active-count + reset). Converted the bespoke `<table>` (with oversized `text-lg` titles + emerald header) to the shadcn `Table`/`TableHeader`/`TableHead`/`TableRow`/`TableCell` with Leads typography: `font-semibold text-xs sm:text-sm text-muted-foreground` headers, `text-primary text-xs sm:text-sm` name links, `py-2 sm:py-4` cells, slate borders + `hover:bg-slate-50`. Removed dead `TABLE_HEADER_CLASS`/`rowClass`/`MetricCard`. AgePill/lead pill/state badge retained.
+- **Tested**: lint clean + side-by-side screenshots of Leads vs Marketing Requests confirm matching header, filter bar, and table styling.
+
+
 ### 2026-06-05 — Marketing Requests: age pill + status-history (time-in-status) auditing ✅ DONE
 - **Request**: Show a request "age" pill in list + detail, and track how long the request spent in each status (shown in detail).
 - **Backend** (`routes/marketing_requests.py`): create now seeds `status_history: [{state_key,state_label,state_color,entered_at,by_user_id,by_user_name}]`; each transition `$push`es a new entry. Detail `GET /{request_id}` backfills a single synthesized entry (from `created_at` + current state, flagged `backfilled`) for requests predating tracking.
