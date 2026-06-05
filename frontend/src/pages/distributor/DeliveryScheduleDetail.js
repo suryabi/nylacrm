@@ -156,13 +156,19 @@ export default function DeliveryScheduleDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schedule?.id, JSON.stringify(schedule?.delivery_ids || [])]);
 
-  const editable = schedule && !['approved', 'in_progress', 'completed', 'cancelled'].includes(schedule.status);
+  // Editable while planning (draft/confirmed) or even after approval — editing
+  // an approved schedule sends it back for approval. Locked once the run starts.
+  const editable = schedule && !['in_progress', 'completed', 'cancelled'].includes(schedule.status);
 
   const patch = async (body) => {
+    const wasApproved = schedule?.status === 'approved';
     setBusy(true);
     try {
       const { data } = await axios.put(`${BASE}/${id}`, body, { withCredentials: true });
       setSchedule(data);
+      if (wasApproved && data?.status === 'confirmed') {
+        toast.info('Schedule edited — sent back for approval.');
+      }
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to update');
     } finally {
@@ -215,11 +221,14 @@ export default function DeliveryScheduleDetail() {
   };
 
   const detach = async (deliveryId) => {
+    const wasApproved = schedule?.status === 'approved';
     setBusy(true);
     try {
       const { data } = await axios.post(`${BASE}/${id}/detach-delivery/${deliveryId}`, {}, { withCredentials: true });
       setSchedule(data);
-      toast.success('Removed from schedule');
+      toast.success(wasApproved && data?.status === 'confirmed'
+        ? 'Removed — schedule sent back for approval.'
+        : 'Removed from schedule');
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to remove delivery');
     } finally {
@@ -244,11 +253,14 @@ export default function DeliveryScheduleDetail() {
   const attachSelected = async () => {
     const ids = Object.keys(picked).filter((k) => picked[k]);
     if (ids.length === 0) { toast.error('Pick at least one delivery'); return; }
+    const wasApproved = schedule?.status === 'approved';
     setBusy(true);
     try {
       const { data } = await axios.post(`${BASE}/${id}/attach-deliveries`, { delivery_ids: ids }, { withCredentials: true });
       setSchedule(data);
-      toast.success(`${ids.length} ${ids.length === 1 ? 'delivery' : 'deliveries'} added`);
+      toast.success(wasApproved && data?.status === 'confirmed'
+        ? `${ids.length} added — schedule sent back for approval.`
+        : `${ids.length} ${ids.length === 1 ? 'delivery' : 'deliveries'} added`);
       setAttachOpen(false);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to attach deliveries');
@@ -689,6 +701,9 @@ export default function DeliveryScheduleDetail() {
                 · {fmtDateTime(schedule.approved_at)}
               </span>
             )}
+            <span className="block text-emerald-700/90 text-xs mt-0.5">
+              You can still edit this schedule — any change will send it back for approval.
+            </span>
           </div>
         </Card>
       )}

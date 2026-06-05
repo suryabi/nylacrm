@@ -798,6 +798,41 @@ async def get_schedule(schedule_id: str, current_user: dict = Depends(get_curren
     return await _enrich_schedule(s, tenant_id)
 
 
+def _approval_reset_fields(actor: dict, now: str) -> dict:
+    """Fields that push an APPROVED schedule back to 'confirmed' (pending
+    approval) after it is edited. Clears the approval stamp and records who/when
+    the edit reverted it."""
+    return {
+        "status": "confirmed",
+        "approved_at": None,
+        "approved_by": None,
+        "approved_by_name": None,
+        "reverted_from_approval_at": now,
+        "reverted_from_approval_by_name": (
+            actor.get("full_name") or actor.get("name") or actor.get("email") or "Unknown"
+        ),
+    }
+
+
+async def _revert_schedule_deliveries_to_pending(tenant_id: str, delivery_ids: list, now: str):
+    """Roll a schedule's deliveries back from the post-approval state
+    ('delivery_scheduled') to the pre-approval state ('delivery_assigned') so a
+    fresh approval re-applies cleanly after an edit."""
+    ids = [d for d in (delivery_ids or []) if d]
+    if not ids:
+        return
+    await db.distributor_deliveries.update_many(
+        {"tenant_id": tenant_id, "id": {"$in": ids}, "status": {"$in": ["delivery_scheduled", "scheduled"]}},
+        {"$set": {"status": "delivery_assigned", "updated_at": now}},
+    )
+
+
+# A schedule can be edited while it is being planned/awaiting-approval (draft,
+# confirmed) or even after approval (approved) — editing an approved schedule
+# sends it back for approval. Once the run has started it is locked.
+NON_EDITABLE_SCHEDULE_STATUSES = {"cancelled", "in_progress", "completed"}
+
+
 @router.put("/{schedule_id}")
 async def update_schedule(schedule_id: str, payload: ScheduleUpdate, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
@@ -808,8 +843,11 @@ async def update_schedule(schedule_id: str, payload: ScheduleUpdate, current_use
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    if existing.get("status") in ("cancelled", "approved"):
-        raise HTTPException(status_code=400, detail=f"{existing.get('status').title()} schedules cannot be edited")
+    if existing.get("status") in NON_EDITABLE_SCHEDULE_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{(existing.get('status') or '').replace('_', ' ').title()} schedules cannot be edited",
+        )
 
     update_doc: dict = {}
     if payload.schedule_date is not None:
@@ -848,10 +886,19 @@ async def update_schedule(schedule_id: str, payload: ScheduleUpdate, current_use
         raise HTTPException(status_code=400, detail="No fields to update")
     update_doc["updated_at"] = datetime.now(timezone.utc).isoformat()
 
+    # Editing an APPROVED schedule sends it back for approval.
+    was_approved = existing.get("status") == "approved"
+    if was_approved:
+        update_doc.update(_approval_reset_fields(current_user, update_doc["updated_at"]))
+
     await db.distributor_delivery_schedules.update_one(
         {"id": schedule_id, "tenant_id": tenant_id},
         {"$set": update_doc}
     )
+    if was_approved:
+        await _revert_schedule_deliveries_to_pending(
+            tenant_id, existing.get("delivery_ids", []), update_doc["updated_at"]
+        )
     s = await db.distributor_delivery_schedules.find_one(
         {"id": schedule_id, "tenant_id": tenant_id},
         {"_id": 0}
@@ -874,8 +921,11 @@ async def attach_deliveries(
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    if existing.get("status") in ("cancelled", "approved"):
-        raise HTTPException(status_code=400, detail=f"{existing.get('status').title()} schedules cannot be edited")
+    if existing.get("status") in NON_EDITABLE_SCHEDULE_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{(existing.get('status') or '').replace('_', ' ').title()} schedules cannot be edited",
+        )
 
     new_ids = [d for d in payload.delivery_ids if d]
     if not new_ids:
@@ -912,28 +962,26 @@ async def attach_deliveries(
     merged = current + [d for d in new_ids if d not in current]
     newly_added = [d for d in new_ids if d not in current]
     now_iso = datetime.now(timezone.utc).isoformat()
+    was_approved = existing.get("status") == "approved"
 
-    # Status flow side-effects for newly attached deliveries:
-    #   - If schedule is already APPROVED → bump straight to `delivery_scheduled`.
-    #   - Otherwise (draft/confirmed schedule) → mark as `delivery_assigned` so
-    #     the stock-out screen surfaces "attached to schedule" state.
+    # Newly attached deliveries move to the pre-approval `delivery_assigned`
+    # state. (If the schedule was approved, attaching is an edit that sends it
+    # back for approval, so everything sits at pre-approval until re-approved.)
     if newly_added:
-        target_status = "delivery_scheduled" if existing.get("status") == "approved" else "delivery_assigned"
         await db.distributor_deliveries.update_many(
             {"tenant_id": tenant_id, "id": {"$in": newly_added}, "status": "confirmed"},
-            {"$set": {"status": target_status, "updated_at": now_iso}}
+            {"$set": {"status": "delivery_assigned", "updated_at": now_iso}}
         )
-        # If schedule is approved, also lift any deliveries that were only `delivery_assigned`
-        if existing.get("status") == "approved":
-            await db.distributor_deliveries.update_many(
-                {"tenant_id": tenant_id, "id": {"$in": newly_added}, "status": "delivery_assigned"},
-                {"$set": {"status": "delivery_scheduled", "updated_at": now_iso}}
-            )
 
+    set_doc = {"delivery_ids": merged, "updated_at": now_iso}
+    if was_approved:
+        set_doc.update(_approval_reset_fields(current_user, now_iso))
     await db.distributor_delivery_schedules.update_one(
         {"id": schedule_id, "tenant_id": tenant_id},
-        {"$set": {"delivery_ids": merged, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {"$set": set_doc}
     )
+    if was_approved:
+        await _revert_schedule_deliveries_to_pending(tenant_id, current, now_iso)
     s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
     return await _enrich_schedule(s, tenant_id)
 
@@ -952,14 +1000,21 @@ async def detach_delivery(
     )
     if not existing:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    if existing.get("status") in ("cancelled", "approved"):
-        raise HTTPException(status_code=400, detail=f"{existing.get('status').title()} schedules cannot be edited")
+    if existing.get("status") in NON_EDITABLE_SCHEDULE_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{(existing.get('status') or '').replace('_', ' ').title()} schedules cannot be edited",
+        )
 
     ids = [d for d in (existing.get("delivery_ids") or []) if d != delivery_id]
     now_iso = datetime.now(timezone.utc).isoformat()
+    was_approved = existing.get("status") == "approved"
+    set_doc = {"delivery_ids": ids, "updated_at": now_iso}
+    if was_approved:
+        set_doc.update(_approval_reset_fields(current_user, now_iso))
     await db.distributor_delivery_schedules.update_one(
         {"id": schedule_id, "tenant_id": tenant_id},
-        {"$set": {"delivery_ids": ids, "updated_at": now_iso}}
+        {"$set": set_doc}
     )
 
     # Revert the detached delivery's status back to `confirmed` so it can be
@@ -973,6 +1028,10 @@ async def detach_delivery(
         },
         {"$set": {"status": "confirmed", "updated_at": now_iso}}
     )
+    # If the schedule was approved, editing it (removing a stop) sends it back
+    # for approval — roll the remaining deliveries back to pre-approval state.
+    if was_approved:
+        await _revert_schedule_deliveries_to_pending(tenant_id, ids, now_iso)
 
     s = await db.distributor_delivery_schedules.find_one({"id": schedule_id, "tenant_id": tenant_id}, {"_id": 0})
     return await _enrich_schedule(s, tenant_id)

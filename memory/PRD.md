@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-04 — Delivery Schedules: allow editing after approval (sends back for approval) ✅ DONE
+- **Request**: Allow editing a delivery schedule even after it's approved; doing so should reset its status back to "pending approval".
+- **Backend** (`routes/distributor_delivery_schedules.py`): editing is now permitted for `draft`/`confirmed`/**`approved`** schedules (still locked once `in_progress`/`completed`/`cancelled`). When an **approved** schedule is edited via update (date/vehicle/driver/notes/reorder), **attach-deliveries**, or **detach-delivery**, it is reset to `confirmed` (pending approval): the approval stamp (`approved_at`/`approved_by`/`approved_by_name`) is cleared, `reverted_from_approval_at`/`reverted_from_approval_by_name` are recorded, and the underlying deliveries are rolled back from the post-approval state (`scheduled`/`delivery_scheduled`) to the pre-approval `delivery_assigned` so re-approval re-applies cleanly. Added shared helpers `_approval_reset_fields` + `_revert_schedule_deliveries_to_pending` and `NON_EDITABLE_SCHEDULE_STATUSES`.
+- **Frontend** (`pages/distributor/DeliveryScheduleDetail.js`): `editable` now includes approved schedules. The approver banner gains a note: "You can still edit this schedule — any change will send it back for approval." Edit/detach/attach handlers show an info toast ("…sent back for approval") when an approved schedule is edited.
+- **Verified (preview)**: e2e via API on the live approved schedule (temporarily reassigned to a test distributor, then restored) — editing notes flipped status `approved → confirmed`, cleared `approved_by`/`approved_at`, set `reverted_from_approval_by_name`, and reverted both deliveries `scheduled → delivery_assigned`. Original data fully restored after the test. Py + JS lint clean. **Redeploy to push to production.**
+
+
+
 ### 2026-06-04 — Transition "Notify assignee" (in-app + email + Slack) ✅ DONE
 - **Request**: Let a transition optionally notify the assignee so people know action is needed without polling the board.
 - **In-app notification center** (NEW): `notifications` collection + `routes/notifications.py` (`GET /notifications`, `GET /notifications/unread-count`, `POST /notifications/{id}/read`, `POST /notifications/read-all`). Frontend `NotificationBell.jsx` mounted in the sidebar user section — bell with unread badge, popover list (unread dots, body, time-ago), click-to-open (navigates to the request) + mark-read, "Mark all read", polls unread-count every 60s.
