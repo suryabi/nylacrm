@@ -35,6 +35,6 @@
   "retest_needed": false,
   "should_main_agent_self_test": true,
   "main_agent_can_self_test": true,
-  "context_for_next_testing_agent": "Re-run via: REACT_APP_BACKEND_URL=https://design-requests-ui.preview.emergentagent.com pytest backend/tests/test_iteration_150_production_dashboard_time_filter.py -v. Tests are read-only. Backend totals to expect on this tenant: lifetime 28+ batches / ₹2,548 / 75 events / 69 unmapped; this_month 24+; last_year 0. Frontend testids to use: production-dashboard, production-dashboard-time-filter, summary-rejection-cost, summary-unmapped-events, summary-rejection-rate, summary-top-costly-sku, summary-{skus|batches|total-crates|unallocated|in-qc-stages|warehouse-ready|transferred|rejected}.",
+  "context_for_next_testing_agent": "Re-run via: REACT_APP_BACKEND_URL=https://print-module-preview.preview.emergentagent.com pytest backend/tests/test_iteration_150_production_dashboard_time_filter.py -v. Tests are read-only. Backend totals to expect on this tenant: lifetime 28+ batches / ₹2,548 / 75 events / 69 unmapped; this_month 24+; last_year 0. Frontend testids to use: production-dashboard, production-dashboard-time-filter, summary-rejection-cost, summary-unmapped-events, summary-rejection-rate, summary-top-costly-sku, summary-{skus|batches|total-crates|unallocated|in-qc-stages|warehouse-ready|transferred|rejected}.",
   "rca of the issue": "No issues. Time filter + rejection cost dashboard works as specified."
 }

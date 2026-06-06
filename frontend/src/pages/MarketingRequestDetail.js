@@ -23,11 +23,12 @@ import {
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
   Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
-  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy,
+  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy, Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
+import { SendForPrintingDialog } from '../components/SendForPrintingDialog';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -302,6 +303,9 @@ export default function MarketingRequestDetail() {
   const [showDeleteReq, setShowDeleteReq] = useState(false);
   const [deletingReq, setDeletingReq] = useState(false);
 
+  // Send for printing
+  const [showSendPrint, setShowSendPrint] = useState(false);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -569,6 +573,7 @@ export default function MarketingRequestDetail() {
 
   const overdue = req.requested_due_date && !['production_completed'].includes(req.current_state_key) && isOverdueDate(req.requested_due_date);
   const stateStyle = stateBadgeStyle(req.current_state_color);
+  const canSendToPrint = ['final_approved', 'production_in_progress', 'production_completed'].includes(req.current_state_key);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6" data-testid="mr-detail-page">
@@ -576,17 +581,29 @@ export default function MarketingRequestDetail() {
         <Button variant="ghost" size="sm" onClick={() => navigate('/marketing-requests')} data-testid="mr-back-btn">
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests
         </Button>
-        {canDelete && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowDeleteReq(true)}
-            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-            data-testid="mr-delete-request-btn"
-          >
-            <Trash2 className="h-4 w-4 mr-2" /> Delete Request
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canSendToPrint && (
+            <Button
+              size="sm"
+              onClick={() => setShowSendPrint(true)}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              data-testid="mr-send-print-btn"
+            >
+              <Printer className="h-4 w-4 mr-2" /> Send for Printing
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowDeleteReq(true)}
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+              data-testid="mr-delete-request-btn"
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Delete Request
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Hero header — light, contemporary surface with emerald accents */}
@@ -1303,6 +1320,14 @@ export default function MarketingRequestDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Send for printing */}
+      <SendForPrintingDialog
+        open={showSendPrint}
+        onOpenChange={setShowSendPrint}
+        marketingRequest={req}
+        onCreated={(printReq) => navigate(`/print-requests/${printReq.id}`)}
+      />
 
       {/* File preview lightbox */}
       <FilePreviewDialog file={previewFile} onClose={() => setPreviewFile(null)} />

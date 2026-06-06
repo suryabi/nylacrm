@@ -17,7 +17,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -50,6 +50,7 @@ const salesNavigationGroups = [
       { name: 'Invoices', href: '/invoices', icon: FileText, moduleKey: 'invoices', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Customer Returns', href: '/customer-returns', icon: PackageOpen, moduleKey: 'customer_returns', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Design Requests', href: '/marketing-requests', icon: Sparkles, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Sales Portal', href: '/sales-portal', icon: Store, moduleKey: 'sales_portal', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
     ]
   },
@@ -123,6 +124,7 @@ const productionNavigationGroups = [
       { name: 'Inventory', href: '/inventory', icon: Boxes, moduleKey: 'inventory', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Customer Returns', href: '/customer-returns', icon: PackageOpen, moduleKey: 'customer_returns', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Design Requests', href: '/marketing-requests', icon: Sparkles, roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
     ]
   },
@@ -227,6 +229,7 @@ const marketingNavigationGroups = [
     title: 'Marketing',
     items: [
       { name: 'Design Requests', href: '/marketing-requests', icon: Sparkles, roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
+      { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator', 'Production Manager', 'Production Supervisor', 'Production Staff'] },
       { name: 'Content Calendar', href: '/marketing-calendar', icon: CalendarRange, moduleKey: 'marketing_calendar', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
       { name: 'Masters', href: '/marketing-masters', icon: Layers, moduleKey: 'marketing_masters', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
     ]
@@ -265,6 +268,7 @@ const adminNavigationGroups = [
       { name: 'Locations', href: '/master-locations', icon: MapPin, moduleKey: 'master_locations', roles: ADMIN_ONLY_ROLES },
       { name: 'Lead Statuses', href: '/master-lead-status', icon: Settings, moduleKey: 'lead_statuses', roles: ADMIN_ONLY_ROLES },
       { name: 'Design Request Types', href: '/admin/request-types', icon: Tag, moduleKey: 'marketing_request_types', roles: ADMIN_ONLY_ROLES },
+      { name: 'Print Settings', href: '/admin/print-settings', icon: Printer, moduleKey: 'print_request_statuses', roles: ADMIN_ONLY_ROLES },
       { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ADMIN_ONLY_ROLES },

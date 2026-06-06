@@ -164,6 +164,15 @@ routes_router.include_router(master_departments_router, prefix="/master-departme
 routes_router.include_router(marketing_request_types_router, prefix="/marketing-request-types", tags=["Marketing Request Types"])
 routes_router.include_router(marketing_request_statuses_router, prefix="/marketing-request-statuses", tags=["Marketing Request Statuses"])
 
+from .print_requests import router as print_requests_router
+from .print_masters import (
+    statuses_router as print_request_statuses_router,
+    vendors_router as print_vendors_router,
+)
+routes_router.include_router(print_requests_router, prefix="/print-requests", tags=["Print Requests"])
+routes_router.include_router(print_request_statuses_router, prefix="/print-request-statuses", tags=["Print Request Statuses"])
+routes_router.include_router(print_vendors_router, prefix="/print-vendors", tags=["Print Vendors"])
+
 from .notifications import router as notifications_router
 routes_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 

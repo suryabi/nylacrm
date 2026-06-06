@@ -134,6 +134,9 @@ import MarketingPostDetail from './pages/MarketingPostDetail';
 import MarketingRequests from './pages/MarketingRequests';
 import NewMarketingRequest from './pages/NewMarketingRequest';
 import MarketingRequestDetail from './pages/MarketingRequestDetail';
+import PrintRequests from './pages/PrintRequests';
+import PrintRequestDetail from './pages/PrintRequestDetail';
+import PrintRequestSettings from './pages/PrintRequestSettings';
 // Personal Calendar (per-user, with Google Calendar sync)
 import PersonalCalendar from './pages/PersonalCalendar';
 import '@/App.css';
@@ -383,6 +386,9 @@ function AppRouter() {
           <Route path="/marketing-requests" element={<ProtectedRoute><MarketingRequests /></ProtectedRoute>} />
           <Route path="/marketing-requests/new" element={<ProtectedRoute><NewMarketingRequest /></ProtectedRoute>} />
           <Route path="/marketing-requests/:id" element={<ProtectedRoute><MarketingRequestDetail /></ProtectedRoute>} />
+          <Route path="/print-requests" element={<ProtectedRoute moduleKey="print_requests"><PrintRequests /></ProtectedRoute>} />
+          <Route path="/print-requests/:id" element={<ProtectedRoute moduleKey="print_requests"><PrintRequestDetail /></ProtectedRoute>} />
+          <Route path="/admin/print-settings" element={<ProtectedRoute><PrintRequestSettings /></ProtectedRoute>} />
           {/* Personal Calendar */}
           <Route path="/personal-calendar" element={<ProtectedRoute><PersonalCalendar /></ProtectedRoute>} />
         </Routes>

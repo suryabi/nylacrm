@@ -60,6 +60,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     "marketing_calendar": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_masters": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_requests": {"view": True, "create": True, "edit": True, "delete": False},
+    "print_requests": {"view": True, "create": True, "edit": True, "delete": False},
     "master_departments": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_request_types": {"view": False, "create": False, "edit": False, "delete": False},
 
@@ -77,6 +78,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     "tenant_settings": {"view": False, "create": False, "edit": False, "delete": False},
     "api_keys": {"view": False, "create": False, "edit": False, "delete": False},
     "sku_replace": {"view": False, "create": False, "edit": False, "delete": False},
+    "print_request_statuses": {"view": False, "create": False, "edit": False, "delete": False},
 
     # Production Modules
     "production_dashboard": {"view": False, "create": False, "edit": False, "delete": False},
@@ -250,9 +252,9 @@ MODULE_CATEGORIES = {
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model"],
     "Documents": ["company_documents", "files_documents"],
     "Requests": ["leaves", "travel_requests", "budget_requests"],
-    "Marketing": ["marketing_calendar", "marketing_masters", "marketing_requests"],
+    "Marketing": ["marketing_calendar", "marketing_masters", "marketing_requests", "print_requests"],
     "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories", "cogs_components", "master_departments"],
-    "Admin": ["tenant_settings", "api_keys", "sku_replace", "marketing_request_types"],
+    "Admin": ["tenant_settings", "api_keys", "sku_replace", "marketing_request_types", "print_request_statuses"],
     "Distribution": ["distributors", "stock_dashboard", "cost_cards", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
     "Production": ["production_dashboard", "production_batches", "qc_routes", "qc_team", "rejection_reasons", "rejection_report", "rejection_cost_config", "packaging_types", "maintenance", "inventory", "quality_control", "assets", "vendors"],
     "Task Management": ["task_management", "task_milestones", "task_labels"],
@@ -298,6 +300,8 @@ MODULE_LABELS = {
     "marketing_requests": "Marketing Requests",
     "master_departments": "Departments",
     "marketing_request_types": "Design Request Types",
+    "print_requests": "Print Requests",
+    "print_request_statuses": "Print Settings (Statuses & Vendors)",
     "company_profile": "Company Profile",
     "team": "Team Management",
     "master_locations": "Master Locations",
