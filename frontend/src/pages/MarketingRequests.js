@@ -78,7 +78,7 @@ function StateChip({ state, count, isActive, onClick }) {
   );
 }
 
-function RequestTable({ rows, navigate, sort, onSort }) {
+function RequestTable({ rows, navigate, sort, onSort, onSortChange }) {
   const COLUMNS = [
     { label: 'Request', field: 'request_number' },
     { label: 'Lead', field: 'lead_company' },
@@ -87,113 +87,188 @@ function RequestTable({ rows, navigate, sort, onSort }) {
     { label: 'Due Date', field: 'requested_due_date' },
     { label: 'Raised By', field: 'created_by_name' },
   ];
+  const MOBILE_SORTS = [
+    { value: '-created_at', label: 'Newest first' },
+    { value: 'created_at', label: 'Oldest first' },
+    { value: 'requested_due_date', label: 'Due date ↑' },
+    { value: '-requested_due_date', label: 'Due date ↓' },
+    { value: 'current_state_label', label: 'State A–Z' },
+    { value: 'created_by_name', label: 'Raised by A–Z' },
+    { value: 'request_number', label: 'Request # ↑' },
+  ];
   const activeField = sort?.replace(/^-/, '');
   const activeDesc = sort?.startsWith('-');
   return (
-    <Card className="border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50/50">
-                {COLUMNS.map(({ label, field }) => {
-                  const isActive = activeField === field;
+    <>
+      {/* Mobile / tablet: stacked cards */}
+      <div className="lg:hidden space-y-3" data-testid="mr-mobile-list">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-slate-500">{rows.length} shown</span>
+          <select
+            value={sort || '-created_at'}
+            onChange={(e) => onSortChange(e.target.value)}
+            className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+            data-testid="mr-mobile-sort"
+            aria-label="Sort requests"
+          >
+            {MOBILE_SORTS.map(o => <option key={o.value} value={o.value}>Sort: {o.label}</option>)}
+          </select>
+        </div>
+        {rows.length === 0 ? (
+          <Card className="border border-slate-100 rounded-xl"><CardContent className="p-10 text-center text-sm text-muted-foreground">No requests in this view.</CardContent></Card>
+        ) : rows.map((req) => {
+          const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
+          const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
+          const leadLabel = req.lead_company || req.lead_name;
+          return (
+            <Card
+              key={req.id}
+              className="border border-slate-100 rounded-xl shadow-sm active:scale-[0.99] transition-transform cursor-pointer"
+              onClick={() => navigate(`/marketing-requests/${req.id}`)}
+              data-testid={`mr-card-${req.id}`}
+            >
+              <CardContent className="p-4 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold text-slate-900 text-sm leading-snug">{req.request_type_name || 'Untyped Request'}</span>
+                  <Badge variant="outline" style={stateBadgeStyle(req.current_state_color)} className="border text-[10px] shrink-0">
+                    {req.current_state_label || req.current_state_key || 'unknown'}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-mono"><Tag className="h-3 w-3" /> {req.request_number}</span>
+                  <AgePill createdAt={req.created_at} />
+                  {req.short_timeline_reason && (
+                    <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200"><Clock className="h-2.5 w-2.5 mr-0.5" /> Tight</Badge>
+                  )}
+                </div>
+                {req.requirement_details && (
+                  <p className="text-xs text-muted-foreground line-clamp-2">{req.requirement_details}</p>
+                )}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-1 border-t border-slate-50 text-xs">
+                  {leadLabel && (
+                    <div className="flex items-center gap-1.5 col-span-2 text-slate-600"><Users className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> <span className="truncate">{leadLabel}</span></div>
+                  )}
+                  <div className="flex items-center gap-1.5 text-slate-600"><Sparkles className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> <span className="truncate">{assignedTo}</span></div>
+                  <div className={`flex items-center gap-1.5 ${overdue ? 'text-red-600' : 'text-slate-600'}`}>
+                    <Calendar className="h-3.5 w-3.5 shrink-0" /> {req.requested_due_date ? formatDate(req.requested_due_date, 'MMM d') : '—'}{overdue && <AlertTriangle className="h-3 w-3" />}
+                  </div>
+                  <div className="flex items-center gap-1.5 col-span-2 text-slate-600">
+                    <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-[9px] font-medium text-emerald-700">{getInitials(req.created_by_name)}</div>
+                    <span className="truncate">{req.created_by_name}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Desktop / large screens: full table */}
+      <Card className="hidden lg:block border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50/50">
+                  {COLUMNS.map(({ label, field }) => {
+                    const isActive = activeField === field;
+                    return (
+                      <TableHead key={field} className="font-semibold text-xs sm:text-sm text-muted-foreground">
+                        <button
+                          type="button"
+                          onClick={() => onSort(field)}
+                          className={`inline-flex items-center gap-1 select-none hover:text-slate-900 dark:hover:text-slate-100 transition-colors ${isActive ? 'text-slate-900 dark:text-slate-100' : ''}`}
+                          data-testid={`mr-sort-${field}`}
+                        >
+                          {label}
+                          {!isActive && <ChevronsUpDown className="h-3 w-3 opacity-40" />}
+                          {isActive && (activeDesc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />)}
+                        </button>
+                      </TableHead>
+                    );
+                  })}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.length === 0 ? (
+                  <TableRow><TableCell colSpan={6} className="p-12 text-center text-sm text-muted-foreground">No requests in this view.</TableCell></TableRow>
+                ) : rows.map((req) => {
+                  const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
+                  const assignedTo = req.assigned_user_name
+                    || req.assigned_department_name
+                    || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
+                  const leadLabel = req.lead_company || req.lead_name;
                   return (
-                    <TableHead key={field} className="font-semibold text-xs sm:text-sm text-muted-foreground">
-                      <button
-                        type="button"
-                        onClick={() => onSort(field)}
-                        className={`inline-flex items-center gap-1 select-none hover:text-slate-900 dark:hover:text-slate-100 transition-colors ${isActive ? 'text-slate-900 dark:text-slate-100' : ''}`}
-                        data-testid={`mr-sort-${field}`}
-                      >
-                        {label}
-                        {!isActive && <ChevronsUpDown className="h-3 w-3 opacity-40" />}
-                        {isActive && (activeDesc ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />)}
-                      </button>
-                    </TableHead>
+                    <TableRow key={req.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 border-b border-slate-50 dark:border-slate-800/50 transition-colors" onClick={() => navigate(`/marketing-requests/${req.id}`)} data-testid={`mr-row-${req.id}`}>
+                      <TableCell className="py-2 sm:py-4" style={{ maxWidth: 440 }}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-primary truncate text-xs sm:text-sm" style={{ maxWidth: 320 }} title={req.request_type_name}>
+                            {req.request_type_name || 'Untyped Request'}
+                          </span>
+                          {req.short_timeline_reason && (
+                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                              <Clock className="h-2.5 w-2.5 mr-0.5" /> Tight
+                            </Badge>
+                          )}
+                          <AgePill createdAt={req.created_at} />
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground font-mono">
+                            <Tag className="h-3 w-3" /> {req.request_number}
+                          </span>
+                          <span className="text-[10px] sm:text-xs text-muted-foreground line-clamp-1" style={{ maxWidth: 280 }}>
+                            {req.requirement_details ? req.requirement_details.slice(0, 100) : ''}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-2 sm:py-4" data-testid={`mr-row-lead-${req.id}`}>
+                        {leadLabel ? (
+                          <div className="flex items-center gap-1.5 max-w-[200px]" title={leadLabel}>
+                            <Users className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                            <span className="text-xs sm:text-sm text-slate-700 truncate">{leadLabel}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground/40">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 sm:py-4">
+                        <Badge variant="outline" style={stateBadgeStyle(req.current_state_color)} className="border text-xs">
+                          {req.current_state_label || req.current_state_key || 'unknown'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="py-2 sm:py-4">
+                        <span className="text-xs sm:text-sm text-slate-700">{assignedTo}</span>
+                        {req?.production?.assigned_delivery_department_name && (
+                          <div className="text-[10px] text-orange-700 mt-1 flex items-center gap-1">
+                            <Truck className="h-3 w-3" /> {req.production.assigned_delivery_department_name}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2 sm:py-4">
+                        {req.requested_due_date ? (
+                          <div className={`flex items-center gap-1.5 text-xs sm:text-sm ${overdue ? 'text-red-600' : 'text-slate-600'}`}>
+                            <Calendar className="h-3.5 w-3.5" /> {formatDate(req.requested_due_date, 'MMM d, yyyy')}
+                            {overdue && <AlertTriangle className="h-3 w-3" />}
+                          </div>
+                        ) : <span className="text-slate-400">—</span>}
+                      </TableCell>
+                      <TableCell className="py-2 sm:py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-[10px] font-medium text-emerald-700" title={req.created_by_name}>
+                            {getInitials(req.created_by_name)}
+                          </div>
+                          <span className="text-xs sm:text-sm text-slate-700">{req.created_by_name}</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="p-12 text-center text-sm text-muted-foreground">No requests in this view.</TableCell></TableRow>
-              ) : rows.map((req) => {
-                const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
-                const assignedTo = req.assigned_user_name
-                  || req.assigned_department_name
-                  || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
-                const leadLabel = req.lead_company || req.lead_name;
-                return (
-                  <TableRow key={req.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 border-b border-slate-50 dark:border-slate-800/50 transition-colors" onClick={() => navigate(`/marketing-requests/${req.id}`)} data-testid={`mr-row-${req.id}`}>
-                    <TableCell className="py-2 sm:py-4" style={{ maxWidth: 440 }}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-primary truncate text-xs sm:text-sm" style={{ maxWidth: 320 }} title={req.request_type_name}>
-                          {req.request_type_name || 'Untyped Request'}
-                        </span>
-                        {req.short_timeline_reason && (
-                          <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                            <Clock className="h-2.5 w-2.5 mr-0.5" /> Tight
-                          </Badge>
-                        )}
-                        <AgePill createdAt={req.created_at} />
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground font-mono">
-                          <Tag className="h-3 w-3" /> {req.request_number}
-                        </span>
-                        <span className="text-[10px] sm:text-xs text-muted-foreground line-clamp-1" style={{ maxWidth: 280 }}>
-                          {req.requirement_details ? req.requirement_details.slice(0, 100) : ''}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-2 sm:py-4" data-testid={`mr-row-lead-${req.id}`}>
-                      {leadLabel ? (
-                        <div className="flex items-center gap-1.5 max-w-[200px]" title={leadLabel}>
-                          <Users className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                          <span className="text-xs sm:text-sm text-slate-700 truncate">{leadLabel}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/40">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 sm:py-4">
-                      <Badge variant="outline" style={stateBadgeStyle(req.current_state_color)} className="border text-xs">
-                        {req.current_state_label || req.current_state_key || 'unknown'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="py-2 sm:py-4">
-                      <span className="text-xs sm:text-sm text-slate-700">{assignedTo}</span>
-                      {req?.production?.assigned_delivery_department_name && (
-                        <div className="text-[10px] text-orange-700 mt-1 flex items-center gap-1">
-                          <Truck className="h-3 w-3" /> {req.production.assigned_delivery_department_name}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2 sm:py-4">
-                      {req.requested_due_date ? (
-                        <div className={`flex items-center gap-1.5 text-xs sm:text-sm ${overdue ? 'text-red-600' : 'text-slate-600'}`}>
-                          <Calendar className="h-3.5 w-3.5" /> {formatDate(req.requested_due_date, 'MMM d, yyyy')}
-                          {overdue && <AlertTriangle className="h-3 w-3" />}
-                        </div>
-                      ) : <span className="text-slate-400">—</span>}
-                    </TableCell>
-                    <TableCell className="py-2 sm:py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-[10px] font-medium text-emerald-700" title={req.created_by_name}>
-                          {getInitials(req.created_by_name)}
-                        </div>
-                        <span className="text-xs sm:text-sm text-slate-700">{req.created_by_name}</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </>
   );
 }
 
@@ -288,6 +363,8 @@ export default function MarketingRequests() {
     setSort(prev => (prev === field ? `-${field}` : field));
     setPage(1);
   };
+  // Direct sort selection (mobile dropdown).
+  const onSortChange = (value) => { setSort(value); setPage(1); };
   const [exporting, setExporting] = useState(false);
 
   const exportCsv = async () => {
@@ -361,11 +438,11 @@ export default function MarketingRequests() {
 
       {/* Queue tabs as metric cards */}
       <Tabs value={queue} onValueChange={switchQueue} className="space-y-5">
-        <TabsList className="bg-slate-100 dark:bg-slate-800 p-1 h-11">
+        <TabsList className="bg-slate-100 dark:bg-slate-800 p-1 h-11 w-full sm:w-auto overflow-x-auto no-scrollbar justify-start">
           {metrics.map(m => (
-            <TabsTrigger key={m.key} value={m.key} className="data-[state=active]:bg-white px-5" data-testid={`tab-${m.key}`}>
-              <m.icon className="h-4 w-4 mr-2" /> {m.label}
-              <span className="ml-2 text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 rounded">{m.value}</span>
+            <TabsTrigger key={m.key} value={m.key} className="data-[state=active]:bg-white px-3 sm:px-5 whitespace-nowrap shrink-0" data-testid={`tab-${m.key}`}>
+              <m.icon className="h-4 w-4 mr-1.5 sm:mr-2" /> {m.label}
+              <span className="ml-1.5 sm:ml-2 text-[10px] bg-slate-200 dark:bg-slate-700 px-1.5 rounded">{m.value}</span>
             </TabsTrigger>
           ))}
         </TabsList>
@@ -442,7 +519,7 @@ export default function MarketingRequests() {
                 <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
               ) : (
                 <>
-                  <RequestTable rows={items} navigate={navigate} sort={sort} onSort={onSort} />
+                  <RequestTable rows={items} navigate={navigate} sort={sort} onSort={onSort} onSortChange={onSortChange} />
                   {data.pages > 1 && (
                     <div className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground px-1">
                       <span>Page {data.page || page} of {data.pages} &middot; {data.total} total</span>

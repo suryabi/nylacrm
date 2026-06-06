@@ -885,6 +885,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Verified via curl: admin delete 200 → 404; distributor 403. UI screenshot confirms button + dialog.
 
 
+### 2026-06-06 — Design Requests module: mobile & iPad responsive ✅ DONE (needs prod redeploy)
+- List (`MarketingRequests.js`): table replaced by stacked cards below `lg` (mobile + iPad portrait) with a mobile "Sort" dropdown; full sortable table on `lg+`. Queue tabs now horizontally scrollable (`no-scrollbar`).
+- Request Types admin (`MarketingRequestTypeMasters.js`): card layout below `md`, table on `md+`.
+- Added `.no-scrollbar` utility in `index.css`. Detail page + New Request form verified already responsive. Tested at 390px (phone), 820px (iPad portrait), desktop.
+
+
 ### 2026-06-05 — Admin UI: Design Request Types master management ✅ DONE (needs prod redeploy)
 - New page `MarketingRequestTypeMasters.js` at `/admin/request-types` (admin-only; CEO/Director/Admin/System Admin). Full CRUD over `marketing_request_types`: add, rename, edit Design/Production lead times, activate/deactivate (Switch), delete custom types (seeded defaults blocked from delete, can be deactivated). Uses existing backend endpoints (GET/POST/PATCH/DELETE /api/marketing-request-types).
 - Linked in sidebar under Master Data → "Design Request Types". Verified CRUD via curl + UI screenshot.

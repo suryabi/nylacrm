@@ -156,7 +156,45 @@ export default function MarketingRequestTypeMasters() {
           {loading ? (
             <div className="p-12 flex items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…</div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-slate-100" data-testid="mr-types-mobile">
+              {types.length === 0 ? (
+                <div className="p-10 text-center text-sm text-muted-foreground">No request types yet. Add your first one.</div>
+              ) : types.map((t) => (
+                <div key={t.id} className={`p-4 space-y-3 ${t.is_active === false ? 'opacity-60' : ''}`} data-testid={`mr-type-card-${t.id}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Tag className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <span className="font-medium text-slate-800 truncate">{t.name}</span>
+                      {t.is_default && <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-500 border-slate-200 shrink-0">Default</Badge>}
+                    </div>
+                    <Switch checked={t.is_active !== false} onCheckedChange={() => toggleActive(t)} data-testid={`mr-type-active-${t.id}`} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">Design {t.design_lead_time_days}d · Production {t.production_lead_time_days}d</span>
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(t)} data-testid={`mr-type-edit-${t.id}`}>
+                        <Pencil className="h-4 w-4 mr-1" /> Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setToDelete(t)}
+                        className="text-red-500 border-red-200 hover:text-red-700 hover:bg-red-50"
+                        disabled={t.is_default}
+                        data-testid={`mr-type-delete-${t.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Table for md+ */}
+            <div className="hidden md:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/60 hover:bg-slate-50/60">
@@ -182,11 +220,11 @@ export default function MarketingRequestTypeMasters() {
                       <TableCell className="py-3 text-sm text-slate-600">{t.design_lead_time_days}d</TableCell>
                       <TableCell className="py-3 text-sm text-slate-600">{t.production_lead_time_days}d</TableCell>
                       <TableCell className="py-3">
-                        <Switch checked={t.is_active !== false} onCheckedChange={() => toggleActive(t)} data-testid={`mr-type-active-${t.id}`} />
+                        <Switch checked={t.is_active !== false} onCheckedChange={() => toggleActive(t)} data-testid={`mr-type-active-table-${t.id}`} />
                       </TableCell>
                       <TableCell className="py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(t)} data-testid={`mr-type-edit-${t.id}`}>
+                          <Button variant="ghost" size="sm" onClick={() => openEdit(t)} data-testid={`mr-type-edit-table-${t.id}`}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
@@ -196,7 +234,7 @@ export default function MarketingRequestTypeMasters() {
                             className="text-red-500 hover:text-red-700 hover:bg-red-50"
                             disabled={t.is_default}
                             title={t.is_default ? 'Seeded defaults can only be deactivated' : 'Delete'}
-                            data-testid={`mr-type-delete-${t.id}`}
+                            data-testid={`mr-type-delete-table-${t.id}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -207,6 +245,7 @@ export default function MarketingRequestTypeMasters() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
