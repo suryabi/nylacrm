@@ -115,7 +115,7 @@ export default function PrintRequestSettings() {
   if (!canManage) {
     return (
       <div className="p-6 max-w-3xl mx-auto" data-testid="print-settings-no-access">
-        <Card className="border border-slate-200 rounded-xl"><CardContent className="p-10 text-center text-slate-500">You don't have permission to manage print settings.</CardContent></Card>
+        <Card className="border border-slate-200 rounded-xl"><CardContent className="p-10 text-center text-slate-500">You don&apos;t have permission to manage print settings.</CardContent></Card>
       </div>
     );
   }
@@ -240,7 +240,7 @@ export default function PrintRequestSettings() {
       {/* Delete confirm */}
       <Dialog open={!!del} onOpenChange={(o) => { if (!o && !deleting) setDel(null); }}>
         <DialogContent className="max-w-md" data-testid="print-settings-delete-dialog">
-          <DialogHeader><DialogTitle>Delete "{del?.item?.name}"?</DialogTitle><DialogDescription>This cannot be undone.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Delete &quot;{del?.item?.name}&quot;?</DialogTitle><DialogDescription>This cannot be undone.</DialogDescription></DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDel(null)} disabled={deleting}>Cancel</Button>
             <Button onClick={confirmDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700" data-testid="print-settings-delete-confirm">{deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}</Button>

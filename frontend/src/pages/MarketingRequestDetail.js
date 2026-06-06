@@ -233,7 +233,7 @@ const FilePreviewDialog = ({ file, onClose }) => {
           ) : (
             <div className="text-center p-10">
               <Icon className={`h-14 w-14 mx-auto ${cls}`} />
-              <p className="mt-3 text-sm text-slate-600">Inline preview isn't available for this file type.</p>
+              <p className="mt-3 text-sm text-slate-600">Inline preview isn&apos;t available for this file type.</p>
               <p className="text-xs text-slate-400">Download it to view the contents.</p>
             </div>
           )}
@@ -1060,7 +1060,7 @@ export default function MarketingRequestDetail() {
               ))}
             </div>
             {statusTimeline.backfilled && (
-              <p className="text-[11px] text-amber-600 mt-1">Detailed history wasn't tracked before this request's earlier transitions — showing time in the current status from creation.</p>
+              <p className="text-[11px] text-amber-600 mt-1">Detailed history wasn&apos;t tracked before this request&apos;s earlier transitions — showing time in the current status from creation.</p>
             )}
           </div>
         </CardContent>
@@ -1304,7 +1304,7 @@ export default function MarketingRequestDetail() {
           <DialogHeader>
             <DialogTitle>Remove attachment?</DialogTitle>
             <DialogDescription>
-              "{fileToDelete?.filename}" will be permanently removed from this request. This action cannot be undone.
+              &quot;{fileToDelete?.filename}&quot; will be permanently removed from this request. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -312,7 +312,7 @@ export default function DashboardLayout({ children }) {
   const toggleSidebarCollapsed = () => {
     setSidebarCollapsed(prev => {
       const next = !prev;
-      try { localStorage.setItem('sidebarCollapsed', next ? '1' : '0'); } catch {}
+      try { localStorage.setItem('sidebarCollapsed', next ? '1' : '0'); } catch { /* noop */ }
       return next;
     });
   };

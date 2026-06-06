@@ -212,7 +212,7 @@ function ProtectedRoute({ children, moduleKey, appModule }) {
               </div>
               <h2 className="text-xl font-semibold text-foreground mb-2">Access Denied</h2>
               <p className="text-muted-foreground mb-4">
-                You don't have permission to view this page. Contact your administrator if you believe this is a mistake.
+                You don&apos;t have permission to view this page. Contact your administrator if you believe this is a mistake.
               </p>
               <button
                 onClick={() => window.history.back()}

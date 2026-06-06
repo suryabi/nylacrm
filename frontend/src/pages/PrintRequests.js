@@ -66,7 +66,7 @@ export default function PrintRequests() {
     if (statusId) next.set('status', statusId);
     if (page > 1) next.set('p', String(page));
     setSp(next, { replace: true });
-  }, [search, statusId, page]); // eslint-disable-line
+  }, [search, statusId, page, setSp]);
 
   const items = data.items || [];
 
