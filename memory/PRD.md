@@ -885,6 +885,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Verified via curl: admin delete 200 → 404; distributor 403. UI screenshot confirms button + dialog.
 
 
+### 2026-06-06 — Discoverability: Request Types editor entry points ✅ DONE (needs prod redeploy)
+- Added "Design Request Types" (→ `/admin/request-types`, admin-only) directly under "Design Requests" in Sales (Core), Production, and Marketing sidebar contexts — previously only in Admin → Master Data which Sales-module users never saw.
+- Added a "Manage Types" button (admin-only) in the Design Requests list header (`mr-manage-types-btn`) so it's reachable from any module context.
+- NOTE: production sidebar/route changes require redeploy.
+
+
 ### 2026-06-06 — Design Requests module: mobile & iPad responsive ✅ DONE (needs prod redeploy)
 - List (`MarketingRequests.js`): table replaced by stacked cards below `lg` (mobile + iPad portrait) with a mobile "Sort" dropdown; full sortable table on `lg+`. Queue tabs now horizontally scrollable (`no-scrollbar`).
 - Request Types admin (`MarketingRequestTypeMasters.js`): card layout below `md`, table on `md+`.
