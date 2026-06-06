@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-02-06 — Print Requests module (frontend integration + RBAC hardening) ✅ DONE
+- **Request**: From a final-approved Design Request, allow creating a Print Request (Send for Printing). Configurable linear status flow, vendor assignment, notes, RBAC (CEO/Admin always allowed). Make Print Requests a sidebar item like Design Requests.
+- **Backend**: `routes/print_masters.py` write endpoints (`POST/PATCH/DELETE /api/print-request-statuses`, `POST/PATCH/DELETE /api/print-vendors`) now guarded by `_require_admin` (uses `_is_admin` from `utils/sm_helpers`). Reads remain open to tenant users (it's tenant config). Print Request lifecycle endpoints already existed; tests `/app/backend/tests/test_print_requests_module.py` cover full lifecycle (18/18 passing).
+- **Frontend**: Fixed all blocking ESLint errors that were preventing build (unescaped quotes in `PrintRequestSettings.js`, `MarketingRequestDetail.js`, `App.js`; empty `catch {}` in `DashboardLayout.js`; unused eslint-disable directives). Pages: `PrintRequests.js` (list, data-testid `print-requests-page`), `PrintRequestDetail.js`, `PrintRequestSettings.js` (Statuses + Vendors admin tabs). Routes wired in `App.js` (`/print-requests`, `/print-requests/:id`, `/admin/print-settings`). Sidebar entries added across Sales/Production/Marketing role groups + Admin Print Settings (`DashboardLayout.js`).
+- **Tested**: pytest 18/18 PASS (backend); Playwright smoke 5/5 (sidebar entry, list page, settings tabs+CRUD, send-for-printing trigger on final_approved MR). Pre-existing test data: PR-2026-0001 (In Printing), PR-2026-0002 (New).
+
+
+
 ### 2026-06-05 — Renamed "Marketing Requests" → "Design Requests" (UI label) ✅ DONE
 - **Request**: Rename the module label to Design Requests.
 - **Frontend**: updated user-facing labels only — sidebar nav in all role variants (`DashboardLayout.js`), list page title (`MarketingRequests.js`), detail back button (`MarketingRequestDetail.js`), new-form title (`NewMarketingRequest.js`), and breadcrumb labels (`NavigationContext.js`: `/marketing-requests` → "Design Requests", `/new` → "New Design Request", detail → "Design Request Details"). Routes (`/marketing-requests`), API endpoints, data-testids, and file/variable names kept unchanged. The state machine's own name ("Marketing Request Lifecycle") is configurable data and was left as-is.
