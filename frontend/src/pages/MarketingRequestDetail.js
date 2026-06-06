@@ -500,6 +500,20 @@ export default function MarketingRequestDetail() {
     finally { setVerBusy((p) => ({ ...p, [versionId]: false })); }
   };
 
+  const [versionToDelete, setVersionToDelete] = useState(null);
+  const [deletingVersion, setDeletingVersion] = useState(false);
+  const confirmDeleteVersion = async () => {
+    if (!versionToDelete) return;
+    setDeletingVersion(true);
+    try {
+      await axios.delete(`${API}/marketing-requests/${id}/versions/${versionToDelete.id}`, { headers: HEAD() });
+      toast.success(`${versionToDelete.version_name || 'Version'} deleted`);
+      setVersionToDelete(null);
+      fetchAll();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to delete version'); }
+    finally { setDeletingVersion(false); }
+  };
+
   const openProdDialog = async () => {
     try {
       const { data } = await axios.get(`${API}/master-departments?kind=delivery`, { headers: HEAD() });
@@ -920,8 +934,8 @@ export default function MarketingRequestDetail() {
                     ))}
                   </div>
 
-                  {/* Approve / Revert control */}
-                  <div className="mt-3 flex items-center gap-2">
+                  {/* Approve / Revert / Delete controls */}
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
                     {v.is_approved ? (
                       <Button
                         size="sm" variant="outline"
@@ -941,6 +955,17 @@ export default function MarketingRequestDetail() {
                         data-testid={`version-approve-btn-${v.id}`}
                       >
                         <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve this version
+                      </Button>
+                    )}
+                    {!req.production && (
+                      <Button
+                        size="sm" variant="outline"
+                        className="h-7 text-xs text-red-700 border-red-200 hover:bg-red-50"
+                        onClick={() => setVersionToDelete(v)}
+                        disabled={verBusy[v.id] || deletingVersion}
+                        data-testid={`version-delete-btn-${v.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
                       </Button>
                     )}
                   </div>
@@ -1350,6 +1375,36 @@ export default function MarketingRequestDetail() {
               data-testid="delete-request-confirm-btn"
             >
               {deletingReq ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4 mr-2" /> Delete Request</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete version confirmation */}
+      <Dialog open={!!versionToDelete} onOpenChange={(o) => { if (!o && !deletingVersion) setVersionToDelete(null); }}>
+        <DialogContent className="max-w-md" data-testid="delete-version-dialog">
+          <DialogHeader>
+            <DialogTitle>Delete {versionToDelete?.version_name || 'this version'}?</DialogTitle>
+            <DialogDescription>
+              All {(versionToDelete?.files || []).length} file(s), links and comments on{' '}
+              <span className="font-medium text-slate-700">{versionToDelete?.version_name}</span>{' '}
+              will be permanently removed from this design request. This action cannot be undone.
+              {versionToDelete?.is_approved && (
+                <span className="block mt-2 text-amber-700">
+                  This is the currently approved version — deleting it will clear the approval.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVersionToDelete(null)} disabled={deletingVersion} data-testid="delete-version-cancel-btn">Cancel</Button>
+            <Button
+              onClick={confirmDeleteVersion}
+              disabled={deletingVersion}
+              className="bg-red-600 hover:bg-red-700"
+              data-testid="delete-version-confirm-btn"
+            >
+              {deletingVersion ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4 mr-2" /> Delete Version</>}
             </Button>
           </DialogFooter>
         </DialogContent>

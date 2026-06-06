@@ -1051,9 +1051,58 @@ async def unapprove_version(request_id: str, version_id: str, current_user: dict
     return await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
 
 
-# ──────────────────────────────────────────────────────────────
-# Production submission — records the payload; state changes are SM-driven
-# ──────────────────────────────────────────────────────────────
+@router.delete("/{request_id}/versions/{version_id}")
+async def delete_version(request_id: str, version_id: str, current_user: dict = Depends(get_current_user)):
+    """Permanently delete a work version and all its attached files.
+
+    - Blocked once the request has been submitted for production (assets are locked).
+    - If the deleted version was currently approved, the request's approved_version is cleared.
+    - Underlying storage objects + file rows are best-effort removed.
+    """
+    tenant_id = get_current_tenant_id()
+    doc = await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "Request not found")
+    if doc.get("production"):
+        raise HTTPException(400, "Versions are locked — this request has been submitted for production.")
+
+    versions = doc.get("versions") or []
+    target = _find_version(versions, version_id)
+    if not target:
+        raise HTTPException(404, "Version not found")
+
+    # Collect file ids on this version and best-effort wipe storage + DB rows.
+    file_ids = [f.get("id") for f in (target.get("files") or []) if f.get("id")]
+    if file_ids:
+        rows = await db.marketing_request_files.find(
+            {"id": {"$in": file_ids}, "tenant_id": tenant_id}, {"_id": 0, "path": 1}
+        ).to_list(len(file_ids))
+        for row in rows:
+            if row.get("path"):
+                try:
+                    await delete_object(row["path"])
+                except Exception:
+                    logger.exception("Storage delete failed for path %s during version delete", row.get("path"))
+        await db.marketing_request_files.delete_many({"id": {"$in": file_ids}, "tenant_id": tenant_id})
+
+    remaining = [v for v in versions if v.get("id") != version_id]
+    now = datetime.now(timezone.utc).isoformat()
+    set_doc: dict = {"versions": remaining, "updated_at": now}
+    if doc.get("approved_version_id") == version_id:
+        set_doc["approved_version_id"] = None
+        set_doc["approved_version_name"] = None
+
+    user_name = current_user.get("name") or current_user.get("email") or "User"
+    timeline = RequestComment(
+        user_id=current_user.get("id"), user_name=user_name,
+        text=f"Deleted work version {target.get('version_name')} and {len(file_ids)} attached file(s).",
+        kind="system",
+    ).model_dump()
+    await db.marketing_requests.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"$set": set_doc, "$push": {"comments": timeline}},
+    )
+    return await db.marketing_requests.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
 @router.post("/{request_id}/production-submit")
 async def submit_for_production(request_id: str, payload: ProductionSubmitRequest, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()

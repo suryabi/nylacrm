@@ -15,6 +15,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+
+### 2026-02-06 — Design Requests: delete a work version (with confirmation, cascades file storage) ✅ DONE
+- **Request**: From a Design Request, allow deleting a version. Must remove everything from the system after a confirmation.
+- **Backend**: New `DELETE /api/marketing-requests/{request_id}/versions/{version_id}` in `routes/marketing_requests.py`. Cascade: (a) collects all `version.files[*].id`, (b) best-effort `delete_object` from storage + `marketing_request_files.delete_many`, (c) removes the version from the embedded `versions[]` array, (d) clears `approved_version_id`/`approved_version_name` if the deleted version was approved, (e) appends a system timeline comment ("Deleted work version V<n> and N attached file(s)"). Blocked when the request has already been submitted for production (matches `delete_request_file` lock).
+- **Frontend**: `MarketingRequestDetail.js` — added a small red "Delete" button to each version card (`data-testid="version-delete-btn-<vid>"`), and a confirmation `Dialog` (`data-testid="delete-version-dialog"`) showing version name + file count + an amber warning if it's the currently approved version. Button hidden once `req.production` is set (assets locked).
+- **Tested**: `/app/backend/tests/test_marketing_request_version_delete.py` — 5/5 PASS (404 unknown request, 404 unknown version, 401 unauth, full delete cascade with file row gone, approved-version delete clears approval). Frontend smoke: 2 delete buttons rendered on a 2-version request, dialog opens on click.
+
+
 ### 2026-02-06 — Print Requests module (frontend integration + RBAC hardening) ✅ DONE
 - **Request**: From a final-approved Design Request, allow creating a Print Request (Send for Printing). Configurable linear status flow, vendor assignment, notes, RBAC (CEO/Admin always allowed). Make Print Requests a sidebar item like Design Requests.
 - **Backend**: `routes/print_masters.py` write endpoints (`POST/PATCH/DELETE /api/print-request-statuses`, `POST/PATCH/DELETE /api/print-vendors`) now guarded by `_require_admin` (uses `_is_admin` from `utils/sm_helpers`). Reads remain open to tenant users (it's tenant config). Print Request lifecycle endpoints already existed; tests `/app/backend/tests/test_print_requests_module.py` cover full lifecycle (18/18 passing).
