@@ -885,6 +885,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Verified via curl: admin delete 200 → 404; distributor 403. UI screenshot confirms button + dialog.
 
 
+### 2026-06-06 — Design Request Types → Admin module + RBAC ✅ DONE (needs prod redeploy)
+- Backend `role.py`: moved `marketing_request_types` permission key from "Organization" → "Admin" category; relabeled "Marketing Request Types" → "Design Request Types". Now appears in Tenant Settings → Roles tab (Admin group) with View/Create/Edit/Delete toggles. CEO/Admin have FULL_ACCESS (always on).
+- Sidebar: removed the item from Sales/Production/Marketing contexts; kept a single entry in the **Admin** context's Master Data group with `moduleKey: 'marketing_request_types'` so visibility is RBAC-controlled (admins always; other roles need `view`). Removed the "Manage Types" button from the Design Requests list header.
+- Page `MarketingRequestTypeMasters.js` guard now: admin role OR `hasActionPermission('marketing_request_types','view')`.
+- Verified via `/api/roles` (Admin category, new label) + Roles tab UI (Admin count 3→4). Needs prod redeploy.
+
+
 ### 2026-06-06 — Discoverability: Request Types editor entry points ✅ DONE (needs prod redeploy)
 - Added "Design Request Types" (→ `/admin/request-types`, admin-only) directly under "Design Requests" in Sales (Core), Production, and Marketing sidebar contexts — previously only in Admin → Master Data which Sales-module users never saw.
 - Added a "Manage Types" button (admin-only) in the Design Requests list header (`mr-manage-types-btn`) so it's reachable from any module context.

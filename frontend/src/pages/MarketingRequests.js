@@ -275,7 +275,6 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange }) {
 export default function MarketingRequests() {
   const navigate = useNavigate();
   const { user } = useAuth(); // eslint-disable-line no-unused-vars
-  const isAdmin = ['ceo', 'director', 'admin', 'system admin', 'system_admin', 'tenant_admin'].includes((user?.role || '').trim().toLowerCase());
   const [sp, setSp] = useSearchParams();
 
   const [queue, setQueue] = useState(sp.get('queue') || 'all');
@@ -422,15 +421,6 @@ export default function MarketingRequests() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Button
-              variant="outline"
-              onClick={() => navigate('/admin/request-types')}
-              data-testid="mr-manage-types-btn"
-            >
-              <Tag className="h-4 w-4 mr-2" /> Manage Types
-            </Button>
-          )}
           <Button
             variant="outline"
             onClick={exportCsv}

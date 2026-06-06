@@ -20,6 +20,7 @@ import {
 import { Tag, Plus, Pencil, Trash2, Loader2, ArrowLeft, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
+import { useTenantConfig } from '../context/TenantConfigContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -33,7 +34,9 @@ const EMPTY = { name: '', design_lead_time_days: 7, production_lead_time_days: 7
 export default function MarketingRequestTypeMasters() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const isAdmin = ADMIN_ROLES.includes((user?.role || '').trim().toLowerCase());
+  const { hasActionPermission } = useTenantConfig();
+  const isAdminRole = ADMIN_ROLES.includes((user?.role || '').trim().toLowerCase());
+  const canManage = isAdminRole || hasActionPermission('marketing_request_types', 'view');
 
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,7 +117,7 @@ export default function MarketingRequestTypeMasters() {
     } finally { setDeleting(false); }
   };
 
-  if (!isAdmin) {
+  if (!canManage) {
     return (
       <div className="p-6 max-w-3xl mx-auto" data-testid="mr-types-no-access">
         <Card className="border border-slate-200 rounded-xl">
