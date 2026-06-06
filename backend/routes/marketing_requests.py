@@ -113,6 +113,16 @@ def _user_departments_lower(user: dict) -> List[str]:
     return [str(x).strip().lower() for x in d if x]
 
 
+def _slack_lead_line(doc: dict) -> str:
+    """Build a '\nLead: ...' line for Slack messages when a lead is attached."""
+    name = (doc.get("lead_name") or "").strip()
+    company = (doc.get("lead_company") or "").strip()
+    if company and name and company != name:
+        return f"\n:bust_in_silhouette: Lead: {company} — {name}"
+    label = company or name
+    return f"\n:bust_in_silhouette: Lead: {label}" if label else ""
+
+
 async def _can_delete_request(tenant_id: str, user: dict) -> bool:
     """Admin roles can always delete; other roles need the explicit
     `marketing_requests.delete` permission configured in Role Management."""
@@ -408,6 +418,7 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
                 f":memo: *New marketing request* `{doc['request_number']}` — {doc['title']}\n"
                 f"Type: {doc['request_type_name']} · Assigned to: {doc['assigned_department_name']}\n"
                 f"Requested due: {doc['requested_due_date']} · Raised by: {doc['created_by_name']}"
+                + _slack_lead_line(doc)
             ),
         )
     except Exception:
@@ -841,6 +852,7 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
                 f"{doc.get('title','')} · by {current_user.get('name') or current_user.get('email')}"
                 + (f"\n_Auto-assigned to {assign['assignee_label']}_" if assign.get("assignee_label") else "")
                 + (f"\n_{payload.comment}_" if payload.comment else "")
+                + _slack_lead_line(doc)
             ),
         )
     except Exception:
@@ -872,7 +884,7 @@ async def add_comment(request_id: str, payload: CommentCreate, current_user: dic
         try:
             parent = await db.marketing_requests.find_one(
                 {"id": request_id, "tenant_id": tenant_id},
-                {"_id": 0, "request_number": 1, "title": 1},
+                {"_id": 0, "request_number": 1, "title": 1, "lead_name": 1, "lead_company": 1},
             )
             if parent:
                 await slack_post_event(
@@ -881,6 +893,7 @@ async def add_comment(request_id: str, payload: CommentCreate, current_user: dic
                     text=(
                         f":speech_balloon: *{parent.get('request_number')}* — {parent.get('title','')}\n"
                         f"New comment by {event['user_name']}:\n_{event['text']}_"
+                        + _slack_lead_line(parent)
                     ),
                 )
         except Exception:

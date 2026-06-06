@@ -885,6 +885,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Verified via curl: admin delete 200 → 404; distributor 403. UI screenshot confirms button + dialog.
 
 
+### 2026-06-06 — Slack notifications include attached Lead ✅ DONE (needs prod redeploy)
+- Added `_slack_lead_line(doc)` helper in `marketing_requests.py`; injected into all 3 Slack messages: request created, status change/transition, and new comment (comment projection extended to fetch `lead_name`/`lead_company`).
+- Format: `:bust_in_silhouette: Lead: <Company> — <Contact>` (single value when equal/only one present); omitted entirely when no lead attached. Helper logic unit-checked; backend healthy.
+
+
 ### 2026-06-06 — Design Request Types → Admin module + RBAC ✅ DONE (needs prod redeploy)
 - Backend `role.py`: moved `marketing_request_types` permission key from "Organization" → "Admin" category; relabeled "Marketing Request Types" → "Design Request Types". Now appears in Tenant Settings → Roles tab (Admin group) with View/Create/Edit/Delete toggles. CEO/Admin have FULL_ACCESS (always on).
 - Sidebar: removed the item from Sales/Production/Marketing contexts; kept a single entry in the **Admin** context's Master Data group with `moduleKey: 'marketing_request_types'` so visibility is RBAC-controlled (admins always; other roles need `view`). Removed the "Manage Types" button from the Design Requests list header.
