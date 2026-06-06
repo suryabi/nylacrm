@@ -274,14 +274,7 @@ export default function MarketingRequestDetail() {
   const [versionComment, setVersionComment] = useState('');
   const [savingVersion, setSavingVersion] = useState(false);
 
-  // Production submit dialog state
-  const [showProd, setShowProd] = useState(false);
-  const [departments, setDepartments] = useState([]);
-  const [prodForm, setProdForm] = useState({
-    quantity_required: '', requested_production_date: '',
-    assigned_delivery_department_id: '', production_notes: '',
-  });
-  const [savingProd, setSavingProd] = useState(false);
+  // Production submit dialog state — REMOVED (superseded by Send for Printing flow)
 
   // Delete-attachment confirm state
   const [fileToDelete, setFileToDelete] = useState(null);
@@ -512,39 +505,6 @@ export default function MarketingRequestDetail() {
       fetchAll();
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to delete version'); }
     finally { setDeletingVersion(false); }
-  };
-
-  const openProdDialog = async () => {
-    try {
-      const { data } = await axios.get(`${API}/master-departments?kind=delivery`, { headers: HEAD() });
-      let depts = data?.departments || [];
-      if (!depts.length) {
-        const all = await axios.get(`${API}/master-departments`, { headers: HEAD() });
-        depts = all.data?.departments || [];
-      }
-      setDepartments(depts);
-      setShowProd(true);
-    } catch { toast.error('Failed to load delivery departments'); }
-  };
-  const submitProduction = async () => {
-    if (!prodForm.quantity_required || !prodForm.requested_production_date || !prodForm.assigned_delivery_department_id) {
-      toast.error('Fill all required production fields'); return;
-    }
-    setSavingProd(true);
-    try {
-      await axios.post(`${API}/marketing-requests/${id}/production-submit`, {
-        quantity_required: parseInt(prodForm.quantity_required),
-        requested_production_date: prodForm.requested_production_date,
-        assigned_delivery_department_id: prodForm.assigned_delivery_department_id,
-        production_notes: prodForm.production_notes || null,
-        final_approved_file_ids: [],
-        final_approved_links: [],
-      }, { headers: HEAD() });
-      toast.success('Production payload attached');
-      setShowProd(false);
-      fetchAll();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Production submit failed'); }
-    finally { setSavingProd(false); }
   };
 
   const allowedTransitions = useMemo(() => transitions.filter(t => t.allowed), [transitions]);
@@ -779,16 +739,6 @@ export default function MarketingRequestDetail() {
               <ChevronRight className="h-3.5 w-3.5 mr-1" /> {t.action_label}
             </Button>
           ))}
-          <Button
-            size="sm"
-            variant="outline"
-            className="ml-auto"
-            onClick={openProdDialog}
-            data-testid="attach-production-btn"
-          >
-            <Truck className="h-4 w-4 mr-2" />
-            {req.production ? 'Update Production Payload' : 'Attach Production Payload'}
-          </Button>
         </CardContent>
       </Card>
 
@@ -1284,44 +1234,7 @@ export default function MarketingRequestDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* Production submit dialog */}
-      <Dialog open={showProd} onOpenChange={setShowProd}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Attach Production Payload</DialogTitle>
-            <DialogDescription>Capture quantity, target date and delivery team. State transitions are still driven by the lifecycle actions.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Quantity Required *</Label>
-              <Input type="number" min="1" value={prodForm.quantity_required} onChange={(e) => setProdForm({ ...prodForm, quantity_required: e.target.value })} />
-            </div>
-            <div>
-              <Label>Requested Production Date *</Label>
-              <Input type="date" value={prodForm.requested_production_date} onChange={(e) => setProdForm({ ...prodForm, requested_production_date: e.target.value })} />
-            </div>
-            <div>
-              <Label>Assigned Delivery Team *</Label>
-              <Select value={prodForm.assigned_delivery_department_id} onValueChange={(v) => setProdForm({ ...prodForm, assigned_delivery_department_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Select team" /></SelectTrigger>
-                <SelectContent>
-                  {departments.map(d => (<SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Production Notes</Label>
-              <Textarea rows={2} value={prodForm.production_notes} onChange={(e) => setProdForm({ ...prodForm, production_notes: e.target.value })} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowProd(false)}>Cancel</Button>
-            <Button onClick={submitProduction} disabled={savingProd} className="bg-emerald-600 hover:bg-emerald-700">
-              {savingProd ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving…</> : <><Truck className="h-4 w-4 mr-2" /> Save</>}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Production submit dialog — REMOVED (use Send for Printing flow on final-approved designs) */}
 
       {/* Delete attachment confirm dialog */}
       <Dialog open={!!fileToDelete} onOpenChange={(o) => { if (!o) setFileToDelete(null); }}>
