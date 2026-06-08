@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import {
   RotateCcw, Plus, Download, RefreshCw, Search, Calendar, Trash2,
   Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard,
-  Send, Clock, ExternalLink
+  Send, Clock, ExternalLink, Building2
 } from 'lucide-react';
 import axios from 'axios';
 import PayCustomerDialog from './PayCustomerDialog';
@@ -77,6 +77,11 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
     items: [],
     notes: ''
   });
+
+  // Searchable account picker state — mirrors the Stock Out Record Delivery
+  // experience so users get the same typeahead + selected-card UI everywhere.
+  const [returnAccountSearch, setReturnAccountSearch] = useState('');
+  const selectedReturnAccount = accounts.find(a => a.id === createForm.account_id) || null;
   
   // Item form for adding items
   const [itemForm, setItemForm] = useState({
@@ -712,20 +717,115 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {/* Account Selection */}
+            {/* Account Selection — searchable picker (same UX as Stock Out) */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Account *</Label>
-                <Select value={createForm.account_id} onValueChange={(v) => setCreateForm(prev => ({ ...prev, account_id: v }))}>
-                  <SelectTrigger data-testid="return-account-select">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map(acc => (
-                      <SelectItem key={acc.id} value={acc.id}>{acc.account_name || acc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {selectedReturnAccount ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid="return-account-selected">
+                    <Building2 className="h-4 w-4 text-blue-700 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900 truncate">{selectedReturnAccount.account_name || selectedReturnAccount.name}</p>
+                        <span className="inline-flex items-center text-[10px] font-medium uppercase tracking-wider text-blue-700 bg-blue-100 border border-blue-200 px-1.5 py-0.5 rounded">
+                          Selected
+                        </span>
+                      </div>
+                      {(selectedReturnAccount.city || selectedReturnAccount.state) && (
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          {selectedReturnAccount.city}{selectedReturnAccount.state ? `, ${selectedReturnAccount.state}` : ''}
+                          {selectedReturnAccount.is_primary && <span className="text-amber-600 ml-1">★ Primary</span>}
+                        </p>
+                      )}
+                      {selectedReturnAccount.contact_name && (
+                        <p className="text-[11px] text-slate-500 mt-0.5">Contact: {selectedReturnAccount.contact_name}</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-500 hover:text-slate-700 h-7 w-7 p-0"
+                      onClick={() => {
+                        setCreateForm(prev => ({ ...prev, account_id: '' }));
+                        setReturnAccountSearch('');
+                      }}
+                      data-testid="return-account-clear"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Search accounts by name or city…"
+                      value={returnAccountSearch}
+                      onChange={(e) => setReturnAccountSearch(e.target.value)}
+                      data-testid="return-account-search"
+                      className="w-full"
+                    />
+                    <div className="border rounded-md max-h-[200px] overflow-y-auto">
+                      {accounts.length === 0 ? (
+                        <div className="p-4 text-sm text-muted-foreground text-center">
+                          <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p>No accounts available</p>
+                        </div>
+                      ) : (
+                        accounts
+                          .filter(account => {
+                            if (!returnAccountSearch) return true;
+                            const s = returnAccountSearch.toLowerCase();
+                            return (
+                              (account.account_name || account.name || '').toLowerCase().includes(s) ||
+                              (account.city || '').toLowerCase().includes(s) ||
+                              (account.contact_name || '').toLowerCase().includes(s) ||
+                              (account.territory || '').toLowerCase().includes(s)
+                            );
+                          })
+                          .map(account => (
+                            <div
+                              key={account.id}
+                              className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
+                              onClick={() => {
+                                setCreateForm(prev => ({ ...prev, account_id: account.id }));
+                                setReturnAccountSearch('');
+                              }}
+                              data-testid={`return-account-option-${account.id}`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm truncate">
+                                    {account.account_name || account.name}
+                                    {account.is_primary && <span className="ml-2 text-amber-600">★ Primary</span>}
+                                  </p>
+                                  {(account.city || account.state) && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {account.city}{account.state ? `, ${account.state}` : ''}
+                                      {account.territory && ` • ${account.territory}`}
+                                    </p>
+                                  )}
+                                  {account.contact_name && (
+                                    <p className="text-xs text-muted-foreground">Contact: {account.contact_name}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                      )}
+                      {accounts.length > 0 && returnAccountSearch && accounts.filter(a => {
+                        const s = returnAccountSearch.toLowerCase();
+                        return (
+                          (a.account_name || a.name || '').toLowerCase().includes(s) ||
+                          (a.city || '').toLowerCase().includes(s) ||
+                          (a.contact_name || '').toLowerCase().includes(s) ||
+                          (a.territory || '').toLowerCase().includes(s)
+                        );
+                      }).length === 0 && (
+                        <div className="p-3 text-xs text-muted-foreground text-center">No accounts match &quot;{returnAccountSearch}&quot;</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Return Date</Label>
