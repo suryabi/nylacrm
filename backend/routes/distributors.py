@@ -7602,11 +7602,20 @@ async def get_stock_dashboard(
             if sid not in factory_wh_stock_by_sku:
                 factory_wh_stock_by_sku[sid] = {"sku_id": sid, "sku_name": fws.get("sku_name", "Unknown"), "qty": 0}
             factory_wh_stock_by_sku[sid]["qty"] += crates_qty
-            # Per-location breakdown
+            # Per-location breakdown — aggregate per SKU so a SKU with
+            # multiple `factory_warehouse_stock` rows (one per batch) shows
+            # as a single line with the summed crate quantity instead of
+            # one row per batch.
             wh_id = fws.get("warehouse_location_id", "")
             if wh_id not in factory_wh_by_location:
-                factory_wh_by_location[wh_id] = {"warehouse_name": fws.get("warehouse_name", ""), "skus": []}
-            factory_wh_by_location[wh_id]["skus"].append({"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": crates_qty})
+                factory_wh_by_location[wh_id] = {
+                    "warehouse_name": fws.get("warehouse_name", ""),
+                    "skus_by_id": {},
+                }
+            bucket = factory_wh_by_location[wh_id]["skus_by_id"].setdefault(
+                sid, {"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": 0}
+            )
+            bucket["quantity"] += crates_qty
     
     # === 2. STOCK OUT: Deliveries to customers (delivered/completed/complete) ===
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
@@ -7920,7 +7929,16 @@ async def get_stock_dashboard(
             "pending_factory_return": total_pending_factory,
         },
         "factory_warehouses": [
-            {"warehouse_id": wh_id, "warehouse_name": wh_data["warehouse_name"], "skus": wh_data["skus"]}
+            {
+                "warehouse_id": wh_id,
+                "warehouse_name": wh_data["warehouse_name"],
+                # Convert the aggregated dict back to a list, sorted by name
+                # for stable, alphabetical display in the UI.
+                "skus": sorted(
+                    wh_data["skus_by_id"].values(),
+                    key=lambda s: (s.get("sku_name") or "").lower(),
+                ),
+            }
             for wh_id, wh_data in factory_wh_by_location.items()
         ],
         "sku_count": len(sku_summaries),

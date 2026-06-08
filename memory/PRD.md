@@ -16,6 +16,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 
 
+### 2026-02-06 — 🐛 Critical fix: Factory Warehouse Stock card showed duplicate SKU rows ✅ DONE
+- **Bug**: When the same SKU at the same factory warehouse had multiple `factory_warehouse_stock` documents (one per production batch), the distributor stock-dashboard returned one row per batch — so the **Factory Warehouse Stock** card on the UI listed the same SKU three or four times with split quantities, instead of one consolidated row per SKU.
+- **Root cause**: `routes/distributors.py` (the `stock-dashboard` endpoint) was appending each Mongo doc into `factory_wh_by_location[wh_id]["skus"]` without deduping. With batch tracking enabled, each batch is a separate stock document → multiple appended rows for the same SKU.
+- **Fix**: Refactored the per-location accumulator to a dict keyed by `sku_id` (`skus_by_id`), summing crate quantities. Final response converts it to a sorted (alphabetical) list. One row per (warehouse, SKU) — quantities summed across batches.
+- **Tested**: New regression test `tests/test_factory_warehouse_stock_dedupe.py` asserts no duplicate `sku_id` per warehouse across every distributor in the tenant. 9/9 backend tests pass. Verified live for Surya 1 distributor — previously-duplicated SKU `Nyla – 660 ml / Sparkling` (2 batches) now appears once with the summed 276 crates.
+
+
+
 ### 2026-02-06 — 🐛 Critical fix: batch picker showed stale batches when switching warehouses ✅ DONE
 - **Bug**: In Stock In, Stock Out (Record Account Delivery) and Promotional Stock-Out, the batch picker kept showing the previously selected warehouse's batches and quantities after the user switched "From Location" to a different warehouse. Caused by frontend caches (`shipmentBatchesBySku`, `deliveryBatchesBySku`, `batchMap`) keyed by `sku_id` only — once a SKU was loaded for one location, subsequent location changes never re-fetched.
 - **Fix**: Added a one-line `useEffect` in each of the three flows that resets the per-flow batch cache to `{}` whenever the source location id changes. Backend `/batches-available` was already correctly scoped by `warehouse_location_id` / `distributor_location_id` — the bug was purely client-side cache invalidation.
