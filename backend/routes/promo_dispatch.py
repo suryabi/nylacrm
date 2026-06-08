@@ -30,6 +30,7 @@ from core.tenant import get_current_tenant_id
 from models.distributor import PromoDeliveryCreate
 from services.zoho_service import (
     create_delivery_challan_for_promo_dispatch,
+    fetch_delivery_challan_pdf,
     is_zoho_configured,
 )
 from routes.distributors import can_manage_distributor_data
@@ -471,6 +472,24 @@ async def promo_challan_pdf(distributor_id: str, dispatch_id: str, current_user:
         {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
     if not d:
         raise HTTPException(status_code=404, detail="Dispatch not found")
+
+    # Prefer the Zoho-rendered PDF when the dispatch has been synced — that
+    # is the only source of truth once it's pushed (no duplicate documents).
+    # The locally-rendered PDF is kept strictly as a fallback for dispatches
+    # that pre-date the integration or whose Zoho push failed.
+    if d.get("zoho_sync_status") == "synced" and d.get("zoho_doc_id"):
+        try:
+            pdf_bytes, _zoho_challan_no = await fetch_delivery_challan_pdf(tenant_id, d["zoho_doc_id"])
+            filename = f"challan_{d.get('zoho_doc_number') or d.get('challan_number', dispatch_id)}.pdf"
+            return Response(
+                content=pdf_bytes, media_type="application/pdf",
+                headers={"Content-Disposition": f"inline; filename={filename}"})
+        except Exception:
+            logger.exception(
+                f"Zoho PDF fetch failed for promo dispatch {d.get('challan_number')}; "
+                f"falling back to locally-rendered PDF."
+            )
+
     items = await db.promo_dispatch_items.find({"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
     d["items"] = items
 

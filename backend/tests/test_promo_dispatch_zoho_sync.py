@@ -29,10 +29,15 @@ API = f"{BASE}/api"
 
 def test_zoho_promo_function_importable():
     """Smoke: the new function and the retry route are wired into the app."""
-    from services.zoho_service import create_delivery_challan_for_promo_dispatch  # noqa
-    from routes.promo_dispatch import retry_zoho_for_promo_dispatch  # noqa
+    from services.zoho_service import (  # noqa: F401
+        create_delivery_challan_for_promo_dispatch,
+        fetch_delivery_challan_pdf,
+    )
+    from routes.promo_dispatch import retry_zoho_for_promo_dispatch, promo_challan_pdf  # noqa: F401
     assert callable(create_delivery_challan_for_promo_dispatch)
     assert callable(retry_zoho_for_promo_dispatch)
+    assert callable(fetch_delivery_challan_pdf)
+    assert callable(promo_challan_pdf)
 
 
 def test_zoho_promo_payload_shape():
