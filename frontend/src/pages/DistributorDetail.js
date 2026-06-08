@@ -499,13 +499,18 @@ export default function DistributorDetail() {
     }
   }, [shipmentForm.source_warehouse_id, token]);
 
-  // Phase 2: when the source factory warehouse tracks batches, fetch the
-  // FIFO-ordered batch list per SKU as the user picks SKUs on each line. We
-  // re-use the existing `/distributor/stock-transfers/batches-available`
-  // endpoint — it handles both factory and distributor source locations.
+  // Phase 2: batch picker on Stock In is shown when EITHER the source
+  // factory warehouse tracks batches OR the destination distributor
+  // location tracks batches. Batch list source depends on which:
+  //   • source factory tracks  → /batches-available (stock at factory, FIFO)
+  //   • only destination tracks → /production-batches (canonical SKU list)
   const sourceFactoryTracksBatches = !!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches);
+  const destDistributorTracksBatches = !!(
+    (distributor?.locations || []).find(loc => loc.id === shipmentForm.distributor_location_id)?.track_batches
+  );
+  const shipmentNeedsBatch = sourceFactoryTracksBatches || destDistributorTracksBatches;
   useEffect(() => {
-    if (!sourceFactoryTracksBatches || !shipmentForm.source_warehouse_id) {
+    if (!shipmentNeedsBatch) {
       setShipmentBatchesBySku({});
       return;
     }
@@ -516,16 +521,16 @@ export default function DistributorDetail() {
     ));
     if (!needed.length) return;
     needed.forEach(sid => {
-      axios.get(
-        `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${shipmentForm.source_warehouse_id}&sku_id=${sid}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      ).then(res => {
+      const url = sourceFactoryTracksBatches && shipmentForm.source_warehouse_id
+        ? `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${shipmentForm.source_warehouse_id}&sku_id=${sid}`
+        : `${API_URL}/api/distributor/stock-transfers/production-batches?sku_id=${sid}`;
+      axios.get(url, { headers: { Authorization: `Bearer ${token}` } }).then(res => {
         setShipmentBatchesBySku(prev => ({ ...prev, [sid]: res.data.batches || [] }));
       }).catch(() => {
         setShipmentBatchesBySku(prev => ({ ...prev, [sid]: [] }));
       });
     });
-  }, [shipmentForm.source_warehouse_id, shipmentItems, sourceFactoryTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shipmentForm.source_warehouse_id, shipmentForm.distributor_location_id, shipmentItems, shipmentNeedsBatch, sourceFactoryTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Stock OUT — same idea. Source is a distributor warehouse; check its
   // `track_batches` flag on the loaded `distributor.locations` array.
@@ -2716,6 +2721,7 @@ export default function DistributorDetail() {
             setDeleteTarget={setDeleteTarget}
             getShipmentStatusBadge={getShipmentStatusBadge}
             sourceTracksBatches={!!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches)}
+            destTracksBatches={destDistributorTracksBatches}
             batchesBySku={shipmentBatchesBySku}
           />
         </TabsContent>

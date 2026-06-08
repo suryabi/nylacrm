@@ -550,6 +550,42 @@ async def list_batches_available(
     return {"track_batches": track_batches, "batches": out}
 
 
+@router.get("/production-batches")
+async def list_production_batches_for_sku(
+    sku_id: str = Query(..., description="SKU whose production batches we want to list"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return ALL production batches for a SKU (not stock-restricted).
+
+    Used by the Stock In (Shipment) dialog when the destination distributor
+    location tracks batches but the source factory warehouse does not — in
+    that case the user still needs to assign a production-batch identity to
+    each incoming line, sourced from the canonical `production_batches`
+    collection.
+
+    Response shape mirrors `/batches-available` for easy frontend reuse:
+      `{ batches: [{batch_id, batch_code, quantity, received_at, production_date}] }`
+    Sorted by `production_date` ascending (FIFO).
+    """
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    batches = await db.production_batches.find(
+        {"tenant_id": tenant_id, "sku_id": sku_id},
+        {"_id": 0, "id": 1, "batch_code": 1, "total_bottles": 1,
+         "production_date": 1, "created_at": 1, "status": 1},
+    ).to_list(2000)
+    out = [{
+        "batch_id": b.get("id"),
+        "batch_code": b.get("batch_code") or b.get("id"),
+        "quantity": int(b.get("total_bottles") or 0),
+        "received_at": b.get("created_at"),
+        "production_date": b.get("production_date"),
+        "status": b.get("status"),
+    } for b in batches]
+    out.sort(key=lambda r: (r.get("production_date") or r.get("received_at") or "9999"))
+    return {"batches": out}
+
+
 @router.get("/location-stock")
 async def get_location_stock(
     location_id: str = Query(..., description="Source warehouse location id"),

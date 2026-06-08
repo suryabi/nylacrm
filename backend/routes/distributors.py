@@ -2286,10 +2286,11 @@ async def create_shipment(
     # Validate location exists and belongs to distributor
     location = await db.distributor_locations.find_one(
         {"id": data.distributor_location_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
-        {"_id": 0, "location_name": 1, "address_line_1": 1, "city": 1, "state": 1, "pincode": 1}
+        {"_id": 0, "location_name": 1, "address_line_1": 1, "city": 1, "state": 1, "pincode": 1, "track_batches": 1}
     )
     if not location:
         raise HTTPException(status_code=400, detail="Invalid distributor location")
+    dest_tracks_batches = bool(location.get("track_batches"))
     
     # Validate source factory warehouse if provided
     source_warehouse_name = None
@@ -2308,20 +2309,25 @@ async def create_shipment(
     if not data.items or len(data.items) == 0:
         raise HTTPException(status_code=400, detail="At least one item is required")
 
-    # Phase 2 batch tracking: when the source factory warehouse has
-    # `track_batches=True`, every line MUST carry a `batch_id`. Reject the
-    # request up-front with a friendly error if any line is missing one.
-    if source_tracks_batches:
+    # Phase 2 batch tracking: when EITHER the source factory warehouse has
+    # `track_batches=True` OR the destination distributor location does,
+    # every line MUST carry a `batch_id`. Reject up-front with a friendly
+    # error if any line is missing one.
+    if source_tracks_batches or dest_tracks_batches:
         missing_batch = [
             (item.sku_name or item.sku_id)
             for item in data.items
             if not item.batch_id
         ]
         if missing_batch:
+            who = (
+                f"Source warehouse '{source_warehouse_name}'" if source_tracks_batches
+                else f"Destination location '{location.get('location_name')}'"
+            )
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Source warehouse '{source_warehouse_name}' tracks batches — "
+                    f"{who} tracks batches — "
                     f"please pick a production batch for: {', '.join(missing_batch[:5])}"
                     + (f" and {len(missing_batch) - 5} more" if len(missing_batch) > 5 else "")
                 ),

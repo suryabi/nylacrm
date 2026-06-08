@@ -37,17 +37,19 @@ export default function ShipmentsTab({
   setDeleteTarget,
   getShipmentStatusBadge,
   // Phase 2 batch tracking — optional batch list keyed by sku_id for the
-  // currently-selected source warehouse. Empty map when the source warehouse
-  // doesn't track batches.
+  // Phase 2 batch tracking — optional batch list keyed by sku_id for the
+  // currently-selected source warehouse. Empty map when neither side
+  // tracks batches.
   batchesBySku = {},
   sourceTracksBatches = false,
+  destTracksBatches = false,
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle className="text-lg">Stock In (Factory → Distributor)</CardTitle>
-          <CardDescription>Stock shipments to this distributor's locations</CardDescription>
+          <CardDescription>Stock shipments to this distributor&apos;s locations</CardDescription>
         </div>
         {canManage && (
           <Dialog open={showShipmentDialog} onOpenChange={(open) => {
@@ -186,7 +188,7 @@ export default function ShipmentsTab({
                   {shipmentItems.length === 0 ? (
                     <div className="text-center py-6 text-muted-foreground border rounded-md">
                       <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">No items added. Click "Add Item" to start.</p>
+                      <p className="text-sm">No items added. Click &quot;Add Item&quot; to start.</p>
                     </div>
                   ) : (
                     <div className="border rounded-lg overflow-hidden">
@@ -278,8 +280,8 @@ export default function ShipmentsTab({
                               <p className="h-4"></p>
                             </div>
                           </div>
-                          {/* Row 3: Batch picker — only shown when source warehouse tracks batches */}
-                          {sourceTracksBatches && item.sku_id && (
+                          {/* Row 3: Batch picker — shown when source factory OR destination distributor tracks batches */}
+                          {(sourceTracksBatches || destTracksBatches) && item.sku_id && (
                             <div className="mt-3 flex items-center gap-3">
                               <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider w-16">Batch *</Label>
                               <div className="flex-1">
@@ -294,15 +296,19 @@ export default function ShipmentsTab({
                                   }}
                                   data-testid={`shipment-batch-${index}`}
                                 >
-                                  <option value="">Select batch (FIFO recommended)…</option>
+                                  <option value="">Select production batch (FIFO recommended)…</option>
                                   {(batchesBySku[item.sku_id] || []).map(b => (
                                     <option key={b.batch_id} value={b.batch_id}>
-                                      {b.batch_code} — {b.quantity} units{b.received_at ? ` · ${b.received_at.slice(0,10)}` : ''}
+                                      {b.batch_code} — {b.quantity} units{b.production_date ? ` · produced ${b.production_date.slice(0,10)}` : (b.received_at ? ` · ${b.received_at.slice(0,10)}` : '')}
                                     </option>
                                   ))}
                                 </select>
                                 {!(batchesBySku[item.sku_id] || []).length && (
-                                  <p className="text-xs text-red-600 mt-1">No batches available for this SKU at source.</p>
+                                  <p className="text-xs text-red-600 mt-1">
+                                    {sourceTracksBatches
+                                      ? 'No batches available for this SKU at source.'
+                                      : 'No production batches found for this SKU.'}
+                                  </p>
                                 )}
                               </div>
                             </div>

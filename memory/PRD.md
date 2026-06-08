@@ -16,6 +16,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 
 
+### 2026-02-06 — Distributor Stock In: batch picker mirrors Stock Out behaviour ✅ DONE
+- **Request**: During stock in, allow selecting production batches the exact same way as during stock out.
+- **Backend**: New `GET /api/distributor/stock-transfers/production-batches?sku_id=` returns all production batches for a SKU (FIFO by `production_date`) in the same response shape as `/batches-available` so the frontend can reuse the picker. Extended `POST /api/distributors/{id}/shipments` (`routes/distributors.py`) to require `batch_id` on every line when EITHER the source factory warehouse OR the destination distributor location has `track_batches=true` (previously only source-factory was enforced). Friendly 400 error names which side requires batches.
+- **Frontend** (`DistributorDetail.js` + `ShipmentsTab.jsx`): The Stock In create-shipment dialog now shows the amber batch picker whenever `sourceTracksBatches || destTracksBatches`. Batch list source: source factory's available stock (`/batches-available`) when factory tracks batches; otherwise canonical production batches (`/production-batches`). Picker labels updated to "Select production batch (FIFO recommended)" and show `production_date` when available, matching the Stock Out experience.
+- **Tested**: `/app/backend/tests/test_distributor_stockin_batch_picker.py` — 3 PASS, 1 SKIP (skip is expected — no track_batches distributor location seeded in test tenant). Live UI smoke: Stock In dialog renders cleanly for Brian distributor.
+
+
+
 ### 2026-02-06 — Design Requests: delete a work version (with confirmation, cascades file storage) ✅ DONE
 - **Request**: From a Design Request, allow deleting a version. Must remove everything from the system after a confirmation.
 - **Backend**: New `DELETE /api/marketing-requests/{request_id}/versions/{version_id}` in `routes/marketing_requests.py`. Cascade: (a) collects all `version.files[*].id`, (b) best-effort `delete_object` from storage + `marketing_request_files.delete_many`, (c) removes the version from the embedded `versions[]` array, (d) clears `approved_version_id`/`approved_version_name` if the deleted version was approved, (e) appends a system timeline comment ("Deleted work version V<n> and N attached file(s)"). Blocked when the request has already been submitted for production (matches `delete_request_file` lock).
