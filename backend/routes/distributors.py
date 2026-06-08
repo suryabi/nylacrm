@@ -7983,10 +7983,16 @@ async def get_stock_dashboard(
             # Grouped view: Empty/Reusable + Promotional(FOC) are empty USED bottles
             # cycling back for recycling (a returnable asset, NOT lost product);
             # Damaged + Expired are genuinely unsellable finished goods.
+            #
+            # ⚠️ UNITS: `empty_bottles_returned` stays in **raw bottles** —
+            # they are returned individually for cleaning/refill and almost
+            # never in clean crate multiples. Every other column on this
+            # dashboard is in **crates**.
             "empty_bottles_returned": (
-                _to_crates(sid, cr_data.get('empty_reusable', 0))
-                + _to_crates(sid, cr_data.get('promotional', 0))
+                int(cr_data.get('empty_reusable', 0))
+                + int(cr_data.get('promotional', 0))
             ),
+            "empty_bottles_returned_unit": "bottles",
             "product_returns": (
                 _to_crates(sid, cr_data.get('damaged', 0))
                 + _to_crates(sid, cr_data.get('expired', 0))
