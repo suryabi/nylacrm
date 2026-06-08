@@ -14,6 +14,7 @@ import {
   AlertCircle, Settings2, Users, Ban,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import BatchPickerCards from './BatchPickerCards';
 
 const ADMIN_ROLES = ['CEO', 'Director', 'Admin', 'admin', 'Super Admin', 'super_admin', 'System Admin'];
 const NON_EMPLOYEE_ROLES = ['Distributor', 'Driver'];  // not internal staff — excluded from Employee picker
@@ -784,29 +785,16 @@ export default function PromoDispatchSection({
                         </div>
 
                         {batchRequired && item.sku_id && (
-                          <div className="mt-3">
-                            <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1.5 mb-1.5">
-                              <Package className="h-3 w-3" /> Batch <span className="text-red-500">*</span>
-                            </Label>
-                            {batches.length === 0 ? (
-                              <div className="rounded-lg border border-red-200 bg-red-50/70 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
-                                <AlertCircle className="h-3.5 w-3.5" /> No batches available for this SKU at the source.
-                              </div>
-                            ) : (
-                              <Select value={item.batch_id} onValueChange={(v) => {
-                                const b = batches.find(x => (x.batch_id || '__legacy__') === v);
-                                updateItem(item.id, 'batch_id', v);
-                                updateItem(item.id, 'batch_code', b?.batch_code || '');
-                              }}>
-                                <SelectTrigger className="h-9" data-testid={`promo-batch-select-${index}`}><SelectValue placeholder="Select batch" /></SelectTrigger>
-                                <SelectContent>
-                                  {batches.map(b => (
-                                    <SelectItem key={b.batch_id || '__legacy__'} value={b.batch_id || '__legacy__'}>{b.batch_code} — {(b.quantity || 0).toLocaleString()} units</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </div>
+                          <BatchPickerCards
+                            batches={batches}
+                            selectedId={item.batch_id || ''}
+                            onSelect={(bid, bcode) => {
+                              updateItem(item.id, 'batch_id', bid || '__legacy__');
+                              updateItem(item.id, 'batch_code', bcode || '');
+                            }}
+                            testIdPrefix={`promo-batch-${index}`}
+                            emptyMessage="No batches available for this SKU at the source."
+                          />
                         )}
 
                         <div className="flex items-start gap-3 mt-3">

@@ -16,6 +16,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 
 
+### 2026-02-06 — Batch picker card UI consolidated across Stock In + Promotional Stock Out ✅ DONE
+- **Request**: Make Stock In and Promotional Stock Out use the same nice card-style batch picker (with age chip + production date + unit count) that Stock Out already uses, instead of the cramped `<select>` dropdown.
+- **Frontend**:
+  - Extracted the picker into a new shared component `/components/distributor/BatchPickerCards.jsx` — FIFO-sorted, age-tier coloured chips (green <30d, amber <60d, rose ≥60d), production_date/received_at, selected-card amber gradient + check badge.
+  - `ShipmentsTab.jsx` (Stock In) now renders `<BatchPickerCards>` in place of the old `<select>`.
+  - `PromoDispatchSection.jsx` (Promotional Stock-Out / Delivery Challan) now renders `<BatchPickerCards>` in place of the old `<select>`.
+- **Tested**: Build green, lint clean on new component. Live smoke: Promo Stock-Out dialog opens; picker stays hidden when the chosen source location is not batch-tracked (correct behaviour). Stock Out continues to use its own copy (unchanged).
+
+
+
 ### 2026-02-06 — Distributor Stock In: batch picker mirrors Stock Out behaviour ✅ DONE
 - **Request**: During stock in, allow selecting production batches the exact same way as during stock out.
 - **Backend**: New `GET /api/distributor/stock-transfers/production-batches?sku_id=` returns all production batches for a SKU (FIFO by `production_date`) in the same response shape as `/batches-available` so the frontend can reuse the picker. Extended `POST /api/distributors/{id}/shipments` (`routes/distributors.py`) to require `batch_id` on every line when EITHER the source factory warehouse OR the destination distributor location has `track_batches=true` (previously only source-factory was enforced). Friendly 400 error names which side requires batches.

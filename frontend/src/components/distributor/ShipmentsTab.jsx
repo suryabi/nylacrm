@@ -8,6 +8,7 @@ import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Factory } from 'lucide-react';
+import BatchPickerCards from './BatchPickerCards';
 
 export default function ShipmentsTab({
   distributor,
@@ -282,36 +283,18 @@ export default function ShipmentsTab({
                           </div>
                           {/* Row 3: Batch picker — shown when source factory OR destination distributor tracks batches */}
                           {(sourceTracksBatches || destTracksBatches) && item.sku_id && (
-                            <div className="mt-3 flex items-center gap-3">
-                              <Label className="text-xs font-semibold text-amber-700 uppercase tracking-wider w-16">Batch *</Label>
-                              <div className="flex-1">
-                                <select
-                                  className="w-full h-9 px-3 border-amber-300 border rounded-md text-sm bg-amber-50 dark:bg-amber-900/20"
-                                  value={item.batch_id || ''}
-                                  onChange={e => {
-                                    const bid = e.target.value;
-                                    const batch = (batchesBySku[item.sku_id] || []).find(b => b.batch_id === bid);
-                                    updateShipmentItem(item.id, 'batch_id', bid);
-                                    updateShipmentItem(item.id, 'batch_code', batch ? batch.batch_code : '');
-                                  }}
-                                  data-testid={`shipment-batch-${index}`}
-                                >
-                                  <option value="">Select production batch (FIFO recommended)…</option>
-                                  {(batchesBySku[item.sku_id] || []).map(b => (
-                                    <option key={b.batch_id} value={b.batch_id}>
-                                      {b.batch_code} — {b.quantity} units{b.production_date ? ` · produced ${b.production_date.slice(0,10)}` : (b.received_at ? ` · ${b.received_at.slice(0,10)}` : '')}
-                                    </option>
-                                  ))}
-                                </select>
-                                {!(batchesBySku[item.sku_id] || []).length && (
-                                  <p className="text-xs text-red-600 mt-1">
-                                    {sourceTracksBatches
-                                      ? 'No batches available for this SKU at source.'
-                                      : 'No production batches found for this SKU.'}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
+                            <BatchPickerCards
+                              batches={batchesBySku[item.sku_id] || []}
+                              selectedId={item.batch_id || ''}
+                              onSelect={(bid, bcode) => {
+                                updateShipmentItem(item.id, 'batch_id', bid);
+                                updateShipmentItem(item.id, 'batch_code', bcode || '');
+                              }}
+                              testIdPrefix={`shipment-batch-${index}`}
+                              emptyMessage={sourceTracksBatches
+                                ? 'No batches available for this SKU at source.'
+                                : 'No production batches found for this SKU.'}
+                            />
                           )}
                         </div>
                         );
