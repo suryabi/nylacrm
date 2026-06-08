@@ -267,6 +267,21 @@ export default function StockDashboard() {
           </TabsTrigger>
         </TabsList>
 
+        {/* Units banner — consistent across every stock surface so users always
+            know whether they're looking at crates or bottles. */}
+        <div
+          className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-[11px] text-slate-600"
+          data-testid="units-banner"
+        >
+          <Package className="h-3.5 w-3.5 text-slate-400" />
+          <span>
+            Quantities in <span className="font-semibold text-slate-700">crates</span>
+            <span className="text-slate-400"> — except </span>
+            <span className="font-semibold text-emerald-700">Empty Bottles</span>
+            <span className="text-slate-400"> (raw bottles)</span>
+          </span>
+        </div>
+
         {/* By Location Tab */}
         <TabsContent value="by-location">
           <div className="space-y-4">

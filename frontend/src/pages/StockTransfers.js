@@ -705,6 +705,18 @@ export default function StockTransfers() {
 
       <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
         <CardContent className="p-0">
+          <div
+            className="flex items-center gap-2 border-b border-emerald-100/60 bg-emerald-50/30 px-4 py-1.5 text-[11px] text-slate-600"
+            data-testid="units-banner"
+          >
+            <Package className="h-3.5 w-3.5 text-slate-400" />
+            <span>
+              Quantities in <span className="font-semibold text-slate-700">crates</span>
+              <span className="text-slate-400"> — except </span>
+              <span className="font-semibold text-emerald-700">Empty Bottles</span>
+              <span className="text-slate-400"> (raw bottles)</span>
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
               <thead>

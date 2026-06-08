@@ -462,6 +462,18 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
             <CardDescription>
               Track returns from customers and calculate credits
             </CardDescription>
+            <div
+              className="mt-2 inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-[11px] text-slate-600"
+              data-testid="units-banner"
+            >
+              <Package className="h-3 w-3 text-slate-400" />
+              <span>
+                Quantities in <span className="font-semibold text-slate-700">crates</span>
+                <span className="text-slate-400"> — except </span>
+                <span className="font-semibold text-emerald-700">Empty Bottles</span>
+                <span className="text-slate-400"> (raw bottles)</span>
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={downloadExcel} disabled={filteredReturns.length === 0}>
