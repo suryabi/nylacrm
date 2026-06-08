@@ -188,7 +188,7 @@ export default function StockDashboard() {
                 <p className="text-3xl font-bold text-blue-700" data-testid="total-stock">
                   {stockData?.summary?.total_quantity?.toLocaleString() || 0}
                 </p>
-                <p className="text-xs text-blue-600">units</p>
+                <p className="text-xs text-blue-600">crates</p>
               </div>
               <Boxes className="h-10 w-10 text-blue-500 opacity-80" />
             </div>

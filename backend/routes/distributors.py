@@ -3337,144 +3337,245 @@ async def get_stock_dashboard_summary(
     distributor_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get stock dashboard summary across all distributors"""
+    """Tenant-wide stock dashboard.
+
+    Pulls from BOTH `distributor_stock` (regular distributor warehouses) AND
+    `factory_warehouse_stock` (factory / master warehouses) and reports
+    **everything in crates** (numbers in the raw collections are bottles —
+    converted per-SKU via `bottles_per_crate`).
+
+    Bug fixes vs. earlier:
+      • Factory warehouses were entirely missing.
+      • Numbers were bottles, labelled as units; the UI then showed inflated
+        counts (e.g. 27,613 instead of ~1,150 crates).
+      • Negative rows polluted totals — floored to zero per row (the negative
+        is surfaced as a warehouse-overview anomaly elsewhere).
+    """
     tenant_id = get_current_tenant_id()
-    
-    # Build query
-    query = {"tenant_id": tenant_id}
+
+    # ── 1. Pull raw stock from both collections ───────────────────────────
+    dist_query: dict = {"tenant_id": tenant_id}
     if distributor_id:
-        query["distributor_id"] = distributor_id
-    
-    # Get all stock records
-    stock = await db.distributor_stock.find(query, {"_id": 0}).to_list(5000)
-    
-    # If city filter is applied, filter by distributor locations in that city
+        dist_query["distributor_id"] = distributor_id
+    distributor_rows = await db.distributor_stock.find(dist_query, {"_id": 0}).to_list(5000)
+
+    fwh_query: dict = {"tenant_id": tenant_id}
+    factory_rows = await db.factory_warehouse_stock.find(fwh_query, {"_id": 0}).to_list(5000)
+
+    # ── 2. Apply optional city filter (works for both collections) ────────
     if city:
-        # Get locations in this city
-        locations_in_city = await db.distributor_locations.find(
-            {"tenant_id": tenant_id, "city": city},
-            {"id": 1}
-        ).to_list(500)
-        location_ids = [loc['id'] for loc in locations_in_city]
-        stock = [s for s in stock if s.get('distributor_location_id') in location_ids]
-    
-    # Calculate summary metrics
-    total_quantity = sum(s.get('quantity', 0) for s in stock)
-    total_skus = len(set(s.get('sku_id') for s in stock if s.get('sku_id')))
-    total_locations = len(set(s.get('distributor_location_id') for s in stock if s.get('distributor_location_id')))
-    total_distributors = len(set(s.get('distributor_id') for s in stock if s.get('distributor_id')))
-    
-    # Group by distributor
-    by_distributor = {}
-    for item in stock:
-        dist_id = item.get('distributor_id')
-        dist_name = item.get('distributor_name', 'Unknown')
-        if dist_id not in by_distributor:
-            by_distributor[dist_id] = {
-                'distributor_id': dist_id,
-                'distributor_name': dist_name,
-                'total_quantity': 0,
-                'sku_count': set(),
-                'locations': set()
-            }
-        by_distributor[dist_id]['total_quantity'] += item.get('quantity', 0)
-        by_distributor[dist_id]['sku_count'].add(item.get('sku_id'))
-        by_distributor[dist_id]['locations'].add(item.get('distributor_location_id'))
-    
-    # Convert sets to counts
-    distributor_summary = []
-    for dist_id, data in by_distributor.items():
-        distributor_summary.append({
-            'distributor_id': dist_id,
-            'distributor_name': data['distributor_name'],
-            'total_quantity': data['total_quantity'],
-            'sku_count': len(data['sku_count']),
-            'location_count': len(data['locations'])
+        loc_ids_in_city = {
+            loc["id"] for loc in await db.distributor_locations.find(
+                {"tenant_id": tenant_id, "city": city}, {"_id": 0, "id": 1}
+            ).to_list(2000)
+        }
+        distributor_rows = [s for s in distributor_rows if s.get("distributor_location_id") in loc_ids_in_city]
+        factory_rows = [s for s in factory_rows if s.get("warehouse_location_id") in loc_ids_in_city]
+
+    # If a specific distributor was requested, factory warehouses owned by
+    # that distributor (self-managed factories) should still be included; the
+    # link is via `distributor_locations.distributor_id`.
+    if distributor_id:
+        loc_owned = {
+            loc["id"] for loc in await db.distributor_locations.find(
+                {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_factory": True},
+                {"_id": 0, "id": 1},
+            ).to_list(500)
+        }
+        factory_rows = [s for s in factory_rows if s.get("warehouse_location_id") in loc_owned]
+
+    # ── 3. Bottles → crates lookup per SKU ────────────────────────────────
+    sku_ids = list({s.get("sku_id") for s in (distributor_rows + factory_rows) if s.get("sku_id")})
+    bpc_by_sku: dict = {}
+    if sku_ids:
+        sku_rows = await db.master_skus.find(
+            {"tenant_id": tenant_id, "id": {"$in": sku_ids}},
+            {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1, "sku_name": 1},
+        ).to_list(len(sku_ids) + 1)
+        for ms in sku_rows:
+            bpc = ms.get("bottles_per_crate")
+            if not bpc:
+                so_pkgs = ((ms.get("packaging_config") or {}).get("stock_out") or [])
+                for p in so_pkgs:
+                    upp = p.get("units_per_package")
+                    if upp:
+                        bpc = upp
+                        break
+            if bpc and int(bpc) > 0:
+                bpc_by_sku[ms["id"]] = int(bpc)
+    # Fall back to any bottles_per_crate stored on the stock row itself
+    for s in distributor_rows + factory_rows:
+        sid = s.get("sku_id")
+        if sid and not bpc_by_sku.get(sid) and s.get("bottles_per_crate"):
+            try:
+                bpc = int(s["bottles_per_crate"])
+                if bpc > 0:
+                    bpc_by_sku[sid] = bpc
+            except (TypeError, ValueError):
+                pass
+
+    def crates(sku_id: str, bottles) -> int:
+        bpc = bpc_by_sku.get(sku_id) or 1
+        try:
+            return max(0, int(bottles) // (bpc or 1))
+        except Exception:
+            return max(0, int(bottles or 0))
+
+    # ── 4. Resolve location metadata for factory rows ─────────────────────
+    fwh_loc_ids = list({s.get("warehouse_location_id") for s in factory_rows if s.get("warehouse_location_id")})
+    fwh_locs: dict = {}
+    if fwh_loc_ids:
+        fwh_locs = {loc["id"]: loc for loc in await db.distributor_locations.find(
+            {"tenant_id": tenant_id, "id": {"$in": fwh_loc_ids}},
+            {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "city": 1, "is_factory": 1},
+        ).to_list(len(fwh_loc_ids) + 1)}
+    parent_dist_ids = list({loc.get("distributor_id") for loc in fwh_locs.values() if loc.get("distributor_id")})
+    parent_dists: dict = {}
+    if parent_dist_ids:
+        parent_dists = {d["id"]: d for d in await db.distributors.find(
+            {"tenant_id": tenant_id, "id": {"$in": parent_dist_ids}},
+            {"_id": 0, "id": 1, "distributor_name": 1},
+        ).to_list(len(parent_dist_ids) + 1)}
+
+    # ── 5. Build a unified "stock_rows" list of crate-denominated entries ─
+    unified: list[dict] = []
+    for s in distributor_rows:
+        unified.append({
+            "kind": "distributor",
+            "distributor_id": s.get("distributor_id"),
+            "distributor_name": s.get("distributor_name") or "Unknown",
+            "location_id": s.get("distributor_location_id"),
+            "location_name": s.get("location_name") or "Unknown",
+            "sku_id": s.get("sku_id"),
+            "sku_name": s.get("sku_name") or "Unknown",
+            "quantity": crates(s.get("sku_id", ""), s.get("quantity", 0)),
+            "is_factory": False,
         })
-    
-    # Sort by quantity descending
-    distributor_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
-    
-    # Group by SKU
-    by_sku = {}
-    for item in stock:
-        sku_id = item.get('sku_id')
-        sku_name = item.get('sku_name', 'Unknown')
-        if sku_id not in by_sku:
-            by_sku[sku_id] = {
-                'sku_id': sku_id,
-                'sku_name': sku_name,
-                'total_quantity': 0,
-                'locations': set()
-            }
-        by_sku[sku_id]['total_quantity'] += item.get('quantity', 0)
-        by_sku[sku_id]['locations'].add(item.get('distributor_location_id'))
-    
-    sku_summary = []
-    for sku_id, data in by_sku.items():
-        sku_summary.append({
-            'sku_id': sku_id,
-            'sku_name': data['sku_name'],
-            'total_quantity': data['total_quantity'],
-            'location_count': len(data['locations'])
+    for s in factory_rows:
+        loc = fwh_locs.get(s.get("warehouse_location_id"), {})
+        parent = parent_dists.get(loc.get("distributor_id"), {})
+        unified.append({
+            "kind": "factory",
+            "distributor_id": loc.get("distributor_id"),
+            "distributor_name": parent.get("distributor_name") or s.get("warehouse_name") or "Factory",
+            "location_id": s.get("warehouse_location_id"),
+            "location_name": s.get("warehouse_name") or loc.get("location_name") or "Factory Warehouse",
+            "sku_id": s.get("sku_id"),
+            "sku_name": s.get("sku_name") or "Unknown",
+            "quantity": crates(s.get("sku_id", ""), s.get("quantity", 0)),
+            "is_factory": True,
         })
-    
-    sku_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
-    
-    # Group by location
-    by_location = {}
-    for item in stock:
-        loc_id = item.get('distributor_location_id')
-        loc_name = item.get('location_name', 'Unknown')
-        dist_name = item.get('distributor_name', 'Unknown')
-        if loc_id not in by_location:
-            by_location[loc_id] = {
-                'location_id': loc_id,
-                'location_name': loc_name,
-                'distributor_name': dist_name,
-                'total_quantity': 0,
-                'sku_count': set(),
-                'items': []
-            }
-        by_location[loc_id]['total_quantity'] += item.get('quantity', 0)
-        by_location[loc_id]['sku_count'].add(item.get('sku_id'))
-        by_location[loc_id]['items'].append({
-            'sku_id': item.get('sku_id'),
-            'sku_name': item.get('sku_name'),
-            'quantity': item.get('quantity', 0)
+
+    # ── 6. Top-level summary ──────────────────────────────────────────────
+    total_quantity = sum(r["quantity"] for r in unified)
+    total_skus = len({r["sku_id"] for r in unified if r.get("sku_id")})
+    total_locations = len({r["location_id"] for r in unified if r.get("location_id")})
+    total_distributors = len({r["distributor_id"] for r in unified if r.get("distributor_id")})
+
+    # ── 7. Groupings (by_distributor / by_sku / by_location) ──────────────
+    by_dist: dict = {}
+    for r in unified:
+        did = r.get("distributor_id") or "__factory__"
+        bucket = by_dist.setdefault(did, {
+            "distributor_id": did,
+            "distributor_name": r.get("distributor_name"),
+            "total_quantity": 0,
+            "sku_count": set(),
+            "locations": set(),
         })
-    
+        bucket["total_quantity"] += r["quantity"]
+        if r.get("sku_id"):
+            bucket["sku_count"].add(r["sku_id"])
+        if r.get("location_id"):
+            bucket["locations"].add(r["location_id"])
+    distributor_summary = sorted([
+        {"distributor_id": v["distributor_id"], "distributor_name": v["distributor_name"],
+         "total_quantity": v["total_quantity"], "sku_count": len(v["sku_count"]),
+         "location_count": len(v["locations"])}
+        for v in by_dist.values()
+    ], key=lambda x: x["total_quantity"], reverse=True)
+
+    by_sku: dict = {}
+    for r in unified:
+        sid = r.get("sku_id")
+        if not sid:
+            continue
+        bucket = by_sku.setdefault(sid, {
+            "sku_id": sid, "sku_name": r.get("sku_name"),
+            "total_quantity": 0, "locations": set(),
+        })
+        bucket["total_quantity"] += r["quantity"]
+        if r.get("location_id"):
+            bucket["locations"].add(r["location_id"])
+    sku_summary = sorted([
+        {"sku_id": v["sku_id"], "sku_name": v["sku_name"],
+         "total_quantity": v["total_quantity"], "location_count": len(v["locations"])}
+        for v in by_sku.values()
+    ], key=lambda x: x["total_quantity"], reverse=True)
+
+    by_loc: dict = {}
+    for r in unified:
+        lid = r.get("location_id")
+        if not lid:
+            continue
+        bucket = by_loc.setdefault(lid, {
+            "location_id": lid, "location_name": r.get("location_name"),
+            "distributor_name": r.get("distributor_name"),
+            "is_factory": r.get("is_factory", False),
+            "total_quantity": 0, "sku_count": set(), "items": [],
+        })
+        # If the same location surfaces from both collections (rare) mark as
+        # factory if either row says so — factories are the more specific kind.
+        if r.get("is_factory"):
+            bucket["is_factory"] = True
+        bucket["total_quantity"] += r["quantity"]
+        bucket["sku_count"].add(r.get("sku_id"))
+        bucket["items"].append({
+            "sku_id": r.get("sku_id"),
+            "sku_name": r.get("sku_name"),
+            "quantity": r["quantity"],
+        })
+    # Aggregate duplicate SKU lines within a location (when the same SKU
+    # appears in both distributor_stock and factory_warehouse_stock — yes,
+    # this happens for self-managed factories — or across multiple batches).
     location_summary = []
-    for loc_id, data in by_location.items():
+    for v in by_loc.values():
+        items_by_sku: dict = {}
+        for it in v["items"]:
+            sid = it.get("sku_id")
+            if not sid:
+                continue
+            items_by_sku.setdefault(sid, {"sku_id": sid, "sku_name": it.get("sku_name"), "quantity": 0})
+            items_by_sku[sid]["quantity"] += int(it.get("quantity") or 0)
         location_summary.append({
-            'location_id': loc_id,
-            'location_name': data['location_name'],
-            'distributor_name': data['distributor_name'],
-            'total_quantity': data['total_quantity'],
-            'sku_count': len(data['sku_count']),
-            'items': data['items']
+            "location_id": v["location_id"],
+            "location_name": v["location_name"],
+            "distributor_name": v["distributor_name"],
+            "is_factory": v["is_factory"],
+            "total_quantity": v["total_quantity"],
+            "sku_count": len([s for s in v["sku_count"] if s]),
+            "items": sorted(items_by_sku.values(), key=lambda x: (x.get("sku_name") or "").lower()),
         })
-    
-    location_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
-    
-    # Get list of cities with stock
+    location_summary.sort(key=lambda x: x["total_quantity"], reverse=True)
+
+    # Cities (just the ones whose locations actually have stock)
     cities_with_stock = await db.distributor_locations.distinct(
         "city",
-        {"tenant_id": tenant_id, "id": {"$in": list(set(s.get('distributor_location_id') for s in stock))}}
+        {"tenant_id": tenant_id, "id": {"$in": list({r.get("location_id") for r in unified if r.get("location_id")})}}
     )
-    
+
     return {
         "summary": {
             "total_quantity": total_quantity,
             "total_skus": total_skus,
             "total_locations": total_locations,
-            "total_distributors": total_distributors
+            "total_distributors": total_distributors,
+            "unit": "crates",
         },
         "by_distributor": distributor_summary,
         "by_sku": sku_summary,
         "by_location": location_summary,
         "cities": sorted(cities_with_stock) if cities_with_stock else [],
-        "raw_stock": stock
     }
 
 
