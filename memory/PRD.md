@@ -16,6 +16,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 
 
+### 2026-02-06 — Stock-by-SKU table: per-row batch disclosure ✅ DONE
+- **Request**: In the Stock Dashboard's "Stock by SKU" table, allow each row to expand and reveal its batch-wise breakdown.
+- **Backend** (`routes/distributors.py`): Built a `fwh_batches_by_sku` lookup from the already-aggregated `factory_wh_by_location` dict, then attached `factory_warehouse_batches: [{batch_code, quantity, production_date, received_at, warehouse_id, warehouse_name}]` (FIFO-sorted) to every SKU summary returned to the frontend.
+- **Frontend** (`StockDashboardTab.jsx`): Every SKU row in the Stock-by-SKU table is now expandable (was previously only expandable when returns existed). A small teal "N batch(es)" chip beside the SKU name indicates the batch count; clicking the row opens a "FACTORY WAREHOUSE STOCK · PER-BATCH · FIFO" panel showing age-tier chip (🟢 <30d, 🟠 <60d, 🔴 ≥60d), batch code, warehouse name, prod/received date and per-batch crate count. Existing customer/factory returns breakdown still shown side-by-side when present.
+- **Tested**: Backend regression test still passes (sum of batches == consolidated quantity per SKU). Live screenshot on Surya 1 distributor confirms Nyla 660ml Sparkling expands to show 2 batches in FIFO order, single-batch SKUs work identically.
+
+
+
 ### 2026-02-06 — "N batches" disclosure on Factory Warehouse Stock card ✅ DONE
 - **Request**: Show a tiny "N batches" sub-label under each consolidated SKU row on the Factory Warehouse Stock card, with click-to-expand per-batch breakdown for FIFO planning.
 - **Backend**: The aggregator in `routes/distributors.py` now also keeps a per-SKU `batches` array (`batch_id`, `batch_code`, `quantity`, `production_date`, `received_at`) FIFO-sorted by production_date. Single-batch SKUs still carry a 1-element array; multi-batch SKUs carry N entries that sum to the consolidated `quantity`.

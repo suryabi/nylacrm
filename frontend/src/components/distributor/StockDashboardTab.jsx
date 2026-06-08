@@ -398,24 +398,34 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                 {skus.map((sku, i) => {
                   const isExpanded = expandedSku[sku.sku_id];
                   const hasReturns = sku.customer_returns > 0 || sku.factory_returns > 0;
+                  const batches = sku.factory_warehouse_batches || [];
+                  const hasBatches = batches.length > 0;
+                  const isExpandable = hasReturns || hasBatches;
                   const lowStock = sku.days_of_stock !== null && sku.days_of_stock <= 7;
                   return (
                     <React.Fragment key={sku.sku_id}>
                       <tr
-                        className={`border-b transition-colors ${hasReturns ? 'cursor-pointer hover:bg-slate-50' : ''} ${lowStock ? 'bg-red-50/40' : i % 2 === 1 ? 'bg-slate-50/30' : ''}`}
-                        onClick={() => hasReturns && toggleSku(sku.sku_id)}
+                        className={`border-b transition-colors ${isExpandable ? 'cursor-pointer hover:bg-slate-50' : ''} ${lowStock ? 'bg-red-50/40' : i % 2 === 1 ? 'bg-slate-50/30' : ''}`}
+                        onClick={() => isExpandable && toggleSku(sku.sku_id)}
                         data-testid={`sku-row-${sku.sku_id}`}
                       >
                         <td className="p-3 pl-4">
                           <div className="flex items-center gap-2">
-                            {hasReturns ? (
+                            {isExpandable ? (
                               isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
                             ) : <div className="w-3.5" />}
                             <div>
                               <p className="font-medium text-slate-800">{sku.sku_name}</p>
-                              {sku.pending_factory_return > 0 && (
-                                <span className="text-[10px] text-purple-600 font-medium">{sku.pending_factory_return} pending factory return</span>
-                              )}
+                              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                {sku.pending_factory_return > 0 && (
+                                  <span className="text-[10px] text-purple-600 font-medium">{sku.pending_factory_return} pending factory return</span>
+                                )}
+                                {hasBatches && (
+                                  <span className="text-[10px] font-medium text-teal-700 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5" data-testid={`sku-batch-count-${sku.sku_id}`}>
+                                    {batches.length} batch{batches.length === 1 ? '' : 'es'}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -449,11 +459,57 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                           {sku.weeks_analyzed > 0 && <span className="text-[10px] text-slate-400 ml-1">/{sku.weeks_analyzed}w</span>}
                         </td>
                       </tr>
-                      {isExpanded && hasReturns && (
+                      {isExpanded && isExpandable && (
                         <tr>
                           <td colSpan={11} className="p-0">
-                            <div className="bg-slate-50/80 border-b px-6 py-3">
-                              <div className="grid grid-cols-2 gap-6">
+                            <div className="bg-slate-50/80 border-b px-6 py-3 space-y-3">
+                              {/* Per-batch breakdown of factory warehouse stock — FIFO */}
+                              {hasBatches && (
+                                <div className="rounded-lg border border-teal-200 overflow-hidden" data-testid={`sku-batches-${sku.sku_id}`}>
+                                  <div className="bg-teal-50 px-3 py-1.5 flex items-center justify-between border-b border-teal-200">
+                                    <span className="text-[11px] font-semibold text-teal-700 uppercase tracking-wider">Factory Warehouse Stock · per-batch · FIFO</span>
+                                    <span className="text-[11px] font-bold text-teal-800">{fmt(sku.factory_warehouse_stock)} crates</span>
+                                  </div>
+                                  <div className="divide-y divide-slate-100">
+                                    {batches.map((b, bi) => {
+                                      const iso = b.production_date || b.received_at;
+                                      let days = null;
+                                      if (iso) {
+                                        const t = Date.parse(String(iso).length === 10 ? `${iso}T00:00:00Z` : iso);
+                                        if (!Number.isNaN(t)) days = Math.max(0, Math.floor((Date.now() - t) / 86400000));
+                                      }
+                                      const ageLabel = days == null ? 'Age unknown' : (days === 0 ? 'Today' : `${days}d old`);
+                                      const ageCls =
+                                        days == null ? 'text-slate-600 bg-slate-100 border-slate-200'
+                                        : days < 30 ? 'text-emerald-700 bg-emerald-100 border-emerald-200'
+                                        : days < 60 ? 'text-amber-700 bg-amber-100 border-amber-200'
+                                        : 'text-rose-700 bg-rose-100 border-rose-200';
+                                      return (
+                                        <div key={b.batch_id || `legacy-${bi}`} className="flex items-center justify-between px-3 py-1.5 text-xs" data-testid={`sku-batch-${sku.sku_id}-${bi}`}>
+                                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <span className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ageCls}`}>
+                                              {ageLabel}
+                                            </span>
+                                            <span className="font-mono font-medium text-slate-800 text-[11px] truncate">{b.batch_code}</span>
+                                            {b.warehouse_name && (
+                                              <span className="text-[10px] text-slate-500 truncate">· {b.warehouse_name}</span>
+                                            )}
+                                            {iso && (
+                                              <span className="text-[10px] text-slate-400">
+                                                · {b.production_date ? 'Prod' : 'Recv'} {String(iso).slice(0, 10)}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="font-semibold text-teal-700 tabular-nums">{fmt(b.quantity)} crates</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+                              {/* Returns breakdown (existing) */}
+                              {hasReturns && (
+                                <div className="grid grid-cols-2 gap-6">
                                 {/* Customer Returns Breakdown */}
                                 {sku.customer_returns > 0 && (
                                   <div className="rounded-lg border border-amber-200 overflow-hidden">
@@ -503,7 +559,8 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                                     </div>
                                   </div>
                                 )}
-                              </div>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>

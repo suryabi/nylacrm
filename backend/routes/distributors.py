@@ -7624,6 +7624,21 @@ async def get_stock_dashboard(
                 "production_date": fws.get("production_date"),
                 "received_at": fws.get("created_at"),
             })
+
+    # Build a sku_id → list-of-batches (with warehouse_name) lookup so the
+    # main Stock-by-SKU table can expose a per-batch disclosure on every row.
+    fwh_batches_by_sku = {}
+    for wh_id, wh_data in factory_wh_by_location.items():
+        wh_name = wh_data.get("warehouse_name", "")
+        for sid_key, bucket in wh_data["skus_by_id"].items():
+            entry = fwh_batches_by_sku.setdefault(sid_key, [])
+            for b in bucket.get("batches", []):
+                entry.append({**b, "warehouse_id": wh_id, "warehouse_name": wh_name})
+    # FIFO per SKU — oldest first
+    for sid_key in fwh_batches_by_sku:
+        fwh_batches_by_sku[sid_key].sort(
+            key=lambda b: (b.get("production_date") or b.get("received_at") or "9999")
+        )
     
     # === 2. STOCK OUT: Deliveries to customers (delivered/completed/complete) ===
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
@@ -7883,6 +7898,10 @@ async def get_stock_dashboard(
             },
             "pending_factory_return": _to_crates(sid, cr_data.get('pending_factory', 0)),
             "factory_warehouse_stock": qty_factory_wh,
+            # Per-batch breakdown of the factory warehouse stock for this SKU
+            # so the Stock-by-SKU table can expose a batch-level disclosure on
+            # every row. Empty list when this SKU has no factory stock.
+            "factory_warehouse_batches": fwh_batches_by_sku.get(sid, []),
             "stock_at_hand": stock_at_hand,
             "pct_stock_at_hand": pct_at_hand,
             "weekly_avg_deliveries": weekly_avg,
