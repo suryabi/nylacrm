@@ -60,6 +60,17 @@ def test_factory_warehouse_skus_are_unique_per_warehouse(hdr):
             # Quantities are positive ints (crates)
             for s in (wh.get("skus") or []):
                 assert isinstance(s.get("quantity"), int) and s["quantity"] >= 0
+                # New: each SKU should carry a `batches` array. Multi-batch
+                # SKUs must have N>=2 entries that sum to the consolidated
+                # `quantity` so the UI breakdown doesn't lie.
+                batches = s.get("batches") or []
+                assert isinstance(batches, list)
+                if len(batches) > 1:
+                    total = sum(int(b.get("quantity") or 0) for b in batches)
+                    assert total == s["quantity"], (
+                        f"Batch breakdown {total} != consolidated quantity {s['quantity']} "
+                        f"for SKU '{s.get('sku_name')}'"
+                    )
             if wh.get("skus"):
                 seen_any = True
     if not seen_any:

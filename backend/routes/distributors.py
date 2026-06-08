@@ -7605,7 +7605,8 @@ async def get_stock_dashboard(
             # Per-location breakdown — aggregate per SKU so a SKU with
             # multiple `factory_warehouse_stock` rows (one per batch) shows
             # as a single line with the summed crate quantity instead of
-            # one row per batch.
+            # one row per batch. We also keep the per-batch breakdown
+            # under `batches` so the UI can disclose it on demand.
             wh_id = fws.get("warehouse_location_id", "")
             if wh_id not in factory_wh_by_location:
                 factory_wh_by_location[wh_id] = {
@@ -7613,9 +7614,16 @@ async def get_stock_dashboard(
                     "skus_by_id": {},
                 }
             bucket = factory_wh_by_location[wh_id]["skus_by_id"].setdefault(
-                sid, {"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": 0}
+                sid, {"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": 0, "batches": []}
             )
             bucket["quantity"] += crates_qty
+            bucket["batches"].append({
+                "batch_id": fws.get("batch_id"),
+                "batch_code": fws.get("batch_code") or "(legacy)",
+                "quantity": crates_qty,
+                "production_date": fws.get("production_date"),
+                "received_at": fws.get("created_at"),
+            })
     
     # === 2. STOCK OUT: Deliveries to customers (delivered/completed/complete) ===
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
@@ -7933,9 +7941,20 @@ async def get_stock_dashboard(
                 "warehouse_id": wh_id,
                 "warehouse_name": wh_data["warehouse_name"],
                 # Convert the aggregated dict back to a list, sorted by name
-                # for stable, alphabetical display in the UI.
+                # for stable, alphabetical display in the UI. Each entry now
+                # also carries a `batches` array (FIFO sorted) used by the
+                # "N batches" disclosure in the dashboard card.
                 "skus": sorted(
-                    wh_data["skus_by_id"].values(),
+                    [
+                        {
+                            **s,
+                            "batches": sorted(
+                                s.get("batches", []),
+                                key=lambda b: (b.get("production_date") or b.get("received_at") or "9999"),
+                            ),
+                        }
+                        for s in wh_data["skus_by_id"].values()
+                    ],
                     key=lambda s: (s.get("sku_name") or "").lower(),
                 ),
             }

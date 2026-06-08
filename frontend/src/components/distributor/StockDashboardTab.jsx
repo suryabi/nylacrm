@@ -12,6 +12,91 @@ import { useAuth } from '../../context/AuthContext';
 const fmt = (v) => (v || 0).toLocaleString('en-IN');
 const pct = (v) => `${(v || 0).toFixed(1)}%`;
 
+/**
+ * Factory Warehouse SKU row with optional "N batches" disclosure.
+ * Renders a single consolidated line; if the SKU is sourced from more than
+ * one batch, the user can click the row to expand a small inset table with
+ * batch code, age and units — FIFO ordered so the oldest batch is first
+ * (warehouse teams can immediately see what to ship next).
+ */
+function FactoryWarehouseSkuRow({ sku, fmt: format }) {
+  const batches = sku.batches || [];
+  const multi = batches.length > 1;
+  const [open, setOpen] = useState(false);
+  const ageDays = (iso) => {
+    if (!iso) return null;
+    const t = Date.parse(iso.length === 10 ? `${iso}T00:00:00Z` : iso);
+    if (Number.isNaN(t)) return null;
+    return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+  };
+  const chipFor = (days) => {
+    if (days == null) return 'text-slate-600 bg-slate-100 border-slate-200';
+    if (days < 30) return 'text-emerald-700 bg-emerald-100 border-emerald-200';
+    if (days < 60) return 'text-amber-700 bg-amber-100 border-amber-200';
+    return 'text-rose-700 bg-rose-100 border-rose-200';
+  };
+
+  return (
+    <div className="rounded bg-white/60 overflow-hidden" data-testid={`fw-sku-row-${sku.sku_id}`}>
+      <button
+        type="button"
+        onClick={() => multi && setOpen(o => !o)}
+        className={`w-full flex items-center justify-between text-sm px-2 py-1.5 text-left transition-colors ${multi ? 'cursor-pointer hover:bg-teal-50/70' : 'cursor-default'}`}
+        disabled={!multi}
+        data-testid={`fw-sku-toggle-${sku.sku_id}`}
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          {multi && (
+            <ChevronRight
+              className={`h-3.5 w-3.5 text-teal-600 flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
+            />
+          )}
+          <span className="text-slate-700 truncate">{sku.sku_name}</span>
+        </div>
+        <div className="flex items-baseline gap-2 flex-shrink-0">
+          <span className="font-bold text-teal-700">{format(sku.quantity)} crates</span>
+          {multi && (
+            <span className="text-[10px] font-medium text-teal-600/80 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5">
+              {batches.length} batches
+            </span>
+          )}
+        </div>
+      </button>
+      {multi && open && (
+        <div className="border-t border-teal-100 bg-teal-50/40 px-2 py-1.5" data-testid={`fw-sku-batches-${sku.sku_id}`}>
+          <div className="text-[10px] font-semibold text-teal-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+            <span>Per-batch breakdown · FIFO</span>
+            <span className="text-teal-600/70 normal-case">{format(sku.quantity)} crates total</span>
+          </div>
+          <div className="space-y-0.5">
+            {batches.map((b, bi) => {
+              const dateIso = b.production_date || b.received_at;
+              const days = ageDays(dateIso);
+              const ageLabel = days == null ? 'Age unknown' : (days === 0 ? 'Today' : `${days}d old`);
+              return (
+                <div key={b.batch_id || `legacy-${bi}`} className="flex items-center justify-between text-[12px] px-1.5 py-1 rounded hover:bg-white/80">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`text-[9px] font-semibold uppercase tracking-wider px-1 py-0.5 rounded border ${chipFor(days)}`}>
+                      {ageLabel}
+                    </span>
+                    <span className="font-mono text-slate-700 text-[11px] truncate">{b.batch_code}</span>
+                    {dateIso && (
+                      <span className="text-[10px] text-slate-400">
+                        {b.production_date ? 'Prod' : 'Recv'} {String(dateIso).slice(0, 10)}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-semibold text-teal-700 tabular-nums">{format(b.quantity)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StockDashboardTab({ distributor, API_URL, token }) {
   const { user } = useAuth();
   const isElevated = ['ceo', 'system admin'].includes((user?.role || '').trim().toLowerCase());
@@ -221,10 +306,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     </div>
                     <div className="space-y-1.5">
                       {wh.skus.map((s, i) => (
-                        <div key={i} className="flex items-center justify-between text-sm px-2 py-1 rounded bg-white/60">
-                          <span className="text-slate-700">{s.sku_name}</span>
-                          <span className="font-bold text-teal-700">{fmt(s.quantity)} crates</span>
-                        </div>
+                        <FactoryWarehouseSkuRow key={`${wh.warehouse_id}-${s.sku_id || i}`} sku={s} fmt={fmt} />
                       ))}
                     </div>
                   </div>

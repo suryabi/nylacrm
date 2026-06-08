@@ -16,6 +16,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 
 
+### 2026-02-06 — "N batches" disclosure on Factory Warehouse Stock card ✅ DONE
+- **Request**: Show a tiny "N batches" sub-label under each consolidated SKU row on the Factory Warehouse Stock card, with click-to-expand per-batch breakdown for FIFO planning.
+- **Backend**: The aggregator in `routes/distributors.py` now also keeps a per-SKU `batches` array (`batch_id`, `batch_code`, `quantity`, `production_date`, `received_at`) FIFO-sorted by production_date. Single-batch SKUs still carry a 1-element array; multi-batch SKUs carry N entries that sum to the consolidated `quantity`.
+- **Frontend** (`StockDashboardTab.jsx`): Extracted a new `FactoryWarehouseSkuRow` sub-component. Renders a plain line when the SKU has ≤1 batch (no clutter). When ≥2 batches, the row becomes clickable, shows a rotating chevron + a small teal "N batches" pill next to the quantity, and expands an inset showing batch code, age tier chip (green <30d, amber <60d, rose ≥60d), production/received date, and per-batch crate count.
+- **Tested**: Dedupe regression test extended to assert `sum(batches.quantity) == consolidated.quantity` for every multi-batch SKU. 27 backend tests still pass. Live screenshot on Surya 1 confirms the 2-batch SKU "Nyla – 660 ml / Sparkling (23 crates · 2 batches)" expands cleanly to show BATCH-VERIFY-A-001 (3) + BATCH-VERIFY-B-002 (20).
+
+
+
 ### 2026-02-06 — 🐛 Critical fix: Factory Warehouse Stock card showed duplicate SKU rows ✅ DONE
 - **Bug**: When the same SKU at the same factory warehouse had multiple `factory_warehouse_stock` documents (one per production batch), the distributor stock-dashboard returned one row per batch — so the **Factory Warehouse Stock** card on the UI listed the same SKU three or four times with split quantities, instead of one consolidated row per SKU.
 - **Root cause**: `routes/distributors.py` (the `stock-dashboard` endpoint) was appending each Mongo doc into `factory_wh_by_location[wh_id]["skus"]` without deduping. With batch tracking enabled, each batch is a separate stock document → multiple appended rows for the same SKU.
