@@ -16,6 +16,15 @@ import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Safe percentage helper: never returns NaN. Returns 0 when denominator is
+// 0 / undefined / NaN so the UI shows "0%" instead of "NaN%".
+const safePct = (numerator, denominator, decimals = 0) => {
+  const d = Number(denominator);
+  const n = Number(numerator);
+  if (!Number.isFinite(d) || !Number.isFinite(n) || d <= 0) return '0';
+  return ((n / d) * 100).toFixed(decimals);
+};
+
 export default function StockDashboard() {
   const { token } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -352,11 +361,11 @@ export default function StockDashboard() {
                                     <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
                                       <div 
                                         className="h-full bg-primary rounded-full"
-                                        style={{ width: `${(item.quantity / location.total_quantity * 100).toFixed(0)}%` }}
+                                        style={{ width: `${safePct(item.quantity, location.total_quantity, 0)}%` }}
                                       />
                                     </div>
                                     <span className="text-muted-foreground">
-                                      {(item.quantity / location.total_quantity * 100).toFixed(0)}%
+                                      {safePct(item.quantity, location.total_quantity, 0)}%
                                     </span>
                                   </div>
                                 </td>
@@ -419,11 +428,11 @@ export default function StockDashboard() {
                               <div className="w-24 h-3 bg-muted rounded-full overflow-hidden">
                                 <div 
                                   className="h-full bg-green-500 rounded-full"
-                                  style={{ width: `${(sku.total_quantity / stockData.summary.total_quantity * 100).toFixed(0)}%` }}
+                                  style={{ width: `${safePct(sku.total_quantity, stockData.summary.total_quantity, 0)}%` }}
                                 />
                               </div>
                               <span className="text-sm text-muted-foreground w-12 text-right">
-                                {(sku.total_quantity / stockData.summary.total_quantity * 100).toFixed(1)}%
+                                {safePct(sku.total_quantity, stockData.summary.total_quantity, 1)}%
                               </span>
                             </div>
                           </td>
@@ -473,7 +482,7 @@ export default function StockDashboard() {
                         <div className="flex items-center gap-1 text-muted-foreground">
                           <BarChart3 className="h-4 w-4" />
                           <span className="text-sm">
-                            {(dist.total_quantity / stockData.summary.total_quantity * 100).toFixed(1)}% of total
+                            {safePct(dist.total_quantity, stockData.summary.total_quantity, 1)}% of total
                           </span>
                         </div>
                       </div>

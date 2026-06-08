@@ -3384,42 +3384,21 @@ async def get_stock_dashboard_summary(
         }
         factory_rows = [s for s in factory_rows if s.get("warehouse_location_id") in loc_owned]
 
-    # ── 3. Bottles → crates lookup per SKU ────────────────────────────────
-    sku_ids = list({s.get("sku_id") for s in (distributor_rows + factory_rows) if s.get("sku_id")})
-    bpc_by_sku: dict = {}
-    if sku_ids:
-        sku_rows = await db.master_skus.find(
-            {"tenant_id": tenant_id, "id": {"$in": sku_ids}},
-            {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1, "sku_name": 1},
-        ).to_list(len(sku_ids) + 1)
-        for ms in sku_rows:
-            bpc = ms.get("bottles_per_crate")
-            if not bpc:
-                so_pkgs = ((ms.get("packaging_config") or {}).get("stock_out") or [])
-                for p in so_pkgs:
-                    upp = p.get("units_per_package")
-                    if upp:
-                        bpc = upp
-                        break
-            if bpc and int(bpc) > 0:
-                bpc_by_sku[ms["id"]] = int(bpc)
-    # Fall back to any bottles_per_crate stored on the stock row itself
-    for s in distributor_rows + factory_rows:
-        sid = s.get("sku_id")
-        if sid and not bpc_by_sku.get(sid) and s.get("bottles_per_crate"):
-            try:
-                bpc = int(s["bottles_per_crate"])
-                if bpc > 0:
-                    bpc_by_sku[sid] = bpc
-            except (TypeError, ValueError):
-                pass
-
-    def crates(sku_id: str, bottles) -> int:
-        bpc = bpc_by_sku.get(sku_id) or 1
+    # ── 3. Stock quantities are stored **already in crates** in both
+    #       `distributor_stock` and `factory_warehouse_stock` (the per-SKU
+    #       bottles-per-crate conversion happens at the moment stock is
+    #       received / dispatched, never on read). We therefore do NOT divide
+    #       again here — doing so previously made small crate counts collapse
+    #       to 0 (e.g. 12 crates ÷ 24 bpc = 0). We only floor negatives so
+    #       any reconciliation glitch can't pollute totals.
+    def crates(_sku_id: str, qty) -> int:
         try:
-            return max(0, int(bottles) // (bpc or 1))
+            return max(0, int(qty))
         except Exception:
-            return max(0, int(bottles or 0))
+            try:
+                return max(0, int(qty or 0))
+            except Exception:
+                return 0
 
     # ── 4. Resolve location metadata for factory rows ─────────────────────
     fwh_loc_ids = list({s.get("warehouse_location_id") for s in factory_rows if s.get("warehouse_location_id")})
