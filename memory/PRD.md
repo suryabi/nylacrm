@@ -16,6 +16,17 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 
 
+### 2026-02-06 — Promotional Stock-Out → Zoho Books delivery challan integration ✅ DONE
+- **Request**: Push promo delivery challans to Zoho (use the default Zoho template — no custom template needed) and clearly mark them "Not for Sale / No Commercial Value", matching the existing inter-branch stock transfer flow.
+- **Backend (`services/zoho_service.py`)**: New `create_delivery_challan_for_promo_dispatch()` pushes a Zoho Books *Delivery Challan* with `gst_treatment="out_of_scope"`, zero `tax_total`, `is_inclusive_tax=false`, and a prominent banner in `notes`:
+  > "*** NOT FOR SALE · NO COMMERCIAL VALUE ***  Promotional / non-sale stock-out. Indicative values for asset tracking only — no GST applicable, no consideration receivable."
+  Recipient name, company, phone, reason, vehicle, driver, remarks appended below the banner. Each line item is renamed to "<sku> · Batch <code> — Sample / Promotional (Not for Sale)" and tax fields cleared. Customer = distributor's own Zoho contact (upserted on demand). Shipping address overridden with the actual recipient delivery address. Idempotent via `zoho_invoice_mappings` keyed by `source_type="promo_dispatch"`.
+- **Backend (`routes/promo_dispatch.py`)**: After local create succeeds, attempts the Zoho push best-effort. A failure does NOT block the dispatch — `zoho_sync_status` is persisted on the doc as `synced` / `failed` with the error truncated. New `POST /api/distributors/{id}/promo-deliveries/{did}/retry-zoho` endpoint re-attempts.
+- **Frontend (`PromoDispatchSection.jsx`)**: New "Zoho" column on the dispatches table — shows a green "Synced · DC-Z-0001" link (opens the Zoho deliverychallan page) when pushed, or a red "Retry" button (with tooltip carrying the error) when failed. Toast feedback on retry.
+- **Tested**: New `tests/test_promo_dispatch_zoho_sync.py` (3 tests) — verifies payload shape contains the banner + out-of-scope flags + line-item Sample suffix, asserts retry endpoint 404s correctly on unknown ids. 9/9 tests pass across promo + dedupe + batch picker suites.
+
+
+
 ### 2026-02-06 — Stock-by-SKU table: per-row batch disclosure ✅ DONE
 - **Request**: In the Stock Dashboard's "Stock by SKU" table, allow each row to expand and reveal its batch-wise breakdown.
 - **Backend** (`routes/distributors.py`): Built a `fwh_batches_by_sku` lookup from the already-aggregated `factory_wh_by_location` dict, then attached `factory_warehouse_batches: [{batch_code, quantity, production_date, received_at, warehouse_id, warehouse_name}]` (FIFO-sorted) to every SKU summary returned to the frontend.

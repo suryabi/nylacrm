@@ -11,7 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Gift, RefreshCw, Package, FileText, X, Download, ChevronDown,
-  AlertCircle, Settings2, Users, Ban,
+  AlertCircle, Settings2, Users, Ban, ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import BatchPickerCards from './BatchPickerCards';
@@ -37,6 +37,7 @@ export default function PromoDispatchSection({
   const [dispatches, setDispatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [retryingId, setRetryingId] = useState(null);
 
   // Create dialog
   const [showDialog, setShowDialog] = useState(false);
@@ -356,6 +357,28 @@ export default function PromoDispatchSection({
     }
   };
 
+  const retryZohoSync = async (dispatch) => {
+    setRetryingId(dispatch.id);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/retry-zoho`,
+        { method: 'POST', headers: authHeaders },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body.detail || 'Zoho retry failed');
+      } else {
+        toast.success(`Synced to Zoho as ${body.zoho_doc_number || 'delivery challan'}`);
+        fetchDispatches();
+      }
+    } catch (err) {
+      console.error('Error retrying Zoho sync:', err);
+      toast.error('Zoho retry failed');
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
   // Reasons manager
   const addReason = async () => {
     const name = newReasonName.trim();
@@ -466,6 +489,7 @@ export default function PromoDispatchSection({
                       <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">From</th>
                       <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Units</th>
                       <th className="text-right p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Indicative Value</th>
+                      <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Zoho</th>
                       <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Challan</th>
                     </tr>
                   </thead>
@@ -488,6 +512,34 @@ export default function PromoDispatchSection({
                           <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2 py-0.5 rounded-full">{d.total_quantity}</span>
                         </td>
                         <td className="p-3 text-right text-slate-700 tabular-nums">₹{fmtINR(d.total_indicative_value)}</td>
+                        <td className="p-3 text-center">
+                          {d.zoho_sync_status === 'synced' && d.zoho_doc_url ? (
+                            <a
+                              href={d.zoho_doc_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 px-2 py-0.5 rounded transition-colors"
+                              data-testid={`zoho-link-${d.id}`}
+                              title={d.zoho_doc_number || 'Synced to Zoho Books'}
+                            >
+                              <ShieldCheck className="h-3 w-3" /> {d.zoho_doc_number || 'Synced'}
+                            </a>
+                          ) : d.zoho_sync_status === 'failed' ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[11px] text-rose-700 border-rose-200 hover:bg-rose-50"
+                              onClick={() => retryZohoSync(d)}
+                              disabled={retryingId === d.id}
+                              data-testid={`zoho-retry-${d.id}`}
+                              title={d.zoho_sync_error || 'Push failed — click to retry'}
+                            >
+                              {retryingId === d.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <><AlertCircle className="h-3 w-3 mr-1" /> Retry</>}
+                            </Button>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">—</span>
+                          )}
+                        </td>
                         <td className="p-3 text-center">
                           <Button
                             variant="outline"

@@ -3,9 +3,14 @@ Promotional / Non-sale stock-out (Delivery Challan) routes.
 
 Sometimes goods are stocked out from a distributor and handed to people saved in
 the CRM **Contacts** module — for promotions, networking, brand visibility or
-sampling. There is NO sale: no invoice, no Zoho push, no account balance, no
-revenue. Stock is still deducted (inventory stays accurate) and a **Delivery
-Challan** is generated with indicative values marked "Not for Sale".
+sampling. There is NO sale: no invoice, no account balance, no revenue. Stock
+is still deducted (inventory stays accurate) and a **Delivery Challan** is
+generated with indicative values marked "Not for Sale".
+
+Zoho integration: a delivery-challan document is also pushed to Zoho Books with
+`gst_treatment=out_of_scope` and a prominent "Not for Sale · No Commercial
+Value" banner in the notes — purely as an audit trail. A failure to push does
+NOT block the local dispatch (it remains usable and can be retried).
 
 Collections (kept separate from account deliveries to avoid any regression):
   • promo_reasons        — admin-managed master list of reasons
@@ -23,6 +28,10 @@ from database import db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.distributor import PromoDeliveryCreate
+from services.zoho_service import (
+    create_delivery_challan_for_promo_dispatch,
+    is_zoho_configured,
+)
 from routes.distributors import can_manage_distributor_data
 from utils.pdf_generator import generate_delivery_challan_pdf
 
@@ -286,8 +295,67 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
                 stock_key, {"$inc": {"quantity": -it.quantity}, "$set": {"updated_at": now}})
 
     logger.info(f"Promo dispatch {challan_number} created by {current_user.get('email')} (no invoice).")
+
+    # ── Best-effort Zoho push (out-of-scope delivery challan, no GST) ──
+    zoho_sync_status = "not_attempted"
+    zoho_sync_error = None
+    if is_zoho_configured():
+        try:
+            items_for_zoho = [{
+                "sku_id": it.sku_id,
+                "sku_name": it.sku_name,
+                "quantity": it.quantity,
+                "unit_price": float(it.unit_price or 0),
+                "batch_code": it.batch_code,
+            } for it in data.items]
+            mapping = await create_delivery_challan_for_promo_dispatch(
+                tenant_id=tenant_id, dispatch=dispatch, items=items_for_zoho, distributor=distributor,
+            )
+            zoho_sync_status = "synced"
+            await db.promo_dispatches.update_one(
+                {"id": dispatch_id, "tenant_id": tenant_id},
+                {"$set": {
+                    "zoho_sync_status": "synced",
+                    "zoho_doc_id": mapping.get("zoho_invoice_id"),
+                    "zoho_doc_number": mapping.get("zoho_invoice_number"),
+                    "zoho_doc_url": mapping.get("zoho_invoice_url"),
+                    "zoho_synced_at": now,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            dispatch["zoho_sync_status"] = "synced"
+            dispatch["zoho_doc_id"] = mapping.get("zoho_invoice_id")
+            dispatch["zoho_doc_number"] = mapping.get("zoho_invoice_number")
+            dispatch["zoho_doc_url"] = mapping.get("zoho_invoice_url")
+            logger.info(
+                f"Promo dispatch {challan_number} pushed to Zoho as "
+                f"{mapping.get('zoho_invoice_number')}"
+            )
+        except Exception as exc:
+            zoho_sync_status = "failed"
+            zoho_sync_error = str(exc)[:500]
+            logger.exception(
+                f"Zoho push failed for promo dispatch {challan_number}; "
+                f"local dispatch saved, can be retried."
+            )
+            await db.promo_dispatches.update_one(
+                {"id": dispatch_id, "tenant_id": tenant_id},
+                {"$set": {
+                    "zoho_sync_status": "failed",
+                    "zoho_sync_error": zoho_sync_error,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            dispatch["zoho_sync_status"] = "failed"
+            dispatch["zoho_sync_error"] = zoho_sync_error
+
     dispatch.pop("_id", None)
-    return {"message": f"Delivery Challan {challan_number} generated", "dispatch": dispatch}
+    return {
+        "message": f"Delivery Challan {challan_number} generated",
+        "dispatch": dispatch,
+        "zoho_sync_status": zoho_sync_status,
+        "zoho_sync_error": zoho_sync_error,
+    }
 
 
 @router.get("/distributors/{distributor_id}/promo-deliveries")
@@ -339,6 +407,59 @@ async def get_promo_dispatch(distributor_id: str, dispatch_id: str, current_user
     items = await db.promo_dispatch_items.find({"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
     d["items"] = items
     return d
+
+
+@router.post("/distributors/{distributor_id}/promo-deliveries/{dispatch_id}/retry-zoho")
+async def retry_zoho_for_promo_dispatch(distributor_id: str, dispatch_id: str, current_user: dict = Depends(get_current_user)):
+    """Re-attempt the Zoho delivery-challan push for a dispatch that failed
+    (or was created before the integration was configured). Idempotent —
+    already-synced dispatches return their existing mapping."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised")
+    if not is_zoho_configured():
+        raise HTTPException(status_code=400, detail="Zoho Books integration is not configured for this tenant.")
+    tenant_id = get_current_tenant_id()
+    d = await db.promo_dispatches.find_one(
+        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    if not d:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    items_rows = await db.promo_dispatch_items.find({"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0}) or {}
+    items_for_zoho = [{
+        "sku_id": it.get("sku_id"),
+        "sku_name": it.get("sku_name"),
+        "quantity": it.get("quantity"),
+        "unit_price": float(it.get("unit_price") or 0),
+        "batch_code": it.get("batch_code"),
+    } for it in items_rows]
+    try:
+        mapping = await create_delivery_challan_for_promo_dispatch(
+            tenant_id=tenant_id, dispatch=d, items=items_for_zoho, distributor=distributor,
+        )
+        now = datetime.now(timezone.utc).isoformat()
+        await db.promo_dispatches.update_one(
+            {"id": dispatch_id, "tenant_id": tenant_id},
+            {"$set": {
+                "zoho_sync_status": "synced",
+                "zoho_doc_id": mapping.get("zoho_invoice_id"),
+                "zoho_doc_number": mapping.get("zoho_invoice_number"),
+                "zoho_doc_url": mapping.get("zoho_invoice_url"),
+                "zoho_synced_at": now,
+                "zoho_sync_error": None,
+                "updated_at": now,
+            }},
+        )
+        return {"ok": True, "zoho_doc_number": mapping.get("zoho_invoice_number"),
+                "zoho_doc_url": mapping.get("zoho_invoice_url")}
+    except Exception as exc:
+        err = str(exc)[:500]
+        logger.exception(f"Retry Zoho push failed for promo dispatch {d.get('challan_number')}")
+        await db.promo_dispatches.update_one(
+            {"id": dispatch_id, "tenant_id": tenant_id},
+            {"$set": {"zoho_sync_status": "failed", "zoho_sync_error": err,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        raise HTTPException(status_code=400, detail=f"Zoho push failed: {err}")
 
 
 @router.get("/distributors/{distributor_id}/promo-deliveries/{dispatch_id}/challan-pdf")

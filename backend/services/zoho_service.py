@@ -1844,6 +1844,148 @@ async def create_delivery_challan_for_stock_transfer(
     return mapping_doc
 
 
+async def create_delivery_challan_for_promo_dispatch(
+    *, tenant_id: str, dispatch: dict, items: list[dict], distributor: dict
+) -> dict:
+    """Push a promotional / non-sale stock-out as a Zoho Books *Delivery Challan*.
+
+    Promo dispatches are gifted samples, brand promotions or sponsorships — they
+    move stock physically but are **NOT a taxable supply**. Per the same Indian
+    GST rule used for branch transfers we use a Delivery Challan (no GST) with:
+      • `gst_treatment="out_of_scope"`
+      • zero `tax_total`
+      • a prominent "Not for sale · No commercial value" banner in `notes`
+
+    The "customer" is the distributor itself (its own Zoho contact) — there is
+    no real buyer. The actual recipient (CRM Contact / Lead / Employee) is
+    recorded in `notes` and as `shipping_address` so the printed PDF is still
+    fully self-describing.
+
+    Idempotent — re-pushing the same `dispatch.id` returns the existing mapping.
+    """
+    if not is_zoho_configured():
+        raise RuntimeError("Zoho Books integration is not configured (ZOHO_CLIENT_ID missing).")
+
+    existing_mapping = await db.zoho_invoice_mappings.find_one(
+        {"tenant_id": tenant_id, "source_type": "promo_dispatch",
+         "source_id": dispatch.get("id"), "status": "synced"},
+        {"_id": 0},
+    )
+    if existing_mapping and existing_mapping.get("zoho_invoice_id"):
+        logger.info(
+            f"Zoho delivery challan already synced for promo dispatch "
+            f"{dispatch.get('challan_number')}; skipping re-push."
+        )
+        return existing_mapping
+
+    # Use the distributor's own Zoho contact as the document's `customer_id`.
+    # If the distributor isn't yet linked, upsert one on the fly so the push
+    # doesn't fail just because the distributor was never invoiced before.
+    customer_id = await upsert_contact(tenant_id, {
+        "id": distributor.get("id"),
+        "account_name": distributor.get("distributor_name") or distributor.get("legal_entity_name"),
+        "legal_entity_name": distributor.get("legal_entity_name") or distributor.get("distributor_name"),
+        "gstin": distributor.get("gstin"),
+        "primary_contact_name": distributor.get("primary_contact_name"),
+        "primary_contact_email": distributor.get("primary_contact_email"),
+        "primary_contact_mobile": distributor.get("primary_contact_mobile"),
+        "billing_address": distributor.get("billing_address") or distributor.get("registered_address"),
+        "delivery_address": distributor.get("registered_address"),
+        "zoho_contact_id": distributor.get("zoho_contact_id"),
+    })
+
+    # Build line items. Promo dispatches carry indicative unit_price on each
+    # line for record-keeping (asset valuation) — we pass it as `rate` but the
+    # document is marked out-of-scope so Zoho will NOT compute or charge tax.
+    line_items: list[dict] = []
+    for it in items:
+        zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
+        base_name = (it.get("sku_name") or "").strip() or "Item"
+        batch_code = (it.get("batch_code") or "").strip()
+        parts = [base_name]
+        if batch_code:
+            parts.append(f"Batch {batch_code}")
+        display_name = " · ".join(parts) + "  — Sample / Promotional (Not for Sale)"
+        line_items.append({
+            "item_id": zoho_item_id,
+            "name": display_name,
+            "quantity": float(it.get("quantity", 0) or 0),
+            "rate": float(it.get("unit_price", 0) or 0),
+            "tax_id": "",
+            "tax_name": "",
+            "tax_type": "",
+            "tax_percentage": 0,
+            "item_tax_preferences": [],
+        })
+
+    if not line_items:
+        raise RuntimeError(f"Promo dispatch {dispatch.get('challan_number')} has no items to push.")
+
+    # The banner the user explicitly asked for — same wording as the existing
+    # local PDF — placed at the top of `notes` so it shows on the printed
+    # Zoho delivery-challan PDF.
+    banner = (
+        "*** NOT FOR SALE · NO COMMERCIAL VALUE ***\n"
+        "Promotional / non-sale stock-out. Indicative values for asset "
+        "tracking only — no GST applicable, no consideration receivable.\n"
+    )
+    recipient_block = (
+        f"Recipient: {dispatch.get('contact_name') or '—'}"
+        + (f" ({dispatch.get('contact_company')})" if dispatch.get('contact_company') else "")
+        + (f"\nPhone: {dispatch.get('contact_phone')}" if dispatch.get('contact_phone') else "")
+        + (f"\nReason: {dispatch.get('promo_reason')}" if dispatch.get('promo_reason') else "")
+        + (f"\nVehicle: {dispatch.get('vehicle_number')}" if dispatch.get('vehicle_number') else "")
+        + (f"\nDriver: {dispatch.get('driver_name')}" if dispatch.get('driver_name') else "")
+        + (f"\nRemarks: {dispatch.get('remarks')}" if dispatch.get('remarks') else "")
+    )
+    notes = (banner + "\n" + recipient_block).strip()
+
+    payload = {
+        "customer_id": customer_id,
+        "challan_type": "others",   # Zoho enum — see stock-transfer function for the limited set
+        "reference_number": dispatch.get("challan_number"),
+        "date": (dispatch.get("delivery_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
+        "line_items": line_items,
+        "notes": notes,
+        "is_inclusive_tax": False,
+        "gst_treatment": "out_of_scope",
+        "tax_total": 0,
+    }
+    if dispatch.get("delivery_address"):
+        # Override the printed `shipping_address` with the actual recipient
+        # delivery address so the PDF carries the right "deliver to" block.
+        payload["shipping_address"] = {"address": dispatch["delivery_address"]}
+
+    result = await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=payload)
+    challan = result.get("deliverychallan") or result.get("delivery_challan") or {}
+    zoho_challan_id = challan.get("deliverychallan_id") or challan.get("delivery_challan_id")
+    zoho_challan_number = challan.get("deliverychallan_number") or challan.get("delivery_challan_number")
+    challan_url = _zoho_books_url(zoho_challan_id, await get_credentials(tenant_id) or {})
+    if challan_url:
+        challan_url = challan_url.replace("/invoices/", "/deliverychallans/")
+
+    now = datetime.now(timezone.utc).isoformat()
+    mapping_doc = {
+        "tenant_id": tenant_id,
+        "source_type": "promo_dispatch",
+        "source_id": dispatch.get("id"),
+        "source_number": dispatch.get("challan_number"),
+        "zoho_invoice_id": zoho_challan_id,
+        "zoho_invoice_number": zoho_challan_number,
+        "zoho_invoice_url": challan_url,
+        "zoho_doc_type": "delivery_challan",
+        "status": "synced",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.zoho_invoice_mappings.update_one(
+        {"tenant_id": tenant_id, "source_type": "promo_dispatch", "source_id": dispatch.get("id")},
+        {"$set": mapping_doc, "$setOnInsert": {"first_synced_at": now}},
+        upsert=True,
+    )
+    return mapping_doc
+
+
 async def create_invoice_for_stock_transfer(
     *, tenant_id: str, transfer: dict, dest_distributor: dict
 ) -> dict:
