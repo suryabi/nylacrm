@@ -858,12 +858,12 @@ export default function PromoDispatchSection({
 
                         <div className="flex items-start gap-3 mt-3">
                           <div className="w-24 flex-shrink-0">
-                            <Label className="text-xs text-muted-foreground">Qty (units)</Label>
+                            <Label className="text-xs text-muted-foreground">Qty (crates)</Label>
                             <Input type="number" min="1" className="h-10 mt-1 text-base font-medium" value={item.quantity}
                               onChange={(e) => updateItem(item.id, 'quantity', e.target.value)} data-testid={`promo-qty-${index}`} />
                           </div>
                           <div className="flex-1 min-w-[100px]">
-                            <Label className="text-xs text-muted-foreground">Indicative Value/unit (₹)</Label>
+                            <Label className="text-xs text-muted-foreground">Indicative Value/crate (₹)</Label>
                             <Input type="number" min="0" step="0.01" className="h-10 mt-1 text-base" value={item.unit_price}
                               onChange={(e) => updateItem(item.id, 'unit_price', e.target.value)} data-testid={`promo-price-${index}`} />
                           </div>
@@ -876,7 +876,7 @@ export default function PromoDispatchSection({
                     );
                   })}
                   <div className="px-4 py-3 flex items-center justify-between bg-fuchsia-50/40">
-                    <span className="text-sm font-semibold">Total · {totalQty} units</span>
+                    <span className="text-sm font-semibold">Total · {totalQty} crates</span>
                     <span className="text-lg font-bold tabular-nums" data-testid="promo-grand-total">₹{fmtINR(totalValue)}</span>
                   </div>
                 </div>
