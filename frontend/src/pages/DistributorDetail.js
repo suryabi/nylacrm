@@ -509,6 +509,12 @@ export default function DistributorDetail() {
     (distributor?.locations || []).find(loc => loc.id === shipmentForm.distributor_location_id)?.track_batches
   );
   const shipmentNeedsBatch = sourceFactoryTracksBatches || destDistributorTracksBatches;
+  // 🐛 FIX: batches are scoped to (source warehouse, destination location).
+  // Resetting the cache whenever either side changes prevents the picker from
+  // showing stale batches/quantities from the previously selected warehouse.
+  useEffect(() => {
+    setShipmentBatchesBySku({});
+  }, [shipmentForm.source_warehouse_id, shipmentForm.distributor_location_id]);
   useEffect(() => {
     if (!shipmentNeedsBatch) {
       setShipmentBatchesBySku({});
@@ -537,6 +543,12 @@ export default function DistributorDetail() {
   const sourceDistributorTracksBatches = !!(
     (distributor?.locations || []).find(loc => loc.id === deliveryForm.distributor_location_id)?.track_batches
   );
+  // 🐛 FIX: batches are scoped to the source location. Reset the cache
+  // whenever the user switches `distributor_location_id`, otherwise the
+  // picker keeps showing the previous warehouse's batches and quantities.
+  useEffect(() => {
+    setDeliveryBatchesBySku({});
+  }, [deliveryForm.distributor_location_id]);
   useEffect(() => {
     if (!sourceDistributorTracksBatches || !deliveryForm.distributor_location_id) {
       setDeliveryBatchesBySku({});

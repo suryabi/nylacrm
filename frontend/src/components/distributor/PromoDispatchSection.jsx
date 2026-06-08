@@ -188,6 +188,13 @@ export default function PromoDispatchSection({
     return () => clearTimeout(t);
   }, [leadSearch, showDialog, recipientType, selectedLead, fetchLeads]);
 
+  // 🐛 FIX: batches are scoped to the source `distributor_location_id`.
+  // Reset the cache whenever the user changes location so the picker
+  // refetches batches for the new warehouse instead of showing stale data.
+  useEffect(() => {
+    setBatchMap({});
+  }, [form.distributor_location_id]);
+
   // Fetch available batches for the *selected From-Location* whenever it or the
   // chosen SKUs change (only if that location tracks batches). This mirrors the
   // regular Stock-Out flow so the promo dialog shows the batch picker for the

@@ -16,6 +16,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 
 
+### 2026-02-06 — 🐛 Critical fix: batch picker showed stale batches when switching warehouses ✅ DONE
+- **Bug**: In Stock In, Stock Out (Record Account Delivery) and Promotional Stock-Out, the batch picker kept showing the previously selected warehouse's batches and quantities after the user switched "From Location" to a different warehouse. Caused by frontend caches (`shipmentBatchesBySku`, `deliveryBatchesBySku`, `batchMap`) keyed by `sku_id` only — once a SKU was loaded for one location, subsequent location changes never re-fetched.
+- **Fix**: Added a one-line `useEffect` in each of the three flows that resets the per-flow batch cache to `{}` whenever the source location id changes. Backend `/batches-available` was already correctly scoped by `warehouse_location_id` / `distributor_location_id` — the bug was purely client-side cache invalidation.
+- **Tested**: 26 backend tests still pass. Build green. Three lines changed in `DistributorDetail.js` (2 effects) and `PromoDispatchSection.jsx` (1 effect).
+
+
+
 ### 2026-02-06 — Batch picker card UI consolidated across Stock In + Promotional Stock Out ✅ DONE
 - **Request**: Make Stock In and Promotional Stock Out use the same nice card-style batch picker (with age chip + production date + unit count) that Stock Out already uses, instead of the cramped `<select>` dropdown.
 - **Frontend**:
