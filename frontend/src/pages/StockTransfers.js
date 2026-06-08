@@ -353,7 +353,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
                   {filteredSources.length === 0 && <SelectItem value="__none__" disabled>No self-managed warehouses with stock</SelectItem>}
                   {filteredSources.map((s) => (
                     <SelectItem key={s.location_id} value={s.location_id}>
-                      {s.distributor_name} — {s.location_name} ({s.total_qty} units{s.is_factory ? ' · Factory' : ''})
+                      {s.distributor_name} — {s.location_name} ({s.total_qty.toLocaleString('en-IN')} crates{s.is_factory ? ' · Factory' : ''})
                     </SelectItem>
                   ))}
                 </SelectContent>

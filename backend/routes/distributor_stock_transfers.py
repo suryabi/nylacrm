@@ -625,36 +625,81 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
 
     Each row carries `source_kind ∈ ('distributor', 'factory')` so the UI can
     badge and the create-transfer flow can route the inventory deduction.
+
+    `total_qty` is reported in **crates** (not bottles). We group at the SKU
+    level so each SKU's bottles can be divided by its own `bottles_per_crate`
+    before summing — otherwise a warehouse mixing 12-pack and 24-pack SKUs
+    would report a meaningless figure.
     """
     tenant_id = get_current_tenant_id()
 
-    # 1) Distributor warehouse stock
+    # 1) Distributor warehouse stock — grouped at (warehouse, SKU) to allow
+    #    per-SKU bottles→crates conversion before summing.
     rows_d = [r async for r in db.distributor_stock.aggregate([
         {"$match": {"tenant_id": tenant_id, "quantity": {"$gt": 0}}},
-        {"$group": {"_id": {"d": "$distributor_id", "l": "$distributor_location_id"},
+        {"$group": {"_id": {"d": "$distributor_id", "l": "$distributor_location_id", "s": "$sku_id"},
                     "distributor_name": {"$first": "$distributor_name"},
                     "location_name": {"$first": "$location_name"},
-                    "total_qty": {"$sum": "$quantity"}}},
+                    "bottles": {"$sum": "$quantity"}}},
     ])]
 
-    # 2) Factory warehouse stock
+    # 2) Factory warehouse stock — same per-SKU grouping.
     rows_f = [r async for r in db.factory_warehouse_stock.aggregate([
         {"$match": {"tenant_id": tenant_id, "quantity": {"$gt": 0}}},
-        {"$group": {"_id": "$warehouse_location_id",
+        {"$group": {"_id": {"l": "$warehouse_location_id", "s": "$sku_id"},
                     "warehouse_name": {"$first": "$warehouse_name"},
-                    "total_qty": {"$sum": "$quantity"}}},
+                    "bottles": {"$sum": "$quantity"},
+                    "bpc_hint": {"$first": "$bottles_per_crate"}}},
     ])]
+
+    # Bottles-per-crate map seeded from master_skus + any inline hint on the
+    # factory stock rows themselves (some legacy rows carry the field).
+    sku_ids = list({r["_id"]["s"] for r in rows_d if r["_id"].get("s")}
+                   | {r["_id"]["s"] for r in rows_f if r["_id"].get("s")})
+    bpc_by_sku: dict = {}
+    if sku_ids:
+        sku_rows = await db.master_skus.find(
+            {"tenant_id": tenant_id, "id": {"$in": sku_ids}},
+            {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1},
+        ).to_list(len(sku_ids) + 1)
+        for ms in sku_rows:
+            bpc = ms.get("bottles_per_crate")
+            if not bpc:
+                # Fall back to the first stock-out package's units_per_package.
+                so_pkgs = ((ms.get("packaging_config") or {}).get("stock_out") or [])
+                for p in so_pkgs:
+                    upp = p.get("units_per_package")
+                    if upp:
+                        bpc = upp
+                        break
+            if bpc and int(bpc) > 0:
+                bpc_by_sku[ms["id"]] = int(bpc)
+    for r in rows_f:
+        sid = r["_id"].get("s")
+        if sid and not bpc_by_sku.get(sid) and r.get("bpc_hint"):
+            try:
+                if int(r["bpc_hint"]) > 0:
+                    bpc_by_sku[sid] = int(r["bpc_hint"])
+            except (TypeError, ValueError):
+                pass
+
+    def _to_crates(sku_id: str, bottles: int) -> int:
+        bpc = bpc_by_sku.get(sku_id) or 1
+        try:
+            return int(bottles) // bpc if bpc > 0 else int(bottles)
+        except Exception:
+            return int(bottles)
 
     # Collect every location_id we'll need to enrich (gstin / parent distributor)
     loc_ids = list({r["_id"]["l"] for r in rows_d if r["_id"].get("l")}
-                   | {r["_id"] for r in rows_f if r["_id"]})
+                   | {r["_id"]["l"] for r in rows_f if r["_id"].get("l")})
     locs = {loc["id"]: loc for loc in await db.distributor_locations.find(
         {"tenant_id": tenant_id, "id": {"$in": loc_ids}},
         {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "gstin": 1, "is_factory": 1, "track_batches": 1, "city": 1, "state": 1},
     ).to_list(len(loc_ids) + 1)} if loc_ids else {}
 
     dist_ids = list({r["_id"]["d"] for r in rows_d if r["_id"].get("d")}
-                    | {locs[r["_id"]]["distributor_id"] for r in rows_f if r["_id"] in locs})
+                    | {locs[r["_id"]["l"]]["distributor_id"] for r in rows_f if r["_id"]["l"] in locs})
     dists = {d["id"]: d for d in await db.distributors.find(
         {"tenant_id": tenant_id, "id": {"$in": dist_ids}},
         {"_id": 0, "id": 1, "distributor_name": 1, "is_self_managed": 1, "gstin": 1},
@@ -663,6 +708,7 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
     out: dict = {}  # keyed by location_id to dedupe when the same warehouse has rows in BOTH collections
     for row in rows_d:
         lid = row["_id"]["l"]
+        sid = row["_id"]["s"]
         d = dists.get(row["_id"]["d"], {})
         loc = locs.get(lid, {})
         gstin = (loc.get("gstin") or d.get("gstin") or "").strip().upper() or None
@@ -679,9 +725,10 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
-        bucket["total_qty"] += int(row.get("total_qty") or 0)
+        bucket["total_qty"] += _to_crates(sid, int(row.get("bottles") or 0))
     for row in rows_f:
-        lid = row["_id"]
+        lid = row["_id"]["l"]
+        sid = row["_id"]["s"]
         loc = locs.get(lid, {})
         if not loc:
             continue  # surfaced via /warehouse-stock-overview orphans
@@ -700,7 +747,7 @@ async def list_eligible_sources(current_user: dict = Depends(get_current_user)):
             "gstin": gstin,
             "pan": _extract_pan(gstin) or None,
         })
-        bucket["total_qty"] += int(row.get("total_qty") or 0)
+        bucket["total_qty"] += _to_crates(sid, int(row.get("bottles") or 0))
         # Promote source_kind to 'factory' if this warehouse is actually a factory
         # (the distributor_stock leg may have created the bucket first with kind='distributor').
         if loc.get("is_factory"):
