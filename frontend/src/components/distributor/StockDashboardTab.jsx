@@ -21,7 +21,7 @@ const pct = (v) => `${(v || 0).toFixed(1)}%`;
  */
 function FactoryWarehouseSkuRow({ sku, fmt: format }) {
   const batches = sku.batches || [];
-  const multi = batches.length > 1;
+  const hasBatches = batches.length > 0;
   const [open, setOpen] = useState(false);
   const ageDays = (iso) => {
     if (!iso) return null;
@@ -40,13 +40,13 @@ function FactoryWarehouseSkuRow({ sku, fmt: format }) {
     <div className="rounded bg-white/60 overflow-hidden" data-testid={`fw-sku-row-${sku.sku_id}`}>
       <button
         type="button"
-        onClick={() => multi && setOpen(o => !o)}
-        className={`w-full flex items-center justify-between text-sm px-2 py-1.5 text-left transition-colors ${multi ? 'cursor-pointer hover:bg-teal-50/70' : 'cursor-default'}`}
-        disabled={!multi}
+        onClick={() => hasBatches && setOpen(o => !o)}
+        className={`w-full flex items-center justify-between text-sm px-2 py-1.5 text-left transition-colors ${hasBatches ? 'cursor-pointer hover:bg-teal-50/70' : 'cursor-default'}`}
+        disabled={!hasBatches}
         data-testid={`fw-sku-toggle-${sku.sku_id}`}
       >
         <div className="flex items-center gap-1.5 min-w-0">
-          {multi && (
+          {hasBatches && (
             <ChevronRight
               className={`h-3.5 w-3.5 text-teal-600 flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`}
             />
@@ -55,14 +55,14 @@ function FactoryWarehouseSkuRow({ sku, fmt: format }) {
         </div>
         <div className="flex items-baseline gap-2 flex-shrink-0">
           <span className="font-bold text-teal-700">{format(sku.quantity)} crates</span>
-          {multi && (
+          {hasBatches && (
             <span className="text-[10px] font-medium text-teal-600/80 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5">
-              {batches.length} batches
+              {batches.length} batch{batches.length === 1 ? '' : 'es'}
             </span>
           )}
         </div>
       </button>
-      {multi && open && (
+      {hasBatches && open && (
         <div className="border-t border-teal-100 bg-teal-50/40 px-2 py-1.5" data-testid={`fw-sku-batches-${sku.sku_id}`}>
           <div className="text-[10px] font-semibold text-teal-700 uppercase tracking-wider mb-1 flex items-center justify-between">
             <span>Per-batch breakdown · FIFO</span>
