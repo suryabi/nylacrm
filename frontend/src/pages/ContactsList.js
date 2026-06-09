@@ -208,6 +208,7 @@ export default function ContactsList() {
     phone: '',
     email: '',
     address: '',
+    address_line2: '',
     city: '',
     state: '',
     country: '',
@@ -308,6 +309,7 @@ export default function ContactsList() {
       phone: '',
       email: '',
       address: '',
+      address_line2: '',
       city: '',
       state: '',
       country: '',
@@ -330,6 +332,7 @@ export default function ContactsList() {
       phone: contact.phone || '',
       email: contact.email || '',
       address: contact.address || '',
+      address_line2: contact.address_line2 || '',
       city: contact.city || '',
       state: contact.state || '',
       country: contact.country || '',
@@ -758,14 +761,25 @@ export default function ContactsList() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Address</Label>
-                <Textarea
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="Street address"
-                  rows={2}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Address Line 1</Label>
+                  <Input
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="Building, street"
+                    data-testid="contact-address-line1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Address Line 2</Label>
+                  <Input
+                    value={formData.address_line2}
+                    onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
+                    placeholder="Area, landmark (optional)"
+                    data-testid="contact-address-line2"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
@@ -873,11 +887,11 @@ export default function ContactsList() {
                     </a>
                   </div>
                 )}
-                {(viewContact.address || viewContact.city) && (
+                {(viewContact.address || viewContact.address_line2 || viewContact.city) && (
                   <div className="flex items-start gap-3">
                     <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <span>
-                      {[viewContact.address, viewContact.city, viewContact.state, viewContact.country]
+                      {[viewContact.address, viewContact.address_line2, viewContact.city, viewContact.state, viewContact.country]
                         .filter(Boolean)
                         .join(', ')}
                     </span>

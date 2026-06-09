@@ -43,6 +43,7 @@ class ContactCreate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
+    address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
@@ -58,6 +59,7 @@ class ContactUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
+    address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
