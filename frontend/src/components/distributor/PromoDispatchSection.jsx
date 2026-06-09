@@ -487,7 +487,7 @@ export default function PromoDispatchSection({
                       <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Contact</th>
                       <th className="text-center p-3 font-semibold text-fuchsia-700 uppercase tracking-wider text-xs">Reason</th>
                       <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">From</th>
-                      <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Units</th>
+                      <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Crates</th>
                       <th className="text-right p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Indicative Value</th>
                       <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Zoho</th>
                       <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Challan</th>
