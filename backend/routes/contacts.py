@@ -47,6 +47,10 @@ class ContactCreate(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
+    pincode: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
     notes: Optional[str] = None
     card_front_url: Optional[str] = None
     card_back_url: Optional[str] = None
@@ -63,6 +67,10 @@ class ContactUpdate(BaseModel):
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
+    pincode: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
     notes: Optional[str] = None
     card_front_url: Optional[str] = None
     card_back_url: Optional[str] = None

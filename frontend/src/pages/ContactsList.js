@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
+import GooglePlacesAddressSearch from '../components/GooglePlacesAddressSearch';
 import {
   Dialog,
   DialogContent,
@@ -212,6 +213,10 @@ export default function ContactsList() {
     city: '',
     state: '',
     country: '',
+    pincode: '',
+    lat: null,
+    lng: null,
+    formatted_address: '',
     notes: ''
   });
 
@@ -313,6 +318,10 @@ export default function ContactsList() {
       city: '',
       state: '',
       country: '',
+      pincode: '',
+      lat: null,
+      lng: null,
+      formatted_address: '',
       notes: ''
     });
     setCardFront(null);
@@ -336,6 +345,10 @@ export default function ContactsList() {
       city: contact.city || '',
       state: contact.state || '',
       country: contact.country || '',
+      pincode: contact.pincode || '',
+      lat: contact.lat ?? null,
+      lng: contact.lng ?? null,
+      formatted_address: contact.formatted_address || '',
       notes: contact.notes || ''
     });
     setCardFront(contact.card_front_url || null);
@@ -761,52 +774,106 @@ export default function ContactsList() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Address Line 1</Label>
-                  <Input
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="Building, street"
-                    data-testid="contact-address-line1"
-                  />
+              {/* Address with Google Places autocomplete (same as Lead / Account) */}
+              <div className="space-y-3 rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Search Address</Label>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span>Powered by</span>
+                    <span className="font-semibold text-[#4285F4]">G</span>
+                    <span className="font-semibold text-[#EA4335]">o</span>
+                    <span className="font-semibold text-[#FBBC05]">o</span>
+                    <span className="font-semibold text-[#4285F4]">g</span>
+                    <span className="font-semibold text-[#34A853]">l</span>
+                    <span className="font-semibold text-[#EA4335]">e</span>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Address Line 2</Label>
-                  <Input
-                    value={formData.address_line2}
-                    onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
-                    placeholder="Area, landmark (optional)"
-                    data-testid="contact-address-line2"
-                  />
-                </div>
-              </div>
+                <GooglePlacesAddressSearch
+                  cityHint={formData.city}
+                  placeholder="Search for a place (3+ chars)…"
+                  testId="contact-address-search"
+                  onPick={(p) => setFormData((prev) => ({
+                    ...prev,
+                    address: p.address_line_1 || prev.address,
+                    address_line2: p.address_line_2 || prev.address_line2,
+                    city: p.city || prev.city,
+                    state: p.state || prev.state,
+                    pincode: p.pincode || prev.pincode,
+                    lat: p.lat ?? prev.lat,
+                    lng: p.lng ?? prev.lng,
+                    formatted_address: p.formatted_address || prev.formatted_address,
+                  }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Fields below auto-fill when you pick a result — you can still edit them.
+                </p>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>City</Label>
-                  <Input
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    placeholder="City"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Address Line 1</Label>
+                    <Input
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      placeholder="Building, street"
+                      data-testid="contact-address-line1"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Address Line 2</Label>
+                    <Input
+                      value={formData.address_line2}
+                      onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
+                      placeholder="Area, locality (optional)"
+                      data-testid="contact-address-line2"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>State</Label>
-                  <Input
-                    value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                    placeholder="State"
-                  />
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">City</Label>
+                    <Input
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      placeholder="City"
+                      data-testid="contact-address-city"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">State</Label>
+                    <Input
+                      value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                      placeholder="State"
+                      data-testid="contact-address-state"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Pincode</Label>
+                    <Input
+                      value={formData.pincode}
+                      onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                      placeholder="Pincode"
+                      data-testid="contact-address-pincode"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Country</Label>
+                    <Input
+                      value={formData.country}
+                      onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                      placeholder="Country"
+                      data-testid="contact-address-country"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Country</Label>
-                  <Input
-                    value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    placeholder="Country"
-                  />
-                </div>
+
+                {formData.lat != null && formData.lng != null && (
+                  <p className="text-[11px] font-mono text-emerald-600 flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    GPS captured: {Number(formData.lat).toFixed(6)}, {Number(formData.lng).toFixed(6)}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -891,7 +958,7 @@ export default function ContactsList() {
                   <div className="flex items-start gap-3">
                     <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <span>
-                      {[viewContact.address, viewContact.address_line2, viewContact.city, viewContact.state, viewContact.country]
+                      {[viewContact.address, viewContact.address_line2, viewContact.city, viewContact.state, viewContact.pincode, viewContact.country]
                         .filter(Boolean)
                         .join(', ')}
                     </span>
