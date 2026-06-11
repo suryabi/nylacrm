@@ -385,6 +385,7 @@ function AppRouter() {
           {/* New Marketing Requests Module (Sales raises -> Marketing fulfils -> Delivery produces) */}
           <Route path="/marketing-requests" element={<ProtectedRoute><MarketingRequests /></ProtectedRoute>} />
           <Route path="/marketing-requests/new" element={<ProtectedRoute><NewMarketingRequest /></ProtectedRoute>} />
+          <Route path="/marketing-requests/:id/edit" element={<ProtectedRoute><NewMarketingRequest /></ProtectedRoute>} />
           <Route path="/marketing-requests/:id" element={<ProtectedRoute><MarketingRequestDetail /></ProtectedRoute>} />
           <Route path="/print-requests" element={<ProtectedRoute moduleKey="print_requests"><PrintRequests /></ProtectedRoute>} />
           <Route path="/print-requests/:id" element={<ProtectedRoute moduleKey="print_requests"><PrintRequestDetail /></ProtectedRoute>} />

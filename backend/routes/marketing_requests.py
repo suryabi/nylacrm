@@ -139,6 +139,24 @@ async def _can_delete_request(tenant_id: str, user: dict) -> bool:
     return bool((perms.get("marketing_requests") or {}).get("delete"))
 
 
+async def _can_edit_request(tenant_id: str, user: dict, request_doc: dict) -> bool:
+    """Admins can always edit; the original requester can edit their own
+    request; any other role needs the `marketing_requests.edit` permission."""
+    if _is_admin(user):
+        return True
+    if request_doc.get("created_by") and request_doc.get("created_by") == user.get("id"):
+        return True
+    role_name = (user.get("role") or "").strip()
+    if not role_name:
+        return False
+    role = await db.roles.find_one(
+        {"tenant_id": tenant_id, "name": {"$regex": f"^{re.escape(role_name)}$", "$options": "i"}},
+        {"_id": 0, "permissions": 1},
+    )
+    perms = (role or {}).get("permissions") or {}
+    return bool((perms.get("marketing_requests") or {}).get("edit"))
+
+
 # ──────────────────────────────────────────────────────────────
 # File upload (re-usable across logo, references, version files)
 # ──────────────────────────────────────────────────────────────
@@ -423,6 +441,97 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
         )
     except Exception:
         logger.exception("Slack notification failed for new marketing request")
+    return doc
+
+
+@router.put("/{request_id}")
+@router.patch("/{request_id}")
+async def update_request(request_id: str, payload: MarketingRequestCreate, current_user: dict = Depends(get_current_user)):
+    """Edit an existing design/marketing request. Allowed for the original
+    requester and admins/managers with the `marketing_requests.edit`
+    permission, at any state. State-machine progress, versions, comments and
+    production are preserved — only the request's descriptive fields change."""
+    tenant_id = get_current_tenant_id()
+    existing = await db.marketing_requests.find_one(
+        {"id": request_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(404, "Request not found")
+    if not await _can_edit_request(tenant_id, current_user, existing):
+        raise HTTPException(403, "You don't have permission to edit this request")
+
+    type_doc = await db.marketing_request_types.find_one(
+        {"id": payload.request_type_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    if not type_doc:
+        raise HTTPException(400, "Request type not found")
+    dept_doc = await db.master_departments.find_one(
+        {"id": payload.assigned_department_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    if not dept_doc:
+        raise HTTPException(400, "Assigned department not found")
+
+    lead = None
+    if payload.lead_id:
+        lead = await db.leads.find_one({"id": payload.lead_id, "tenant_id": tenant_id}, {"_id": 0})
+        if not lead:
+            raise HTTPException(400, "Lead not found")
+
+    # Same lead-time guardrail as creation
+    try:
+        due = date.fromisoformat(payload.requested_due_date[:10])
+    except ValueError:
+        raise HTTPException(400, "requested_due_date must be ISO date (YYYY-MM-DD)")
+    required_days = int(type_doc.get("design_lead_time_days") or 0) + int(type_doc.get("production_lead_time_days") or 0)
+    earliest = date.today() + timedelta(days=required_days)
+    if due < earliest and not (payload.short_timeline_reason and payload.short_timeline_reason.strip()):
+        raise HTTPException(
+            400,
+            f"Requested due date {due} is earlier than the minimum lead time "
+            f"({required_days} days → earliest {earliest}). Provide a `short_timeline_reason` to proceed.",
+        )
+
+    logo_doc = None
+    if payload.logo_file_id:
+        f = await _get_file(tenant_id, payload.logo_file_id)
+        if f:
+            logo_doc = StoredFile(**f).model_dump()
+    ref_docs = await _stored_files_from_ids(tenant_id, payload.reference_file_ids or [])
+
+    update = {
+        "title": (payload.title or type_doc["name"]),
+        "request_type_id": type_doc["id"],
+        "request_type_name": type_doc["name"],
+        "assigned_department_id": dept_doc["id"],
+        "assigned_department_name": dept_doc["name"],
+        "lead_id": payload.lead_id,
+        "lead_name": (lead.get("contact_person") or lead.get("name") or lead.get("company")) if lead else None,
+        "lead_company": lead.get("company") if lead else None,
+        "requested_due_date": payload.requested_due_date,
+        "requirement_details": payload.requirement_details,
+        "design_lead_time_days": int(type_doc.get("design_lead_time_days") or 0),
+        "production_lead_time_days": int(type_doc.get("production_lead_time_days") or 0),
+        "short_timeline_reason": payload.short_timeline_reason,
+        "logo": logo_doc,
+        "references": ref_docs,
+        "social_media_links": payload.social_media_links or [],
+        "file_links": payload.file_links or [],
+        "additional_comments": payload.additional_comments,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    sys_comment = RequestComment(
+        user_id=current_user.get("id"),
+        user_name=current_user.get("name") or "User",
+        text=f"Request details edited by {current_user.get('name') or current_user.get('email')}.",
+        kind="system",
+    ).model_dump()
+    await db.marketing_requests.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"$set": update, "$push": {"comments": sys_comment}},
+    )
+    doc = await db.marketing_requests.find_one(
+        {"id": request_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
     return doc
 
 

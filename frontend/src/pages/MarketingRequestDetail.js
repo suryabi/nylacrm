@@ -255,8 +255,7 @@ export default function MarketingRequestDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { hasActionPermission } = useTenantConfig();
-  const canDelete = hasActionPermission('marketing_requests', 'delete');
-  const [req, setReq] = useState(null);
+  const canDelete = hasActionPermission('marketing_requests', 'delete');  const [req, setReq] = useState(null);
   const [transitions, setTransitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
@@ -564,6 +563,17 @@ export default function MarketingRequestDetail() {
               data-testid="mr-send-print-btn"
             >
               <Printer className="h-4 w-4 mr-2" /> Send for Printing
+            </Button>
+          )}
+          {((user?.id && req?.created_by && user.id === req.created_by) || hasActionPermission('marketing_requests', 'edit')) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/marketing-requests/${id}/edit`)}
+              className="text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+              data-testid="mr-edit-request-btn"
+            >
+              <Pencil className="h-4 w-4 mr-2" /> Edit Request
             </Button>
           )}
           {canDelete && (

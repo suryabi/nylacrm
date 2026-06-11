@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { format } from 'date-fns';
 import { Button } from '../components/ui/button';
@@ -77,6 +77,9 @@ const LinkListField = ({ label, placeholder, links, onChange, onAdd, onRemove, t
 
 export default function NewMarketingRequest() {
   const navigate = useNavigate();
+  const { id: editId } = useParams();
+  const isEdit = Boolean(editId);
+  const [loadingExisting, setLoadingExisting] = useState(Boolean(editId));
   const [types, setTypes] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [submitting, setSubmitting] = useState(false);
@@ -118,6 +121,36 @@ export default function NewMarketingRequest() {
       }
     })();
   }, []);
+
+  // Edit mode: load the existing request and prefill the form once.
+  useEffect(() => {
+    if (!editId) return;
+    (async () => {
+      try {
+        const { data: req } = await axios.get(`${API}/marketing-requests/${editId}`, { headers: HEAD() });
+        setForm({
+          request_type_id: req.request_type_id || '',
+          assigned_department_id: req.assigned_department_id || '',
+          requested_due_date: req.requested_due_date || '',
+          requirement_details: req.requirement_details || '',
+          additional_comments: req.additional_comments || '',
+          short_timeline_reason: req.short_timeline_reason || '',
+        });
+        if (req.logo) setLogoFile({ ...req.logo, _preview: isImg(req.logo) ? `${API}/marketing-requests/files/${req.logo.id}` : null });
+        if (Array.isArray(req.references)) setReferenceFiles(req.references.map(f => ({ ...f, _preview: null })));
+        setSocialLinks(req.social_media_links?.length ? req.social_media_links : ['']);
+        setFileLinks(req.file_links?.length ? req.file_links : ['']);
+        if (req.lead_id) {
+          setSelectedLead({ id: req.lead_id, company: req.lead_company, contact_person: req.lead_name, name: req.lead_name });
+        }
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'Failed to load request');
+        navigate('/marketing-requests');
+      } finally {
+        setLoadingExisting(false);
+      }
+    })();
+  }, [editId, navigate]);
 
   // Debounced lead search (only while no lead is selected)
   useEffect(() => {
@@ -200,11 +233,13 @@ export default function NewMarketingRequest() {
         social_media_links: socialLinks.map(l => l.trim()).filter(Boolean),
         file_links: fileLinks.map(l => l.trim()).filter(Boolean),
       };
-      const { data } = await axios.post(`${API}/marketing-requests`, payload, { headers: HEAD() });
-      toast.success(`Created ${data.request_number}`);
+      const { data } = isEdit
+        ? await axios.put(`${API}/marketing-requests/${editId}`, payload, { headers: HEAD() })
+        : await axios.post(`${API}/marketing-requests`, payload, { headers: HEAD() });
+      toast.success(isEdit ? `Updated ${data.request_number}` : `Created ${data.request_number}`);
       navigate(`/marketing-requests/${data.id}`);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to create request');
+      toast.error(e.response?.data?.detail || (isEdit ? 'Failed to update request' : 'Failed to create request'));
     } finally {
       setSubmitting(false);
     }
@@ -212,13 +247,19 @@ export default function NewMarketingRequest() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6" data-testid="new-mr-page">
+      {loadingExisting && (
+        <div className="flex items-center justify-center py-24 text-slate-500" data-testid="mr-edit-loading">
+          <Loader2 className="h-5 w-5 mr-2 animate-spin text-emerald-600" /> Loading request…
+        </div>
+      )}
+      {!loadingExisting && (<>
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)} data-testid="back-btn">
           <ArrowLeft className="h-4 w-4 mr-2" /> Back
         </Button>
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-emerald-600" /> New Design Request
+            <Sparkles className="h-6 w-6 text-emerald-600" /> {isEdit ? 'Edit Design Request' : 'New Design Request'}
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">Pick a request type, set the timeline, describe the requirement.</p>
         </div>
@@ -479,11 +520,14 @@ export default function NewMarketingRequest() {
       </Card>
 
       <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => navigate('/marketing-requests')}>Cancel</Button>
+        <Button variant="outline" onClick={() => navigate(isEdit ? `/marketing-requests/${editId}` : '/marketing-requests')}>Cancel</Button>
         <Button onClick={handleSubmit} disabled={!canSubmit || submitting} className="bg-emerald-600 hover:bg-emerald-700" data-testid="mr-submit-btn">
-          {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : <><Send className="h-4 w-4 mr-2" /> Submit Request</>}
+          {submitting
+            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {isEdit ? 'Saving…' : 'Submitting…'}</>
+            : <><Send className="h-4 w-4 mr-2" /> {isEdit ? 'Save Changes' : 'Submit Request'}</>}
         </Button>
       </div>
+      </>)}
     </div>
   );
 }
