@@ -92,6 +92,18 @@ async def get_return_categories(
             "label": "Promotional/FOC",
             "description": "Free of cost or promotional items",
             "color": "#6B7280"
+        },
+        {
+            "value": "unused_refundable",
+            "label": "Unused Stock - Refundable",
+            "description": "Unsold, sellable stock returned by the customer/distributor — eligible for credit/refund",
+            "color": "#0891B2"
+        },
+        {
+            "value": "unused_non_refundable",
+            "label": "Unused Stock - Non-Refundable",
+            "description": "Unsold stock returned but not eligible for credit/refund",
+            "color": "#64748B"
         }
     ]
     return {"categories": categories}

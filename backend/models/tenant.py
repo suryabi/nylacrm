@@ -448,6 +448,8 @@ class ReturnReasonCategory(str):
     EXPIRED = "expired"  # Expired stock to be returned to factory for disposal
     DAMAGED = "damaged"  # Damaged stock to be returned to factory
     PROMOTIONAL = "promotional"  # FOC/Promo items - may or may not return to factory
+    UNUSED_REFUNDABLE = "unused_refundable"  # Unsold sellable stock returned - eligible for credit
+    UNUSED_NON_REFUNDABLE = "unused_non_refundable"  # Unsold stock returned - not eligible for credit
 
 
 class ReturnReason(BaseModel):
