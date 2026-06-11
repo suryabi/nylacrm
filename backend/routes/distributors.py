@@ -4717,7 +4717,7 @@ async def retry_delivery_zoho_push(
     if not fresh.get('zoho_invoice_url'):
         raise HTTPException(
             status_code=400,
-            detail="Zoho push completed but no invoice URL was produced. Most common causes: account has no Zoho contact ID, line items have no agreed price, or the source warehouse is not marked as Factory.",
+            detail="Zoho push completed but no invoice URL was produced. Most common causes: account has no Zoho contact ID, line items have no agreed price, or the source warehouse is not a Factory warehouse and its distributor is not marked Self-Managed.",
         )
     return {
         "message": "Zoho invoice generated.",

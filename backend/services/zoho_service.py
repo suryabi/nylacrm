@@ -2174,24 +2174,37 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
         logger.warning(f"sync_delivery_to_zoho: delivery {delivery_id} not found")
         raise ZohoPushSkippedError("Delivery not found.")
 
-    # Guard: only factory-warehouse stock-outs are invoiced via Zoho.
+    # Guard: only stock-outs from company-owned warehouses are invoiced via Zoho.
+    # A warehouse qualifies when it is either a Factory warehouse (`is_factory`)
+    # OR belongs to a self-managed distributor (`distributors.is_self_managed`).
+    # Third-party distributor warehouses are skipped — they bill in their own books.
     src_loc_id = delivery.get("distributor_location_id")
     if not src_loc_id:
         logger.info(f"sync_delivery_to_zoho: delivery {delivery.get('delivery_number')} has no source location; skipping")
         raise ZohoPushSkippedError("Delivery has no source warehouse — cannot determine if it should be invoiced via Zoho.")
     src_loc = await db.distributor_locations.find_one(
-        {"id": src_loc_id, "tenant_id": tenant_id}, {"_id": 0, "is_factory": 1, "location_name": 1}
+        {"id": src_loc_id, "tenant_id": tenant_id},
+        {"_id": 0, "is_factory": 1, "location_name": 1, "distributor_id": 1}
     )
-    if not src_loc or not src_loc.get("is_factory"):
-        loc_name = (src_loc or {}).get("location_name") or "(unknown)"
+    loc_name = (src_loc or {}).get("location_name") or "(unknown)"
+    is_factory = bool(src_loc and src_loc.get("is_factory"))
+    is_self_managed = False
+    if src_loc and not is_factory:
+        src_dist = await db.distributors.find_one(
+            {"id": src_loc.get("distributor_id"), "tenant_id": tenant_id},
+            {"_id": 0, "is_self_managed": 1}
+        )
+        is_self_managed = bool(src_dist and src_dist.get("is_self_managed"))
+    if not (is_factory or is_self_managed):
         logger.info(
             f"sync_delivery_to_zoho: delivery {delivery.get('delivery_number')} dispatched from "
-            f"non-factory warehouse '{loc_name}'; skipping Zoho push"
+            f"third-party distributor warehouse '{loc_name}'; skipping Zoho push"
         )
         raise ZohoPushSkippedError(
-            f"This delivery is dispatched from '{loc_name}' which is a distributor warehouse, not a factory. "
-            "Only factory-warehouse stock-outs are invoiced via Zoho (distributor warehouses use the local billing flow). "
-            "If this should be invoiced via Zoho, mark the source warehouse as Factory in Distributor → Locations."
+            f"This delivery is dispatched from '{loc_name}', which belongs to a third-party distributor. "
+            "Only company-owned warehouses (Factory warehouses or self-managed distributors) are invoiced via Zoho "
+            "(third-party distributors bill in their own books). "
+            "If this should be invoiced via Zoho, mark the source warehouse as Factory, or mark its distributor as Self-Managed."
         )
 
     items = await db.distributor_delivery_items.find(
