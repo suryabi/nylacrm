@@ -55,6 +55,7 @@ from .distributor_portal import router as distributor_portal_router
 from .distributor_contacts import router as distributor_contacts_router
 from .zoho_books import router as zoho_books_router
 from .distributor_chat import router as distributor_chat_router
+from .inventory_management import router as inventory_management_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -265,5 +266,9 @@ routes_router.include_router(revenue_analytics_router, tags=["Revenue Analytics"
 # Full paths declared in the router → mounts under /api. See routes/promo_dispatch.py
 from .promo_dispatch import router as promo_dispatch_router
 routes_router.include_router(promo_dispatch_router, tags=["Promotional Dispatch"])
+
+# Inventory Management — Item Master, Vendor Master, Vendor-Item pricing,
+# stock entries, purchase orders, GRN. See routes/inventory_management.py
+routes_router.include_router(inventory_management_router, prefix="/inventory", tags=["Inventory Management"])
 
 __all__ = ['routes_router']

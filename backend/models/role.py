@@ -95,6 +95,10 @@ DEFAULT_MODULE_PERMISSIONS = {
     "assets": {"view": False, "create": False, "edit": False, "delete": False},
     "vendors": {"view": False, "create": False, "edit": False, "delete": False},
 
+    # Inventory & Procurement
+    "purchase_orders": {"view": False, "create": False, "edit": False, "delete": False},
+    "goods_receipt": {"view": False, "create": False, "edit": False, "delete": False},
+
     # Distribution Modules
     "distributors": {"view": False, "create": False, "edit": False, "delete": False},
     "stock_dashboard": {"view": False, "create": False, "edit": False, "delete": False},
@@ -257,6 +261,7 @@ MODULE_CATEGORIES = {
     "Admin": ["tenant_settings", "api_keys", "sku_replace", "marketing_request_types", "print_request_statuses"],
     "Distribution": ["distributors", "stock_dashboard", "cost_cards", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
     "Production": ["production_dashboard", "production_batches", "qc_routes", "qc_team", "rejection_reasons", "rejection_report", "rejection_cost_config", "packaging_types", "maintenance", "inventory", "quality_control", "assets", "vendors"],
+    "Inventory & Procurement": ["purchase_orders", "goods_receipt"],
     "Task Management": ["task_management", "task_milestones", "task_labels"],
 }
 
@@ -336,6 +341,8 @@ MODULE_LABELS = {
     "quality_control": "Quality Control",
     "assets": "Assets",
     "vendors": "Vendors",
+    "purchase_orders": "Purchase Orders",
+    "goods_receipt": "Goods Receipt (GRN)",
     "task_management": "Tasks",
     "task_milestones": "Milestones",
     "task_labels": "Labels",
