@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Depends
-from deps import get_current_user
+from deps import get_current_user, get_user_or_api_key
 from core.tenant import get_current_tenant_id
 from database import db, get_tenant_db
 
@@ -59,12 +59,15 @@ class QCRouteUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class BatchCreate(BaseModel):
-    sku_id: str
-    sku_name: str
+    sku_id: Optional[str] = None
+    # External callers may identify the SKU by its code instead of the internal id.
+    sku_code: Optional[str] = None
+    sku_name: Optional[str] = None
     batch_code: str
     production_date: str
     total_crates: int
-    bottles_per_crate: int
+    # Optional — auto-filled from the SKU's default production packaging when omitted.
+    bottles_per_crate: Optional[int] = None
     ph_value: Optional[float] = None
     notes: Optional[str] = None
     # When True (CEO / System Admin only), the batch skips every QC stage and
@@ -517,16 +520,52 @@ async def get_batch(batch_id: str, current_user: dict = Depends(get_current_user
     return batch
 
 @router.post("/batches")
-async def create_batch(data: BatchCreate, current_user: dict = Depends(get_current_user)):
+async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_or_api_key)):
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
 
-    # Gate the QC-bypass fast path to CEO / System Admin.
+    # Gate the QC-bypass fast path to CEO / System Admin (never available to API keys).
     if data.skip_qc and not _is_elevated(current_user):
         raise HTTPException(
             status_code=403,
             detail="Only CEO and System Admin can skip QC when creating a production batch.",
         )
+
+    # Resolve SKU + packaging. Full in-app payloads (sku_id + sku_name +
+    # bottles_per_crate all present) are trusted as-is for backward compatibility.
+    # Partial payloads (typically from external API callers) are resolved against
+    # the SKU master: SKU lookup by sku_id or sku_code, with sku_name and
+    # bottles_per_crate auto-filled from the SKU's default production packaging.
+    if data.sku_id and data.sku_name and data.bottles_per_crate:
+        sku_id = data.sku_id
+        sku_name = data.sku_name
+        bottles_per_crate = int(data.bottles_per_crate)
+    else:
+        sku_doc = None
+        if data.sku_id:
+            sku_doc = await tdb.master_skus.find_one({"id": data.sku_id}, {"_id": 0})
+        elif data.sku_code:
+            sku_doc = await tdb.master_skus.find_one({"sku_code": data.sku_code}, {"_id": 0})
+        else:
+            raise HTTPException(status_code=400, detail="Provide either sku_id or sku_code.")
+        if not sku_doc:
+            raise HTTPException(status_code=404, detail="SKU not found for the given sku_id/sku_code.")
+        sku_id = sku_doc["id"]
+        sku_name = data.sku_name or sku_doc.get("sku_name") or sku_doc.get("name")
+        bottles_per_crate = data.bottles_per_crate
+        if not bottles_per_crate:
+            prod_pkg = (sku_doc.get("packaging_config") or {}).get("production") or []
+            default_pkg = next((p for p in prod_pkg if p.get("is_default")), None) or (prod_pkg[0] if prod_pkg else None)
+            bottles_per_crate = default_pkg.get("units_per_package") if default_pkg else None
+        if not bottles_per_crate or int(bottles_per_crate) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="bottles_per_crate is required (the SKU has no default production packaging configured).",
+            )
+        bottles_per_crate = int(bottles_per_crate)
+
+    if not data.total_crates or int(data.total_crates) <= 0:
+        raise HTTPException(status_code=400, detail="total_crates must be greater than 0.")
 
     # Check if batch code already exists
     existing = await tdb.production_batches.find_one({"batch_code": data.batch_code, "tenant_id": tenant_id})
@@ -534,9 +573,9 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
 
     # Get QC route for this SKU
-    qc_route = await tdb.qc_routes.find_one({"sku_id": data.sku_id, "tenant_id": tenant_id}, {"_id": 0})
+    qc_route = await tdb.qc_routes.find_one({"sku_id": sku_id, "tenant_id": tenant_id}, {"_id": 0})
 
-    total_bottles = data.total_crates * data.bottles_per_crate
+    total_bottles = data.total_crates * bottles_per_crate
     now = datetime.now(timezone.utc).isoformat()
 
     # Initialize stage balances from QC route
@@ -562,11 +601,11 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_curre
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "batch_code": data.batch_code,
-        "sku_id": data.sku_id,
-        "sku_name": data.sku_name,
+        "sku_id": sku_id,
+        "sku_name": sku_name,
         "production_date": data.production_date,
         "total_crates": data.total_crates,
-        "bottles_per_crate": data.bottles_per_crate,
+        "bottles_per_crate": bottles_per_crate,
         "total_bottles": total_bottles,
         "production_line": "",
         "ph_value": data.ph_value,

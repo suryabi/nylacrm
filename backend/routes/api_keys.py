@@ -60,6 +60,13 @@ AVAILABLE_ENDPOINTS = [
         "label": "List Accounts",
         "description": "Fetch list of accounts (with filters).",
     },
+    {
+        "id": "create_production_batch",
+        "method": "POST",
+        "path_pattern": "/api/production/batches",
+        "label": "Create Production Batch",
+        "description": "Create a production batch from an external system. Resolves SKU by sku_id or sku_code; QC route is applied automatically.",
+    },
 ]
 
 ENDPOINT_LOOKUP = {e["id"]: e for e in AVAILABLE_ENDPOINTS}

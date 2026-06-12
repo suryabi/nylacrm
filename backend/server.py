@@ -1981,7 +1981,7 @@ async def seed_default_skus():
 @api_router.get("/master-skus")
 async def get_master_skus(
     include_inactive: bool = False,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_user_or_api_key)
 ):
     """Get the master list of all available SKUs from database"""
     # Seed defaults if empty
