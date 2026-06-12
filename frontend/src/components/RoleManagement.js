@@ -98,6 +98,44 @@ export default function RoleManagement() {
     });
   };
 
+  // ── Group-level helpers (grant a whole area like Marketing in one click) ──
+  const ACTIONS = ['view', 'create', 'edit', 'delete'];
+
+  // 'all' | 'some' | 'none' for a given action across every module in a group
+  const groupActionState = (category, action) => {
+    const mods = moduleCategories[category] || [];
+    if (mods.length === 0) return 'none';
+    const on = mods.filter(m => editedPermissions[m]?.[action]).length;
+    return on === 0 ? 'none' : on === mods.length ? 'all' : 'some';
+  };
+
+  // 'all' | 'some' | 'none' for ALL actions across every module in a group
+  const groupFullState = (category) => {
+    const mods = moduleCategories[category] || [];
+    if (mods.length === 0) return 'none';
+    const total = mods.length * ACTIONS.length;
+    let on = 0;
+    mods.forEach(m => ACTIONS.forEach(a => { if (editedPermissions[m]?.[a]) on++; }));
+    return on === 0 ? 'none' : on === total ? 'all' : 'some';
+  };
+
+  const setGroupFull = (category, value) => {
+    const mods = moduleCategories[category] || [];
+    setEditedPermissions(prev => {
+      const np = { ...prev };
+      mods.forEach(m => { np[m] = { view: value, create: value, edit: value, delete: value }; });
+      return np;
+    });
+  };
+
+  const triChecked = (state) => (state === 'all' ? true : state === 'some' ? 'indeterminate' : false);
+
+  const expandAll = (open) => {
+    const next = {};
+    Object.keys(moduleCategories).forEach(c => { next[c] = open; });
+    setExpandedCategories(next);
+  };
+
   const handleSavePermissions = async () => {
     if (!selectedRole) return;
     
@@ -345,6 +383,21 @@ export default function RoleManagement() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
+                  {/* Toolbar */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-xs text-muted-foreground">
+                      Tip: use the checkboxes on a <span className="font-medium text-foreground">group row</span> (e.g. Marketing) to grant a whole area at once, or hit <span className="font-medium text-foreground">Full access</span>.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => expandAll(true)} data-testid="expand-all-btn">
+                        <ChevronDown className="w-4 h-4 mr-1" /> Expand all
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => expandAll(false)} data-testid="collapse-all-btn">
+                        <ChevronRight className="w-4 h-4 mr-1" /> Collapse all
+                      </Button>
+                    </div>
+                  </div>
+
                   {/* Permission Matrix */}
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-sm">
@@ -378,30 +431,58 @@ export default function RoleManagement() {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(moduleCategories).map(([category, modules]) => (
+                        {Object.entries(moduleCategories).map(([category, modules]) => {
+                          const fullState = groupFullState(category);
+                          return (
                           <React.Fragment key={category}>
-                            {/* Category Header */}
-                            <tr 
-                              className="bg-muted/30 cursor-pointer hover:bg-muted/50"
-                              onClick={() => toggleCategory(category)}
-                            >
-                              <td className="p-3 font-medium" colSpan={5}>
+                            {/* Category / Group Header with bulk controls */}
+                            <tr className="bg-muted/30">
+                              <td className="p-3 font-medium">
                                 <div className="flex items-center gap-2">
-                                  {expandedCategories[category] ? (
-                                    <ChevronDown className="w-4 h-4" />
-                                  ) : (
-                                    <ChevronRight className="w-4 h-4" />
-                                  )}
-                                  {category}
-                                  <span className="text-xs text-muted-foreground">({modules.length})</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCategory(category)}
+                                    className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+                                    data-testid={`group-toggle-${category.toLowerCase().replace(/\s+/g, '-')}`}
+                                  >
+                                    {expandedCategories[category] ? (
+                                      <ChevronDown className="w-4 h-4" />
+                                    ) : (
+                                      <ChevronRight className="w-4 h-4" />
+                                    )}
+                                    <span>{category}</span>
+                                    <span className="text-xs text-muted-foreground">({modules.length})</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setGroupFull(category, fullState !== 'all')}
+                                    className={`ml-1 text-[11px] font-medium px-2 py-0.5 rounded-full border transition-colors ${
+                                      fullState === 'all'
+                                        ? 'bg-primary/10 text-primary border-primary/30 hover:bg-primary/20'
+                                        : 'text-muted-foreground border-border hover:bg-muted'
+                                    }`}
+                                    data-testid={`group-full-${category.toLowerCase().replace(/\s+/g, '-')}`}
+                                  >
+                                    {fullState === 'all' ? 'Revoke all' : 'Full access'}
+                                  </button>
                                 </div>
                               </td>
+                              {ACTIONS.map((action) => (
+                                <td key={action} className="text-center p-3">
+                                  <Checkbox
+                                    className="data-[state=indeterminate]:bg-primary/40 data-[state=indeterminate]:border-primary/40 data-[state=indeterminate]:text-primary-foreground"
+                                    checked={triChecked(groupActionState(category, action))}
+                                    onCheckedChange={(checked) => handleToggleAllInCategory(category, action, checked === true)}
+                                    data-testid={`group-perm-${category.toLowerCase().replace(/\s+/g, '-')}-${action}`}
+                                  />
+                                </td>
+                              ))}
                             </tr>
                             {/* Module Rows */}
                             {expandedCategories[category] && modules.map((moduleKey) => (
                               <tr key={moduleKey} className="border-t">
                                 <td className="p-3 pl-8">{moduleLabels[moduleKey] || moduleKey}</td>
-                                {['view', 'create', 'edit', 'delete'].map((action) => (
+                                {ACTIONS.map((action) => (
                                   <td key={action} className="text-center p-3">
                                     <Checkbox
                                       checked={editedPermissions[moduleKey]?.[action] || false}
@@ -413,7 +494,8 @@ export default function RoleManagement() {
                               </tr>
                             ))}
                           </React.Fragment>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
