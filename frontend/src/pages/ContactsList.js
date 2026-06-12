@@ -40,7 +40,8 @@ import { toast } from 'sonner';
 import { 
   Plus, Search, Filter, Loader2, Users, Phone, Mail, Building2,
   MapPin, Pencil, Trash2, Upload, Camera, X, CreditCard, Eye,
-  ChevronLeft, ChevronRight, ScanLine, Sparkles, RotateCcw
+  ChevronLeft, ChevronRight, ScanLine, Sparkles, RotateCcw,
+  Share2, Copy, Check, MessageCircle, ExternalLink, Link2Off
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
@@ -48,7 +49,7 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Contact Card Component
-const ContactCard = ({ contact, onEdit, onDelete, onView }) => (
+const ContactCard = ({ contact, onEdit, onDelete, onView, onShare }) => (
   <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onView(contact)}>
     <CardContent className="p-4">
       <div className="flex items-start justify-between">
@@ -99,6 +100,9 @@ const ContactCard = ({ contact, onEdit, onDelete, onView }) => (
       </div>
 
       <div className="mt-3 pt-3 border-t flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+        <Button variant="ghost" size="sm" className="text-emerald-600" onClick={() => onShare(contact)} data-testid={`contact-share-${contact.id}`} title="Share contact">
+          <Share2 className="h-4 w-4" />
+        </Button>
         <Button variant="ghost" size="sm" onClick={() => onEdit(contact)}>
           <Pencil className="h-4 w-4" />
         </Button>
@@ -227,6 +231,78 @@ export default function ContactsList() {
   // View Contact Dialog
   const [viewContact, setViewContact] = useState(null);
 
+  // Share Contact Dialog
+  const [shareContact, setShareContact] = useState(null);
+  const [shareToken, setShareToken] = useState(null);
+  const [shareEnabled, setShareEnabled] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const shareUrl = shareToken ? `${window.location.origin}/c/${shareToken}` : '';
+
+  const openShare = async (contact) => {
+    setShareContact(contact);
+    setShareToken(contact.share_token || null);
+    setShareEnabled(false);
+    setCopied(false);
+    setShareLoading(true);
+    try {
+      // Enabling is idempotent and returns a stable token
+      const res = await fetch(`${API_URL}/api/contacts/${contact.id}/share`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setShareToken(data.share_token);
+      setShareEnabled(data.share_enabled);
+    } catch {
+      toast.error('Failed to create share link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const revokeShare = async () => {
+    if (!shareContact) return;
+    setShareLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/contacts/${shareContact.id}/share`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) throw new Error();
+      setShareEnabled(false);
+      toast.success('Share link turned off');
+    } catch {
+      toast.error('Failed to revoke link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const reEnableShare = async () => {
+    if (!shareContact) return;
+    setShareLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/contacts/${shareContact.id}/share`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setShareToken(data.share_token);
+      setShareEnabled(data.share_enabled);
+      toast.success('Share link turned on');
+    } catch {
+      toast.error('Failed to enable link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const copyShareLink = () => {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      toast.success('Link copied');
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => toast.error('Could not copy'));
+  };
+
+  const shareMsg = shareContact
+    ? `Contact: ${shareContact.name}${shareContact.company ? ` (${shareContact.company})` : ''}\n${shareUrl}`
+    : '';
+
   // Fetch contacts
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -274,6 +350,19 @@ export default function ContactsList() {
   useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
+
+  // Deep link: /contacts?view={id} opens that contact's card (used by the
+  // "Open in CRM" button on the public share page).
+  useEffect(() => {
+    const viewId = new URLSearchParams(window.location.search).get('view');
+    if (!viewId) return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/contacts/${viewId}`, { credentials: 'include' });
+        if (res.ok) setViewContact(await res.json());
+      } catch { /* ignore */ }
+    })();
+  }, []);
 
   useEffect(() => {
     fetchFilterOptions();
@@ -607,6 +696,7 @@ export default function ContactsList() {
               onEdit={openEditSheet}
               onDelete={handleDelete}
               onView={setViewContact}
+              onShare={openShare}
             />
           ))}
         </div>
@@ -1001,6 +1091,10 @@ export default function ContactsList() {
             <Button variant="outline" onClick={() => setViewContact(null)}>
               Close
             </Button>
+            <Button variant="outline" className="text-emerald-600 border-emerald-200" onClick={() => { const c = viewContact; setViewContact(null); openShare(c); }} data-testid="contact-view-share-btn">
+              <Share2 className="h-4 w-4 mr-2" />
+              Share
+            </Button>
             <Button onClick={() => {
               openEditSheet(viewContact);
               setViewContact(null);
@@ -1008,6 +1102,66 @@ export default function ContactsList() {
               <Pencil className="h-4 w-4 mr-2" />
               Edit
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Contact Dialog */}
+      <Dialog open={!!shareContact} onOpenChange={(o) => !o && setShareContact(null)}>
+        <DialogContent className="max-w-md" data-testid="contact-share-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-emerald-600" /> Share Contact
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Anyone with this link can view the card for <span className="font-medium text-slate-700">{shareContact?.name}</span> (name,
+              company, designation, phone, email &amp; address). No login required.
+            </p>
+
+            {shareLoading && (
+              <div className="flex items-center justify-center py-6 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Working…
+              </div>
+            )}
+
+            {!shareLoading && shareEnabled && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={shareUrl} className="font-mono text-xs" data-testid="contact-share-url" onFocus={(e) => e.target.select()} />
+                  <Button onClick={copyShareLink} className="bg-emerald-600 hover:bg-emerald-700 shrink-0" data-testid="contact-share-copy">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <a href={`https://wa.me/?text=${encodeURIComponent(shareMsg)}`} target="_blank" rel="noopener noreferrer" data-testid="contact-share-whatsapp">
+                    <Button variant="outline" className="w-full text-green-700 border-green-200"><MessageCircle className="h-4 w-4 mr-1.5" /> WhatsApp</Button>
+                  </a>
+                  <a href={`mailto:?subject=${encodeURIComponent(`Contact: ${shareContact?.name || ''}`)}&body=${encodeURIComponent(shareMsg)}`} data-testid="contact-share-email">
+                    <Button variant="outline" className="w-full"><Mail className="h-4 w-4 mr-1.5" /> Email</Button>
+                  </a>
+                  <a href={shareUrl} target="_blank" rel="noopener noreferrer" data-testid="contact-share-open">
+                    <Button variant="outline" className="w-full"><ExternalLink className="h-4 w-4 mr-1.5" /> Open</Button>
+                  </a>
+                </div>
+                <Button variant="ghost" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50" onClick={revokeShare} data-testid="contact-share-revoke">
+                  <Link2Off className="h-4 w-4 mr-2" /> Turn off link (revoke access)
+                </Button>
+              </>
+            )}
+
+            {!shareLoading && !shareEnabled && shareContact && (
+              <div className="rounded-lg border border-dashed p-4 text-center space-y-3">
+                <p className="text-sm text-muted-foreground">This link is currently turned off.</p>
+                <Button onClick={reEnableShare} className="bg-emerald-600 hover:bg-emerald-700" data-testid="contact-share-enable">
+                  <Share2 className="h-4 w-4 mr-2" /> Turn on share link
+                </Button>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShareContact(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -11,7 +11,8 @@ import base64
 import os
 
 from deps import get_current_user
-from database import get_tenant_db
+from database import get_tenant_db, db
+import secrets
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
@@ -356,7 +357,65 @@ async def delete_contact(
     await tdb.contacts.delete_one({'id': contact_id})
     return {"message": "Contact deleted"}
 
-# ============== VISITING CARD OCR ==============
+# ============== PUBLIC SHARE LINK ==============
+# Whitelisted fields exposed on the public (no-login) contact card.
+_PUBLIC_CONTACT_FIELDS = [
+    "id", "name", "company", "designation", "phone", "email",
+    "address", "address_line2", "city", "state", "pincode", "country",
+]
+
+
+@router.post("/{contact_id}/share")
+async def enable_contact_share(
+    contact_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Enable a public, revocable share link for this contact.
+    Re-enabling reuses the same token, so the link stays stable."""
+    tdb = get_tdb()
+    contact = await tdb.contacts.find_one({'id': contact_id}, {'_id': 0})
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    token = contact.get('share_token') or secrets.token_urlsafe(8)
+    await tdb.contacts.update_one(
+        {'id': contact_id},
+        {'$set': {
+            'share_token': token,
+            'share_enabled': True,
+            'shared_at': datetime.now(timezone.utc).isoformat(),
+            'shared_by': current_user.get('id'),
+        }},
+    )
+    return {"share_token": token, "share_enabled": True}
+
+
+@router.delete("/{contact_id}/share")
+async def revoke_contact_share(
+    contact_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Revoke (turn off) the public share link. The token is preserved so the
+    same link can be re-activated later, but it returns 404 while disabled."""
+    tdb = get_tdb()
+    contact = await tdb.contacts.find_one({'id': contact_id}, {'_id': 0})
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    await tdb.contacts.update_one({'id': contact_id}, {'$set': {'share_enabled': False}})
+    return {"share_enabled": False}
+
+
+@router.get("/public/{token}")
+async def get_public_contact(token: str):
+    """PUBLIC (no auth) — fetch a shared contact's limited details by token.
+    Returns 404 if the token is unknown or sharing has been revoked."""
+    contact = await db.contacts.find_one({'share_token': token, 'share_enabled': True}, {'_id': 0})
+    if not contact:
+        raise HTTPException(status_code=404, detail="This contact link is no longer available")
+    out = {k: contact.get(k) for k in _PUBLIC_CONTACT_FIELDS}
+    out['tenant_id'] = contact.get('tenant_id')
+    return out
+
+
 
 @router.post("/extract-card")
 async def extract_visiting_card(

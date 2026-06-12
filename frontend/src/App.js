@@ -87,7 +87,7 @@ import FilesDocuments from './pages/FilesDocuments';
 // Production Context Pages
 import Maintenance from './pages/Maintenance';
 import Inventory from './pages/Inventory';
-import QualityControl from './pages/QualityControl';
+import PublicContactCard from './pages/PublicContactCard';import QualityControl from './pages/QualityControl';
 import ProductionBatches from './pages/ProductionBatches';
 import ProductionDashboard from './pages/ProductionDashboard';
 import BatchDetail from './pages/BatchDetail';
@@ -270,6 +270,9 @@ function AppRouter() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<RegisterTenant />} />
           <Route path="/auth/callback" element={<GoogleAuthCallback />} />
+
+          {/* Public, no-login contact share card */}
+          <Route path="/c/:token" element={<PublicContactCard />} />
 
           {/* Driver mobile-web app — own login, own minimal layout (no DashboardLayout) */}
           <Route path="/driver/login" element={<DriverLogin />} />

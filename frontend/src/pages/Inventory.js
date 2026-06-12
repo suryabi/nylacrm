@@ -385,7 +385,7 @@ export default function Inventory() {
       {/* Add / Edit dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="item-form-dialog">
-          <DialogHeader><DialogTitle>{editing ? 'Edit Item' : 'New Item'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? 'Edit Item' : 'New Item'}</DialogTitle><DialogDescription>Define the item details, stock levels and optional customer-specific linkage.</DialogDescription></DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Item Name *</Label><Input value={form.item_name} onChange={(e) => setForm({ ...form, item_name: e.target.value })} data-testid="item-name-input" /></div>
