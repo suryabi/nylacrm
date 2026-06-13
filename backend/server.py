@@ -574,6 +574,63 @@ async def create_approval_task(
     return {k: v for k, v in task_doc.items() if k != '_id'}
 
 
+async def resolve_request_approver(requester_id: str) -> Optional[dict]:
+    """Resolve who should approve a request raised by `requester_id`.
+
+    Priority: direct reporting manager (`reports_to`) -> dotted-line manager
+    (`dotted_line_to`) -> any active Director/CEO -> any active Admin.
+    Returns the approver user dict ({id, name, email}) or None.
+    """
+    tdb = get_tdb()
+    requester = await tdb.users.find_one(
+        {'id': requester_id},
+        {'_id': 0, 'reports_to': 1, 'dotted_line_to': 1}
+    ) or {}
+    for key in ('reports_to', 'dotted_line_to'):
+        uid = requester.get(key)
+        if uid:
+            mgr = await tdb.users.find_one(
+                {'id': uid, 'is_active': True},
+                {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+            )
+            if mgr:
+                return mgr
+    # Fallback: any active Director or CEO
+    fallback = await tdb.users.find_one(
+        {'role': {'$in': ['Director', 'CEO']}, 'is_active': True},
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+    )
+    if fallback:
+        return fallback
+    # Last resort: any active Admin / System Admin
+    return await tdb.users.find_one(
+        {'role': {'$in': ['Admin', 'System Admin']}, 'is_active': True},
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+    )
+
+
+async def notify_approver(approver: dict, *, title: str, body: str, link: str,
+                          entity_type: str, entity_id: str, kind: str = 'approval'):
+    """Best-effort in-app + email notification to a user. Never raises."""
+    if not approver or not approver.get('id'):
+        return
+    try:
+        from utils.notify import notify_users
+        await notify_users(
+            get_current_tenant_id(),
+            [approver['id']],
+            title=title,
+            body=body,
+            link=link,
+            kind=kind,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            send_email_too=True,
+        )
+    except Exception:
+        logger.exception('notify_approver failed')
+
+
 async def complete_approval_task(
     approval_type: str,
     reference_id: str,
@@ -8599,17 +8656,16 @@ async def create_travel_request(request: TravelRequestCreate, current_user: dict
     
     await get_tdb().travel_requests.insert_one(doc)
     
-    # Create approval tasks for CEO and Director if submitting for approval
+    # Create approval task for the requester's reporting manager (with fallbacks)
     if request.submit_for_approval:
-        # Find CEO and Director users
-        approvers = await get_tdb().users.find(
-            {'role': {'$in': ['CEO', 'Director']}, 'is_active': True},
-            {'_id': 0, 'id': 1, 'name': 1}
-        ).to_list(10)
-        
-        travel_details = f"{request.from_location} to {request.to_location} ({request.departure_date})"
-        
-        for approver in approvers:
+        approver = await resolve_request_approver(current_user['id'])
+
+        if approver:
+            await get_tdb().travel_requests.update_one(
+                {'id': travel_obj.id},
+                {'$set': {'approver_id': approver['id'], 'approver_name': approver.get('name')}}
+            )
+            travel_details = f"{request.from_location} to {request.to_location} ({request.departure_date})"
             await create_approval_task(
                 approval_type=ApprovalType.TRAVEL_REQUEST,
                 requester_id=current_user['id'],
@@ -8620,6 +8676,16 @@ async def create_travel_request(request: TravelRequestCreate, current_user: dict
                 reference_id=travel_obj.id,
                 reference_type='travel_request'
             )
+            await notify_approver(
+                approver,
+                title=f"Travel approval needed: {request.to_location}",
+                body=f"{current_user.get('name', 'A team member')} submitted a travel request ({travel_details}, ₹{request.tentative_budget:,.0f}). Your approval is required.",
+                link="/travel-requests",
+                entity_type='travel_request',
+                entity_id=travel_obj.id,
+            )
+        else:
+            logger.warning(f"No approver could be resolved for travel {travel_obj.id} raised by {current_user.get('name')}")
     
     return {k: v for k, v in doc.items() if k != '_id'}
 
@@ -8827,12 +8893,14 @@ async def approve_travel_request(
 ):
     """Approve or reject travel request (CEO/Director only)"""
     
-    if current_user['role'].lower() not in ['ceo', 'director']:
-        raise HTTPException(status_code=403, detail='Only CEO or Director can approve travel requests')
-    
     travel_req = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not travel_req:
         raise HTTPException(status_code=404, detail='Travel request not found')
+    
+    # The designated approver (reporting manager) OR a senior approver can act.
+    _senior_roles = ['CEO', 'Director', 'Vice President', 'Admin', 'System Admin']
+    if current_user['id'] != travel_req.get('approver_id') and current_user['role'] not in _senior_roles:
+        raise HTTPException(status_code=403, detail='You are not authorized to approve this travel request')
     
     if travel_req['status'] != 'pending_approval':
         raise HTTPException(status_code=400, detail='Only pending requests can be approved/rejected')
@@ -8957,17 +9025,16 @@ async def create_budget_request(request: BudgetRequestCreate, current_user: dict
     
     await get_tdb().budget_requests.insert_one(doc)
     
-    # Create approval task for Director if submitting for approval
+    # Create approval task for the requester's reporting manager (with fallbacks)
     if request.submit_for_approval:
-        # Find Directors only
-        approvers = await get_tdb().users.find(
-            {'role': 'Director', 'is_active': True},
-            {'_id': 0, 'id': 1, 'name': 1}
-        ).to_list(10)
-        
-        budget_details = f"{request.title} - ₹{total_amount:,.0f}"
-        
-        for approver in approvers:
+        approver = await resolve_request_approver(current_user['id'])
+
+        if approver:
+            await get_tdb().budget_requests.update_one(
+                {'id': budget_obj.id},
+                {'$set': {'approver_id': approver['id'], 'approver_name': approver.get('name')}}
+            )
+            budget_details = f"{request.title} - ₹{total_amount:,.0f}"
             await create_approval_task(
                 approval_type=ApprovalType.BUDGET_REQUEST,
                 requester_id=current_user['id'],
@@ -8978,6 +9045,16 @@ async def create_budget_request(request: BudgetRequestCreate, current_user: dict
                 reference_id=budget_obj.id,
                 reference_type='budget_request'
             )
+            await notify_approver(
+                approver,
+                title=f"Budget approval needed: {request.title}",
+                body=f"{current_user.get('name', 'A team member')} submitted a budget request '{request.title}' of ₹{total_amount:,.0f}. Your approval is required.",
+                link="/budget-requests",
+                entity_type='budget_request',
+                entity_id=budget_obj.id,
+            )
+        else:
+            logger.warning(f"No approver could be resolved for budget {budget_obj.id} raised by {current_user.get('name')}")
     
     return {k: v for k, v in doc.items() if k != '_id'}
 
@@ -9150,12 +9227,14 @@ async def approve_budget_request(
 ):
     """Approve or reject budget request (Director only)"""
     
-    if current_user['role'].lower() != 'director':
-        raise HTTPException(status_code=403, detail='Only Director can approve budget requests')
-    
     budget_req = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not budget_req:
         raise HTTPException(status_code=404, detail='Budget request not found')
+    
+    # The designated approver (reporting manager) OR a senior approver can act.
+    _senior_roles = ['CEO', 'Director', 'Vice President', 'Admin', 'System Admin']
+    if current_user['id'] != budget_req.get('approver_id') and current_user['role'] not in _senior_roles:
+        raise HTTPException(status_code=403, detail='You are not authorized to approve this budget request')
     
     if budget_req['status'] != 'pending_approval':
         raise HTTPException(status_code=400, detail='Only pending requests can be approved/rejected')
@@ -9310,24 +9389,40 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
     
     # Create approval task if submitted for approval
     if request.submit_for_approval:
-        # Find Director for approval
-        director = await get_tdb().users.find_one(
-            {'role': {'$in': ['Director', 'director']}},
-            {'_id': 0, 'id': 1, 'name': 1}
-        )
-        
-        if director:
+        # Route to the requester's reporting manager (with fallbacks)
+        approver = await resolve_request_approver(current_user['id'])
+
+        if approver:
+            # Persist the resolved approver on the request so the approve
+            # endpoint can authorize them (even if they aren't a Director).
+            await get_tdb().expense_requests.update_one(
+                {'id': expense_obj.id},
+                {'$set': {'approver_id': approver['id'], 'approver_name': approver.get('name')}}
+            )
             expense_label = expense_type_info['label']
             await create_approval_task(
                 approval_type=ApprovalType.EXPENSE,
                 requester_id=current_user['id'],
                 requester_name=current_user.get('name', 'Unknown'),
-                approver_id=director['id'],
+                approver_id=approver['id'],
                 details=f"{expense_label} - {entity_name} (₹{final_amount:,.0f})",
                 description=f"Expense request for {entity_name}:\n\nType: {expense_label}\nAmount: ₹{final_amount:,.0f}\n{('Free Trial Days: ' + str(request.free_trial_days)) if request.free_trial_days else ''}\n{request.description or ''}",
                 reference_id=expense_obj.id,
-                reference_type='expense_request'
+                reference_type='expense_request',
+                lead_id=request.entity_id if request.entity_type == 'lead' else None,
+                account_id=request.entity_id if request.entity_type == 'account' else None,
             )
+            _entity_link = f"/leads/{request.entity_id}" if request.entity_type == 'lead' else f"/accounts/{request.entity_id}"
+            await notify_approver(
+                approver,
+                title=f"Expense approval needed: {entity_name}",
+                body=f"{current_user.get('name', 'A team member')} submitted a {expense_label} of ₹{final_amount:,.0f} for {entity_name}. Your approval is required.",
+                link=_entity_link,
+                entity_type='expense_request',
+                entity_id=expense_obj.id,
+            )
+        else:
+            logger.warning(f"No approver could be resolved for expense {expense_obj.id} raised by {current_user.get('name')}")
     
     return {
         'id': expense_obj.id,
@@ -9496,13 +9591,14 @@ async def approve_expense_request(
 ):
     """Approve or reject an expense request"""
     
-    # Only Directors and CEO can approve
-    if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'ceo', 'director', 'vp']:
-        raise HTTPException(status_code=403, detail='Only Directors can approve expense requests')
-    
     expense_req = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not expense_req:
         raise HTTPException(status_code=404, detail='Expense request not found')
+    
+    # The designated approver (reporting manager) OR a senior approver can act.
+    _senior_roles = ['CEO', 'Director', 'Vice President', 'Admin', 'System Admin', 'ceo', 'director', 'vp']
+    if current_user['id'] != expense_req.get('approver_id') and current_user['role'] not in _senior_roles:
+        raise HTTPException(status_code=403, detail='You are not authorized to approve this expense request')
     
     if expense_req['status'] != 'pending_approval':
         raise HTTPException(status_code=400, detail='Expense request is not pending approval')
@@ -9527,7 +9623,80 @@ async def approve_expense_request(
         status='completed' if approval.status == 'approved' else 'cancelled'
     )
     
+    # Notify the requester of the decision (best-effort)
+    try:
+        from utils.notify import notify_users
+        _ent = expense_req.get('entity_name') or 'your request'
+        _link = (f"/leads/{expense_req.get('entity_id')}" if expense_req.get('entity_type') == 'lead'
+                 else f"/accounts/{expense_req.get('entity_id')}")
+        _reason = f" Reason: {approval.rejection_reason}" if (approval.status == 'rejected' and approval.rejection_reason) else ''
+        await notify_users(
+            get_current_tenant_id(), [expense_req.get('user_id')],
+            title=f"Expense {approval.status}: {_ent}",
+            body=f"Your expense request for {_ent} was {approval.status} by {current_user.get('name')}.{_reason}",
+            link=_link, kind='approval_decision',
+            entity_type='expense_request', entity_id=request_id,
+        )
+    except Exception:
+        logger.exception('notify requester (expense decision) failed')
+    
     return {'message': f'Expense request {approval.status}'}
+
+@api_router.get("/approvals/my-pending")
+async def get_my_pending_approvals(current_user: dict = Depends(get_current_user)):
+    """Approval tasks assigned to the current user that still need action.
+
+    Powers the Home "Pending Approvals" card. Enriches each approval task with
+    its underlying request (status + amount + entity) and drops any that have
+    already been decided elsewhere.
+    """
+    tdb = get_tdb()
+    tasks = await tdb.tasks.find(
+        {
+            'is_approval_task': True,
+            'assigned_to': current_user['id'],
+            'status': {'$in': ['pending', 'open', 'in_progress']},
+        },
+        {'_id': 0}
+    ).sort('created_at', -1).to_list(200)
+
+    coll_for_ref = {
+        'expense_request': 'expense_requests',
+        'travel_request': 'travel_requests',
+        'budget_request': 'budget_requests',
+        'leave_request': 'leave_requests',
+    }
+    out = []
+    for t in tasks:
+        ref_type = t.get('approval_reference_type')
+        ref_id = t.get('approval_reference_id')
+        item = {
+            'task_id': t.get('id'),
+            'approval_type': t.get('approval_type'),
+            'title': t.get('title'),
+            'description': t.get('description'),
+            'requester_name': t.get('created_by_name') or t.get('assigned_by_name'),
+            'due_date': t.get('due_date'),
+            'created_at': t.get('created_at'),
+            'reference_type': ref_type,
+            'reference_id': ref_id,
+            'lead_id': t.get('lead_id'),
+            'account_id': t.get('account_id'),
+            'amount': None,
+            'entity_name': None,
+        }
+        coll = coll_for_ref.get(ref_type)
+        if coll and ref_id:
+            req = await getattr(tdb, coll).find_one({'id': ref_id}, {'_id': 0})
+            if req:
+                # Skip requests that have already been decided
+                if req.get('status') not in ('pending_approval', 'pending'):
+                    continue
+                item['amount'] = req.get('amount') or req.get('total_amount') or req.get('tentative_budget')
+                item['entity_name'] = req.get('entity_name')
+        out.append(item)
+    return out
+
 
 @api_router.delete("/expense-requests/{request_id}")
 async def delete_expense_request(request_id: str, current_user: dict = Depends(get_current_user)):

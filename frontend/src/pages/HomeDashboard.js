@@ -26,6 +26,7 @@ import {
   MeetingDetailDialog
 } from '../components/widgets';
 import DistributorMessagesCard from '../components/DistributorMessagesCard';
+import PendingApprovalsWidget from '../components/widgets/PendingApprovalsWidget';
 // Quote widgets temporarily disabled - uncomment to re-enable
 // import WaterQuoteWidget from '../components/widgets/WaterQuoteWidget';
 // import SalesQuoteWidget from '../components/widgets/SalesQuoteWidget';
@@ -355,6 +356,11 @@ export default function HomeDashboard() {
           {/* Task Metrics - Bento Grid Row 1 */}
           <section className="mb-6 sm:mb-8">
             <TaskMetricsWidget />
+          </section>
+
+          {/* Pending Approvals — auto-hides when nothing needs the user's action */}
+          <section className="mb-6 sm:mb-8">
+            <PendingApprovalsWidget />
           </section>
 
           {/* Distributor messages alert (suppliers only — auto-hides for others) */}
