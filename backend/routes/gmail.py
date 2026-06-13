@@ -431,6 +431,27 @@ class AttachmentIn(BaseModel):
     data: str  # standard base64-encoded file content
 
 
+class MarkReadRequest(BaseModel):
+    message_ids: List[str]
+
+
+@router.post("/gmail/mark-read")
+async def mark_read(payload: MarkReadRequest, current_user: dict = Depends(get_current_user)):
+    """Remove the UNREAD label from the given messages (mark as read in Gmail)."""
+    if not payload.message_ids:
+        return {"updated": 0}
+    access_token = await _require_token(current_user["id"])
+    async with httpx.AsyncClient(timeout=20) as client:
+        r = await client.post(
+            f"{GMAIL_API}/messages/batchModify",
+            headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+            json={"ids": payload.message_ids, "removeLabelIds": ["UNREAD"]},
+        )
+    if r.status_code not in (200, 204):
+        raise HTTPException(status_code=400, detail=f"Gmail API error: {r.text[:200]}")
+    return {"updated": len(payload.message_ids)}
+
+
 @router.get("/gmail/messages/{message_id}/attachments/{attachment_id}")
 async def download_attachment(
     message_id: str,

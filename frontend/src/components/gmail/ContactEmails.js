@@ -8,6 +8,7 @@ import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { useNavigate } from 'react-router-dom';
 import { downloadAttachment, filesToAttachments, humanSize } from './gmailUtils';
+import RecipientField from './RecipientField';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -69,6 +70,11 @@ export default function ContactEmails({ email, name }) {
         const res = await axios.get(`${API_URL}/gmail/messages/${m.id}`, { headers: authHeaders() });
         setBodyCache((c) => ({ ...c, [m.id]: res.data }));
       } catch { /* ignore */ }
+    }
+    // Mark read when opened in the CRM
+    if (m.unread) {
+      axios.post(`${API_URL}/gmail/mark-read`, { message_ids: [m.id] }, { headers: authHeaders() }).catch(() => {});
+      setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, unread: false } : x)));
     }
   };
 
@@ -201,8 +207,8 @@ export default function ContactEmails({ email, name }) {
               <button type="button" className="text-xs text-muted-foreground hover:text-slate-700" onClick={() => setShowCcBcc(true)} data-testid="contact-show-ccbcc">+ Add Cc/Bcc</button>
             ) : (
               <>
-                <Input placeholder="Cc" value={compose.cc} onChange={(e) => setCompose({ ...compose, cc: e.target.value })} data-testid="contact-compose-cc" />
-                <Input placeholder="Bcc" value={compose.bcc} onChange={(e) => setCompose({ ...compose, bcc: e.target.value })} data-testid="contact-compose-bcc" />
+                <RecipientField value={compose.cc} onChange={(v) => setCompose({ ...compose, cc: v })} placeholder="Cc" testid="contact-compose-cc" />
+                <RecipientField value={compose.bcc} onChange={(v) => setCompose({ ...compose, bcc: v })} placeholder="Bcc" testid="contact-compose-bcc" />
               </>
             )}
             <Input placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} data-testid="contact-compose-subject" />

@@ -13,6 +13,7 @@ import {
 } from '../components/ui/dialog';
 import { Badge } from '../components/ui/badge';
 import { downloadAttachment, filesToAttachments, humanSize } from '../components/gmail/gmailUtils';
+import RecipientField from '../components/gmail/RecipientField';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -153,6 +154,13 @@ export default function Mail() {
     try {
       const res = await axios.get(`${API_URL}/gmail/threads/${msg.threadId}`, { headers: authHeaders() });
       setThread(res.data);
+      // Mark any unread messages in this thread as read (Gmail + local list)
+      const unreadIds = (res.data.messages || []).filter((x) => x.unread).map((x) => x.id);
+      if (unreadIds.length) {
+        axios.post(`${API_URL}/gmail/mark-read`, { message_ids: unreadIds }, { headers: authHeaders() }).catch(() => {});
+        setMessages((prev) => prev.map((m) => (m.threadId === msg.threadId ? { ...m, unread: false } : m)));
+        setThread((t) => (t ? { ...t, messages: t.messages.map((m) => ({ ...m, unread: false })) } : t));
+      }
     } catch {
       toast.error('Could not open conversation');
       setThread(null);
@@ -376,16 +384,16 @@ export default function Mail() {
         <DialogContent className="max-w-2xl" data-testid="compose-dialog">
           <DialogHeader><DialogTitle>{compose.reply_to_message_id ? 'Reply' : 'New email'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Input placeholder="To" value={compose.to} onChange={(e) => setCompose({ ...compose, to: e.target.value })} data-testid="compose-to" />
+            <div className="flex items-start gap-2">
+              <div className="flex-1"><RecipientField value={compose.to} onChange={(v) => setCompose({ ...compose, to: v })} placeholder="To" testid="compose-to" /></div>
               {!showCcBcc && (
-                <Button type="button" variant="ghost" size="sm" className="text-xs text-muted-foreground shrink-0" onClick={() => setShowCcBcc(true)} data-testid="compose-show-ccbcc">Cc/Bcc</Button>
+                <Button type="button" variant="ghost" size="sm" className="text-xs text-muted-foreground shrink-0 mt-1" onClick={() => setShowCcBcc(true)} data-testid="compose-show-ccbcc">Cc/Bcc</Button>
               )}
             </div>
             {showCcBcc && (
               <>
-                <Input placeholder="Cc" value={compose.cc} onChange={(e) => setCompose({ ...compose, cc: e.target.value })} data-testid="compose-cc" />
-                <Input placeholder="Bcc" value={compose.bcc} onChange={(e) => setCompose({ ...compose, bcc: e.target.value })} data-testid="compose-bcc" />
+                <RecipientField value={compose.cc} onChange={(v) => setCompose({ ...compose, cc: v })} placeholder="Cc" testid="compose-cc" />
+                <RecipientField value={compose.bcc} onChange={(v) => setCompose({ ...compose, bcc: v })} placeholder="Bcc" testid="compose-bcc" />
               </>
             )}
             <Input placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} data-testid="compose-subject" />
