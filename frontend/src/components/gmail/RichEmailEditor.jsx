@@ -11,7 +11,7 @@ const MODULES = {
     ['clean'],
   ],
 };
-const FORMATS = ['bold', 'italic', 'underline', 'strike', 'list', 'bullet', 'link'];
+const FORMATS = ['bold', 'italic', 'underline', 'strike', 'list', 'link'];
 
 export default function RichEmailEditor({ value, onChange, placeholder = 'Write your message...' }) {
   return (
