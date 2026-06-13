@@ -19,6 +19,20 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Decide where to send a user after login based on their role/department.
+// Dedicated teams land directly in their own module; everyone else → Sales home.
+const landingRouteFor = (u) => {
+  if (!u) return '/home';
+  if (u.role === 'Driver') return '/driver/schedules';
+  if (u.role === 'Distributor') return '/distributor-home';
+  const depts = Array.isArray(u.department)
+    ? u.department.map((d) => (d || '').toLowerCase())
+    : [(u.department || '').toLowerCase()];
+  // Marketing-only users go straight to the Marketing module (Design Requests).
+  if (depts.includes('marketing') && !depts.includes('sales')) return '/marketing-requests';
+  return '/home';
+};
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -96,12 +110,7 @@ export default function Login() {
   // Redirect to home if user is already authenticated (not during login process)
   useEffect(() => {
     if (user && !authLoading && !loading) {
-      const dest = user.role === 'Driver'
-        ? '/driver/schedules'
-        : user.role === 'Distributor'
-          ? '/distributor-home'
-          : '/home';
-      navigate(dest, { replace: true });
+      navigate(landingRouteFor(user), { replace: true });
     }
   }, [user, authLoading, loading, navigate]);
   
@@ -142,12 +151,7 @@ export default function Login() {
         // Small delay to ensure state is synced before redirect
         await new Promise(resolve => setTimeout(resolve, 100));
         // Use navigate with replace to prevent back button issues
-        const dest = userData.role === 'Driver'
-          ? '/driver/schedules'
-          : userData.role === 'Distributor'
-            ? '/distributor-home'
-            : '/home';
-        navigate(dest, { replace: true });
+        navigate(landingRouteFor(userData), { replace: true });
       } else {
         toast.error('Login failed - no user data received');
         setLoading(false);

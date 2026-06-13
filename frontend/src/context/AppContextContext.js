@@ -100,14 +100,23 @@ export function AppContextProvider({ children }) {
       return;
     }
     
+    // Set based on department (support both string and array)
+    const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
+    
+    // Dedicated single-department teams land directly in their own module.
+    // Marketing-only users (no sales) go straight to the Marketing module —
+    // checked before admin-role defaulting so a Marketing-only lead lands there too.
+    if (depts.includes('marketing') && !depts.includes('sales')) {
+      setCurrentContext('marketing');
+      return;
+    }
+    
     // Admin roles default to sales
     if (ADMIN_ROLES.includes(user.role)) {
       setCurrentContext('sales');
       return;
     }
     
-    // Set based on department (support both string and array)
-    const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
     if (depts.includes('production') && !depts.includes('sales')) {
       setCurrentContext('production');
     } else if (depts.includes('distribution') && !depts.includes('sales')) {
