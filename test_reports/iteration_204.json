@@ -1,0 +1,52 @@
+{
+  "summary": "Tested the new EntityContactsSection on both Lead and Account detail pages via UI. Lead flow works end-to-end (section visible, add/edit/delete all functional, first-name validation correctly blocks empty submit with 'First name is required' toast and keeps dialog open). Account flow is BROKEN with a fatal runtime error: 'EntityContactsSection is not defined' because the component is rendered but not imported in /app/frontend/src/pages/AccountDetail.js. The entire Account detail page crashes (red error overlay) — no contacts section, no Account Information, no Invoice Summary renders.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AccountDetail",
+        "issue": "CRITICAL: Runtime ReferenceError 'EntityContactsSection is not defined' crashes the entire Account detail page. The component is used at line 1807 (<EntityContactsSection parentType='account' parentId={...} />) but the import statement was never added at the top of /app/frontend/src/pages/AccountDetail.js. LeadDetail.js imports it correctly, so the Lead flow works. Add: `import EntityContactsSection from '../components/EntityContactsSection';` to AccountDetail.js imports.",
+        "selector": "page /accounts/:id",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "EntityContactsSection - Add/Edit Dialog",
+        "issue": "Minor a11y warning: 'Missing Description or aria-describedby={undefined} for {DialogContent}'. Consider adding <DialogDescription> for screen readers.",
+        "selector": "[data-testid='contact-form-dialog']",
+        "priority": "LOW"
+      },
+      {
+        "component": "EntityContactsSection - Salutation Select",
+        "issue": "Console warning: 'Select is changing from uncontrolled to controlled'. Initial value is `form.salutation || undefined`; once a value is set it becomes controlled. Use `value={form.salutation}` with empty string handled, or keep it strictly controlled to avoid the warning.",
+        "selector": "[data-testid='contact-salutation']",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Account → Contacts CRUD",
+        "issue": "Cannot test add/edit/delete on Account detail at all because the page crashes on render due to the missing import (see ui_bugs above). Once the import is added the flow should work since the same component already works correctly on Lead detail.",
+        "affected_selectors": ["[data-testid='entity-contacts-section']", "[data-testid='add-contact-btn']", "[data-testid='contact-form-dialog']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Add `import EntityContactsSection from '../components/EntityContactsSection';` near the other component imports (around line 41) in /app/frontend/src/pages/AccountDetail.js. Without this fix every Account detail page is fully broken — not just the new Contacts section.",
+    "(Optional) Fix Select uncontrolled→controlled warning in EntityContactsSection by initializing salutation as '' and passing value={form.salutation} consistently.",
+    "(Optional) Add DialogDescription to the contact-form-dialog for accessibility."
+  ],
+  "critical_code_review_comments": [
+    "AccountDetail.js uses EntityContactsSection without importing it — must be a regression from the recent edit that removed the duplicated JSX block. This kind of error should be catchable by an ESLint rule (no-undef / react/jsx-no-undef).",
+    "EntityContactsSection.jsx is clean and well-structured (≈190 lines, single responsibility). Async/await usage is correct, data-testids are present on all interactive elements, validation is enforced. No business-logic issues seen."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "Lead flow 100% (4/4 sub-flows); Account flow 0% (page crashes before any test can run)"},
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123 (used successfully)",
+  "seed_data_creation": "Created and deleted one test contact (TestFirst TestLast / Mr / Manager → Senior Manager) under the first lead in the list (id 08c93122-99fc-4587-b31c-559649f29c17). Cleanup completed — row deleted at end of lead flow. No account-side test data created because the page never rendered.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After main agent adds the missing import in AccountDetail.js, only the Account-side Add/Edit/Delete + cross-sync to global Contacts module needs to be re-verified. Lead-side flow including validation is fully passing. Use the same Mr/Dr salutation, 'First name is required' is the expected error toast, contact rows use data-testid 'contact-row-<id>' and the row text concatenates as 'SalutationFirstLastEmailPhoneDesignation'.",
+  "rca of the issue": "RCA: /app/frontend/src/pages/AccountDetail.js renders <EntityContactsSection .../> at line 1807 but has no corresponding import statement. The component identifier therefore resolves to undefined at render time, React throws 'EntityContactsSection is not defined', and the AccountDetail error boundary catches it (visible 'Uncaught runtime errors' overlay). LeadDetail.js (the working twin) imports the component, so the regression is isolated to AccountDetail.js. Reproduction: login as admin → /accounts → click any account → red error overlay. Mitigation (1-line fix): add `import EntityContactsSection from '../components/EntityContactsSection';` to AccountDetail.js. Recommend also enabling/running an ESLint pass to surface react/jsx-no-undef going forward."
+}

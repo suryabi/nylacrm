@@ -1757,17 +1757,7 @@ ${googleMapsLink}`;
                     })()}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Contact Name</p>
-                  <p className="font-medium">{account.contact_name || '-'}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Contact Number</p>
-                    <p className="font-medium">{account.contact_number || '-'}</p>
-                  </div>
-                </div>
+                {/* Per-contact details now live in the multi-contact Contacts table below */}
                 {account.gst_number && (
                   <div>
                     <p className="text-sm text-muted-foreground">GST Number</p>
@@ -1812,6 +1802,9 @@ ${googleMapsLink}`;
               </div>
             )}
           </Card>
+
+          {/* Multi-contact table (synced to the Contacts module) */}
+          <EntityContactsSection parentType="account" parentId={account.account_id || account.id} />
 
           {/* Invoice Summary — second section, right after Account Information */}
           <Card className="p-4 sm:p-6">

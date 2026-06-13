@@ -67,6 +67,10 @@ routes_router.include_router(meetings_router, prefix="/meetings", tags=["Meeting
 routes_router.include_router(users_router, prefix="/users", tags=["Users"])
 routes_router.include_router(expense_master_router, tags=["Expense Master"])
 routes_router.include_router(contacts_router, tags=["Contacts"])
+
+# Lead/Account multi-contact tables (synced into the Contacts module)
+from .entity_contacts import router as entity_contacts_router
+routes_router.include_router(entity_contacts_router, tags=["Entity Contacts"])
 routes_router.include_router(tenant_admin_router, tags=["Tenant Administration"])
 routes_router.include_router(tenant_registration_router, prefix="/tenants", tags=["Tenant Registration"])
 routes_router.include_router(platform_admin_router, prefix="/platform-admin", tags=["Platform Administration"])

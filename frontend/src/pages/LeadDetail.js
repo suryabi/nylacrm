@@ -45,6 +45,7 @@ import LeadScoringCard from '../components/LeadScoringCard';
 import LeadGroupCard from '../components/LeadGroupCard';
 import LeadDeliveryAddressCard from '../components/LeadDeliveryAddressCard';
 import ContactEmails from '../components/gmail/ContactEmails';
+import EntityContactsSection from '../components/EntityContactsSection';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1388,33 +1389,7 @@ ${userEmail}`;
                   <p className="font-medium">{lead.company}</p>
                 </div>
               </div>
-              {lead.contact_person && (
-                <div className="flex items-center gap-3">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Contact Person</p>
-                    <p className="font-medium">{lead.contact_person}</p>
-                  </div>
-                </div>
-              )}
-              {lead.email && (
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{lead.email}</p>
-                  </div>
-                </div>
-              )}
-              {lead.phone && (
-                <div className="flex items-center gap-3">
-                  <Phone className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Phone</p>
-                    <p className="font-medium">{lead.phone}</p>
-                  </div>
-                </div>
-              )}
+              {/* Per-contact details now live in the multi-contact Contacts table below */}
               {assignedUser && (
                 <div className="flex items-center gap-3 md:col-span-2">
                   <User className="h-5 w-5 text-muted-foreground" />
@@ -1426,6 +1401,9 @@ ${userEmail}`;
               )}
             </div>
           </Card>
+
+          {/* Multi-contact table (synced to the Contacts module) */}
+          <EntityContactsSection parentType="lead" parentId={lead.id} />
 
           {/* Email history with this contact (Gmail) */}
           {lead.email && (
