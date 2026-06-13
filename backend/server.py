@@ -6266,6 +6266,14 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
         )
         duplicate['already_existed'] = True
         duplicate['matched_on'] = 'gstin' if (lead.get('gstin') or lead.get('GSTIN')) else 'company_and_city'
+        # Bring the lead's contacts over to the matched account too.
+        await get_tdb().contacts.update_many(
+            {'lead_id': data.lead_id},
+            {'$set': {
+                'account_id': duplicate.get('account_id') or duplicate.get('id'),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }}
+        )
         return duplicate
 
     # Validate proposed SKU pricing exists
@@ -6389,6 +6397,18 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     await get_tdb().leads.update_one(
         {'id': data.lead_id},
         {'$set': {'account_id': account_id, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+
+    # Copy the lead's contacts onto the new account: same contact records, now
+    # also tagged with this account_id so they appear under the account's
+    # Contacts table (single source of truth — no duplication).
+    await get_tdb().contacts.update_many(
+        {'lead_id': data.lead_id},
+        {'$set': {
+            'account_id': account_id,
+            'company': account_name,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }}
     )
 
     # Return the actual saved document (includes delivery_address when copied

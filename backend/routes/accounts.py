@@ -411,7 +411,19 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     }
     
     await tdb.accounts.insert_one(account_data)
-    
+
+    # Copy the lead's contacts onto the new account: same contact records, now
+    # also tagged with this account_id so they show under the account's Contacts
+    # table (single source of truth — no duplication in the Contacts module).
+    await tdb.contacts.update_many(
+        {'lead_id': data.lead_id},
+        {'$set': {
+            'account_id': account_data['account_id'],
+            'company': account_data['account_name'],
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+
     # Update lead with account reference
     await tdb.leads.update_one(
         {'id': data.lead_id},

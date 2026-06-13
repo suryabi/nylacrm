@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Users, Mail, Phone, Building2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from './ui/hover-card';
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription,
   AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -16,7 +17,9 @@ import {
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const SALUTATIONS = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
-const EMPTY = { salutation: '', first_name: '', last_name: '', email: '', phone: '', designation: '' };
+const EMPTY = { salutation: 'Mr', first_name: '', last_name: '', email: '', phone: '', designation: '' };
+
+const fullName = (c) => [c.first_name, c.last_name].filter(Boolean).join(' ');
 
 /**
  * Multi-contact table for a Lead or Account. Contacts are persisted into the
@@ -52,7 +55,7 @@ export default function EntityContactsSection({ parentType, parentId }) {
   const openEdit = (c) => {
     setEditing(c);
     setForm({
-      salutation: c.salutation || '', first_name: c.first_name || '', last_name: c.last_name || '',
+      salutation: c.salutation || 'Mr', first_name: c.first_name || '', last_name: c.last_name || '',
       email: c.email || '', phone: c.phone || '', designation: c.designation || '',
     });
     setDialogOpen(true);
@@ -101,9 +104,8 @@ export default function EntityContactsSection({ parentType, parentId }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Salutation</TableHead>
-                <TableHead>First Name</TableHead>
-                <TableHead>Last Name</TableHead>
+                <TableHead className="w-20">Salutation</TableHead>
+                <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Designation</TableHead>
@@ -114,11 +116,57 @@ export default function EntityContactsSection({ parentType, parentId }) {
               {contacts.map((c) => (
                 <TableRow key={c.id} data-testid={`contact-row-${c.id}`}>
                   <TableCell>{c.salutation || '—'}</TableCell>
-                  <TableCell className="font-medium">{c.first_name}</TableCell>
-                  <TableCell>{c.last_name || '—'}</TableCell>
-                  <TableCell>{c.email ? <a href={`mailto:${c.email}`} className="text-primary hover:underline">{c.email}</a> : '—'}</TableCell>
-                  <TableCell>{c.phone || '—'}</TableCell>
-                  <TableCell>{c.designation || '—'}</TableCell>
+                  <TableCell>
+                    <HoverCard openDelay={150} closeDelay={60}>
+                      <HoverCardTrigger asChild>
+                        <div className="max-w-[180px] truncate font-medium cursor-default" data-testid={`contact-name-${c.id}`}>
+                          {fullName(c) || '—'}
+                        </div>
+                      </HoverCardTrigger>
+                      <HoverCardContent align="start" className="w-72" data-testid={`contact-hovercard-${c.id}`}>
+                        <div className="space-y-2">
+                          <div>
+                            <p className="font-semibold text-sm">{[c.salutation, c.first_name, c.last_name].filter(Boolean).join(' ')}</p>
+                            {c.designation && <p className="text-xs text-muted-foreground">{c.designation}</p>}
+                          </div>
+                          <div className="space-y-1.5 text-sm border-t pt-2">
+                            {c.email && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <a href={`mailto:${c.email}`} className="text-primary hover:underline break-all">{c.email}</a>
+                              </div>
+                            )}
+                            {c.phone && (
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span>{c.phone}</span>
+                              </div>
+                            )}
+                            {c.company && (
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="text-muted-foreground">{c.company}</span>
+                              </div>
+                            )}
+                            {!c.email && !c.phone && !c.company && (
+                              <p className="text-xs text-muted-foreground">No additional details</p>
+                            )}
+                          </div>
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-[200px] truncate" title={c.email || ''}>
+                      {c.email ? <a href={`mailto:${c.email}`} className="text-primary hover:underline">{c.email}</a> : '—'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-[140px] truncate" title={c.phone || ''}>{c.phone || '—'}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="max-w-[160px] truncate" title={c.designation || ''}>{c.designation || '—'}</div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(c)} data-testid={`edit-contact-${c.id}`}><Pencil className="h-4 w-4" /></Button>
