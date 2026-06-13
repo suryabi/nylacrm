@@ -5,7 +5,7 @@ import { Plus, Pencil, Trash2, Loader2, Users } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
 import {
@@ -135,11 +135,14 @@ export default function EntityContactsSection({ parentType, parentId }) {
       {/* Add / Edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg" data-testid="contact-form-dialog">
-          <DialogHeader><DialogTitle>{editing ? 'Edit Contact' : 'Add Contact'}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Contact' : 'Add Contact'}</DialogTitle>
+            <DialogDescription>Manage a contact for this {parentType}. It will also appear in the Contacts module.</DialogDescription>
+          </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Salutation</label>
-              <Select value={form.salutation || undefined} onValueChange={(v) => setForm({ ...form, salutation: v })}>
+              <Select value={form.salutation} onValueChange={(v) => setForm({ ...form, salutation: v })}>
                 <SelectTrigger data-testid="contact-salutation"><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>{SALUTATIONS.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
