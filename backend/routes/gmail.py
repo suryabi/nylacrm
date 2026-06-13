@@ -21,7 +21,7 @@ from urllib.parse import urlencode, urlparse
 import httpx
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel
 
 from deps import get_current_user
@@ -425,6 +425,38 @@ async def contact_emails(
 # Sending / replying
 # ──────────────────────────────────────────────
 
+class AttachmentIn(BaseModel):
+    filename: str
+    mime_type: Optional[str] = "application/octet-stream"
+    data: str  # standard base64-encoded file content
+
+
+@router.get("/gmail/messages/{message_id}/attachments/{attachment_id}")
+async def download_attachment(
+    message_id: str,
+    attachment_id: str,
+    filename: Optional[str] = None,
+    mime: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Download a single attachment from a message."""
+    access_token = await _require_token(current_user["id"])
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.get(
+            f"{GMAIL_API}/messages/{message_id}/attachments/{attachment_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    if r.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"Gmail API error: {r.text[:200]}")
+    content = _b64url_decode(r.json().get("data", ""))
+    safe_name = (filename or "attachment").replace('"', "")
+    return Response(
+        content=content,
+        media_type=mime or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
+
+
 class SendEmailRequest(BaseModel):
     to: str
     subject: Optional[str] = None
@@ -434,6 +466,10 @@ class SendEmailRequest(BaseModel):
     bcc: Optional[str] = None
     thread_id: Optional[str] = None
     reply_to_message_id: Optional[str] = None
+    attachments: Optional[List[AttachmentIn]] = None
+
+
+MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024  # 20 MB total (Gmail allows 25MB)
 
 
 @router.post("/gmail/send")
@@ -489,6 +525,20 @@ async def send_email(payload: SendEmailRequest, current_user: dict = Depends(get
             mime.add_alternative(payload.body_html, subtype="html")
         else:
             mime.set_content(payload.body_html, subtype="html")
+
+    # Attach files (base64-encoded from the client)
+    if payload.attachments:
+        total = 0
+        for att in payload.attachments:
+            try:
+                raw_bytes = base64.b64decode(att.data)
+            except Exception:
+                raise HTTPException(status_code=400, detail=f"Invalid attachment data for {att.filename}")
+            total += len(raw_bytes)
+            if total > MAX_ATTACHMENTS_BYTES:
+                raise HTTPException(status_code=400, detail="Attachments exceed the 20MB limit.")
+            maintype, _, subtype = (att.mime_type or "application/octet-stream").partition("/")
+            mime.add_attachment(raw_bytes, maintype=maintype or "application", subtype=subtype or "octet-stream", filename=att.filename)
 
     raw = base64.urlsafe_b64encode(mime.as_bytes()).decode()
     send_body = {"raw": raw}

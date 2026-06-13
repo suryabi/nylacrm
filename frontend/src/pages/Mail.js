@@ -3,7 +3,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   Mail as MailIcon, Loader2, RefreshCw, Search, Send, X, Plug,
-  ArrowLeft, Paperclip, Reply, PenSquare, AlertCircle, Inbox, ShieldCheck,
+  ArrowLeft, Paperclip, Reply, PenSquare, AlertCircle, Inbox, ShieldCheck, Download,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
 import { Badge } from '../components/ui/badge';
+import { downloadAttachment, filesToAttachments, humanSize } from '../components/gmail/gmailUtils';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -66,7 +67,9 @@ export default function Mail() {
   const [loadingThread, setLoadingThread] = useState(false);
 
   const [composeOpen, setComposeOpen] = useState(false);
-  const [compose, setCompose] = useState({ to: '', subject: '', body_text: '', reply_to_message_id: null, thread_id: null });
+  const [compose, setCompose] = useState({ to: '', cc: '', bcc: '', subject: '', body_text: '', reply_to_message_id: null, thread_id: null });
+  const [composeFiles, setComposeFiles] = useState([]);
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [sending, setSending] = useState(false);
   const searchRef = useRef(null);
 
@@ -170,16 +173,21 @@ export default function Mail() {
     const from = parseAddr(msg.from);
     setCompose({
       to: from.email,
+      cc: '', bcc: '',
       subject: msg.subject?.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject || ''}`,
       body_text: '',
       reply_to_message_id: msg.id,
       thread_id: thread?.thread_id,
     });
+    setComposeFiles([]);
+    setShowCcBcc(false);
     setComposeOpen(true);
   };
 
   const startCompose = () => {
-    setCompose({ to: '', subject: '', body_text: '', reply_to_message_id: null, thread_id: null });
+    setCompose({ to: '', cc: '', bcc: '', subject: '', body_text: '', reply_to_message_id: null, thread_id: null });
+    setComposeFiles([]);
+    setShowCcBcc(false);
     setComposeOpen(true);
   };
 
@@ -188,15 +196,20 @@ export default function Mail() {
     if (!compose.body_text.trim()) { toast.error('Message body is required'); return; }
     setSending(true);
     try {
+      const attachments = composeFiles.length ? await filesToAttachments(composeFiles) : undefined;
       await axios.post(`${API_URL}/gmail/send`, {
         to: compose.to,
+        cc: compose.cc || undefined,
+        bcc: compose.bcc || undefined,
         subject: compose.subject,
         body_text: compose.body_text,
         reply_to_message_id: compose.reply_to_message_id,
         thread_id: compose.thread_id,
+        attachments,
       }, { headers: authHeaders() });
       toast.success('Email sent');
       setComposeOpen(false);
+      setComposeFiles([]);
       if (compose.thread_id && thread) openThread({ threadId: compose.thread_id });
       else fetchMessages(activeQuery);
     } catch (e) {
@@ -332,7 +345,17 @@ export default function Mail() {
                       {m.attachments?.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-2">
                           {m.attachments.map((att, i) => (
-                            <span key={i} className="inline-flex items-center gap-1 text-xs bg-slate-50 border rounded px-2 py-1 text-slate-600"><Paperclip className="h-3 w-3" /> {att.filename}</span>
+                            <button
+                              key={i}
+                              onClick={() => downloadAttachment(m.id, att).catch(() => toast.error('Download failed'))}
+                              className="inline-flex items-center gap-1 text-xs bg-slate-50 hover:bg-slate-100 border rounded px-2 py-1 text-slate-700 transition-colors"
+                              data-testid={`attachment-${m.id}-${i}`}
+                              title={`Download ${att.filename}`}
+                            >
+                              <Paperclip className="h-3 w-3" /> {att.filename}
+                              <span className="text-slate-400">{humanSize(att.size)}</span>
+                              <Download className="h-3 w-3 text-rose-600" />
+                            </button>
                           ))}
                         </div>
                       )}
@@ -353,15 +376,42 @@ export default function Mail() {
         <DialogContent className="max-w-2xl" data-testid="compose-dialog">
           <DialogHeader><DialogTitle>{compose.reply_to_message_id ? 'Reply' : 'New email'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Input placeholder="To" value={compose.to} onChange={(e) => setCompose({ ...compose, to: e.target.value })} data-testid="compose-to" />
+            <div className="flex items-center gap-2">
+              <Input placeholder="To" value={compose.to} onChange={(e) => setCompose({ ...compose, to: e.target.value })} data-testid="compose-to" />
+              {!showCcBcc && (
+                <Button type="button" variant="ghost" size="sm" className="text-xs text-muted-foreground shrink-0" onClick={() => setShowCcBcc(true)} data-testid="compose-show-ccbcc">Cc/Bcc</Button>
+              )}
+            </div>
+            {showCcBcc && (
+              <>
+                <Input placeholder="Cc" value={compose.cc} onChange={(e) => setCompose({ ...compose, cc: e.target.value })} data-testid="compose-cc" />
+                <Input placeholder="Bcc" value={compose.bcc} onChange={(e) => setCompose({ ...compose, bcc: e.target.value })} data-testid="compose-bcc" />
+              </>
+            )}
             <Input placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} data-testid="compose-subject" />
-            <Textarea placeholder="Write your message..." rows={10} value={compose.body_text} onChange={(e) => setCompose({ ...compose, body_text: e.target.value })} data-testid="compose-body" />
+            <Textarea placeholder="Write your message..." rows={9} value={compose.body_text} onChange={(e) => setCompose({ ...compose, body_text: e.target.value })} data-testid="compose-body" />
+            {composeFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2" data-testid="compose-attachments-list">
+                {composeFiles.map((f, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5 text-xs bg-slate-50 border rounded px-2 py-1 text-slate-700">
+                    <Paperclip className="h-3 w-3" /> {f.name} <span className="text-slate-400">{humanSize(f.size)}</span>
+                    <button type="button" onClick={() => setComposeFiles(composeFiles.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-rose-600"><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setComposeOpen(false)}>Cancel</Button>
-            <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={sendEmail} disabled={sending} data-testid="compose-send-btn">
-              {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Send
-            </Button>
+          <DialogFooter className="sm:justify-between">
+            <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 cursor-pointer" data-testid="compose-attach-label">
+              <Paperclip className="h-4 w-4" /> Attach
+              <input type="file" multiple className="hidden" onChange={(e) => { setComposeFiles([...composeFiles, ...Array.from(e.target.files)]); e.target.value = ''; }} data-testid="compose-attach-input" />
+            </label>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setComposeOpen(false)}>Cancel</Button>
+              <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={sendEmail} disabled={sending} data-testid="compose-send-btn">
+                {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Send
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
