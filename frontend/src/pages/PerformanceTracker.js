@@ -858,6 +858,7 @@ export default function PerformanceTracker() {
                 render: () => (
                   <SamplingTrialsSubsection
                     resourceIdsKey={resourceIdsKey}
+                    cityFilter={cityFilter}
                     token={token}
                     tenantId={tenantId}
                     isLocked={isLocked}
@@ -873,6 +874,7 @@ export default function PerformanceTracker() {
                     year={selectedYear}
                     month={selectedMonth}
                     resourceIdsKey={resourceIdsKey}
+                    cityFilter={cityFilter}
                     token={token}
                     tenantId={tenantId}
                     isLocked={isLocked}
@@ -2014,7 +2016,7 @@ const computeEndDate = (startIso, days) => {
   }
 };
 
-function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked }) {
+function SamplingTrialsSubsection({ resourceIdsKey, cityFilter = 'all', token, tenantId, isLocked }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -2045,6 +2047,14 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
   const leads = data?.leads || [];
   const trials = data?.trials || [];
   const totals = data?.totals || { total_trials: 0, total_amount: 0, by_status: {} };
+
+  // Lead dropdown is scoped by BOTH the selected resource (backend) AND the
+  // active city filter (the lead's own city). The currently-selected lead in
+  // an edit form is always kept so the value stays resolvable.
+  const cityLower = (cityFilter && cityFilter !== 'all') ? cityFilter.toLowerCase() : null;
+  const pickerLeads = cityLower
+    ? leads.filter(l => (l.city || '').toLowerCase() === cityLower || l.id === form?.lead_id)
+    : leads;
 
   const openNewForm = () => {
     setEditingId(null);
@@ -2243,9 +2253,9 @@ function SamplingTrialsSubsection({ resourceIdsKey, token, tenantId, isLocked })
                   <SelectValue placeholder="Select a lead" />
                 </SelectTrigger>
                 <SelectContent>
-                  {leads.length === 0 ? (
+                  {pickerLeads.length === 0 ? (
                     <div className="px-3 py-2 text-xs text-slate-500">No leads found for selected resource(s)</div>
-                  ) : leads.map(l => (
+                  ) : pickerLeads.map(l => (
                     <SelectItem key={l.id} value={l.id}>
                       {l.name}{l.city ? ` — ${l.city}` : ''}
                     </SelectItem>
@@ -2640,7 +2650,7 @@ const priorityBadgeClasses = (priority) => {
 
 const formatStatusLabel = (s) => (s || '—').toString().replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, isLocked }) {
+function FocusLeadsSubsection({ year, month, resourceIdsKey, cityFilter = 'all', token, tenantId, isLocked }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -2721,10 +2731,16 @@ function FocusLeadsSubsection({ year, month, resourceIdsKey, token, tenantId, is
   }
 
   const available = leads.filter(l => !draftIds.includes(l.id));
+  const cityLower = (cityFilter && cityFilter !== 'all') ? cityFilter.toLowerCase() : null;
+  // Picker candidates are filtered by BOTH the selected resource (via the
+  // backend resource_ids) AND the active city filter (the lead's own city).
+  const cityScoped = cityLower
+    ? available.filter(l => (l.city || '').toLowerCase() === cityLower)
+    : available;
   const searchLower = search.trim().toLowerCase();
   const filtered = searchLower
-    ? available.filter(l => (l.name || '').toLowerCase().includes(searchLower) || (l.city || '').toLowerCase().includes(searchLower))
-    : available;
+    ? cityScoped.filter(l => (l.name || '').toLowerCase().includes(searchLower) || (l.city || '').toLowerCase().includes(searchLower))
+    : cityScoped;
 
   return (
     <div className="space-y-4" data-testid="focus-leads-subsection">
