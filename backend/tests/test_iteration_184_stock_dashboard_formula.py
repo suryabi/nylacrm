@@ -32,7 +32,7 @@ load_dotenv("/app/backend/.env")
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL",
-    "https://stock-crateflow.preview.emergentagent.com",
+    "https://beverage-crm-ops.preview.emergentagent.com",
 ).rstrip("/")
 ADMIN_EMAIL = "surya.yadavalli@nylaairwater.earth"
 ADMIN_PASS = "test123"
