@@ -1,15 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Mail as MailIcon, Loader2, ChevronDown, ChevronRight, Plug, PenSquare, Send, ExternalLink, Paperclip, Download, X } from 'lucide-react';
+import { Mail as MailIcon, Loader2, ChevronDown, ChevronRight, Plug, PenSquare, ExternalLink, Paperclip, Download } from 'lucide-react';
 import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { useNavigate } from 'react-router-dom';
-import { downloadAttachment, filesToAttachments, humanSize, htmlToText, isEmptyHtml } from './gmailUtils';
-import RecipientField from './RecipientField';
-import RichEmailEditor from './RichEmailEditor';
+import { downloadAttachment, humanSize } from './gmailUtils';
+import InlineComposer from './InlineComposer';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -38,11 +34,8 @@ export default function ContactEmails({ email, name }) {
   const [messages, setMessages] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [bodyCache, setBodyCache] = useState({});
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [compose, setCompose] = useState({ cc: '', bcc: '', subject: '', body_html: '', reply_to_message_id: null, thread_id: null });
-  const [composeFiles, setComposeFiles] = useState([]);
-  const [showCcBcc, setShowCcBcc] = useState(false);
-  const [sending, setSending] = useState(false);
+  // composer: null | { replyToMessageId, threadId, subject }
+  const [composer, setComposer] = useState(null);
 
   const load = useCallback(async () => {
     if (!email) { setLoading(false); return; }
@@ -72,51 +65,27 @@ export default function ContactEmails({ email, name }) {
         setBodyCache((c) => ({ ...c, [m.id]: res.data }));
       } catch { /* ignore */ }
     }
-    // Mark read when opened in the CRM
     if (m.unread) {
       axios.post(`${API_URL}/gmail/mark-read`, { message_ids: [m.id] }, { headers: authHeaders() }).catch(() => {});
       setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, unread: false } : x)));
     }
   };
 
-  const openCompose = (m) => {
-    setCompose({
-      cc: '', bcc: '',
-      subject: m ? (m.subject?.toLowerCase().startsWith('re:') ? m.subject : `Re: ${m.subject || ''}`) : '',
-      body_html: '',
-      reply_to_message_id: m?.id || null,
-      thread_id: m?.threadId || null,
-    });
-    setComposeFiles([]);
-    setShowCcBcc(false);
-    setComposeOpen(true);
+  const openNewEmail = () => {
+    setComposer({ replyToMessageId: null, threadId: null, subject: '' });
   };
 
-  const send = async () => {
-    if (isEmptyHtml(compose.body_html)) { toast.error('Message body is required'); return; }
-    setSending(true);
-    try {
-      const attachments = composeFiles.length ? await filesToAttachments(composeFiles) : undefined;
-      await axios.post(`${API_URL}/gmail/send`, {
-        to: email,
-        cc: compose.cc || undefined,
-        bcc: compose.bcc || undefined,
-        subject: compose.subject,
-        body_html: compose.body_html,
-        body_text: htmlToText(compose.body_html),
-        reply_to_message_id: compose.reply_to_message_id,
-        thread_id: compose.thread_id,
-        attachments,
-      }, { headers: authHeaders() });
-      toast.success('Email sent');
-      setComposeOpen(false);
-      setComposeFiles([]);
-      load();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to send');
-    } finally {
-      setSending(false);
-    }
+  const openReply = (m) => {
+    setComposer({
+      replyToMessageId: m.id,
+      threadId: m.threadId || null,
+      subject: m.subject?.toLowerCase().startsWith('re:') ? m.subject : `Re: ${m.subject || ''}`,
+    });
+  };
+
+  const handleSent = () => {
+    setComposer(null);
+    load();
   };
 
   const connect = async () => {
@@ -140,15 +109,32 @@ export default function ContactEmails({ email, name }) {
     );
   }
 
+  const isNewEmail = composer && !composer.replyToMessageId;
+
   return (
     <div data-testid="contact-emails">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs text-muted-foreground">{messages.length} email{messages.length !== 1 ? 's' : ''} with {email}</p>
         <div className="flex gap-1.5">
-          <Button size="sm" variant="outline" onClick={() => openCompose(null)} data-testid="contact-emails-compose-btn"><PenSquare className="h-3.5 w-3.5 mr-1" /> New email</Button>
+          <Button size="sm" variant="outline" onClick={openNewEmail} data-testid="contact-emails-compose-btn"><PenSquare className="h-3.5 w-3.5 mr-1" /> New email</Button>
           <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => navigate('/mail')} title="Open Mail"><ExternalLink className="h-3.5 w-3.5" /></Button>
         </div>
       </div>
+
+      {/* Inline new-email composer */}
+      {isNewEmail && (
+        <div className="mb-3" data-testid="contact-new-email-panel">
+          <InlineComposer
+            key="contact-compose"
+            initialTo={email}
+            toEditable={false}
+            recipientLabel={name || email}
+            onCancel={() => setComposer(null)}
+            onSent={handleSent}
+            testid="contact-composer"
+          />
+        </div>
+      )}
 
       {messages.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-6">No emails exchanged with this contact yet.</p>
@@ -158,6 +144,7 @@ export default function ContactEmails({ email, name }) {
             const a = parseAddr(m.from);
             const body = bodyCache[m.id];
             const isOpen = openId === m.id;
+            const replyingHere = composer && composer.replyToMessageId === m.id;
             return (
               <li key={m.id} data-testid={`contact-email-${m.id}`}>
                 <button onClick={() => toggle(m)} className="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex items-start gap-2">
@@ -189,9 +176,26 @@ export default function ContactEmails({ email, name }) {
                         ))}
                       </div>
                     )}
-                    <div className="mt-2 flex justify-end">
-                      <Button size="sm" variant="outline" className="text-rose-600" onClick={() => openCompose(m)}>Reply</Button>
-                    </div>
+                    {replyingHere ? (
+                      <div className="mt-3" data-testid={`contact-reply-panel-${m.id}`}>
+                        <InlineComposer
+                          key={`reply-${m.id}`}
+                          initialTo={email}
+                          toEditable={false}
+                          recipientLabel={name || email}
+                          initialSubject={composer.subject}
+                          replyToMessageId={composer.replyToMessageId}
+                          threadId={composer.threadId}
+                          onCancel={() => setComposer(null)}
+                          onSent={handleSent}
+                          testid={`contact-reply-composer-${m.id}`}
+                        />
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex justify-end">
+                        <Button size="sm" variant="outline" className="text-rose-600" onClick={() => openReply(m)} data-testid={`contact-reply-btn-${m.id}`}>Reply</Button>
+                      </div>
+                    )}
                   </div>
                 )}
               </li>
@@ -199,47 +203,6 @@ export default function ContactEmails({ email, name }) {
           })}
         </ul>
       )}
-
-      <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="max-w-xl" data-testid="contact-compose-dialog">
-          <DialogHeader><DialogTitle>{compose.reply_to_message_id ? 'Reply' : 'Email'} {name || email}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Input value={email} disabled />
-            {!showCcBcc ? (
-              <button type="button" className="text-xs text-muted-foreground hover:text-slate-700" onClick={() => setShowCcBcc(true)} data-testid="contact-show-ccbcc">+ Add Cc/Bcc</button>
-            ) : (
-              <>
-                <RecipientField value={compose.cc} onChange={(v) => setCompose({ ...compose, cc: v })} placeholder="Cc" testid="contact-compose-cc" />
-                <RecipientField value={compose.bcc} onChange={(v) => setCompose({ ...compose, bcc: v })} placeholder="Bcc" testid="contact-compose-bcc" />
-              </>
-            )}
-            <Input placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} data-testid="contact-compose-subject" />
-            <RichEmailEditor value={compose.body_html} onChange={(v) => setCompose({ ...compose, body_html: v })} />
-            {composeFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {composeFiles.map((f, i) => (
-                  <span key={i} className="inline-flex items-center gap-1.5 text-xs bg-slate-50 border rounded px-2 py-1 text-slate-700">
-                    <Paperclip className="h-3 w-3" /> {f.name} <span className="text-slate-400">{humanSize(f.size)}</span>
-                    <button type="button" onClick={() => setComposeFiles(composeFiles.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-rose-600"><X className="h-3 w-3" /></button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-          <DialogFooter className="sm:justify-between">
-            <label className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
-              <Paperclip className="h-4 w-4" /> Attach
-              <input type="file" multiple className="hidden" onChange={(e) => { setComposeFiles([...composeFiles, ...Array.from(e.target.files)]); e.target.value = ''; }} data-testid="contact-compose-attach-input" />
-            </label>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setComposeOpen(false)}>Cancel</Button>
-              <Button className="bg-rose-600 hover:bg-rose-700 text-white" onClick={send} disabled={sending} data-testid="contact-compose-send">
-                {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Send
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

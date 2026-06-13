@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
-from database import db
+from database import db, get_tenant_db
 
 router = APIRouter()
 
@@ -543,6 +543,7 @@ class SendEmailRequest(BaseModel):
     thread_id: Optional[str] = None
     reply_to_message_id: Optional[str] = None
     attachments: Optional[List[AttachmentIn]] = None
+    crm_document_ids: Optional[List[str]] = None  # IDs from the CRM Files & Documents store
 
 
 MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024  # 20 MB total (Gmail allows 25MB)
@@ -602,19 +603,37 @@ async def send_email(payload: SendEmailRequest, current_user: dict = Depends(get
         else:
             mime.set_content(payload.body_html, subtype="html")
 
-    # Attach files (base64-encoded from the client)
+    # Attach files (base64-encoded from the client) and/or CRM-stored documents
+    total = 0
+
+    def _attach_b64(filename: str, mime_type: Optional[str], b64data: str):
+        nonlocal total
+        try:
+            raw_bytes = base64.b64decode(b64data)
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid attachment data for {filename}")
+        total += len(raw_bytes)
+        if total > MAX_ATTACHMENTS_BYTES:
+            raise HTTPException(status_code=400, detail="Attachments exceed the 20MB limit.")
+        maintype, _, subtype = (mime_type or "application/octet-stream").partition("/")
+        mime.add_attachment(raw_bytes, maintype=maintype or "application", subtype=subtype or "octet-stream", filename=filename)
+
     if payload.attachments:
-        total = 0
         for att in payload.attachments:
-            try:
-                raw_bytes = base64.b64decode(att.data)
-            except Exception:
-                raise HTTPException(status_code=400, detail=f"Invalid attachment data for {att.filename}")
-            total += len(raw_bytes)
-            if total > MAX_ATTACHMENTS_BYTES:
-                raise HTTPException(status_code=400, detail="Attachments exceed the 20MB limit.")
-            maintype, _, subtype = (att.mime_type or "application/octet-stream").partition("/")
-            mime.add_attachment(raw_bytes, maintype=maintype or "application", subtype=subtype or "octet-stream", filename=att.filename)
+            _attach_b64(att.filename, att.mime_type, att.data)
+
+    # Pull selected documents from the tenant-scoped CRM document store
+    if payload.crm_document_ids:
+        tdb = get_tenant_db()
+        for doc_id in payload.crm_document_ids:
+            crm_doc = await tdb.documents.find_one({"id": doc_id})
+            if not crm_doc or not crm_doc.get("file_data"):
+                raise HTTPException(status_code=404, detail="One of the selected CRM documents could not be found.")
+            _attach_b64(
+                crm_doc.get("file_name") or crm_doc.get("name") or "document",
+                crm_doc.get("content_type"),
+                crm_doc["file_data"],
+            )
 
     raw = base64.urlsafe_b64encode(mime.as_bytes()).decode()
     send_body = {"raw": raw}
