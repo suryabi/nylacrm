@@ -192,8 +192,14 @@ export default function PerformanceTracker() {
     }
   }, [selectedPlan, viewMode, plans]);
 
-  // Derive unique territories and cities from the plan's resource allocations
-  const planTerritories = [...new Map(resources.map(r => [r.territory_id, { id: r.territory_id, name: r.territory_name || r.territory_id }])).values()];
+  // Derive unique territories and cities from the plan's resource allocations.
+  // Skip allocations with a missing territory_id — a Radix <SelectItem> cannot
+  // have an empty-string value and would crash the page.
+  const planTerritories = [...new Map(
+    resources
+      .filter(r => r.territory_id)
+      .map(r => [r.territory_id, { id: r.territory_id, name: r.territory_name || r.territory_id }])
+  ).values()];
   const planCities = [...new Set(
     resources
       .filter(r => territoryFilter === 'all' || r.territory_id === territoryFilter)
