@@ -431,6 +431,61 @@ class AttachmentIn(BaseModel):
     data: str  # standard base64-encoded file content
 
 
+@router.get("/recipients/search")
+async def search_recipients(q: str = Query("", description="name or email fragment"),
+                            current_user: dict = Depends(get_current_user)):
+    """Unified recipient autocomplete: internal users + CRM contacts (with email)."""
+    q = (q or "").strip()
+    if len(q) < 1:
+        return {"results": []}
+    tid = get_current_tenant_id()
+    rgx = {"$regex": q, "$options": "i"}
+    out = []
+    seen = set()
+
+    users = await db.users.find(
+        {"tenant_id": tid, "email": {"$nin": [None, ""]}, "$or": [{"name": rgx}, {"email": rgx}]},
+        {"_id": 0, "name": 1, "email": 1, "designation": 1, "role": 1},
+    ).limit(6).to_list(6)
+    for u in users:
+        e = (u.get("email") or "").lower()
+        if not e or e in seen:
+            continue
+        seen.add(e)
+        out.append({"type": "user", "name": u.get("name") or u["email"], "email": u["email"],
+                    "subtitle": u.get("designation") or u.get("role") or "Team member"})
+
+    contacts = await db.contacts.find(
+        {"tenant_id": tid, "email": {"$nin": [None, ""]}, "$or": [{"name": rgx}, {"email": rgx}, {"company": rgx}]},
+        {"_id": 0, "name": 1, "email": 1, "company": 1, "designation": 1},
+    ).limit(8).to_list(8)
+    for c in contacts:
+        e = (c.get("email") or "").lower()
+        if not e or e in seen:
+            continue
+        seen.add(e)
+        out.append({"type": "contact", "name": c.get("name") or c["email"], "email": c["email"],
+                    "subtitle": c.get("company") or c.get("designation") or "Contact"})
+
+    # Leads carry the primary contact email for most CRM records
+    leads = await db.leads.find(
+        {"tenant_id": tid, "email": {"$nin": [None, ""]},
+         "$or": [{"name": rgx}, {"email": rgx}, {"company": rgx}, {"contact_person": rgx}]},
+        {"_id": 0, "name": 1, "email": 1, "company": 1, "contact_person": 1},
+    ).limit(10).to_list(10)
+    for l in leads:
+        e = (l.get("email") or "").lower()
+        if not e or e in seen:
+            continue
+        seen.add(e)
+        out.append({"type": "contact",
+                    "name": l.get("contact_person") or l.get("name") or l["email"],
+                    "email": l["email"],
+                    "subtitle": l.get("company") or "Lead contact"})
+
+    return {"results": out[:12]}
+
+
 class MarkReadRequest(BaseModel):
     message_ids: List[str]
 

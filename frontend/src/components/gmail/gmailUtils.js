@@ -46,3 +46,12 @@ export const humanSize = (bytes) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 };
+
+// Strip HTML to plain text (used as a multipart/alternative fallback).
+export function htmlToText(html) {
+  if (!html) return '';
+  const d = new DOMParser().parseFromString(html, 'text/html');
+  return (d.body.textContent || '').replace(/\u00a0/g, ' ').trim();
+}
+
+export const isEmptyHtml = (html) => !htmlToText(html);

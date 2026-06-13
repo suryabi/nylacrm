@@ -7,8 +7,9 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
 import { useNavigate } from 'react-router-dom';
-import { downloadAttachment, filesToAttachments, humanSize } from './gmailUtils';
+import { downloadAttachment, filesToAttachments, humanSize, htmlToText, isEmptyHtml } from './gmailUtils';
 import RecipientField from './RecipientField';
+import RichEmailEditor from './RichEmailEditor';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -38,7 +39,7 @@ export default function ContactEmails({ email, name }) {
   const [openId, setOpenId] = useState(null);
   const [bodyCache, setBodyCache] = useState({});
   const [composeOpen, setComposeOpen] = useState(false);
-  const [compose, setCompose] = useState({ cc: '', bcc: '', subject: '', body_text: '', reply_to_message_id: null, thread_id: null });
+  const [compose, setCompose] = useState({ cc: '', bcc: '', subject: '', body_html: '', reply_to_message_id: null, thread_id: null });
   const [composeFiles, setComposeFiles] = useState([]);
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [sending, setSending] = useState(false);
@@ -82,7 +83,7 @@ export default function ContactEmails({ email, name }) {
     setCompose({
       cc: '', bcc: '',
       subject: m ? (m.subject?.toLowerCase().startsWith('re:') ? m.subject : `Re: ${m.subject || ''}`) : '',
-      body_text: '',
+      body_html: '',
       reply_to_message_id: m?.id || null,
       thread_id: m?.threadId || null,
     });
@@ -92,7 +93,7 @@ export default function ContactEmails({ email, name }) {
   };
 
   const send = async () => {
-    if (!compose.body_text.trim()) { toast.error('Message body is required'); return; }
+    if (isEmptyHtml(compose.body_html)) { toast.error('Message body is required'); return; }
     setSending(true);
     try {
       const attachments = composeFiles.length ? await filesToAttachments(composeFiles) : undefined;
@@ -101,7 +102,8 @@ export default function ContactEmails({ email, name }) {
         cc: compose.cc || undefined,
         bcc: compose.bcc || undefined,
         subject: compose.subject,
-        body_text: compose.body_text,
+        body_html: compose.body_html,
+        body_text: htmlToText(compose.body_html),
         reply_to_message_id: compose.reply_to_message_id,
         thread_id: compose.thread_id,
         attachments,
@@ -212,7 +214,7 @@ export default function ContactEmails({ email, name }) {
               </>
             )}
             <Input placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} data-testid="contact-compose-subject" />
-            <Textarea rows={7} placeholder="Write your message..." value={compose.body_text} onChange={(e) => setCompose({ ...compose, body_text: e.target.value })} data-testid="contact-compose-body" />
+            <RichEmailEditor value={compose.body_html} onChange={(v) => setCompose({ ...compose, body_html: v })} />
             {composeFiles.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {composeFiles.map((f, i) => (

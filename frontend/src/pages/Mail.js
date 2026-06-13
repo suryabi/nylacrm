@@ -12,8 +12,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../components/ui/dialog';
 import { Badge } from '../components/ui/badge';
-import { downloadAttachment, filesToAttachments, humanSize } from '../components/gmail/gmailUtils';
+import { downloadAttachment, filesToAttachments, humanSize, htmlToText, isEmptyHtml } from '../components/gmail/gmailUtils';
 import RecipientField from '../components/gmail/RecipientField';
+import RichEmailEditor from '../components/gmail/RichEmailEditor';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -68,7 +69,7 @@ export default function Mail() {
   const [loadingThread, setLoadingThread] = useState(false);
 
   const [composeOpen, setComposeOpen] = useState(false);
-  const [compose, setCompose] = useState({ to: '', cc: '', bcc: '', subject: '', body_text: '', reply_to_message_id: null, thread_id: null });
+  const [compose, setCompose] = useState({ to: '', cc: '', bcc: '', subject: '', body_html: '', reply_to_message_id: null, thread_id: null });
   const [composeFiles, setComposeFiles] = useState([]);
   const [showCcBcc, setShowCcBcc] = useState(false);
   const [sending, setSending] = useState(false);
@@ -183,7 +184,7 @@ export default function Mail() {
       to: from.email,
       cc: '', bcc: '',
       subject: msg.subject?.toLowerCase().startsWith('re:') ? msg.subject : `Re: ${msg.subject || ''}`,
-      body_text: '',
+      body_html: '',
       reply_to_message_id: msg.id,
       thread_id: thread?.thread_id,
     });
@@ -193,7 +194,7 @@ export default function Mail() {
   };
 
   const startCompose = () => {
-    setCompose({ to: '', cc: '', bcc: '', subject: '', body_text: '', reply_to_message_id: null, thread_id: null });
+    setCompose({ to: '', cc: '', bcc: '', subject: '', body_html: '', reply_to_message_id: null, thread_id: null });
     setComposeFiles([]);
     setShowCcBcc(false);
     setComposeOpen(true);
@@ -201,7 +202,7 @@ export default function Mail() {
 
   const sendEmail = async () => {
     if (!compose.to.trim()) { toast.error('Recipient is required'); return; }
-    if (!compose.body_text.trim()) { toast.error('Message body is required'); return; }
+    if (isEmptyHtml(compose.body_html)) { toast.error('Message body is required'); return; }
     setSending(true);
     try {
       const attachments = composeFiles.length ? await filesToAttachments(composeFiles) : undefined;
@@ -210,7 +211,8 @@ export default function Mail() {
         cc: compose.cc || undefined,
         bcc: compose.bcc || undefined,
         subject: compose.subject,
-        body_text: compose.body_text,
+        body_html: compose.body_html,
+        body_text: htmlToText(compose.body_html),
         reply_to_message_id: compose.reply_to_message_id,
         thread_id: compose.thread_id,
         attachments,
@@ -397,7 +399,7 @@ export default function Mail() {
               </>
             )}
             <Input placeholder="Subject" value={compose.subject} onChange={(e) => setCompose({ ...compose, subject: e.target.value })} data-testid="compose-subject" />
-            <Textarea placeholder="Write your message..." rows={9} value={compose.body_text} onChange={(e) => setCompose({ ...compose, body_text: e.target.value })} data-testid="compose-body" />
+            <RichEmailEditor value={compose.body_html} onChange={(v) => setCompose({ ...compose, body_html: v })} />
             {composeFiles.length > 0 && (
               <div className="flex flex-wrap gap-2" data-testid="compose-attachments-list">
                 {composeFiles.map((f, i) => (
