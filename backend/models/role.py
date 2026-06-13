@@ -302,7 +302,7 @@ MODULE_LABELS = {
     "budget_requests": "Budget Requests",
     "marketing_calendar": "Content Calendar",
     "marketing_masters": "Marketing Masters",
-    "marketing_requests": "Marketing Requests",
+    "marketing_requests": "Design Requests",
     "master_departments": "Departments",
     "marketing_request_types": "Design Request Types",
     "print_requests": "Print Requests",
