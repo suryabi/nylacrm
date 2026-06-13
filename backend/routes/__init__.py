@@ -150,6 +150,10 @@ routes_router.include_router(api_keys_router, prefix="/api-keys", tags=["API Key
 # Personal Calendar (CRM meetings + Google Calendar sync)
 routes_router.include_router(personal_calendar_router, tags=["Personal Calendar"])
 
+# Gmail (per-user OAuth mailbox: read, send, contact email history)
+from .gmail import router as gmail_router
+routes_router.include_router(gmail_router, tags=["Gmail"])
+
 # Per-user preferences (home widget order, etc.)
 routes_router.include_router(user_preferences_router, tags=["User Preferences"])
 

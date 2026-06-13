@@ -44,6 +44,7 @@ import { useTenantConfig } from '../context/TenantConfigContext';
 import LeadScoringCard from '../components/LeadScoringCard';
 import LeadGroupCard from '../components/LeadGroupCard';
 import LeadDeliveryAddressCard from '../components/LeadDeliveryAddressCard';
+import ContactEmails from '../components/gmail/ContactEmails';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1425,6 +1426,14 @@ ${userEmail}`;
               )}
             </div>
           </Card>
+
+          {/* Email history with this contact (Gmail) */}
+          {lead.email && (
+            <Card className="p-6" data-testid="lead-emails-card">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Mail className="h-5 w-5 text-rose-600" /> Emails</h2>
+              <ContactEmails email={lead.email} name={lead.contact_person || lead.company} />
+            </Card>
+          )}
 
           {/* Location Information */}
           <Card className="p-6">

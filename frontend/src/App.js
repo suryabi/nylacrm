@@ -139,6 +139,7 @@ import PrintRequestDetail from './pages/PrintRequestDetail';
 import PrintRequestSettings from './pages/PrintRequestSettings';
 // Personal Calendar (per-user, with Google Calendar sync)
 import PersonalCalendar from './pages/PersonalCalendar';
+import Mail from './pages/Mail';
 import '@/App.css';
 import { useActivityTracker } from './hooks/useActivityTracker';
 import { NavigationProvider } from './context/NavigationContext';
@@ -395,6 +396,8 @@ function AppRouter() {
           <Route path="/admin/print-settings" element={<ProtectedRoute><PrintRequestSettings /></ProtectedRoute>} />
           {/* Personal Calendar */}
           <Route path="/personal-calendar" element={<ProtectedRoute><PersonalCalendar /></ProtectedRoute>} />
+          {/* Mail (Gmail integration) */}
+          <Route path="/mail" element={<ProtectedRoute><Mail /></ProtectedRoute>} />
         </Routes>
         <Toaster />
       </>
