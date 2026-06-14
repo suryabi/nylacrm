@@ -5,6 +5,7 @@ The logged-in user must be linked to a distributor via `user.distributor_id`.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
+from pydantic import BaseModel
 import logging
 
 from database import db
@@ -13,6 +14,27 @@ from core.tenant import get_current_tenant_id
 
 router = APIRouter(tags=["Distributor Portal"])
 logger = logging.getLogger(__name__)
+
+
+def _addr_city(d: dict):
+    ba = d.get("billing_address")
+    if isinstance(ba, dict):
+        return ba.get("city") or d.get("city")
+    return d.get("city")
+
+
+async def _accessible_distributor_ids(tenant_id: str, email: str) -> list:
+    """Distributor IDs where this email has portal access enabled."""
+    if not email:
+        return []
+    contacts = await db.distributor_contacts.find(
+        {"tenant_id": tenant_id, "has_portal_access": True},
+        {"_id": 0, "distributor_id": 1, "email": 1, "id": 1}
+    ).to_list(1000)
+    return sorted({
+        c["distributor_id"] for c in contacts
+        if c.get("distributor_id") and (c.get("email") or "").strip().lower() == email
+    })
 
 
 def _resolve_distributor_id(current_user: dict) -> str:
@@ -136,3 +158,78 @@ async def get_distributor_home(current_user: dict = Depends(get_current_user)):
         "recent_shipments": recent_shipments,
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ───────── Multi-facility switching ─────────
+
+class SwitchFacilityRequest(BaseModel):
+    distributor_id: str
+
+
+@router.get("/my-facilities")
+async def my_facilities(current_user: dict = Depends(get_current_user)):
+    """
+    All distributor facilities this portal user can access — i.e. every
+    distributor where their email has Portal Access enabled — plus the
+    currently active one. Used to render the facility switcher.
+    """
+    tenant_id = get_current_tenant_id()
+    email = (current_user.get("email") or "").strip().lower()
+    active_id = current_user.get("distributor_id")
+
+    dist_ids = await _accessible_distributor_ids(tenant_id, email)
+    # Never strand the user: keep their active facility in the list even if a
+    # contact toggle was changed.
+    if active_id and active_id not in dist_ids:
+        dist_ids.append(active_id)
+
+    facilities = []
+    if dist_ids:
+        dists = await db.distributors.find(
+            {"tenant_id": tenant_id, "id": {"$in": dist_ids}},
+            {"_id": 0, "id": 1, "distributor_name": 1, "distributor_code": 1,
+             "billing_address": 1, "city": 1}
+        ).to_list(1000)
+        for d in dists:
+            facilities.append({
+                "distributor_id": d["id"],
+                "name": d.get("distributor_name") or "Distributor",
+                "code": d.get("distributor_code"),
+                "city": _addr_city(d),
+            })
+        facilities.sort(key=lambda f: (f["name"] or "").lower())
+
+    return {"facilities": facilities, "active_distributor_id": active_id}
+
+
+@router.post("/switch-facility")
+async def switch_facility(data: SwitchFacilityRequest,
+                          current_user: dict = Depends(get_current_user)):
+    """Set the active facility for this portal user (validates access first)."""
+    tenant_id = get_current_tenant_id()
+    email = (current_user.get("email") or "").strip().lower()
+    target = data.distributor_id
+
+    # Verify a portal-access contact for this email exists on the target facility
+    contacts = await db.distributor_contacts.find(
+        {"tenant_id": tenant_id, "distributor_id": target, "has_portal_access": True},
+        {"_id": 0, "email": 1, "id": 1}
+    ).to_list(50)
+    match = next((c for c in contacts if (c.get("email") or "").strip().lower() == email), None)
+
+    if not match and current_user.get("distributor_id") != target:
+        raise HTTPException(status_code=403, detail="You do not have portal access to that facility")
+
+    dist = await db.distributors.find_one(
+        {"id": target, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "distributor_name": 1}
+    )
+    if not dist:
+        raise HTTPException(status_code=404, detail="Facility not found")
+
+    update = {"distributor_id": target}
+    if match and match.get("id"):
+        update["distributor_contact_id"] = match["id"]
+    await db.users.update_one({"id": current_user["id"]}, {"$set": update})
+
+    logger.info(f"[portal] User {current_user.get('email')} switched to facility {target}")
+    return {"switched": True, "distributor_id": target, "name": dist.get("distributor_name")}

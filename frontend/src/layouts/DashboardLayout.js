@@ -10,6 +10,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '.
 import AskNyla from '../components/widgets/AskNyla';
 import DistributorChatButton from '../components/DistributorChatButton';
 import NotificationBell from '../components/NotificationBell';
+import FacilitySwitcher from '../components/distributor/FacilitySwitcher';
 import { 
   LogOut, Menu, ChevronDown, ChevronRight, 
   LayoutDashboard, Users, Building2, Store,
@@ -625,7 +626,9 @@ export default function DashboardLayout({ children }) {
               </div>
               <NotificationBell />
             </div>
-            
+
+            {isDistributorUser && <FacilitySwitcher />}
+
             {/* Theme Toggle */}
             <Button
               onClick={toggleTheme}
