@@ -7646,6 +7646,18 @@ async def get_stock_dashboard(
             return bottles // pu
         return _to_crates(item.get('sku_id', ''), bottles)
 
+    def _item_crates(item: dict) -> int:
+        """Stock-In/Out line items are ENTERED AND STORED IN CRATES (users type
+        crates, not bottles). So the stored quantity is already the crate count
+        — do NOT divide by bottles-per-crate. The only exception is legacy rows
+        that explicitly carried a per-item `packaging_units` (>1), meaning they
+        were recorded in bottles; those we still convert."""
+        qty = int(item.get('quantity') or 0)
+        pu = int(item.get('packaging_units') or 0)
+        if pu > 1:
+            return qty // pu
+        return qty
+
     # === 1. STOCK IN: Shipments received (only delivered shipments) ===
     delivered_shipment_ids = await db.distributor_shipments.distinct(
         "id",
@@ -7661,7 +7673,7 @@ async def get_stock_dashboard(
         sid = si.get('sku_id', '')
         if sid not in stock_in_by_sku:
             stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'), "qty": 0}
-        stock_in_by_sku[sid]["qty"] += _bottle_to_crates(si)
+        stock_in_by_sku[sid]["qty"] += _item_crates(si)
 
     # === 1b. FACTORY WAREHOUSE STOCK (from production transfers) ===
     # Get factory warehouse IDs belonging to this distributor
@@ -7774,7 +7786,7 @@ async def get_stock_dashboard(
         sid = di.get('sku_id', '')
         if sid not in stock_out_by_sku:
             stock_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
-        stock_out_by_sku[sid]["qty"] += _bottle_to_crates(di)
+        stock_out_by_sku[sid]["qty"] += _item_crates(di)
 
     # === 2b. RESERVED — committed to any OPEN Stock Out order, not yet delivered ===
     # Every open order (draft → in-transit) reserves stock so it can't be
@@ -7797,7 +7809,7 @@ async def get_stock_dashboard(
         sid = di.get('sku_id', '')
         if sid not in stock_pending_out_by_sku:
             stock_pending_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
-        stock_pending_out_by_sku[sid]["qty"] += _bottle_to_crates(di)
+        stock_pending_out_by_sku[sid]["qty"] += _item_crates(di)
     
     # Weekly delivery data (last 12 weeks) for average calculation
     from datetime import timedelta

@@ -141,3 +141,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - `stock-dashboard` returns stock_on_hand / stock_reserved / stock_available (per-SKU + totals); expanded the "reserved" status set to all open orders.
 - Frontend `StockDashboardTab.jsx`: new On-hand / Reserved Stock / Available / Delivered-Consumed cards + relabeled SKU table columns (Reserved, Available).
 - Verified by testing agent (iteration_205, 4/4 backend pass + FE smoke); regression test at /app/backend/tests/test_iteration_205_distributor_stock_reservation.py.
+
+## 2026-06-14 — Stock Dashboard units fixed to CRATES ✅
+- Root cause: Stock-In shipments & Stock-Out deliveries are ENTERED AND STORED IN CRATES (confirmed in write paths — quantity stored as-typed, no ×pack-size), but the dashboard was dividing them by bottles-per-crate (treating them as bottles), so numbers were wrong wherever a SKU had bpc>1.
+- Fix (`routes/distributors.py` get_stock_dashboard): new `_item_crates()` — shipment/delivery/pending line items now display their stored crate value directly (only legacy rows carrying per-item `packaging_units>1` are still converted). Factory-warehouse stock keeps ÷bpc since transfers store BOTTLES (crates × units_per_package).
+- Result: Received / Delivered / Reserved / On-hand / Available all show crates consistently. Bonus: Reserved no longer rounds to 0 for small orders.
+- Returns / damages / QC / empty bottles intentionally remain in individual bottles (the exception). Returns column bottle-vs-crate display refinement deferred (returns currently still ÷bpc for the at-hand math).
+- Verified in preview (cross-checked raw crate sums vs endpoint). NOTE: applies to the Distributor Stock Dashboard; user is on PRODUCTION → must redeploy.
