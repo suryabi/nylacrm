@@ -4,7 +4,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import {
   RefreshCw, Package, Truck, RotateCcw, Factory,
-  TrendingUp, Clock, Droplets, ChevronDown, ChevronRight, BarChart3
+  TrendingUp, Clock, Droplets, ChevronDown, ChevronRight, BarChart3, Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
@@ -213,19 +213,28 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           testId="total-stock-received"
         />
         <SummaryCard
-          label="Delivered to Customers"
+          label="Delivered / Consumed"
           value={fmt(t.stock_delivered)}
           icon={<Truck className="h-4 w-4" />}
           color="emerald"
+          sub="Permanently delivered out"
           testId="total-stock-delivered"
         />
         <SummaryCard
-          label="Scheduled / In-transit"
-          value={fmt(t.stock_pending_out || 0)}
-          icon={<Truck className="h-4 w-4" />}
+          label="On-hand"
+          value={fmt(t.stock_on_hand ?? t.stock_at_hand)}
+          icon={<Package className="h-4 w-4" />}
+          color="slate"
+          sub="Physical balance"
+          testId="total-stock-on-hand"
+        />
+        <SummaryCard
+          label="Reserved Stock"
+          value={fmt(t.stock_reserved ?? t.stock_pending_out ?? 0)}
+          icon={<Lock className="h-4 w-4" />}
           color="amber"
-          sub="Committed, not yet out"
-          testId="total-stock-pending-out"
+          sub="Committed to open orders"
+          testId="total-stock-reserved"
         />
         <SummaryCard
           label="Empty Bottles"
@@ -251,12 +260,12 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           testId="total-factory-returns"
         />
         <SummaryCard
-          label="Stock at Hand"
-          value={fmt(t.stock_at_hand)}
+          label="Available"
+          value={fmt(t.stock_available ?? t.stock_at_hand)}
           icon={<Droplets className="h-4 w-4" />}
           color="indigo"
-          sub={pct(t.pct_stock_at_hand)}
-          testId="total-stock-at-hand"
+          sub="Deliverable now"
+          testId="total-stock-available"
         />
         <SummaryCard
           label="SKUs Tracked"
@@ -371,7 +380,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <span className="text-emerald-600">Delivered</span>
                   </th>
                   <th className="text-right p-3">
-                    <span className="text-amber-600" title="Scheduled / on-the-way deliveries — already committed">Pending Out</span>
+                    <span className="text-amber-600" title="Committed to open Stock Out orders (draft → in-transit) — not available for other orders">Reserved</span>
                   </th>
                   <th className="text-right p-3">
                     <span className="text-emerald-600" title="Empty / Reusable + FOC bottles returned for recycling (counted in raw BOTTLES, not crates)">Empty Bottles</span>
@@ -386,9 +395,9 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <span className="text-teal-600">Wh. Stock</span>
                   </th>
                   <th className="text-right p-3">
-                    <span className="text-indigo-700 font-bold">At Hand</span>
+                    <span className="text-indigo-700 font-bold" title="Available = On-hand − Reserved (deliverable right now)">Available</span>
                   </th>
-                  <th className="text-right p-3">% At Hand</th>
+                  <th className="text-right p-3">% Avail</th>
                   <th className="text-right p-3">
                     <span className="text-teal-600">Wkly Avg</span>
                   </th>

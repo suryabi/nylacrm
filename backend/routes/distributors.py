@@ -4085,6 +4085,44 @@ async def get_assigned_accounts_for_delivery(
     return {"accounts": accounts}
 
 
+# Statuses where a Stock Out order still HOLDS a reservation on stock — i.e.
+# every open order that has not yet been delivered or cancelled. Stock on these
+# orders is "Reserved" (committed) and must not be re-allocated to other orders.
+RESERVED_DELIVERY_STATUSES = [
+    "draft", "pending", "confirmed",
+    "scheduled", "delivery_scheduled", "delivery_assigned",
+    "on_the_way", "in_transit",
+]
+
+
+async def _reserved_qty_map(tenant_id, distributor_id, location_id, tracks_batches, exclude_delivery_id=None):
+    """Reserved (committed) quantity per (sku_id, batch_id|None) at a source
+    location, summed across all OPEN Stock Out orders. Fully derived from the
+    deliveries themselves, so cancel/complete/delete need no extra bookkeeping —
+    the reservation simply disappears once the order leaves the open set."""
+    open_ids = await db.distributor_deliveries.distinct(
+        "id",
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": location_id,
+            "status": {"$in": RESERVED_DELIVERY_STATUSES},
+        },
+    )
+    if exclude_delivery_id:
+        open_ids = [i for i in open_ids if i != exclude_delivery_id]
+    if not open_ids:
+        return {}
+    reserved: dict = {}
+    async for it in db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": open_ids}},
+        {"_id": 0, "sku_id": 1, "batch_id": 1, "quantity": 1},
+    ):
+        key = (it.get("sku_id"), it.get("batch_id") if tracks_batches else None)
+        reserved[key] = reserved.get(key, 0) + int(it.get("quantity") or 0)
+    return reserved
+
+
 @router.post("/{distributor_id}/deliveries")
 async def create_delivery(
     distributor_id: str,
@@ -4216,20 +4254,17 @@ async def create_delivery(
                 {"_id": 0, "sku_id": 1, "quantity": 1},
             ).to_list(20000):
                 derived_on_hand_by_sku[it["sku_id"]] = derived_on_hand_by_sku.get(it["sku_id"], 0) - int(it.get("quantity") or 0)
-            # Pending out = scheduled / on-the-way deliveries at this location
-            pending_ids = await db.distributor_deliveries.distinct(
-                "id",
-                {
-                    "tenant_id": tenant_id, "distributor_id": distributor_id,
-                    "distributor_location_id": data.distributor_location_id,
-                    "status": {"$in": ["scheduled", "delivery_scheduled", "delivery_assigned", "on_the_way", "in_transit"]},
-                },
-            )
-            for it in await db.distributor_delivery_items.find(
-                {"tenant_id": tenant_id, "delivery_id": {"$in": pending_ids}, "sku_id": {"$in": sku_ids_needed}},
-                {"_id": 0, "sku_id": 1, "quantity": 1},
-            ).to_list(20000):
-                derived_on_hand_by_sku[it["sku_id"]] = derived_on_hand_by_sku.get(it["sku_id"], 0) - int(it.get("quantity") or 0)
+            # NOTE: open/pending orders are NOT subtracted here — they are
+            # handled uniformly below via the Reserved map so every source type
+            # (factory / batch / distributor) nets out committed stock the same
+            # way and we never double-count.
+
+    # Reserved = stock already committed to OTHER open Stock Out orders at this
+    # source location. Available = on-hand − reserved. Reserving here makes that
+    # stock unavailable for allocation to any other customer/order.
+    reserved_map = await _reserved_qty_map(
+        tenant_id, distributor_id, data.distributor_location_id, source_tracks_batches
+    )
 
     for (sku_id, batch_id), demand in stock_demand.items():
         if source_is_factory:
@@ -4272,13 +4307,17 @@ async def create_delivery(
         else:
             on_hand = on_hand_rows
 
-        if demand > on_hand:
+        reserved = reserved_map.get((sku_id, batch_id if source_tracks_batches else None), 0)
+        available = on_hand - reserved
+
+        if demand > available:
             label = (rows[0].get("sku_name") if rows else None) or sku_id
             batch_label = ""
             if source_tracks_batches and batch_id:
                 bc = (rows[0].get("batch_code") if rows else None) or batch_id[:8]
                 batch_label = f" (batch {bc})"
-            shortages.append(f"{label}{batch_label}: need {demand}, have {on_hand}")
+            committed = f", {reserved} reserved" if reserved else ""
+            shortages.append(f"{label}{batch_label}: need {demand}, available {available} ({on_hand} on-hand{committed})")
 
     if shortages:
         raise HTTPException(
@@ -7737,19 +7776,16 @@ async def get_stock_dashboard(
             stock_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
         stock_out_by_sku[sid]["qty"] += _bottle_to_crates(di)
 
-    # === 2b. PENDING OUT — committed but not yet delivered ===
-    # A scheduled (or in-progress) delivery has *reserved* stock even if the
-    # driver hasn't reached the customer. Without this bucket, the at-hand
-    # value would lie about availability and let the user over-commit to
-    # the same units twice. Excludes terminal statuses (delivered/cancelled).
+    # === 2b. RESERVED — committed to any OPEN Stock Out order, not yet delivered ===
+    # Every open order (draft → in-transit) reserves stock so it can't be
+    # re-allocated to another customer. On-hand still includes these units;
+    # Available = On-hand − Reserved. Excludes terminal statuses
+    # (delivered / cancelled).
     pending_delivery_ids = await db.distributor_deliveries.distinct(
         "id",
         {
             "tenant_id": tenant_id, "distributor_id": distributor_id,
-            "status": {"$in": [
-                "scheduled", "delivery_scheduled", "delivery_assigned",
-                "on_the_way", "in_transit",
-            ]},
+            "status": {"$in": RESERVED_DELIVERY_STATUSES},
         },
     )
     pending_items = await db.distributor_delivery_items.find(
@@ -7930,6 +7966,15 @@ async def get_stock_dashboard(
         # this on May 27 — over-deliveries would otherwise be possible.
         stock_at_hand = qty_in - qty_out - qty_pending_out - qty_factory_returned
 
+        # Explicit reserve→deliver model (derived):
+        #   on_hand  = physical balance still held (incl. reserved units)
+        #   reserved = committed to open Stock Out orders
+        #   available= on_hand − reserved  (== stock_at_hand, what's deliverable now)
+        #   delivered= permanently consumed/delivered out
+        stock_on_hand = qty_in - qty_out - qty_factory_returned
+        stock_reserved = qty_pending_out
+        stock_available = stock_at_hand
+
         # Weekly average (last 12 weeks)
         weekly_data = weekly_by_sku.get(sid, {})
         weeks_with_data = len(weekly_data)
@@ -7989,6 +8034,9 @@ async def get_stock_dashboard(
             # every row. Empty list when this SKU has no factory stock.
             "factory_warehouse_batches": fwh_batches_by_sku.get(sid, []),
             "stock_at_hand": stock_at_hand,
+            "stock_on_hand": stock_on_hand,
+            "stock_reserved": stock_reserved,
+            "stock_available": stock_available,
             "pct_stock_at_hand": pct_at_hand,
             "weekly_avg_deliveries": weekly_avg,
             "days_of_stock": days_remaining,
@@ -8026,6 +8074,9 @@ async def get_stock_dashboard(
             "stock_received": total_stock_in,
             "stock_delivered": total_stock_out,
             "stock_pending_out": total_stock_pending_out,
+            "stock_reserved": total_stock_pending_out,
+            "stock_on_hand": total_stock_in - total_stock_out - total_factory_returns,
+            "stock_available": total_at_hand,
             "stock_at_hand": total_at_hand,
             "customer_returns": total_cust_returns,
             "empty_bottles_returned": total_empty_bottles_returned,
