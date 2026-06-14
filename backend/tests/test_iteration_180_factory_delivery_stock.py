@@ -20,7 +20,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 load_dotenv("/app/backend/.env")
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://bevmail-documents.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://fmcg-multi-tenant.preview.emergentagent.com").rstrip("/")
 ADMIN_EMAIL = "surya.yadavalli@nylaairwater.earth"
 ADMIN_PASS = "test123"
 TENANT_ID = "nyla-air-water"

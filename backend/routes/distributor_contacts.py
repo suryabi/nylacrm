@@ -42,6 +42,7 @@ class ContactCreate(BaseModel):
     mobile: Optional[str] = None
     email: Optional[EmailStr] = None
     designation: Optional[str] = None
+    department: Optional[str] = None
     has_portal_access: bool = False
     is_primary: bool = False
 
@@ -51,6 +52,7 @@ class ContactUpdate(BaseModel):
     mobile: Optional[str] = None
     email: Optional[EmailStr] = None
     designation: Optional[str] = None
+    department: Optional[str] = None
     has_portal_access: Optional[bool] = None
     is_primary: Optional[bool] = None
 
@@ -168,6 +170,7 @@ async def create_contact(distributor_id: str, data: ContactCreate,
         "mobile": data.mobile,
         "email": str(data.email) if data.email else None,
         "designation": data.designation,
+        "department": data.department,
         "is_primary": bool(data.is_primary),
         "has_portal_access": bool(data.has_portal_access),
         "user_id": user_id,
@@ -202,7 +205,7 @@ async def update_contact(distributor_id: str, contact_id: str, data: ContactUpda
         raise HTTPException(status_code=404, detail="Contact not found")
 
     update: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    for field in ("name", "mobile", "email", "designation", "is_primary"):
+    for field in ("name", "mobile", "email", "designation", "department", "is_primary"):
         v = getattr(data, field)
         if v is not None:
             update[field] = str(v) if field == "email" else v
