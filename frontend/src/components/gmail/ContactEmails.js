@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Mail as MailIcon, Loader2, ChevronDown, ChevronRight, Plug, PenSquare, ExternalLink, Paperclip, Download } from 'lucide-react';
+import { Mail as MailIcon, Loader2, ChevronDown, ChevronRight, Plug, PenSquare, ExternalLink, Paperclip, Download, ClipboardList, Check } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useNavigate } from 'react-router-dom';
-import { downloadAttachment, humanSize } from './gmailUtils';
+import { downloadAttachment, humanSize, htmlToText } from './gmailUtils';
 import InlineComposer from './InlineComposer';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -27,15 +27,43 @@ const relTime = (d) => {
  * Embedded panel showing all Gmail messages exchanged with `email`,
  * for Lead / Account / Contact detail pages. Lets the user reply/compose inline.
  */
-export default function ContactEmails({ email, name }) {
+export default function ContactEmails({ email, name, leadId, onLogged }) {
   const navigate = useNavigate();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [bodyCache, setBodyCache] = useState({});
+  const [loggingId, setLoggingId] = useState(null);
+  const [loggedIds, setLoggedIds] = useState(new Set());
   // composer: null | { replyToMessageId, threadId, subject }
   const [composer, setComposer] = useState(null);
+
+  const logToTimeline = async (m) => {
+    if (!leadId) return;
+    setLoggingId(m.id);
+    try {
+      let body = bodyCache[m.id];
+      if (!body) {
+        const res = await axios.get(`${API_URL}/gmail/messages/${m.id}`, { headers: authHeaders() });
+        body = res.data;
+        setBodyCache((c) => ({ ...c, [m.id]: body }));
+      }
+      const text = (body?.text_body || htmlToText(body?.html_body || '') || m.snippet || '').trim();
+      const truncated = text.length > 2000 ? `${text.slice(0, 2000)}…` : text;
+      const description = `Email — ${m.subject || '(no subject)'}\nFrom: ${m.from}\nDate: ${new Date(m.date).toLocaleString()}\n\n${truncated}`;
+      await axios.post(`${API_URL}/activities`, {
+        lead_id: leadId, activity_type: 'email', interaction_method: 'email', description,
+      }, { headers: authHeaders() });
+      toast.success('Email logged to lead timeline');
+      setLoggedIds((s) => new Set(s).add(m.id));
+      onLogged && onLogged();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not log email');
+    } finally {
+      setLoggingId(null);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!email) { setLoading(false); return; }
@@ -192,7 +220,24 @@ export default function ContactEmails({ email, name }) {
                         />
                       </div>
                     ) : (
-                      <div className="mt-2 flex justify-end">
+                      <div className="mt-2 flex justify-end gap-2">
+                        {leadId && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-slate-600"
+                            onClick={() => logToTimeline(m)}
+                            disabled={loggingId === m.id || loggedIds.has(m.id)}
+                            data-testid={`contact-log-btn-${m.id}`}
+                          >
+                            {loggingId === m.id
+                              ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              : loggedIds.has(m.id)
+                                ? <Check className="h-3.5 w-3.5 mr-1 text-emerald-600" />
+                                : <ClipboardList className="h-3.5 w-3.5 mr-1" />}
+                            {loggedIds.has(m.id) ? 'Logged' : 'Log to timeline'}
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" className="text-rose-600" onClick={() => openReply(m)} data-testid={`contact-reply-btn-${m.id}`}>Reply</Button>
                       </div>
                     )}

@@ -1409,7 +1409,7 @@ ${userEmail}`;
           {lead.email && (
             <Card className="p-6" data-testid="lead-emails-card">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Mail className="h-5 w-5 text-rose-600" /> Emails</h2>
-              <ContactEmails email={lead.email} name={lead.contact_person || lead.company} />
+              <ContactEmails email={lead.email} name={lead.contact_person || lead.company} leadId={lead.id} onLogged={async () => { try { const r = await activitiesAPI.getByLeadId(id); setActivities(r.data); } catch (e) { /* ignore */ } }} />
             </Card>
           )}
 
