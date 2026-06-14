@@ -133,3 +133,11 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - **Team-wide priority ordering** within each column via drag up/down + up/down arrow buttons. Persisted by new backend `POST /api/marketing-requests/board-reorder` (sets `board_rank`); columns sort by board_rank then created_at.
 - Cross-column drag is intentionally blocked (status changes happen in List view); shows an info toast.
 - Backend: added `no_limit` to the list endpoint so the board loads all matching requests. Verified via curl (reorder persists) + UI round-trip (reload keeps order).
+
+## 2026-06-14 — Distributor Stock Out reservation (reserve → deliver) ✅
+- Stock Out orders now RESERVE stock the moment an order is created (any status incl. draft). Reservation is fully DERIVED from open orders (RESERVED_DELIVERY_STATUSES) — no schema change, no backfill; cancel/complete/delete need no extra bookkeeping.
+- Model per SKU/location: On-hand (physical, unchanged until delivery), Reserved (committed to open orders), Available = On-hand − Reserved. On completion, on-hand drops and it becomes Delivered/Consumed.
+- `create_delivery` now BLOCKS over-allocation against Available (helper `_reserved_qty_map`) for all source types (factory / batch / distributor). `routes/distributors.py`.
+- `stock-dashboard` returns stock_on_hand / stock_reserved / stock_available (per-SKU + totals); expanded the "reserved" status set to all open orders.
+- Frontend `StockDashboardTab.jsx`: new On-hand / Reserved Stock / Available / Delivered-Consumed cards + relabeled SKU table columns (Reserved, Available).
+- Verified by testing agent (iteration_205, 4/4 backend pass + FE smoke); regression test at /app/backend/tests/test_iteration_205_distributor_stock_reservation.py.
