@@ -289,9 +289,11 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
 
 // ── Gantt timeline view ───────────────────────────────────────────────
 function RequestGantt({ rows, navigate }) {
-  const DAY_W = 32;     // px per day
-  const LABEL_W = 280;  // left label column width
-  const ROW_H = 46;
+  const DAY_W = 38;     // px per day
+  const LABEL_W = 300;  // left label column width
+  const ROW_H = 60;     // row height
+  const HEADER_H = 56;  // month + day header
+  const MAX_DAYS = 110; // hard cap so far-future dates don't run "infinite"
 
   const today = startOfDay(new Date());
 
@@ -309,7 +311,7 @@ function RequestGantt({ rows, navigate }) {
 
   if (items.length === 0) {
     return (
-      <Card className="border border-slate-100 rounded-xl">
+      <Card className="border border-slate-200 rounded-xl shadow-sm">
         <CardContent className="p-12 text-center text-sm text-muted-foreground">
           No requests to plot on the timeline.
         </CardContent>
@@ -317,20 +319,22 @@ function RequestGantt({ rows, navigate }) {
     );
   }
 
-  // Timeline bounds (include today, with padding)
-  let minD = items.reduce((m, i) => (i._start < m ? i._start : m), items[0]._start);
-  let maxD = items.reduce((m, i) => {
-    const e = i._end || i._start;
-    return e > m ? e : m;
-  }, items[0]._start);
-  if (today < minD) minD = today;
-  if (today > maxD) maxD = today;
-  minD = addDays(minD, -2);
-  maxD = addDays(maxD, 3);
+  // ── Bounded timeline window (prevents runaway/infinite-looking bars) ──
+  const earliest = items.reduce((m, i) => (i._start < m ? i._start : m), items[0]._start);
+  let windowStart = startOfDay(earliest < today ? earliest : today);
+  windowStart = addDays(windowStart, -3);
 
-  const days = eachDayOfInterval({ start: minD, end: maxD });
+  const dued = items.filter((i) => i._end).map((i) => i._end);
+  const latestDue = dued.length ? dued.reduce((m, d) => (d > m ? d : m), dued[0]) : today;
+  const maxRelevant = latestDue > today ? latestDue : today;
+  const hardMax = addDays(windowStart, MAX_DAYS);
+  let windowEnd = addDays(maxRelevant < hardMax ? maxRelevant : hardMax, 3);
+  const minEnd = addDays(today, 12);
+  if (windowEnd < minEnd) windowEnd = minEnd;
+
+  const days = eachDayOfInterval({ start: windowStart, end: windowEnd });
   const totalW = days.length * DAY_W;
-  const xFor = (d) => differenceInCalendarDays(d, minD) * DAY_W;
+  const xFor = (d) => differenceInCalendarDays(d, windowStart) * DAY_W;
   const todayCenter = xFor(today) + DAY_W / 2;
 
   // Month bands
@@ -342,31 +346,36 @@ function RequestGantt({ rows, navigate }) {
     else monthGroups.push({ key, count: 1 });
   });
 
+  // Subtle vertical day gridlines drawn once behind every track
+  const gridBg = `repeating-linear-gradient(to right, transparent, transparent ${DAY_W - 1}px, rgba(148,163,184,0.12) ${DAY_W - 1}px, rgba(148,163,184,0.12) ${DAY_W}px)`;
+
+  const isCompleted = (i) => i.current_state_key === 'production_completed' || i.current_state_key === 'final_approved';
+
   return (
-    <Card className="border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden" data-testid="mr-gantt">
-      <div className="overflow-x-auto">
+    <Card className="border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden flex flex-col" data-testid="mr-gantt">
+      <div className="overflow-auto max-h-[72vh]">
         <div style={{ minWidth: LABEL_W + totalW }}>
-          {/* Header */}
-          <div className="flex bg-slate-50/70 border-b border-slate-100 sticky top-0 z-20">
+          {/* ── Header ── */}
+          <div className="flex sticky top-0 z-30" style={{ height: HEADER_H }}>
             <div
               style={{ width: LABEL_W }}
-              className="shrink-0 sticky left-0 z-30 bg-slate-50/70 border-r border-slate-100 px-3 flex items-end pb-1.5 text-xs font-semibold text-slate-500"
+              className="shrink-0 sticky left-0 z-40 bg-slate-50/95 backdrop-blur border-r border-b border-slate-200 px-4 flex items-end pb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500"
             >
               Request
             </div>
-            <div>
-              <div className="flex">
+            <div className="bg-white/90 backdrop-blur border-b border-slate-200" style={{ width: totalW }}>
+              <div className="flex h-7 items-center">
                 {monthGroups.map((g, i) => (
                   <div
                     key={i}
                     style={{ width: g.count * DAY_W }}
-                    className="text-[11px] font-semibold text-slate-600 px-2 py-1 border-r border-slate-100 truncate"
+                    className="text-[11px] font-semibold text-slate-700 px-2 border-r border-slate-100 truncate"
                   >
                     {g.key}
                   </div>
                 ))}
               </div>
-              <div className="flex border-t border-slate-100">
+              <div className="flex h-7">
                 {days.map((d, i) => {
                   const wknd = isWeekend(d);
                   const tdy = isSameDay(d, today);
@@ -374,10 +383,10 @@ function RequestGantt({ rows, navigate }) {
                     <div
                       key={i}
                       style={{ width: DAY_W }}
-                      className={`text-center py-0.5 text-[9px] leading-tight border-r border-slate-50 ${wknd ? 'bg-slate-100/70' : ''} ${tdy ? 'bg-emerald-100 text-emerald-700 font-bold' : 'text-slate-400'}`}
+                      className={`flex flex-col items-center justify-center border-r border-slate-100 text-[9px] leading-none gap-0.5 ${wknd ? 'bg-slate-50' : ''} ${tdy ? 'bg-emerald-50' : ''}`}
                     >
-                      <div>{format(d, 'EEEEE')}</div>
-                      <div className="text-slate-600">{format(d, 'd')}</div>
+                      <span className={wknd ? 'text-slate-300' : 'text-slate-400'}>{format(d, 'EEEEE')}</span>
+                      <span className={`font-medium ${tdy ? 'text-emerald-600 font-bold' : 'text-slate-600'}`}>{format(d, 'd')}</span>
                     </div>
                   );
                 })}
@@ -385,52 +394,102 @@ function RequestGantt({ rows, navigate }) {
             </div>
           </div>
 
-          {/* Body */}
+          {/* ── Body ── */}
           <div className="relative">
-            {/* Today vertical line */}
+            {/* Today vertical line + glowing node */}
             <div
-              className="absolute top-0 bottom-0 w-px bg-emerald-500/70 z-[5] pointer-events-none"
+              className="absolute top-0 bottom-0 w-px bg-emerald-500 z-[15] pointer-events-none"
               style={{ left: LABEL_W + todayCenter }}
-            />
+            >
+              <span className="absolute top-0 -translate-x-1/2 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.7)]" />
+            </div>
+
             {items.map((i) => {
-              const startX = xFor(i._start);
-              const endDay = i._end && i._end >= i._start ? i._end : i._start;
-              const span = differenceInCalendarDays(endDay, i._start) + 1;
-              const width = Math.max(span * DAY_W - 4, DAY_W * 0.6);
-              const color = i.current_state_color || '#94a3b8';
-              const completed = i.current_state_key === 'production_completed' || i.current_state_key === 'final_approved';
+              const completed = isCompleted(i);
               const overdue = i._end && i._end < today && !completed;
               const noDue = !i._end;
+              const color = i.current_state_color || '#64748b';
+
+              // Clamp to window
+              const rawStart = i._start < windowStart ? windowStart : i._start;
+              const cappedLeft = i._start < windowStart;
+              const rawEnd = noDue ? rawStart : (i._end >= i._start ? i._end : i._start);
+              const visEnd = rawEnd > windowEnd ? windowEnd : rawEnd;
+              const cappedRight = !noDue && rawEnd > windowEnd;
+              const startX = xFor(rawStart);
+              const span = differenceInCalendarDays(visEnd, rawStart) + 1;
+              const width = Math.max(span * DAY_W - 4, DAY_W * 0.65);
+
+              const assignedTo = i.assigned_user_name || i.assigned_department_name || (i.assigned_role ? `Role: ${i.assigned_role}` : '—');
+
               return (
                 <div
                   key={i.id}
-                  className="flex border-b border-slate-50 hover:bg-slate-50/60 group transition-colors"
+                  className="flex group border-b border-slate-100 hover:bg-slate-50/50 transition-colors"
                   style={{ height: ROW_H }}
                   data-testid={`mr-gantt-row-${i.id}`}
                 >
+                  {/* Left label */}
                   <div
                     style={{ width: LABEL_W }}
-                    className="shrink-0 sticky left-0 z-10 bg-white group-hover:bg-slate-50/60 border-r border-slate-100 px-3 flex flex-col justify-center cursor-pointer transition-colors"
+                    className="shrink-0 sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 px-4 flex flex-col justify-center gap-0.5 cursor-pointer transition-colors"
                     onClick={() => navigate(`/marketing-requests/${i.id}`)}
                   >
-                    <span className="text-xs font-medium text-primary truncate" title={i.request_type_name}>
-                      {i.request_type_name || 'Untyped Request'}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground font-mono truncate">{i.request_number}</span>
-                  </div>
-                  <div className="relative" style={{ width: totalW }}>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/marketing-requests/${i.id}`)}
-                      title={`${i.current_state_label || ''} · ${formatDate(i.created_at, 'MMM d')} → ${i._end ? formatDate(i.requested_due_date, 'MMM d') : 'no due date'}`}
-                      className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-md border flex items-center px-2 overflow-hidden hover:shadow-md transition-shadow ${overdue ? 'ring-2 ring-red-400' : ''} ${noDue ? 'border-dashed' : ''}`}
-                      style={{ left: startX + 2, width, background: `${color}26`, borderColor: color }}
-                      data-testid={`mr-gantt-bar-${i.id}`}
-                    >
-                      <span className="text-[10px] font-medium truncate" style={{ color }}>
-                        {i.current_state_label || i.current_state_key}
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+                      <span className="text-sm font-medium text-slate-900 truncate" title={i.request_type_name}>
+                        {i.request_type_name || 'Untyped Request'}
                       </span>
-                    </button>
+                    </div>
+                    <div className="flex items-center gap-2 pl-3">
+                      <span className="font-mono text-[10px] tracking-wider text-slate-400">{i.request_number}</span>
+                      <span className="text-[10px] text-slate-400 truncate">· {assignedTo}</span>
+                    </div>
+                  </div>
+
+                  {/* Track */}
+                  <div className="relative" style={{ width: totalW, backgroundImage: gridBg }}>
+                    {noDue ? (
+                      // TBD milestone pill (finite — no runaway bar)
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/marketing-requests/${i.id}`)}
+                        title={`No due date · started ${formatDate(i.created_at, 'MMM d')}`}
+                        className="absolute top-1/2 -translate-y-1/2 h-7 px-2.5 bg-slate-50 border border-dashed border-slate-300 rounded-full flex items-center gap-1.5 shadow-sm hover:shadow-md hover:border-slate-400 transition-all"
+                        style={{ left: startX + 2 }}
+                        data-testid="gantt-tbd-milestone"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">No due date</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/marketing-requests/${i.id}`)}
+                        title={`${i.current_state_label || ''} · ${formatDate(i.created_at, 'MMM d')} → ${formatDate(i.requested_due_date, 'MMM d, yyyy')}${cappedRight ? ' (beyond view)' : ''}`}
+                        className={`absolute top-1/2 -translate-y-1/2 h-8 border flex items-center gap-1.5 px-2.5 shadow-sm hover:-translate-y-[1px] hover:shadow-md transition-all overflow-hidden
+                          ${cappedRight ? 'rounded-l-md rounded-r-none' : 'rounded-md'}
+                          ${cappedLeft ? 'rounded-l-none' : ''}`}
+                        style={{
+                          left: startX + 2,
+                          width,
+                          ...(overdue
+                            ? { borderColor: '#fca5a5', backgroundImage: 'repeating-linear-gradient(45deg, #fef2f2, #fef2f2 8px, #ffffff 8px, #ffffff 16px)' }
+                            : { background: `${color}1f`, borderColor: color }),
+                        }}
+                        data-testid={overdue ? 'gantt-overdue-bar' : `mr-gantt-bar-${i.id}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: overdue ? '#ef4444' : color }} />
+                        {width > 64 && (
+                          <span className="text-[11px] font-medium truncate" style={{ color: overdue ? '#b91c1c' : color }}>
+                            {overdue ? 'Overdue' : (i.current_state_label || i.current_state_key)}
+                          </span>
+                        )}
+                        {cappedRight && (
+                          <span className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: overdue ? '#b91c1c' : color }}>›</span>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -438,12 +497,14 @@ function RequestGantt({ rows, navigate }) {
           </div>
         </div>
       </div>
+
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 px-4 py-2.5 border-t border-slate-100 bg-slate-50/40 text-[11px] text-slate-500">
-        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-px bg-emerald-500" /> Today</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded ring-2 ring-red-400 bg-red-50" /> Overdue</span>
-        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-dashed border-slate-400" /> No due date</span>
-        <span className="ml-auto">Bar color = current state · {items.length} shown</span>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-600">
+        <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]" /> Today</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-4 h-3 rounded-sm border border-red-300" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #fef2f2, #fef2f2 4px, #ffffff 4px, #ffffff 8px)' }} /> Overdue</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-7 h-4 rounded-full border border-dashed border-slate-300 bg-slate-50" /> No due date</span>
+        <span className="inline-flex items-center gap-1.5"><span className="text-slate-400">›</span> Continues beyond view</span>
+        <span className="ml-auto text-slate-400">Bar color = current state · {items.length} shown</span>
       </div>
     </Card>
   );
