@@ -126,3 +126,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - **Submitted highlighting** (earlier same day): new/initial-state requests get a ⭐ star prefix + amber row highlight; other rows use zebra striping. Initial-state detection driven by state machine `is_initial`.
 - Lead/Account contact Category dropdown now also includes "Food & Beverage (F&B)".
 - Frontend-only; verified via screenshots.
+
+## 2026-06-14 — Design Requests: Kanban board + priority ordering ✅
+- Replaced the Gantt view with a **Kanban board** on the Design Requests page (`MarketingRequests.js` now toggles List / Kanban; removed `RequestGantt`). New `components/marketing/RequestKanban.jsx`.
+- Columns = workflow states (colored), cards grouped by `current_state_key` showing priority #, type, request #, due date (overdue in red), assigned team, requester avatar, Tight badge.
+- **Team-wide priority ordering** within each column via drag up/down + up/down arrow buttons. Persisted by new backend `POST /api/marketing-requests/board-reorder` (sets `board_rank`); columns sort by board_rank then created_at.
+- Cross-column drag is intentionally blocked (status changes happen in List view); shows an info toast.
+- Backend: added `no_limit` to the list endpoint so the board loads all matching requests. Verified via curl (reorder persists) + UI round-trip (reload keeps order).

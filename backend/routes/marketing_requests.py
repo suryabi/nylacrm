@@ -586,23 +586,50 @@ async def list_requests(
     created_by: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
+    no_limit: bool = False,
     sort: str = "-created_at",
     current_user: dict = Depends(get_current_user),
 ):
     tenant_id = get_current_tenant_id()
     page = max(page, 1)
-    limit = max(min(limit, 100), 1)
 
     q = _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by)
 
     total = await db.marketing_requests.count_documents(q)
     sort_field = sort.lstrip("-+")
     sort_dir = -1 if sort.startswith("-") else 1
+
+    # Board/Kanban needs every matching request (no pagination cap).
+    if no_limit:
+        rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).to_list(2000)
+        return {"items": rows, "total": total, "page": 1, "limit": total, "pages": 1}
+
+    limit = max(min(limit, 100), 1)
     rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).skip((page - 1) * limit).limit(limit).to_list(limit)
     return {
         "items": rows, "total": total, "page": page, "limit": limit,
         "pages": (total + limit - 1) // limit if total else 0,
     }
+
+
+class BoardReorder(BaseModel):
+    state_key: Optional[str] = None
+    ordered_ids: List[str] = []
+
+
+@router.post("/board-reorder")
+async def board_reorder(payload: BoardReorder, current_user: dict = Depends(get_current_user)):
+    """Persist the team-wide priority order of requests within a Kanban column.
+    `ordered_ids` is the full top-to-bottom order for one state column."""
+    tenant_id = get_current_tenant_id()
+    if not payload.ordered_ids:
+        return {"ok": True, "count": 0}
+    for idx, rid in enumerate(payload.ordered_ids):
+        await db.marketing_requests.update_one(
+            {"id": rid, "tenant_id": tenant_id},
+            {"$set": {"board_rank": idx}},
+        )
+    return {"ok": True, "count": len(payload.ordered_ids)}
 
 
 @router.get("/export")
