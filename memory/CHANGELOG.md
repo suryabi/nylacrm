@@ -115,3 +115,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 **Note:** `inventory`/`vendors`/`purchase_orders`/`goods_receipt` modules were enabled for tenant `nyla-air-water` in the PREVIEW DB. In PRODUCTION the user must enable the "Inventory"/"Vendors" modules via Tenant Settings → Modules after redeploy.
 
 **Testing:** Backend verified via curl (unique code, GSTIN, price-overlap, active-price resolver). UI verified by testing agent — 19/19 flows passed (iteration_202.json).
+
+## 2026-06-14 — Lead/Account contact Category + Distributor form cleanup ✅
+- **Lead/Account contacts** (`routes/entity_contacts.py`, `components/EntityContactsSection.jsx`): added a **Category** dropdown to the contact add/edit form with options Owner, Partner, Purchase, Stock, Delivery, Accounts, Management, Third Party. New `category` field persisted on the contact record; shown as a new "Category" column in the contacts table.
+- **Distributor contacts** (`routes/distributor_contacts.py`, `components/distributor/ContactsSection.jsx`): removed the Department dropdown that had been added to the wrong form in the prior session; Mobile + Email now share a row again. `department` field removed from ContactCreate/ContactUpdate/doc.
+- **Testing:** Backend verified via curl (create category=Purchase → update→Management → list verify → delete). Frontend dialog + Category column verified via screenshot.

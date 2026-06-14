@@ -38,6 +38,7 @@ class EntityContactIn(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     designation: Optional[str] = None
+    category: Optional[str] = None
 
 
 class EntityContactUpdate(BaseModel):
@@ -47,6 +48,7 @@ class EntityContactUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     designation: Optional[str] = None
+    category: Optional[str] = None
 
 
 def _full_name(first: Optional[str], last: Optional[str]) -> str:
@@ -112,6 +114,7 @@ async def _create(parent_type: str, parent_id: str, data: EntityContactIn, curre
         "designation": data.designation,
         "phone": data.phone,
         "email": data.email,
+        "category": data.category,
         "company": _parent_company(parent),
         fk: parent_id,
         "parent_type": parent_type,

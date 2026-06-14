@@ -3,14 +3,13 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   User, Mail, Phone, Plus, Edit2, Trash2, Loader2, KeyRound,
-  ShieldCheck, Star, Briefcase, X, Building2
+  ShieldCheck, Star, Briefcase, X
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Checkbox } from '../ui/checkbox';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select';
 import { Badge } from '../ui/badge';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
@@ -22,10 +21,8 @@ import {
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-const DEPARTMENTS = ['Owner', 'Partner', 'Purchase', 'Stock', 'Delivery', 'Accounts', 'Management', 'Third Party'];
-
 const EMPTY = {
-  name: '', mobile: '', email: '', designation: '', department: '',
+  name: '', mobile: '', email: '', designation: '',
   has_portal_access: false, is_primary: false,
 };
 
@@ -65,7 +62,6 @@ export default function ContactsSection({ distributorId, canManage = true }) {
       mobile: c.mobile || '',
       email: c.email || '',
       designation: c.designation || '',
-      department: c.department || '',
       has_portal_access: !!c.has_portal_access,
       is_primary: !!c.is_primary,
     });
@@ -86,7 +82,6 @@ export default function ContactsSection({ distributorId, canManage = true }) {
         mobile: form.mobile.trim() || null,
         email: form.email.trim() || null,
         designation: form.designation.trim() || null,
-        department: form.department || null,
         has_portal_access: !!form.has_portal_access,
         is_primary: !!form.is_primary,
       };
@@ -185,11 +180,6 @@ export default function ContactsSection({ distributorId, canManage = true }) {
                     {c.has_portal_access && (
                       <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 text-[10px] gap-1">
                         <ShieldCheck className="h-2.5 w-2.5" /> Portal Access
-                      </Badge>
-                    )}
-                    {c.department && (
-                      <Badge variant="outline" className="text-[10px] gap-1 border-slate-200 text-slate-600">
-                        <Building2 className="h-2.5 w-2.5" /> {c.department}
                       </Badge>
                     )}
                   </div>
@@ -295,27 +285,16 @@ export default function ContactsSection({ distributorId, canManage = true }) {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="contact-department">Department</Label>
-                <Select value={form.department || undefined} onValueChange={(v) => setForm(f => ({ ...f, department: v }))}>
-                  <SelectTrigger id="contact-department" data-testid="contact-department-select">
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEPARTMENTS.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="contact-email">Email{form.has_portal_access ? ' *' : ''}</Label>
+                <Input
+                  id="contact-email"
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  data-testid="contact-email-input"
+                  placeholder="name@company.com"
+                />
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="contact-email">Email{form.has_portal_access ? ' *' : ''}</Label>
-              <Input
-                id="contact-email"
-                type="email"
-                value={form.email}
-                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                data-testid="contact-email-input"
-                placeholder="name@company.com"
-              />
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">

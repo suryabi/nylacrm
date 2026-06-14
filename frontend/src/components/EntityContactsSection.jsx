@@ -17,7 +17,8 @@ import {
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const SALUTATIONS = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
-const EMPTY = { salutation: 'Mr', first_name: '', last_name: '', email: '', phone: '', designation: '' };
+const CATEGORIES = ['Owner', 'Partner', 'Purchase', 'Stock', 'Delivery', 'Accounts', 'Management', 'Third Party'];
+const EMPTY = { salutation: 'Mr', first_name: '', last_name: '', email: '', phone: '', designation: '', category: '' };
 
 const fullName = (c) => [c.first_name, c.last_name].filter(Boolean).join(' ');
 
@@ -56,7 +57,7 @@ export default function EntityContactsSection({ parentType, parentId }) {
     setEditing(c);
     setForm({
       salutation: c.salutation || 'Mr', first_name: c.first_name || '', last_name: c.last_name || '',
-      email: c.email || '', phone: c.phone || '', designation: c.designation || '',
+      email: c.email || '', phone: c.phone || '', designation: c.designation || '', category: c.category || '',
     });
     setDialogOpen(true);
   };
@@ -109,6 +110,7 @@ export default function EntityContactsSection({ parentType, parentId }) {
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Designation</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -167,6 +169,11 @@ export default function EntityContactsSection({ parentType, parentId }) {
                   <TableCell>
                     <div className="max-w-[160px] truncate" title={c.designation || ''}>{c.designation || '—'}</div>
                   </TableCell>
+                  <TableCell>
+                    {c.category
+                      ? <span className="inline-flex items-center rounded-full bg-sky-50 text-sky-700 border border-sky-200 px-2 py-0.5 text-xs" data-testid={`contact-category-${c.id}`}>{c.category}</span>
+                      : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(c)} data-testid={`edit-contact-${c.id}`}><Pencil className="h-4 w-4" /></Button>
@@ -215,6 +222,13 @@ export default function EntityContactsSection({ parentType, parentId }) {
             <div className="sm:col-span-2">
               <label className="text-xs text-muted-foreground">Designation</label>
               <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} data-testid="contact-designation" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs text-muted-foreground">Category</label>
+              <Select value={form.category || undefined} onValueChange={(v) => setForm({ ...form, category: v })}>
+                <SelectTrigger data-testid="contact-category"><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
