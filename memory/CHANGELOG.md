@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-14 — Production batch API accepts external SKU id ✅
+- `POST /api/production/batches` (external/API-key + internal) now resolves the SKU by **`external_sku_id`** in addition to `sku_id` / `sku_code`. External systems that only know their own SKU identifier can create batches without the internal id — packaging (bottles_per_crate) and QC route are still auto-resolved from the SKU master.
+- Added `external_sku_id` to `BatchCreate` (`routes/production_qc.py`), added the resolution branch, and updated the API-key endpoint catalog description (`routes/api_keys.py`).
+- Verified end-to-end via a real API key (X-API-Key): created a batch with only `external_sku_id:"B660"` → resolved to "Nyla – 600 ml / Silver" (12/crate, 60 bottles); unknown external id returns a clear 404. Backend-only.
+
+
 ## 2026-06-14 — Approval tasks auto-close on approve/reject (+ self-heal stale ones) ✅
 - Confirmed the proposal review endpoint (`PUT /leads/{id}/proposal/review`) already closes the linked approval task via `complete_approval_task` on approve/reject/changes-requested — so deciding a proposal closes the action item (no manual close needed, same as leave requests).
 - **Fix**: `GET /approvals/my-pending` (powers the Home "Pending Approvals" widget) now reconciles **proposal** tasks against the proposal's status (it previously only reconciled expense/travel/budget/leave). Any approval task whose underlying request is already decided is now **auto-closed** (`complete_approval_task`) and dropped from the widget — self-healing for stale/lingering items created before the close logic existed.

@@ -60,8 +60,10 @@ class QCRouteUpdate(BaseModel):
 
 class BatchCreate(BaseModel):
     sku_id: Optional[str] = None
-    # External callers may identify the SKU by its code instead of the internal id.
+    # External callers may identify the SKU by its code or its external SKU id
+    # (their own system's identifier) instead of the internal id.
     sku_code: Optional[str] = None
+    external_sku_id: Optional[str] = None
     sku_name: Optional[str] = None
     batch_code: str
     production_date: str
@@ -546,10 +548,13 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
             sku_doc = await tdb.master_skus.find_one({"id": data.sku_id}, {"_id": 0})
         elif data.sku_code:
             sku_doc = await tdb.master_skus.find_one({"sku_code": data.sku_code}, {"_id": 0})
+        elif data.external_sku_id:
+            # External systems only know their own SKU identifier, not our internal id.
+            sku_doc = await tdb.master_skus.find_one({"external_sku_id": data.external_sku_id}, {"_id": 0})
         else:
-            raise HTTPException(status_code=400, detail="Provide either sku_id or sku_code.")
+            raise HTTPException(status_code=400, detail="Provide sku_id, sku_code, or external_sku_id.")
         if not sku_doc:
-            raise HTTPException(status_code=404, detail="SKU not found for the given sku_id/sku_code.")
+            raise HTTPException(status_code=404, detail="SKU not found for the given sku_id/sku_code/external_sku_id.")
         sku_id = sku_doc["id"]
         sku_name = data.sku_name or sku_doc.get("sku_name") or sku_doc.get("name")
         bottles_per_crate = data.bottles_per_crate

@@ -65,7 +65,7 @@ AVAILABLE_ENDPOINTS = [
         "method": "POST",
         "path_pattern": "/api/production/batches",
         "label": "Create Production Batch",
-        "description": "Create a production batch from an external system. Resolves SKU by sku_id or sku_code; QC route is applied automatically.",
+        "description": "Create a production batch from an external system. Resolves SKU by sku_id, sku_code, or external_sku_id; QC route is applied automatically.",
     },
 ]
 
