@@ -17,7 +17,7 @@ import {
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 const SALUTATIONS = ['Mr', 'Mrs', 'Ms', 'Dr', 'Prof'];
-const CATEGORIES = ['Owner', 'Partner', 'Purchase', 'Stock', 'Delivery', 'Accounts', 'Management', 'Third Party'];
+const CATEGORIES = ['Owner', 'Partner', 'Purchase', 'Stock', 'Delivery', 'Accounts', 'Management', 'Food & Beverage (F&B)', 'Third Party'];
 const EMPTY = { salutation: 'Mr', first_name: '', last_name: '', email: '', phone: '', designation: '', category: '' };
 
 const fullName = (c) => [c.first_name, c.last_name].filter(Boolean).join(' ');
