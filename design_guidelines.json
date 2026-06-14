@@ -1,120 +1,126 @@
 {
-  "theme": "Light",
-  "archetype": "Organic & Earthy / Soft Utility",
-  "brand_identity": "Emerald/Green (Strictly enforced)",
-  "typography": {
-    "headings": "Outfit, sans-serif",
-    "body": "Plus Jakarta Sans, Inter, sans-serif",
-    "scale": {
-      "h1": "text-4xl sm:text-5xl font-bold tracking-tight text-slate-900",
-      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight text-slate-900",
-      "h3": "text-xl sm:text-2xl font-medium text-slate-800",
-      "label": "text-sm font-medium text-slate-700 uppercase tracking-wider",
-      "body": "text-base text-slate-600 leading-relaxed"
-    }
-  },
+  "theme": "light",
+  "archetype": "4 (Swiss & High-Contrast / Data-Dense Dashboard)",
+  "domain_context": "B2B CRM / Internal SaaS",
   "colors": {
-    "primary": "emerald-600",
-    "primary_hover": "emerald-700",
-    "background": "slate-50",
-    "surface": "white",
-    "borders": "emerald-100",
-    "muted_bg": "emerald-50",
-    "text_main": "slate-900",
-    "text_muted": "slate-500",
-    "success": "emerald-600",
-    "warning": "amber-500",
-    "error": "red-500"
-  },
-  "spacing_and_layout": {
-    "form_page": "max-w-3xl mx-auto space-y-8 p-6 md:p-10",
-    "detail_page": "max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8 p-6 md:p-10",
-    "cards": "rounded-2xl p-6 bg-white shadow-[0_2px_8px_rgba(6,95,70,0.04)] border border-emerald-50",
-    "panels": "bg-slate-50 rounded-3xl p-6 md:p-8 border border-slate-100"
-  },
-  "components": {
-    "file_upload_dropzone": {
-      "container_classes": "relative group flex flex-col items-center justify-center w-full h-40 px-4 py-8 bg-emerald-50/30 border-2 border-dashed border-emerald-200 rounded-2xl hover:bg-emerald-50/80 hover:border-emerald-400 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2",
-      "icon_classes": "w-10 h-10 text-emerald-500 mb-3 group-hover:-translate-y-1 group-hover:scale-110 transition-transform duration-300",
-      "text_primary_classes": "text-sm font-medium text-slate-700",
-      "text_secondary_classes": "text-xs text-slate-500 mt-1",
-      "file_chip_classes": "flex items-center justify-between p-3 mt-3 bg-white border border-emerald-100 rounded-xl shadow-sm",
-      "file_thumbnail_classes": "w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0",
-      "micro_interaction": "Drag-over state should change border to solid emerald-500 and bg to emerald-100. Smooth ease-out transforms."
+    "primary": {
+      "base": "emerald-600",
+      "hover": "emerald-700",
+      "light": "emerald-50",
+      "border": "emerald-200"
     },
-    "form_inputs_and_select": {
-      "input_classes": "flex h-12 w-full rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm text-slate-900 shadow-sm transition-all focus-visible:outline-none focus-visible:border-emerald-500 focus-visible:ring-4 focus-visible:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50",
-      "textarea_classes": "min-h-[120px] rounded-xl border border-emerald-100 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm transition-all focus-visible:outline-none focus-visible:border-emerald-500 focus-visible:ring-4 focus-visible:ring-emerald-500/10",
-      "label_classes": "block text-sm font-semibold text-slate-700 mb-2",
-      "select_trigger_classes": "flex h-12 w-full items-center justify-between rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm shadow-sm ring-offset-background placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+    "neutrals": {
+      "background": "white",
+      "surface": "slate-50",
+      "border": "slate-200",
+      "text_main": "slate-900",
+      "text_muted": "slate-500"
     },
-    "date_picker": {
-      "trigger_classes": "flex h-12 w-full items-center justify-start gap-3 rounded-xl border border-emerald-100 bg-white px-4 py-2 text-left text-sm shadow-sm transition-all hover:border-emerald-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10",
-      "icon_classes": "h-5 w-5 text-emerald-600",
-      "calendar_classes": "p-3 bg-white rounded-2xl border border-emerald-100 shadow-xl"
-    },
-    "repeatable_links_list": {
-      "list_container": "space-y-3",
-      "row_classes": "flex items-center gap-3 bg-slate-50 border border-slate-200 p-2 pl-4 rounded-xl focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all",
-      "input_override": "flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 px-0 h-auto text-sm text-slate-800 placeholder:text-slate-400",
-      "remove_button": "p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors",
-      "add_button": "flex items-center justify-center gap-2 w-full py-3 px-4 text-sm font-medium text-emerald-700 bg-emerald-50/50 border border-dashed border-emerald-200 rounded-xl hover:bg-emerald-50 hover:border-emerald-300 transition-all mt-3"
-    },
-    "detail_page_hero": {
-      "container_classes": "relative overflow-hidden rounded-3xl bg-emerald-600 p-8 md:p-10 text-white shadow-lg mb-8",
-      "texture_overlay": "absolute inset-0 opacity-10 mix-blend-overlay bg-cover bg-center pointer-events-none",
-      "badge_classes": "inline-flex items-center px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-medium text-white border border-white/10",
-      "title_classes": "text-3xl md:text-4xl font-bold mt-4 mb-2 tracking-tight"
-    },
-    "work_versions": {
-      "container_classes": "bg-slate-50 rounded-3xl p-6 md:p-8 border border-slate-100 space-y-6 mt-8",
-      "card_classes": "bg-white rounded-2xl p-6 border border-emerald-50 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden",
-      "version_badge": "absolute top-6 right-6 inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold tracking-wider",
-      "approval_badge": "inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-medium border border-emerald-100 mt-4",
-      "comment_thread_classes": "mt-6 pt-6 border-t border-slate-100 space-y-4"
-    },
-    "comments_timeline": {
-      "container_classes": "relative space-y-8 before:absolute before:inset-0 before:ml-6 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-emerald-100 before:via-emerald-50 before:to-transparent",
-      "avatar_classes": "relative z-10 w-12 h-12 rounded-full border-4 border-white shadow-sm ring-1 ring-emerald-50 object-cover",
-      "bubble_classes": "relative bg-white rounded-2xl p-5 shadow-sm border border-slate-100 ml-6 md:ml-0 group-hover:border-emerald-100 transition-colors",
-      "composer_classes": "flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 focus-within:border-emerald-300 focus-within:bg-white transition-colors"
+    "workflow_states": {
+      "submitted": { "bg": "slate-100", "border": "slate-300", "text": "slate-700", "dot": "slate-400" },
+      "in_progress": { "bg": "blue-50", "border": "blue-200", "text": "blue-700", "dot": "blue-500" },
+      "review": { "bg": "amber-50", "border": "amber-200", "text": "amber-700", "dot": "amber-500" },
+      "final_approved": { "bg": "emerald-50", "border": "emerald-200", "text": "emerald-700", "dot": "emerald-500" },
+      "overdue": { "bg": "red-50", "border": "red-300", "text": "red-700", "dot": "red-500" }
     }
   },
-  "media_urls": {
-    "avatars": [
-      {
-        "url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHBvcnRyYWl0fGVufDB8fHx8MTc4MDY3OTU4N3ww&ixlib=rb-4.1.0&q=85",
-        "description": "Male avatar for requester or approver"
+  "typography": {
+    "headings": "font-sans tracking-tight font-semibold text-slate-900",
+    "body": "font-sans text-slate-700",
+    "mono_identifiers": "font-mono text-xs tracking-wider text-slate-500",
+    "sizes": {
+      "h3": "text-lg",
+      "body": "text-sm",
+      "small": "text-xs"
+    }
+  },
+  "layout_and_spacing": {
+    "container": "bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full",
+    "row_height": "h-16",
+    "bar_height": "h-8",
+    "left_panel_width": "w-80 shrink-0",
+    "day_column_width": "w-10 shrink-0"
+  },
+  "component_specifics": {
+    "gantt_container": {
+      "description": "Uses CSS Grid or Flex with a sticky left pane. The right side scrolls horizontally.",
+      "classes": "flex w-full overflow-x-auto relative scrollbar-thin scrollbar-thumb-slate-300"
+    },
+    "left_panel": {
+      "description": "Sticky column on the left containing request details. 2-line high-density layout.",
+      "classes": "sticky left-0 z-20 bg-white border-r border-slate-200 shadow-[4px_0_12px_rgba(0,0,0,0.03)] flex flex-col",
+      "header_cell": "h-14 flex items-center px-4 border-b border-slate-200 bg-slate-50/80 backdrop-blur text-xs font-semibold uppercase tracking-wider text-slate-500",
+      "row_cell": "h-16 px-4 border-b border-slate-100 flex items-center gap-3 hover:bg-slate-50 transition-colors group cursor-pointer",
+      "row_content": {
+        "layout": "flex flex-col gap-1 w-full min-w-0",
+        "top_line": "flex items-center justify-between",
+        "request_id": "font-mono text-[10px] sm:text-xs text-slate-500",
+        "title": "text-sm font-medium text-slate-900 truncate",
+        "bottom_line": "flex items-center gap-2",
+        "assignee": "flex items-center gap-1.5 text-xs text-slate-500",
+        "avatar": "w-5 h-5 rounded-full bg-slate-200 object-cover"
+      }
+    },
+    "timeline_grid": {
+      "header_area": "sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-200 flex flex-col",
+      "month_row": "flex h-7 items-center border-b border-slate-100",
+      "month_cell": "px-2 text-xs font-medium text-slate-600 sticky left-80",
+      "day_row": "flex h-7 items-center",
+      "day_cell": "w-10 shrink-0 flex flex-col items-center justify-center border-r border-slate-100 text-[10px]",
+      "weekend_cell": "bg-slate-50/50",
+      "grid_row": "flex h-16 border-b border-slate-100 relative group hover:bg-slate-50/30 transition-colors"
+    },
+    "today_marker": {
+      "description": "A sharp, clear vertical line crossing the entire chart.",
+      "classes": "absolute top-0 bottom-0 w-px bg-emerald-500 z-10 pointer-events-none",
+      "node": "absolute -top-1 -translate-x-1/2 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
+    },
+    "timeline_bar": {
+      "description": "The actual task span. Uses subtle borders and solid backgrounds to feel tactile, not flat.",
+      "wrapper": "absolute top-1/2 -translate-y-1/2 h-8 px-1",
+      "inner_bar": "w-full h-full rounded-md border flex items-center px-2.5 shadow-sm transition-transform hover:-translate-y-[1px] hover:shadow-md cursor-pointer",
+      "text": "text-xs font-medium truncate",
+      "overdue_styling": "bg-[repeating-linear-gradient(45deg,theme(colors.red.50),theme(colors.red.50)_10px,theme(colors.white)_10px,theme(colors.white)_20px)] border-red-300 text-red-700"
+    },
+    "edge_cases": {
+      "no_due_date": {
+        "solution": "Do not render a bar. Render a 'TBD Milestone Pill' at the created_date.",
+        "classes": "absolute top-1/2 -translate-y-1/2 h-6 w-16 bg-slate-50 border border-dashed border-slate-400 rounded-full flex items-center justify-center shadow-sm",
+        "text": "text-[10px] font-semibold text-slate-500 uppercase tracking-wide",
+        "trailing_line": "absolute top-1/2 left-full w-8 h-px bg-gradient-to-r from-slate-400 border-dashed to-transparent"
       },
-      {
-        "url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHBvcnRyYWl0fGVufDB8fHx8MTc4MDY3OTU4N3ww&ixlib=rb-4.1.0&q=85",
-        "description": "Female avatar for lead or comments"
+      "far_future_infinite_date": {
+        "solution": "Cap the rendering at a maximum date range (e.g., end of currently loaded quarter). If a bar exceeds this, cut it off and apply a fade mask.",
+        "classes": "rounded-r-none border-r-0 relative overflow-visible",
+        "fade_effect": "after:absolute after:top-0 after:-right-4 after:w-8 after:h-full after:bg-gradient-to-r after:from-[color] after:to-transparent after:opacity-50",
+        "indicator_icon": "absolute top-1/2 -right-3 -translate-y-1/2 text-[color] w-3 h-3"
       }
-    ],
-    "textures": [
-      {
-        "url": "https://images.unsplash.com/photo-1629197520635-16570fbd0bb3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGVtZXJhbGQlMjBncmVlbiUyMHRleHR1cmV8ZW58MHx8fHwxNzgwNjc5NTg3fDA&ixlib=rb-4.1.0&q=85",
-        "description": "Abstract emerald texture for hero banner overlay (use with mix-blend-overlay and 10-15% opacity)"
-      }
+    },
+    "legend": {
+      "classes": "flex items-center gap-4 px-4 py-3 border-t border-slate-200 bg-slate-50 text-xs text-slate-600",
+      "item": "flex items-center gap-1.5",
+      "dot": "w-2 h-2 rounded-full"
+    }
+  },
+  "interactions": {
+    "hover_row": "Highlight both the left panel cell and the timeline grid row simultaneously. Requires shared state or group-hover if structured correctly.",
+    "hover_bar": "Slight upward translation (-translate-y-[1px]), deepen shadow (shadow-md).",
+    "click_row": "Opens a Shadcn Sheet (Side Panel) containing the full request details."
+  },
+  "testing": {
+    "data_testid_rules": [
+      "data-testid='gantt-container'",
+      "data-testid='gantt-row-mr-2026-0021'",
+      "data-testid='gantt-bar-mr-2026-0021'",
+      "data-testid='gantt-tbd-milestone'",
+      "data-testid='gantt-overdue-bar'"
     ]
   },
-  "motion_interactions": {
-    "hover_states": "All buttons and interactive cards must have `-translate-y-[2px]` and `shadow-md` on hover. Use `transition-all duration-200 ease-out`.",
-    "dropzone": "Scale upload icon by 110% on hover. On drag over, pulse background slightly.",
-    "focus_states": "Replace default outline with `focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500` for a soft, premium glow."
-  },
-  "accessibility": {
-    "contrast": "Ensure all text, especially slate-500 or emerald-600, passes APCA/WCAG on white/slate-50 backgrounds.",
-    "aria": "Add `aria-label` to custom dropzones and repeatable field remove buttons.",
-    "testing": "All key elements must include `data-testid` (e.g., `data-testid=\"file-upload-dropzone\"`, `data-testid=\"add-link-btn\"`)."
-  },
   "instructions_to_main_agent": [
-    "Do NOT change the existing brand primary color (emerald-600). Build around it to make it softer and more premium.",
-    "Replace all native file inputs (`<input type='file'>`) with the custom Dropzone recipe provided in `components.file_upload_dropzone`.",
-    "Replace native date picker with Shadcn `<Popover>` + `<Calendar>` combo.",
-    "Replace native `<select>` with Shadcn `<Select>` component.",
-    "For repeatable links, replace the side-by-side input and square '+' button with a vertical list of inputs inside styled rows, and a full-width dashed 'Add Link' button below.",
-    "Apply the bento grid spacing logic for the detail page. Group metadata into neat, distinct cards.",
-    "Ensure `data-testid` attributes are preserved or added to new components."
+    "Implement the Gantt using standard flex/grid layouts. Keep the left panel sticky with `sticky left-0 z-20`.",
+    "For the timeline bars, use absolute positioning `left: [calc]%` and `width: [calc]%` relative to the grid row.",
+    "To solve the infinite timeline bug: Instead of rendering `due_date || infinity`, compute `actual_due_date = due_date || null`. If null, render the `<NoDueDatePill />` component at `created_date`. If `due_date` exceeds the `max_visible_date` of your chart window, cap the `width` percentage to 100% and apply `rounded-r-none` with an arrow icon.",
+    "Ensure Overdue items (due_date < today && status !== final_approved) use the striped background utility provided in `component_specifics.timeline_bar.overdue_styling`.",
+    "Add `data-testid` to all clickable rows and bars for testing."
   ]
 }
