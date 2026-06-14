@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-06-14 — Approval tasks auto-close on approve/reject (+ self-heal stale ones) ✅
+- Confirmed the proposal review endpoint (`PUT /leads/{id}/proposal/review`) already closes the linked approval task via `complete_approval_task` on approve/reject/changes-requested — so deciding a proposal closes the action item (no manual close needed, same as leave requests).
+- **Fix**: `GET /approvals/my-pending` (powers the Home "Pending Approvals" widget) now reconciles **proposal** tasks against the proposal's status (it previously only reconciled expense/travel/budget/leave). Any approval task whose underlying request is already decided is now **auto-closed** (`complete_approval_task`) and dropped from the widget — self-healing for stale/lingering items created before the close logic existed.
+- Verified via curl: (A) a stale pending proposal task with an already-approved proposal auto-closes on next widget load and disappears; (B) approving a live proposal closes its task. Backend-only; no frontend change.
+
+
 ## 2026-06-14 — "Log to lead timeline" for emails ✅
 - On a Lead's embedded email panel (`ContactEmails`), each email now has a **"Log to timeline"** button that saves the email's content (subject, sender, date, body text) as an `email` activity on the lead's Activity Timeline. Button shows a "Logged ✓" state after saving and refreshes the timeline.
 - Uses the existing `POST /api/activities` (no backend change). `ContactEmails` now accepts `leadId` + `onLogged`; wired from `LeadDetail.js`. Body HTML is converted to text and truncated (~2000 chars).

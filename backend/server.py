@@ -9690,7 +9690,37 @@ async def get_my_pending_approvals(current_user: dict = Depends(get_current_user
     for t in tasks:
         ref_type = t.get('approval_reference_type')
         ref_id = t.get('approval_reference_id')
-        item = {
+        amount = None
+        entity_name = None
+        decided = False
+
+        if ref_type == 'proposal':
+            # Proposals live in lead_proposals keyed by lead_id
+            prop = await tdb.lead_proposals.find_one({'lead_id': ref_id}, {'_id': 0, 'status': 1})
+            if not prop or prop.get('status') not in ('pending_review', 'revised'):
+                decided = True
+        else:
+            coll = coll_for_ref.get(ref_type)
+            if coll and ref_id:
+                req = await getattr(tdb, coll).find_one({'id': ref_id}, {'_id': 0})
+                if req:
+                    if req.get('status') not in ('pending_approval', 'pending'):
+                        decided = True
+                    else:
+                        amount = req.get('amount') or req.get('total_amount') or req.get('tentative_budget')
+                        entity_name = req.get('entity_name')
+
+        if decided:
+            # Self-heal: the underlying request was already approved/rejected, so
+            # close the lingering approval task instead of showing it forever.
+            await complete_approval_task(
+                approval_type=t.get('approval_type'),
+                reference_id=ref_id,
+                status='completed',
+            )
+            continue
+
+        out.append({
             'task_id': t.get('id'),
             'approval_type': t.get('approval_type'),
             'title': t.get('title'),
@@ -9702,19 +9732,9 @@ async def get_my_pending_approvals(current_user: dict = Depends(get_current_user
             'reference_id': ref_id,
             'lead_id': t.get('lead_id'),
             'account_id': t.get('account_id'),
-            'amount': None,
-            'entity_name': None,
-        }
-        coll = coll_for_ref.get(ref_type)
-        if coll and ref_id:
-            req = await getattr(tdb, coll).find_one({'id': ref_id}, {'_id': 0})
-            if req:
-                # Skip requests that have already been decided
-                if req.get('status') not in ('pending_approval', 'pending'):
-                    continue
-                item['amount'] = req.get('amount') or req.get('total_amount') or req.get('tentative_budget')
-                item['entity_name'] = req.get('entity_name')
-        out.append(item)
+            'amount': amount,
+            'entity_name': entity_name,
+        })
     return out
 
 
