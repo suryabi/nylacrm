@@ -48,70 +48,93 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Contact Card Component
-const ContactCard = ({ contact, onEdit, onDelete, onView, onShare }) => (
-  <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onView(contact)}>
-    <CardContent className="p-4">
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div 
-            className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg"
-            style={{ backgroundColor: contact.category_color || '#6366f1' }}
-          >
-            {contact.name?.charAt(0)?.toUpperCase() || '?'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold truncate">{contact.name}</h3>
-            {contact.designation && (
-              <p className="text-sm text-muted-foreground truncate">{contact.designation}</p>
-            )}
-            {contact.company && (
-              <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
-                <Building2 className="h-3 w-3" /> {contact.company}
-              </p>
-            )}
-          </div>
-        </div>
-        <Badge 
-          variant="outline" 
-          className="text-xs shrink-0"
-          style={{ borderColor: contact.category_color, color: contact.category_color }}
+// Contact Row (table) Component
+const ContactRow = ({ contact, onEdit, onDelete, onView, onShare }) => (
+  <TableRow
+    className="cursor-pointer hover:bg-slate-50/80"
+    onClick={() => onView(contact)}
+    data-testid={`contact-row-${contact.id}`}
+  >
+    {/* Name + avatar + designation */}
+    <TableCell className="min-w-[200px]">
+      <div className="flex items-center gap-3">
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-sm shrink-0"
+          style={{ backgroundColor: contact.category_color || '#6366f1' }}
         >
-          {contact.category_name}
-        </Badge>
+          {contact.name?.charAt(0)?.toUpperCase() || '?'}
+        </div>
+        <div className="min-w-0">
+          <p className="font-medium text-slate-900 truncate" title={contact.name}>{contact.name}</p>
+          {contact.designation && (
+            <p className="text-xs text-muted-foreground truncate" title={contact.designation}>{contact.designation}</p>
+          )}
+        </div>
       </div>
-      
-      <div className="mt-3 space-y-1">
-        {contact.phone && (
-          <p className="text-sm flex items-center gap-2 text-muted-foreground">
-            <Phone className="h-3 w-3" /> {contact.phone}
-          </p>
-        )}
-        {contact.email && (
-          <p className="text-sm flex items-center gap-2 text-muted-foreground truncate">
-            <Mail className="h-3 w-3" /> {contact.email}
-          </p>
-        )}
-        {contact.city && (
-          <p className="text-sm flex items-center gap-2 text-muted-foreground">
-            <MapPin className="h-3 w-3" /> {contact.city}
-          </p>
-        )}
-      </div>
+    </TableCell>
 
-      <div className="mt-3 pt-3 border-t flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-        <Button variant="ghost" size="sm" className="text-emerald-600" onClick={() => onShare(contact)} data-testid={`contact-share-${contact.id}`} title="Share contact">
+    {/* Company */}
+    <TableCell className="text-sm text-slate-600">
+      {contact.company ? (
+        <span className="inline-flex items-center gap-1.5 max-w-[180px] truncate" title={contact.company}>
+          <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{contact.company}</span>
+        </span>
+      ) : <span className="text-muted-foreground">—</span>}
+    </TableCell>
+
+    {/* Category */}
+    <TableCell>
+      <Badge
+        variant="outline"
+        className="text-xs whitespace-nowrap"
+        style={{ borderColor: contact.category_color, color: contact.category_color }}
+      >
+        {contact.category_name}
+      </Badge>
+    </TableCell>
+
+    {/* Phone */}
+    <TableCell className="text-sm text-slate-600 whitespace-nowrap">
+      {contact.phone ? (
+        <a href={`tel:${contact.phone}`} className="inline-flex items-center gap-1.5 hover:text-primary" onClick={(e) => e.stopPropagation()}>
+          <Phone className="h-3.5 w-3.5 text-slate-400" /> {contact.phone}
+        </a>
+      ) : <span className="text-muted-foreground">—</span>}
+    </TableCell>
+
+    {/* Email */}
+    <TableCell className="text-sm text-slate-600">
+      {contact.email ? (
+        <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1.5 hover:text-primary max-w-[200px] truncate" title={contact.email} onClick={(e) => e.stopPropagation()}>
+          <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{contact.email}</span>
+        </a>
+      ) : <span className="text-muted-foreground">—</span>}
+    </TableCell>
+
+    {/* City */}
+    <TableCell className="text-sm text-slate-600 whitespace-nowrap">
+      {contact.city ? (
+        <span className="inline-flex items-center gap-1.5">
+          <MapPin className="h-3.5 w-3.5 text-slate-400" /> {contact.city}
+        </span>
+      ) : <span className="text-muted-foreground">—</span>}
+    </TableCell>
+
+    {/* Actions */}
+    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+      <div className="flex justify-end gap-0.5">
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => onShare(contact)} data-testid={`contact-share-${contact.id}`} title="Share contact">
           <Share2 className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => onEdit(contact)}>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(contact)} data-testid={`contact-edit-${contact.id}`} title="Edit">
           <Pencil className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => onDelete(contact)}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => onDelete(contact)} data-testid={`contact-delete-${contact.id}`} title="Delete">
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
-    </CardContent>
-  </Card>
+    </TableCell>
+  </TableRow>
 );
 
 // Image Upload Component with Preview
@@ -688,18 +711,35 @@ export default function ContactsList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {contacts.map((contact) => (
-            <ContactCard
-              key={contact.id}
-              contact={contact}
-              onEdit={openEditSheet}
-              onDelete={handleDelete}
-              onView={setViewContact}
-              onShare={openShare}
-            />
-          ))}
-        </div>
+        <Card>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/60 hover:bg-slate-50/60">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>City</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {contacts.map((contact) => (
+                  <ContactRow
+                    key={contact.id}
+                    contact={contact}
+                    onEdit={openEditSheet}
+                    onDelete={handleDelete}
+                    onView={setViewContact}
+                    onShare={openShare}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
       )}
 
       {/* Pagination */}
