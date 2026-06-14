@@ -120,3 +120,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - **Lead/Account contacts** (`routes/entity_contacts.py`, `components/EntityContactsSection.jsx`): added a **Category** dropdown to the contact add/edit form with options Owner, Partner, Purchase, Stock, Delivery, Accounts, Management, Third Party. New `category` field persisted on the contact record; shown as a new "Category" column in the contacts table.
 - **Distributor contacts** (`routes/distributor_contacts.py`, `components/distributor/ContactsSection.jsx`): removed the Department dropdown that had been added to the wrong form in the prior session; Mobile + Email now share a row again. `department` field removed from ContactCreate/ContactUpdate/doc.
 - **Testing:** Backend verified via curl (create category=Purchase → update→Management → list verify → delete). Frontend dialog + Category column verified via screenshot.
+
+## 2026-06-14 — Design Requests: Gantt timeline view + Submitted highlighting ✅
+- **Gantt view** (`pages/MarketingRequests.js`, new `RequestGantt` component): List/Gantt toggle (URL-persisted `?view=gantt`). Horizontal timeline with month bands + day axis, sticky left request-label column, bars spanning created_at → requested_due_date colored by current state, a "Today" line, overdue bars ringed red, dashed bars for no-due-date, and a legend. Gantt fetches up to 200 rows (vs 20 for list).
+- **Submitted highlighting** (earlier same day): new/initial-state requests get a ⭐ star prefix + amber row highlight; other rows use zebra striping. Initial-state detection driven by state machine `is_initial`.
+- Lead/Account contact Category dropdown now also includes "Food & Beverage (F&B)".
+- Frontend-only; verified via screenshots.

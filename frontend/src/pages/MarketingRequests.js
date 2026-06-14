@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
-import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
+import { format, parseISO, isValid, isPast, isToday, differenceInCalendarDays, startOfDay, addDays, eachDayOfInterval, isSameDay, isWeekend } from 'date-fns';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -16,7 +16,7 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch, Download, Hourglass,
-  ChevronsUpDown, ArrowUp, ArrowDown, Star,
+  ChevronsUpDown, ArrowUp, ArrowDown, Star, GanttChart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -287,6 +287,169 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
   );
 }
 
+// ── Gantt timeline view ───────────────────────────────────────────────
+function RequestGantt({ rows, navigate }) {
+  const DAY_W = 32;     // px per day
+  const LABEL_W = 280;  // left label column width
+  const ROW_H = 46;
+
+  const today = startOfDay(new Date());
+
+  const items = (rows || [])
+    .map((r) => {
+      const start = r.created_at ? parseISO(r.created_at) : null;
+      const rawEnd = r.requested_due_date ? parseISO(r.requested_due_date) : null;
+      return {
+        ...r,
+        _start: start && isValid(start) ? startOfDay(start) : null,
+        _end: rawEnd && isValid(rawEnd) ? startOfDay(rawEnd) : null,
+      };
+    })
+    .filter((i) => i._start);
+
+  if (items.length === 0) {
+    return (
+      <Card className="border border-slate-100 rounded-xl">
+        <CardContent className="p-12 text-center text-sm text-muted-foreground">
+          No requests to plot on the timeline.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Timeline bounds (include today, with padding)
+  let minD = items.reduce((m, i) => (i._start < m ? i._start : m), items[0]._start);
+  let maxD = items.reduce((m, i) => {
+    const e = i._end || i._start;
+    return e > m ? e : m;
+  }, items[0]._start);
+  if (today < minD) minD = today;
+  if (today > maxD) maxD = today;
+  minD = addDays(minD, -2);
+  maxD = addDays(maxD, 3);
+
+  const days = eachDayOfInterval({ start: minD, end: maxD });
+  const totalW = days.length * DAY_W;
+  const xFor = (d) => differenceInCalendarDays(d, minD) * DAY_W;
+  const todayCenter = xFor(today) + DAY_W / 2;
+
+  // Month bands
+  const monthGroups = [];
+  days.forEach((d) => {
+    const key = format(d, 'MMM yyyy');
+    const last = monthGroups[monthGroups.length - 1];
+    if (last && last.key === key) last.count += 1;
+    else monthGroups.push({ key, count: 1 });
+  });
+
+  return (
+    <Card className="border border-slate-100 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden" data-testid="mr-gantt">
+      <div className="overflow-x-auto">
+        <div style={{ minWidth: LABEL_W + totalW }}>
+          {/* Header */}
+          <div className="flex bg-slate-50/70 border-b border-slate-100 sticky top-0 z-20">
+            <div
+              style={{ width: LABEL_W }}
+              className="shrink-0 sticky left-0 z-30 bg-slate-50/70 border-r border-slate-100 px-3 flex items-end pb-1.5 text-xs font-semibold text-slate-500"
+            >
+              Request
+            </div>
+            <div>
+              <div className="flex">
+                {monthGroups.map((g, i) => (
+                  <div
+                    key={i}
+                    style={{ width: g.count * DAY_W }}
+                    className="text-[11px] font-semibold text-slate-600 px-2 py-1 border-r border-slate-100 truncate"
+                  >
+                    {g.key}
+                  </div>
+                ))}
+              </div>
+              <div className="flex border-t border-slate-100">
+                {days.map((d, i) => {
+                  const wknd = isWeekend(d);
+                  const tdy = isSameDay(d, today);
+                  return (
+                    <div
+                      key={i}
+                      style={{ width: DAY_W }}
+                      className={`text-center py-0.5 text-[9px] leading-tight border-r border-slate-50 ${wknd ? 'bg-slate-100/70' : ''} ${tdy ? 'bg-emerald-100 text-emerald-700 font-bold' : 'text-slate-400'}`}
+                    >
+                      <div>{format(d, 'EEEEE')}</div>
+                      <div className="text-slate-600">{format(d, 'd')}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="relative">
+            {/* Today vertical line */}
+            <div
+              className="absolute top-0 bottom-0 w-px bg-emerald-500/70 z-[5] pointer-events-none"
+              style={{ left: LABEL_W + todayCenter }}
+            />
+            {items.map((i) => {
+              const startX = xFor(i._start);
+              const endDay = i._end && i._end >= i._start ? i._end : i._start;
+              const span = differenceInCalendarDays(endDay, i._start) + 1;
+              const width = Math.max(span * DAY_W - 4, DAY_W * 0.6);
+              const color = i.current_state_color || '#94a3b8';
+              const completed = i.current_state_key === 'production_completed' || i.current_state_key === 'final_approved';
+              const overdue = i._end && i._end < today && !completed;
+              const noDue = !i._end;
+              return (
+                <div
+                  key={i.id}
+                  className="flex border-b border-slate-50 hover:bg-slate-50/60 group transition-colors"
+                  style={{ height: ROW_H }}
+                  data-testid={`mr-gantt-row-${i.id}`}
+                >
+                  <div
+                    style={{ width: LABEL_W }}
+                    className="shrink-0 sticky left-0 z-10 bg-white group-hover:bg-slate-50/60 border-r border-slate-100 px-3 flex flex-col justify-center cursor-pointer transition-colors"
+                    onClick={() => navigate(`/marketing-requests/${i.id}`)}
+                  >
+                    <span className="text-xs font-medium text-primary truncate" title={i.request_type_name}>
+                      {i.request_type_name || 'Untyped Request'}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono truncate">{i.request_number}</span>
+                  </div>
+                  <div className="relative" style={{ width: totalW }}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/marketing-requests/${i.id}`)}
+                      title={`${i.current_state_label || ''} · ${formatDate(i.created_at, 'MMM d')} → ${i._end ? formatDate(i.requested_due_date, 'MMM d') : 'no due date'}`}
+                      className={`absolute top-1/2 -translate-y-1/2 h-6 rounded-md border flex items-center px-2 overflow-hidden hover:shadow-md transition-shadow ${overdue ? 'ring-2 ring-red-400' : ''} ${noDue ? 'border-dashed' : ''}`}
+                      style={{ left: startX + 2, width, background: `${color}26`, borderColor: color }}
+                      data-testid={`mr-gantt-bar-${i.id}`}
+                    >
+                      <span className="text-[10px] font-medium truncate" style={{ color }}>
+                        {i.current_state_label || i.current_state_key}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-4 px-4 py-2.5 border-t border-slate-100 bg-slate-50/40 text-[11px] text-slate-500">
+        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-px bg-emerald-500" /> Today</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded ring-2 ring-red-400 bg-red-50" /> Overdue</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-dashed border-slate-400" /> No due date</span>
+        <span className="ml-auto">Bar color = current state · {items.length} shown</span>
+      </div>
+    </Card>
+  );
+}
+
+
 export default function MarketingRequests() {
   const navigate = useNavigate();
   const { user } = useAuth(); // eslint-disable-line no-unused-vars
@@ -299,6 +462,7 @@ export default function MarketingRequests() {
   const [deptId, setDeptId] = useState(sp.get('dept') || '');
   const [requestedBy, setRequestedBy] = useState(sp.get('by') || '');
   const [sort, setSort] = useState(sp.get('sort') || '-created_at');
+  const [view, setView] = useState(sp.get('view') === 'gantt' ? 'gantt' : 'list');
   const [page, setPage] = useState(parseInt(sp.get('p') || '1'));
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
@@ -311,7 +475,7 @@ export default function MarketingRequests() {
   const fetchList = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ queue, page: String(page), limit: '20' });
+      const params = new URLSearchParams({ queue, page: String(page), limit: view === 'gantt' ? '200' : '20' });
       if (search) params.set('search', search);
       if (stateKey) params.set('state_key', stateKey);
       if (requestTypeId) params.set('request_type_id', requestTypeId);
@@ -323,7 +487,7 @@ export default function MarketingRequests() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load requests');
     } finally { setLoading(false); }
-  }, [queue, page, search, stateKey, requestTypeId, deptId, requestedBy, sort]);
+  }, [queue, page, search, stateKey, requestTypeId, deptId, requestedBy, sort, view]);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -364,9 +528,10 @@ export default function MarketingRequests() {
     if (deptId) next.set('dept', deptId);
     if (requestedBy) next.set('by', requestedBy);
     if (sort && sort !== '-created_at') next.set('sort', sort);
+    if (view === 'gantt') next.set('view', 'gantt');
     if (page > 1) next.set('p', String(page));
     setSp(next, { replace: true });
-  }, [queue, stateKey, search, requestTypeId, deptId, requestedBy, page, sort]); // eslint-disable-line
+  }, [queue, stateKey, search, requestTypeId, deptId, requestedBy, page, sort, view]); // eslint-disable-line
 
   const switchQueue = (next) => { setQueue(next); setPage(1); };
   const switchState = (key) => { setStateKey(prev => prev === key ? '' : key); setPage(1); };
@@ -482,6 +647,25 @@ export default function MarketingRequests() {
                     <X className="h-3.5 w-3.5 mr-1" /> Clear
                   </Button>
                 )}
+                {/* List / Gantt view toggle */}
+                <div className="ml-auto inline-flex rounded-lg border border-slate-200 bg-white p-0.5" data-testid="mr-view-toggle">
+                  <button
+                    type="button"
+                    onClick={() => setView('list')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${view === 'list' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                    data-testid="mr-view-list"
+                  >
+                    <LayoutList className="h-3.5 w-3.5" /> List
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView('gantt')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${view === 'gantt' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                    data-testid="mr-view-gantt"
+                  >
+                    <GanttChart className="h-3.5 w-3.5" /> Gantt
+                  </button>
+                </div>
               </div>
             )}
 
@@ -532,6 +716,8 @@ export default function MarketingRequests() {
 
               {loading ? (
                 <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
+              ) : view === 'gantt' ? (
+                <RequestGantt rows={items} navigate={navigate} />
               ) : (
                 <>
                   <RequestTable rows={items} navigate={navigate} sort={sort} onSort={onSort} onSortChange={onSortChange} states={states} />
