@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Loader2, Send, X, Paperclip, FolderOpen, FileText } from 'lucide-react';
@@ -38,6 +38,21 @@ export default function InlineComposer({
   const [crmDocs, setCrmDocs] = useState([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sending, setSending] = useState(false);
+
+  // Auto-append the user's saved signature (if enabled) to a fresh composer.
+  useEffect(() => {
+    let active = true;
+    axios.get(`${API_URL}/gmail/signature`, { headers: authHeaders() })
+      .then((res) => {
+        const sig = res.data;
+        if (active && sig?.enabled && sig?.html && isEmptyHtml(bodyHtml)) {
+          setBodyHtml(`<p><br></p><p><br></p>${sig.html}`);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const send = async () => {
     if (toEditable && !to.trim()) { toast.error('Recipient is required'); return; }

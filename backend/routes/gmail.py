@@ -533,6 +533,36 @@ async def download_attachment(
     )
 
 
+class SignatureIn(BaseModel):
+    html: Optional[str] = ""
+    enabled: bool = True
+
+
+@router.get("/gmail/signature")
+async def get_signature(current_user: dict = Depends(get_current_user)):
+    """Per-user email signature (HTML) used to auto-append to outgoing mail."""
+    doc = await db.email_signatures.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    if not doc:
+        return {"html": "", "enabled": False}
+    return {"html": doc.get("html", ""), "enabled": bool(doc.get("enabled", False))}
+
+
+@router.put("/gmail/signature")
+async def save_signature(payload: SignatureIn, current_user: dict = Depends(get_current_user)):
+    await db.email_signatures.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {
+            "user_id": current_user["id"],
+            "tenant_id": get_current_tenant_id(),
+            "html": payload.html or "",
+            "enabled": bool(payload.enabled),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+    return {"ok": True, "enabled": bool(payload.enabled)}
+
+
 class SendEmailRequest(BaseModel):
     to: str
     subject: Optional[str] = None
