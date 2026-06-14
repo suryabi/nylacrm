@@ -180,11 +180,11 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-50/50">
+                <TableRow className="border-b-2 border-slate-200 bg-slate-100/70 hover:bg-slate-100/70">
                   {COLUMNS.map(({ label, field }) => {
                     const isActive = activeField === field;
                     return (
-                      <TableHead key={field} className="font-semibold text-xs sm:text-sm text-muted-foreground">
+                      <TableHead key={field} className="font-semibold text-[11px] uppercase tracking-wide text-slate-500 py-3">
                         <button
                           type="button"
                           onClick={() => onSort(field)}
@@ -211,11 +211,11 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                   const leadLabel = req.lead_company || req.lead_name;
                   const isNew = isNewReq(req);
                   const rowClass = isNew
-                    ? 'bg-amber-50/60 hover:bg-amber-50 border-l-2 border-l-amber-400'
-                    : (idx % 2 === 1 ? 'bg-slate-50/40 hover:bg-slate-100/60' : 'bg-white hover:bg-slate-50');
+                    ? 'bg-amber-50 hover:bg-amber-100/70 border-l-4 border-l-amber-400'
+                    : (idx % 2 === 1 ? 'bg-slate-50/70 hover:bg-emerald-50/50' : 'bg-white hover:bg-emerald-50/50');
                   return (
-                    <TableRow key={req.id} className={`cursor-pointer ${rowClass} border-b border-slate-50 dark:border-slate-800/50 transition-colors`} onClick={() => navigate(`/marketing-requests/${req.id}`)} data-testid={`mr-row-${req.id}`}>
-                      <TableCell className="py-2 sm:py-4" style={{ maxWidth: 440 }}>
+                    <TableRow key={req.id} className={`cursor-pointer ${rowClass} border-b border-slate-200 dark:border-slate-800/50 transition-colors`} onClick={() => navigate(`/marketing-requests/${req.id}`)} data-testid={`mr-row-${req.id}`}>
+                      <TableCell className="py-4 align-top" style={{ maxWidth: 440 }}>
                         <div className="flex items-center gap-2 flex-wrap">
                           {isNew && <Star className="h-4 w-4 text-amber-500 fill-amber-400 shrink-0" data-testid={`mr-new-star-${req.id}`} title="New — not acted on yet" />}
                           <span className="font-medium text-primary truncate text-xs sm:text-sm" style={{ maxWidth: 320 }} title={req.request_type_name}>
@@ -237,7 +237,7 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="py-2 sm:py-4" data-testid={`mr-row-lead-${req.id}`}>
+                      <TableCell className="py-4 align-top" data-testid={`mr-row-lead-${req.id}`}>
                         {leadLabel ? (
                           <div className="flex items-center gap-1.5 max-w-[200px]" title={leadLabel}>
                             <Users className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
@@ -247,12 +247,12 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                           <span className="text-xs text-muted-foreground/40">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="py-2 sm:py-4">
+                      <TableCell className="py-4 align-top">
                         <Badge variant="outline" style={stateBadgeStyle(req.current_state_color)} className="border text-xs">
                           {req.current_state_label || req.current_state_key || 'unknown'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="py-2 sm:py-4">
+                      <TableCell className="py-4 align-top">
                         <span className="text-xs sm:text-sm text-slate-700">{assignedTo}</span>
                         {req?.production?.assigned_delivery_department_name && (
                           <div className="text-[10px] text-orange-700 mt-1 flex items-center gap-1">
@@ -260,7 +260,7 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="py-2 sm:py-4">
+                      <TableCell className="py-4 align-top">
                         {req.requested_due_date ? (
                           <div className={`flex items-center gap-1.5 text-xs sm:text-sm ${overdue ? 'text-red-600' : 'text-slate-600'}`}>
                             <Calendar className="h-3.5 w-3.5" /> {formatDate(req.requested_due_date, 'MMM d, yyyy')}
@@ -268,7 +268,7 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                           </div>
                         ) : <span className="text-slate-400">—</span>}
                       </TableCell>
-                      <TableCell className="py-2 sm:py-4">
+                      <TableCell className="py-4 align-top">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-emerald-100 border-2 border-white flex items-center justify-center text-[10px] font-medium text-emerald-700" title={req.created_by_name}>
                             {getInitials(req.created_by_name)}
