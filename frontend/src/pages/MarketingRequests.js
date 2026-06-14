@@ -16,7 +16,7 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch, Download, Hourglass,
-  ChevronsUpDown, ArrowUp, ArrowDown,
+  ChevronsUpDown, ArrowUp, ArrowDown, Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -78,7 +78,13 @@ function StateChip({ state, count, isActive, onClick }) {
   );
 }
 
-function RequestTable({ rows, navigate, sort, onSort, onSortChange }) {
+function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
+  // "New" = request sitting in an initial state (submitted) — not acted/updated yet.
+  const initialKeys = new Set(
+    (states || []).filter((s) => s.is_initial).map((s) => s.key)
+  );
+  if (initialKeys.size === 0) initialKeys.add('submitted');
+  const isNewReq = (req) => initialKeys.has(req.current_state_key);
   const COLUMNS = [
     { label: 'Request', field: 'request_number' },
     { label: 'Lead', field: 'lead_company' },
@@ -116,20 +122,24 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange }) {
         </div>
         {rows.length === 0 ? (
           <Card className="border border-slate-100 rounded-xl"><CardContent className="p-10 text-center text-sm text-muted-foreground">No requests in this view.</CardContent></Card>
-        ) : rows.map((req) => {
+        ) : rows.map((req, idx) => {
           const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
           const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
           const leadLabel = req.lead_company || req.lead_name;
+          const isNew = isNewReq(req);
           return (
             <Card
               key={req.id}
-              className="border border-slate-100 rounded-xl shadow-sm active:scale-[0.99] transition-transform cursor-pointer"
+              className={`rounded-xl shadow-sm active:scale-[0.99] transition-transform cursor-pointer ${isNew ? 'border-l-4 border-l-amber-400 border-y border-r border-amber-100 bg-amber-50/40' : 'border border-slate-100'}`}
               onClick={() => navigate(`/marketing-requests/${req.id}`)}
               data-testid={`mr-card-${req.id}`}
             >
               <CardContent className="p-4 space-y-2.5">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-semibold text-slate-900 text-sm leading-snug">{req.request_type_name || 'Untyped Request'}</span>
+                  <span className="font-semibold text-slate-900 text-sm leading-snug flex items-center gap-1.5">
+                    {isNew && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-400 shrink-0" data-testid={`mr-new-star-${req.id}`} />}
+                    {req.request_type_name || 'Untyped Request'}
+                  </span>
                   <Badge variant="outline" style={stateBadgeStyle(req.current_state_color)} className="border text-[10px] shrink-0">
                     {req.current_state_label || req.current_state_key || 'unknown'}
                   </Badge>
@@ -192,16 +202,21 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange }) {
               <TableBody>
                 {rows.length === 0 ? (
                   <TableRow><TableCell colSpan={6} className="p-12 text-center text-sm text-muted-foreground">No requests in this view.</TableCell></TableRow>
-                ) : rows.map((req) => {
+                ) : rows.map((req, idx) => {
                   const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
                   const assignedTo = req.assigned_user_name
                     || req.assigned_department_name
                     || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
                   const leadLabel = req.lead_company || req.lead_name;
+                  const isNew = isNewReq(req);
+                  const rowClass = isNew
+                    ? 'bg-amber-50/60 hover:bg-amber-50 border-l-2 border-l-amber-400'
+                    : (idx % 2 === 1 ? 'bg-slate-50/40 hover:bg-slate-100/60' : 'bg-white hover:bg-slate-50');
                   return (
-                    <TableRow key={req.id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 border-b border-slate-50 dark:border-slate-800/50 transition-colors" onClick={() => navigate(`/marketing-requests/${req.id}`)} data-testid={`mr-row-${req.id}`}>
+                    <TableRow key={req.id} className={`cursor-pointer ${rowClass} border-b border-slate-50 dark:border-slate-800/50 transition-colors`} onClick={() => navigate(`/marketing-requests/${req.id}`)} data-testid={`mr-row-${req.id}`}>
                       <TableCell className="py-2 sm:py-4" style={{ maxWidth: 440 }}>
                         <div className="flex items-center gap-2 flex-wrap">
+                          {isNew && <Star className="h-4 w-4 text-amber-500 fill-amber-400 shrink-0" data-testid={`mr-new-star-${req.id}`} title="New — not acted on yet" />}
                           <span className="font-medium text-primary truncate text-xs sm:text-sm" style={{ maxWidth: 320 }} title={req.request_type_name}>
                             {req.request_type_name || 'Untyped Request'}
                           </span>
@@ -519,7 +534,7 @@ export default function MarketingRequests() {
                 <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>
               ) : (
                 <>
-                  <RequestTable rows={items} navigate={navigate} sort={sort} onSort={onSort} onSortChange={onSortChange} />
+                  <RequestTable rows={items} navigate={navigate} sort={sort} onSort={onSort} onSortChange={onSortChange} states={states} />
                   {data.pages > 1 && (
                     <div className="flex items-center justify-between text-xs sm:text-sm text-muted-foreground px-1">
                       <span>Page {data.page || page} of {data.pages} &middot; {data.total} total</span>
