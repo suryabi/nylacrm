@@ -154,3 +154,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Frontend: "Signature" button on Mail header opens SignatureSettingsDialog (enable toggle + rich editor). New SignatureEditor.jsx has an "Insert company logo" button that embeds the tenant branding logo_url (disabled when no logo configured). Logo imgs normalized to max-width:160px for inbox rendering.
 - Auto-append: InlineComposer fetches the signature on mount and appends it (with blank lines above) to new emails AND replies when enabled; user can edit/remove before sending. RichEmailEditor formats now allow 'image' so the logo renders in the composer.
 - Verified: backend GET/PUT, dialog UI, and auto-append into composer (preview tenant has no logo so the insert button is disabled there; it works in production where a logo is set).
+
+## 2026-06-14 — Email signature pivoted to ADMIN-controlled template ✅
+- Per the user: signature DESIGN is admin/CEO-only; users can't edit. Switched from per-user to ONE tenant-wide template with placeholders ({{name}}, {{title}}, {{phone}}, {{email}}, {{department}}) auto-filled from each sender's profile.
+- Backend (routes/gmail.py): db.email_signature_template (per tenant). Admin/CEO-only GET/PUT /api/gmail/signature/template (role in {CEO, System Admin, Admin} else 403). GET /api/gmail/signature now returns the template RESOLVED for the current sender. Added `import re` + `_resolve_signature()`.
+- Frontend: removed the per-user "Signature" button/dialog from Mail. New admin section EmailSignatureSettings.jsx added as a "Signature" tab in Tenant Settings (placeholder-insert buttons, logo insert, enable toggle, live preview). SignatureEditor extended with placeholder buttons. Deleted SignatureSettingsDialog.jsx.
+- InlineComposer still auto-appends via GET /gmail/signature (now per-sender resolved). Verified: template save/load, resolution for 2 users, non-admin 403, admin UI + live preview.

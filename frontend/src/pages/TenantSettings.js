@@ -17,11 +17,12 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles, BarChart3
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles, BarChart3, PenLine
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
 import InvoiceRelinkTool from '../components/InvoiceRelinkTool';
+import EmailSignatureSettings from '../components/gmail/EmailSignatureSettings';
 import OutstandingBackfillTool from '../components/OutstandingBackfillTool';
 import SkuAliasTool from '../components/SkuAliasTool';
 
@@ -719,7 +720,7 @@ export default function TenantSettings() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7 lg:w-[840px]">
+        <TabsList className="grid w-full grid-cols-8 lg:w-[960px]">
           <TabsTrigger value="company" className="flex items-center gap-2" data-testid="tab-company">
             <Building2 className="h-4 w-4" />
             Company
@@ -743,6 +744,10 @@ export default function TenantSettings() {
           <TabsTrigger value="returns" className="flex items-center gap-2" data-testid="tab-returns">
             <RotateCcw className="h-4 w-4" />
             Returns
+          </TabsTrigger>
+          <TabsTrigger value="signature" className="flex items-center gap-2" data-testid="tab-signature">
+            <PenLine className="h-4 w-4" />
+            Signature
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-2" data-testid="tab-settings">
             <Settings className="h-4 w-4" />
@@ -1753,6 +1758,11 @@ export default function TenantSettings() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* Email Signature Tab */}
+        <TabsContent value="signature" className="space-y-6">
+          <EmailSignatureSettings />
         </TabsContent>
 
         {/* Settings Tab */}

@@ -3,14 +3,13 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   Mail as MailIcon, Loader2, RefreshCw, Search, X, Plug,
-  ArrowLeft, Paperclip, Reply, PenSquare, AlertCircle, Inbox, ShieldCheck, Download, PenLine,
+  ArrowLeft, Paperclip, Reply, PenSquare, AlertCircle, Inbox, ShieldCheck, Download,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { downloadAttachment, humanSize } from '../components/gmail/gmailUtils';
 import InlineComposer from '../components/gmail/InlineComposer';
-import SignatureSettingsDialog from '../components/gmail/SignatureSettingsDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -66,7 +65,6 @@ export default function Mail() {
 
   // composer: null | { mode:'compose'|'reply', to, subject, replyToMessageId, threadId }
   const [composer, setComposer] = useState(null);
-  const [sigOpen, setSigOpen] = useState(false);
   const searchRef = useRef(null);
 
   const fetchStatus = useCallback(async () => {
@@ -247,13 +245,10 @@ export default function Mail() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => fetchMessages(activeQuery)} data-testid="mail-refresh-btn"><RefreshCw className="h-4 w-4" /></Button>
-          <Button variant="outline" size="sm" onClick={() => setSigOpen(true)} data-testid="mail-signature-btn"><PenLine className="h-4 w-4 mr-1.5" /> Signature</Button>
           <Button size="sm" className="bg-rose-600 hover:bg-rose-700 text-white" onClick={startCompose} data-testid="mail-compose-btn"><PenSquare className="h-4 w-4 mr-1.5" /> Compose</Button>
           <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={disconnect} data-testid="mail-disconnect-btn">Disconnect</Button>
         </div>
       </div>
-
-      <SignatureSettingsDialog open={sigOpen} onOpenChange={setSigOpen} />
 
       {/* Search */}
       <form onSubmit={runSearch} className="relative mb-4 max-w-xl" data-testid="mail-search-form">

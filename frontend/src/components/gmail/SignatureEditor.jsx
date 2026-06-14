@@ -21,27 +21,53 @@ const FORMATS = ['bold', 'italic', 'underline', 'strike', 'color', 'list', 'link
  * logo" action that embeds the tenant logo (hosted URL) so it renders in
  * recipients' inboxes.
  */
-export default function SignatureEditor({ value, onChange, logoUrl }) {
+export default function SignatureEditor({ value, onChange, logoUrl, placeholders = [] }) {
   const quillRef = useRef(null);
+
+  const editorAt = () => {
+    const editor = quillRef.current?.getEditor?.();
+    if (!editor) return null;
+    const range = editor.getSelection(true);
+    return { editor, index: range ? range.index : editor.getLength() };
+  };
 
   const insertLogo = () => {
     if (!logoUrl) return;
-    const editor = quillRef.current?.getEditor?.();
-    if (!editor) return;
-    const range = editor.getSelection(true);
-    const index = range ? range.index : editor.getLength();
-    editor.insertEmbed(index, 'image', logoUrl, 'user');
-    editor.setSelection(index + 1, 0);
+    const ctx = editorAt();
+    if (!ctx) return;
+    ctx.editor.insertEmbed(ctx.index, 'image', logoUrl, 'user');
+    ctx.editor.setSelection(ctx.index + 1, 0);
+  };
+
+  const insertPlaceholder = (key) => {
+    const ctx = editorAt();
+    if (!ctx) return;
+    const token = `{{${key}}}`;
+    ctx.editor.insertText(ctx.index, token, 'user');
+    ctx.editor.setSelection(ctx.index + token.length, 0);
   };
 
   return (
     <div className="email-quill" data-testid="signature-editor">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-muted-foreground">Design your signature</span>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        {placeholders.map((p) => (
+          <Button
+            key={p.key}
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => insertPlaceholder(p.key)}
+            data-testid={`signature-placeholder-${p.key}`}
+          >
+            + {p.label}
+          </Button>
+        ))}
         <Button
           type="button"
           variant="outline"
           size="sm"
+          className="h-7 ml-auto"
           onClick={insertLogo}
           disabled={!logoUrl}
           title={logoUrl ? 'Insert your company logo' : 'No company logo configured in branding'}
@@ -57,7 +83,7 @@ export default function SignatureEditor({ value, onChange, logoUrl }) {
         onChange={onChange}
         modules={MODULES}
         formats={FORMATS}
-        placeholder="e.g. Jane Doe — Sales Manager · +91 98765 43210"
+        placeholder="e.g. {{name}} — {{title}} · {{phone}}"
       />
     </div>
   );

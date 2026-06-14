@@ -13,6 +13,7 @@ import os
 import base64
 import uuid
 import asyncio
+import re
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Optional, List
@@ -533,30 +534,70 @@ async def download_attachment(
     )
 
 
-class SignatureIn(BaseModel):
+ADMIN_SIGNATURE_ROLES = {"CEO", "System Admin", "Admin"}
+
+
+def _resolve_signature(html: str, user: dict) -> str:
+    """Fill {{placeholders}} in the admin-defined template with the current
+    sender's own profile details."""
+    if not html:
+        return ""
+    title = user.get("designation") or user.get("role") or ""
+    values = {
+        "name": user.get("name") or "",
+        "title": title,
+        "designation": title,
+        "role": user.get("role") or "",
+        "phone": user.get("phone") or user.get("mobile") or "",
+        "email": user.get("email") or "",
+        "department": user.get("department") or "",
+    }
+
+    def repl(m):
+        return values.get(m.group(1).strip().lower(), m.group(0))
+
+    return re.sub(r"\{\{\s*(\w+)\s*\}\}", repl, html)
+
+
+class SignatureTemplateIn(BaseModel):
     html: Optional[str] = ""
     enabled: bool = True
 
 
 @router.get("/gmail/signature")
 async def get_signature(current_user: dict = Depends(get_current_user)):
-    """Per-user email signature (HTML) used to auto-append to outgoing mail."""
-    doc = await db.email_signatures.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    """Resolved signature for the CURRENT sender (placeholders filled). Used to
+    auto-append to outgoing mail. Read-only for everyone."""
+    doc = await db.email_signature_template.find_one({"tenant_id": get_current_tenant_id()}, {"_id": 0})
+    if not doc or not doc.get("enabled") or not doc.get("html"):
+        return {"html": "", "enabled": False}
+    return {"html": _resolve_signature(doc["html"], current_user), "enabled": True}
+
+
+@router.get("/gmail/signature/template")
+async def get_signature_template(current_user: dict = Depends(get_current_user)):
+    """Raw signature template (with {{placeholders}}). Admin / CEO only."""
+    if current_user.get("role") not in ADMIN_SIGNATURE_ROLES:
+        raise HTTPException(status_code=403, detail="Only an admin or CEO can manage the company email signature")
+    doc = await db.email_signature_template.find_one({"tenant_id": get_current_tenant_id()}, {"_id": 0})
     if not doc:
         return {"html": "", "enabled": False}
     return {"html": doc.get("html", ""), "enabled": bool(doc.get("enabled", False))}
 
 
-@router.put("/gmail/signature")
-async def save_signature(payload: SignatureIn, current_user: dict = Depends(get_current_user)):
-    await db.email_signatures.update_one(
-        {"user_id": current_user["id"]},
+@router.put("/gmail/signature/template")
+async def save_signature_template(payload: SignatureTemplateIn, current_user: dict = Depends(get_current_user)):
+    """Save the company-wide signature template. Admin / CEO only."""
+    if current_user.get("role") not in ADMIN_SIGNATURE_ROLES:
+        raise HTTPException(status_code=403, detail="Only an admin or CEO can manage the company email signature")
+    await db.email_signature_template.update_one(
+        {"tenant_id": get_current_tenant_id()},
         {"$set": {
-            "user_id": current_user["id"],
             "tenant_id": get_current_tenant_id(),
             "html": payload.html or "",
             "enabled": bool(payload.enabled),
             "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": current_user.get("email"),
         }},
         upsert=True,
     )
