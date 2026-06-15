@@ -385,59 +385,37 @@ export default function LocationsTab({
               </label>
             </div>
 
-            {/* GST identity + Zoho Branch mapping (multi-GSTIN) */}
+            {/* GST identity + Zoho Branch mapping (multi-GSTIN) — CRM is the source
+                of truth. The Branch ID + GSTIN are entered here and pushed onto the
+                invoice (CRM → Zoho). Nothing is pulled from Zoho. */}
             <div className="space-y-3 p-3 rounded-lg bg-emerald-50/50 border border-emerald-100" data-testid="location-gst-section">
-              <div className="flex items-center justify-between gap-2">
-                <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
-                  <Receipt className="h-4 w-4 text-emerald-600" />
-                  GST & Zoho Branch
-                </label>
-                <Button
-                  type="button" variant="outline" size="sm" className="h-7 text-xs"
-                  onClick={onSyncBranches} disabled={branchesLoading}
-                  data-testid="sync-zoho-branches-btn"
-                >
-                  {branchesLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
-                  Sync from Zoho
-                </Button>
-              </div>
+              <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                <Receipt className="h-4 w-4 text-emerald-600" />
+                GST &amp; Zoho Branch
+              </label>
               <p className="text-[11px] text-slate-500 -mt-1">
-                Stock-out invoices from this warehouse are booked under the mapped Zoho branch's GSTIN.
-                Required for self-managed / factory warehouses so the correct GST is applied.
+                Stock-out invoices from this warehouse are pushed to Zoho under this Branch ID,
+                so the correct GSTIN is applied. Find the Branch ID in Zoho Books → Settings →
+                Branches (open the branch — the ID is in the URL). Required for self-managed /
+                factory warehouses.
               </p>
               <div className="space-y-1.5">
-                <Label className="text-xs">Zoho Branch</Label>
-                <Select
+                <Label className="text-xs">Zoho Branch ID</Label>
+                <Input
+                  placeholder="e.g., 460000000038080"
                   value={newLocation.zoho_branch_id || ''}
-                  onValueChange={(v) => {
-                    const b = (zohoBranches || []).find(x => String(x.branch_id) === String(v));
-                    setNewLocation(prev => ({
-                      ...prev,
-                      zoho_branch_id: v,
-                      zoho_branch_name: b?.branch_name || '',
-                      gstin: b?.gstin || prev.gstin,
-                    }));
-                  }}
-                  disabled={branchesLoading || (zohoBranches || []).length === 0}
-                >
-                  <SelectTrigger data-testid="location-zoho-branch-select">
-                    <SelectValue placeholder={
-                      branchesLoading ? 'Loading branches…'
-                        : ((zohoBranches || []).length === 0 ? 'No branches — click "Sync from Zoho"' : 'Select Zoho branch')
-                    } />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(zohoBranches || []).map(b => (
-                      <SelectItem key={b.branch_id} value={String(b.branch_id)}>
-                        {b.branch_name}{b.gstin ? ` · ${b.gstin}` : ''}{b.is_primary_branch ? ' (Primary)' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {branchesError && <p className="text-[11px] text-red-600" data-testid="branches-error">{branchesError}</p>}
-                {newLocation.zoho_branch_name && (
-                  <p className="text-[11px] text-emerald-700">Mapped to: <span className="font-medium">{newLocation.zoho_branch_name}</span></p>
-                )}
+                  onChange={(e) => setNewLocation(prev => ({ ...prev, zoho_branch_id: (e.target.value || '').trim() }))}
+                  data-testid="location-zoho-branch-input"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Branch name <span className="text-slate-400">(optional, for reference)</span></Label>
+                <Input
+                  placeholder="e.g., Delhi Branch"
+                  value={newLocation.zoho_branch_name || ''}
+                  onChange={(e) => setNewLocation(prev => ({ ...prev, zoho_branch_name: e.target.value }))}
+                  data-testid="location-zoho-branch-name-input"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">GSTIN</Label>
@@ -447,7 +425,7 @@ export default function LocationsTab({
                   onChange={(e) => setNewLocation(prev => ({ ...prev, gstin: (e.target.value || '').toUpperCase() }))}
                   data-testid="location-gstin-input"
                 />
-                <p className="text-[10px] text-slate-400">Auto-filled from the selected Zoho branch; editable.</p>
+                <p className="text-[10px] text-slate-400">For reference on this warehouse. The GST actually applied comes from the mapped Zoho branch.</p>
               </div>
             </div>
           </div>

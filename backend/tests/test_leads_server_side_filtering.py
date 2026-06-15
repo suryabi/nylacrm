@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://crate-allocation.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://zoho-branch-sync.preview.emergentagent.com')
 
 
 class TestLeadsServerSideFiltering:
