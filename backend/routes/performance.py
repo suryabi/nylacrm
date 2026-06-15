@@ -697,6 +697,29 @@ async def approve_performance(record_id: str, data: dict = {}, current_user: dic
     return {"message": "Performance record approved"}
 
 
+@router.post("/{record_id}/unapprove")
+async def unapprove_performance(record_id: str, current_user: dict = Depends(get_current_user)):
+    """Reverse an approval so the record is editable again (back to draft)."""
+    tenant_id = get_current_tenant_id()
+    result = await db.monthly_performance.update_one(
+        {"id": record_id, "tenant_id": tenant_id, "status": "approved"},
+        {"$set": {
+            "status": "draft",
+            "unapproved_at": datetime.now(timezone.utc).isoformat(),
+            "unapproved_by": current_user.get("id"),
+            "unapproved_by_name": current_user.get("name", ""),
+        }, "$unset": {
+            "approved_at": "",
+            "approved_by": "",
+            "approved_by_name": "",
+            "manager_comments": "",
+        }}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Record not found or not in approved status")
+    return {"message": "Approval reversed; record is editable again"}
+
+
 @router.post("/{record_id}/return")
 async def return_performance(record_id: str, data: dict = {}, current_user: dict = Depends(get_current_user)):
     """Return a submitted record for corrections."""

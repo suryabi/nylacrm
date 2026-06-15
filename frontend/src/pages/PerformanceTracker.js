@@ -15,7 +15,7 @@ import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
   ChevronDown, ChevronRight, Building2, Clock, ArrowUp, ArrowDown, Minus,
-  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package, FlaskConical, Plus, Trash2, Calendar, Wallet
+  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package, FlaskConical, Plus, Trash2, Calendar, Wallet, Unlock
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -356,6 +356,13 @@ export default function PerformanceTracker() {
     generate();
   };
 
+  const unapproveRecord = async () => {
+    if (!data?.record_id) return;
+    if (!window.confirm('Reverse approval? This will move the record back to Draft so it can be edited, then re-submitted and re-approved.')) return;
+    await fetch(`${API_URL}/api/performance/${data.record_id}/unapprove`, { method: 'POST', headers });
+    generate();
+  };
+
   const toggleSection = (s) => setExpandedSections(prev => ({ ...prev, [s]: !prev[s] }));
   const addSupport = (cat) => {
     setSupportNeeded(prev => prev.some(s => s.category === cat) ? prev : [...prev, { category: cat, details: '' }]);
@@ -626,6 +633,17 @@ export default function PerformanceTracker() {
                   </Button>
                 </>
               )}
+              {resolveResourceIds().length === 1 && data.status === 'approved' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-sm border-amber-300 text-amber-700 hover:bg-amber-50"
+                  onClick={unapproveRecord}
+                  data-testid="unapprove-btn"
+                >
+                  <Unlock className="h-4 w-4 mr-1" />Reverse Approval
+                </Button>
+              )}
             </div>
           </div>
 
@@ -861,7 +879,7 @@ export default function PerformanceTracker() {
                     cityFilter={cityFilter}
                     token={token}
                     tenantId={tenantId}
-                    isLocked={false}
+                    isLocked={isLocked}
                   />
                 ),
               },
