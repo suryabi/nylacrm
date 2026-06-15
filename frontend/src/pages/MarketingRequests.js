@@ -16,7 +16,7 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   LayoutList, Tag, User, Users, Calendar, X, Loader2, Truck, GitBranch, Download, Hourglass,
-  ChevronsUpDown, ArrowUp, ArrowDown, Star, LayoutGrid,
+  ChevronsUpDown, ArrowUp, ArrowDown, Star, LayoutGrid, Flame,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -131,7 +131,7 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
           return (
             <Card
               key={req.id}
-              className={`rounded-xl shadow-sm active:scale-[0.99] transition-transform cursor-pointer ${isNew ? 'border-l-4 border-l-amber-400 border-y border-r border-amber-100 bg-amber-50/40' : 'border border-slate-100'}`}
+              className={`rounded-xl shadow-sm active:scale-[0.99] transition-transform cursor-pointer ${req.is_urgent ? 'border-l-4 border-l-red-500 border-y border-r border-red-200 bg-red-50/50' : isNew ? 'border-l-4 border-l-amber-400 border-y border-r border-amber-100 bg-amber-50/40' : 'border border-slate-100'}`}
               onClick={() => navigate(`/marketing-requests/${req.id}`)}
               data-testid={`mr-card-${req.id}`}
             >
@@ -146,6 +146,9 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                  {req.is_urgent && (
+                    <Badge className="text-[10px] bg-red-600 hover:bg-red-600 text-white border-red-600" data-testid={`mr-urgent-badge-${req.id}`}><Flame className="h-2.5 w-2.5 mr-0.5" /> URGENT</Badge>
+                  )}
                   <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-mono"><Tag className="h-3 w-3" /> {req.request_number}</span>
                   <AgePill createdAt={req.created_at} />
                   {req.short_timeline_reason && (
@@ -210,13 +213,20 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                     || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
                   const leadLabel = req.lead_company || req.lead_name;
                   const isNew = isNewReq(req);
-                  const rowClass = isNew
-                    ? 'bg-amber-50 hover:bg-amber-100/70 border-l-4 border-l-amber-400'
-                    : (idx % 2 === 1 ? 'bg-slate-50/70 hover:bg-emerald-50/50' : 'bg-white hover:bg-emerald-50/50');
+                  const rowClass = req.is_urgent
+                    ? 'bg-red-50 hover:bg-red-100/70 border-l-4 border-l-red-500'
+                    : isNew
+                      ? 'bg-amber-50 hover:bg-amber-100/70 border-l-4 border-l-amber-400'
+                      : (idx % 2 === 1 ? 'bg-slate-50/70 hover:bg-emerald-50/50' : 'bg-white hover:bg-emerald-50/50');
                   return (
                     <TableRow key={req.id} className={`cursor-pointer ${rowClass} border-b border-slate-200 dark:border-slate-800/50 transition-colors`} onClick={() => navigate(`/marketing-requests/${req.id}`)} data-testid={`mr-row-${req.id}`}>
                       <TableCell className="py-4 align-top" style={{ maxWidth: 440 }}>
                         <div className="flex items-center gap-2 flex-wrap">
+                          {req.is_urgent && (
+                            <Badge className="text-[10px] bg-red-600 hover:bg-red-600 text-white border-red-600 shrink-0" data-testid={`mr-urgent-badge-${req.id}`}>
+                              <Flame className="h-2.5 w-2.5 mr-0.5" /> URGENT
+                            </Badge>
+                          )}
                           {isNew && <Star className="h-4 w-4 text-amber-500 fill-amber-400 shrink-0" data-testid={`mr-new-star-${req.id}`} title="New — not acted on yet" />}
                           <span className="font-medium text-primary truncate text-xs sm:text-sm" style={{ maxWidth: 320 }} title={req.request_type_name}>
                             {req.request_type_name || 'Untyped Request'}

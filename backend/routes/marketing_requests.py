@@ -387,6 +387,7 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
         "design_lead_time_days": int(type_doc.get("design_lead_time_days") or 0),
         "production_lead_time_days": int(type_doc.get("production_lead_time_days") or 0),
         "short_timeline_reason": payload.short_timeline_reason,
+        "is_urgent": bool(payload.is_urgent),
         "logo": logo_doc,
         "references": ref_docs,
         "social_media_links": payload.social_media_links or [],
@@ -433,6 +434,7 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
             tenant_id=tenant_id,
             event_type="marketing_request_created",
             text=(
+                f"{':red_circle: *URGENT* — ' if doc.get('is_urgent') else ''}"
                 f":memo: *New marketing request* `{doc['request_number']}` — {doc['title']}\n"
                 f"Type: {doc['request_type_name']} · Assigned to: {doc['assigned_department_name']}\n"
                 f"Requested due: {doc['requested_due_date']} · Raised by: {doc['created_by_name']}"
@@ -512,6 +514,7 @@ async def update_request(request_id: str, payload: MarketingRequestCreate, curre
         "design_lead_time_days": int(type_doc.get("design_lead_time_days") or 0),
         "production_lead_time_days": int(type_doc.get("production_lead_time_days") or 0),
         "short_timeline_reason": payload.short_timeline_reason,
+        "is_urgent": bool(payload.is_urgent),
         "logo": logo_doc,
         "references": ref_docs,
         "social_media_links": payload.social_media_links or [],
@@ -536,8 +539,53 @@ async def update_request(request_id: str, payload: MarketingRequestCreate, curre
 
 
 # ──────────────────────────────────────────────────────────────
-# List + counts (queues are simple filters; state filter via query)
+# Quick toggle — flag/unflag a request as URGENT without a full edit
 # ──────────────────────────────────────────────────────────────
+class UrgentUpdate(BaseModel):
+    is_urgent: bool
+
+
+@router.patch("/{request_id}/urgent")
+async def set_request_urgent(request_id: str, payload: UrgentUpdate, current_user: dict = Depends(get_current_user)):
+    """Flag or unflag a design/marketing request as urgent. Allowed for the
+    original requester and admins/managers with edit permission."""
+    tenant_id = get_current_tenant_id()
+    existing = await db.marketing_requests.find_one(
+        {"id": request_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    if not existing:
+        raise HTTPException(404, "Request not found")
+    if not await _can_edit_request(tenant_id, current_user, existing):
+        raise HTTPException(403, "You don't have permission to change this request")
+
+    is_urgent = bool(payload.is_urgent)
+    sys_comment = RequestComment(
+        user_id=current_user.get("id"),
+        user_name=current_user.get("name") or "User",
+        text=(f"Marked as URGENT by {current_user.get('name') or current_user.get('email')}."
+              if is_urgent else
+              f"Urgent flag removed by {current_user.get('name') or current_user.get('email')}."),
+        kind="system",
+    ).model_dump()
+    await db.marketing_requests.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"$set": {"is_urgent": is_urgent, "updated_at": datetime.now(timezone.utc).isoformat()},
+         "$push": {"comments": sys_comment}},
+    )
+    if is_urgent:
+        try:
+            await slack_post_event(
+                tenant_id=tenant_id,
+                event_type="marketing_request_urgent",
+                text=(f":red_circle: *URGENT* design request `{existing.get('request_number')}` — "
+                      f"{existing.get('title')} (assigned to {existing.get('assigned_department_name')})"),
+            )
+        except Exception:
+            logger.exception("Slack notification failed for urgent flag")
+    doc = await db.marketing_requests.find_one(
+        {"id": request_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    return doc
 def _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by):
     """Shared Mongo query builder for the list + export endpoints."""
     q: dict = {"tenant_id": tenant_id}

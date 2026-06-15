@@ -219,6 +219,7 @@ class MarketingRequestCreate(BaseModel):
     requested_due_date: str
     requirement_details: str
     short_timeline_reason: Optional[str] = None
+    is_urgent: Optional[bool] = False
     social_media_links: List[str] = []
     file_links: List[str] = []
     additional_comments: Optional[str] = None

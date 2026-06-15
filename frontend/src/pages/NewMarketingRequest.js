@@ -12,10 +12,11 @@ import {
 } from '../components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Calendar } from '../components/ui/calendar';
+import { Switch } from '../components/ui/switch';
 import { FileDropzone } from '../components/FileDropzone';
 import {
   ArrowLeft, Sparkles, X, Link as LinkIcon, AlertTriangle, Loader2, Plus,
-  Tag, ImageIcon, FileText, CalendarClock, Building2, Send, Users, Trash2, CalendarIcon,
+  Tag, ImageIcon, FileText, CalendarClock, Building2, Send, Users, Trash2, CalendarIcon, Flame,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -95,6 +96,7 @@ export default function NewMarketingRequest() {
     requirement_details: '',
     additional_comments: '',
     short_timeline_reason: '',
+    is_urgent: false,
   });
   const [logoFile, setLogoFile] = useState(null);
   const [referenceFiles, setReferenceFiles] = useState([]);
@@ -135,6 +137,7 @@ export default function NewMarketingRequest() {
           requirement_details: req.requirement_details || '',
           additional_comments: req.additional_comments || '',
           short_timeline_reason: req.short_timeline_reason || '',
+          is_urgent: !!req.is_urgent,
         });
         if (req.logo) setLogoFile({ ...req.logo, _preview: isImg(req.logo) ? `${API}/marketing-requests/files/${req.logo.id}` : null });
         if (Array.isArray(req.references)) setReferenceFiles(req.references.map(f => ({ ...f, _preview: null })));
@@ -228,6 +231,7 @@ export default function NewMarketingRequest() {
         additional_comments: form.additional_comments || null,
         lead_id: selectedLead?.id || null,
         short_timeline_reason: isShortTimeline ? form.short_timeline_reason : null,
+        is_urgent: !!form.is_urgent,
         logo_file_id: logoFile?.id || null,
         reference_file_ids: referenceFiles.map(f => f.id),
         social_media_links: socialLinks.map(l => l.trim()).filter(Boolean),
@@ -349,6 +353,28 @@ export default function NewMarketingRequest() {
                 </PopoverContent>
               </Popover>
             </div>
+          </div>
+
+          {/* Urgent flag */}
+          <div
+            className={`flex items-center justify-between gap-4 rounded-xl border p-3.5 transition-colors ${form.is_urgent ? 'border-red-300 bg-red-50/70' : 'border-slate-200 bg-white'}`}
+            data-testid="mr-urgent-toggle-row"
+          >
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${form.is_urgent ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-400'}`}>
+                <Flame className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Mark as Urgent</p>
+                <p className="text-xs text-slate-500">Highlights this request in red for the design team across the list & board.</p>
+              </div>
+            </div>
+            <Switch
+              checked={form.is_urgent}
+              onCheckedChange={(v) => setForm({ ...form, is_urgent: v })}
+              className="data-[state=checked]:bg-red-600"
+              data-testid="mr-urgent-switch"
+            />
           </div>
 
           {/* Lead this request is raised for (optional) */}

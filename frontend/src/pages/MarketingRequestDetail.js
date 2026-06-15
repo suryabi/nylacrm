@@ -23,7 +23,7 @@ import {
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
   Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
-  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy, Printer,
+  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy, Printer, Flame,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -382,6 +382,23 @@ export default function MarketingRequestDetail() {
     } finally { setSavingEst(false); }
   };
 
+  const [savingUrgent, setSavingUrgent] = useState(false);
+  const toggleUrgent = async () => {
+    const next = !req?.is_urgent;
+    setSavingUrgent(true);
+    try {
+      const { data } = await axios.patch(
+        `${API}/marketing-requests/${id}/urgent`,
+        { is_urgent: next },
+        { headers: HEAD() },
+      );
+      setReq((p) => ({ ...p, is_urgent: data.is_urgent }));
+      toast.success(next ? 'Marked as urgent' : 'Urgent flag removed');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update urgency');
+    } finally { setSavingUrgent(false); }
+  };
+
   const confirmDeleteRequest = async () => {
     setDeletingReq(true);
     try {
@@ -555,6 +572,21 @@ export default function MarketingRequestDetail() {
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests
         </Button>
         <div className="flex items-center gap-2">
+          {((user?.id && req?.created_by && user.id === req.created_by) || hasActionPermission('marketing_requests', 'edit')) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleUrgent}
+              disabled={savingUrgent}
+              className={req.is_urgent
+                ? 'text-red-700 border-red-300 bg-red-50 hover:bg-red-100'
+                : 'text-slate-600 border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200'}
+              data-testid="mr-urgent-toggle-btn"
+            >
+              {savingUrgent ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Flame className={`h-4 w-4 mr-2 ${req.is_urgent ? 'fill-red-500' : ''}`} />}
+              {req.is_urgent ? 'Urgent' : 'Mark Urgent'}
+            </Button>
+          )}
           {canSendToPrint && (
             <Button
               size="sm"
@@ -611,6 +643,11 @@ export default function MarketingRequestDetail() {
               {overdue && (
                 <Badge variant="outline" className="text-xs bg-red-50 text-red-600 border-red-200">
                   <AlertTriangle className="h-3 w-3 mr-1" /> Overdue
+                </Badge>
+              )}
+              {req.is_urgent && (
+                <Badge className="text-xs bg-red-600 hover:bg-red-600 text-white border-red-600" data-testid="mr-urgent-badge">
+                  <Flame className="h-3 w-3 mr-1" /> URGENT
                 </Badge>
               )}
               {req.short_timeline_reason && (

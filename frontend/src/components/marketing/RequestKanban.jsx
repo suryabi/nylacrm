@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
 import {
   GripVertical, ChevronUp, ChevronDown, Calendar, AlertTriangle,
-  Users, Tag, Clock,
+  Users, Tag, Clock, Flame,
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 
@@ -36,6 +36,7 @@ const sortCards = (a, b) => {
 
 function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDragEnd, onMove, navigate, dragging }) {
   const overdue = isOverdue(req.requested_due_date) && req.current_state_key !== 'production_completed';
+  const urgent = !!req.is_urgent;
   const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : null);
   const leadLabel = req.lead_company || req.lead_name;
   return (
@@ -44,7 +45,7 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
       onDragStart={(e) => onDragStart(e, req)}
       onDragOver={(e) => onDragOver(e, req)}
       onDragEnd={onDragEnd}
-      className={`group bg-white rounded-lg border border-slate-200 p-2.5 mb-2 shadow-sm hover:shadow-md hover:border-slate-300 transition-all cursor-grab active:cursor-grabbing ${dragging ? 'opacity-50' : ''}`}
+      className={`group rounded-lg p-2.5 mb-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${urgent ? 'bg-red-50/60 border-2 border-red-500 ring-1 ring-red-300' : 'bg-white border border-slate-200 hover:border-slate-300'} ${dragging ? 'opacity-50' : ''}`}
       data-testid={`kanban-card-${req.id}`}
     >
       <div className="flex items-start gap-1.5">
@@ -55,9 +56,16 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
           <p className="text-sm font-medium text-slate-900 truncate group-hover:text-primary transition-colors" title={req.request_type_name}>
             {req.request_type_name || 'Untyped Request'}
           </p>
-          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono">
-            <Tag className="h-2.5 w-2.5" /> {req.request_number}
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 font-mono">
+              <Tag className="h-2.5 w-2.5" /> {req.request_number}
+            </span>
+            {urgent && (
+              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wide text-white bg-red-600 px-1.5 py-0.5 rounded" data-testid={`kanban-urgent-${req.id}`}>
+                <Flame className="h-2.5 w-2.5" /> Urgent
+              </span>
+            )}
+          </div>
         </div>
         {/* Priority nudge + drag handle */}
         <div className="flex flex-col items-center -my-0.5">
