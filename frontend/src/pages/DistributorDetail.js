@@ -1752,23 +1752,61 @@ export default function DistributorDetail() {
         driver_contact: deliveryForm.driver_contact || null,
         remarks: deliveryForm.remarks || null,
         gst_percent: parseFloat(deliveryForm.gst_percent) || 0,
-        items: deliveryItems.map(item => {
+        items: deliveryItems.flatMap(item => {
           const pkgUnits = parseInt(item.packaging_units) || 1;
-          const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
-          return {
+          const demandPkgs = parseInt(item.quantity) || 0;
+          const baseFields = {
             sku_id: item.sku_id,
             sku_name: item.sku_name,
-            quantity: totalUnits,
             packaging_units: pkgUnits,
-            packages: parseInt(item.quantity) || 0,
             unit_price: parseFloat(item.unit_price),
             customer_selling_price: parseFloat(item.unit_price),
             discount_percent: parseFloat(item.discount_percent) || 0,
             tax_percent: 0,
-            // Phase 2 batch identity
-            batch_id: item.batch_id || null,
-            batch_code: item.batch_code || null,
           };
+          const lineFor = (pkgs, batchId, batchCode) => ({
+            ...baseFields,
+            quantity: pkgs * pkgUnits,
+            packages: pkgs,
+            batch_id: batchId || null,
+            batch_code: batchCode || null,
+          });
+          // Non-batch source warehouse: single line, no FIFO split needed.
+          if (!sourceDistributorTracksBatches) {
+            return [lineFor(demandPkgs, item.batch_id, item.batch_code)];
+          }
+          const batches = deliveryBatchesBySku[item.sku_id] || [];
+          // Honour an explicit batch pick when that batch alone covers the demand.
+          if (item.batch_id) {
+            const sel = batches.find(b => b.batch_id === item.batch_id);
+            if (sel && demandPkgs * pkgUnits <= (sel.quantity || 0)) {
+              return [lineFor(demandPkgs, sel.batch_id, sel.batch_code)];
+            }
+          }
+          // FIFO auto-split across all batches (oldest first) so a delivery can
+          // draw from multiple batches when one batch can't cover the qty.
+          const ak = (b) => b.production_date || b.received_at || '';
+          const sorted = [...batches].sort((a, b) => {
+            const ka = ak(a), kb = ak(b);
+            if (ka && kb) return ka.localeCompare(kb);
+            if (ka) return -1;
+            if (kb) return 1;
+            return (a.batch_code || '').localeCompare(b.batch_code || '');
+          });
+          const out = [];
+          let remaining = demandPkgs;
+          for (const b of sorted) {
+            if (remaining <= 0) break;
+            const availPkgs = Math.floor((b.quantity || 0) / pkgUnits);
+            const take = Math.min(remaining, availPkgs);
+            if (take > 0) {
+              out.push(lineFor(take, b.batch_id, b.batch_code));
+              remaining -= take;
+            }
+          }
+          // Fallback: if nothing could be allocated (batch data not loaded yet),
+          // keep the original single line so the item is never silently dropped.
+          return out.length > 0 ? out : [lineFor(demandPkgs, item.batch_id, item.batch_code)];
         }),
         // Include credit notes if any
         credit_notes_to_apply: creditNotesToApply.length > 0 ? creditNotesToApply : null

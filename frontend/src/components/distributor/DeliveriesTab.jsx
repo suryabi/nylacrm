@@ -1026,7 +1026,7 @@ export default function DeliveriesTab({
                                   </Label>
                                   {sorted.length > 0 && (
                                     <span className="text-[10px] text-slate-500">
-                                      {sorted.length} batch{sorted.length === 1 ? '' : 'es'} available
+                                      {sorted.length} batch{sorted.length === 1 ? '' : 'es'} · {sorted.reduce((s, b) => s + (b.quantity || 0), 0).toLocaleString()} units total · auto-split FIFO
                                     </span>
                                   )}
                                 </div>
@@ -1124,18 +1124,22 @@ export default function DeliveriesTab({
                                 }}
                                 data-testid={`delivery-qty-${item.id}`} />
                               {(() => {
-                                // Inline availability hint + over-stock warning.
-                                // Available units come from `batchesBySku` when a batch is
-                                // selected, else fall back to the existing "X units" math.
-                                const selectedBatch = sourceTracksBatches && item.batch_id
-                                  ? (batchesBySku[item.sku_id] || []).find(b => b.batch_id === item.batch_id)
+                                // Availability = SUM across ALL batches for this SKU. The
+                                // delivery auto-splits FIFO across batches on submit, so the
+                                // cap is the aggregate stock, not a single batch.
+                                const totalAvailUnits = sourceTracksBatches
+                                  ? (batchesBySku[item.sku_id] || []).reduce((s, b) => s + (b.quantity || 0), 0)
                                   : null;
-                                const availableUnits = selectedBatch ? (selectedBatch.quantity || 0) : null;
-                                const over = availableUnits != null && totalUnits > availableUnits;
-                                if (availableUnits != null) {
+                                // Aggregate demand for this SKU across every line (matches the
+                                // backend's per-SKU availability check).
+                                const skuDemandUnits = deliveryItems
+                                  .filter(i => i.sku_id === item.sku_id)
+                                  .reduce((s, i) => s + ((parseInt(i.quantity) || 0) * (parseInt(i.packaging_units) || 1)), 0);
+                                const over = totalAvailUnits != null && skuDemandUnits > totalAvailUnits;
+                                if (totalAvailUnits != null) {
                                   return (
                                     <p className={`text-xs font-medium text-center mt-0.5 h-4 ${over ? 'text-red-600' : 'text-blue-600'}`}>
-                                      {totalUnits}/{availableUnits} units
+                                      {totalUnits}/{totalAvailUnits} units
                                     </p>
                                   );
                                 }
@@ -1181,14 +1185,19 @@ export default function DeliveriesTab({
                               exceeds what the selected batch can fulfil. Prevents form
                               submission to avoid the backend 400 round-trip. */}
                           {(() => {
-                            const selectedBatch = sourceTracksBatches && item.batch_id
-                              ? (batchesBySku[item.sku_id] || []).find(b => b.batch_id === item.batch_id)
-                              : null;
-                            if (selectedBatch && totalUnits > (selectedBatch.quantity || 0)) {
+                            // Over-stock guard now compares aggregate SKU demand against the
+                            // SUM of all batches (FIFO auto-split draws across batches).
+                            if (!sourceTracksBatches || !item.sku_id) return null;
+                            const allBatches = batchesBySku[item.sku_id] || [];
+                            const totalAvailUnits = allBatches.reduce((s, b) => s + (b.quantity || 0), 0);
+                            const skuDemandUnits = deliveryItems
+                              .filter(i => i.sku_id === item.sku_id)
+                              .reduce((s, i) => s + ((parseInt(i.quantity) || 0) * (parseInt(i.packaging_units) || 1)), 0);
+                            if (skuDemandUnits > totalAvailUnits) {
                               return (
                                 <p className="mt-1 text-xs text-red-600 flex items-center gap-1" data-testid={`delivery-over-stock-${item.id}`}>
                                   <AlertCircle className="h-3 w-3" />
-                                  Quantity exceeds batch availability ({selectedBatch.quantity} units in {selectedBatch.batch_code}).
+                                  Quantity exceeds available stock ({totalAvailUnits} units across {allBatches.length} batch{allBatches.length === 1 ? '' : 'es'}).
                                 </p>
                               );
                             }
@@ -1406,21 +1415,27 @@ export default function DeliveriesTab({
                     the backend stock-availability validator so users never hit
                     a 400 round-trip. */}
                 {(() => {
-                  const overLines = (deliveryItems || []).filter((it) => {
-                    if (!sourceTracksBatches || !it.batch_id) return false;
-                    const sel = (batchesBySku[it.sku_id] || []).find((b) => b.batch_id === it.batch_id);
-                    if (!sel) return false;
-                    const pu = parseInt(it.packaging_units) || 1;
-                    const tu = (parseInt(it.quantity) || 0) * pu;
-                    return tu > (sel.quantity || 0);
-                  });
+                  // Block submit only when aggregate demand for a SKU exceeds the
+                  // SUM of all its batches. Per-batch caps no longer apply because
+                  // the delivery auto-splits FIFO across batches on submit.
+                  const overLines = (() => {
+                    if (!sourceTracksBatches) return [];
+                    const skuIds = Array.from(new Set((deliveryItems || []).map(i => i.sku_id).filter(Boolean)));
+                    return skuIds.filter((sid) => {
+                      const totalAvail = (batchesBySku[sid] || []).reduce((s, b) => s + (b.quantity || 0), 0);
+                      const demand = (deliveryItems || [])
+                        .filter(i => i.sku_id === sid)
+                        .reduce((s, i) => s + ((parseInt(i.quantity) || 0) * (parseInt(i.packaging_units) || 1)), 0);
+                      return demand > totalAvail;
+                    });
+                  })();
                   const hasOverStock = overLines.length > 0;
                   return (
                     <>
                       {hasOverStock && (
                         <div className="mr-auto flex items-center gap-1.5 text-xs text-red-600 font-medium" data-testid="over-stock-banner">
                           <AlertCircle className="h-3.5 w-3.5" />
-                          {overLines.length} line{overLines.length === 1 ? '' : 's'} over batch availability — adjust qty before submitting.
+                          {overLines.length} SKU{overLines.length === 1 ? '' : 's'} over available stock — adjust qty before submitting.
                         </div>
                       )}
                       <Button variant="outline" onClick={() => setShowDeliveryDialog(false)}>Cancel</Button>
