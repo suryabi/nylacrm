@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import {
   MapPin, Plus, Trash2, Package, User, Phone, Factory, Pencil, ExternalLink,
-  Navigation, Receipt, Loader2, RefreshCw,
+  Navigation, Receipt,
 } from 'lucide-react';
 import GooglePlacesAddressSearch from '../GooglePlacesAddressSearch';
 
@@ -40,10 +40,6 @@ export default function LocationsTab({
   editingLocationId,
   setEditingLocationId,
   onEditLocation,
-  zohoBranches = [],
-  branchesLoading = false,
-  branchesError = '',
-  onSyncBranches,
 }) {
   const isEditing = !!editingLocationId;
 

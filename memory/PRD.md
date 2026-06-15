@@ -16,6 +16,24 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 
 
+### 2026-02-10 — Zoho Books multi-GSTIN: per-warehouse Branch mapping (P0) ✅ DONE
+- **Request**: When stock-out happens from a self-managed warehouse, the Zoho invoice must use **that warehouse's GSTIN** (not the org's primary GSTIN). Previously a Delhi-warehouse stock-out got booked with the Hyderabad GSTIN.
+- **Decision**: CRM is the source of truth (CRM → Zoho). No auto-sync or auto-create of Zoho branches; user enters Branch ID + GSTIN per warehouse manually.
+- **Backend** (`models/distributor.py`, `routes/distributors.py`): `DistributorLocation*` schemas gained `gstin`, `zoho_branch_id`, `zoho_branch_name`. POST/PUT endpoints persist and return these fields.
+- **Backend** (`services/zoho_service.py`): Invoice push reads the source warehouse's `zoho_branch_id` and sets it on the Zoho `branch_id` payload. If the warehouse is **not mapped**, raises `ZohoBranchNotMappedError` with an actionable message ("Map it to the correct Zoho Branch under Distributors → Warehouses → edit …") — push is **blocked before** any Zoho write so we never produce a wrong-GST invoice.
+- **Frontend** (`components/distributor/LocationsTab.jsx`): Add/Edit Location dialog has a "GST & Zoho Branch" section with three manual inputs — Zoho Branch ID, Branch name (optional), GSTIN. Card displays an emerald "Zoho branch" badge for mapped factory warehouses and a red "No Zoho branch" warning for unmapped factory warehouses. Removed the previously attempted "Sync from Zoho" pull flow (and unused `loadZohoBranches`/`zohoBranches` state from `DistributorDetail.js`).
+- **Tested**: `backend/tests/test_zoho_warehouse_branch_gst.py` — 2/2 PASS (payload carries source warehouse `branch_id`; unmapped warehouse blocks push BEFORE Zoho write). UI smoke verified — edit dialog renders all 3 fields, save shows "Location updated" toast, the emerald branch badge appears on the location card immediately, and `PUT /api/distributors/{id}/locations/{id}` persists `gstin`/`zoho_branch_id`/`zoho_branch_name` correctly. Test data restored.
+
+
+
+### 2026-02-10 — Misc UX fixes (stock-batch picker, docs, design urgent) ✅ DONE
+- Stock In batch selection: removed FIFO mandate — availability now follows the manually selected batch.
+- Stock Out: reverted forced FIFO auto-split on delivery; FIFO is now a suggestion only.
+- Files & Documents: Document download button is always visible (no hover), bigger, and PDFs download with the document's actual filename via authenticated `/download` endpoint (Content-Disposition).
+- Design (Marketing) Requests: new "URGENT" toggle with red Kanban borders, flame badge across list/kanban/detail views, dedicated `POST /api/marketing-requests/{id}/urgent` endpoint.
+
+
+
 ### 2026-02-06 — Promotional Stock-Out → Zoho Books delivery challan integration ✅ DONE
 - **Request**: Push promo delivery challans to Zoho (use the default Zoho template — no custom template needed) and clearly mark them "Not for Sale / No Commercial Value", matching the existing inter-branch stock transfer flow.
 - **Backend (`services/zoho_service.py`)**: New `create_delivery_challan_for_promo_dispatch()` pushes a Zoho Books *Delivery Challan* with `gst_treatment="out_of_scope"`, zero `tax_total`, `is_inclusive_tax=false`, and a prominent banner in `notes`:
