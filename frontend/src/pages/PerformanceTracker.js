@@ -861,7 +861,7 @@ export default function PerformanceTracker() {
                     cityFilter={cityFilter}
                     token={token}
                     tenantId={tenantId}
-                    isLocked={isLocked}
+                    isLocked={false}
                   />
                 ),
               },
