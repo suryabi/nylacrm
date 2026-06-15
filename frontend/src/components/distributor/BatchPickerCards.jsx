@@ -41,6 +41,7 @@ export default function BatchPickerCards({
   onSelect,
   testIdPrefix = 'batch',
   emptyMessage = 'No batches available for this SKU.',
+  unitLabel = 'units',
 }) {
   // FIFO sort — oldest first
   const sorted = [...batches].sort((a, b) => {
@@ -118,7 +119,7 @@ export default function BatchPickerCards({
                   <span className={`text-lg font-bold tabular-nums ${selected ? 'text-amber-700' : 'text-slate-800'}`}>
                     {(b.quantity || 0).toLocaleString()}
                   </span>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">crates</span>
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">{unitLabel}</span>
                 </div>
               </button>
             );

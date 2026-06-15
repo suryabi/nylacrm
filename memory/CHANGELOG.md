@@ -1,11 +1,18 @@
 # Changelog
 
-## 2026-06-15 — Stock Out: FIFO auto-split across batches (P0 bug) ✅
-- **Bug**: At batch-tracking distributor warehouses, the Stock Out (Distributor → Customer) form locked each line to a single batch and capped the qty to that one batch's stock. A SKU split across two batches (e.g. 20 + 15 = 35 crates) could not be delivered as 35 — submission was blocked.
-- **Fix (frontend only; backend per-batch validation unchanged)**:
-  - `DistributorDetail.handleCreateDelivery` now FIFO **auto-splits** each batch-tracked line across batches (oldest first) on submit — one payload line per batch consumed, each carrying its own `batch_id`/`batch_code` with whole-package allocation. Honours an explicit batch pick when that batch alone covers the demand; non-batch sources unchanged.
-  - `DeliveriesTab.jsx`: availability hint, per-line over-stock warning, and the footer submit-guard now compute against the **SUM of all batches** for the SKU (aggregate demand vs aggregate stock) instead of a single batch. Picker header shows total units + "auto-split FIFO".
-- Verified: 7/7 unit tests on the split algorithm (`__tests__/fifoSplit.test.mjs`) incl. the exact 35→20+15 case, 25→20+5, crate-of-12 whole-pack splits, and over-total caps; Stock Out tab renders with no console errors.
+## 2026-06-15 — Files & Documents: always-visible download button + correct PDF download filename ✅
+- **Download button** (`FilesDocuments.js`): removed the `opacity-0 group-hover:opacity-100` so it's **always visible** (no hover needed) and made it a larger, labeled "Download" button (was a small hover-only icon). Delete stays as an icon.
+- **PDF in-viewer download name**: the preview `<embed>` now points at `${API_URL}/documents/{id}/download` (cookie-authenticated) instead of a `data:` URL. That endpoint already returns `Content-Disposition: inline; filename="<file_name>"`, so the browser/Acrobat toolbar download uses the real document filename instead of "download". Verified: endpoint returns 200 + `filename="Nyla_Stone_Waters-1.pdf"`.
+- Verified E2E: 5 doc cards each show the always-visible "Download" button (103×36px); download endpoint authenticates via the session cookie and carries the correct filename header.
+
+
+- **Bug**: On **Stock In** (Factory → Distributor), the "Avail" / qty cap was read from the aggregate `factory_warehouse_stock` row via `warehouseStock.find(sku)`, which returns only the **first** batch row. With a SKU split across batches (e.g. 36 + 240 units), Avail was stuck at one batch (35 crates) and the user could not stock from the larger batch — it felt like FIFO was being mandated.
+- **Requirement (user)**: "User should be able to choose whichever batch he wants. FIFO is only a suggestion, can't be mandated."
+- **Fix (frontend only)**:
+  - `ShipmentsTab.jsx`: availability now follows the **selected batch** when the source tracks batches (`selBatch.quantity`); before a batch is picked it shows the total across all batches. Batch picker **moved above** the qty row so the user picks the batch first. Added `shipment-avail-*` / `shipment-qty-*` test ids.
+  - `BatchPickerCards.jsx`: unit label is now a `unitLabel` prop (default `units`) — factory batches show **units** (bottles), not "crates". Promo Stock-Out passes `unitLabel="crates"`.
+  - **Reverted** the earlier mandated FIFO auto-split on Stock Out (`DistributorDetail.handleCreateDelivery` + `DeliveriesTab.jsx`) back to one line per user-selected batch — consistent with "pick any batch, FIFO is only a default". To draw from more stock, pick a batch with enough or add another line.
+- Verified E2E: Stock In with Nyla 660ml Sparkling (batches 36 + 240) — Avail = 276 (none selected) → 36 (batch A) → 240 (batch B). Frontend compiles clean.
 
 
 ## 2026-06-14 — Production batch API accepts external SKU id ✅

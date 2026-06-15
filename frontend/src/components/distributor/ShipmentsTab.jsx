@@ -195,8 +195,19 @@ export default function ShipmentsTab({
                     <div className="border rounded-lg overflow-hidden">
                       <div className="divide-y divide-slate-200">
                       {shipmentItems.map((item, index) => {
+                        const allBatches = batchesBySku[item.sku_id] || [];
+                        const selBatch = (sourceTracksBatches && item.batch_id)
+                          ? allBatches.find(b => b.batch_id === item.batch_id)
+                          : null;
                         const stockEntry = (warehouseStock || []).find(s => s.sku_id === item.sku_id);
-                        const availableQty = stockEntry ? stockEntry.quantity : 0;
+                        // When the source warehouse tracks batches, availability follows the
+                        // SELECTED batch — the user is free to pick ANY batch (FIFO is only a
+                        // default suggestion, never mandated). The aggregate `warehouseStock`
+                        // row only reflects a single batch, so it must NOT cap the qty here.
+                        // Before a batch is picked, show the total across all batches.
+                        const availableQty = sourceTracksBatches
+                          ? (selBatch ? (selBatch.quantity || 0) : allBatches.reduce((s, b) => s + (b.quantity || 0), 0))
+                          : (stockEntry ? stockEntry.quantity : 0);
                         const pkgUnits = parseInt(item.packaging_units) || 1;
                         const maxPkgs = pkgUnits > 0 ? Math.floor(availableQty / pkgUnits) : availableQty;
                         const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
@@ -238,12 +249,32 @@ export default function ShipmentsTab({
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
+                          {/* Batch picker — placed ABOVE the qty row so the user picks the
+                              batch FIRST and the Avail/qty cap reflects whichever batch they
+                              choose. FIFO ordering is only a suggestion, not mandated. Shown
+                              when source factory OR destination distributor tracks batches. */}
+                          {(sourceTracksBatches || destTracksBatches) && item.sku_id && (
+                            <div className="mt-1">
+                              <BatchPickerCards
+                                batches={batchesBySku[item.sku_id] || []}
+                                selectedId={item.batch_id || ''}
+                                onSelect={(bid, bcode) => {
+                                  updateShipmentItem(item.id, 'batch_id', bid);
+                                  updateShipmentItem(item.id, 'batch_code', bcode || '');
+                                }}
+                                testIdPrefix={`shipment-batch-${index}`}
+                                emptyMessage={sourceTracksBatches
+                                  ? 'No batches available for this SKU at source.'
+                                  : 'No production batches found for this SKU.'}
+                              />
+                            </div>
+                          )}
                           {/* Row 2: Avail | Qty | Price | Disc | Amount — fixed height, top-aligned */}
                           <div className="flex items-start gap-3 mt-3">
                             <div className="w-16 flex-shrink-0 text-center">
                               <Label className="text-xs text-muted-foreground">Avail</Label>
                               {item.sku_id ? (
-                                <div className="mt-1">
+                                <div className="mt-1" data-testid={`shipment-avail-${index}`}>
                                   <p className={`text-base font-bold tabular-nums ${maxPkgs > 0 ? 'text-emerald-700' : 'text-red-600'}`}>{maxPkgs}</p>
                                   <p className="text-[10px] text-muted-foreground leading-tight">{availableQty} units</p>
                                 </div>
@@ -254,6 +285,7 @@ export default function ShipmentsTab({
                               <Input type="number" min="1" max={maxPkgs || undefined}
                                 className={`h-10 mt-1 text-base font-medium ${item.sku_id && (parseInt(item.quantity) || 0) > maxPkgs ? 'border-red-400 text-red-600' : ''}`}
                                 value={item.quantity}
+                                data-testid={`shipment-qty-${index}`}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value) || 0;
                                   if (item.sku_id && maxPkgs > 0 && val > maxPkgs) updateShipmentItem(item.id, 'quantity', maxPkgs);
@@ -281,21 +313,7 @@ export default function ShipmentsTab({
                               <p className="h-4"></p>
                             </div>
                           </div>
-                          {/* Row 3: Batch picker — shown when source factory OR destination distributor tracks batches */}
-                          {(sourceTracksBatches || destTracksBatches) && item.sku_id && (
-                            <BatchPickerCards
-                              batches={batchesBySku[item.sku_id] || []}
-                              selectedId={item.batch_id || ''}
-                              onSelect={(bid, bcode) => {
-                                updateShipmentItem(item.id, 'batch_id', bid);
-                                updateShipmentItem(item.id, 'batch_code', bcode || '');
-                              }}
-                              testIdPrefix={`shipment-batch-${index}`}
-                              emptyMessage={sourceTracksBatches
-                                ? 'No batches available for this SKU at source.'
-                                : 'No production batches found for this SKU.'}
-                            />
-                          )}
+                          {/* Row 3: Batch picker moved above the qty row (see comment there). */}
                         </div>
                         );
                       })}

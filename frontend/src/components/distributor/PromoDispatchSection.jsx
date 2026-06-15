@@ -853,6 +853,7 @@ export default function PromoDispatchSection({
                             }}
                             testIdPrefix={`promo-batch-${index}`}
                             emptyMessage="No batches available for this SKU at the source."
+                            unitLabel="crates"
                           />
                         )}
 
