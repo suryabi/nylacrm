@@ -956,6 +956,9 @@ async def create_distributor_location(
         "is_factory": data.is_factory or False,
         "track_batches": bool(data.track_batches) if data.track_batches is not None else False,
         "status": data.status or "active",
+        "gstin": data.gstin,
+        "zoho_branch_id": data.zoho_branch_id,
+        "zoho_branch_name": data.zoho_branch_name,
         "lat": data.lat,
         "lng": data.lng,
         "formatted_address": data.formatted_address,
@@ -1005,6 +1008,7 @@ async def update_distributor_location(
     for field in ['location_name', 'location_code', 'address_line_1', 'address_line_2',
                   'state', 'city', 'pincode', 'contact_person', 'contact_number',
                   'email', 'is_default', 'is_factory', 'track_batches', 'status',
+                  'gstin', 'zoho_branch_id', 'zoho_branch_name',
                   'lat', 'lng', 'formatted_address']:
         value = getattr(data, field, None)
         if value is not None:
@@ -4754,9 +4758,20 @@ async def retry_delivery_zoho_push(
         {"_id": 0, "zoho_invoice_url": 1, "zoho_invoice_number": 1, "zoho_invoice_id": 1},
     ) or {}
     if not fresh.get('zoho_invoice_url'):
+        # Surface the exact reason recorded by the sync (e.g. warehouse not
+        # mapped to a Zoho Branch, no agreed price, no SKU mapping) instead of a
+        # generic catch-all, so the user knows precisely what to fix.
+        failure = await db.zoho_invoice_mappings.find_one(
+            {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery_id},
+            {"_id": 0, "error": 1},
+            sort=[("synced_at", -1)],
+        )
+        reason = (failure or {}).get("error")
         raise HTTPException(
             status_code=400,
-            detail="Zoho push completed but no invoice URL was produced. Most common causes: account has no Zoho contact ID, line items have no agreed price, or the source warehouse is not a Factory warehouse and its distributor is not marked Self-Managed.",
+            detail=reason or (
+                "Zoho push completed but no invoice URL was produced. Most common causes: account has no Zoho contact ID, line items have no agreed price, or the source warehouse is not a Factory warehouse and its distributor is not marked Self-Managed."
+            ),
         )
     return {
         "message": "Zoho invoice generated.",

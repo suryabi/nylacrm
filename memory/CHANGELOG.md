@@ -1,6 +1,18 @@
 # Changelog
 
-## 2026-06-15 — Files & Documents: always-visible download button + correct PDF download filename ✅
+## 2026-06-15 — Multi-GSTIN: stock-out invoices use the SOURCE warehouse's Zoho Branch GSTIN (P0 production bug) ✅
+- **Bug**: a stock-out from the Delhi warehouse generated a Zoho invoice with the **Hyderabad** GSTIN. Root cause: `create_invoice_for_delivery` never sent a `branch_id`, so Zoho booked every invoice under the org's **primary branch** (Hyderabad). Also, warehouses didn't store a GSTIN or a Zoho-branch link.
+- **Fix**:
+  - `models/distributor.py`: added `gstin`, `zoho_branch_id`, `zoho_branch_name` to DistributorLocation (create/update/read); persisted by the location create & update endpoints in `routes/distributors.py`.
+  - `routes/zoho_books.py`: new `GET /api/zoho/branches` — lists the org's Zoho Books Branches (branch_id, branch_name, gstin, state, place_of_supply) so each warehouse can be mapped to its GSTIN.
+  - `services/zoho_service.py → create_invoice_for_delivery`: resolves the delivery's source warehouse (`distributor_location_id`) → its `zoho_branch_id` → sets `invoice_payload["branch_id"]`. If a warehouse has **no branch mapped**, raises new `ZohoBranchNotMappedError` and **blocks the push** (no wrong-GST invoice). Added a no-retry break for it in `sync_delivery_to_zoho`.
+  - `routes/distributors.py` retry endpoint now surfaces the **exact** recorded failure reason (e.g. "Warehouse 'Delhi' is not mapped to a Zoho Branch…") instead of a generic message.
+  - `components/distributor/LocationsTab.jsx` + `pages/DistributorDetail.js`: warehouse edit form gets a **GST & Zoho Branch** section — "Sync from Zoho" button, branch dropdown (auto-fills GSTIN), and warehouse cards show a "mapped branch" / "No Zoho branch" badge.
+- **Recommendation given to user**: maintain GSTIN at the **warehouse** level (GST is state-wise), 1:1 mapped to a Zoho Branch; distributor-level GSTIN kept only as a fallback.
+- Verified: model persistence (curl), branches endpoint structure, warehouse form UI renders with sync + dropdown + GSTIN, and 2/2 backend unit tests (`tests/test_zoho_warehouse_branch_gst.py`) — branch_id attached when mapped; push blocked when unmapped.
+- ⚠️ The already-wrong Delhi invoice in production must be corrected manually in Zoho (change branch / void + re-push after redeploy + warehouse mapping).
+
+
 - **Download button** (`FilesDocuments.js`): removed the `opacity-0 group-hover:opacity-100` so it's **always visible** (no hover needed) and made it a larger, labeled "Download" button (was a small hover-only icon). Delete stays as an icon.
 - **PDF in-viewer download name**: the preview `<embed>` now points at `${API_URL}/documents/{id}/download` (cookie-authenticated) instead of a `data:` URL. That endpoint already returns `Content-Disposition: inline; filename="<file_name>"`, so the browser/Acrobat toolbar download uses the real document filename instead of "download". Verified: endpoint returns 200 + `filename="Nyla_Stone_Waters-1.pdf"`.
 - Verified E2E: 5 doc cards each show the always-visible "Download" button (103×36px); download endpoint authenticates via the session cookie and carries the correct filename header.

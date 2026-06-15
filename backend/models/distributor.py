@@ -156,6 +156,13 @@ class DistributorLocationCreate(BaseModel):
     # warehouse REQUIRES a batch_id per line. Default False (feature opt-in).
     track_batches: Optional[bool] = False
     status: Optional[str] = "active"
+    # Per-warehouse GST identity. GST registration in India is state-wise, so a
+    # self-managed entity with warehouses in multiple states has one GSTIN per
+    # warehouse. `zoho_branch_id` maps this warehouse to the matching Zoho Books
+    # Branch so stock-out invoices carry the correct GSTIN + place-of-supply.
+    gstin: Optional[str] = None
+    zoho_branch_id: Optional[str] = None
+    zoho_branch_name: Optional[str] = None
     # Google Places-derived geocoding fields. Populated when the user picks an
     # address from the Places autocomplete; used for "Open in Google Maps" and
     # potentially for routing/distance calcs in future.
@@ -179,6 +186,9 @@ class DistributorLocationUpdate(BaseModel):
     is_factory: Optional[bool] = None
     track_batches: Optional[bool] = None
     status: Optional[str] = None
+    gstin: Optional[str] = None
+    zoho_branch_id: Optional[str] = None
+    zoho_branch_name: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
     formatted_address: Optional[str] = None
@@ -202,6 +212,9 @@ class DistributorLocation(BaseModel):
     is_factory: bool = False
     track_batches: bool = False
     status: str = "active"
+    gstin: Optional[str] = None
+    zoho_branch_id: Optional[str] = None
+    zoho_branch_name: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
     formatted_address: Optional[str] = None

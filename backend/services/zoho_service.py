@@ -676,6 +676,14 @@ class ZohoPushSkippedError(RuntimeError):
     so the rep sees exactly what to fix."""
 
 
+class ZohoBranchNotMappedError(RuntimeError):
+    """Raised when a self-managed warehouse stock-out is pushed to Zoho but the
+    source warehouse has no `zoho_branch_id`. Without a branch, Zoho books the
+    invoice under the org's PRIMARY branch (wrong GSTIN). This is a config issue
+    — map the warehouse to a Zoho Branch under Distributors → warehouse settings
+    — so we block the push rather than emit a wrong-GST invoice."""
+
+
 def _account_has_zoho_link(account: dict) -> bool:
     """True only when the account has a non-empty `zoho_contact_id`."""
     if not account:
@@ -1083,6 +1091,30 @@ async def create_invoice_for_delivery(
         "line_items": line_items,
         "notes": f"Generated from Nyla CRM delivery {delivery.get('delivery_number')}",
     }
+
+    # ── Branch (multi-GSTIN) — CRITICAL for correct GST ─────────────────────
+    # The invoice must be booked under the Zoho Branch that maps to the
+    # warehouse this stock-out shipped from, so Zoho applies THAT warehouse's
+    # GSTIN + source-of-supply (and thus computes CGST/SGST vs IGST against the
+    # customer correctly). Without `branch_id`, Zoho silently uses the org's
+    # primary branch — which is how a Delhi stock-out got a Hyderabad GSTIN.
+    src_loc_id = delivery.get("distributor_location_id")
+    src_loc = None
+    if src_loc_id:
+        src_loc = await db.distributor_locations.find_one(
+            {"id": src_loc_id, "tenant_id": tenant_id},
+            {"_id": 0, "zoho_branch_id": 1, "zoho_branch_name": 1, "location_name": 1},
+        )
+    branch_id = (src_loc or {}).get("zoho_branch_id")
+    if branch_id:
+        invoice_payload["branch_id"] = str(branch_id)
+    else:
+        loc_name = (src_loc or {}).get("location_name") or "this warehouse"
+        raise ZohoBranchNotMappedError(
+            f"Warehouse '{loc_name}' is not mapped to a Zoho Branch, so the invoice "
+            f"would carry the wrong GSTIN. Map it to the correct Zoho Branch under "
+            f"Distributors → (self-managed) → Warehouses → edit '{loc_name}', then retry the push."
+        )
 
     # ── Payment terms — pulled from account.payment_terms_days when set.
     # Zoho Books expects an integer for `payment_terms` (number of credit days)
@@ -2269,6 +2301,14 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
             last_error = str(e)
             logger.warning(
                 f"Zoho push aborted (no SKU mapping) for delivery "
+                f"{delivery.get('delivery_number')}: {e}"
+            )
+            break
+        except ZohoBranchNotMappedError as e:
+            # Don't retry: warehouse→branch mapping is a configuration issue.
+            last_error = str(e)
+            logger.warning(
+                f"Zoho push aborted (warehouse not mapped to a Zoho Branch) for delivery "
                 f"{delivery.get('delivery_number')}: {e}"
             )
             break

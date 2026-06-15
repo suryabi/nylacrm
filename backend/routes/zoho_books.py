@@ -303,6 +303,36 @@ async def list_zoho_items(
     }
 
 
+@router.get("/zoho/branches")
+async def list_zoho_branches(current_user: dict = Depends(get_current_user)):
+    """List Zoho Books Branches (multi-GSTIN).
+
+    Used to map each self-managed warehouse to the Zoho Branch that carries the
+    correct GSTIN, so stock-out invoices are booked under the right branch
+    (correct GSTIN + place-of-supply → correct CGST/SGST vs IGST). Requires the
+    Branches feature to be enabled on the connected Zoho organisation.
+    """
+    tenant_id = get_current_tenant_id()
+    try:
+        data = await zoho._zoho_request("GET", "/books/v3/branches", tenant_id=tenant_id)
+    except zoho.ZohoApiError as e:
+        raise HTTPException(status_code=e.status_code, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    branches = []
+    for b in data.get("branches", []):
+        branches.append({
+            "branch_id": b.get("branch_id"),
+            "branch_name": b.get("branch_name"),
+            "gstin": b.get("gst_no") or b.get("gstin"),
+            "is_primary_branch": bool(b.get("is_primary_branch")),
+            "state": b.get("state") or b.get("state_name"),
+            "place_of_supply": b.get("place_of_supply") or b.get("state_code"),
+            "status": b.get("status"),
+        })
+    return {"branches": branches}
+
+
 # -------------------- Sync status / manual retry --------------------
 
 @router.get("/zoho/sync-status")

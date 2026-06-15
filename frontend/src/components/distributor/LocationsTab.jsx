@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import {
   MapPin, Plus, Trash2, Package, User, Phone, Factory, Pencil, ExternalLink,
-  Navigation,
+  Navigation, Receipt, Loader2, RefreshCw,
 } from 'lucide-react';
 import GooglePlacesAddressSearch from '../GooglePlacesAddressSearch';
 
@@ -40,6 +40,10 @@ export default function LocationsTab({
   editingLocationId,
   setEditingLocationId,
   onEditLocation,
+  zohoBranches = [],
+  branchesLoading = false,
+  branchesError = '',
+  onSyncBranches,
 }) {
   const isEditing = !!editingLocationId;
 
@@ -111,6 +115,17 @@ export default function LocationsTab({
                               Factory
                             </Badge>
                           )}
+                          {location.zoho_branch_id ? (
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200" data-testid={`branch-badge-${location.id}`} title={location.gstin || ''}>
+                              <Receipt className="h-3 w-3 mr-1" />
+                              {location.zoho_branch_name || 'Zoho branch'}
+                            </Badge>
+                          ) : location.is_factory ? (
+                            <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200" data-testid={`branch-unmapped-${location.id}`}>
+                              <Receipt className="h-3 w-3 mr-1" />
+                              No Zoho branch
+                            </Badge>
+                          ) : null}
                           {hasGeo && (
                             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
                               <Navigation className="h-3 w-3 mr-1" />
@@ -368,6 +383,72 @@ export default function LocationsTab({
                   When ON, every stock-in / stock-out / stock-transfer involving this warehouse requires a batch.
                 </span>
               </label>
+            </div>
+
+            {/* GST identity + Zoho Branch mapping (multi-GSTIN) */}
+            <div className="space-y-3 p-3 rounded-lg bg-emerald-50/50 border border-emerald-100" data-testid="location-gst-section">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Receipt className="h-4 w-4 text-emerald-600" />
+                  GST & Zoho Branch
+                </label>
+                <Button
+                  type="button" variant="outline" size="sm" className="h-7 text-xs"
+                  onClick={onSyncBranches} disabled={branchesLoading}
+                  data-testid="sync-zoho-branches-btn"
+                >
+                  {branchesLoading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                  Sync from Zoho
+                </Button>
+              </div>
+              <p className="text-[11px] text-slate-500 -mt-1">
+                Stock-out invoices from this warehouse are booked under the mapped Zoho branch's GSTIN.
+                Required for self-managed / factory warehouses so the correct GST is applied.
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Zoho Branch</Label>
+                <Select
+                  value={newLocation.zoho_branch_id || ''}
+                  onValueChange={(v) => {
+                    const b = (zohoBranches || []).find(x => String(x.branch_id) === String(v));
+                    setNewLocation(prev => ({
+                      ...prev,
+                      zoho_branch_id: v,
+                      zoho_branch_name: b?.branch_name || '',
+                      gstin: b?.gstin || prev.gstin,
+                    }));
+                  }}
+                  disabled={branchesLoading || (zohoBranches || []).length === 0}
+                >
+                  <SelectTrigger data-testid="location-zoho-branch-select">
+                    <SelectValue placeholder={
+                      branchesLoading ? 'Loading branches…'
+                        : ((zohoBranches || []).length === 0 ? 'No branches — click "Sync from Zoho"' : 'Select Zoho branch')
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(zohoBranches || []).map(b => (
+                      <SelectItem key={b.branch_id} value={String(b.branch_id)}>
+                        {b.branch_name}{b.gstin ? ` · ${b.gstin}` : ''}{b.is_primary_branch ? ' (Primary)' : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {branchesError && <p className="text-[11px] text-red-600" data-testid="branches-error">{branchesError}</p>}
+                {newLocation.zoho_branch_name && (
+                  <p className="text-[11px] text-emerald-700">Mapped to: <span className="font-medium">{newLocation.zoho_branch_name}</span></p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">GSTIN</Label>
+                <Input
+                  placeholder="e.g., 07ABCDE1234F1Z5"
+                  value={newLocation.gstin || ''}
+                  onChange={(e) => setNewLocation(prev => ({ ...prev, gstin: (e.target.value || '').toUpperCase() }))}
+                  data-testid="location-gstin-input"
+                />
+                <p className="text-[10px] text-slate-400">Auto-filled from the selected Zoho branch; editable.</p>
+              </div>
             </div>
           </div>
           <DialogFooter>

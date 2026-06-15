@@ -107,11 +107,19 @@ export default function DistributorDetail() {
     is_default: false,
     is_factory: false,
     track_batches: false,
+    gstin: '',
+    zoho_branch_id: '',
+    zoho_branch_name: '',
     lat: null,
     lng: null,
     formatted_address: '',
   });
   const [addingLocation, setAddingLocation] = useState(false);
+  // Zoho Books Branches (multi-GSTIN) — used to map each self-managed warehouse
+  // to the branch that carries its GSTIN, so stock-out invoices use the right GST.
+  const [zohoBranches, setZohoBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesError, setBranchesError] = useState('');
   
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -917,6 +925,9 @@ export default function DistributorDetail() {
     is_default: false,
     is_factory: false,
     track_batches: false,
+    gstin: '',
+    zoho_branch_id: '',
+    zoho_branch_name: '',
     lat: null,
     lng: null,
     formatted_address: '',
@@ -937,12 +948,40 @@ export default function DistributorDetail() {
       is_default: !!location.is_default,
       is_factory: !!location.is_factory,
       track_batches: !!location.track_batches,
+      gstin: location.gstin || '',
+      zoho_branch_id: location.zoho_branch_id || '',
+      zoho_branch_name: location.zoho_branch_name || '',
       lat: location.lat ?? null,
       lng: location.lng ?? null,
       formatted_address: location.formatted_address || '',
     });
     setShowLocationDialog(true);
   };
+
+  // Pull Zoho Branches so each warehouse can be mapped to its GSTIN/branch.
+  const loadZohoBranches = async () => {
+    setBranchesLoading(true);
+    setBranchesError('');
+    try {
+      const { data } = await axios.get(`${API_URL}/api/zoho/branches`, {
+        headers: { Authorization: `Bearer ${token}` }, withCredentials: true,
+      });
+      setZohoBranches(data.branches || []);
+    } catch (e) {
+      setBranchesError(e.response?.data?.detail || 'Could not load Zoho branches. Is Zoho Books connected?');
+      setZohoBranches([]);
+    } finally {
+      setBranchesLoading(false);
+    }
+  };
+
+  // Lazy-load branches the first time the location dialog opens.
+  useEffect(() => {
+    if (showLocationDialog && zohoBranches.length === 0 && !branchesLoading && !branchesError) {
+      loadZohoBranches();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showLocationDialog]);
 
   const handleAddLocation = async () => {
     if (!newLocation.location_name || !newLocation.state || !newLocation.city) {
@@ -2629,6 +2668,10 @@ export default function DistributorDetail() {
               editingLocationId={editingLocationId}
               setEditingLocationId={setEditingLocationId}
               onEditLocation={handleEditLocation}
+              zohoBranches={zohoBranches}
+              branchesLoading={branchesLoading}
+              branchesError={branchesError}
+              onSyncBranches={loadZohoBranches}
             />
           </div>
         </TabsContent>
