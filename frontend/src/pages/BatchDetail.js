@@ -546,15 +546,16 @@ export default function BatchDetail() {
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">
                     Total crates
-                    {batch.status !== 'created' && <span className="ml-1 text-[10px] text-slate-400">(locked)</span>}
+                    {batch.status !== 'created' && ((batch.total_crates || 0) - (batch.unallocated_crates || 0)) > 0 && (
+                      <span className="ml-1 text-[10px] text-amber-500">(min {(batch.total_crates || 0) - (batch.unallocated_crates || 0)} in QC)</span>
+                    )}
                   </label>
                   <input
                     type="number"
                     min="1"
-                    disabled={batch.status !== 'created'}
                     value={editForm.total_crates ?? 0}
                     onChange={(e) => setEditForm({ ...editForm, total_crates: e.target.value })}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300 disabled:bg-slate-50 disabled:text-slate-400"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
                     data-testid="edit-batch-crates"
                   />
                 </div>

@@ -683,22 +683,40 @@ async def update_batch(batch_id: str, data: BatchUpdate, current_user: dict = De
         updates["sku_id"] = data.sku_id
         updates["sku_name"] = sku.get("sku_name") or sku.get("name") or data.sku_name or existing.get("sku_name")
 
-    # Crates/bottles_per_crate only editable while batch is still "created"
-    # (after that, stage_balances + transfers are tied to the original count).
-    crates_changed = data.total_crates is not None and data.total_crates != existing.get("total_crates")
+    # Bottles-per-crate stays locked once QC has started (it changes bottle-level
+    # math + warehouse transfers). Total crates, however, can be corrected at any
+    # time — but never below the crates already moved into QC / allocations.
     bpc_changed = data.bottles_per_crate is not None and data.bottles_per_crate != existing.get("bottles_per_crate")
+    if bpc_changed and not is_created:
+        raise HTTPException(
+            status_code=400,
+            detail="Bottles-per-crate can only be changed before QC starts.",
+        )
+
+    crates_changed = data.total_crates is not None and data.total_crates != existing.get("total_crates")
     if crates_changed or bpc_changed:
-        if not is_created:
-            raise HTTPException(
-                status_code=400,
-                detail="Total crates / bottles-per-crate can only be changed before QC starts.",
-            )
         new_crates = data.total_crates if data.total_crates is not None else existing.get("total_crates", 0)
         new_bpc = data.bottles_per_crate if data.bottles_per_crate is not None else existing.get("bottles_per_crate", 0)
-        updates["total_crates"] = new_crates
-        updates["bottles_per_crate"] = new_bpc
-        updates["total_bottles"] = new_crates * new_bpc
-        updates["unallocated_crates"] = new_crates  # safe: nothing moved yet
+        if new_crates is None or int(new_crates) <= 0:
+            raise HTTPException(status_code=400, detail="Total crates must be greater than 0.")
+
+        old_total = existing.get("total_crates", 0) or 0
+        old_unalloc = existing.get("unallocated_crates", 0) or 0
+        moved = old_total - old_unalloc  # crates already pushed into QC stages / allocations
+        new_unalloc = int(new_crates) - moved
+        if new_unalloc < 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Can't set total crates to {new_crates}: {moved} crates are already "
+                    f"in QC/allocations. The minimum is {moved}."
+                ),
+            )
+
+        updates["total_crates"] = int(new_crates)
+        updates["bottles_per_crate"] = int(new_bpc)
+        updates["total_bottles"] = int(new_crates) * int(new_bpc)
+        updates["unallocated_crates"] = new_unalloc
 
     await tdb.production_batches.update_one({"id": batch_id}, {"$set": updates})
     updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})

@@ -160,3 +160,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Backend (routes/gmail.py): db.email_signature_template (per tenant). Admin/CEO-only GET/PUT /api/gmail/signature/template (role in {CEO, System Admin, Admin} else 403). GET /api/gmail/signature now returns the template RESOLVED for the current sender. Added `import re` + `_resolve_signature()`.
 - Frontend: removed the per-user "Signature" button/dialog from Mail. New admin section EmailSignatureSettings.jsx added as a "Signature" tab in Tenant Settings (placeholder-insert buttons, logo insert, enable toggle, live preview). SignatureEditor extended with placeholder buttons. Deleted SignatureSettingsDialog.jsx.
 - InlineComposer still auto-appends via GET /gmail/signature (now per-sender resolved). Verified: template save/load, resolution for 2 users, non-admin 403, admin UI + live preview.
+
+## 2026-06-15 — Production batch: Total Crates editable after creation ✅
+- Total crates was read-only once a batch left "created" status. Now editable at any status.
+- Backend (routes/production_qc.py update_batch): recomputes unallocated_crates = new_total − already-moved, and total_bottles; blocks reducing below crates already in QC/allocations (clear 400). Bottles-per-crate stays locked after QC starts (unchanged).
+- Frontend (BatchDetail.js edit dialog): crates input unlocked with a "min X in QC" hint; bottles/crate still locked.
+- Verified via API (increase→unallocated recomputed; reduce-below-allocated→400; restore) + UI screenshot (crates enabled, bpc disabled).
