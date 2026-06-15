@@ -154,6 +154,7 @@ class AccountUpdate(BaseModel):
     contact_number: Optional[str] = None
     gst_number: Optional[str] = None
     next_follow_up: Optional[str] = None
+    assigned_to: Optional[str] = None
     sku_pricing: Optional[List[AccountSKUPricing]] = None
     delivery_address: Optional[DeliveryAddress] = None
     onboarded_month: Optional[int] = None
@@ -580,6 +581,9 @@ async def update_account(account_id: str, update: AccountUpdate, current_user: d
                 update_data[key] = [s.model_dump() if hasattr(s, 'model_dump') else s for s in value]
             elif key == 'delivery_address':
                 update_data[key] = value.model_dump() if hasattr(value, 'model_dump') else value
+            elif key == 'assigned_to':
+                # Empty string explicitly means "unassign" — store as None.
+                update_data[key] = value if value != '' else None
             else:
                 update_data[key] = value
     

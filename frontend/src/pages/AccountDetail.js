@@ -231,6 +231,7 @@ export default function AccountDetail() {
   const [includeInGopMetrics, setIncludeInGopMetrics] = useState(true);
   const [businessCategory, setBusinessCategory] = useState('');
   const [businessCategories, setBusinessCategories] = useState([]);
+  const [assignedTo, setAssignedTo] = useState('');
 
   // Load business categories once for the edit dropdown (master list, tenant-scoped).
   useEffect(() => {
@@ -701,6 +702,7 @@ ${googleMapsLink}`;
       setOnboardedMonth(data.onboarded_month || '');
       setOnboardedYear(data.onboarded_year || '');
       setBusinessCategory(data.category || data.business_category || data.lead_business_category || '');
+      setAssignedTo(data.assigned_to || '');
       // Seed the activation modal's `billedBy` radio from whatever's already
       // persisted on the account so the user sees their previous choice.
       setBilledBy(data.billed_by || 'company');
@@ -1006,6 +1008,7 @@ ${googleMapsLink}`;
         contact_number: contactNumber || null,
         gst_number: gstNumber || null,
         next_follow_up: nextFollowUp || null,
+        assigned_to: assignedTo,
         sku_pricing: skuPricing.map((r) => ({ ...r, mrp: (r.mrp === '' || r.mrp == null) ? null : r.mrp })),
         onboarded_month: onboardedMonth ? parseInt(onboardedMonth) : null,
         onboarded_year: onboardedYear ? parseInt(onboardedYear) : null,
@@ -2934,7 +2937,30 @@ ${googleMapsLink}`;
             <div className="space-y-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Assigned To</p>
-                <p className="font-medium">{getAssignedUserName()}</p>
+                {isEditing ? (
+                  <Select
+                    value={assignedTo || '__unassigned__'}
+                    onValueChange={(v) => setAssignedTo(v === '__unassigned__' ? '' : v)}
+                  >
+                    <SelectTrigger className="mt-1" data-testid="assigned-to-select">
+                      <SelectValue placeholder="Select user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__unassigned__" data-testid="assigned-to-option-unassigned">
+                        Unassigned
+                      </SelectItem>
+                      {users
+                        .filter((u) => u.is_active !== false)
+                        .map((u) => (
+                          <SelectItem key={u.id} value={u.id} data-testid={`assigned-to-option-${u.id}`}>
+                            {u.name}{u.territory ? ` - ${u.territory}` : ''}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="font-medium" data-testid="assigned-to-display">{getAssignedUserName()}</p>
+                )}
               </div>
               <div>
                 <p className="text-muted-foreground">Created</p>
