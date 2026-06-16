@@ -8023,7 +8023,7 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                 headers = {
                     'Content-Type': 'application/json',
                     'X-Goog-Api-Key': api_key,
-                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id'
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id,places.location,places.addressComponents'
                 }
                 
                 body = {
@@ -8044,7 +8044,18 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                         'PRICE_LEVEL_VERY_EXPENSIVE': 5
                     }
                     price_level = price_level_map.get(place.get('priceLevel', 'PRICE_LEVEL_MODERATE'), 3)
-                    
+
+                    # Structured address (postal code / city / state) — same
+                    # extraction as the nearby-search path so the created lead
+                    # carries proper geo + components.
+                    addr_comps = place.get('addressComponents', []) or []
+                    def _pick(types, _comps=addr_comps):
+                        for c in _comps:
+                            if any(t in (c.get('types') or []) for t in types):
+                                return c.get('longText') or c.get('shortText') or ''
+                        return ''
+                    place_loc = place.get('location', {}) or {}
+
                     outlet_data = {
                         'place_id': place.get('id', ''),
                         'name': place.get('displayName', {}).get('text', 'Unknown'),
@@ -8053,7 +8064,14 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                         'rating': place.get('rating', 0),
                         'user_ratings_total': place.get('userRatingCount', 0),
                         'price_level': '₹' * price_level,
-                        'types': place.get('types', [])
+                        'types': place.get('types', []),
+                        # Geo + structured address so the created lead's
+                        # delivery_address has lat/lng for field check-in.
+                        'lat': place_loc.get('latitude'),
+                        'lng': place_loc.get('longitude'),
+                        'pincode': _pick(['postal_code']),
+                        'city': _pick(['locality', 'administrative_area_level_2']),
+                        'state': _pick(['administrative_area_level_1']),
                     }
                     all_places.append(outlet_data)
                 
