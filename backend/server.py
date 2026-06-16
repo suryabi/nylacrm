@@ -9374,8 +9374,11 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
             ))
             total_sku_cost += item_cost
     
-    # Calculate total amount
-    final_amount = total_sku_cost if request.expense_type == 'free_trial' else request.amount
+    # Calculate total amount — rounded to whole rupees end-to-end so the
+    # stored amount, the notification body, and the approval task description
+    # never carry confusing fractional paise from MLP × Qty products.
+    raw_amount = total_sku_cost if request.expense_type == 'free_trial' else request.amount
+    final_amount = round(float(raw_amount or 0))
     
     # Create expense request
     expense_obj = ExpenseRequest(

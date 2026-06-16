@@ -277,14 +277,38 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
                         </p>
                       )}
                     </td>
-                    <td className="px-3 py-3 font-medium">
-                      ₹{(expense.amount || 0).toLocaleString()}
+                    <td className="px-3 py-3 font-medium tabular-nums">
+                      ₹{Math.round(Number(expense.amount || 0)).toLocaleString('en-IN')}
                     </td>
                     <td className="px-3 py-3">
                       <Badge className={`${status.color} text-xs`}>
                         <StatusIcon className="h-3 w-3 mr-1" />
                         {status.label}
                       </Badge>
+                      {expense.status === 'pending_approval' && expense.approver_name && (
+                        <div
+                          className="text-[11px] text-muted-foreground mt-1"
+                          data-testid={`expense-approver-${expense.id}`}
+                        >
+                          Pending with <span className="font-medium text-foreground">{expense.approver_name}</span>
+                        </div>
+                      )}
+                      {expense.status === 'approved' && expense.approver_name && (
+                        <div
+                          className="text-[11px] text-muted-foreground mt-1"
+                          data-testid={`expense-approver-${expense.id}`}
+                        >
+                          by <span className="font-medium text-foreground">{expense.approver_name}</span>
+                        </div>
+                      )}
+                      {expense.status === 'rejected' && expense.approver_name && (
+                        <div
+                          className="text-[11px] text-muted-foreground mt-1"
+                          data-testid={`expense-approver-${expense.id}`}
+                        >
+                          by <span className="font-medium text-foreground">{expense.approver_name}</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-muted-foreground">
                       {format(new Date(expense.created_at), 'MMM d, yyyy')}
