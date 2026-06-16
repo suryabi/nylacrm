@@ -242,7 +242,10 @@ export default function PerformanceTracker() {
   const { statuses: leadStatuses, getStatusLabel, getStatusById } = useLeadStatuses();
   const [plans, setPlans] = useState([]);
   const [viewMode, setViewMode] = useState(() => ssGet('view_mode', 'target_plan')); // 'target_plan' | 'month'
-  const [selectedPlan, setSelectedPlan] = useState(() => ssGet('plan', ''));
+  // Plan is intentionally NOT persisted across page loads — start fresh so the
+  // user explicitly picks a plan each visit (avoids surprise data from a stale
+  // session pick).
+  const [selectedPlan, setSelectedPlan] = useState('');
   const [resources, setResources] = useState([]);
   // Stable list of all sales/admin resources — used to populate territory/city
   // filter dropdowns regardless of plan selection.
@@ -281,7 +284,7 @@ export default function PerformanceTracker() {
 
   // Persist filters to sessionStorage on change
   useEffect(() => { ssSet('view_mode', viewMode); }, [viewMode]);
-  useEffect(() => { ssSet('plan', selectedPlan); }, [selectedPlan]);
+  // Note: `selectedPlan` is intentionally NOT persisted — see comment above.
   useEffect(() => { ssSet('territory', territoryFilter); }, [territoryFilter]);
   useEffect(() => { ssSet('city', cityFilter); }, [cityFilter]);
   useEffect(() => { ssSet('resource', selectedResource); }, [selectedResource]);
