@@ -36,6 +36,37 @@ export default function StockDashboard() {
   const [distributors, setDistributors] = useState([]);
   const [safetyData, setSafetyData] = useState(null);
   const [safetyLoading, setSafetyLoading] = useState(false);
+  // Display unit toggle. "bottles" = raw bottle counts (the underlying storage
+  // unit). "default_crate" = each SKU shown in its own default crate packaging
+  // (e.g. 1L → 12 Bottle Crate, 660ml → 24 Bottle Crate). Reps can switch on
+  // the fly to count what they actually load onto a truck.
+  const [unitMode, setUnitMode] = useState('default_crate');
+
+  // Convert a row's quantity into the active unit. For 'default_crate' mode we
+  // floor-divide bottles by the SKU's default `units_per_package`. Rows that
+  // don't carry a default packaging (or for which it's 1) just return the
+  // bottle count — so empty-bottles etc. keep working as before.
+  const toUnit = (row, qty) => {
+    if (!row) return qty || 0;
+    if (unitMode === 'bottles') return qty || 0;
+    const upp = row.default_units_per_package || 1;
+    if (upp <= 1) return qty || 0;
+    return Math.floor((qty || 0) / upp);
+  };
+  const unitLabelFor = (row) => {
+    if (unitMode === 'bottles') return 'bottles';
+    const name = row?.default_packaging_name;
+    if (!name) return 'bottles';
+    // Pick the last *word* in the packaging name, ignoring numbers, dashes
+    // and other non-letter tokens. "Crate - 12" → "crates", "Carton - 6" →
+    // "cartons", "24 Bottle Crate" → "crates", "Bottle (1)" → "bottles".
+    const words = name
+      .replace(/\(.*\)$/, '')
+      .split(/\s+/)
+      .map(w => w.replace(/[-_]+$/, '').trim())
+      .filter(w => /[a-z]/i.test(w));
+    return ((words[words.length - 1] || 'package').toLowerCase() + 's');
+  };
 
   // Fetch distributors list
   const fetchDistributors = useCallback(async () => {
@@ -276,19 +307,45 @@ export default function StockDashboard() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Units banner — consistent across every stock surface so users always
-            know whether they're looking at crates or bottles. */}
+        {/* Units toggle — flip the entire dashboard between raw bottles and
+            each SKU's default crate packaging (e.g. 1L → 12 Bottle Crate). */}
         <div
-          className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50/70 px-3 py-1.5 text-[11px] text-slate-600"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-600"
           data-testid="units-banner"
         >
-          <Package className="h-3.5 w-3.5 text-slate-400" />
-          <span>
-            Quantities in <span className="font-semibold text-slate-700">crates</span>
-            <span className="text-slate-400"> — except </span>
-            <span className="font-semibold text-emerald-700">Empty Bottles</span>
-            <span className="text-slate-400"> (raw bottles)</span>
-          </span>
+          <div className="flex items-center gap-2">
+            <Package className="h-3.5 w-3.5 text-slate-400" />
+            <span>
+              Showing each SKU in its
+              {unitMode === 'default_crate' ? (
+                <> <span className="font-semibold text-slate-700">default crate packaging</span> (configured in SKU Management).</>
+              ) : (
+                <> <span className="font-semibold text-slate-700">raw bottle</span> count.</>
+              )}
+            </span>
+          </div>
+          <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5" role="group" aria-label="Display unit">
+            <button
+              type="button"
+              onClick={() => setUnitMode('default_crate')}
+              className={`px-3 py-1 text-[11px] font-medium rounded-[3px] transition-colors ${
+                unitMode === 'default_crate' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              data-testid="unit-toggle-crate"
+            >
+              Default Crate
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnitMode('bottles')}
+              className={`px-3 py-1 text-[11px] font-medium rounded-[3px] transition-colors ${
+                unitMode === 'bottles' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              data-testid="unit-toggle-bottles"
+            >
+              Bottles
+            </button>
+          </div>
         </div>
 
         {/* By Location Tab */}
@@ -347,15 +404,26 @@ export default function StockDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {location.items?.sort((a, b) => b.quantity - a.quantity).map((item, idx) => (
+                            {location.items?.sort((a, b) => b.quantity - a.quantity).map((item, idx) => {
+                              const q = toUnit(item, item.quantity);
+                              const lbl = unitLabelFor(item);
+                              return (
                               <tr key={item.sku_id || idx} className="border-b last:border-b-0 hover:bg-muted/30">
                                 <td className="p-3">
                                   <div className="flex items-center gap-2">
                                     <Package className="h-4 w-4 text-muted-foreground" />
-                                    {item.sku_name}
+                                    <div>
+                                      <div>{item.sku_name}</div>
+                                      {unitMode === 'default_crate' && item.default_packaging_name && (
+                                        <div className="text-[10px] text-muted-foreground">in {item.default_packaging_name}</div>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
-                                <td className="p-3 text-right font-medium">{item.quantity?.toLocaleString()}</td>
+                                <td className="p-3 text-right">
+                                  <div className="font-medium tabular-nums">{q.toLocaleString()}</div>
+                                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{lbl}</div>
+                                </td>
                                 <td className="p-3 text-right">
                                   <div className="flex items-center justify-end gap-2">
                                     <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
@@ -370,7 +438,8 @@ export default function StockDashboard() {
                                   </div>
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -407,18 +476,27 @@ export default function StockDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stockData?.by_sku?.map((sku, idx) => (
+                      {stockData?.by_sku?.map((sku, idx) => {
+                        const shownQty = toUnit(sku, sku.total_quantity);
+                        const unitLbl = unitLabelFor(sku);
+                        return (
                         <tr key={sku.sku_id || idx} className="border-b hover:bg-muted/30" data-testid={`sku-row-${idx}`}>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
                               <div className="p-1.5 bg-green-100 rounded">
                                 <Package className="h-4 w-4 text-green-600" />
                               </div>
-                              <span className="font-medium">{sku.sku_name}</span>
+                              <div className="min-w-0">
+                                <div className="font-medium">{sku.sku_name}</div>
+                                {unitMode === 'default_crate' && sku.default_packaging_name && (
+                                  <div className="text-[10px] text-muted-foreground">in {sku.default_packaging_name}</div>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="p-3 text-right">
-                            <span className="text-lg font-bold">{sku.total_quantity?.toLocaleString()}</span>
+                            <div className="text-lg font-bold tabular-nums">{shownQty.toLocaleString()}</div>
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{unitLbl}</div>
                           </td>
                           <td className="p-3 text-right">
                             <Badge variant="outline">{sku.location_count} locations</Badge>
@@ -437,7 +515,7 @@ export default function StockDashboard() {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      );})}
                     </tbody>
                   </table>
                 </div>

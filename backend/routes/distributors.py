@@ -3541,6 +3541,57 @@ async def get_stock_dashboard_summary(
         })
     location_summary.sort(key=lambda x: x["total_quantity"], reverse=True)
 
+    # ── 8. Enrich each SKU with its DEFAULT crate packaging ────────────────
+    # The rep can then toggle the dashboard from raw bottles to that SKU's
+    # default crate (e.g. "12 Bottle Crate" for 1L) on the frontend. We use
+    # `packaging_config.stock_out` (customer-facing) as the canonical default
+    # because that's the unit reps think in when reading the dashboard. Falls
+    # back to `packaging_config.stock_in`, then to any first packaging found.
+    sku_ids_in_play = list({r.get("sku_id") for r in unified if r.get("sku_id")})
+    sku_pkg: dict = {}
+    if sku_ids_in_play:
+        # Master SKUs may pre-date the tenant_id field — accept rows without it
+        # too, mirroring how the rest of the dashboard treats legacy masters.
+        async for sku in db.master_skus.find(
+            {
+                "id": {"$in": sku_ids_in_play},
+                "$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}],
+            },
+            {"_id": 0, "id": 1, "packaging_config": 1},
+        ):
+            cfg = sku.get("packaging_config") or {}
+            chosen = None
+            for ctx in ("stock_out", "stock_in", "production", "promo_stock_out"):
+                rows = cfg.get(ctx) or []
+                if not rows:
+                    continue
+                pick = next((p for p in rows if p.get("is_default")), None) or rows[0]
+                if pick and (pick.get("units_per_package") or 0) > 1:
+                    chosen = pick
+                    break
+                if pick and not chosen:
+                    chosen = pick  # fallback (e.g. "Bottle (1)") — used if no crate exists
+            if chosen:
+                sku_pkg[sku["id"]] = {
+                    "default_packaging_name": chosen.get("packaging_type_name"),
+                    "default_units_per_package": int(chosen.get("units_per_package") or 1),
+                }
+
+    def _attach(item: dict):
+        """Add default-packaging fields + the converted crate count to a row."""
+        pkg = sku_pkg.get(item.get("sku_id"))
+        item["default_packaging_name"] = (pkg or {}).get("default_packaging_name")
+        item["default_units_per_package"] = (pkg or {}).get("default_units_per_package") or 1
+        upp = item["default_units_per_package"]
+        qty = int(item.get("total_quantity") if "total_quantity" in item else item.get("quantity", 0))
+        item["default_packaging_quantity"] = qty // upp if upp > 0 else qty
+        return item
+
+    for row in sku_summary:
+        _attach(row)
+    for loc in location_summary:
+        loc["items"] = [_attach(dict(it)) for it in loc.get("items", [])]
+
     # Cities (just the ones whose locations actually have stock)
     cities_with_stock = await db.distributor_locations.distinct(
         "city",
