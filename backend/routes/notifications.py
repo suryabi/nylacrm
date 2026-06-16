@@ -102,3 +102,38 @@ async def mark_all_read(current_user: dict = Depends(get_current_user)):
         {"$set": {"is_read": True, "read_at": _now()}},
     )
     return {"success": True, "updated": res.modified_count}
+
+
+@router.delete("/{notif_id}")
+async def delete_notification(notif_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a single notification belonging to the current user."""
+    tenant_id = get_current_tenant_id()
+    res = await db.notifications.delete_one(
+        {"id": notif_id, "tenant_id": tenant_id, "user_id": current_user.get("id")}
+    )
+    return {"success": res.deleted_count > 0, "deleted": res.deleted_count}
+
+
+@router.delete("")
+async def bulk_delete_notifications(
+    category: str = Query(None),     # e.g. 'approval' to clear pending-approval alerts
+    status: str = Query(None),       # 'read' | 'unread' | None (all)
+    search: str = Query(None),       # match title/body
+    current_user: dict = Depends(get_current_user),
+):
+    """Bulk-delete the current user's notifications matching the given filters.
+    Always scoped to (tenant_id, user_id) so a user can only clear their own."""
+    import re as _re
+    tenant_id = get_current_tenant_id()
+    q = {"tenant_id": tenant_id, "user_id": current_user.get("id")}
+    if category:
+        q["category"] = category
+    if status == "unread":
+        q["is_read"] = False
+    elif status == "read":
+        q["is_read"] = True
+    if search and search.strip():
+        rx = {"$regex": _re.escape(search.strip()), "$options": "i"}
+        q["$or"] = [{"title": rx}, {"body": rx}]
+    res = await db.notifications.delete_many(q)
+    return {"success": True, "deleted": res.deleted_count}
