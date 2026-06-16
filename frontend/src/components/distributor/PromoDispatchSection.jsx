@@ -268,14 +268,17 @@ export default function PromoDispatchSection({
     // dropdown then guides the rep to pick one explicitly.
     const pkgs = master?.packaging_config?.promo_stock_out || [];
     const defPkg = pkgs.find(p => p.is_default) || pkgs[0] || null;
+    const upp = defPkg?.units_per_package || 1;
     setItems(prev => prev.map(it => {
       if (it.id !== id) return it;
-      const indicative = master ? (master.mrp ?? master.base_price ?? 0) : it.unit_price;
+      // Per-bottle indicative price from the SKU master, scaled to the chosen
+      // packaging size (e.g. ₹112/bottle × 24 bottles/crate = ₹2,688/crate).
+      const perBottle = master ? (master.mrp ?? master.base_price ?? 0) : 0;
       return {
         ...it,
         sku_id: skuId,
         sku_name: master?.sku_name || master?.name || it.sku_name,
-        unit_price: indicative || 0,
+        unit_price: Math.round((perBottle || 0) * upp * 100) / 100,
         batch_id: '',
         batch_code: '',
         packaging_type_id: defPkg?.packaging_type_id || '',
@@ -875,9 +878,17 @@ export default function PromoDispatchSection({
                                 onValueChange={(ptId) => {
                                   const pkg = promoPkgs.find(p => p.packaging_type_id === ptId);
                                   if (!pkg) return;
+                                  // Re-scale the indicative-per-package value to the new
+                                  // packaging size so the total stays consistent
+                                  // (e.g. ₹112/bottle → ₹2,688 for crate-24, ₹1,344 for crate-12).
+                                  const perBottle = (item.units_per_package && item.units_per_package > 0)
+                                    ? (parseFloat(item.unit_price) || 0) / item.units_per_package
+                                    : (parseFloat(item.unit_price) || 0);
+                                  const newPerPackage = Math.round(perBottle * (pkg.units_per_package || 1) * 100) / 100;
                                   updateItem(item.id, 'packaging_type_id', pkg.packaging_type_id);
                                   updateItem(item.id, 'packaging_type_name', pkg.packaging_type_name);
                                   updateItem(item.id, 'units_per_package', pkg.units_per_package);
+                                  updateItem(item.id, 'unit_price', newPerPackage);
                                 }}
                               >
                                 <SelectTrigger className="h-10" data-testid={`promo-pkg-select-${index}`}>
