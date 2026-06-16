@@ -446,10 +446,17 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
 
 @router.get("/target-plans")
 async def get_target_plans(current_user: dict = Depends(get_current_user)):
-    """Get all target plans for selection."""
+    """Get all *active* target plans for selection in the Performance Tracker.
+
+    Draft / inactive / archived plans are excluded so reps can't accidentally
+    point performance against an unreleased plan.
+    """
     tenant_id = get_current_tenant_id()
     plans = await db.target_plans_v2.find(
-        {"$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}]},
+        {
+            "status": "active",
+            "$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}],
+        },
         {"_id": 0}
     ).sort("created_at", -1).to_list(100)
     return plans

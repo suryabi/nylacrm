@@ -478,7 +478,11 @@ export default function PerformanceTracker() {
                     <SelectTrigger data-testid="select-plan"><SelectValue placeholder="Select a target plan..." /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">Select a plan</SelectItem>
-                      {plans.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                      {plans.map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}{p.assigned_to_name ? ` (${p.assigned_to_name})` : ''}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
