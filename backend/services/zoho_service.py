@@ -2009,10 +2009,41 @@ async def create_delivery_challan_for_promo_dispatch(
         "gst_treatment": "out_of_scope",
         "tax_total": 0,
     }
-    if dispatch.get("delivery_address"):
-        # Override the printed `shipping_address` with the actual recipient
-        # delivery address so the PDF carries the right "deliver to" block.
-        payload["shipping_address"] = {"address": dispatch["delivery_address"]}
+
+    # FROM (header) address: pin the document to the source warehouse's Zoho
+    # Branch so the printed challan header switches from the org HQ (Madhapur)
+    # to that branch's registered address (e.g. Delhi). The branch id is
+    # configured per warehouse under Distributor → Locations → "Zoho Branch ID".
+    src_branch_id = (dispatch.get("source_zoho_branch_id") or "").strip()
+    if src_branch_id:
+        payload["branch_id"] = src_branch_id
+
+    # DELIVER-TO address: prefer the recipient's structured shipping address
+    # (lead / contact / employee). Zoho's API only respects field overrides
+    # when the dict carries the *structured* keys (address, city, state, zip
+    # …) — passing just an `address` blob is silently ignored and the customer's
+    # billing address gets used instead, which is the bug the user reported.
+    rsa = dispatch.get("recipient_shipping_address") or {}
+    has_structured = any((rsa.get(k) or "").strip() for k in ("address", "city", "state", "zip"))
+    if has_structured:
+        payload["shipping_address"] = {
+            "attention": rsa.get("attention") or "",
+            "address":   rsa.get("address") or "",
+            "street2":   rsa.get("street2") or "",
+            "city":      rsa.get("city") or "",
+            "state":     rsa.get("state") or "",
+            "zip":       rsa.get("zip") or "",
+            "country":   rsa.get("country") or "India",
+            "phone":     rsa.get("phone") or "",
+        }
+    elif dispatch.get("delivery_address"):
+        # Legacy fallback for older dispatches that don't carry the structured
+        # address yet — at least put the text into the address field.
+        payload["shipping_address"] = {
+            "attention": dispatch.get("contact_name") or "",
+            "address": dispatch["delivery_address"][:200],
+            "country": "India",
+        }
 
     result = await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=payload)
     challan = result.get("deliverychallan") or result.get("delivery_challan") or {}

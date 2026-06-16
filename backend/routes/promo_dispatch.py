@@ -232,6 +232,24 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     challan_number = await _generate_challan_number(tenant_id)
     dispatch_id = str(uuid.uuid4())
     contact_addr = ", ".join([x for x in [recipient.get("address"), recipient.get("city"), recipient.get("state")] if x])
+
+    # Build a STRUCTURED shipping address for the recipient (lead / contact /
+    # employee) so the Zoho Delivery Challan PDF prints the real Deliver-To
+    # block — not the distributor's billing address. Leads created via Lead
+    # Discovery carry a nested `delivery_address` dict; older leads/contacts
+    # carry the same fields at the top level. We accept both.
+    da = recipient.get("delivery_address") if isinstance(recipient.get("delivery_address"), dict) else {}
+    recipient_shipping = {
+        "attention": recipient_name or "",
+        "address": (da.get("address_line1") or recipient.get("address") or "")[:200],
+        "street2": (da.get("address_line2") or "")[:200],
+        "city":    (da.get("city")    or recipient.get("city")    or "")[:100],
+        "state":   (da.get("state")   or recipient.get("state")   or "")[:100],
+        "zip":     str(da.get("pincode") or recipient.get("pincode") or "")[:20],
+        "country": (da.get("country") or recipient.get("country") or "India")[:50],
+        "phone":   recipient_phone or "",
+    }
+
     total_qty = sum(it.quantity for it in data.items)
     total_value = sum(it.quantity * float(it.unit_price or 0) for it in data.items)
 
@@ -259,6 +277,14 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "driver_name": data.driver_name,
         "driver_contact": data.driver_contact,
         "delivery_address": data.delivery_address or contact_addr,
+        # Structured shipping address (recipient) + source warehouse branch
+        # mapping — used by the Zoho push to set the right "Deliver To" block
+        # and source-branch header. Persisted so retries don't need to re-fetch
+        # the lead/contact/employee or the source warehouse.
+        "recipient_shipping_address": recipient_shipping,
+        "source_zoho_branch_id": loc.get("zoho_branch_id"),
+        "source_location_name": loc.get("location_name"),
+        "source_gstin": loc.get("gstin"),
         "remarks": data.remarks,
         "total_quantity": total_qty,
         "total_indicative_value": round(total_value, 2),
@@ -445,6 +471,9 @@ async def retry_zoho_for_promo_dispatch(distributor_id: str, dispatch_id: str, c
         "quantity": it.get("quantity"),
         "unit_price": float(it.get("unit_price") or 0),
         "batch_code": it.get("batch_code"),
+        "packaging_type_id": it.get("packaging_type_id"),
+        "packaging_type_name": it.get("packaging_type_name"),
+        "units_per_package": it.get("units_per_package"),
     } for it in items_rows]
     try:
         mapping = await create_delivery_challan_for_promo_dispatch(
