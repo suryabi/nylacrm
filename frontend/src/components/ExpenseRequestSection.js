@@ -62,6 +62,8 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [masterSkus, setMasterSkus] = useState([]);
+  // Details modal — opened by clicking a row in the history table.
+  const [detailsExpense, setDetailsExpense] = useState(null);
   
   // Form state
   const [expenseType, setExpenseType] = useState('');
@@ -254,7 +256,12 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
                 const status = statusConfig[expense.status] || statusConfig.draft;
                 const StatusIcon = status.icon;
                 return (
-                  <tr key={expense.id} className="hover:bg-muted/30">
+                  <tr
+                    key={expense.id}
+                    className="hover:bg-muted/30 cursor-pointer"
+                    onClick={() => setDetailsExpense(expense)}
+                    data-testid={`expense-row-${expense.id}`}
+                  >
                     <td className="px-3 py-3">
                       <div>
                         <span className="font-medium">{expense.expense_type_label}</span>
@@ -287,7 +294,7 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => handleDelete(expense.id)}
+                          onClick={(e) => { e.stopPropagation(); handleDelete(expense.id); }}
                           className="h-8 w-8 text-red-500 hover:text-red-700"
                           data-testid={`delete-expense-${expense.id}`}
                         >
@@ -514,6 +521,145 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Details Dialog — read-only view of an expense request */}
+      <ExpenseDetailsDialog
+        expense={detailsExpense}
+        onClose={() => setDetailsExpense(null)}
+      />
     </Card>
+  );
+}
+
+// ── Read-only details dialog ──────────────────────────────────────────────
+// Opened by clicking any expense row in the history table. Shows everything
+// the requester entered (type, description, amount/free-trial, SKUs, MLP
+// breakdown, approval state, who-approved-when).
+function ExpenseDetailsDialog({ expense, onClose }) {
+  if (!expense) return null;
+  const status = statusConfig[expense.status] || statusConfig.draft;
+  const StatusIcon = status.icon;
+  const isFreeTrial = expense.expense_type === 'free_trial';
+  const fmtAmt = (v) => `₹${Math.round(Number(v || 0)).toLocaleString('en-IN')}`;
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="expense-details-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Receipt className="h-5 w-5" />
+            {expense.expense_type_label}
+            <Badge className={`${status.color} text-xs ml-2`}>
+              <StatusIcon className="h-3 w-3 mr-1" />
+              {status.label}
+            </Badge>
+          </DialogTitle>
+          <DialogDescription>
+            Submitted by <span className="font-medium text-foreground">{expense.user_name || '—'}</span>
+            {expense.created_at && (
+              <> on <span className="font-medium text-foreground">{format(new Date(expense.created_at), 'MMM d, yyyy · h:mm a')}</span></>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 py-2">
+          {/* Top: amount + key facts */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 rounded-lg border bg-muted/30 p-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Amount</div>
+              <div className="text-lg font-bold text-foreground tabular-nums" data-testid="details-amount">
+                {fmtAmt(expense.amount)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">For</div>
+              <div className="text-sm font-medium text-foreground truncate" title={expense.entity_name}>{expense.entity_name || '—'}</div>
+              {expense.entity_city && <div className="text-xs text-muted-foreground">{expense.entity_city}</div>}
+            </div>
+            {isFreeTrial && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Trial Duration</div>
+                <div className="text-sm font-medium text-foreground">{expense.free_trial_days || 0} days</div>
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
+          {expense.description && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Description</div>
+              <div className="text-sm whitespace-pre-wrap rounded-md border bg-background p-3" data-testid="details-description">
+                {expense.description}
+              </div>
+            </div>
+          )}
+
+          {/* SKU breakdown for free-trial */}
+          {isFreeTrial && Array.isArray(expense.sku_items) && expense.sku_items.length > 0 && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                <Package className="h-3.5 w-3.5" /> SKU Breakdown
+              </div>
+              <div className="border rounded-md overflow-hidden">
+                <table className="w-full text-sm" data-testid="details-sku-table">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">SKU</th>
+                      <th className="text-right px-3 py-2 font-medium w-20">Qty</th>
+                      <th className="text-right px-3 py-2 font-medium w-28">MLP</th>
+                      <th className="text-right px-3 py-2 font-medium w-28">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {expense.sku_items.map((it, i) => (
+                      <tr key={i}>
+                        <td className="px-3 py-2">{it.sku_name}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{it.quantity}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{fmtAmt(it.minimum_landing_price)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium">{fmtAmt(it.total_cost)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-muted/30">
+                    <tr>
+                      <td colSpan={3} className="px-3 py-2 text-right font-medium">Total</td>
+                      <td className="px-3 py-2 text-right tabular-nums font-bold">{fmtAmt(expense.total_sku_cost || expense.amount)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                MLP = Minimum Landing Price for <span className="font-medium">{expense.entity_city || '—'}</span>.
+              </p>
+            </div>
+          )}
+
+          {/* Approval timeline */}
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">Approval</div>
+            <div className="rounded-md border bg-background divide-y" data-testid="details-approval">
+              <div className="flex items-center justify-between px-3 py-2 text-sm">
+                <span className="text-muted-foreground">Approver</span>
+                <span className="font-medium">{expense.approver_name || 'Not routed yet'}</span>
+              </div>
+              {expense.approval_date && (
+                <div className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">{expense.status === 'rejected' ? 'Rejected on' : 'Approved on'}</span>
+                  <span className="font-medium">{format(new Date(expense.approval_date), 'MMM d, yyyy · h:mm a')}</span>
+                </div>
+              )}
+              {expense.approver_comments && (
+                <div className="px-3 py-2 text-sm">
+                  <div className="text-muted-foreground mb-0.5">Approver comments</div>
+                  <div className="whitespace-pre-wrap">{expense.approver_comments}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} data-testid="details-close-btn">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
