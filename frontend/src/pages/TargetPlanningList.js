@@ -643,8 +643,17 @@ export default function TargetPlanningList() {
                     </div>
                   )}
 
-                  <div className="mt-1 flex items-center text-sm font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    View Details <ArrowRight className="h-4 w-4 ml-1" />
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span
+                      className="text-xs text-zinc-500 truncate"
+                      title={plan.name}
+                      data-testid={`plan-name-${plan.id}`}
+                    >
+                      {plan.name}
+                    </span>
+                    <span className="flex items-center text-sm font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0">
+                      View Details <ArrowRight className="h-4 w-4 ml-1" />
+                    </span>
                   </div>
                 </div>
               </div>
