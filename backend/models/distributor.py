@@ -573,6 +573,11 @@ class PromoDeliveryItemCreate(BaseModel):
     unit_price: float = 0  # indicative value per unit (not a sale price)
     batch_id: Optional[str] = None
     batch_code: Optional[str] = None
+    # Packaging — mirrors stock-transfer line items. The SKU's
+    # `packaging_config.promo_stock_out` drives the dropdown in the dialog.
+    packaging_type_id: Optional[str] = None
+    packaging_type_name: Optional[str] = None  # e.g. "Crate - 12", "Carton - 6"
+    units_per_package: Optional[int] = None
     remarks: Optional[str] = None
 
 

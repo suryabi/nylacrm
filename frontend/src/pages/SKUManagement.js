@@ -683,6 +683,7 @@ export default function SKUManagement() {
                 { key: 'production', label: 'Production', desc: 'Packaging used during production batches' },
                 { key: 'stock_in', label: 'Stock In (Distributor Delivery)', desc: 'Packaging for shipments to distributors' },
                 { key: 'stock_out', label: 'Stock Out (Customer Delivery)', desc: 'Packaging for customer deliveries' },
+                { key: 'promo_stock_out', label: 'Promotional Stock Out', desc: 'Packaging for non-sale dispatches (sampling, networking, brand visibility)' },
               ].map(ctx => {
                 const items = formData.packaging_config?.[ctx.key] || [];
                 return (

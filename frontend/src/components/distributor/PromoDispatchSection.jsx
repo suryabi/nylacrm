@@ -20,7 +20,7 @@ const ADMIN_ROLES = ['CEO', 'Director', 'Admin', 'admin', 'Super Admin', 'super_
 const NON_EMPLOYEE_ROLES = ['Distributor', 'Driver'];  // not internal staff — excluded from Employee picker
 
 let _rowSeq = 0;
-const newItem = () => ({ id: `pi-${++_rowSeq}`, sku_id: '', sku_name: '', quantity: 1, unit_price: 0, batch_id: '', batch_code: '' });
+const newItem = () => ({ id: `pi-${++_rowSeq}`, sku_id: '', sku_name: '', quantity: 1, unit_price: 0, batch_id: '', batch_code: '', packaging_type_id: '', packaging_type_name: '', units_per_package: null });
 const fmtINR = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PromoDispatchSection({
@@ -263,6 +263,11 @@ export default function PromoDispatchSection({
 
   const onSelectSku = (id, skuId) => {
     const master = skus.find(s => s.id === skuId);
+    // Use the SKU's `packaging_config.promo_stock_out` to pre-select the
+    // default packaging (e.g. "Crate - 12"). Falls back to nothing — the
+    // dropdown then guides the rep to pick one explicitly.
+    const pkgs = master?.packaging_config?.promo_stock_out || [];
+    const defPkg = pkgs.find(p => p.is_default) || pkgs[0] || null;
     setItems(prev => prev.map(it => {
       if (it.id !== id) return it;
       const indicative = master ? (master.mrp ?? master.base_price ?? 0) : it.unit_price;
@@ -273,6 +278,9 @@ export default function PromoDispatchSection({
         unit_price: indicative || 0,
         batch_id: '',
         batch_code: '',
+        packaging_type_id: defPkg?.packaging_type_id || '',
+        packaging_type_name: defPkg?.packaging_type_name || '',
+        units_per_package: defPkg?.units_per_package || null,
       };
     }));
   };
@@ -318,6 +326,9 @@ export default function PromoDispatchSection({
           unit_price: parseFloat(i.unit_price) || 0,
           batch_id: (i.batch_id && i.batch_id !== '__legacy__') ? i.batch_id : null,
           batch_code: i.batch_code || null,
+          packaging_type_id: i.packaging_type_id || null,
+          packaging_type_name: i.packaging_type_name || null,
+          units_per_package: i.units_per_package ?? null,
         })),
       };
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries`, {
@@ -833,6 +844,12 @@ export default function PromoDispatchSection({
                   {items.map((item, index) => {
                     const lineValue = (parseInt(item.quantity) || 0) * (parseFloat(item.unit_price) || 0);
                     const batches = batchMap[item.sku_id] || [];
+                    const masterSku = skus.find(s => s.id === item.sku_id);
+                    const promoPkgs = masterSku?.packaging_config?.promo_stock_out || [];
+                    // Friendly label like "crate" (singular) or "carton" — falls back
+                    // to the legacy "crates" wording when the SKU has no promo
+                    // packaging configured yet.
+                    const unitLabel = (item.packaging_type_name || 'package').toLowerCase().split(' ')[0] || 'package';
                     return (
                       <div key={item.id} className={`px-4 py-3 ${index % 2 ? 'bg-slate-50' : 'bg-white'}`} data-testid={`promo-item-${index}`}>
                         <div className="flex items-center gap-3">
@@ -845,6 +862,38 @@ export default function PromoDispatchSection({
                                 ))}
                               </SelectContent>
                             </Select>
+                          </div>
+                          {/* Promotional packaging — driven by the SKU's
+                              `packaging_config.promo_stock_out` configured in
+                              SKU Management. Hidden until the user picks an
+                              SKU; shows a faded "—" if the SKU has no promo
+                              packaging set up yet. */}
+                          <div className="w-44 flex-shrink-0">
+                            {item.sku_id && promoPkgs.length > 0 ? (
+                              <Select
+                                value={item.packaging_type_id || ''}
+                                onValueChange={(ptId) => {
+                                  const pkg = promoPkgs.find(p => p.packaging_type_id === ptId);
+                                  if (!pkg) return;
+                                  updateItem(item.id, 'packaging_type_id', pkg.packaging_type_id);
+                                  updateItem(item.id, 'packaging_type_name', pkg.packaging_type_name);
+                                  updateItem(item.id, 'units_per_package', pkg.units_per_package);
+                                }}
+                              >
+                                <SelectTrigger className="h-10" data-testid={`promo-pkg-select-${index}`}>
+                                  <SelectValue placeholder="Select packaging" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {promoPkgs.map(pkg => (
+                                    <SelectItem key={pkg.packaging_type_id} value={pkg.packaging_type_id}>
+                                      {pkg.packaging_type_name} ({pkg.units_per_package})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : item.sku_id ? (
+                              <span className="text-[11px] text-muted-foreground italic block py-2.5">No promo packaging configured for this SKU</span>
+                            ) : null}
                           </div>
                           <Button variant="ghost" size="sm" className="h-10 w-10 p-0 text-destructive flex-shrink-0" onClick={() => setItems(prev => prev.filter(i => i.id !== item.id))}>
                             <Trash2 className="h-4 w-4" />
@@ -861,18 +910,18 @@ export default function PromoDispatchSection({
                             }}
                             testIdPrefix={`promo-batch-${index}`}
                             emptyMessage="No batches available for this SKU at the source."
-                            unitLabel="crates"
+                            unitLabel={unitLabel + 's'}
                           />
                         )}
 
                         <div className="flex items-start gap-3 mt-3">
                           <div className="w-24 flex-shrink-0">
-                            <Label className="text-xs text-muted-foreground">Qty (crates)</Label>
+                            <Label className="text-xs text-muted-foreground">Qty ({unitLabel}s)</Label>
                             <Input type="number" min="1" className="h-10 mt-1 text-base font-medium" value={item.quantity}
                               onChange={(e) => updateItem(item.id, 'quantity', e.target.value)} data-testid={`promo-qty-${index}`} />
                           </div>
                           <div className="flex-1 min-w-[100px]">
-                            <Label className="text-xs text-muted-foreground">Indicative Value/crate (₹)</Label>
+                            <Label className="text-xs text-muted-foreground">Indicative Value/{unitLabel} (₹)</Label>
                             <Input type="number" min="0" step="0.01" className="h-10 mt-1 text-base" value={item.unit_price}
                               onChange={(e) => updateItem(item.id, 'unit_price', e.target.value)} data-testid={`promo-price-${index}`} />
                           </div>
@@ -885,7 +934,7 @@ export default function PromoDispatchSection({
                     );
                   })}
                   <div className="px-4 py-3 flex items-center justify-between bg-fuchsia-50/40">
-                    <span className="text-sm font-semibold">Total · {totalQty} crates</span>
+                    <span className="text-sm font-semibold">Total · {totalQty} {totalQty === 1 ? 'package' : 'packages'}</span>
                     <span className="text-lg font-bold tabular-nums" data-testid="promo-grand-total">₹{fmtINR(totalValue)}</span>
                   </div>
                 </div>
