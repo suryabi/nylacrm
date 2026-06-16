@@ -122,7 +122,6 @@ import DistributorDetail from './pages/DistributorDetail';
 import StockTransfers from './pages/StockTransfers';
 import StockDashboard from './pages/StockDashboard';
 import TaskManagement from './pages/TaskManagement';
-import NotificationsInbox from './pages/NotificationsInbox';
 import TaskDetail from './pages/TaskDetail';
 import PerformanceTracker from './pages/PerformanceTracker';
 import EmailTemplates from './pages/EmailTemplates';
@@ -384,7 +383,6 @@ function AppRouter() {
           {/* Task Management */}
           <Route path="/tasks" element={<ProtectedRoute><TaskManagement /></ProtectedRoute>} />
           <Route path="/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
-          <Route path="/notifications" element={<ProtectedRoute><NotificationsInbox /></ProtectedRoute>} />
           <Route path="/performance" element={<ProtectedRoute moduleKey="performance_tracker"><PerformanceTracker /></ProtectedRoute>} />
           <Route path="/investor-dashboard" element={<ProtectedRoute moduleKey="investor_dashboard"><InvestorDashboard /></ProtectedRoute>} />
           {/* Marketing Module */}

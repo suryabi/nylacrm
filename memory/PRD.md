@@ -15,7 +15,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
-### 2026-06-16 — Full-page Notifications inbox (history, filters, mark-all-read at scale) (P1) ✅ DONE
+### 2026-06-16 — Notifications: redesigned as a contemporary right-side slide-over panel ✅ DONE
+- **Request**: The full-page notifications inbox didn't look good — make it contemporary/visually appealing and convert it to a side panel instead of a full page.
+- **Change**: Replaced the full-page `/notifications` route + popover with a single slide-over **`components/NotificationsPanel.jsx`** (shadcn `Sheet`, side=right). Clicking the bell now opens this panel directly. Design: gradient emerald→teal header (bell tile, unread/total counts, "Mark all"), sticky filter row (status tabs All/Unread/Read + type dropdown + search), date-grouped sections (Today / Yesterday / Earlier this week / Earlier) with sticky labels, per-item color-coded category icon tiles (@-mention, Task, Approval, Design, Lead, Account, Stock, Return, Meeting, Print), unread emerald left-accent bar + dot, and a "Load older" button (15/page, accumulating). `NotificationBell.jsx` simplified to just the badge button + panel. Removed `pages/NotificationsInbox.js` and its route. Backend (paginated/filterable `GET /notifications` + `/categories`) unchanged.
+- **Tested**: screenshots — panel slides in with grouped sections + category icons; Unread filter (12) works; backend filters/pagination already verified. Seed data cleaned up.
+
+
 - **Request**: A dedicated notifications page with full history, filters and bulk mark-all-read (the bell only shows the latest 20).
 - **Backend** (`routes/notifications.py`): extended `GET /notifications` with pagination (`page`, `limit`) + filters (`status`=unread/read/all, `category`, `search` over title/body) and now returns `total`/`page`/`pages` alongside `notifications`/`unread_count` (bell's `?limit=20` call still works unchanged). New `GET /notifications/categories` returns category keys+labels for the filter dropdown.
 - **Frontend**: new page `pages/NotificationsInbox.js` at route `/notifications` — header (total · unread), status segmented tabs (All / Unread(n) / Read), category dropdown, debounced search, color-coded category badges, unread dots, click-to-open (marks read + navigates to the entity), bulk "Mark all read", and Prev/Next pagination (20/page). `NotificationBell.jsx` gained a "View all notifications" footer link. Route wired in `App.js`.
