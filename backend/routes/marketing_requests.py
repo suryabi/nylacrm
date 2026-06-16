@@ -1082,6 +1082,28 @@ async def add_comment(request_id: str, payload: CommentCreate, current_user: dic
                 )
         except Exception:
             logger.exception("Slack notification failed for marketing request comment")
+
+        # @-mention notifications — parse the comment body for inline
+        # `@[Name](user-id)` chips inserted by the frontend MentionTextarea
+        # and ping every referenced user (minus the author).
+        try:
+            from utils.mentions import extract_mentions
+            from utils.notify import notify_users
+            mention_ids = [uid for uid in extract_mentions(event.get("text") or "") if uid != current_user.get("id")]
+            if mention_ids and parent:
+                await notify_users(
+                    tenant_id=tenant_id,
+                    user_ids=mention_ids,
+                    title=f"{event['user_name']} mentioned you",
+                    body=f"{parent.get('request_number')} — {parent.get('title','')[:80]}",
+                    link=f"/marketing-requests/{request_id}",
+                    kind="mention",
+                    category="mention",
+                    entity_type="marketing_request",
+                    entity_id=request_id,
+                )
+        except Exception:
+            logger.exception("Mention notification failed for marketing request comment")
     return event
 
 

@@ -1,0 +1,175 @@
+<analysis>### Handover Summary
+
+**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync (legal vs trade names, delivery challan addresses, and manual branch sync), introducing reusable Email Templates with rich text, establishing a multi-layered Notification System (tenant + user preferences), and implementing an  system within comments for team collaboration. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability across varying packaging sizes, and reliable external accounting sync.
+
+**User's preferred language**: English
+*(INSTRUCT next agent to respond in English only)*
+
+**what currently exists?** 
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target Planning, QC, Production, Distribution, Marketing Requests, and Returns. It features a custom Gmail OAuth integration with template support, an automated approval routing engine, a distributor portal with batch/packaging-aware stock picking, Zoho Books integration for automated invoicing/delivery challans, and an extensible notification preference matrix.
+
+**Last working item**: 
+    - Last item agent was working: Implementing the full  experience for comments (starting with Design/Marketing Requests). The agent created the frontend  component and the backend  parser, and updated the  route in  to extract mentions and trigger .
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? screenshot tool (to verify  triggers the user dropdown in UI) and curl/python -c (to verify backend parses the mention and triggers the notification).
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**: 
+  Issue 1: Complete and integrate  in Design Request comments (P0)
+     - Attempted fixes: Backend route updated and base components created. 
+     - Next debug checklist: The frontend component  needs to be imported and used inside the Design/Marketing Request detail page (replacing the standard comment textarea). Then, thoroughly test the autocomplete functionality and ensure  fires.
+     - Why fix this issue and what will be achieved with the fix? Allows team members to tag each other in comments and receive in-app notifications.
+     - Status: IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? both
+     - Blocked on other issue: None
+
+  Issue 2: Expand  to other comment surfaces (P1)
+     - Attempted fixes: None yet.
+     - Next debug checklist: Once proven on Design Requests, wire  and the backend  logic into Lead activity notes, Account notes, Tasks, and Meeting Minutes.
+     - Why fix this issue and what will be achieved with the fix? Consistency in collaboration across the CRM.
+     - Status: NOT STARTED
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? both
+     - Blocked on other issue: Issue 1
+
+  Issue 3: Gemini API Key returns 403 PERMISSION DENIED (P2)
+     - Attempted fixes: Key provided by user resulted in GCP denial.
+     - Next debug checklist: Await user providing a valid key from a brand new Google Cloud project.
+     - Status: BLOCKED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? backend
+
+  Issue 4: Slack Integration failing for Marketing Requests (P2)
+     - Attempted fixes: Verified bot configuration; works in preview.
+     - Next debug checklist: User needs to confirm production environment configurations.
+     - Status: USER VERIFICATION PENDING
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? backend
+
+**In progress Task List**: 
+  Task 1: Inventory Management Module - Phase 2+ (P2)
+     - Where to resume: Phase 1 (Item/Vendor Masters) is complete. Phase 2 (Stock Entries, Purchase Receipts, Adjustments) parked. 
+     - What will be achieved with this? End-to-end supply chain visibility.
+     - Status: BLOCKED (Awaiting user prioritization)
+     - Should Test frontend/backend/both after fix? both
+     - Blocked on something: User approval.
+
+**Upcoming and Future Tasks**
+    Upcoming Tasks:
+    - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
+    - P1: Full-page Notifications inbox (history, filter, mark-all-read at scale).
+    - P1: MinIO integration for object storage (Build  settings page to replace base64 mongo storage).
+    - P1: Happenstance integration (Agent asked user for API key & scope, pending user answer).
+    
+    Future Tasks:
+    - P2: Auto-suggest Vehicle on distributor deliveries based on customer city.
+    - P2: KB Phase 2: Per-document permissions, embedding-based retrieval, Google Drive auto-sync.
+    - P2: Website Wrapper around CRM.
+
+**Completed work in this session**
+- Account Assigned To made editable via dropdown in Edit mode (DONE)
+- Performance Tracker: Unapprove flow built, Sampling/Trials logic fixed, Territory/City filters scope correctly to the selected Target Plan (DONE)
+- Target Planning: Added plan names to UI cards, built rich/searchable Plan Picker component, restricted dropdowns to active plans only, stopped auto-selecting default plans (DONE)
+- Expense Requests: Added click-to-view details modal, rounded amounts, displayed assigned approver in status badge (DONE)
+- Lead Discovery: Fixed Google Places textSearch to correctly fetch and save lat/lng coordinates upon lead creation (DONE)
+- Promotional Stock Out: Unlocked Batch Picker to show batches whenever they exist, added distinct packaging configurations for promo dispatch, implemented automatic price scaling based on chosen packaging size (DONE)
+- Deliveries/Stock Out: Batch quantities automatically visually convert from bottles to the user-selected packaging crates/sizes (DONE)
+- Stock Dashboard: Added Default Crate vs Bottles toggle to display SKU stock aggregated by their default configured package size (DONE)
+- Zoho Books Sync: Fixed legal vs trade name mapping for  vs , corrected delivery challan from/to address routing, added manual Sync to Zoho button for warehouse locations (DONE)
+- Email Templates: Added CRUD management for public/private email templates with rich text, attachments, and , wired directly into the InlineComposer (DONE)
+- Notifications: Built 3-layer notification settings matrix (global switch, tenant role-matrix, user prefs) and wired to existing task creation events (DONE)
+
+**Earlier issues found/mentioned but not fixed**
+   - Issue 1: Bloated  collection
+     - Debug checklist: Review  (base64). Needs MinIO integration.
+     - Why to solve this issue and what will be achieved with this? Base64 native storage will rapidly bloat DB size and degrade performance.
+     - Should Test frontend/backend/both after fix: both
+     - Is recurring issue? N
+
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: Production vs Preview testing confusion.
+  - Recurrence count: ~40
+  - Status: IN PROGRESS
+  - Note: The user continuously deploys to production and shares screenshots from the production environment, expecting fixes instantly. NEVER provide deployment URLs. Remind the user that they must redeploy the app to see preview changes in production.
+
+**Code Architecture**
+- : Main monolith.
+- : Domain routers (, , , , ).
+- : Shared logic (, ).
+- : Reusable UI (, , , ).
+- : Main views (, , , ).
+
+**Key Technical Concepts**
+- **Notifications & Mentions**: Notifications utilize a global + tenant role + user preference matrix. Mentions will parse text using regex from  and insert rich tokens, alerting tagged users.
+- **Zoho Books Integration**:  manages translation between CRM objects and Zoho entities.
+
+**key DB schema**
+  - : {id, tenant_id, owner_id, is_public, name, subject, body, attachments}
+  - : {tenant_id, enabled, category_matrix, user_preferences}
+
+**changes in tech stack**
+  - Added  for rich-text editing in Email Templates.
+
+**All files of reference** 
+  -  (Newly created for current task)
+  -  (Newly created for current task)
+  -  (Being modified for mentions)
+  -  (Created)
+  -  (Created)
+  -  (Created)
+  -  (Created)
+  -  (Modified for packaging logic)
+
+**Areas that need refactoring**: 
+  - Base64 storage approach for Documents should be refactored to Object Storage (MinIO).
+
+**key api endpoints**
+  - 
+  - 
+  - 
+
+**Critical Info for New Agent** 
+  - **Preview vs Production:** You only have access to the PREVIEW environment. The user frequently shares screenshots from the Production environment. Remind them gently to redeploy when you confirm a fix.
+  - **DO NOT EXPOSE PREVIEW URLS** in your responses.
+  - For : The backend parser has been written (), and the frontend container  was generated, but the integration in the actual frontend comment UI (e.g., ) has NOT been wired up yet.
+
+**documents and test reports created in this job** 
+  -  (Updated)
+
+**Last 10 User Messages and any pending HUMAN messages** 
+ - : Build the full @-mention experience (Agent generated base files and started modifying backend route, currently IN PROGRESS).
+
+**Project Health Check:**
+Broken: None.
+Mocked: None.
+
+**3rd Party Integrations** 
+ - Zoho Books (Requires User API Key)
+ - Google Maps API (Requires User API Key)
+ - Slack API (Bot token webhook)
+ - Emergent Object Storage
+ - Resend (Requires User API Key)
+ - Gmail API (Internal GCP App OAuth)
+ - Gemini / Google GenAI SDK (Requires User API Key - currently blocked)
+
+**Testing status**
+  - Testing agent used after significant changes: NO (Agent self-tested with exhaustive curl / screenshot validations for all UI features).
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: None this session.
+  - Known regressions: None
+
+**Credentials to test flow:**
+Refer to 
+
+**What agent forgot to execute**
+- The agent built  and updated the backend, but forgot to implement it into the frontend view ( or ) where comments are actually typed. 
+
+**Debugging checklist for current issue**
+    Issue: Complete  in Design/Marketing Request Comments
+    Frontend files to check: 
+      -  (Ensure it functions properly)
+      - The main view rendering the comment box (e.g.  / ). Replace standard textareas with .
+    Backend files to check:
+      -  (Ensure  actually grabs the right IDs and  works).</analysis>

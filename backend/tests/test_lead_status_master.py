@@ -7,7 +7,7 @@ import requests
 import os
 import uuid
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://zoho-branch-sync.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://mention-sync.preview.emergentagent.com')
 
 class TestLeadStatusMasterAPI:
     """Tests for /api/master/lead-statuses endpoints"""
