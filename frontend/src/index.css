@@ -218,3 +218,14 @@
         @apply text-amber-400;
     }
 }
+
+/* @-mention contentEditable placeholder */
+.mention-editor.mention-empty:empty:before,
+.mention-editor.mention-empty:before {
+    content: attr(data-placeholder);
+    color: #94a3b8;
+    pointer-events: none;
+}
+.mention-editor.mention-empty:not(:empty):before {
+    content: none;
+}

@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-16 — 🐛 Fix: @-mention editor showed raw `@[Name](uuid)` token while typing ✅ DONE
+- **Reported (preview)**: Picking a name from the mention autocomplete inserted the raw canonical token `@[Sravya Pinnamameni](d6ff6bf4-…)` into the comment box instead of a clean pill.
+- **Root cause**: `MentionTextarea` was a plain `<textarea>` — it can only hold raw text, so the inline `@[Name](id)` markup (needed by the backend) was visible while composing; the pretty pill only rendered after posting.
+- **Fix** (`components/MentionTextarea.jsx`): rebuilt the editor as a `contentEditable` rich input. Selected mentions render as non-editable rose `@Name` pills inline while typing; the component serializes the DOM back to the canonical `@[Name](id)` string for `onChange`, so the backend mention-parse + notifications are unchanged. Same prop API (`value`/`onChange`/`placeholder`/`rows`/`className`/`disabled`/`testid`) → no call-site or backend changes. Added contentEditable placeholder CSS in `index.css`. Applies to ALL surfaces (Leads, Accounts, Tasks, Meetings, Design Requests main + version threads).
+- **Tested**: screenshot — typing "Please check @Vamsi Bommena regarding pricing" shows the clean pill (no UUID); posting renders the comment with the pill, clears the editor, and the canonical token is stored (notification created). Test data cleaned up.
+
+
 ### 2026-06-16 — @-mentions expanded to Leads, Tasks, Accounts & Meetings (P1) ✅ DONE
 - **Request**: Extend the @-mention experience beyond Design Requests to Lead notes, Account notes, Tasks and Meeting Minutes.
 - **Reusable helpers**: `utils/entity_comments.py` (`build_comment` + `notify_comment_mentions`) — shared mention-parse + notify across surfaces (category `mention`, author excluded, best-effort). Frontend `components/EntityCommentThread.jsx` — self-contained discussion thread (GET/POST a `{basePath}`) using `MentionTextarea` + `renderMentionedText`.
