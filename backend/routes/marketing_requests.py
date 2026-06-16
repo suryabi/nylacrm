@@ -1175,6 +1175,27 @@ async def add_version_comment(request_id: str, version_id: str, payload: Version
         {"id": request_id, "tenant_id": tenant_id},
         {"$set": {"versions": versions, "updated_at": datetime.now(timezone.utc).isoformat()}},
     )
+
+    # @-mention notifications on the per-version thread — ping referenced users
+    # (minus the author). Best-effort; never blocks the comment.
+    try:
+        from utils.mentions import extract_mentions
+        from utils.notify import notify_users
+        mention_ids = [uid for uid in extract_mentions(comment.get("text") or "") if uid != current_user.get("id")]
+        if mention_ids:
+            await notify_users(
+                tenant_id=tenant_id,
+                user_ids=mention_ids,
+                title=f"{comment['user_name']} mentioned you",
+                body=f"{doc.get('request_number')} — {version.get('version_name','')} comment",
+                link=f"/marketing-requests/{request_id}",
+                kind="mention",
+                category="mention",
+                entity_type="marketing_request",
+                entity_id=request_id,
+            )
+    except Exception:
+        logger.exception("Mention notification failed for marketing request version comment")
     return comment
 
 

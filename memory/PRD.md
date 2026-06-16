@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-16 — @-mentions in Design Request comments (P0) ✅ DONE
+- **Request**: Build the full @-mention experience — tag teammates in comments and notify them.
+- **Frontend** (`pages/MarketingRequestDetail.js`): wired the existing `MentionTextarea` + `renderMentionedText` (`components/MentionTextarea.jsx`) into BOTH comment surfaces — the main Comments & Activity composer (replaced plain `Textarea`) and each work-version comment composer (replaced the `Input`). Saved mentions now render as rose pills in the main timeline and per-version threads. Typing `@` opens a teammate autocomplete (name + role/email), arrow/enter/tab to pick, inserts `@[Name](user-id)` inline.
+- **Backend** (`routes/marketing_requests.py`): the main `POST /{id}/comments` already parsed mentions + fired `notify_users` (category `mention`). Added the same mention extraction + `notify_users` to the per-version route `POST /{id}/versions/{vid}/comments`. Mentions skip the author; best-effort (never blocks the comment). Category `mention` is registered in `notification_settings.CATEGORIES` and defaults to allowed at every preference layer.
+- **Tested**: curl e2e — posting a comment with `@[Vamsi Bommena](id)` created a `mention` notification for Vamsi ("Surya Yadavalli mentioned you" → MR-2026-0021, link to the request); test data cleaned up afterward. Screenshot — typing `@Vam` in the main composer surfaces the "Vamsi Bommena · Director" autocomplete dropdown.
+
+
 
 ### 2026-02-10 — Zoho Books multi-GSTIN: per-warehouse Branch mapping (P0) ✅ DONE
 - **Request**: When stock-out happens from a self-managed warehouse, the Zoho invoice must use **that warehouse's GSTIN** (not the org's primary GSTIN). Previously a Delhi-warehouse stock-out got booked with the Hyderabad GSTIN.

@@ -9,6 +9,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import { FileDropzone } from '../components/FileDropzone';
+import MentionTextarea, { renderMentionedText } from '../components/MentionTextarea';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '../components/ui/dialog';
@@ -993,21 +994,23 @@ export default function MarketingRequestDetail() {
                             <span className="text-[10px] text-slate-500">{fmtDate(c.created_at, 'dd MMM, hh:mm a')}</span>
                           </span>
                         </div>
-                        <p className="whitespace-pre-wrap pl-7 text-slate-700">{c.text}</p>
+                        <p className="whitespace-pre-wrap pl-7 text-slate-700">{renderMentionedText(c.text)}</p>
                       </div>
                     ))}
                     <div className="flex gap-2">
-                      <Input
-                        value={verComment[v.id] || ''}
-                        onChange={(e) => setVerComment((p) => ({ ...p, [v.id]: e.target.value }))}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addVersionComment(v.id); } }}
-                        placeholder="Add a comment on this version…"
-                        className="h-8 text-xs"
-                        data-testid={`version-comment-input-${v.id}`}
-                      />
+                      <div className="flex-1">
+                        <MentionTextarea
+                          value={verComment[v.id] || ''}
+                          onChange={(val) => setVerComment((p) => ({ ...p, [v.id]: val }))}
+                          placeholder="Add a comment on this version… (type @ to mention)"
+                          rows={2}
+                          className="text-xs"
+                          testid={`version-comment-input-${v.id}`}
+                        />
+                      </div>
                       <Button
                         size="sm"
-                        className="h-8 bg-emerald-600 hover:bg-emerald-700"
+                        className="h-8 bg-emerald-600 hover:bg-emerald-700 self-start"
                         onClick={() => addVersionComment(v.id)}
                         disabled={verBusy[v.id] || !(verComment[v.id] || '').trim()}
                         data-testid={`version-comment-send-${v.id}`}
@@ -1107,12 +1110,14 @@ export default function MarketingRequestDetail() {
                   </span>
                   <span className="text-[10px] text-slate-500">{fmtDate(c.created_at, 'dd MMM, hh:mm a')}</span>
                 </div>
-                <p className="whitespace-pre-wrap pl-7">{c.text}</p>
+                <p className="whitespace-pre-wrap pl-7">{renderMentionedText(c.text)}</p>
               </div>
             ))}
           </div>
           <div className="flex gap-2 pt-1">
-            <Textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Add a comment…" data-testid="mr-comment-input" />
+            <div className="flex-1">
+              <MentionTextarea rows={2} value={comment} onChange={setComment} placeholder="Add a comment… (type @ to mention a teammate)" testid="mr-comment-input" />
+            </div>
             <Button onClick={addComment} size="sm" disabled={!comment.trim()} className="bg-emerald-600 hover:bg-emerald-700 self-start" data-testid="mr-comment-send-btn">
               <Send className="h-4 w-4" />
             </Button>
