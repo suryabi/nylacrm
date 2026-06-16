@@ -197,11 +197,14 @@ export default function PromoDispatchSection({
   }, [form.distributor_location_id]);
 
   // Fetch available batches for the *selected From-Location* whenever it or the
-  // chosen SKUs change (only if that location tracks batches). This mirrors the
-  // regular Stock-Out flow so the promo dialog shows the batch picker for the
-  // location the user actually picks (e.g. a factory warehouse).
+  // chosen SKUs change. We always fetch (regardless of the location's
+  // `track_batches` flag) so the picker shows up automatically whenever there
+  // are real batches with stock for that SKU at that warehouse — even if the
+  // admin never flipped the `track_batches` toggle on that location. This fixes
+  // the case where one warehouse (e.g. Hyderabad) shows batches but another
+  // (e.g. Gurgaon) silently hides them because of a stale config flag.
   useEffect(() => {
-    if (!showDialog || !form.distributor_location_id || !locTracksBatches) return;
+    if (!showDialog || !form.distributor_location_id) return;
     const skuIds = [...new Set(items.map(i => i.sku_id).filter(Boolean))];
     const missing = skuIds.filter(sid => !(sid in batchMap));
     if (missing.length === 0) return;
@@ -229,7 +232,7 @@ export default function PromoDispatchSection({
       });
     });
     return () => { cancelled = true; };
-  }, [showDialog, form.distributor_location_id, locTracksBatches, items, batchMap, API_URL, authHeaders]);
+  }, [showDialog, form.distributor_location_id, items, batchMap, API_URL, authHeaders]);
 
   const resetForm = () => {
     setRecipientType('contact');
@@ -277,9 +280,14 @@ export default function PromoDispatchSection({
   const totalQty = items.reduce((s, i) => s + (parseInt(i.quantity) || 0), 0);
   const totalValue = items.reduce((s, i) => s + (parseInt(i.quantity) || 0) * (parseFloat(i.unit_price) || 0), 0);
 
-  const batchRequired = locTracksBatches;
+  // Whether the batch picker should appear for a given row. We show it when
+  // either (a) the source location has track_batches=true (admin enforced), or
+  // (b) the source location actually has batches with stock for the chosen SKU
+  // (data-driven — handles warehouses where the flag was never flipped).
+  const skuHasBatches = (skuId) => (batchMap[skuId] || []).length > 0;
+  const isBatchRequiredForRow = (row) => locTracksBatches || skuHasBatches(row.sku_id);
   const itemsValid = items.length > 0 && items.every(i =>
-    i.sku_id && (parseInt(i.quantity) || 0) > 0 && (!batchRequired || i.batch_id));
+    i.sku_id && (parseInt(i.quantity) || 0) > 0 && (!isBatchRequiredForRow(i) || i.batch_id));
   const recipientChosen = recipientType === 'lead' ? !!selectedLead
     : recipientType === 'employee' ? !!selectedEmployee
     : !!selectedContact;
@@ -843,7 +851,7 @@ export default function PromoDispatchSection({
                           </Button>
                         </div>
 
-                        {batchRequired && item.sku_id && (
+                        {isBatchRequiredForRow(item) && item.sku_id && (
                           <BatchPickerCards
                             batches={batches}
                             selectedId={item.batch_id || ''}

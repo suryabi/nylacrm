@@ -209,7 +209,12 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             raise HTTPException(status_code=400, detail=f"Batch is required for SKU {it.sku_name or it.sku_id}.")
         if src_is_factory:
             key = {"tenant_id": tenant_id, "warehouse_location_id": data.distributor_location_id, "sku_id": it.sku_id}
-            if src_tracks_batches and it.batch_id:
+            # Honour the picked batch whenever the user supplied one — even if
+            # the source location wasn't explicitly flagged `track_batches=True`.
+            # The frontend now surfaces the batch picker whenever batches exist,
+            # so a batch_id here means the rep made a real choice that the
+            # backend should respect for both availability and deduction.
+            if it.batch_id and it.batch_id != "__legacy__":
                 key["batch_id"] = it.batch_id
             rows = await db.factory_warehouse_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
         else:
@@ -284,7 +289,9 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         })
         if src_is_factory:
             stock_key = {"tenant_id": tenant_id, "warehouse_location_id": data.distributor_location_id, "sku_id": it.sku_id}
-            if src_tracks_batches and it.batch_id:
+            # Mirror the availability check: respect the picked batch when one
+            # was supplied, regardless of the location's track_batches flag.
+            if it.batch_id and it.batch_id != "__legacy__":
                 stock_key["batch_id"] = it.batch_id
             await db.factory_warehouse_stock.update_one(
                 stock_key, {"$inc": {"quantity": -it.quantity}, "$set": {"updated_at": now}})
