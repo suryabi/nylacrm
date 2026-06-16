@@ -2386,3 +2386,71 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
         error=last_error or "Unknown error",
         attempts=len(backoff_seconds),
     )
+
+
+# ── Warehouse → Zoho Branch sync ──────────────────────────────────────────
+async def sync_warehouse_to_zoho_branch(*, tenant_id: str, location: dict) -> dict:
+    """Push a self-managed warehouse's address, GSTIN and contact details into
+    the matched Zoho branch so the printed Tax-Invoice / Delivery-Challan PDF
+    carries the correct registered address for that branch.
+
+    Pre-conditions:
+        • `is_zoho_configured()` is True for the tenant.
+        • The warehouse already has a `zoho_branch_id` filled in (we deliberately
+          do NOT create branches automatically — Zoho requires `tax_settings_id`
+          configs that must be set up by the user in the Zoho UI first).
+
+    Returns the updated branch dict from Zoho on success.
+    """
+    if not is_zoho_configured():
+        raise ZohoPushSkippedError(
+            "Zoho Books integration is not configured. Connect Zoho first under "
+            "Settings → Integrations → Zoho Books."
+        )
+
+    branch_id = (location.get("zoho_branch_id") or "").strip()
+    if not branch_id:
+        raise ZohoPushSkippedError(
+            "This warehouse is not yet linked to a Zoho branch. Open the warehouse → "
+            "fill in the Zoho Branch ID (from Zoho Books → Settings → Branches) and "
+            "save before clicking Sync."
+        )
+
+    addr = {
+        "street_address1": (
+            location.get("address_line_1")  # canonical column name in distributor_locations
+            or location.get("address_line1")
+            or location.get("address")
+            or ""
+        )[:200],
+        "street_address2": (location.get("address_line_2") or location.get("address_line2") or "")[:200],
+        "city":            (location.get("city") or "")[:100],
+        "state":           (location.get("state") or "")[:100],
+        "zip":             str(location.get("pincode") or "")[:20],
+        "country":         (location.get("country") or "India")[:50],
+        "phone":           (location.get("contact_number") or location.get("phone") or "")[:50],
+    }
+
+    payload = {
+        # Branch display name (kept in sync with what the warehouse is called in CRM)
+        "branch_name": location.get("location_name") or "",
+        # All Zoho branches require an address; we send it once at this top level
+        # and Zoho replicates it to billing & shipping when blank.
+        "address": addr,
+        "billing_address": addr,
+        "shipping_address": addr,
+        # GSTIN attached to this branch — the whole reason multi-branch sync matters.
+        "gstin": (location.get("gstin") or "").strip(),
+        "is_primary_branch": False,
+    }
+    # Drop empty top-level scalars so Zoho doesn't overwrite an existing value
+    # with a blank one (we only push what the CRM actually has).
+    payload = {k: v for k, v in payload.items() if v not in ("", None)}
+
+    result = await _zoho_request(
+        "PUT",
+        f"/books/v3/branches/{branch_id}",
+        tenant_id=tenant_id,
+        json=payload,
+    )
+    return result.get("branch") or result

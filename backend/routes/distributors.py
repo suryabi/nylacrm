@@ -1027,6 +1027,63 @@ async def update_distributor_location(
     return updated
 
 
+@router.post("/{distributor_id}/locations/{location_id}/sync-to-zoho")
+async def sync_location_to_zoho_branch(
+    distributor_id: str,
+    location_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Push the CRM warehouse's address + GSTIN to the linked Zoho branch.
+
+    This is the one-click "Sync to Zoho" action on each warehouse card. It
+    requires the warehouse to already have a `zoho_branch_id` populated —
+    we do NOT create branches automatically because Zoho enforces
+    tax-settings prerequisites that must be configured in the Zoho UI first.
+    """
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+    location = await db.distributor_locations.find_one(
+        {"id": location_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0},
+    )
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    try:
+        from services.zoho_service import (
+            sync_warehouse_to_zoho_branch,
+            ZohoPushSkippedError,
+            ZohoApiError,
+        )
+        branch = await sync_warehouse_to_zoho_branch(tenant_id=tenant_id, location=location)
+    except ZohoPushSkippedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ZohoApiError as e:
+        raise HTTPException(status_code=502, detail=f"Zoho rejected the sync: {e}")
+
+    # Record when the last successful sync happened so the UI can show it.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.distributor_locations.update_one(
+        {"id": location_id, "tenant_id": tenant_id},
+        {"$set": {
+            "zoho_branch_synced_at": now_iso,
+            # Keep the cached branch name in sync with whatever Zoho returned.
+            "zoho_branch_name": branch.get("branch_name") or location.get("zoho_branch_name"),
+            "updated_at": now_iso,
+        }},
+    )
+
+    return {
+        "ok": True,
+        "synced_at": now_iso,
+        "zoho_branch_id": location.get("zoho_branch_id"),
+        "zoho_branch_name": branch.get("branch_name") or location.get("zoho_branch_name"),
+        "message": "Warehouse address and GSTIN pushed to Zoho. Future invoices and challans from this warehouse will print the updated header.",
+    }
+
+
 @router.delete("/{distributor_id}/locations/{location_id}")
 async def delete_distributor_location(
     distributor_id: str,

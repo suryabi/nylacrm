@@ -9,9 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import {
   MapPin, Plus, Trash2, Package, User, Phone, Factory, Pencil, ExternalLink,
-  Navigation, Receipt,
+  Navigation, Receipt, RefreshCw, Check, Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import axios from 'axios';
 import GooglePlacesAddressSearch from '../GooglePlacesAddressSearch';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 const mapsLinkFor = (location) => {
   if (location?.lat != null && location?.lng != null) {
@@ -42,6 +46,32 @@ export default function LocationsTab({
   onEditLocation,
 }) {
   const isEditing = !!editingLocationId;
+  // Track which locations are currently being synced so the buttons show a
+  // spinner and prevent double-clicks.
+  const [syncingId, setSyncingId] = React.useState(null);
+
+  const syncToZoho = async (location) => {
+    if (!location?.zoho_branch_id) {
+      toast.error('Add a Zoho Branch ID for this warehouse first, then sync.');
+      return;
+    }
+    setSyncingId(location.id);
+    try {
+      const token = localStorage.getItem('session_token');
+      const res = await axios.post(
+        `${API_URL}/api/distributors/${distributor?.id}/locations/${location.id}/sync-to-zoho`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true },
+      );
+      toast.success(res.data?.message || 'Warehouse synced to Zoho branch.');
+      // Best-effort local update so the "Last synced" timestamp reflects without a full refetch.
+      location.zoho_branch_synced_at = res.data?.synced_at;
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to sync — check Zoho integration and Branch ID.');
+    } finally {
+      setSyncingId(null);
+    }
+  };
 
   const closeDialog = (open) => {
     setShowLocationDialog(open);
@@ -151,6 +181,27 @@ export default function LocationsTab({
                         </div>
                       </div>
                       <div className="flex flex-col gap-1">
+                        {canManage && location.zoho_branch_id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50"
+                            onClick={() => syncToZoho(location)}
+                            disabled={syncingId === location.id}
+                            title={location.zoho_branch_synced_at
+                              ? `Push CRM address & GSTIN to Zoho. Last synced ${new Date(location.zoho_branch_synced_at).toLocaleString()}.`
+                              : 'Push CRM address & GSTIN to Zoho (never synced)'}
+                            data-testid={`location-sync-zoho-${location.id}`}
+                          >
+                            {syncingId === location.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : location.zoho_branch_synced_at ? (
+                              <Check className="h-4 w-4" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
                         {canManage && (
                           <Button
                             variant="ghost"
