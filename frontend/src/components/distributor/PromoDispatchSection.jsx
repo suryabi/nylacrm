@@ -849,10 +849,12 @@ export default function PromoDispatchSection({
                     const batches = batchMap[item.sku_id] || [];
                     const masterSku = skus.find(s => s.id === item.sku_id);
                     const promoPkgs = masterSku?.packaging_config?.promo_stock_out || [];
-                    // Friendly label like "crate" (singular) or "carton" — falls back
-                    // to the legacy "crates" wording when the SKU has no promo
-                    // packaging configured yet.
-                    const unitLabel = (item.packaging_type_name || 'package').toLowerCase().split(' ')[0] || 'package';
+                    // Friendly unit label derived from the packaging name's
+                    // last word — "24 Bottle Crate" → "crate", "12 Bottle
+                    // Carton" → "carton", "Bottle (1)" → "bottle". Falls back
+                    // to a generic "package" when no packaging is picked yet.
+                    const pkgWords = (item.packaging_type_name || '').trim().replace(/\(.*\)$/, '').trim().split(/\s+/).filter(Boolean);
+                    const unitLabel = (pkgWords[pkgWords.length - 1] || 'package').toLowerCase();
                     return (
                       <div key={item.id} className={`px-4 py-3 ${index % 2 ? 'bg-slate-50' : 'bg-white'}`} data-testid={`promo-item-${index}`}>
                         <div className="flex items-center gap-3">
@@ -922,6 +924,7 @@ export default function PromoDispatchSection({
                             testIdPrefix={`promo-batch-${index}`}
                             emptyMessage="No batches available for this SKU at the source."
                             unitLabel={unitLabel + 's'}
+                            unitsPerPackage={item.units_per_package || 1}
                           />
                         )}
 

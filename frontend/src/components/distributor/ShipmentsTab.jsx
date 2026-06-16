@@ -266,6 +266,13 @@ export default function ShipmentsTab({
                                 emptyMessage={sourceTracksBatches
                                   ? 'No batches available for this SKU at source.'
                                   : 'No production batches found for this SKU.'}
+                                unitsPerPackage={item.units_per_package || 1}
+                                unitLabel={(() => {
+                                  const upp = Number(item.units_per_package) || 1;
+                                  if (upp <= 1) return 'units';
+                                  const w = (item.packaging_type_name || '').trim().replace(/\(.*\)$/, '').trim().split(/\s+/).filter(Boolean);
+                                  return ((w[w.length - 1] || 'package').toLowerCase() + 's');
+                                })()}
                               />
                             </div>
                           )}

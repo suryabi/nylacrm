@@ -42,6 +42,12 @@ export default function BatchPickerCards({
   testIdPrefix = 'batch',
   emptyMessage = 'No batches available for this SKU.',
   unitLabel = 'units',
+  // When the user has picked a packaging (e.g. "12 Bottle Crate"), pass the
+  // pack size here and the batch cards will convert the underlying bottle
+  // stock to the chosen packaging unit (e.g. 3,984 bottles → 332 crates).
+  // Loose bottles that don't make up a full package are shown as a small
+  // secondary line so the rep doesn't lose track of fractional inventory.
+  unitsPerPackage = 1,
 }) {
   // FIFO sort — oldest first
   const sorted = [...batches].sort((a, b) => {
@@ -116,10 +122,25 @@ export default function BatchPickerCards({
                   {ageDate ? `${ageSource} ${ageDate}` : 'Date unavailable'}
                 </div>
                 <div className="mt-1.5 flex items-baseline gap-1">
-                  <span className={`text-lg font-bold tabular-nums ${selected ? 'text-amber-700' : 'text-slate-800'}`}>
-                    {(b.quantity || 0).toLocaleString()}
-                  </span>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">{unitLabel}</span>
+                  {(() => {
+                    const upp = Math.max(1, Number(unitsPerPackage) || 1);
+                    const qty = Number(b.quantity || 0);
+                    const packs = Math.floor(qty / upp);
+                    const remainder = qty - packs * upp;
+                    return (
+                      <>
+                        <span className={`text-lg font-bold tabular-nums ${selected ? 'text-amber-700' : 'text-slate-800'}`}>
+                          {packs.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">{unitLabel}</span>
+                        {upp > 1 && remainder > 0 && (
+                          <span className="ml-1 text-[10px] text-slate-400 normal-case tracking-normal" title="Bottles left over that don't make a full package">
+                            +{remainder} loose
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </button>
             );

@@ -1081,10 +1081,31 @@ export default function DeliveriesTab({
                                               : 'Date unavailable'}
                                           </div>
                                           <div className="mt-1.5 flex items-baseline gap-1">
-                                            <span className={`text-lg font-bold tabular-nums ${selected ? 'text-amber-700' : 'text-slate-800'}`}>
-                                              {(b.quantity || 0).toLocaleString()}
-                                            </span>
-                                            <span className="text-[10px] text-slate-500 uppercase tracking-wider">units</span>
+                                            {(() => {
+                                              const upp = Math.max(1, Number(item.units_per_package) || 1);
+                                              const qty = Number(b.quantity || 0);
+                                              const packs = Math.floor(qty / upp);
+                                              const remainder = qty - packs * upp;
+                                              // Friendly unit derived from the packaging name's last word
+                                              // ("24 Bottle Crate" → "crate", "Bottle (1)" → "bottle").
+                                              const pkgWords = (item.packaging_type_name || '').trim().replace(/\(.*\)$/, '').trim().split(/\s+/).filter(Boolean);
+                                              const unitWord = upp === 1
+                                                ? 'units'
+                                                : ((pkgWords[pkgWords.length - 1] || 'package').toLowerCase() + 's');
+                                              return (
+                                                <>
+                                                  <span className={`text-lg font-bold tabular-nums ${selected ? 'text-amber-700' : 'text-slate-800'}`}>
+                                                    {packs.toLocaleString()}
+                                                  </span>
+                                                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">{unitWord}</span>
+                                                  {upp > 1 && remainder > 0 && (
+                                                    <span className="ml-1 text-[10px] text-slate-400 normal-case tracking-normal" title="Bottles left over that don't make a full package">
+                                                      +{remainder} loose
+                                                    </span>
+                                                  )}
+                                                </>
+                                              );
+                                            })()}
                                           </div>
                                         </button>
                                       );
