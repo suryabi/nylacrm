@@ -8,9 +8,9 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   Bell, CheckCheck, Search, Loader2, Inbox, AtSign, CheckSquare,
-  ShieldCheck, Palette, UserPlus, Package, RotateCcw, CalendarDays, Printer,
+  ShieldCheck, Palette, UserPlus, Package, RotateCcw, CalendarDays, Printer, X,
 } from 'lucide-react';
-import { Sheet, SheetContent } from './ui/sheet';
+import { Sheet, SheetContent, SheetClose } from './ui/sheet';
 import { Input } from './ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -184,24 +184,33 @@ export default function NotificationsPanel({ open, onOpenChange, onUnreadChange 
         {/* Header */}
         <div className="relative px-5 pt-5 pb-4 bg-gradient-to-br from-emerald-600 to-teal-700 text-white shrink-0">
           <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.4) 0, transparent 40%)' }} />
-          <div className="relative flex items-start gap-3">
+          <SheetClose
+            className="absolute right-3 top-3 z-20 h-8 w-8 inline-flex items-center justify-center rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-white/40"
+            data-testid="panel-close"
+            aria-label="Close notifications"
+          >
+            <X className="h-5 w-5" />
+          </SheetClose>
+          <div className="relative flex items-start gap-3 pr-8">
             <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur flex items-center justify-center ring-1 ring-white/20">
               <Bell className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-semibold tracking-tight">Notifications</h2>
-              <p className="text-xs text-emerald-50/80 mt-0.5">
-                {unread > 0 ? `${unread} unread` : 'All caught up'}{total ? ` · ${total} total` : ''}
-              </p>
+              <div className="flex items-center justify-between gap-2 mt-1">
+                <p className="text-xs text-emerald-50/80">
+                  {unread > 0 ? `${unread} unread` : 'All caught up'}{total ? ` · ${total} total` : ''}
+                </p>
+                <button
+                  onClick={markAllRead}
+                  disabled={unread === 0}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                  data-testid="panel-mark-all-read"
+                >
+                  <CheckCheck className="h-3.5 w-3.5" /> Mark all
+                </button>
+              </div>
             </div>
-            <button
-              onClick={markAllRead}
-              disabled={unread === 0}
-              className="mr-7 inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              data-testid="panel-mark-all-read"
-            >
-              <CheckCheck className="h-3.5 w-3.5" /> Mark all
-            </button>
           </div>
         </div>
 
