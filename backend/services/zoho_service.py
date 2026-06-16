@@ -422,49 +422,75 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         except ZohoApiError as e:
             logger.warning(f"Zoho contact lookup by email failed: {e}")
 
-    # 2) Fallback: by exact contact_name (Zoho enforces unique name per org)
-    if not existing and name:
+    # 2) Fallback: by exact contact_name (Zoho enforces unique name per org).
+    # We try multiple candidate display names so a re-synced contact is found
+    # regardless of which naming convention it was first pushed under:
+    #   • account_name        (legacy: pre this change, contact_name was set to this)
+    #   • gst_trade_name      (current: post this change, contact_name is set to this)
+    #   • gst_legal_name      (also tried — some imports used the legal entity)
+    candidates = []
+    for cand in (name, account.get("gst_trade_name"), account.get("gst_legal_name")):
+        c = (cand or "").strip()
+        if c and c.lower() not in {x.lower() for x in candidates}:
+            candidates.append(c)
+    for cand_name in candidates:
+        if existing:
+            break
         try:
             search = await _zoho_request(
                 "GET", "/books/v3/contacts", tenant_id=tenant_id,
-                params={"contact_name": name},
+                params={"contact_name": cand_name},
             )
             contacts = search.get("contacts", [])
             # Exact-match (Zoho contact_name filter is a contains-like search)
             for c in contacts:
-                if (c.get("contact_name") or "").strip().lower() == name.lower():
+                if (c.get("contact_name") or "").strip().lower() == cand_name.lower():
                     existing = c
                     break
-            if not existing and contacts:
-                # If only one result, accept it; otherwise abandon to avoid mis-linking
-                if len(contacts) == 1:
-                    existing = contacts[0]
+            if not existing and contacts and len(contacts) == 1:
+                existing = contacts[0]
         except ZohoApiError as e:
-            logger.warning(f"Zoho contact lookup by name failed: {e}")
+            logger.warning(f"Zoho contact lookup by name '{cand_name}' failed: {e}")
 
-    # Compute the two labels used by Zoho's invoice "Bill To" block:
-    #   • company_name → primary line of Bill To (registered name only)
-    #   • attention    → secondary line of Bill To (account / friendly name)
-    # Combined render on the user's custom Zoho template:
-    #     Jaitra Wellness Private Limited      ← company_name
-    #     Diggin Cafe                          ← attention
+    # Compute the labels used by Zoho's invoice "Bill To" block and the
+    # contact's Display Name (what shows in Zoho lists). Per business
+    # convention:
+    #   • Zoho `company_name`  (bold first line of Bill To)     ← LEGAL entity name
+    #     e.g. "Kwality Beverages Private Limited"
+    #   • Zoho `contact_name`  (Display Name in Zoho lists)     ← TRADE name
+    #     e.g. "Kwality"
+    #   • `attention`          (secondary Bill-To line)         ← TRADE name (or account name)
+    #
+    # Fallback chain when a field is missing: legal → trade → account_name,
+    # so the customer is never created with a blank name.
     trade_name = (account.get("gst_trade_name") or "").strip()
     legal_name = (account.get("gst_legal_name") or "").strip()
     acct_label = (account.get("account_name") or name or "").strip()
-    primary_label = trade_name or legal_name or acct_label
-    # If we have ONLY one identifier (no GST trade/legal name distinct from
-    # account name), both lines collapse to that single label — Zoho will
-    # de-dupe identical lines gracefully on most templates.
-    secondary_label = acct_label if (primary_label and primary_label.lower() != acct_label.lower()) else ""
-    display_label = primary_label  # bold heading text
+
+    # company_name = LEGAL entity name (the "official" registered name that
+    # belongs on a tax invoice). Falls back to trade name then account name.
+    company_name = legal_name or trade_name or acct_label
+
+    # display_name (== Zoho contact_name) = TRADE name (the brand the rep
+    # knows the customer by). Falls back to account name. We DO NOT use
+    # `legal_name` here because it would clutter the Zoho contact list with
+    # full "Pvt Ltd" suffixes.
+    display_name = trade_name or acct_label
+
+    # attention = the friendly secondary line under the bold legal name on
+    # the Bill-To block. Use trade name; if it equals the company name, blank
+    # it so Zoho doesn't render the same line twice.
+    secondary_label = (trade_name or acct_label) if (company_name and (trade_name or acct_label).lower() != company_name.lower()) else ""
 
     payload = {
-        # `contact_name` must remain the account name — Zoho enforces uniqueness on
-        # this field and we use it later to find/match contacts. Don't change it.
-        "contact_name": name,
-        # `company_name` is the registered name (no parenthesis, no account name).
-        # The user's Zoho template prints this as the bold first line of "Bill To".
-        "company_name": display_label,
+        # contact_name is the Zoho "Display Name" (shown in lists & dropdowns)
+        # AND the dedup key (Zoho enforces uniqueness per organisation).
+        # Per user request, this is now the trade name so reps can find
+        # customers by the brand they recognise — not the legal entity suffix.
+        "contact_name": display_name,
+        # company_name is the registered legal-entity name printed as the
+        # bold heading of the "Bill To" block on tax invoices.
+        "company_name": company_name,
         "contact_type": "customer",
     }
     if email:
