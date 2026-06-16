@@ -10,6 +10,9 @@ import uuid
 
 from database import get_tenant_db
 from deps import get_current_user
+from core.tenant import get_current_tenant_id
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -671,6 +674,25 @@ async def create_task(task: TaskCreate, current_user: dict = Depends(get_current
     }
     
     await tdb.tasks_v2.insert_one(task_data)
+
+    # Notify each assignee (skips creator-assigning-self via dedup in notify_users)
+    try:
+        from utils.notify import notify_users
+        recipients = [a for a in (task.assignees or []) if a and a != current_user['id']]
+        if recipients:
+            await notify_users(
+                tenant_id=get_current_tenant_id(),
+                user_ids=recipients,
+                title=f"New task: {task.title}",
+                body=(task.description or '')[:200],
+                link=f"/tasks/{task_data['id']}",
+                kind="task_assigned",
+                category="task",
+                entity_type="task",
+                entity_id=task_data['id'],
+            )
+    except Exception as e:
+        logger.warning(f"notify task assignees failed: {e}")
     
     # Log activity
     await log_activity(tdb, task_data['id'], 'created', None, None, current_user)

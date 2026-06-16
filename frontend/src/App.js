@@ -125,6 +125,7 @@ import TaskManagement from './pages/TaskManagement';
 import TaskDetail from './pages/TaskDetail';
 import PerformanceTracker from './pages/PerformanceTracker';
 import EmailTemplates from './pages/EmailTemplates';
+import NotificationSettings from './pages/NotificationSettings';
 import InvestorDashboard from './pages/InvestorDashboard';
 // Marketing Module
 import MarketingCalendar from './pages/MarketingCalendar';
@@ -316,6 +317,7 @@ function AppRouter() {
           <Route path="/sku-performance" element={<ProtectedRoute moduleKey="report_sku_performance"><SKUPerformance /></ProtectedRoute>} />
           <Route path="/resource-performance" element={<ProtectedRoute moduleKey="report_resource_performance"><ResourcePerformance /></ProtectedRoute>} />
           <Route path="/email-templates" element={<ProtectedRoute><EmailTemplates /></ProtectedRoute>} />
+          <Route path="/notification-settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
           <Route path="/accounts" element={<ProtectedRoute moduleKey="accounts"><AccountsList /></ProtectedRoute>} />
           <Route path="/accounts/sku-pricing" element={<ProtectedRoute moduleKey="accounts"><AccountSKUPricing /></ProtectedRoute>} />
           <Route path="/sales/neck-tag-designer" element={<ProtectedRoute moduleKey="accounts"><NeckTagDesigner /></ProtectedRoute>} />

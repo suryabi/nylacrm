@@ -30,10 +30,18 @@ async def notify_users(
     entity_type: str = None,
     entity_id: str = None,
     send_email_too: bool = True,
+    # `category` is what the tenant+user preference matrix is keyed on. Pick
+    # one of the keys from `routes.notification_settings.CATEGORIES` (`task`,
+    # `lead`, `approval`, `design_request`, …). When omitted we use `kind` as
+    # a best-effort key — keeps older call-sites working but means they
+    # bypass the preference gate gracefully.
+    category: str = None,
 ):
     """Create in-app notifications for the given users and optionally email them.
 
     `user_ids` may contain duplicates / Nones — they are de-duped and cleaned.
+    Each recipient is checked against the tenant kill-switch, role matrix and
+    their own per-category opt-outs (see `routes.notification_settings`).
     """
     ids = sorted({uid for uid in (user_ids or []) if uid})
     if not ids:
@@ -42,11 +50,32 @@ async def notify_users(
     try:
         users = await db.users.find(
             {"id": {"$in": ids}, "tenant_id": tenant_id},
-            {"_id": 0, "id": 1, "name": 1, "email": 1},
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
         ).to_list(length=None)
     except Exception:
         logger.exception("notify_users: failed to load users")
         users = [{"id": uid} for uid in ids]
+
+    # Filter by tenant + role + user preferences. Falls open (allow) on any
+    # error so a settings table glitch never silences notifications.
+    cat = (category or kind or "").strip()
+    if cat:
+        try:
+            from routes.notification_settings import is_category_allowed
+            allowed_users = []
+            for u in users:
+                try:
+                    if await is_category_allowed(tenant_id, u, cat):
+                        allowed_users.append(u)
+                except Exception:
+                    logger.exception("notify_users: preference gate errored — allowing user %s", u.get("id"))
+                    allowed_users.append(u)
+            users = allowed_users
+        except Exception:
+            logger.exception("notify_users: could not import preference gate; allowing all")
+    allowed_ids = {u["id"] for u in users}
+    if not allowed_ids:
+        return
 
     now = _now()
     docs = [{
@@ -57,11 +86,12 @@ async def notify_users(
         "body": body,
         "link": link,
         "kind": kind,
+        "category": cat or None,
         "entity_type": entity_type,
         "entity_id": entity_id,
         "is_read": False,
         "created_at": now,
-    } for uid in ids]
+    } for uid in ids if uid in allowed_ids]
 
     try:
         if docs:
