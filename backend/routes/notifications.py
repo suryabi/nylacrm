@@ -20,16 +20,59 @@ def _now() -> str:
 async def list_notifications(
     unread_only: bool = Query(False),
     limit: int = Query(20, le=100),
+    page: int = Query(1, ge=1),
+    status: str = Query(None),          # 'unread' | 'read' | None/all
+    category: str = Query(None),        # one of notification_settings.CATEGORIES keys
+    search: str = Query(None),          # matches title/body
     current_user: dict = Depends(get_current_user),
 ):
+    """Paginated, filterable notification feed. Powers both the bell popover
+    (default page=1, limit=20) and the full-page inbox (with filters)."""
+    import re as _re
     tenant_id = get_current_tenant_id()
     uid = current_user.get("id")
     q = {"tenant_id": tenant_id, "user_id": uid}
-    if unread_only:
+    if unread_only or status == "unread":
         q["is_read"] = False
-    items = await db.notifications.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(length=limit)
-    unread = await db.notifications.count_documents({"tenant_id": tenant_id, "user_id": uid, "is_read": False})
-    return {"notifications": items, "unread_count": unread}
+    elif status == "read":
+        q["is_read"] = True
+    if category:
+        q["category"] = category
+    if search and search.strip():
+        rx = {"$regex": _re.escape(search.strip()), "$options": "i"}
+        q["$or"] = [{"title": rx}, {"body": rx}]
+
+    total = await db.notifications.count_documents(q)
+    skip = (page - 1) * limit
+    items = (
+        await db.notifications.find(q, {"_id": 0})
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+        .to_list(length=limit)
+    )
+    unread = await db.notifications.count_documents(
+        {"tenant_id": tenant_id, "user_id": uid, "is_read": False}
+    )
+    pages = (total + limit - 1) // limit if limit else 1
+    return {
+        "notifications": items,
+        "unread_count": unread,
+        "total": total,
+        "page": page,
+        "pages": max(pages, 1),
+        "limit": limit,
+    }
+
+
+@router.get("/categories")
+async def list_notification_categories(current_user: dict = Depends(get_current_user)):
+    """Category keys + labels for the inbox filter dropdown."""
+    try:
+        from routes.notification_settings import CATEGORIES
+        return [{"key": c["key"], "label": c["label"]} for c in CATEGORIES]
+    except Exception:
+        return []
 
 
 @router.get("/unread-count")

@@ -146,6 +146,13 @@ export default function NotificationBell() {
             ))
           )}
         </div>
+        <button
+          onClick={() => { setOpen(false); navigate('/notifications'); }}
+          className="w-full text-center px-3 py-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-50 border-t transition-colors"
+          data-testid="notification-view-all"
+        >
+          View all notifications
+        </button>
       </PopoverContent>
     </Popover>
   );

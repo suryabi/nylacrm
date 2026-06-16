@@ -15,6 +15,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-16 — Full-page Notifications inbox (history, filters, mark-all-read at scale) (P1) ✅ DONE
+- **Request**: A dedicated notifications page with full history, filters and bulk mark-all-read (the bell only shows the latest 20).
+- **Backend** (`routes/notifications.py`): extended `GET /notifications` with pagination (`page`, `limit`) + filters (`status`=unread/read/all, `category`, `search` over title/body) and now returns `total`/`page`/`pages` alongside `notifications`/`unread_count` (bell's `?limit=20` call still works unchanged). New `GET /notifications/categories` returns category keys+labels for the filter dropdown.
+- **Frontend**: new page `pages/NotificationsInbox.js` at route `/notifications` — header (total · unread), status segmented tabs (All / Unread(n) / Read), category dropdown, debounced search, color-coded category badges, unread dots, click-to-open (marks read + navigates to the entity), bulk "Mark all read", and Prev/Next pagination (20/page). `NotificationBell.jsx` gained a "View all notifications" footer link. Route wired in `App.js`.
+- **Tested**: curl — pagination (25 seeded → 2 pages), `category=mention` (5, all correct), `status=unread` (16, all unread), `search` (1 match), categories endpoint. Screenshots — inbox renders with badges + pagination; Unread tab → 16 items; search "number 7" → 1 result. Seed data cleaned up.
+
+
 ### 2026-06-16 — 🐛 Fix: @-mention editor showed raw `@[Name](uuid)` token while typing ✅ DONE
 - **Reported (preview)**: Picking a name from the mention autocomplete inserted the raw canonical token `@[Sravya Pinnamameni](d6ff6bf4-…)` into the comment box instead of a clean pill.
 - **Root cause**: `MentionTextarea` was a plain `<textarea>` — it can only hold raw text, so the inline `@[Name](id)` markup (needed by the backend) was visible while composing; the pretty pill only rendered after posting.
