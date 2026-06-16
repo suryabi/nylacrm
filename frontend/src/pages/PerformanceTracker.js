@@ -63,6 +63,9 @@ export default function PerformanceTracker() {
   const [viewMode, setViewMode] = useState(() => ssGet('view_mode', 'target_plan')); // 'target_plan' | 'month'
   const [selectedPlan, setSelectedPlan] = useState(() => ssGet('plan', ''));
   const [resources, setResources] = useState([]);
+  // Stable list of all sales/admin resources — used to populate territory/city
+  // filter dropdowns regardless of plan selection.
+  const [allResources, setAllResources] = useState([]);
   const [territoryFilter, setTerritoryFilter] = useState(() => ssGet('territory', 'all'));
   const [cityFilter, setCityFilter] = useState(() => ssGet('city', 'all'));
   const [selectedResource, setSelectedResource] = useState(() => ssGet('resource', []));
@@ -108,8 +111,12 @@ export default function PerformanceTracker() {
   useEffect(() => {
     fetch(`${API_URL}/api/performance/all-sales-resources`, { headers })
       .then(r => r.ok ? r.json() : [])
-      .then(d => setResources(Array.isArray(d) ? d : []))
-      .catch(() => setResources([]));
+      .then(d => {
+        const list = Array.isArray(d) ? d : [];
+        setResources(list);
+        setAllResources(list);
+      })
+      .catch(() => { setResources([]); setAllResources([]); });
     fetch(`${API_URL}/api/performance/target-plans`, { headers })
       .then(r => r.ok ? r.json() : [])
       .then(d => setPlans(Array.isArray(d) ? d : []))
@@ -192,16 +199,18 @@ export default function PerformanceTracker() {
     }
   }, [selectedPlan, viewMode, plans]);
 
-  // Derive unique territories and cities from the plan's resource allocations.
+  // Derive unique territories and cities from the full sales-resource list so
+  // the filter dropdowns always show every territory/city, regardless of which
+  // plan (and therefore which subset of resources) is selected.
   // Skip allocations with a missing territory_id — a Radix <SelectItem> cannot
   // have an empty-string value and would crash the page.
   const planTerritories = [...new Map(
-    resources
+    allResources
       .filter(r => r.territory_id)
       .map(r => [r.territory_id, { id: r.territory_id, name: r.territory_name || r.territory_id }])
   ).values()];
   const planCities = [...new Set(
-    resources
+    allResources
       .filter(r => territoryFilter === 'all' || r.territory_id === territoryFilter)
       .map(r => r.city)
       .filter(Boolean)
