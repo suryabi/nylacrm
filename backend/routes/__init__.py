@@ -25,6 +25,7 @@ from .platform_admin import router as platform_admin_router
 from .roles import router as roles_router
 from .designations import router as designations_router
 from .scoring import router as scoring_router
+from .email_templates import router as email_templates_router
 from .invoices import router as invoices_router
 from .distributors import router as distributors_router
 from .task_management import router as task_management_router
@@ -82,6 +83,7 @@ routes_router.include_router(requests_router, tags=["Requests"])
 
 # Lead Scoring Model
 routes_router.include_router(scoring_router, prefix="/scoring", tags=["Lead Scoring"])
+routes_router.include_router(email_templates_router, tags=["Email Templates"])
 
 # Invoices Management
 routes_router.include_router(invoices_router, prefix="/invoices", tags=["Invoices"])

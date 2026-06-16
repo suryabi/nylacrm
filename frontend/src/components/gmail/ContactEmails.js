@@ -27,7 +27,7 @@ const relTime = (d) => {
  * Embedded panel showing all Gmail messages exchanged with `email`,
  * for Lead / Account / Contact detail pages. Lets the user reply/compose inline.
  */
-export default function ContactEmails({ email, name, leadId, onLogged }) {
+export default function ContactEmails({ email, name, leadId, accountId, contactId, onLogged }) {
   const navigate = useNavigate();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -157,6 +157,8 @@ export default function ContactEmails({ email, name, leadId, onLogged }) {
             initialTo={email}
             toEditable={false}
             recipientLabel={name || email}
+            entityType={leadId ? 'lead' : (accountId ? 'account' : (contactId ? 'contact' : null))}
+            entityId={leadId || accountId || contactId || null}
             onCancel={() => setComposer(null)}
             onSent={handleSent}
             testid="contact-composer"
@@ -214,6 +216,8 @@ export default function ContactEmails({ email, name, leadId, onLogged }) {
                           initialSubject={composer.subject}
                           replyToMessageId={composer.replyToMessageId}
                           threadId={composer.threadId}
+                          entityType={leadId ? 'lead' : (accountId ? 'account' : (contactId ? 'contact' : null))}
+                          entityId={leadId || accountId || contactId || null}
                           onCancel={() => setComposer(null)}
                           onSent={handleSent}
                           testid={`contact-reply-composer-${m.id}`}
