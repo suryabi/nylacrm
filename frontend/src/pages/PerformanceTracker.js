@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../components/ui/command';
 import { MultiSelect } from '../components/ui/multi-select';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
@@ -15,7 +17,7 @@ import {
   Target, TrendingUp, TrendingDown, Users, Phone, MapPin, DollarSign,
   BarChart3, RefreshCw, Save, Send, Check, RotateCcw, AlertTriangle,
   ChevronDown, ChevronRight, Building2, Clock, ArrowUp, ArrowDown, Minus,
-  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package, FlaskConical, Plus, Trash2, Calendar, Wallet, Unlock
+  Pencil, X, MessageSquare, Mail, Star, Award, Loader2, Package, FlaskConical, Plus, Trash2, Calendar, Wallet, Unlock, Search, CheckCircle2
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -40,6 +42,42 @@ const SUPPORT_CATEGORIES = ['Pricing', 'Logistics', 'Marketing', 'Collections', 
 
 const MONTH_NAMES = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// ── Plan-picker helpers ────────────────────────────────────────────────────
+// Stable avatar colour for an assignee name. 8 muted-but-distinct palettes.
+const AVATAR_PALETTES = [
+  'bg-violet-100 text-violet-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-rose-100 text-rose-700',
+  'bg-amber-100 text-amber-700',
+  'bg-sky-100 text-sky-700',
+  'bg-indigo-100 text-indigo-700',
+  'bg-teal-100 text-teal-700',
+  'bg-fuchsia-100 text-fuchsia-700',
+];
+const avatarPalette = (name = '') => {
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return AVATAR_PALETTES[Math.abs(h) % AVATAR_PALETTES.length];
+};
+const getInitials = (name = '') => name
+  .split(/\s+/).filter(Boolean).slice(0, 2)
+  .map(s => s[0]?.toUpperCase()).join('') || '?';
+
+// Render "1 Mar – 31 Mar 2026" or "1 Mar 2026 – 15 Apr 2026" for cross-year.
+const formatPlanRange = (start, end) => {
+  if (!start || !end) return '';
+  try {
+    const s = new Date(`${start}T00:00:00Z`);
+    const e = new Date(`${end}T00:00:00Z`);
+    const sM = MONTH_NAMES[s.getUTCMonth() + 1];
+    const eM = MONTH_NAMES[e.getUTCMonth() + 1];
+    if (s.getUTCFullYear() === e.getUTCFullYear()) {
+      return `${s.getUTCDate()} ${sM} – ${e.getUTCDate()} ${eM} ${e.getUTCFullYear()}`;
+    }
+    return `${s.getUTCDate()} ${sM} ${s.getUTCFullYear()} – ${e.getUTCDate()} ${eM} ${e.getUTCFullYear()}`;
+  } catch { return `${start} → ${end}`; }
+};
+
 // Default to last month
 const getLastMonth = () => {
   const now = new Date();
@@ -54,6 +92,149 @@ const getLastMonthYear = () => {
 // Session storage helpers for filter persistence
 const ssGet = (key, fallback) => { try { const v = sessionStorage.getItem(`perf_${key}`); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; } };
 const ssSet = (key, val) => { sessionStorage.setItem(`perf_${key}`, JSON.stringify(val)); };
+
+// ── Rich Target Plan picker ────────────────────────────────────────────────
+// A searchable, grouped-by-assignee combobox with rich rows (assignee avatar,
+// plan name, date range, total amount). Built on shadcn Command + Popover.
+function PlanPicker({ plans, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const selected = plans.find(p => p.id === value);
+
+  // Group plans by assignee for the menu. Unassigned plans land at the bottom.
+  const groups = useMemo(() => {
+    const map = new Map();
+    plans.forEach(p => {
+      const key = p.assigned_to_name || '__unassigned__';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(p);
+    });
+    const ordered = [...map.entries()].sort((a, b) => {
+      if (a[0] === '__unassigned__') return 1;
+      if (b[0] === '__unassigned__') return -1;
+      return a[0].localeCompare(b[0]);
+    });
+    return ordered;
+  }, [plans]);
+
+  const renderRow = (p) => {
+    const assignee = p.assigned_to_name || 'Unassigned';
+    const isSelected = p.id === value;
+    return (
+      <CommandItem
+        key={p.id}
+        // Searchable haystack — Command filters by `value` substring match.
+        value={`${p.name} ${assignee} ${p.start_date} ${p.end_date}`}
+        onSelect={() => { onChange(p.id); setOpen(false); }}
+        className="flex items-start gap-3 py-2.5 px-3 cursor-pointer"
+        data-testid={`plan-option-${p.id}`}
+      >
+        <div className={`shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${avatarPalette(assignee)}`}>
+          {getInitials(assignee === 'Unassigned' ? '?' : assignee)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="font-medium text-slate-900 truncate">{p.name}</div>
+            {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />}
+          </div>
+          <div className="text-xs text-slate-500 truncate">
+            {assignee}
+            <span className="mx-1.5 text-slate-300">·</span>
+            <span className="tabular-nums">{formatPlanRange(p.start_date, p.end_date)}</span>
+          </div>
+        </div>
+        <div className="shrink-0 text-right tabular-nums">
+          <div className="text-sm font-semibold text-slate-900">₹{fmtCompact(p.total_amount)}</div>
+          <div className="text-[10px] uppercase tracking-wider text-slate-400">{p.goal_type === 'cumulative' ? 'cumulative' : 'run-rate'}</div>
+        </div>
+      </CommandItem>
+    );
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          data-testid="select-plan"
+          className="group flex w-full items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-left shadow-sm hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-colors"
+        >
+          {selected ? (
+            <>
+              <div className={`shrink-0 h-9 w-9 rounded-full flex items-center justify-center text-[11px] font-semibold ${avatarPalette(selected.assigned_to_name || 'Unassigned')}`}>
+                {getInitials(selected.assigned_to_name || '?')}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-slate-900 truncate">{selected.name}</div>
+                <div className="text-xs text-slate-500 truncate">
+                  {selected.assigned_to_name || 'Unassigned'}
+                  <span className="mx-1.5 text-slate-300">·</span>
+                  <span className="tabular-nums">{formatPlanRange(selected.start_date, selected.end_date)}</span>
+                </div>
+              </div>
+              <span className="hidden sm:inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-700">
+                ₹{fmtCompact(selected.total_amount)}
+              </span>
+            </>
+          ) : (
+            <>
+              <div className="shrink-0 h-9 w-9 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center">
+                <Target className="h-4 w-4" />
+              </div>
+              <div className="flex-1 text-sm text-slate-500">Select a target plan…</div>
+            </>
+          )}
+          <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-slate-600 shrink-0 transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        sideOffset={6}
+        className="w-[min(560px,calc(100vw-2rem))] p-0 shadow-lg border-slate-200"
+      >
+        <Command
+          // Default Command filter is case-insensitive substring; we made the
+          // CommandItem `value` a haystack of name + assignee + dates above.
+          shouldFilter
+        >
+          <CommandInput
+            placeholder="Search by plan, assignee, or date…"
+            data-testid="plan-search-input"
+          />
+          <CommandList className="max-h-[60vh]">
+            <CommandEmpty className="py-8 text-center text-sm text-slate-500">
+              No active plans match your search.
+            </CommandEmpty>
+            {plans.length === 0 && (
+              <div className="py-8 px-6 text-center text-sm text-slate-500" data-testid="plan-picker-empty">
+                No active target plans. Activate a plan from <span className="font-medium text-slate-700">Target Planning</span> to track performance against it.
+              </div>
+            )}
+            {groups.map(([assignee, list]) => (
+              <CommandGroup
+                key={assignee}
+                heading={
+                  <div className="flex items-center gap-2 px-1 py-1.5">
+                    <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-semibold ${avatarPalette(assignee === '__unassigned__' ? 'Unassigned' : assignee)}`}>
+                      {getInitials(assignee === '__unassigned__' ? '?' : assignee)}
+                    </div>
+                    <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                      {assignee === '__unassigned__' ? 'Unassigned' : assignee}
+                    </span>
+                    <span className="text-[11px] text-slate-400">· {list.length}</span>
+                  </div>
+                }
+              >
+                {list.map(renderRow)}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function PerformanceTracker() {
   const navigate = useNavigate();
@@ -474,17 +655,11 @@ export default function PerformanceTracker() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 items-end">
                 <div>
                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.15em] mb-1.5 block">Target Plan <span className="text-rose-500 normal-case">*</span></label>
-                  <Select value={selectedPlan || '__none__'} onValueChange={v => setSelectedPlan(v === '__none__' ? '' : v)}>
-                    <SelectTrigger data-testid="select-plan"><SelectValue placeholder="Select a target plan..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Select a plan</SelectItem>
-                      {plans.map(p => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.name}{p.assigned_to_name ? ` (${p.assigned_to_name})` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <PlanPicker
+                    plans={plans}
+                    value={selectedPlan}
+                    onChange={(v) => setSelectedPlan(v || '')}
+                  />
                 </div>
                 {(() => {
                   const plan = plans.find(p => p.id === selectedPlan);
