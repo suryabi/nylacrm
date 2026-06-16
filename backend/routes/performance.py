@@ -465,6 +465,81 @@ async def get_resources_for_plan(plan_id: str, current_user: dict = Depends(get_
     return allocations
 
 
+@router.get("/plan-scope/{plan_id}")
+async def get_plan_scope(plan_id: str, current_user: dict = Depends(get_current_user)):
+    """Return the union of territories, cities, and resources that are either
+    allocated to or assigned to a target plan. Used to scope the Performance
+    Tracker's Territory/City/Resource filter dropdowns to only the values
+    relevant to the selected plan.
+    """
+    tenant_id = get_current_tenant_id()
+
+    # 1. All allocations for the plan, at any level (territory/city/resource/sku)
+    allocations = await db.target_allocations_v2.find(
+        {"plan_id": plan_id},
+        {"_id": 0, "territory_id": 1, "territory_name": 1, "city": 1, "resource_id": 1, "resource_name": 1, "level": 1}
+    ).to_list(2000)
+
+    # Dedupe key for territories: the territory NAME. Resource records on the
+    # user collection only carry the name (no UUID), so we standardise on the
+    # name end-to-end so the frontend filter (`resource.territory_id === filter`)
+    # works regardless of whether the value came from an allocation or a user.
+    territory_names = set()
+    cities_set = set()
+    resources_map = {}        # resource_id -> {resource_id, resource_name, territory_id, territory_name, city}
+
+    # 2. Allocation-based inclusion
+    for a in allocations:
+        tname = a.get("territory_name")
+        if tname:
+            territory_names.add(tname)
+        city = a.get("city")
+        if city:
+            cities_set.add(city)
+        rid = a.get("resource_id")
+        if rid and a.get("level") == "resource":
+            resources_map[rid] = {
+                "resource_id": rid,
+                "resource_name": a.get("resource_name", ""),
+                # Use territory NAME as the id so it matches what /all-sales-resources returns
+                "territory_id": tname or "",
+                "territory_name": tname or "",
+                "city": city or "",
+            }
+
+    # 3. Assignment-based inclusion — for each resource included via allocations,
+    # also pull that resource's own territory & city from the users collection
+    # (single source of truth for who is assigned to where) and union them into
+    # the dropdown options.
+    if resources_map:
+        users = await db.users.find(
+            {"tenant_id": tenant_id, "id": {"$in": list(resources_map.keys())}},
+            {"_id": 0, "id": 1, "name": 1, "territory": 1, "city": 1}
+        ).to_list(500)
+        for u in users:
+            rid = u["id"]
+            t = u.get("territory") or ""
+            c = u.get("city") or ""
+            res = resources_map[rid]
+            if not res.get("resource_name"):
+                res["resource_name"] = u.get("name", "")
+            if not res.get("territory_name") and t:
+                res["territory_name"] = t
+                res["territory_id"] = t
+            if not res.get("city") and c:
+                res["city"] = c
+            if t:
+                territory_names.add(t)
+            if c:
+                cities_set.add(c)
+
+    return {
+        "territories": [{"id": t, "name": t} for t in sorted(territory_names)],
+        "cities": sorted(cities_set),
+        "resources": list(resources_map.values()),
+    }
+
+
 @router.get("/territories-for-plan/{plan_id}")
 async def get_territories_for_plan(plan_id: str, current_user: dict = Depends(get_current_user)):
     """Get all territories allocated under a target plan."""

@@ -163,24 +163,35 @@ export default function PerformanceTracker() {
     setDefaultsApplied(true);
   }, [resources, user, defaultsApplied, viewMode]);
 
+  // Plan-scoped dropdown options (territories/cities/resources) — populated when
+  // a Target Plan is selected. Union of allocation-based + assignment-based
+  // entities for that plan, returned by /api/performance/plan-scope/{plan_id}.
+  const [planScope, setPlanScope] = useState({ territories: [], cities: [], resources: [] });
+
   // When plan changes, reload plan-specific resources if plan is selected (for target amounts)
   useEffect(() => {
-    if (!selectedPlan) return;
-    fetch(`${API_URL}/api/performance/resources-for-plan/${selectedPlan}`, { headers })
-      .then(r => r.json()).then(planRes => {
-        // Merge plan resources with all resources — plan resources have target amounts
-        setResources(prev => {
-          // If plan has specific resource allocations, use those (they contain territory_id, city, amount)
-          if (planRes.length > 0) return planRes;
-          return prev;
+    if (!selectedPlan) {
+      setPlanScope({ territories: [], cities: [], resources: [] });
+      return;
+    }
+    fetch(`${API_URL}/api/performance/plan-scope/${selectedPlan}`, { headers })
+      .then(r => r.ok ? r.json() : { territories: [], cities: [], resources: [] })
+      .then(scope => {
+        const planRes = Array.isArray(scope.resources) ? scope.resources : [];
+        setPlanScope({
+          territories: Array.isArray(scope.territories) ? scope.territories : [],
+          cities: Array.isArray(scope.cities) ? scope.cities : [],
+          resources: planRes,
         });
+        // Plan resources also drive the per-resource target sum and the chips.
+        setResources(prev => (planRes.length > 0 ? planRes : prev));
         // In target_plan mode: auto-select all plan resources (user can deselect afterwards)
         if (viewMode === 'target_plan' && planRes.length > 0) {
           setSelectedResource(planRes.map(r => r.resource_id).filter(Boolean));
           setTerritoryFilter('all');
           setCityFilter('all');
         }
-      }).catch(() => {});
+      }).catch(() => { setPlanScope({ territories: [], cities: [], resources: [] }); });
 
     // In target_plan mode: align selectedMonth/Year with plan period
     if (viewMode === 'target_plan') {
@@ -199,22 +210,31 @@ export default function PerformanceTracker() {
     }
   }, [selectedPlan, viewMode, plans]);
 
-  // Derive unique territories and cities from the full sales-resource list so
-  // the filter dropdowns always show every territory/city, regardless of which
-  // plan (and therefore which subset of resources) is selected.
-  // Skip allocations with a missing territory_id — a Radix <SelectItem> cannot
-  // have an empty-string value and would crash the page.
-  const planTerritories = [...new Map(
-    allResources
-      .filter(r => r.territory_id)
-      .map(r => [r.territory_id, { id: r.territory_id, name: r.territory_name || r.territory_id }])
-  ).values()];
-  const planCities = [...new Set(
-    allResources
-      .filter(r => territoryFilter === 'all' || r.territory_id === territoryFilter)
-      .map(r => r.city)
-      .filter(Boolean)
-  )];
+  // Filter-dropdown options. When a Target Plan is selected we restrict the
+  // dropdowns to the plan's scope (allocations ∪ assignments). When no plan
+  // is selected (Month mode without plan) we fall back to all sales resources.
+  const dropdownSource = selectedPlan && planScope.resources.length > 0
+    ? planScope.resources
+    : allResources;
+  const planTerritories = selectedPlan
+    ? planScope.territories
+    : [...new Map(
+        allResources
+          .filter(r => r.territory_id)
+          .map(r => [r.territory_id, { id: r.territory_id, name: r.territory_name || r.territory_id }])
+      ).values()];
+  const planCities = selectedPlan
+    ? planScope.cities.filter(c => {
+        if (territoryFilter === 'all') return true;
+        // Keep cities whose resources belong to the selected territory
+        return planScope.resources.some(r => r.city === c && r.territory_id === territoryFilter);
+      })
+    : [...new Set(
+        allResources
+          .filter(r => territoryFilter === 'all' || r.territory_id === territoryFilter)
+          .map(r => r.city)
+          .filter(Boolean)
+      )];
 
   // Filter resources based on territory/city selection
   const filteredResources = resources.filter(r => {
