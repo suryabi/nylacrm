@@ -12,7 +12,8 @@ import base64
 
 from database import get_tenant_db
 from deps import get_current_user
-from core.tenant import with_tenant_id
+from core.tenant import with_tenant_id, get_current_tenant_id
+from utils.entity_comments import notify_comment_mentions
 
 router = APIRouter()
 
@@ -790,6 +791,24 @@ async def create_comment(comment: CommentCreate, current_user: dict = Depends(ge
     comment_data['created_at'] = datetime.now(timezone.utc).isoformat()
     
     await tdb.comments.insert_one(comment_data)
+    
+    # @-mention notifications — parse the comment body for inline
+    # `@[Name](user-id)` chips inserted by the frontend MentionTextarea.
+    try:
+        lead = await tdb.leads.find_one({'id': comment_data['lead_id']}, {'_id': 0, 'company': 1, 'contact_person': 1})
+        lead_label = (lead or {}).get('company') or (lead or {}).get('contact_person') or 'lead'
+        await notify_comment_mentions(
+            tenant_id=get_current_tenant_id(),
+            text=comment_data.get('comment') or '',
+            current_user=current_user,
+            link=f"/leads/{comment_data['lead_id']}",
+            title=f"{current_user.get('name') or current_user.get('email') or 'Someone'} mentioned you",
+            body=f"Comment on lead {lead_label}",
+            entity_type='lead',
+            entity_id=comment_data['lead_id'],
+        )
+    except Exception:
+        pass
     
     comment_data['created_at'] = datetime.fromisoformat(comment_data['created_at'])
     return Comment(**comment_data)

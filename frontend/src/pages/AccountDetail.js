@@ -37,6 +37,7 @@ import {
 import { Checkbox } from '../components/ui/checkbox';
 import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
+import EntityCommentThread from '../components/EntityCommentThread';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import AccountScoringCard from '../components/AccountScoringCard';
 import EntityContactsSection from '../components/EntityContactsSection';
@@ -2218,6 +2219,15 @@ ${googleMapsLink}`;
               entityId={account.id || account.account_id}
               entityName={account.account_name}
               entityCity={account.city}
+            />
+          )}
+
+          {/* Discussion thread with @-mentions */}
+          {account && (
+            <EntityCommentThread
+              basePath={`/accounts/${account.account_id || account.id}/comments`}
+              title="Discussion"
+              testid="account-comments"
             />
           )}
         </div>

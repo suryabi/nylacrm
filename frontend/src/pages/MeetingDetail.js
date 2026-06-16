@@ -9,6 +9,7 @@ import {
   PenLine, History, MessageSquare, ListChecks, ExternalLink, Loader2,
   X, Plus, Link as LinkIcon,
 } from 'lucide-react';
+import EntityCommentThread from '../components/EntityCommentThread';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -173,6 +174,9 @@ export default function MeetingDetail() {
               <p className="text-sm text-slate-400 italic py-4 text-center">No action items</p>
             )}
           </div>
+
+          {/* Discussion thread with @-mentions */}
+          <EntityCommentThread basePath={`/meeting-minutes/${id}/comments`} title="Discussion" testid="meeting-comments" />
         </div>
 
         {/* Sidebar — 1 col */}

@@ -785,11 +785,26 @@ async def add_comment(task_id: str, comment: CommentCreate, current_user: dict =
     # Log activity
     await log_activity(tdb, task_id, 'commented', None, comment.content[:100], current_user)
     
-    # Add mentioned users to watchers
-    if comment.mentions:
+    # Mentions: collect from the explicit `mentions` array AND any inline
+    # `@[name](id)` chips in the content, add them as watchers, and notify them.
+    from utils.mentions import extract_mentions
+    all_mentions = list({*(comment.mentions or []), *extract_mentions(comment.content or '')})
+    if all_mentions:
         await tdb.tasks_v2.update_one(
             {'id': task_id},
-            {'$addToSet': {'watchers': {'$each': comment.mentions}}}
+            {'$addToSet': {'watchers': {'$each': all_mentions}}}
+        )
+        from utils.entity_comments import notify_comment_mentions
+        await notify_comment_mentions(
+            tenant_id=get_current_tenant_id(),
+            text=comment.content or '',
+            current_user=current_user,
+            link=f"/tasks/{task_id}",
+            title=f"{current_user.get('name') or current_user.get('email') or 'Someone'} mentioned you",
+            body=f"Comment on {task.get('task_number') or 'a task'}: {task.get('title','')[:60]}",
+            entity_type='task',
+            entity_id=task_id,
+            extra_ids=comment.mentions or [],
         )
     
     return comment_data

@@ -15,6 +15,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-16 — @-mentions expanded to Leads, Tasks, Accounts & Meetings (P1) ✅ DONE
+- **Request**: Extend the @-mention experience beyond Design Requests to Lead notes, Account notes, Tasks and Meeting Minutes.
+- **Reusable helpers**: `utils/entity_comments.py` (`build_comment` + `notify_comment_mentions`) — shared mention-parse + notify across surfaces (category `mention`, author excluded, best-effort). Frontend `components/EntityCommentThread.jsx` — self-contained discussion thread (GET/POST a `{basePath}`) using `MentionTextarea` + `renderMentionedText`.
+- **Lead comments** (`routes/leads.py` `create_comment`, `pages/LeadDetail.js`): existing comment box swapped to `MentionTextarea`, chips rendered; backend now notifies mentioned users (link `/leads/{id}`).
+- **Tasks** (`routes/task_management.py` `add_comment`, `pages/TaskDetail.js`): comment box swapped to `MentionTextarea`; backend extracts mentions from `content` (merged with the explicit `mentions` array), adds them as watchers AND notifies (link `/tasks/{id}`).
+- **Accounts** (NEW thread): `GET/POST /accounts/{id}/comments` (`account_comments` collection) + a "Discussion" card on `AccountDetail.js` (left column, after Expense Requests).
+- **Meetings** (NEW thread): `GET/POST /meeting-minutes/{id}/comments` (`meeting_comments` collection) + a "Discussion" card on `MeetingDetail.js` (main column, after Action Items).
+- **Tested**: curl e2e on all four — posting a comment with `@[Vamsi Bommena](id)` created a `mention` notification for Vamsi on each entity type with the correct title/body/link; test data + watcher side-effects cleaned up. Screenshots — `@Vam` autocomplete dropdown ("Vamsi Bommena · Director") renders on Lead, Task, Account and Meeting comment boxes; new Discussion cards render on Account & Meeting detail.
+
+
 ### 2026-06-16 — @-mentions in Design Request comments (P0) ✅ DONE
 - **Request**: Build the full @-mention experience — tag teammates in comments and notify them.
 - **Frontend** (`pages/MarketingRequestDetail.js`): wired the existing `MentionTextarea` + `renderMentionedText` (`components/MentionTextarea.jsx`) into BOTH comment surfaces — the main Comments & Activity composer (replaced plain `Textarea`) and each work-version comment composer (replaced the `Input`). Saved mentions now render as rose pills in the main timeline and per-version threads. Typing `@` opens a teammate autocomplete (name + role/email), arrow/enter/tab to pick, inserts `@[Name](user-id)` inline.

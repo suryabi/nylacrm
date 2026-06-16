@@ -13,6 +13,7 @@ import base64
 from database import get_tenant_db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
+from utils.entity_comments import build_comment, notify_comment_mentions
 from services.external_invoices_service import (
     is_external_payload,
     create_external_invoice,
@@ -564,6 +565,56 @@ async def get_account(account_id: str, current_user: dict = Depends(get_current_
         account['sales_person_name'] = user.get('name') if user else None
     
     return account
+
+
+# ============= ACCOUNT COMMENTS / DISCUSSION =============
+
+class AccountCommentCreate(BaseModel):
+    text: str
+
+
+@router.get("/{account_id}/comments")
+async def list_account_comments(account_id: str, current_user: dict = Depends(get_current_user)):
+    """List the discussion thread for an account (oldest → newest)."""
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'id': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    comments = await tdb.account_comments.find(
+        {'account_id': account['id']}, {'_id': 0}
+    ).sort('created_at', 1).to_list(2000)
+    return comments
+
+
+@router.post("/{account_id}/comments")
+async def add_account_comment(account_id: str, payload: AccountCommentCreate, current_user: dict = Depends(get_current_user)):
+    """Add a comment to an account's discussion thread (supports @-mentions)."""
+    tdb = get_tdb()
+    if not (payload.text and payload.text.strip()):
+        raise HTTPException(status_code=400, detail='Comment text is required')
+    account = await tdb.accounts.find_one(
+        _account_match(account_id),
+        {'_id': 0, 'id': 1, 'company_name': 1, 'display_name': 1, 'account_id': 1},
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    comment = build_comment('account_id', account['id'], payload.text, current_user)
+    await tdb.account_comments.insert_one(dict(comment))
+
+    label = account.get('display_name') or account.get('company_name') or account.get('account_id') or 'account'
+    await notify_comment_mentions(
+        tenant_id=get_current_tenant_id(),
+        text=payload.text,
+        current_user=current_user,
+        link=f"/accounts/{account.get('account_id') or account['id']}",
+        title=f"{current_user.get('name') or current_user.get('email') or 'Someone'} mentioned you",
+        body=f"Comment on account {label}",
+        entity_type='account',
+        entity_id=account['id'],
+    )
+    return comment
+
 
 
 @router.put("/{account_id}")

@@ -11,6 +11,7 @@ from core.tenant import get_current_tenant_id
 from database import db, get_tenant_db
 import uuid
 from typing import Optional
+from utils.entity_comments import build_comment, notify_comment_mentions
 
 router = APIRouter(prefix="/meeting-minutes", tags=["meeting-minutes"])
 
@@ -137,6 +138,51 @@ async def get_meeting(meeting_id: str, current_user: dict = Depends(get_current_
                 ai["task_modified"] = True
 
     return meeting
+
+
+@router.get("/{meeting_id}/comments")
+async def list_meeting_comments(meeting_id: str, current_user: dict = Depends(get_current_user)):
+    """List the discussion thread for a meeting (oldest → newest)."""
+    tenant_id = get_current_tenant_id()
+    meeting = await db.meeting_minutes.find_one({"id": meeting_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1})
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    comments = await db.meeting_comments.find(
+        {"meeting_id": meeting_id, "tenant_id": tenant_id}, {"_id": 0}
+    ).sort("created_at", 1).to_list(2000)
+    return comments
+
+
+@router.post("/{meeting_id}/comments")
+async def add_meeting_comment(meeting_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    """Add a comment to a meeting's discussion thread (supports @-mentions)."""
+    tenant_id = get_current_tenant_id()
+    text = (data or {}).get("text") or ""
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Comment text is required")
+    meeting = await db.meeting_minutes.find_one(
+        {"id": meeting_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "title": 1}
+    )
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    comment = build_comment("meeting_id", meeting_id, text, current_user)
+    comment["tenant_id"] = tenant_id
+    await db.meeting_comments.insert_one(dict(comment))
+    comment.pop("tenant_id", None)
+
+    await notify_comment_mentions(
+        tenant_id=tenant_id,
+        text=text,
+        current_user=current_user,
+        link=f"/meeting-minutes/{meeting_id}",
+        title=f"{current_user.get('name') or current_user.get('email') or 'Someone'} mentioned you",
+        body=f"Comment on meeting {meeting.get('title') or ''}".strip(),
+        entity_type="meeting",
+        entity_id=meeting_id,
+    )
+    return comment
+
 
 
 @router.post("")

@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
+import MentionTextarea, { renderMentionedText } from '../components/MentionTextarea';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
@@ -1543,18 +1544,18 @@ ${userEmail}`;
                         {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
                       </p>
                     </div>
-                    <p className="text-sm">{comment.comment}</p>
+                    <p className="text-sm whitespace-pre-wrap">{renderMentionedText(comment.comment)}</p>
                   </div>
                 );
               })}
             </div>
             <form onSubmit={handleAddComment} className="space-y-3">
-              <Textarea
-                placeholder="Add a comment..."
+              <MentionTextarea
+                placeholder="Add a comment… (type @ to mention a teammate)"
                 value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
+                onChange={setNewComment}
                 rows={3}
-                data-testid="comment-input"
+                testid="comment-input"
               />
               <Button type="submit" disabled={submittingComment || !newComment.trim()} data-testid="add-comment-button">
                 <Send className="h-4 w-4 mr-2" />
