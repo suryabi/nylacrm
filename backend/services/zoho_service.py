@@ -319,6 +319,45 @@ def _flatten_strs(d, prefix=""):
         yield (prefix.rstrip("."), d)
 
 
+# Zoho Books rejects address subfields (address / street2 / attention / city /
+# state / zip) with "… has less than 100 characters" when they reach 100, so the
+# safe ceiling is 99. Clip to 99 everywhere we build a Zoho address.
+ZOHO_ADDR_MAX = 99
+
+
+def _zoho_clip(s, n: int = ZOHO_ADDR_MAX) -> str:
+    if not s:
+        return ""
+    return str(s).strip()[:n]
+
+
+def _zoho_shipping_address(*, attention: str = "", address: str = "", street2: str = "",
+                           city: str = "", state: str = "", zip: str = "",
+                           country: str = "India", phone: str = "") -> dict:
+    """Build a Zoho-safe shipping/billing address dict: every field clipped to
+    <100 chars, with any `address` overflow pushed into `street2` so the full
+    address still prints on the challan."""
+    addr_full = (address or "").strip()
+    addr = _zoho_clip(addr_full)
+    overflow = addr_full[ZOHO_ADDR_MAX:].strip() if len(addr_full) > ZOHO_ADDR_MAX else ""
+    street2_combined = ", ".join([p for p in (overflow, (street2 or "").strip()) if p])
+    out = {
+        "attention": _zoho_clip(attention),
+        "address": addr,
+        "street2": _zoho_clip(street2_combined),
+        "country": country or "India",
+    }
+    if city:
+        out["city"] = _zoho_clip(city)
+    if state:
+        out["state"] = _zoho_clip(state)
+    if zip:
+        out["zip"] = _zoho_clip(zip)
+    if phone:
+        out["phone"] = _zoho_clip(phone, 50)
+    return out
+
+
 async def _zoho_request(
     method: str,
     path: str,
@@ -542,7 +581,7 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         if not s:
             return ""
         s = str(s).strip()
-        return s[:100]
+        return s[:ZOHO_ADDR_MAX]
 
     def _zoho_addr(src) -> Optional[dict]:
         if not src:
@@ -550,9 +589,9 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         if isinstance(src, str):
             full = src.strip()
             return {
-                "attention": _clip100(attention_line)[:200],
+                "attention": _clip100(attention_line),
                 "address": _clip100(full),
-                "street2": _clip100(full[100:200]) if len(full) > 100 else "",
+                "street2": _clip100(full[ZOHO_ADDR_MAX:ZOHO_ADDR_MAX * 2]) if len(full) > ZOHO_ADDR_MAX else "",
                 "country": "India",
             }
         if not isinstance(src, dict):
@@ -564,17 +603,17 @@ async def upsert_contact(tenant_id: str, account: dict) -> str:
         state = (src.get("state") or "").strip()
         zipc = (src.get("pincode") or src.get("zip") or src.get("postal_code") or "").strip()
 
-        # Build a candidate address line (line1 + landmark) but cap at 100.
+        # Build a candidate address line (line1 + landmark) but cap at <100.
         # If still too long after that, overflow goes to street2 so nothing is lost.
         candidate_addr = ", ".join([p for p in (line1, landmark) if p]).strip()
         if not (candidate_addr or line2 or city or state or zipc):
             return None
         address = _clip100(candidate_addr) or _clip100(city)
-        # If the original candidate was longer than 100, capture the overflow.
-        overflow = candidate_addr[100:].strip() if len(candidate_addr) > 100 else ""
+        # If the original candidate was longer than the cap, capture the overflow.
+        overflow = candidate_addr[ZOHO_ADDR_MAX:].strip() if len(candidate_addr) > ZOHO_ADDR_MAX else ""
         street2 = _clip100(", ".join([p for p in (overflow, line2) if p]).strip())
         return {
-            "attention": _clip100(attention_line)[:200],
+            "attention": _clip100(attention_line),
             "address": address,
             "street2": street2,
             "city": _clip100(city),
@@ -2056,24 +2095,23 @@ async def create_delivery_challan_for_promo_dispatch(
     rsa = dispatch.get("recipient_shipping_address") or {}
     has_structured = any((rsa.get(k) or "").strip() for k in ("address", "city", "state", "zip"))
     if has_structured:
-        payload["shipping_address"] = {
-            "attention": rsa.get("attention") or "",
-            "address":   rsa.get("address") or "",
-            "street2":   rsa.get("street2") or "",
-            "city":      rsa.get("city") or "",
-            "state":     rsa.get("state") or "",
-            "zip":       rsa.get("zip") or "",
-            "country":   rsa.get("country") or "India",
-            "phone":     rsa.get("phone") or "",
-        }
+        payload["shipping_address"] = _zoho_shipping_address(
+            attention=rsa.get("attention") or dispatch.get("contact_name") or "",
+            address=rsa.get("address") or "",
+            street2=rsa.get("street2") or "",
+            city=rsa.get("city") or "",
+            state=rsa.get("state") or "",
+            zip=rsa.get("zip") or "",
+            country=rsa.get("country") or "India",
+            phone=rsa.get("phone") or "",
+        )
     elif dispatch.get("delivery_address"):
         # Legacy fallback for older dispatches that don't carry the structured
-        # address yet — at least put the text into the address field.
-        payload["shipping_address"] = {
-            "attention": dispatch.get("contact_name") or "",
-            "address": dispatch["delivery_address"][:200],
-            "country": "India",
-        }
+        # address yet — put the free-text address in, clipped + overflowed.
+        payload["shipping_address"] = _zoho_shipping_address(
+            attention=dispatch.get("contact_name") or "",
+            address=dispatch["delivery_address"],
+        )
 
     result = await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=payload)
     challan = result.get("deliverychallan") or result.get("delivery_challan") or {}
