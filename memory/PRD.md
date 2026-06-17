@@ -43,6 +43,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - **⚠️ Requires REDEPLOY + RECONNECT Zoho** (the new `settings.UPDATE` scope only applies on a fresh authorization), then create a NEW promo challan.
 - **Tested**: scopes asserted (`settings.UPDATE` + all deliverychallans present); 8/8 unit tests pass; backend healthy. Live render not exercisable in preview.
 
+### 2026-06-17 — ✨ Feature: Reverse action for regular stock-out (deliveries) ✅ DONE
+- **Request**: Mirror the promo "Reverse" on regular deliveries — for a delivery that was scheduled & **invoiced** but never actually delivered: void the Zoho invoice and release the committed stock back to inventory.
+- **Scope (per user)**: Reverse is allowed ONLY for not-yet-delivered deliveries that already have a Zoho invoice. **Completed/delivered deliveries CANNOT be reversed** (stock already moved). Also blocked for cancelled/already-reversed and settlement-linked deliveries.
+- **Backend** (`services/zoho_service.py`, `routes/distributors.py`):
+  - New `void_invoice()` → `POST /invoices/{id}/status/void` (uses existing `invoices.UPDATE` scope — no reconnect needed; idempotent on 404 / already-void; actionable msg on code-57).
+  - `POST /distributors/{id}/deliveries/{delivery_id}/reverse`: voids the Zoho invoice (best-effort), undoes the local mirror invoice + account `outstanding_balance`, reverts applied credit notes, and sets status `reversed` — which drops it from `RESERVED_DELIVERY_STATUSES` so committed stock is released back to available (stock was never physically deducted; deduction only happens on completion).
+  - `POST .../reverse-zoho-cleanup`: retry the void when `zoho_void_pending`.
+- **Frontend** (`pages/DistributorDetail.js`): "Reverse (Void Invoice)" button in the delivery detail modal (shown for invoiced, not-yet-delivered deliveries), a "Retry Zoho Void" button when a void is pending, and a rose "Reversed" status badge.
+- **Tested**: curl e2e on preview — guards verified (delivered→400, no-invoice→400, not-found→404) and happy path on DEL-2026-0007 (confirmed+invoiced) → status `reversed`, `reversed_by` stamped, stock released; Zoho void correctly deferred (`void_pending`, "Zoho not connected" in preview — will void on production). 12/12 unit tests pass; frontend compiles. **Note**: actual Zoho voiding only verifiable on production (Zoho connected there).
+
 
 
 ### 2026-06-17 — Promotional Stock-Out: Draft workflow + Reverse (P1 feature) ✅ DONE

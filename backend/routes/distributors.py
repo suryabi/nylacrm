@@ -5211,6 +5211,172 @@ async def cancel_delivery(
     }
 
 
+# Statuses for which a delivery is "done" and can no longer be reversed.
+_NON_REVERSIBLE_DELIVERY_STATUSES = {"complete", "completed", "delivered", "cancelled", "reversed"}
+
+
+async def _reverse_delivery_invoice_mirror(tenant_id: str, delivery: dict) -> None:
+    """Undo the local accounting side-effects of a delivery's Zoho invoice mirror:
+    remove the mirror `invoices` doc and decrement the account's running
+    `outstanding_balance` by the amount that was added when the invoice synced.
+    Idempotent — only decrements when the mirror was actually counted."""
+    mirror = await db.invoices.find_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery.get("id")},
+        {"_id": 0},
+    )
+    if not mirror:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    if mirror.get("outstanding_counted"):
+        gross = float(mirror.get("gross_invoice_value") or mirror.get("net_invoice_value") or 0)
+        if gross:
+            await db.accounts.update_one(
+                {"tenant_id": tenant_id,
+                 "$or": [{"id": delivery.get("account_id")}, {"account_id": delivery.get("account_id")}]},
+                {"$inc": {"outstanding_balance": round(-gross, 2)}, "$set": {"updated_at": now}},
+            )
+    await db.invoices.delete_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery.get("id")},
+    )
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/reverse")
+async def reverse_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    reason: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reverse a NOT-YET-DELIVERED delivery whose Zoho invoice was already
+    generated (e.g. scheduled + invoiced, but the delivery fell through):
+      1. Void the Zoho invoice (kept as VOID for audit).
+      2. Undo the local invoice mirror + account outstanding balance.
+      3. Revert any applied credit notes back to available.
+      4. Mark the delivery 'reversed' — this drops it from the reserved set, so
+         the committed stock is released back to available inventory.
+
+    Completed/delivered deliveries CANNOT be reversed (stock already moved)."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
+
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0},
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+
+    status = (delivery.get("status") or "").lower()
+    if status in _NON_REVERSIBLE_DELIVERY_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only a not-yet-delivered delivery can be reversed. Completed/delivered, "
+                   "cancelled or already-reversed deliveries cannot be reversed.",
+        )
+    if delivery.get("settlement_id"):
+        raise HTTPException(status_code=400, detail="Cannot reverse a delivery that is part of a settlement.")
+
+    zoho_invoice_id = delivery.get("zoho_invoice_id")
+    if not zoho_invoice_id:
+        raise HTTPException(
+            status_code=400,
+            detail="This delivery has no Zoho invoice to reverse. Use Cancel instead.",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1) Void the Zoho invoice (best-effort — reversal still completes on failure).
+    from services.zoho_service import void_invoice
+    void_pending = False
+    void_error = None
+    try:
+        await void_invoice(tenant_id, zoho_invoice_id)
+    except Exception as exc:
+        void_pending = True
+        void_error = str(exc)[:500]
+        logger.exception(f"Zoho invoice void failed during reverse for delivery {delivery.get('delivery_number')}")
+
+    # 2) Undo the local invoice mirror + outstanding balance.
+    try:
+        await _reverse_delivery_invoice_mirror(tenant_id, delivery)
+    except Exception:
+        logger.exception(f"Failed to reverse invoice mirror for delivery {delivery_id}")
+
+    # 3) Revert applied credit notes.
+    reverted_notes = []
+    if delivery.get("applied_credit_notes"):
+        from routes.credit_notes import revert_credit_note_application
+        reverted_notes = await revert_credit_note_application(
+            tenant_id=tenant_id, delivery_id=delivery_id,
+            delivery_number=delivery.get("delivery_number"),
+        )
+
+    # 4) Mark reversed (drops it from the reserved set → stock released).
+    remarks = delivery.get("remarks", "") or ""
+    if reason:
+        remarks = f"{remarks}\nReversed: {reason}".strip()
+    set_fields = {
+        "status": "reversed",
+        "remarks": remarks,
+        "reversed_at": now,
+        "reversed_by": current_user.get("id"),
+        "reversed_by_name": current_user.get("name"),
+        "updated_at": now,
+        "applied_credit_notes": [],
+        "zoho_void_pending": void_pending,
+        "zoho_void_error": void_error,
+    }
+    if not void_pending:
+        set_fields["zoho_invoice_voided"] = True
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id}, {"$set": set_fields})
+
+    msg = f"Delivery {delivery.get('delivery_number')} reversed — stock released"
+    msg += " (Zoho invoice void pending — will retry)" if void_pending else " and Zoho invoice voided"
+    updated = await db.distributor_deliveries.find_one({"id": delivery_id, "tenant_id": tenant_id}, {"_id": 0})
+    return {
+        "ok": True, "message": msg, "delivery": updated,
+        "zoho_void_pending": void_pending, "zoho_void_error": void_error,
+        "reverted_credit_notes": reverted_notes,
+    }
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/reverse-zoho-cleanup")
+async def retry_delivery_void(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Re-attempt voiding the Zoho invoice for a reversed delivery whose void is
+    still pending (e.g. a transient Zoho error during the original reverse)."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0},
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    if delivery.get("status") != "reversed" or not delivery.get("zoho_void_pending"):
+        raise HTTPException(status_code=400, detail="No pending Zoho void for this delivery.")
+    now = datetime.now(timezone.utc).isoformat()
+    from services.zoho_service import void_invoice
+    try:
+        await void_invoice(tenant_id, delivery.get("zoho_invoice_id"))
+    except Exception as exc:
+        err = str(exc)[:500]
+        await db.distributor_deliveries.update_one(
+            {"id": delivery_id, "tenant_id": tenant_id},
+            {"$set": {"zoho_void_error": err, "updated_at": now}})
+        raise HTTPException(status_code=400, detail=f"Zoho void failed: {err}")
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": {"zoho_void_pending": False, "zoho_void_error": None,
+                  "zoho_invoice_voided": True, "updated_at": now}})
+    return {"ok": True, "message": "Zoho invoice voided."}
+
+
+
 @router.get("/{distributor_id}/deliveries/{delivery_id}/customer-invoice")
 async def generate_customer_invoice(
     distributor_id: str,

@@ -155,3 +155,45 @@ def test_set_shipping_address_skips_when_empty(monkeypatch):
         zs._set_deliverychallan_shipping_address("t1", "Z123", {"country": "India"})
     )
     assert ok is False
+
+
+def test_void_invoice_success(monkeypatch):
+    captured = {}
+
+    async def fake_request(method, path, *, tenant_id, **kw):
+        captured["method"] = method
+        captured["path"] = path
+        return {"code": 0, "message": "The invoice has been marked as void."}
+
+    monkeypatch.setattr(zs, "_zoho_request", fake_request)
+    ok = asyncio.get_event_loop().run_until_complete(zs.void_invoice("t1", "INV9"))
+    assert ok is True
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/books/v3/invoices/INV9/status/void"
+
+
+def test_void_invoice_idempotent(monkeypatch):
+    # 404 (already gone) and "already void" are both treated as success.
+    async def fake_404(*a, **k):
+        raise ZohoApiError(404, "not found", {"code": 1003, "message": "Invoice not found"})
+
+    async def fake_already(*a, **k):
+        raise ZohoApiError(400, "x", {"code": 36015, "message": "Invoice is already marked as void."})
+
+    monkeypatch.setattr(zs, "_zoho_request", fake_404)
+    assert asyncio.get_event_loop().run_until_complete(zs.void_invoice("t1", "INV9")) is True
+    monkeypatch.setattr(zs, "_zoho_request", fake_already)
+    assert asyncio.get_event_loop().run_until_complete(zs.void_invoice("t1", "INV9")) is True
+
+
+def test_void_invoice_noop_without_id():
+    assert asyncio.get_event_loop().run_until_complete(zs.void_invoice("t1", "")) is True
+
+
+def test_void_invoice_raises_on_other_error(monkeypatch):
+    async def fake(*a, **k):
+        raise ZohoApiError(500, "boom", {"code": 9001, "message": "server error"})
+
+    monkeypatch.setattr(zs, "_zoho_request", fake)
+    with pytest.raises(ZohoApiError):
+        asyncio.get_event_loop().run_until_complete(zs.void_invoice("t1", "INV9"))

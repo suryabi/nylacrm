@@ -1089,6 +1089,50 @@ async def delete_delivery_challan(tenant_id: str, zoho_deliverychallan_id: str) 
         raise
 
 
+async def void_invoice(tenant_id: str, zoho_invoice_id: str) -> bool:
+    """Void an invoice in Zoho Books via `POST /invoices/{id}/status/void`.
+
+    Used when a scheduled delivery is reversed before it actually happens: the
+    invoice is marked VOID in Zoho (kept for audit, number preserved) rather than
+    deleted, which is the accounting-correct way to invalidate it.
+
+    Returns True on success. A 404 (invoice already gone) and an already-void
+    invoice are both treated as success so the reversal is idempotent. Any other
+    failure raises so the caller can flag "Zoho void pending" for a retry.
+    """
+    if not zoho_invoice_id:
+        return True
+    try:
+        await _zoho_request(
+            "POST",
+            f"/books/v3/invoices/{zoho_invoice_id}/status/void",
+            tenant_id=tenant_id,
+            max_attempts=2,
+            timeout=12.0,
+        )
+        return True
+    except ZohoApiError as e:
+        if e.status_code == 404:
+            logger.info(f"Invoice {zoho_invoice_id} already absent in Zoho — treating as voided.")
+            return True
+        # Zoho returns a 400 with this message when the invoice is already void.
+        msg = ((e.payload or {}).get("message") or e.message or "").lower()
+        if "already" in msg and "void" in msg:
+            logger.info(f"Invoice {zoho_invoice_id} is already void in Zoho.")
+            return True
+        if e.status_code == 401 and (e.payload or {}).get("code") == 57:
+            raise ZohoApiError(
+                401,
+                "Zoho hasn't granted permission to void invoices. An admin needs "
+                "to reconnect Zoho Books (Settings → Integrations → Zoho Books → "
+                "Disconnect, then Connect again), then retry.",
+                e.payload,
+            )
+        raise
+
+
+
+
 async def _ensure_mirror_invoice(
     *,
     tenant_id: str,

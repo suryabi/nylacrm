@@ -1978,6 +1978,40 @@ export default function DistributorDetail() {
     }
   };
 
+  const handleReverseDelivery = async (deliveryId) => {
+    if (!window.confirm(
+      'Reverse this delivery? The Zoho invoice will be VOIDED, the committed stock released back to inventory, and any applied credit notes returned to available. Use this only when an already-invoiced delivery did NOT actually happen. This cannot be undone.'
+    )) return;
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/reverse`, {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success(data?.message || 'Delivery reversed');
+      if (data?.zoho_void_pending) {
+        toast.warning('Zoho invoice void is pending — retry from the delivery once Zoho is reachable.');
+      }
+      setShowDeliveryDetail(false);
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reverse delivery');
+    }
+  };
+
+  const handleRetryDeliveryVoid = async (deliveryId) => {
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/reverse-zoho-cleanup`, {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success(data?.message || 'Zoho invoice voided');
+      setShowDeliveryDetail(false);
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to void Zoho invoice');
+    }
+  };
+
   const viewDeliveryDetail = async (deliveryId) => {
     try {
       const response = await axios.get(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}`, {
@@ -2046,6 +2080,7 @@ export default function DistributorDetail() {
       in_transit: { label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
       delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
       returned: { label: 'Returned', color: 'bg-orange-100 text-orange-800' },
+      reversed: { label: 'Reversed', color: 'bg-rose-100 text-rose-800' },
       cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
     };
     const config = statusConfig[status] || statusConfig.draft;
@@ -3734,6 +3769,32 @@ export default function DistributorDetail() {
                     <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
                       <Check className="h-4 w-4 mr-2" />
                       Complete Delivery
+                    </Button>
+                  )}
+                  {/* Reverse: only for an invoiced delivery that hasn't been delivered yet
+                      (scheduled / assigned / on-the-way / confirmed / in-transit). Voids the
+                      Zoho invoice and releases the committed stock back to inventory. */}
+                  {canManage && selectedDelivery.zoho_invoice_id &&
+                    !['draft', 'complete', 'completed', 'delivered', 'cancelled', 'reversed'].includes(selectedDelivery.status) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleReverseDelivery(selectedDelivery.id)}
+                      className="text-rose-600 border-rose-300 hover:bg-rose-50 hover:text-rose-700"
+                      data-testid="reverse-delivery-btn"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Reverse (Void Invoice)
+                    </Button>
+                  )}
+                  {canManage && selectedDelivery.status === 'reversed' && selectedDelivery.zoho_void_pending && (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleRetryDeliveryVoid(selectedDelivery.id)}
+                      className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                      data-testid="retry-delivery-void-btn"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Retry Zoho Void
                     </Button>
                   )}
                 </div>
