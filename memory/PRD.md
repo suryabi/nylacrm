@@ -29,6 +29,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - **Fix** (`services/zoho_service.py`): adopted Zoho's documented two-step pattern. `create_delivery_challan_for_promo_dispatch` now (1) creates the challan WITHOUT an inline shipping address, then (2) sets the recipient as Deliver-To via the dedicated `PUT /books/v3/deliverychallans/{id}/address/shipping` endpoint (new `_set_deliverychallan_shipping_address()` — best-effort, recipient also stays in `notes`). FROM/header remains the source warehouse branch (`branch_id`), which was already correct.
 - **Tested**: `backend/tests/test_promo_challan_shipping_address.py` — 8/8 PASS (adds: address-setter PUTs recipient fields to the correct endpoint with all fields <100; skips when empty). Backend healthy. Live Zoho push not exercisable in preview. **Redeploy to push to production.**
 
+### 2026-06-17 — 🐛 Fix: Zoho challan "Cleanup" (reverse delete) failed with 401 code 57 "not authorized" ✅ DONE
+- **Reported (PRODUCTION)**: Clicking "Cleanup" on a reversed promo challan (to delete the Zoho delivery challan) failed: `Zoho API 401: {"code":57,"message":"You are not authorized to perform this operation"}`.
+- **Root cause**: The Zoho OAuth scopes requested at connect time (`zoho_service.get_zoho_config`) covered contacts/invoices/creditnotes/items/settings but **omitted `deliverychallans` entirely**. The connected token therefore had no permission to delete (or manage) delivery challans → code 57.
+- **Fix** (`services/zoho_service.py`): added `ZohoBooks.deliverychallans.CREATE/READ/UPDATE/DELETE` to the OAuth scope list. Also made `delete_delivery_challan` translate the raw code-57 into an actionable message instructing an admin to reconnect Zoho Books so the new scopes are granted.
+- **⚠️ Requires admin to RECONNECT Zoho**: scope changes only apply on a fresh authorization — the existing refresh token keeps the old scopes. After redeploy: Settings → Integrations → Zoho Books → Disconnect, then Connect again, then retry Cleanup.
+- **Tested**: scope config asserted (delete scope present); backend healthy. Live delete not exercisable in preview (Zoho not connected). **Redeploy + reconnect Zoho to push to production.**
+
 
 
 ### 2026-06-17 — Promotional Stock-Out: Draft workflow + Reverse (P1 feature) ✅ DONE

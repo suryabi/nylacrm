@@ -59,6 +59,13 @@ def get_zoho_config() -> dict:
             "ZohoBooks.creditnotes.CREATE",
             "ZohoBooks.creditnotes.READ",
             "ZohoBooks.creditnotes.UPDATE",
+            # Delivery challans — used for promotional stock-outs & inter-branch
+            # transfers. DELETE is required for the "Reverse → cleanup" flow.
+            # Without these scopes Zoho returns 401 code 57 ("not authorized").
+            "ZohoBooks.deliverychallans.CREATE",
+            "ZohoBooks.deliverychallans.READ",
+            "ZohoBooks.deliverychallans.UPDATE",
+            "ZohoBooks.deliverychallans.DELETE",
             "ZohoBooks.items.READ",
             "ZohoBooks.settings.READ",
         ],
@@ -1061,6 +1068,20 @@ async def delete_delivery_challan(tenant_id: str, zoho_deliverychallan_id: str) 
         if e.status_code == 404:
             logger.info(f"Delivery challan {zoho_deliverychallan_id} already absent in Zoho — treating as deleted.")
             return True
+        # Code 57 = "You are not authorized to perform this operation". This
+        # happens when the connected Zoho token was authorized BEFORE the
+        # delivery-challan scopes (incl. DELETE) were added — the token simply
+        # lacks permission. Surface an actionable message so the admin knows to
+        # reconnect Zoho to grant the new scopes.
+        if e.status_code == 401 and (e.payload or {}).get("code") == 57:
+            raise ZohoApiError(
+                401,
+                "Zoho hasn't granted permission to delete delivery challans. "
+                "An admin needs to reconnect Zoho Books (Settings → Integrations "
+                "→ Zoho Books → Disconnect, then Connect again) so the updated "
+                "delivery-challan permissions are authorized, then retry cleanup.",
+                e.payload,
+            )
         raise
 
 
