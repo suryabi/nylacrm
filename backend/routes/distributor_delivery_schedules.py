@@ -535,6 +535,13 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 "zoho_invoice_id": r.get("zoho_invoice_id"),
                 "zoho_invoice_number": r.get("zoho_invoice_number"),
                 "zoho_invoice_url": r.get("zoho_invoice_url"),
+                # Promotional stock-outs (is_promo) produce a Zoho Delivery
+                # Challan instead of a tax invoice — its id/number live on
+                # zoho_doc_id/zoho_doc_number so the bundle can include it too.
+                "is_promo": bool(r.get("is_promo")),
+                "zoho_doc_id": r.get("zoho_doc_id"),
+                "zoho_doc_number": r.get("zoho_doc_number"),
+                "zoho_sync_status": r.get("zoho_sync_status"),
                 # Hides Zoho UI when the account is billed by a third-party distributor.
                 "account_billed_by": (acct.get("billed_by") or "company"),
             })
@@ -1414,15 +1421,36 @@ async def download_schedule_bundle_pdf(
     # 1) Driver schedule sheet (always page 1).
     schedule_pdf = _build_schedule_pdf(s, dist)
 
-    # 2) Per-delivery Zoho invoices. Best-effort: invoices that fail to
-    #    fetch (no zoho_invoice_id, fetch error, distributor-billed account)
-    #    are skipped and recorded in a warnings header on the response.
-    from services.zoho_service import fetch_invoice_pdf, ZohoApiError
+    # 2) Per-delivery Zoho documents. Regular stock-outs attach a tax INVOICE
+    #    (zoho_invoice_id); promotional stock-outs (is_promo) attach a Zoho
+    #    DELIVERY CHALLAN (zoho_doc_id). Both are appended to the bundle.
+    #    Best-effort: documents that fail to fetch (no id, fetch error,
+    #    distributor-billed account) are skipped and recorded in a warnings header.
+    from services.zoho_service import fetch_invoice_pdf, fetch_delivery_challan_pdf, ZohoApiError
     invoice_pdfs: list[bytes] = []
     skipped: list[str] = []
     for delv in (s.get("deliveries") or []):
-        zoho_id = delv.get("zoho_invoice_id")
         label = delv.get("customer_name") or delv.get("delivery_number") or delv.get("id")
+
+        # Promotional stock-out → fetch the Zoho Delivery Challan PDF.
+        if delv.get("is_promo"):
+            challan_id = delv.get("zoho_doc_id")
+            if not challan_id or delv.get("zoho_sync_status") != "synced":
+                skipped.append(f"{label} (challan not synced yet)")
+                continue
+            try:
+                pdf_bytes, _ = await fetch_delivery_challan_pdf(tenant_id, challan_id)
+                invoice_pdfs.append(pdf_bytes)
+            except ZohoApiError as e:
+                logger.warning(f"Bundle: skipping challan {challan_id} for {label}: Zoho {e.status_code} — {e.message[:200] if e.message else ''}")
+                skipped.append(f"{label} (challan Zoho {e.status_code})")
+            except Exception as e:
+                logger.warning(f"Bundle: skipping challan {challan_id} for {label}: {e}")
+                skipped.append(f"{label} (challan fetch failed)")
+            continue
+
+        # Regular stock-out → fetch the Zoho tax invoice PDF.
+        zoho_id = delv.get("zoho_invoice_id")
         if not zoho_id:
             # Either it's distributor-billed (no Zoho invoice expected) or
             # the Zoho push failed/hasn't run yet.

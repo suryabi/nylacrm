@@ -396,7 +396,7 @@ export default function DeliveryScheduleDetail() {
       link.download = `delivery-bundle-${schedule.schedule_date || id}.pdf`;
       document.body.appendChild(link); link.click(); link.remove();
       window.URL.revokeObjectURL(url);
-      toast.success(`Bundle saved (1 schedule + ${invoicePages} invoice${invoicePages === '1' ? '' : 's'})`);
+      toast.success(`Bundle saved (1 schedule + ${invoicePages} document${invoicePages === '1' ? '' : 's'})`);
       if (skipped) toast.warning(`Some stops were skipped: ${skipped}`);
     } catch (e) {
       let detail = e?.response?.data?.detail;
