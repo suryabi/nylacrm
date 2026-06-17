@@ -2492,8 +2492,16 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
     # tenants that haven't connected Zoho yet.
     delivery = await db.distributor_deliveries.find_one(
         {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
-        {"_id": 0, "account_id": 1, "delivery_number": 1}
+        {"_id": 0, "account_id": 1, "delivery_number": 1, "is_promo": 1}
     )
+    # Promotional stock-outs are zero-value give-aways that push a delivery
+    # CHALLAN (handled by the promo flow), never a tax invoice. Guard here so a
+    # manual "push to Zoho" from the regular Deliveries UI can't create an
+    # invoice for a promo delivery.
+    if delivery and delivery.get("is_promo"):
+        raise ZohoPushSkippedError(
+            "This is a promotional stock-out — it generates a delivery challan, not an invoice."
+        )
     if delivery and delivery.get("account_id"):
         acc_meta = await db.accounts.find_one(
             {"id": delivery["account_id"], "tenant_id": tenant_id},

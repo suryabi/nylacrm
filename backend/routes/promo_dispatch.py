@@ -35,6 +35,7 @@ from services.zoho_service import (
     is_zoho_configured,
 )
 from routes.distributors import can_manage_distributor_data
+from routes.distributors import _reserved_qty_map, RESERVED_DELIVERY_STATUSES, generate_delivery_number
 from utils.pdf_generator import generate_delivery_challan_pdf
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,21 @@ router = APIRouter(tags=["Promotional Dispatch"])
 
 ADMIN_ROLES = {"CEO", "Director", "Admin", "admin", "Super Admin", "super_admin"}
 DEFAULT_REASONS = ["Promotion", "Networking", "Brand Visibility", "Sampling", "Other"]
+
+# Promo stock-outs now live in `distributor_deliveries` (flagged is_promo=True)
+# so they share the regular delivery lifecycle, the stock-reservation pool and
+# the delivery-schedule system. Legacy records created before this change still
+# live in `promo_dispatches` and remain viewable (historical, read-only).
+PROMO_OPEN_STATUSES = ["draft", "confirmed", "delivery_assigned", "delivery_scheduled", "scheduled", "on_the_way", "in_transit"]
+
+
+def _promo_delivery_response(doc: dict) -> dict:
+    """Normalise an is_promo `distributor_deliveries` doc to the shape the promo
+    UI expects (challan_number, status, zoho_doc_* …) without leaking Mongo
+    internals."""
+    d = {k: v for k, v in doc.items() if k != "_id"}
+    d.setdefault("challan_number", d.get("delivery_number"))
+    return d
 
 
 def _ensure_admin(user: dict) -> None:
@@ -189,9 +205,12 @@ async def _check_stock_availability(tenant_id: str, *, src_is_factory: bool, src
                 detail=f"Insufficient stock for {sku_name or sku_id}: {available} available, {qty} requested.")
 
 
-async def _push_promo_dispatch_to_zoho(tenant_id: str, dispatch_id: str, dispatch: dict, items: list, distributor: dict) -> dict:
-    """Best-effort Zoho delivery-challan push. Updates the dispatch row with the
-    sync result and returns {status, error}."""
+async def _push_promo_dispatch_to_zoho(tenant_id: str, dispatch_id: str, dispatch: dict, items: list, distributor: dict, coll=None) -> dict:
+    """Best-effort Zoho delivery-challan push. Updates the dispatch/delivery row
+    with the sync result and returns {status, error}. `coll` defaults to the
+    legacy promo_dispatches collection; pass db.distributor_deliveries for the
+    new unified records."""
+    coll = coll if coll is not None else db.promo_dispatches
     now = datetime.now(timezone.utc).isoformat()
     items_for_zoho = [{
         "sku_id": it.get("sku_id"),
@@ -207,7 +226,7 @@ async def _push_promo_dispatch_to_zoho(tenant_id: str, dispatch_id: str, dispatc
         mapping = await create_delivery_challan_for_promo_dispatch(
             tenant_id=tenant_id, dispatch=dispatch, items=items_for_zoho, distributor=distributor,
         )
-        await db.promo_dispatches.update_one(
+        await coll.update_one(
             {"id": dispatch_id, "tenant_id": tenant_id},
             {"$set": {
                 "zoho_sync_status": "synced",
@@ -225,7 +244,7 @@ async def _push_promo_dispatch_to_zoho(tenant_id: str, dispatch_id: str, dispatc
     except Exception as exc:
         err = str(exc)[:500]
         logger.exception(f"Zoho push failed for promo dispatch {dispatch.get('challan_number')}; local dispatch saved, can be retried.")
-        await db.promo_dispatches.update_one(
+        await coll.update_one(
             {"id": dispatch_id, "tenant_id": tenant_id},
             {"$set": {"zoho_sync_status": "failed", "zoho_sync_error": err, "updated_at": now}},
         )
@@ -301,36 +320,43 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     src_is_factory = bool(loc.get("is_factory"))
     src_tracks_batches = bool(loc.get("track_batches"))
 
-    # ── Validate stock availability for every line (and batch requirement) ──
-    # Skipped for drafts — a draft never touches stock and may be saved even
-    # when stock is short; full validation runs at Confirm time.
+    # ── Validate stock availability (reservation-aware) ────────────────────
+    # Available = on-hand − reserved (open promo + regular Stock Outs at this
+    # source location). Skipped for drafts — a draft may be saved even when
+    # short; full validation runs at Confirm time.
     for it in data.items:
         if it.quantity is None or it.quantity <= 0:
             raise HTTPException(status_code=400, detail="Quantity must be greater than zero.")
-        if data.as_draft:
-            continue
-        if src_is_factory and src_tracks_batches and not it.batch_id:
-            raise HTTPException(status_code=400, detail=f"Batch is required for SKU {it.sku_name or it.sku_id}.")
-        if src_is_factory:
-            key = {"tenant_id": tenant_id, "warehouse_location_id": data.distributor_location_id, "sku_id": it.sku_id}
-            # Honour the picked batch whenever the user supplied one — even if
-            # the source location wasn't explicitly flagged `track_batches=True`.
-            # The frontend now surfaces the batch picker whenever batches exist,
-            # so a batch_id here means the rep made a real choice that the
-            # backend should respect for both availability and deduction.
-            if it.batch_id and it.batch_id != "__legacy__":
-                key["batch_id"] = it.batch_id
-            rows = await db.factory_warehouse_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
-        else:
-            key = {"tenant_id": tenant_id, "distributor_id": distributor_id,
-                   "distributor_location_id": data.distributor_location_id, "sku_id": it.sku_id}
-            key["batch_id"] = it.batch_id if it.batch_id else {"$in": [None]}
-            rows = await db.distributor_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
-        available = sum((r.get("quantity") or 0) for r in rows)
-        if available < it.quantity:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient stock for {it.sku_name or it.sku_id}: {available} available, {it.quantity} requested.")
+    if not data.as_draft:
+        reserved_map = await _reserved_qty_map(
+            tenant_id, distributor_id, data.distributor_location_id, src_tracks_batches)
+        demand_map: dict = {}
+        for it in data.items:
+            if src_is_factory and src_tracks_batches and not it.batch_id:
+                raise HTTPException(status_code=400, detail=f"Batch is required for SKU {it.sku_name or it.sku_id}.")
+            bkey = it.batch_id if src_tracks_batches else None
+            k = (it.sku_id, bkey, it.sku_name)
+            demand_map[k] = demand_map.get(k, 0) + it.quantity
+        for (sku_id, bkey, sku_name), demand in demand_map.items():
+            if src_is_factory:
+                key = {"tenant_id": tenant_id, "warehouse_location_id": data.distributor_location_id, "sku_id": sku_id}
+                if bkey and bkey != "__legacy__":
+                    key["batch_id"] = bkey
+                rows = await db.factory_warehouse_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
+            else:
+                key = {"tenant_id": tenant_id, "distributor_id": distributor_id,
+                       "distributor_location_id": data.distributor_location_id, "sku_id": sku_id}
+                key["batch_id"] = bkey if bkey else {"$in": [None]}
+                rows = await db.distributor_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
+            on_hand = sum((r.get("quantity") or 0) for r in rows)
+            reserved = reserved_map.get((sku_id, bkey), 0)
+            available = on_hand - reserved
+            if available < demand:
+                committed = f", {reserved} reserved" if reserved else ""
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient stock for {sku_name or sku_id}: need {demand}, "
+                           f"available {available} ({on_hand} on-hand{committed}).")
 
     # ── Create dispatch header ──
     challan_number = await _generate_challan_number(tenant_id)
@@ -357,14 +383,25 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     total_qty = sum(it.quantity for it in data.items)
     total_value = sum(it.quantity * float(it.unit_price or 0) for it in data.items)
 
+    # Promo stock-out persisted as an is_promo DELIVERY so it shares the
+    # regular lifecycle (draft→confirmed→delivery_assigned→complete), the
+    # stock-reservation pool and the delivery-schedule system. NO stock is
+    # deducted here — an open delivery merely RESERVES stock; physical
+    # deduction happens at Complete.
     dispatch = {
         "id": dispatch_id,
         "tenant_id": tenant_id,
+        "is_promo": True,
         "distributor_id": distributor_id,
         "distributor_name": distributor.get("distributor_name"),
+        "distributor_code": distributor.get("distributor_code"),
         "distributor_location_id": data.distributor_location_id,
+        "distributor_location_name": loc.get("location_name"),
         "location_name": loc.get("location_name"),
         "is_factory": src_is_factory,
+        # Recipient (lead / contact / employee). No billing account.
+        "account_id": None,
+        "account_name": recipient_name,          # shown as the "customer" in the deliveries list
         "recipient_type": recipient_type,
         "contact_id": data.contact_id if recipient_type == "contact" else None,
         "lead_id": data.lead_id if recipient_type == "lead" else None,
@@ -374,6 +411,9 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "contact_company": recipient_company,
         "contact_address": contact_addr,
         "promo_reason": valid.get("name"),
+        # delivery_number drives the schedule/deliveries UI; challan_number is
+        # the same value kept for the promo UI / Zoho challan.
+        "delivery_number": challan_number,
         "challan_number": challan_number,
         "delivery_date": data.delivery_date,
         "reference_number": data.reference_number,
@@ -381,10 +421,6 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "driver_name": data.driver_name,
         "driver_contact": data.driver_contact,
         "delivery_address": data.delivery_address or contact_addr,
-        # Structured shipping address (recipient) + source warehouse branch
-        # mapping — used by the Zoho push to set the right "Deliver To" block
-        # and source-branch header. Persisted so retries don't need to re-fetch
-        # the lead/contact/employee or the source warehouse.
         "recipient_shipping_address": recipient_shipping,
         "source_zoho_branch_id": loc.get("zoho_branch_id"),
         "source_location_name": loc.get("location_name"),
@@ -392,26 +428,32 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "remarks": data.remarks,
         "total_quantity": total_qty,
         "total_indicative_value": round(total_value, 2),
-        "status": "draft" if data.as_draft else "dispatched",
+        # No sale → all monetary delivery totals are zero (keeps settlement /
+        # outstanding math untouched; promo is excluded from billing anyway).
+        "total_net_amount": 0,
+        "total_gross_amount": 0,
+        "status": "draft" if data.as_draft else "confirmed",
+        "zoho_sync_status": "not_attempted",
         "created_by": current_user.get("id"),
         "created_by_name": current_user.get("name"),
         "created_at": now,
         "updated_at": now,
     }
-    await db.promo_dispatches.insert_one(dispatch)
+    await db.distributor_deliveries.insert_one(dispatch)
 
-    # ── Create items + deduct stock (same convention as complete_delivery) ──
+    # ── Create line items (reserved while the delivery is open; deducted at Complete) ──
     for it in data.items:
         line_value = it.quantity * float(it.unit_price or 0)
-        await db.promo_dispatch_items.insert_one({
+        await db.distributor_delivery_items.insert_one({
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
-            "dispatch_id": dispatch_id,
+            "delivery_id": dispatch_id,
             "sku_id": it.sku_id,
             "sku_name": it.sku_name,
             "quantity": it.quantity,
             "unit_price": float(it.unit_price or 0),
             "line_value": round(line_value, 2),
+            "net_amount": 0,
             "batch_id": it.batch_id,
             "batch_code": it.batch_code,
             "packaging_type_id": it.packaging_type_id,
@@ -420,98 +462,65 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             "remarks": it.remarks,
             "created_at": now,
         })
-        if data.as_draft:
-            continue
-        if src_is_factory:
-            stock_key = {"tenant_id": tenant_id, "warehouse_location_id": data.distributor_location_id, "sku_id": it.sku_id}
-            # Mirror the availability check: respect the picked batch when one
-            # was supplied, regardless of the location's track_batches flag.
-            if it.batch_id and it.batch_id != "__legacy__":
-                stock_key["batch_id"] = it.batch_id
-            await db.factory_warehouse_stock.update_one(
-                stock_key, {"$inc": {"quantity": -it.quantity}, "$set": {"updated_at": now}})
-        else:
-            stock_key = {"tenant_id": tenant_id, "distributor_id": distributor_id,
-                         "distributor_location_id": data.distributor_location_id, "sku_id": it.sku_id}
-            stock_key["batch_id"] = it.batch_id if it.batch_id else {"$in": [None]}
-            await db.distributor_stock.update_one(
-                stock_key, {"$inc": {"quantity": -it.quantity}, "$set": {"updated_at": now}})
 
-    logger.info(f"Promo dispatch {challan_number} created by {current_user.get('email')} (no invoice).")
+    logger.info(f"Promo stock-out {challan_number} created by {current_user.get('email')} "
+                f"(status={dispatch['status']}, stock reserved, no invoice).")
 
-    # Drafts stop here — no stock movement, no Zoho document.
+    # Drafts stop here — reserved only, no Zoho document yet.
     if data.as_draft:
         dispatch.pop("_id", None)
         return {
             "message": f"Draft {challan_number} saved",
-            "dispatch": dispatch,
+            "dispatch": _promo_delivery_response(dispatch),
             "zoho_sync_status": "not_attempted",
             "zoho_sync_error": None,
         }
 
-    # ── Best-effort Zoho push (out-of-scope delivery challan, no GST) ──
+    # ── Confirmed on creation → push the Zoho delivery challan (best-effort) ──
     zoho_sync_status = "not_attempted"
     zoho_sync_error = None
     if is_zoho_configured():
-        try:
-            items_for_zoho = [{
-                "sku_id": it.sku_id,
-                "sku_name": it.sku_name,
-                "quantity": it.quantity,
-                "unit_price": float(it.unit_price or 0),
-                "batch_code": it.batch_code,
-                "packaging_type_id": it.packaging_type_id,
-                "packaging_type_name": it.packaging_type_name,
-                "units_per_package": it.units_per_package,
-            } for it in data.items]
-            mapping = await create_delivery_challan_for_promo_dispatch(
-                tenant_id=tenant_id, dispatch=dispatch, items=items_for_zoho, distributor=distributor,
-            )
-            zoho_sync_status = "synced"
-            await db.promo_dispatches.update_one(
-                {"id": dispatch_id, "tenant_id": tenant_id},
-                {"$set": {
-                    "zoho_sync_status": "synced",
-                    "zoho_doc_id": mapping.get("zoho_invoice_id"),
-                    "zoho_doc_number": mapping.get("zoho_invoice_number"),
-                    "zoho_doc_url": mapping.get("zoho_invoice_url"),
-                    "zoho_synced_at": now,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }},
-            )
-            dispatch["zoho_sync_status"] = "synced"
-            dispatch["zoho_doc_id"] = mapping.get("zoho_invoice_id")
-            dispatch["zoho_doc_number"] = mapping.get("zoho_invoice_number")
-            dispatch["zoho_doc_url"] = mapping.get("zoho_invoice_url")
-            logger.info(
-                f"Promo dispatch {challan_number} pushed to Zoho as "
-                f"{mapping.get('zoho_invoice_number')}"
-            )
-        except Exception as exc:
-            zoho_sync_status = "failed"
-            zoho_sync_error = str(exc)[:500]
-            logger.exception(
-                f"Zoho push failed for promo dispatch {challan_number}; "
-                f"local dispatch saved, can be retried."
-            )
-            await db.promo_dispatches.update_one(
-                {"id": dispatch_id, "tenant_id": tenant_id},
-                {"$set": {
-                    "zoho_sync_status": "failed",
-                    "zoho_sync_error": zoho_sync_error,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                }},
-            )
-            dispatch["zoho_sync_status"] = "failed"
-            dispatch["zoho_sync_error"] = zoho_sync_error
+        items_for_zoho = [{
+            "sku_id": it.sku_id, "sku_name": it.sku_name, "quantity": it.quantity,
+            "unit_price": float(it.unit_price or 0), "batch_code": it.batch_code,
+            "packaging_type_id": it.packaging_type_id, "packaging_type_name": it.packaging_type_name,
+            "units_per_package": it.units_per_package,
+        } for it in data.items]
+        zres = await _push_promo_dispatch_to_zoho(
+            tenant_id, dispatch_id, dispatch, items_for_zoho, distributor, coll=db.distributor_deliveries)
+        zoho_sync_status = zres.get("status")
+        zoho_sync_error = zres.get("error")
+        dispatch["zoho_sync_status"] = zoho_sync_status
+        if zres.get("zoho_doc_url"):
+            dispatch["zoho_doc_url"] = zres.get("zoho_doc_url")
+            dispatch["zoho_doc_number"] = zres.get("zoho_doc_number")
 
     dispatch.pop("_id", None)
     return {
         "message": f"Delivery Challan {challan_number} generated",
-        "dispatch": dispatch,
+        "dispatch": _promo_delivery_response(dispatch),
         "zoho_sync_status": zoho_sync_status,
         "zoho_sync_error": zoho_sync_error,
     }
+
+
+async def _load_promo(tenant_id: str, distributor_id: str, dispatch_id: str):
+    """Return (doc, items, is_legacy). Checks the unified is_promo deliveries
+    first, then the legacy promo_dispatches collection. Returns (None, None,
+    None) when nothing matches."""
+    d = await db.distributor_deliveries.find_one(
+        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id, "is_promo": True}, {"_id": 0})
+    if d:
+        items = await db.distributor_delivery_items.find(
+            {"delivery_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+        return _promo_delivery_response(d), items, False
+    d = await db.promo_dispatches.find_one(
+        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    if d:
+        items = await db.promo_dispatch_items.find(
+            {"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+        return d, items, True
+    return None, None, None
 
 
 @router.get("/distributors/{distributor_id}/promo-deliveries")
@@ -519,21 +528,33 @@ async def list_promo_dispatches(distributor_id: str, current_user: dict = Depend
     if not can_manage_distributor_data(current_user, distributor_id):
         raise HTTPException(status_code=403, detail="Not authorised")
     tenant_id = get_current_tenant_id()
-    rows = await db.promo_dispatches.find(
-        {"tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0}).to_list(1000)
+    new_rows = await db.distributor_deliveries.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_promo": True}, {"_id": 0}).to_list(2000)
+    rows = [_promo_delivery_response(r) for r in new_rows]
+    legacy = await db.promo_dispatches.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0}).to_list(2000)
+    for r in legacy:
+        r["is_legacy"] = True
+    rows.extend(legacy)
     rows.sort(key=lambda d: d.get("created_at", ""), reverse=True)
     return {"dispatches": rows}
 
 
 @router.get("/promo-dispatches/summary")
 async def promo_dispatch_summary(current_user: dict = Depends(get_current_user)):
-    """Tenant-wide tracking of give-aways: total dispatches, units & indicative value."""
+    """Tenant-wide tracking of give-aways: total dispatches, units & indicative
+    value — across both the unified is_promo deliveries and legacy records."""
     tenant_id = get_current_tenant_id()
-    rows = await db.promo_dispatches.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(5000)
+    rows = await db.distributor_deliveries.find(
+        {"tenant_id": tenant_id, "is_promo": True}, {"_id": 0}).to_list(10000)
+    rows += await db.promo_dispatches.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(10000)
     by_reason: dict = {}
     total_value = 0.0
     total_qty = 0
     for d in rows:
+        # Reversed/cancelled give-aways shouldn't inflate the tracker.
+        if (d.get("status") or "") in ("reversed", "cancelled"):
+            continue
         r = d.get("promo_reason") or "Other"
         b = by_reason.setdefault(r, {"reason": r, "count": 0, "quantity": 0, "indicative_value": 0.0})
         b["count"] += 1
@@ -544,7 +565,7 @@ async def promo_dispatch_summary(current_user: dict = Depends(get_current_user))
     for b in by_reason.values():
         b["indicative_value"] = round(b["indicative_value"], 2)
     return {
-        "total_dispatches": len(rows),
+        "total_dispatches": sum(b["count"] for b in by_reason.values()),
         "total_quantity": total_qty,
         "total_indicative_value": round(total_value, 2),
         "by_reason": sorted(by_reason.values(), key=lambda x: x["indicative_value"], reverse=True),
@@ -556,11 +577,9 @@ async def get_promo_dispatch(distributor_id: str, dispatch_id: str, current_user
     if not can_manage_distributor_data(current_user, distributor_id):
         raise HTTPException(status_code=403, detail="Not authorised")
     tenant_id = get_current_tenant_id()
-    d = await db.promo_dispatches.find_one(
-        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    d, items, _legacy = await _load_promo(tenant_id, distributor_id, dispatch_id)
     if not d:
         raise HTTPException(status_code=404, detail="Dispatch not found")
-    items = await db.promo_dispatch_items.find({"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
     d["items"] = items
     return d
 
@@ -575,118 +594,146 @@ async def retry_zoho_for_promo_dispatch(distributor_id: str, dispatch_id: str, c
     if not is_zoho_configured():
         raise HTTPException(status_code=400, detail="Zoho Books integration is not configured for this tenant.")
     tenant_id = get_current_tenant_id()
-    d = await db.promo_dispatches.find_one(
-        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    d, items_rows, is_legacy = await _load_promo(tenant_id, distributor_id, dispatch_id)
     if not d:
         raise HTTPException(status_code=404, detail="Dispatch not found")
-    items_rows = await db.promo_dispatch_items.find({"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    coll = db.promo_dispatches if is_legacy else db.distributor_deliveries
     distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0}) or {}
-    items_for_zoho = [{
-        "sku_id": it.get("sku_id"),
-        "sku_name": it.get("sku_name"),
-        "quantity": it.get("quantity"),
-        "unit_price": float(it.get("unit_price") or 0),
-        "batch_code": it.get("batch_code"),
-        "packaging_type_id": it.get("packaging_type_id"),
-        "packaging_type_name": it.get("packaging_type_name"),
-        "units_per_package": it.get("units_per_package"),
-    } for it in items_rows]
-    try:
-        mapping = await create_delivery_challan_for_promo_dispatch(
-            tenant_id=tenant_id, dispatch=d, items=items_for_zoho, distributor=distributor,
-        )
-        now = datetime.now(timezone.utc).isoformat()
-        await db.promo_dispatches.update_one(
-            {"id": dispatch_id, "tenant_id": tenant_id},
-            {"$set": {
-                "zoho_sync_status": "synced",
-                "zoho_doc_id": mapping.get("zoho_invoice_id"),
-                "zoho_doc_number": mapping.get("zoho_invoice_number"),
-                "zoho_doc_url": mapping.get("zoho_invoice_url"),
-                "zoho_synced_at": now,
-                "zoho_sync_error": None,
-                "updated_at": now,
-            }},
-        )
-        return {"ok": True, "zoho_doc_number": mapping.get("zoho_invoice_number"),
-                "zoho_doc_url": mapping.get("zoho_invoice_url")}
-    except Exception as exc:
-        err = str(exc)[:500]
-        logger.exception(f"Retry Zoho push failed for promo dispatch {d.get('challan_number')}")
-        await db.promo_dispatches.update_one(
-            {"id": dispatch_id, "tenant_id": tenant_id},
-            {"$set": {"zoho_sync_status": "failed", "zoho_sync_error": err,
-                      "updated_at": datetime.now(timezone.utc).isoformat()}},
-        )
-        raise HTTPException(status_code=400, detail=f"Zoho push failed: {err}")
+    zres = await _push_promo_dispatch_to_zoho(tenant_id, dispatch_id, d, items_rows, distributor, coll=coll)
+    if zres.get("status") == "synced":
+        return {"ok": True, "zoho_doc_number": zres.get("zoho_doc_number"), "zoho_doc_url": zres.get("zoho_doc_url")}
+    raise HTTPException(status_code=400, detail=f"Zoho push failed: {zres.get('error')}")
 
 
 @router.post("/distributors/{distributor_id}/promo-deliveries/{dispatch_id}/confirm")
 async def confirm_promo_dispatch(distributor_id: str, dispatch_id: str, current_user: dict = Depends(get_current_user)):
-    """Confirm a DRAFT stock-out: re-validate stock, deduct inventory, and push
-    the Zoho delivery challan (best-effort)."""
+    """Confirm a DRAFT stock-out: re-validate stock (reservation-aware), move it
+    to 'confirmed' (which RESERVES the stock — no physical deduction until
+    Complete) and push the Zoho delivery challan (best-effort)."""
     if not can_manage_distributor_data(current_user, distributor_id):
         raise HTTPException(status_code=403, detail="Not authorised")
     tenant_id = get_current_tenant_id()
-    d = await db.promo_dispatches.find_one(
-        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    d, items, is_legacy = await _load_promo(tenant_id, distributor_id, dispatch_id)
     if not d:
         raise HTTPException(status_code=404, detail="Dispatch not found")
     if d.get("status") != "draft":
         raise HTTPException(status_code=400, detail="Only draft stock-outs can be confirmed.")
-
-    loc = await db.distributor_locations.find_one(
-        {"id": d.get("distributor_location_id"), "tenant_id": tenant_id}, {"_id": 0}) or {}
-    items = await db.promo_dispatch_items.find(
-        {"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
     if not items:
         raise HTTPException(status_code=400, detail="This draft has no items.")
 
-    await _check_stock_availability(
-        tenant_id, src_is_factory=bool(d.get("is_factory")), src_tracks_batches=bool(loc.get("track_batches")),
-        distributor_id=distributor_id, loc_id=d.get("distributor_location_id"), items=items)
-
-    await _adjust_stock_for_dispatch(tenant_id, d, items, sign=-1)
+    loc = await db.distributor_locations.find_one(
+        {"id": d.get("distributor_location_id"), "tenant_id": tenant_id}, {"_id": 0}) or {}
     now = datetime.now(timezone.utc).isoformat()
-    await db.promo_dispatches.update_one(
-        {"id": dispatch_id, "tenant_id": tenant_id},
-        {"$set": {"status": "dispatched", "confirmed_at": now,
-                  "confirmed_by": current_user.get("id"), "updated_at": now}})
-    d["status"] = "dispatched"
+
+    if is_legacy:
+        # Legacy behaviour: deduct immediately, mark dispatched.
+        await _check_stock_availability(
+            tenant_id, src_is_factory=bool(d.get("is_factory")), src_tracks_batches=bool(loc.get("track_batches")),
+            distributor_id=distributor_id, loc_id=d.get("distributor_location_id"), items=items)
+        await _adjust_stock_for_dispatch(tenant_id, d, items, sign=-1)
+        await db.promo_dispatches.update_one(
+            {"id": dispatch_id, "tenant_id": tenant_id},
+            {"$set": {"status": "dispatched", "confirmed_at": now,
+                      "confirmed_by": current_user.get("id"), "updated_at": now}})
+        d["status"] = "dispatched"
+        coll = db.promo_dispatches
+    else:
+        # New flow: reservation-aware validation, NO deduction (reserve only).
+        tracks = bool(loc.get("track_batches"))
+        reserved_map = await _reserved_qty_map(
+            tenant_id, distributor_id, d.get("distributor_location_id"), tracks, exclude_delivery_id=dispatch_id)
+        demand: dict = {}
+        for it in items:
+            bkey = it.get("batch_id") if tracks else None
+            demand[(it.get("sku_id"), bkey, it.get("sku_name"))] = demand.get((it.get("sku_id"), bkey, it.get("sku_name")), 0) + (it.get("quantity") or 0)
+        for (sku_id, bkey, sku_name), need in demand.items():
+            if d.get("is_factory"):
+                key = {"tenant_id": tenant_id, "warehouse_location_id": d.get("distributor_location_id"), "sku_id": sku_id}
+                if bkey and bkey != "__legacy__":
+                    key["batch_id"] = bkey
+                rows = await db.factory_warehouse_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
+            else:
+                key = {"tenant_id": tenant_id, "distributor_id": distributor_id,
+                       "distributor_location_id": d.get("distributor_location_id"), "sku_id": sku_id}
+                key["batch_id"] = bkey if bkey else {"$in": [None]}
+                rows = await db.distributor_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
+            on_hand = sum((r.get("quantity") or 0) for r in rows)
+            available = on_hand - reserved_map.get((sku_id, bkey), 0)
+            if available < need:
+                raise HTTPException(status_code=400, detail=f"Insufficient stock for {sku_name or sku_id}: need {need}, available {available}.")
+        await db.distributor_deliveries.update_one(
+            {"id": dispatch_id, "tenant_id": tenant_id},
+            {"$set": {"status": "confirmed", "confirmed_at": now,
+                      "confirmed_by": current_user.get("id"), "updated_at": now}})
+        d["status"] = "confirmed"
+        coll = db.distributor_deliveries
 
     zres = {"status": "not_attempted", "error": None}
     if is_zoho_configured():
         distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0}) or {}
-        zres = await _push_promo_dispatch_to_zoho(tenant_id, dispatch_id, d, items, distributor)
+        zres = await _push_promo_dispatch_to_zoho(tenant_id, dispatch_id, d, items, distributor, coll=coll)
 
-    updated = await db.promo_dispatches.find_one({"id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0})
+    updated, _it, _lg = await _load_promo(tenant_id, distributor_id, dispatch_id)
     return {"message": f"Challan {d.get('challan_number')} confirmed",
             "dispatch": updated, "zoho_sync_status": zres.get("status"), "zoho_sync_error": zres.get("error")}
 
 
-@router.post("/distributors/{distributor_id}/promo-deliveries/{dispatch_id}/reverse")
-async def reverse_promo_dispatch(distributor_id: str, dispatch_id: str, current_user: dict = Depends(get_current_user)):
-    """Reverse a CONFIRMED stock-out: add stock back to inventory and delete the
-    Zoho delivery challan. The record is kept and marked 'reversed' for audit.
-    If the Zoho deletion fails, the reversal still completes and is flagged
-    'zoho_cleanup_pending' for a later retry."""
+@router.post("/distributors/{distributor_id}/promo-deliveries/{dispatch_id}/complete")
+async def complete_promo_dispatch(distributor_id: str, dispatch_id: str, current_user: dict = Depends(get_current_user)):
+    """Mark a promo stock-out delivered/complete: physically DEDUCT the reserved
+    stock from inventory and move the record to 'complete'. Only the new unified
+    (is_promo delivery) records support completion."""
     if not can_manage_distributor_data(current_user, distributor_id):
         raise HTTPException(status_code=403, detail="Not authorised")
     tenant_id = get_current_tenant_id()
-    d = await db.promo_dispatches.find_one(
-        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    d, items, is_legacy = await _load_promo(tenant_id, distributor_id, dispatch_id)
     if not d:
         raise HTTPException(status_code=404, detail="Dispatch not found")
-    if d.get("status") != "dispatched":
-        raise HTTPException(status_code=400, detail="Only confirmed stock-outs can be reversed.")
+    if is_legacy:
+        raise HTTPException(status_code=400, detail="Legacy stock-outs are already completed (historical).")
+    open_states = {"confirmed", "delivery_assigned", "delivery_scheduled", "scheduled", "on_the_way", "in_transit"}
+    if d.get("status") not in open_states:
+        raise HTTPException(status_code=400, detail="Only a confirmed/assigned stock-out can be completed.")
 
-    items = await db.promo_dispatch_items.find(
-        {"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    # Deduct the reserved stock now (final physical movement).
+    await _adjust_stock_for_dispatch(tenant_id, d, items, sign=-1)
+    now = datetime.now(timezone.utc).isoformat()
+    await db.distributor_deliveries.update_one(
+        {"id": dispatch_id, "tenant_id": tenant_id},
+        {"$set": {"status": "complete", "completed_at": now,
+                  "completed_by": current_user.get("id"),
+                  "completed_by_name": current_user.get("name"), "updated_at": now}})
+    updated, _it, _lg = await _load_promo(tenant_id, distributor_id, dispatch_id)
+    return {"ok": True, "message": f"Stock-out {d.get('challan_number')} completed — stock deducted",
+            "dispatch": updated}
 
-    # 1) Restore stock
-    await _adjust_stock_for_dispatch(tenant_id, d, items, sign=+1)
 
-    # 2) Delete the Zoho delivery challan (if one was created)
+@router.post("/distributors/{distributor_id}/promo-deliveries/{dispatch_id}/reverse")
+async def reverse_promo_dispatch(distributor_id: str, dispatch_id: str, current_user: dict = Depends(get_current_user)):
+    """Reverse a stock-out and delete its Zoho delivery challan. For unified
+    (is_promo delivery) records the stock was only RESERVED, so reversing simply
+    releases the reservation (status→reversed) — no stock add-back. Legacy
+    records had stock deducted on confirm, so those are added back. Kept and
+    marked 'reversed' for audit; a failed Zoho delete is flagged for retry."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised")
+    tenant_id = get_current_tenant_id()
+    d, items, is_legacy = await _load_promo(tenant_id, distributor_id, dispatch_id)
+    if not d:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    coll = db.promo_dispatches if is_legacy else db.distributor_deliveries
+
+    if is_legacy:
+        if d.get("status") != "dispatched":
+            raise HTTPException(status_code=400, detail="Only confirmed stock-outs can be reversed.")
+        # Restore stock (legacy deducted on confirm).
+        await _adjust_stock_for_dispatch(tenant_id, d, items, sign=+1)
+    else:
+        reversible = {"confirmed", "delivery_assigned", "delivery_scheduled", "scheduled", "on_the_way", "in_transit"}
+        if d.get("status") not in reversible:
+            raise HTTPException(status_code=400, detail="Only a not-yet-completed stock-out can be reversed.")
+        # No stock add-back — it was reserved, not deducted. Status change frees it.
+
     zoho_cleanup_pending = False
     zoho_cleanup_error = None
     has_zoho_doc = bool(d.get("zoho_doc_id")) and d.get("zoho_sync_status") == "synced"
@@ -710,12 +757,13 @@ async def reverse_promo_dispatch(distributor_id: str, dispatch_id: str, current_
     }
     if has_zoho_doc and not zoho_cleanup_pending:
         set_fields["zoho_doc_deleted"] = True
-    await db.promo_dispatches.update_one({"id": dispatch_id, "tenant_id": tenant_id}, {"$set": set_fields})
+    await coll.update_one({"id": dispatch_id, "tenant_id": tenant_id}, {"$set": set_fields})
 
-    msg = f"Stock-out {d.get('challan_number')} reversed — stock restored"
+    restored = "stock restored" if is_legacy else "stock released"
+    msg = f"Stock-out {d.get('challan_number')} reversed — {restored}"
     if has_zoho_doc:
         msg += " (Zoho challan deletion pending — will retry)" if zoho_cleanup_pending else " and Zoho challan deleted"
-    updated = await db.promo_dispatches.find_one({"id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0})
+    updated, _it, _lg = await _load_promo(tenant_id, distributor_id, dispatch_id)
     return {"ok": True, "dispatch": updated, "message": msg,
             "zoho_cleanup_pending": zoho_cleanup_pending, "zoho_cleanup_error": zoho_cleanup_error}
 
@@ -729,22 +777,22 @@ async def retry_reverse_zoho_cleanup(distributor_id: str, dispatch_id: str, curr
     if not is_zoho_configured():
         raise HTTPException(status_code=400, detail="Zoho Books integration is not configured for this tenant.")
     tenant_id = get_current_tenant_id()
-    d = await db.promo_dispatches.find_one(
-        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    d, _items, is_legacy = await _load_promo(tenant_id, distributor_id, dispatch_id)
     if not d:
         raise HTTPException(status_code=404, detail="Dispatch not found")
     if d.get("status") != "reversed" or not d.get("zoho_cleanup_pending"):
         raise HTTPException(status_code=400, detail="No pending Zoho cleanup for this stock-out.")
+    coll = db.promo_dispatches if is_legacy else db.distributor_deliveries
     now = datetime.now(timezone.utc).isoformat()
     try:
         await delete_delivery_challan(tenant_id, d.get("zoho_doc_id"))
     except Exception as exc:
         err = str(exc)[:500]
-        await db.promo_dispatches.update_one(
+        await coll.update_one(
             {"id": dispatch_id, "tenant_id": tenant_id},
             {"$set": {"zoho_cleanup_error": err, "updated_at": now}})
         raise HTTPException(status_code=400, detail=f"Zoho cleanup failed: {err}")
-    await db.promo_dispatches.update_one(
+    await coll.update_one(
         {"id": dispatch_id, "tenant_id": tenant_id},
         {"$set": {"zoho_cleanup_pending": False, "zoho_cleanup_error": None,
                   "zoho_doc_deleted": True, "updated_at": now}})
@@ -759,16 +807,19 @@ async def delete_promo_dispatch(distributor_id: str, dispatch_id: str, current_u
     if not can_manage_distributor_data(current_user, distributor_id):
         raise HTTPException(status_code=403, detail="Not authorised")
     tenant_id = get_current_tenant_id()
-    d = await db.promo_dispatches.find_one(
-        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    d, _items, is_legacy = await _load_promo(tenant_id, distributor_id, dispatch_id)
     if not d:
         raise HTTPException(status_code=404, detail="Dispatch not found")
     if d.get("status") not in ("draft", "reversed"):
         raise HTTPException(
             status_code=400,
             detail="Only draft or reversed stock-outs can be deleted. Reverse a confirmed stock-out first.")
-    await db.promo_dispatch_items.delete_many({"dispatch_id": dispatch_id, "tenant_id": tenant_id})
-    await db.promo_dispatches.delete_one({"id": dispatch_id, "tenant_id": tenant_id})
+    if is_legacy:
+        await db.promo_dispatch_items.delete_many({"dispatch_id": dispatch_id, "tenant_id": tenant_id})
+        await db.promo_dispatches.delete_one({"id": dispatch_id, "tenant_id": tenant_id})
+    else:
+        await db.distributor_delivery_items.delete_many({"delivery_id": dispatch_id, "tenant_id": tenant_id})
+        await db.distributor_deliveries.delete_one({"id": dispatch_id, "tenant_id": tenant_id})
     return {"ok": True, "deleted": dispatch_id}
 
 
@@ -777,8 +828,7 @@ async def promo_challan_pdf(distributor_id: str, dispatch_id: str, current_user:
     if not can_manage_distributor_data(current_user, distributor_id):
         raise HTTPException(status_code=403, detail="Not authorised")
     tenant_id = get_current_tenant_id()
-    d = await db.promo_dispatches.find_one(
-        {"id": dispatch_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    d, items, _legacy = await _load_promo(tenant_id, distributor_id, dispatch_id)
     if not d:
         raise HTTPException(status_code=404, detail="Dispatch not found")
 
@@ -799,7 +849,6 @@ async def promo_challan_pdf(distributor_id: str, dispatch_id: str, current_user:
                 f"falling back to locally-rendered PDF."
             )
 
-    items = await db.promo_dispatch_items.find({"dispatch_id": dispatch_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
     d["items"] = items
 
     tenant = await db.tenants.find_one({"id": tenant_id}, {"_id": 0}) or {}

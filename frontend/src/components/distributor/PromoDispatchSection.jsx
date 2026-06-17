@@ -361,7 +361,7 @@ export default function PromoDispatchSection({
   const [actingId, setActingId] = useState(null);
 
   const confirmDispatch = async (dispatch) => {
-    if (!window.confirm(`Confirm ${dispatch.challan_number}? This will deduct stock from inventory and generate the Zoho delivery challan.`)) return;
+    if (!window.confirm(`Confirm ${dispatch.challan_number}? This reserves the stock (deducted on delivery) and generates the Zoho delivery challan.`)) return;
     setActingId(dispatch.id);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/confirm`,
@@ -373,8 +373,23 @@ export default function PromoDispatchSection({
     finally { setActingId(null); }
   };
 
+  const completeDispatch = async (dispatch) => {
+    if (!window.confirm(`Mark ${dispatch.challan_number} as delivered? This deducts the reserved stock from inventory and completes the stock-out.`)) return;
+    setActingId(dispatch.id);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/complete`,
+        { method: 'POST', headers: authHeaders });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(body.detail || 'Failed to complete'); }
+      else { toast.success(body.message || 'Completed'); fetchDispatches(); }
+    } catch { toast.error('Network error while completing'); }
+    finally { setActingId(null); }
+  };
+
   const reverseDispatch = async (dispatch) => {
-    if (!window.confirm(`Reverse ${dispatch.challan_number}? Stock will be added back to inventory and the Zoho delivery challan will be deleted. This cannot be undone.`)) return;
+    const isLegacy = dispatch.is_legacy;
+    const stockMsg = isLegacy ? 'Stock will be added back to inventory' : 'The reserved stock will be released back to inventory';
+    if (!window.confirm(`Reverse ${dispatch.challan_number}? ${stockMsg} and the Zoho delivery challan will be deleted. This cannot be undone.`)) return;
     setActingId(dispatch.id);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/reverse`,
@@ -597,6 +612,10 @@ export default function PromoDispatchSection({
                             <Badge className="bg-amber-100 text-amber-700 border border-amber-200">Draft</Badge>
                           ) : d.status === 'reversed' ? (
                             <Badge className="bg-slate-200 text-slate-600 border border-slate-300">Reversed</Badge>
+                          ) : (d.status === 'complete' || d.status === 'completed' || d.status === 'delivered') ? (
+                            <Badge className="bg-green-100 text-green-700 border border-green-200">Delivered</Badge>
+                          ) : ['delivery_assigned', 'delivery_scheduled', 'scheduled', 'on_the_way', 'in_transit'].includes(d.status) ? (
+                            <Badge className="bg-blue-100 text-blue-700 border border-blue-200">Scheduled</Badge>
                           ) : (
                             <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">Confirmed</Badge>
                           )}
@@ -696,6 +715,29 @@ export default function PromoDispatchSection({
                               >
                                 {actingId === d.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <><Undo2 className="h-3 w-3 mr-1" /> Reverse</>}
                               </Button>
+                            )}
+                            {['confirmed', 'delivery_assigned', 'delivery_scheduled', 'scheduled', 'on_the_way', 'in_transit'].includes(d.status) && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-[11px] bg-green-600 hover:bg-green-700"
+                                  onClick={() => completeDispatch(d)}
+                                  disabled={actingId === d.id}
+                                  data-testid={`complete-dispatch-${d.id}`}
+                                  title="Mark delivered — deducts the reserved stock"
+                                >
+                                  {actingId === d.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <><CheckCircle2 className="h-3 w-3 mr-1" /> Delivered</>}
+                                </Button>
+                                <Button
+                                  variant="outline" size="sm"
+                                  className="h-7 text-[11px] text-orange-700 border-orange-200 hover:bg-orange-50"
+                                  onClick={() => reverseDispatch(d)}
+                                  disabled={actingId === d.id}
+                                  data-testid={`reverse-dispatch-${d.id}`}
+                                >
+                                  {actingId === d.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <><Undo2 className="h-3 w-3 mr-1" /> Reverse</>}
+                                </Button>
+                              </>
                             )}
                             {d.status === 'reversed' && (
                               <Button

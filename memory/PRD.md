@@ -60,6 +60,19 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
   - `_build_schedule_pdf` renders a labelled "Delivery contact: Name (Designation) · Phone" line under each customer in the stops table (all values HTML-escaped).
 - **Tested**: seeded a "Delivery" contact on account TOOP-HYD-A26-001, ran the real schedule e2ec4623 through `_enrich_schedule` + `_build_schedule_pdf` → contact name, phone and designation all present in the extracted PDF text; test contact cleaned up. Backend healthy.
 
+### 2026-06-17 — ✨ Feature: Promotional Stock-Out unified into the regular delivery lifecycle (Option A) ✅ DONE
+- **Request (3 parts)**: (1) promo stock-outs follow the same workflow as regular stock-outs (draft → confirmed → delivery-assigned → complete); (2) promo stock-outs are assignable in delivery schedules (and part of the driver bundle); (3) promo stock selected is RESERVED until the delivery is complete.
+- **Approach (user chose A)**: New promo stock-outs are now persisted as `distributor_deliveries` records flagged `is_promo=True` (recipient = lead/contact/employee, no billing account, zero monetary totals). This makes them inherit the regular lifecycle, the shared stock-reservation pool and the delivery-schedule system. Legacy `promo_dispatches` records remain viewable (read-only, historical).
+- **Backend** (`routes/promo_dispatch.py`, `services/zoho_service.py`):
+  - Create writes an is_promo delivery + `distributor_delivery_items`; status `draft`/`confirmed`. **No stock deduction** — an open delivery only RESERVES (validated reservation-aware: available = on-hand − reserved, shared with regular Stock Outs).
+  - New `/confirm` (draft→confirmed, reserve + push Zoho challan), `/complete` (deduct reserved stock, →complete), `/reverse` (release reservation + delete challan; legacy path still adds stock back). List/summary/get/pdf/delete/retry merge both collections via a `_load_promo` loader.
+  - `sync_delivery_to_zoho` now guards `is_promo` → raises ZohoPushSkippedError (a promo never creates a tax invoice, only a challan).
+  - Schedule assignability is automatic: the schedule `eligible-deliveries` query is `{distributor_id, status:'confirmed'}` — promo confirmed deliveries match (verified at DB level). Driver bundle renders them like any stop (with the Delivery-contact work).
+- **Frontend** (`PromoDispatchSection.jsx`): status badges Draft/Confirmed/Scheduled/Delivered/Reversed; actions Confirm (reserves), **Delivered** (completes → deducts), Reverse. Confirm/Reverse copy updated to "reserve/release".
+- **Tested (curl + DB, preview)**: create draft → confirm (stock unchanged at 1000, reservation map = 10) → complete (deducted → 990, reservation cleared) → complete-again 400. Confirmed promo appears in the eligible-deliveries query. 12/12 unit tests pass; frontend compiles; app renders. Test data cleaned up.
+- **⚠️ Production-only verification**: Zoho challan generation on confirm (Zoho not connected in preview) and the schedule picker UI under a distributor-portal login. **Redeploy** to use. Existing `dispatched` legacy records keep their old (already-deducted) behaviour.
+
+
 
 
 ### 2026-06-17 — Promotional Stock-Out: Draft workflow + Reverse (P1 feature) ✅ DONE
