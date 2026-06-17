@@ -11,7 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/colla
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Gift, RefreshCw, Package, FileText, X, Download, ChevronDown,
-  AlertCircle, Settings2, Users, Ban, ShieldCheck,
+  AlertCircle, Settings2, Users, Ban, ShieldCheck, CheckCircle2, Undo2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import BatchPickerCards from './BatchPickerCards';
@@ -304,7 +304,7 @@ export default function PromoDispatchSection({
     : !!selectedContact;
   const canSubmit = recipientChosen && !!form.distributor_location_id && !!form.reason && itemsValid;
 
-  const handleCreate = async () => {
+  const handleCreate = async (asDraft = false) => {
     if (!canSubmit) return;
     setSaving(true);
     try {
@@ -322,6 +322,7 @@ export default function PromoDispatchSection({
         driver_contact: form.driver_contact || null,
         delivery_address: form.delivery_address || null,
         remarks: form.remarks || null,
+        as_draft: asDraft,
         items: items.filter(i => i.sku_id && (parseInt(i.quantity) || 0) > 0).map(i => ({
           sku_id: i.sku_id,
           sku_name: i.sku_name,
@@ -341,7 +342,7 @@ export default function PromoDispatchSection({
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success(data.message || 'Delivery Challan generated');
+        toast.success(data.message || (asDraft ? 'Draft saved' : 'Delivery Challan generated'));
         setShowDialog(false);
         resetForm();
         fetchDispatches();
@@ -354,6 +355,61 @@ export default function PromoDispatchSection({
     } finally {
       setSaving(false);
     }
+  };
+
+  // Lifecycle actions ──────────────────────────────────────────────
+  const [actingId, setActingId] = useState(null);
+
+  const confirmDispatch = async (dispatch) => {
+    if (!window.confirm(`Confirm ${dispatch.challan_number}? This will deduct stock from inventory and generate the Zoho delivery challan.`)) return;
+    setActingId(dispatch.id);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/confirm`,
+        { method: 'POST', headers: authHeaders });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(body.detail || 'Failed to confirm'); }
+      else { toast.success(body.message || 'Confirmed'); fetchDispatches(); }
+    } catch { toast.error('Network error while confirming'); }
+    finally { setActingId(null); }
+  };
+
+  const reverseDispatch = async (dispatch) => {
+    if (!window.confirm(`Reverse ${dispatch.challan_number}? Stock will be added back to inventory and the Zoho delivery challan will be deleted. This cannot be undone.`)) return;
+    setActingId(dispatch.id);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/reverse`,
+        { method: 'POST', headers: authHeaders });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(body.detail || 'Failed to reverse'); }
+      else { (body.zoho_cleanup_pending ? toast.warning : toast.success)(body.message || 'Reversed'); fetchDispatches(); }
+    } catch { toast.error('Network error while reversing'); }
+    finally { setActingId(null); }
+  };
+
+  const retryZohoCleanup = async (dispatch) => {
+    setActingId(dispatch.id);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/reverse-zoho-cleanup`,
+        { method: 'POST', headers: authHeaders });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(body.detail || 'Zoho cleanup failed'); }
+      else { toast.success(body.message || 'Zoho challan deleted'); fetchDispatches(); }
+    } catch { toast.error('Network error during Zoho cleanup'); }
+    finally { setActingId(null); }
+  };
+
+  const deleteDispatch = async (dispatch) => {
+    const label = dispatch.status === 'draft' ? 'Delete this draft?' : `Permanently delete reversed stock-out ${dispatch.challan_number}? This removes it from the list.`;
+    if (!window.confirm(label)) return;
+    setActingId(dispatch.id);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}`,
+        { method: 'DELETE', headers: authHeaders });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(body.detail || 'Failed to delete'); }
+      else { toast.success('Deleted'); fetchDispatches(); }
+    } catch { toast.error('Network error while deleting'); }
+    finally { setActingId(null); }
   };
 
   const downloadChallan = async (dispatch) => {
@@ -511,13 +567,15 @@ export default function PromoDispatchSection({
                       <th className="text-left p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">From</th>
                       <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Crates</th>
                       <th className="text-right p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Indicative Value</th>
+                      <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Status</th>
                       <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Zoho</th>
                       <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Challan</th>
+                      <th className="text-center p-3 font-semibold text-slate-700 uppercase tracking-wider text-xs">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dispatches.map((d) => (
-                      <tr key={d.id} className="border-b border-slate-100 hover:bg-fuchsia-50/40 transition-colors" data-testid={`promo-dispatch-row-${d.id}`}>
+                      <tr key={d.id} className={`border-b border-slate-100 transition-colors ${d.status === 'reversed' ? 'opacity-60 bg-slate-50' : 'hover:bg-fuchsia-50/40'}`} data-testid={`promo-dispatch-row-${d.id}`}>
                         <td className="p-3">
                           <span className="font-semibold text-fuchsia-700">{d.challan_number}</span>
                           <p className="text-xs text-slate-500 mt-0.5">{d.delivery_date ? new Date(d.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}</p>
@@ -534,8 +592,34 @@ export default function PromoDispatchSection({
                           <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2 py-0.5 rounded-full">{d.total_quantity}</span>
                         </td>
                         <td className="p-3 text-right text-slate-700 tabular-nums">₹{fmtINR(d.total_indicative_value)}</td>
+                        <td className="p-3 text-center" data-testid={`promo-status-${d.id}`}>
+                          {d.status === 'draft' ? (
+                            <Badge className="bg-amber-100 text-amber-700 border border-amber-200">Draft</Badge>
+                          ) : d.status === 'reversed' ? (
+                            <Badge className="bg-slate-200 text-slate-600 border border-slate-300">Reversed</Badge>
+                          ) : (
+                            <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200">Confirmed</Badge>
+                          )}
+                        </td>
                         <td className="p-3 text-center">
-                          {d.zoho_sync_status === 'synced' && d.zoho_doc_url ? (
+                          {d.status === 'draft' ? (
+                            <span className="text-[11px] text-slate-400">—</span>
+                          ) : d.status === 'reversed' ? (
+                            d.zoho_cleanup_pending ? (
+                              <Button
+                                variant="outline" size="sm"
+                                className="h-6 text-[11px] text-amber-700 border-amber-200 hover:bg-amber-50"
+                                onClick={() => retryZohoCleanup(d)}
+                                disabled={actingId === d.id}
+                                data-testid={`zoho-cleanup-${d.id}`}
+                                title={d.zoho_cleanup_error || 'Zoho challan deletion pending — click to retry'}
+                              >
+                                {actingId === d.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <><AlertCircle className="h-3 w-3 mr-1" /> Cleanup</>}
+                              </Button>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 line-through">{d.zoho_doc_number || 'deleted'}</span>
+                            )
+                          ) : d.zoho_sync_status === 'synced' && d.zoho_doc_url ? (
                             <a
                               href={d.zoho_doc_url}
                               target="_blank"
@@ -563,16 +647,68 @@ export default function PromoDispatchSection({
                           )}
                         </td>
                         <td className="p-3 text-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => downloadChallan(d)}
-                            disabled={downloadingId === d.id}
-                            data-testid={`download-challan-${d.id}`}
-                          >
-                            {downloadingId === d.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1" />}
-                            {downloadingId === d.id ? '' : 'PDF'}
-                          </Button>
+                          {d.status === 'draft' ? (
+                            <span className="text-[11px] text-slate-400">—</span>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => downloadChallan(d)}
+                              disabled={downloadingId === d.id}
+                              data-testid={`download-challan-${d.id}`}
+                            >
+                              {downloadingId === d.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1" />}
+                              {downloadingId === d.id ? '' : 'PDF'}
+                            </Button>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {d.status === 'draft' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-[11px] bg-emerald-600 hover:bg-emerald-700"
+                                  onClick={() => confirmDispatch(d)}
+                                  disabled={actingId === d.id}
+                                  data-testid={`confirm-dispatch-${d.id}`}
+                                >
+                                  {actingId === d.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <><CheckCircle2 className="h-3 w-3 mr-1" /> Confirm</>}
+                                </Button>
+                                <Button
+                                  variant="outline" size="sm"
+                                  className="h-7 text-[11px] text-rose-700 border-rose-200 hover:bg-rose-50"
+                                  onClick={() => deleteDispatch(d)}
+                                  disabled={actingId === d.id}
+                                  data-testid={`delete-dispatch-${d.id}`}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                            {d.status === 'dispatched' && (
+                              <Button
+                                variant="outline" size="sm"
+                                className="h-7 text-[11px] text-orange-700 border-orange-200 hover:bg-orange-50"
+                                onClick={() => reverseDispatch(d)}
+                                disabled={actingId === d.id}
+                                data-testid={`reverse-dispatch-${d.id}`}
+                              >
+                                {actingId === d.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <><Undo2 className="h-3 w-3 mr-1" /> Reverse</>}
+                              </Button>
+                            )}
+                            {d.status === 'reversed' && (
+                              <Button
+                                variant="outline" size="sm"
+                                className="h-7 text-[11px] text-rose-700 border-rose-200 hover:bg-rose-50"
+                                onClick={() => deleteDispatch(d)}
+                                disabled={actingId === d.id}
+                                data-testid={`delete-dispatch-${d.id}`}
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" /> Delete
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -963,7 +1099,10 @@ export default function PromoDispatchSection({
 
           <DialogFooter className="shrink-0 border-t pt-4">
             <Button variant="outline" onClick={() => { setShowDialog(false); resetForm(); }}>Cancel</Button>
-            <Button className="bg-fuchsia-600 hover:bg-fuchsia-700" onClick={handleCreate} disabled={saving || !canSubmit} data-testid="save-promo-dispatch-btn">
+            <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => handleCreate(true)} disabled={saving || !canSubmit} data-testid="save-draft-promo-dispatch-btn">
+              {saving ? 'Saving…' : 'Save as Draft'}
+            </Button>
+            <Button className="bg-fuchsia-600 hover:bg-fuchsia-700" onClick={() => handleCreate(false)} disabled={saving || !canSubmit} data-testid="save-promo-dispatch-btn">
               {saving ? 'Generating...' : 'Generate Challan'}
             </Button>
           </DialogFooter>

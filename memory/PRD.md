@@ -15,6 +15,18 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-17 — Promotional Stock-Out: Draft workflow + Reverse (P1 feature) ✅ DONE
+- **Request**: (1) Delete a promo stock-out while in draft; (2) Reverse a confirmed promo stock-out → add stock back + cancel/delete the Zoho delivery challan.
+- **Two-step lifecycle added** (`routes/promo_dispatch.py`, `models/distributor.py`): a promo stock-out now has states **draft → confirmed (dispatched) → reversed**.
+  - **Save as Draft** (`as_draft=true` on create): records the stock-out **without** deducting stock or creating a Zoho challan; freely editable/deletable.
+  - **Confirm** (`POST .../{id}/confirm`): re-validates stock, deducts inventory, and pushes the Zoho delivery challan (best-effort).
+  - **Reverse** (`POST .../{id}/reverse`, confirmed only): **restores stock** to inventory + **deletes the Zoho delivery challan** (new `zoho_service.delete_delivery_challan` — Zoho supports delete, not void, for challans). Record is kept and marked **"Reversed"** (greyed) for audit. Partial Zoho failure → flagged `zoho_cleanup_pending` with a **retry** endpoint (`.../reverse-zoho-cleanup`).
+  - **Delete** (`DELETE .../{id}`): allowed only for **draft** (never touched stock) or **reversed** (stock already restored); a confirmed stock-out is blocked with a clear 400 (must reverse first).
+  - Permissions: anyone who can do promo stock-out (`can_manage_distributor_data`).
+- **Frontend** (`components/distributor/PromoDispatchSection.jsx`): "Save as Draft" button in the create dialog; new **Status** column (Draft/Confirmed/Reversed badges); status-based row **Actions** (Confirm + delete for drafts, Reverse for confirmed, Delete for reversed); greyed reversed rows; "Cleanup" retry button when Zoho deletion is pending; PDF/Zoho columns hidden for drafts.
+- **Tested**: curl lifecycle — draft (stock unchanged 100) → confirm (100→95) → reverse (95→100, marked reversed) → delete; confirmed-delete correctly blocked (400). UI — all three states render with correct actions; clicking Confirm on a draft deducted stock, flipped to Confirmed, and showed the Zoho "Retry" fallback (Zoho not connected in preview). Test data cleaned up.
+
+
 ### 2026-06-16 — Notifications: redesigned as a contemporary right-side slide-over panel ✅ DONE
 - **Request**: The full-page notifications inbox didn't look good — make it contemporary/visually appealing and convert it to a side panel instead of a full page.
 - **Change**: Replaced the full-page `/notifications` route + popover with a single slide-over **`components/NotificationsPanel.jsx`** (shadcn `Sheet`, side=right). Clicking the bell now opens this panel directly. Design: gradient emerald→teal header (bell tile, unread/total counts, "Mark all"), sticky filter row (status tabs All/Unread/Read + type dropdown + search), date-grouped sections (Today / Yesterday / Earlier this week / Earlier) with sticky labels, per-item color-coded category icon tiles (@-mention, Task, Approval, Design, Lead, Account, Stock, Return, Meeting, Print), unread emerald left-accent bar + dot, and a "Load older" button (15/page, accumulating). `NotificationBell.jsx` simplified to just the badge button + panel. Removed `pages/NotificationsInbox.js` and its route. Backend (paginated/filterable `GET /notifications` + `/categories`) unchanged.

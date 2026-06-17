@@ -599,6 +599,7 @@ class PromoDeliveryCreate(BaseModel):
     delivery_address: Optional[str] = None
     remarks: Optional[str] = None
     items: List[PromoDeliveryItemCreate]
+    as_draft: bool = False            # save without deducting stock / Zoho push
 
 
 class AccountDeliveryUpdate(BaseModel):

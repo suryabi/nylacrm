@@ -901,6 +901,35 @@ async def fetch_delivery_challan_pdf(tenant_id: str, zoho_deliverychallan_id: st
 
 
 
+async def delete_delivery_challan(tenant_id: str, zoho_deliverychallan_id: str) -> bool:
+    """Delete a delivery challan in Zoho Books.
+
+    Zoho Books does NOT support "void" for delivery challans (only invoices /
+    credit notes), so a reversal hard-deletes the challan via
+    `DELETE /books/v3/deliverychallans/{id}`.
+
+    Returns True on success. A 404 (challan already gone) is treated as success
+    so cleanup is idempotent. Any other failure raises, letting the caller flag
+    "Zoho cleanup pending" for a retry.
+    """
+    if not zoho_deliverychallan_id:
+        return True
+    try:
+        await _zoho_request(
+            "DELETE",
+            f"/books/v3/deliverychallans/{zoho_deliverychallan_id}",
+            tenant_id=tenant_id,
+            max_attempts=2,
+            timeout=12.0,
+        )
+        return True
+    except ZohoApiError as e:
+        if e.status_code == 404:
+            logger.info(f"Delivery challan {zoho_deliverychallan_id} already absent in Zoho — treating as deleted.")
+            return True
+        raise
+
+
 async def _ensure_mirror_invoice(
     *,
     tenant_id: str,
