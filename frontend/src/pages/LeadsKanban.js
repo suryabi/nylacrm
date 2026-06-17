@@ -28,12 +28,32 @@ import {
   LayoutGrid,
   List,
   ChevronDown,
+  ChevronUp,
+  History,
   Clock,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { format } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Build the "days since last contacted" pill content + recency color.
+const formatContacted = (dateStr) => {
+  if (!dateStr) {
+    return { text: 'Not contacted', cls: 'bg-gray-100 text-gray-500 border-gray-200' };
+  }
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) {
+    return { text: 'Not contacted', cls: 'bg-gray-100 text-gray-500 border-gray-200' };
+  }
+  const days = Math.max(0, Math.floor((Date.now() - d.getTime()) / 86400000));
+  const dayLabel = days === 0 ? 'Today' : `${days} ${days === 1 ? 'day' : 'days'}`;
+  let cls = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (days > 21) cls = 'bg-red-50 text-red-700 border-red-200';
+  else if (days > 7) cls = 'bg-amber-50 text-amber-700 border-amber-200';
+  return { text: `${dayLabel} / ${format(d, 'dd-MMM-yyyy')}`, cls, days };
+};
 
 // Color mapping for dynamic statuses
 const getStatusColors = (color) => {
@@ -68,7 +88,36 @@ const INTERACTION_METHODS = [
 const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus, currentStatus, statuses = [] }) => {
   const assignedUser = users.find(u => u.id === lead.assigned_to);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
-  
+  const [expanded, setExpanded] = useState(false);
+  const [activity, setActivity] = useState(null);
+  const [loadingAct, setLoadingAct] = useState(false);
+  const [actLoaded, setActLoaded] = useState(false);
+  const contacted = formatContacted(lead.last_contacted_date);
+
+  const toggleExpand = async (e) => {
+    e.stopPropagation();
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !actLoaded) {
+      setLoadingAct(true);
+      try {
+        const token = localStorage.getItem('token') || localStorage.getItem('session_token');
+        const res = await axios.get(`${API_URL}/api/activities/${lead.id}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true,
+        });
+        const arr = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.activities || []);
+        arr.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        setActivity(arr[0] || null);
+      } catch {
+        setActivity(null);
+      } finally {
+        setLoadingAct(false);
+        setActLoaded(true);
+      }
+    }
+  };
+
   const handleMoveClick = (e, targetStatus) => {
     e.stopPropagation();
     setShowMoveMenu(false);
@@ -168,18 +217,74 @@ const LeadCard = ({ lead, onDragStart, onDragEnd, onClick, users, onMoveToStatus
             {lead.category}
           </Badge>
         )}
-        
-        {assignedUser && (
-          <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
+      </div>
+
+      {/* Footer: assignee + last-contacted pill (bottom-right) */}
+      <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-2">
+        {assignedUser ? (
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 min-w-0 cursor-pointer" onClick={() => onClick(lead)}>
+            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
               <span className="text-[10px] font-medium text-primary">
                 {assignedUser.name?.charAt(0)?.toUpperCase() || '?'}
               </span>
             </div>
             <span className="truncate">{assignedUser.name}</span>
           </div>
+        ) : (
+          <span className="text-[11px] text-gray-300">Unassigned</span>
         )}
+        <span
+          className={`shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${contacted.cls}`}
+          title="Days since last contacted"
+          data-testid={`lead-last-contacted-${lead.id}`}
+        >
+          <Clock className="w-3 h-3" />
+          {contacted.text}
+        </span>
       </div>
+
+      {/* Expand toggle → latest activity */}
+      <button
+        onClick={toggleExpand}
+        className="mt-1.5 w-full flex items-center justify-center gap-1 text-[11px] text-gray-400 hover:text-primary py-1 rounded transition-colors"
+        data-testid={`expand-lead-${lead.id}`}
+      >
+        {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        {expanded ? 'Hide activity' : 'Latest activity'}
+      </button>
+
+      {expanded && (
+        <div
+          className="mt-1.5 rounded-md bg-slate-50 border border-slate-200 p-2.5"
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`lead-activity-${lead.id}`}
+        >
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <History className="w-3 h-3 text-slate-400" />
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Latest Activity</span>
+          </div>
+          {loadingAct ? (
+            <p className="text-xs text-slate-400">Loading…</p>
+          ) : activity ? (
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Badge variant="outline" className="text-[10px] capitalize bg-white">
+                  {activity.interaction_method || activity.activity_type || 'note'}
+                </Badge>
+                <span className="text-[10px] text-slate-400">
+                  {activity.created_at ? format(new Date(activity.created_at), 'dd-MMM-yyyy, h:mm a') : ''}
+                </span>
+              </div>
+              <p className="text-xs text-slate-700 mt-1 whitespace-pre-wrap break-words line-clamp-4">{activity.description}</p>
+              {activity.created_by_name && (
+                <p className="text-[10px] text-slate-400 mt-1">by {activity.created_by_name}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">No activity logged yet.</p>
+          )}
+        </div>
+      )}
     </div>
   );
 };
