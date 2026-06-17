@@ -15,7 +15,7 @@ import {
 } from '../components/ui/select';
 import {
   ArrowLeftRight, Plus, Search, X, Loader2, Truck, AlertTriangle, ExternalLink,
-  RefreshCw, FileText, Package, Building2, Download,
+  RefreshCw, FileText, Package, Building2, Download, Undo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -671,6 +671,42 @@ export default function StockTransfers() {
     }
   };
 
+  const [reversingId, setReversingId] = useState(null);
+  const reverseTransfer = async (t) => {
+    if (!window.confirm(
+      `Reverse transfer ${t.transfer_number}?\n\n` +
+      `• Stock will be restored: added back to ${t.source_location_name} and deducted from ${t.dest_location_name}.\n` +
+      `• The Zoho ${t.zoho_doc_type === 'delivery_challan' ? 'delivery challan will be DELETED' : 'invoice will be VOIDED'}.\n\n` +
+      `This cannot be undone.`
+    )) return;
+    setReversingId(t.id);
+    try {
+      const { data } = await axios.post(`${API}/distributor/stock-transfers/${t.id}/reverse`, {}, { headers: HEAD() });
+      toast.success(data?.message || `Transfer ${t.transfer_number} reversed`);
+      if (data?.zoho_cleanup_pending) {
+        toast.warning(`Zoho cleanup pending: ${data?.zoho_cleanup_error || 'unknown error'} — use Cleanup to retry.`);
+      }
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reverse transfer');
+    } finally {
+      setReversingId(null);
+    }
+  };
+
+  const retryReverseCleanup = async (t) => {
+    setReversingId(t.id);
+    try {
+      await axios.post(`${API}/distributor/stock-transfers/${t.id}/reverse-zoho-cleanup`, {}, { headers: HEAD() });
+      toast.success('Zoho cleanup completed');
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Zoho cleanup still failing');
+    } finally {
+      setReversingId(null);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6" data-testid="stock-transfers-page">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -787,6 +823,36 @@ export default function StockTransfers() {
                             data-testid={`eway-bill-btn-${t.id}`}
                           >
                             <Download className="h-3 w-3 mr-1" /> E-way Bill
+                          </Button>
+                        )}
+                        {t.status === 'reversed' ? (
+                          <>
+                            <Badge variant="outline" className="text-[10px] bg-rose-50 text-rose-700 border-rose-200" data-testid={`reversed-badge-${t.id}`}>
+                              <Undo2 className="h-3 w-3 mr-1" />Reversed
+                            </Badge>
+                            {t.zoho_cleanup_pending && (
+                              <Button
+                                size="sm" variant="ghost"
+                                className="h-7 px-2 text-[10px] text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                                onClick={() => retryReverseCleanup(t)}
+                                disabled={reversingId === t.id}
+                                title={`Zoho cleanup pending: ${t.zoho_cleanup_error || ''} — retry`}
+                                data-testid={`reverse-cleanup-btn-${t.id}`}
+                              >
+                                {reversingId === t.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RefreshCw className="h-3 w-3 mr-1" />} Cleanup
+                              </Button>
+                            )}
+                          </>
+                        ) : (
+                          <Button
+                            size="sm" variant="ghost"
+                            className="h-7 px-2 text-[10px] text-rose-700 hover:text-rose-800 hover:bg-rose-50"
+                            onClick={() => reverseTransfer(t)}
+                            disabled={reversingId === t.id}
+                            title="Reverse this transfer — restore stock in both warehouses and void/delete the Zoho document"
+                            data-testid={`reverse-transfer-btn-${t.id}`}
+                          >
+                            {reversingId === t.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Undo2 className="h-3 w-3 mr-1" />} Reverse
                           </Button>
                         )}
                       </div>

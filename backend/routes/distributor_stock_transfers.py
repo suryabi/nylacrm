@@ -36,9 +36,11 @@ from deps import get_current_user
 from services.zoho_service import (
     create_delivery_challan_for_stock_transfer,
     create_invoice_for_stock_transfer,
+    delete_delivery_challan,
     fetch_delivery_challan_pdf,
     fetch_invoice_pdf,
     is_zoho_configured,
+    void_invoice,
     MissingZohoMappingError,
     MissingAgreedPriceError,
     AccountNotLinkedToZohoError,
@@ -1258,6 +1260,148 @@ async def delete_stock_transfer(
         "zoho_doc_voided": False,  # Reminder: void the Zoho doc manually in Zoho Books.
         "zoho_invoice_id": doc.get("zoho_invoice_id"),
     }
+
+
+async def _restore_transfer_inventory(tenant_id: str, doc: dict) -> None:
+    """Reverse a transfer's inventory move: add units BACK to the source
+    warehouse and DEDUCT them from the destination — restoring both warehouses
+    to their pre-transfer numbers. Batch-aware (mirrors create_stock_transfer)."""
+    src_loc = await _load_location(tenant_id, doc["source_location_id"])
+    dst_loc = await _load_location(tenant_id, doc["dest_location_id"])
+    src_dist = await _load_distributor(tenant_id, doc["source_distributor_id"])
+    dst_dist = await _load_distributor(tenant_id, doc["dest_distributor_id"])
+    for it in doc.get("items", []):
+        units = int(it.get("quantity_units") or (int(it.get("quantity", 0)) * int(it.get("units_per_package", 1))))
+        ti = TransferItem(
+            sku_id=it["sku_id"],
+            sku_name=it.get("sku_name"),
+            packaging_type_id=it.get("packaging_type_id"),
+            packaging_type_name=it.get("packaging_type_name") or "package",
+            units_per_package=int(it.get("units_per_package") or 1),
+            quantity=int(it.get("quantity") or 1),
+            batch_id=it.get("batch_id"),
+            batch_code=it.get("batch_code"),
+        )
+        await _adjust_stock_for_location(
+            tenant_id, src_loc, ti, units,
+            distributor_name=src_dist.get("distributor_name") or "",
+        )
+        await _adjust_stock_for_location(
+            tenant_id, dst_loc, ti, -units,
+            distributor_name=dst_dist.get("distributor_name") or "",
+        )
+
+
+async def _invalidate_transfer_zoho_doc(tenant_id: str, doc: dict) -> dict:
+    """Invalidate the Zoho document attached to a transfer (best-effort):
+      • Invoice         → VOID  (kept for audit, number preserved).
+      • Delivery Challan → DELETE (Zoho has no void for challans).
+    Returns `{cleanup_pending, cleanup_error, action}`. Never raises — a
+    failure flags `cleanup_pending` so the caller can offer a retry.
+    """
+    zoho_id = doc.get("zoho_invoice_id")
+    doc_type = doc.get("zoho_doc_type") or "invoice"
+    if not zoho_id or doc.get("zoho_status") != "synced":
+        return {"cleanup_pending": False, "cleanup_error": None, "action": "none"}
+    try:
+        if doc_type == "delivery_challan":
+            await delete_delivery_challan(tenant_id, zoho_id)
+            return {"cleanup_pending": False, "cleanup_error": None, "action": "challan_deleted"}
+        await void_invoice(tenant_id, zoho_id)
+        return {"cleanup_pending": False, "cleanup_error": None, "action": "invoice_voided"}
+    except Exception as e:
+        logger.warning(f"Zoho invalidation failed for transfer {doc.get('transfer_number')}: {e}")
+        return {"cleanup_pending": True, "cleanup_error": str(e)[:500], "action": "failed"}
+
+
+@router.post("/{transfer_id}/reverse")
+async def reverse_stock_transfer(transfer_id: str, current_user: dict = Depends(get_current_user)):
+    """Reverse a completed Stock Transfer (kept for audit, marked `reversed`):
+      1. Invalidate the Zoho document — VOID the invoice or DELETE the challan.
+      2. Restore inventory in BOTH warehouses (add back to source, deduct from dest).
+
+    Only `completed` transfers can be reversed. If the Zoho invalidation fails
+    (e.g. Zoho temporarily down), the inventory is still restored and the
+    transfer is flagged `zoho_cleanup_pending` for a retry via
+    `/{transfer_id}/reverse-zoho-cleanup`.
+    """
+    tenant_id = get_current_tenant_id()
+    doc = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(404, "Stock transfer not found")
+    if doc.get("status") == "reversed":
+        raise HTTPException(400, "This stock transfer has already been reversed.")
+    if doc.get("status") != "completed":
+        raise HTTPException(400, "Only a completed stock transfer can be reversed.")
+
+    # 1) Invalidate the Zoho document first (best-effort).
+    zoho_result = await _invalidate_transfer_zoho_doc(tenant_id, doc)
+
+    # 2) Restore inventory in both warehouses.
+    await _restore_transfer_inventory(tenant_id, doc)
+
+    # 3) Mark reversed (kept for audit).
+    now = datetime.now(timezone.utc).isoformat()
+    set_fields = {
+        "status": "reversed",
+        "reversed_at": now,
+        "reversed_by": current_user.get("id"),
+        "reversed_by_name": current_user.get("name") or current_user.get("email"),
+        "zoho_cleanup_pending": zoho_result["cleanup_pending"],
+        "zoho_cleanup_error": zoho_result["cleanup_error"],
+        "zoho_reverse_action": zoho_result["action"],
+        "updated_at": now,
+    }
+    await db.distributor_stock_transfers.update_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"$set": set_fields},
+    )
+    refreshed = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    return {
+        "ok": True,
+        "transfer": refreshed,
+        "zoho_cleanup_pending": zoho_result["cleanup_pending"],
+        "zoho_cleanup_error": zoho_result["cleanup_error"],
+        "message": (
+            f"Transfer {doc.get('transfer_number')} reversed — stock restored to both warehouses"
+            + (". ⚠️ Zoho cleanup pending — retry it." if zoho_result["cleanup_pending"]
+               else (" and the Zoho delivery challan was deleted." if zoho_result["action"] == "challan_deleted"
+                     else (" and the Zoho invoice was voided." if zoho_result["action"] == "invoice_voided" else ".")))
+        ),
+    }
+
+
+@router.post("/{transfer_id}/reverse-zoho-cleanup")
+async def retry_reverse_zoho_cleanup(transfer_id: str, current_user: dict = Depends(get_current_user)):
+    """Retry the Zoho invalidation (void invoice / delete challan) for a
+    transfer that was already reversed but whose Zoho cleanup is still pending."""
+    _ = current_user
+    tenant_id = get_current_tenant_id()
+    doc = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(404, "Stock transfer not found")
+    if doc.get("status") != "reversed":
+        raise HTTPException(400, "This transfer is not reversed — nothing to clean up.")
+    if not doc.get("zoho_cleanup_pending"):
+        return {"ok": True, "already_clean": True}
+    zoho_result = await _invalidate_transfer_zoho_doc(tenant_id, doc)
+    await db.distributor_stock_transfers.update_one(
+        {"id": transfer_id, "tenant_id": tenant_id},
+        {"$set": {
+            "zoho_cleanup_pending": zoho_result["cleanup_pending"],
+            "zoho_cleanup_error": zoho_result["cleanup_error"],
+            "zoho_reverse_action": zoho_result["action"],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    if zoho_result["cleanup_pending"]:
+        raise HTTPException(400, f"Zoho cleanup still failing: {zoho_result['cleanup_error']}")
+    return {"ok": True, "action": zoho_result["action"]}
 
 
 
