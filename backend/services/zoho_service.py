@@ -327,6 +327,7 @@ async def _zoho_request(
     json: Optional[dict] = None,
     params: Optional[dict] = None,
     max_attempts: int = 3,
+    timeout: float = 20.0,
 ) -> dict:
     """Authenticated request with exponential backoff + 429 Retry-After handling."""
     cfg = get_zoho_config()
@@ -348,7 +349,7 @@ async def _zoho_request(
             "Content-Type": "application/json",
         }
         try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.request(method, url, headers=headers, params=params, json=json)
         except httpx.RequestError as e:
             last_exc = e
@@ -2452,5 +2453,7 @@ async def sync_warehouse_to_zoho_branch(*, tenant_id: str, location: dict) -> di
         f"/books/v3/branches/{branch_id}",
         tenant_id=tenant_id,
         json=payload,
+        max_attempts=2,
+        timeout=10.0,
     )
     return result.get("branch") or result

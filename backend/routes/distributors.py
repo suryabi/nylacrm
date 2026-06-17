@@ -5,6 +5,7 @@ CRUD operations for distributors, operating coverage, and locations
 from fastapi import APIRouter, HTTPException, Depends, Query, Response, BackgroundTasks
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
+import asyncio
 import logging
 import re
 import uuid
@@ -1057,11 +1058,29 @@ async def sync_location_to_zoho_branch(
             ZohoPushSkippedError,
             ZohoApiError,
         )
-        branch = await sync_warehouse_to_zoho_branch(tenant_id=tenant_id, location=location)
+        # Bound the total runtime so we always respond well before the gateway
+        # timeout. A slow/unreachable Zoho would otherwise let the request hang
+        # until Cloudflare returns an opaque 502 origin error to the user.
+        branch = await asyncio.wait_for(
+            sync_warehouse_to_zoho_branch(tenant_id=tenant_id, location=location),
+            timeout=25.0,
+        )
     except ZohoPushSkippedError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ZohoApiError as e:
         raise HTTPException(status_code=502, detail=f"Zoho rejected the sync: {e}")
+    except asyncio.TimeoutError:
+        logger.warning("Zoho branch sync timed out for location %s", location_id)
+        raise HTTPException(
+            status_code=504,
+            detail="Zoho Books didn't respond in time. This is usually a temporary Zoho slowdown — please try the sync again in a moment.",
+        )
+    except Exception as e:
+        logger.exception("Zoho branch sync failed for location %s", location_id)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Couldn't reach Zoho Books to sync this warehouse: {str(e)[:200]}. Please verify Zoho is connected and try again.",
+        )
 
     # Record when the last successful sync happened so the UI can show it.
     now_iso = datetime.now(timezone.utc).isoformat()
