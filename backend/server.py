@@ -7664,7 +7664,29 @@ async def create_comment(comment_input: CommentCreate, current_user: dict = Depe
     activity_doc = activity.model_dump()
     activity_doc['created_at'] = activity_doc['created_at'].isoformat()
     await get_tdb().activities.insert_one(activity_doc)
-    
+
+    # @-mention notifications — parse the comment body for inline
+    # `@[Name](user-id)` chips inserted by the frontend MentionTextarea and
+    # ping the referenced users (minus the author). Best-effort.
+    try:
+        from utils.entity_comments import notify_comment_mentions
+        lead = await get_tdb().leads.find_one(
+            {'id': comment_obj.lead_id}, {'_id': 0, 'company': 1, 'contact_person': 1}
+        )
+        lead_label = (lead or {}).get('company') or (lead or {}).get('contact_person') or 'lead'
+        await notify_comment_mentions(
+            tenant_id=get_current_tenant_id(),
+            text=comment_obj.comment or '',
+            current_user=current_user,
+            link=f"/leads/{comment_obj.lead_id}",
+            title=f"{current_user.get('name') or current_user.get('email') or 'Someone'} mentioned you",
+            body=f"Comment on lead {lead_label}",
+            entity_type='lead',
+            entity_id=comment_obj.lead_id,
+        )
+    except Exception:
+        logger.exception("Mention notification failed for lead comment")
+
     return comment_obj
 
 @api_router.get("/comments/{lead_id}", response_model=List[Comment])
