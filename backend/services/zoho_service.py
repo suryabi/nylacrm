@@ -2024,6 +2024,11 @@ async def create_delivery_challan_for_stock_transfer(
         "id": dest_distributor.get("id"),
         "account_name": dest_distributor.get("distributor_name") or dest_distributor.get("legal_entity_name"),
         "legal_entity_name": dest_distributor.get("legal_entity_name") or dest_distributor.get("distributor_name"),
+        # Zoho Bill-To: the bold heading (company_name) must be the LEGAL ENTITY
+        # name, while the Display Name (contact_name) stays the distributor's
+        # trade name. upsert_contact derives company_name from gst_legal_name.
+        "gst_legal_name": dest_distributor.get("legal_entity_name") or dest_distributor.get("distributor_name"),
+        "gst_trade_name": dest_distributor.get("distributor_name") or dest_distributor.get("legal_entity_name"),
         "gstin": dest_distributor.get("gstin"),
         "primary_contact_name": dest_distributor.get("primary_contact_name"),
         "primary_contact_email": dest_distributor.get("primary_contact_email"),
@@ -2176,6 +2181,9 @@ async def create_delivery_challan_for_promo_dispatch(
         "id": distributor.get("id"),
         "account_name": distributor.get("distributor_name") or distributor.get("legal_entity_name"),
         "legal_entity_name": distributor.get("legal_entity_name") or distributor.get("distributor_name"),
+        # Bill-To legal name (company_name) ← legal entity; Display (contact_name) ← trade name.
+        "gst_legal_name": distributor.get("legal_entity_name") or distributor.get("distributor_name"),
+        "gst_trade_name": distributor.get("distributor_name") or distributor.get("legal_entity_name"),
         "gstin": distributor.get("gstin"),
         "primary_contact_name": distributor.get("primary_contact_name"),
         "primary_contact_email": distributor.get("primary_contact_email"),
@@ -2373,6 +2381,11 @@ async def create_invoice_for_stock_transfer(
         "id": dest_distributor.get("id"),
         "account_name": dest_distributor.get("distributor_name") or dest_distributor.get("legal_entity_name"),
         "legal_entity_name": dest_distributor.get("legal_entity_name") or dest_distributor.get("distributor_name"),
+        # Zoho Bill-To: the bold heading (company_name) must be the LEGAL ENTITY
+        # name, while the Display Name (contact_name) stays the distributor's
+        # trade name. upsert_contact derives company_name from gst_legal_name.
+        "gst_legal_name": dest_distributor.get("legal_entity_name") or dest_distributor.get("distributor_name"),
+        "gst_trade_name": dest_distributor.get("distributor_name") or dest_distributor.get("legal_entity_name"),
         "gstin": dest_distributor.get("gstin"),
         "primary_contact_name": dest_distributor.get("primary_contact_name"),
         "primary_contact_email": dest_distributor.get("primary_contact_email"),
