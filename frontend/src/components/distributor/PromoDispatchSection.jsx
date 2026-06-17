@@ -33,7 +33,7 @@ export default function PromoDispatchSection({
   const { user } = useAuth();
   const isAdmin = ADMIN_ROLES.includes((user?.role || '').trim());
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [dispatches, setDispatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
