@@ -331,13 +331,39 @@ def _zoho_clip(s, n: int = ZOHO_ADDR_MAX) -> str:
     return str(s).strip()[:n]
 
 
+def _is_zoho_address_length_error(e: "ZohoApiError") -> bool:
+    """True when Zoho rejects a create payload because an inline billing/shipping
+    address field is (claimed to be) >= 100 chars — Zoho error code 15
+    ("Please ensure that the \"shipping_address\" has less than 100 characters.").
+
+    Zoho can raise this for inline addresses even when each sub-field is well
+    under the limit, so the only reliable recovery is to retry the create
+    WITHOUT the inline address block. The recipient is still captured in the
+    challan `notes`, so nothing is lost on the printed document."""
+    if e.status_code != 400:
+        return False
+    payload = e.payload or {}
+    code = payload.get("code")
+    msg = (payload.get("message") or e.message or "").lower()
+    return code == 15 and "address" in msg and "100 char" in msg
+
+
 def _zoho_shipping_address(*, attention: str = "", address: str = "", street2: str = "",
                            city: str = "", state: str = "", zip: str = "",
                            country: str = "India", phone: str = "") -> dict:
     """Build a Zoho-safe shipping/billing address dict: every field clipped to
     <100 chars, with any `address` overflow pushed into `street2` so the full
     address still prints on the challan."""
+    attention = (attention or "").strip()
     addr_full = (address or "").strip()
+    # Avoid the "outlet name printed twice" rendering the user reported: when the
+    # address line redundantly repeats the recipient/attention name, strip that
+    # leading duplicate (it's already shown on the attention line). This also
+    # shortens the address so it stays comfortably under Zoho's 100-char ceiling.
+    if attention and addr_full.lower().startswith(attention.lower()):
+        deduped = addr_full[len(attention):].lstrip(" ,-–—").strip()
+        if deduped:
+            addr_full = deduped
     addr = _zoho_clip(addr_full)
     overflow = addr_full[ZOHO_ADDR_MAX:].strip() if len(addr_full) > ZOHO_ADDR_MAX else ""
     street2_combined = ", ".join([p for p in (overflow, (street2 or "").strip()) if p])
@@ -356,6 +382,30 @@ def _zoho_shipping_address(*, attention: str = "", address: str = "", street2: s
     if phone:
         out["phone"] = _zoho_clip(phone, 50)
     return out
+
+
+async def _post_deliverychallan_resilient(tenant_id: str, payload: dict, ref: Optional[str] = None) -> dict:
+    """POST a delivery challan to Zoho, recovering from the spurious code-15
+    "shipping_address has less than 100 characters" rejection.
+
+    Zoho intermittently rejects an inline `shipping_address` (and/or
+    `billing_address`) on create even when every sub-field is under the limit.
+    When that happens we retry the create WITHOUT the inline address block — the
+    recipient is already fully described in the challan `notes`, so the printed
+    document remains self-describing and the sync no longer hard-fails."""
+    try:
+        return await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=payload)
+    except ZohoApiError as e:
+        if _is_zoho_address_length_error(e) and ("shipping_address" in payload or "billing_address" in payload):
+            logger.warning(
+                f"Zoho rejected inline address (code 15) for delivery challan "
+                f"{ref or '(no ref)'}; retrying without the inline address block "
+                f"(recipient is preserved in notes). Original error: {e.message}"
+            )
+            retry_payload = {k: v for k, v in payload.items() if k not in ("shipping_address", "billing_address")}
+            return await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=retry_payload)
+        raise
+
 
 
 async def _zoho_request(
@@ -1938,7 +1988,7 @@ async def create_delivery_challan_for_stock_transfer(
         "tax_total": 0,
     }
 
-    result = await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=payload)
+    result = await _post_deliverychallan_resilient(tenant_id, payload, transfer.get("reference_number") or transfer.get("transfer_number"))
     challan = result.get("deliverychallan") or result.get("delivery_challan") or {}
     zoho_challan_id = challan.get("deliverychallan_id") or challan.get("delivery_challan_id")
     zoho_challan_number = challan.get("deliverychallan_number") or challan.get("delivery_challan_number")
@@ -2113,7 +2163,7 @@ async def create_delivery_challan_for_promo_dispatch(
             address=dispatch["delivery_address"],
         )
 
-    result = await _zoho_request("POST", "/books/v3/deliverychallans", tenant_id=tenant_id, json=payload)
+    result = await _post_deliverychallan_resilient(tenant_id, payload, dispatch.get("challan_number"))
     challan = result.get("deliverychallan") or result.get("delivery_challan") or {}
     zoho_challan_id = challan.get("deliverychallan_id") or challan.get("delivery_challan_id")
     zoho_challan_number = challan.get("deliverychallan_number") or challan.get("delivery_challan_number")

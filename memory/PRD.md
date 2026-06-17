@@ -15,6 +15,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-17 — 🐛 Fix: Promo Stock-Out Zoho challan rejected — "shipping_address has less than 100 characters" (code 15) ✅ DONE
+- **Reported (PRODUCTION)**: Confirming a Promotional Stock-Out (Delivery Challan) to a recipient with a long address (e.g. Radisson Blu Marina Hotel, DC-2606-0013) failed the Zoho push with `{"code":15,"message":"Please ensure that the \"shipping_address\" has less than 100 characters."}`. The address also rendered the outlet name **twice** + phone (~185 chars).
+- **Root cause**: Zoho rejects an inline `shipping_address` on `POST /deliverychallans` with code-15 even when sub-fields look bounded; long recipient addresses tripped it. The recipient name was also duplicated because `attention` (= recipient name) and `address` (= address_line1) both began with the outlet name.
+- **Fix** (`services/zoho_service.py`):
+  - `_zoho_shipping_address` now **dedupes** the leading outlet name from the address line (strips the `attention` prefix when the address repeats it) on top of the existing per-field 99-char clipping.
+  - New `_post_deliverychallan_resilient()` wraps the challan POST: on a code-15 inline-address rejection it **retries once without the inline `shipping_address`/`billing_address`** (the recipient is already fully captured in the challan `notes`, so nothing is lost on the printed PDF). Applied to BOTH `create_delivery_challan_for_promo_dispatch` and `create_delivery_challan_for_stock_transfer`. New `_is_zoho_address_length_error()` detector.
+- **Tested**: `backend/tests/test_promo_challan_shipping_address.py` — 6/6 PASS (sub-fields <100, dedupe removes repeated outlet name, extreme-length clipping, error detector, resilient retry drops inline address, unrelated errors pass through). Live Zoho push not exercisable in preview (Zoho not connected). **Redeploy to push to production.**
+
+
+
 ### 2026-06-17 — Promotional Stock-Out: Draft workflow + Reverse (P1 feature) ✅ DONE
 - **Request**: (1) Delete a promo stock-out while in draft; (2) Reverse a confirmed promo stock-out → add stock back + cancel/delete the Zoho delivery challan.
 - **Two-step lifecycle added** (`routes/promo_dispatch.py`, `models/distributor.py`): a promo stock-out now has states **draft → confirmed (dispatched) → reversed**.

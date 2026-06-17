@@ -1,0 +1,116 @@
+"""Regression tests for the Zoho promotional Delivery Challan shipping-address fix.
+
+Covers the production bug (Radisson Blu, DC-2606-0013) where Zoho rejected the
+promo delivery-challan push with:
+    {"code":15,"message":"Please ensure that the \"shipping_address\" has less than 100 characters."}
+
+Two guarantees:
+  1. `_zoho_shipping_address` clips every sub-field < 100 chars AND removes the
+     duplicated outlet name (the address line repeating the attention/recipient).
+  2. `create_delivery_challan_for_promo_dispatch` recovers from a spurious Zoho
+     code-15 address rejection by retrying WITHOUT the inline shipping_address
+     (recipient still captured in `notes`), so the sync no longer hard-fails.
+"""
+import asyncio
+import types
+import pytest
+
+import services.zoho_service as zs
+from services.zoho_service import (
+    _zoho_shipping_address,
+    _is_zoho_address_length_error,
+    ZohoApiError,
+)
+
+RADISSON_ATTN = "Radisson Blu Marina Hotel, Delhi Connaught Place"
+RADISSON_ADDR = (
+    "Radisson Blu Marina Hotel, Delhi Connaught Place "
+    "G-59 Connaught Circus, Connaught Place, New Delhi, Delhi 110001"
+)
+
+
+def test_all_subfields_under_100():
+    out = _zoho_shipping_address(
+        attention=RADISSON_ATTN, address=RADISSON_ADDR,
+        city="New Delhi", state="Delhi", zip="110001", phone="+91 11 4690 9090",
+    )
+    for k, v in out.items():
+        assert len(str(v)) < 100, f"{k} is {len(str(v))} chars (>= 100)"
+
+
+def test_dedupes_repeated_outlet_name():
+    out = _zoho_shipping_address(attention=RADISSON_ATTN, address=RADISSON_ADDR)
+    # address should no longer start with the repeated outlet name
+    assert not out["address"].lower().startswith(RADISSON_ATTN.lower())
+    assert "G-59 Connaught Circus" in out["address"]
+
+
+def test_extreme_length_still_clipped():
+    out = _zoho_shipping_address(
+        attention="X" * 250, address="Y" * 400, street2="Z" * 400,
+        city="C" * 250, state="S" * 250, zip="Z" * 50,
+    )
+    for k, v in out.items():
+        assert len(str(v)) < 100, f"{k} overflowed"
+
+
+def test_error_detector():
+    hit = ZohoApiError(400, "x", {
+        "code": 15,
+        "message": 'Please ensure that the "shipping_address" has less than 100 characters.',
+    })
+    assert _is_zoho_address_length_error(hit) is True
+    # billing variant
+    bill = ZohoApiError(400, "x", {
+        "code": 15, "message": 'Please ensure that the "billing_address" has less than 100 characters.',
+    })
+    assert _is_zoho_address_length_error(bill) is True
+    # unrelated 400
+    other = ZohoApiError(400, "x", {"code": 36, "message": "Invalid value for customer_id"})
+    assert _is_zoho_address_length_error(other) is False
+    # non-400
+    not400 = ZohoApiError(404, "not found", {"code": 15, "message": "100 characters address"})
+    assert _is_zoho_address_length_error(not400) is False
+
+
+def test_resilient_post_retries_without_address(monkeypatch):
+    """First POST raises code-15 -> helper retries WITHOUT the inline address."""
+    calls = []
+
+    async def fake_request(method, path, *, tenant_id, json=None, **kw):
+        calls.append(json)
+        if len(calls) == 1:
+            raise ZohoApiError(400, "addr too long", {
+                "code": 15,
+                "message": 'Please ensure that the "shipping_address" has less than 100 characters.',
+            })
+        return {"deliverychallan": {"deliverychallan_id": "Z1", "deliverychallan_number": "DC-00099"}}
+
+    monkeypatch.setattr(zs, "_zoho_request", fake_request)
+
+    payload = {
+        "customer_id": "c1",
+        "shipping_address": {"address": "long stuff", "attention": "Recipient"},
+        "billing_address": {"address": "x"},
+        "notes": "Recipient: Radisson Blu",
+    }
+    res = asyncio.get_event_loop().run_until_complete(
+        zs._post_deliverychallan_resilient("t1", payload, "DC-2606-0013")
+    )
+    assert res["deliverychallan"]["deliverychallan_id"] == "Z1"
+    assert len(calls) == 2
+    # 2nd attempt must have dropped both inline address blocks
+    assert "shipping_address" not in calls[1]
+    assert "billing_address" not in calls[1]
+    assert calls[1]["notes"] == "Recipient: Radisson Blu"
+
+
+def test_resilient_post_passes_through_other_errors(monkeypatch):
+    async def fake_request(method, path, *, tenant_id, json=None, **kw):
+        raise ZohoApiError(400, "bad customer", {"code": 36, "message": "Invalid customer_id"})
+
+    monkeypatch.setattr(zs, "_zoho_request", fake_request)
+    with pytest.raises(ZohoApiError):
+        asyncio.get_event_loop().run_until_complete(
+            zs._post_deliverychallan_resilient("t1", {"shipping_address": {"a": "b"}}, "DC-1")
+        )
