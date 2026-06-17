@@ -736,11 +736,11 @@ export default function PromoDispatchSection({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Recipient *</Label>
-                <div className="inline-flex rounded-md border border-slate-200 p-0.5 bg-slate-50" data-testid="promo-recipient-type-toggle">
+                <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50 gap-1" data-testid="promo-recipient-type-toggle">
                   <button
                     type="button"
                     onClick={() => setRecipientType('contact')}
-                    className={`px-3 py-1 text-xs font-medium rounded transition-colors ${recipientType === 'contact' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                    className={`px-5 py-2.5 text-sm font-semibold rounded-md transition-colors ${recipientType === 'contact' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white'}`}
                     data-testid="promo-recipient-contact-btn"
                   >
                     Contact
@@ -748,7 +748,7 @@ export default function PromoDispatchSection({
                   <button
                     type="button"
                     onClick={() => setRecipientType('lead')}
-                    className={`px-3 py-1 text-xs font-medium rounded transition-colors ${recipientType === 'lead' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                    className={`px-5 py-2.5 text-sm font-semibold rounded-md transition-colors ${recipientType === 'lead' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white'}`}
                     data-testid="promo-recipient-lead-btn"
                   >
                     Lead
@@ -756,7 +756,7 @@ export default function PromoDispatchSection({
                   <button
                     type="button"
                     onClick={() => setRecipientType('employee')}
-                    className={`px-3 py-1 text-xs font-medium rounded transition-colors ${recipientType === 'employee' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                    className={`px-5 py-2.5 text-sm font-semibold rounded-md transition-colors ${recipientType === 'employee' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-white'}`}
                     data-testid="promo-recipient-employee-btn"
                   >
                     Employee
