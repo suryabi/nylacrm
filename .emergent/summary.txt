@@ -1,41 +1,31 @@
-<analysis>### Handover Summary
+<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, and implementing an  system within comments for team collaboration. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, and reliable external accounting sync.
 
-**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, and implementing an  system within comments for team collaboration. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, and reliable external accounting sync.
-
-**User's preferred language**: English
-(INSTRUCT next agent to respond in English only)
+**User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target Planning, QC, Production, Distribution, Marketing Requests, and Returns. It features Zoho Books integration, multi-layered notification settings, a slide-over notification panel, widespread  functionality in comment threads, and a promotional stock-out workflow with Draft and Reverse capabilities.
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target Planning, QC, Production, Distribution, Marketing Requests, and Returns. Recently, the Promotional Stock-Out flow was deeply refactored to share the exact same  pipeline as regular stock-outs (sharing reserve-on-confirm, deduct-on-complete lifecycles, and delivery schedule assignability). The Zoho Books integration has been heavily patched to safely circumvent 100-character limits and correctly map warehouse & deliver-to addresses. 
 
 **Last working item**: 
-    - Last item agent was working: Fixing the Zoho Books  > 100 characters error. The agent initially fixed this for contact creation and promo-dispatches, but the user reported the issue still persists on production for regular deliveries (showing duplicated outlet names + phone numbers resulting in 185 characters). The agent correctly identified that the regular delivery path ( in  around line 2290) builds this concatenated address blob and needs the  treatment.
-    - Status: IN PROGRESS
-    - Agent Testing Done: N
-    - Which testing method agent to use? backend testing agent or curl (to verify the address generation correctly clips to under 100 characters by shifting overflow to  before the Zoho PUT/POST call).
+    - Last item agent was working: Redesigning the Record Account Delivery screen and the Delivery Details modal. The user complained about accidentally clicking Complete Delivery and Cancel Delivery due to poor placement, and the modal requiring too much scrolling. Action buttons were moved to a top-right Actions Dropdown Menu, leaving only a Close button in the footer.
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y
+    - Which testing method agent to use? screenshot tool
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
-  Issue 1: Zoho Delivery Challan  exceeds 100 chars for regular deliveries (P0)
-     - Attempted fixes: Agent added  to  and promo dispatches, but missed the main distributor delivery sync path.
-     - Next debug checklist: Go to  and inspect  (line 2290+). Locate where the / is built (often concatenating Outlet Name + Address + Phone). Apply the  clipping logic to ensure no single field exceeds 99 characters before sending the payload to Zoho.
-     - Why fix this issue and what will be achieved with the fix? Zoho API rejects the payload with Code 15, blocking delivery challan syncs entirely.
-     - Status: IN PROGRESS
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? backend
-     - Blocked on other issue: None
-
-  Issue 2: Gemini API Key returns 403 PERMISSION DENIED (P2)
+  Issue 1: Gemini API Key returns 403 PERMISSION DENIED (P2)
      - Attempted fixes: Key provided by user resulted in GCP denial.
      - Next debug checklist: Await user providing a valid key from a brand new Google Cloud project.
+     - Why fix this issue and what will be achieved with the fix? Required for KB/Embeddings.
      - Status: BLOCKED
      - Is recurring issue? Y
      - Should Test frontend/backend/both after fix? backend
      - Blocked on other issue: User action required
 
-  Issue 3: Slack Integration failing for Marketing Requests (P2)
+  Issue 2: Slack Integration failing for Marketing Requests (P2)
      - Attempted fixes: Verified bot configuration; works in preview.
      - Next debug checklist: User needs to confirm production environment configurations.
+     - Why fix this issue and what will be achieved with the fix? Ensures notifications flow correctly.
      - Status: USER VERIFICATION PENDING
      - Is recurring issue? Y
      - Should Test frontend/backend/both after fix? backend
@@ -61,15 +51,14 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
     - P2: Website Wrapper around CRM.
 
 **Completed work in this session**
--  fully integrated in Design Requests, Leads, Accounts, Tasks, and Meeting Minutes (DONE)
-- Mention UI fixed to display a clean  pill while typing instead of raw  (DONE)
-- Notifications inbox replaced with a contemporary right-side slide-over panel with color-coded categories, filters, and a close 'X' (DONE)
-- Notification backend extended with pagination, categories filter, and a DELETE endpoint for clearing alerts (DONE)
-- Zoho warehouse sync 502 Cloudflare error fixed by wrapping the sync in a 25s timeout and reducing Zoho retries (DONE)
-- Ghost/Stale Pending Approvals fixed on the dashboard by adding a contract handler to the self-heal logic (DONE)
--  bug on Leads fixed by moving mention parsing logic to the correct  endpoint in  (DONE)
-- Lead Kanban enhanced with Last contacted color-coded pill and an expandable Latest Activity section (DONE)
-- Promotional Stock-out workflow upgraded with Draft mode (prevents stock deduction/Zoho push until confirmed) and Reverse logic (restores stock, deletes Zoho challan) (DONE)
+- Zoho Delivery Challan  > 100 characters code-15 error fixed via a 2-step  then  method (DONE)
+- Zoho cleanup 401 code 57 fixed by adding  and  plus  to OAuth scopes (DONE)
+- Deliver-to address and Warehouse branch address printing correctly on Zoho PDFs (DONE)
+- UI: Promo recipient toggle buttons enlarged (DONE)
+- Reverse action implemented for regular deliveries (stock-outs) via  in Zoho and releasing reserved stock (DONE)
+- Driver Bundle PDF now includes the account's Delivery contact details (DONE)
+- Promotional Stock-Out completely migrated to use the regular  pipeline (), ensuring reserve-on-confirm, deduct-on-complete, and schedule assignability (DONE)
+- UI: Delivery Details modal redesigned to prevent accidental status clicks by using an Actions Dropdown Menu (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: Bloated  collection
@@ -86,95 +75,81 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
 
 **Code Architecture**
 - : Main monolith (Needs refactoring due to size > 11k lines).
-- : Domain routers (, , , ).
+- : Domain routers (, , ).
 - : Zoho Books integration service.
-- : Reusable UI (, , ).
+- : Reusable UI.
 - : Main views ().
 
 **Key Technical Concepts**
-- **Notifications & Mentions**: Centralized in  (contentEditable) and backend  mapping to .
-- **Zoho Books Integration**: Uses  to translate and push payloads. Strict 100-character limit on string fields.
-- **Promotional Dispatch**:  model. Deducts stock and generates challans. Now supports  state.
+- **Promotional Dispatches Unification**: Promo stock-outs no longer write new records to the  collection. They are now natively treated as  with a flag . This unifies stock reservation and schedule assignment.
+- **Zoho Books Integration**: Strict 100-character limit on inline string fields. The codebase uses a resilient two-step POST (create document without shipping) then PUT (update shipping address) pattern to circumvent character limit crashes. 
 
 **key DB schema**
-  - : {id, tenant_id, items, status (draft/dispatched/reversed), is_draft, challan_number}
-  - : {id, tenant_id, user_id, category, is_read}
+  - : {id, tenant_id, items, status, is_promo}
+  - : {id, account_id (uses business code, not UUID), category (Delivery)}
 
 **changes in tech stack**
-  - No new libraries added.  div used over standard textareas for mentions.
+  - None
 
 **All files of reference** 
-  -  (Actively being edited for P0 issue)
-  -  (Refactored for draft/reverse flow)
-  -  (Refactored to contentEditable)
-  -  (Created)
-  -  (Updated with UI pills)
-  -  (Contains main  endpoint and )
+  -  (Massive refactor for challan addresses, 2-step sync, invoice voiding, and scopes)
+  -  (Refactored to map to )
+  -  (Added reverse endpoints)
+  -  (Added delivery contact parsing for PDF)
+  -  (Redesigned delivery details modal)
+  - 
+  - 
+  -  (Updated)
 
 **Areas that need refactoring**: 
-  -  is extremely bloated (>11k lines). Logic should be broken out into .
+  -  is extremely bloated (>11k lines).
   - Base64 storage approach for Documents should be refactored to Object Storage (MinIO).
 
 **key api endpoints**
-  -  (Global comment handler in )
-  -  & 
+  - 
   - 
 
 **Critical Info for New Agent** 
   - **Preview vs Production:** You only have access to the PREVIEW environment. The user frequently shares bugs from the PRODUCTION environment. You must fix the code in preview and kindly instruct the user to **redeploy** to see the changes.
-  - **Zoho Issue:** Look directly into  around line 2290 (). The user's screenshot showed  concatenated multiple times with the phone number, resulting in 185 chars.
+  - **Zoho Scopes Changed**: The agent updated the requested OAuth scopes in  to include , , and . *Crucially, these scopes only take effect when the user re-authorizes Zoho.* If Zoho APIs throw 401 code 57 errors, remind the user to re-connect Zoho from their Settings page.
+  - **Promo Refactor**: Legacy  DB rows are treated as view-only historical data. Any new promo dispatch acts as a  record.
 
 **documents and test reports created in this job** 
-  -  (Updated)
+  - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- 1. User reported Zoho sync failure (502 Cloudflare error) on distributor warehouse.
- 2. Agent fixed the timeout behavior, returning a clean 504.
- 3. User complained about ghost Pending Approvals on the dashboard for closed tasks.
- 4. Agent fixed the self-heal logic to account for contracts and xdg-open - opens a file or URL in the user's preferred application
-
-Synopsis
-
-xdg-open { file | URL }
-
-xdg-open { --help | --manual | --version }
-
-Use 'man xdg-open' or 'xdg-open --manual' for additional info. status.
- 5. User asked for Lead Kanban improvements (Contacted pill + expandable activity section).
- 6. Agent implemented and tested UI changes.
- 7. User reported  not triggering in Leads/Accounts.
- 8. Agent found the UI actually uses  (in ) and wired mentions there.
- 9. User requested Draft mode and Reverse logic for Promotional Stock Out.
- 10. Agent built draft/confirm/reverse lifecycle.
- 11. User reported Zoho shipping address error (limit 100 characters).
- 12. Agent added a clipping helper to promo dispatch and contacts.
- 13. **(Pending Human Message)** User reported the fix didn't work and provided an example of a regular distributor delivery () concatenating the name twice + address + phone into 185 characters. Agent started investigating  but the session ended.
+ 1. User reported Zoho Deliver To addresses were showing the warehouse address instead of the recipient.
+ 2. Agent pinpointed issue to Zoho templates and updated the PDF mapping logic. User confirmed changes.
+ 3. User noted UI buttons for promo recipient toggle were too small.
+ 4. Agent enlarged the UI buttons.
+ 5. User requested a reverse action for regular deliveries, similar to the existing promo dispatch reverse.
+ 6. Agent implemented reverse flow () for regular invoiced-but-not-delivered records.
+ 7. User asked to include the delivery contact in the schedule bundle PDF.
+ 8. Agent wired account contacts () into the generated PDF.
+ 9. User asked for promo stock outs to completely share the regular delivery workflow (draft, confirm, delivery assigned, complete, and shared stock reservation pool). 
+ 10. Agent implemented the unification (Option A) and tested it.
+ 11. User asked to redesign the record account delivery modal (bigger scroll area) and move Complete Delivery / Cancel Delivery buttons to a dropdown to avoid accidental clicks. Agent implemented this as the final action.
 
 **Project Health Check:**
-Broken: Regular delivery sync to Zoho (Address > 100 chars).
+Broken: None.
 Mocked: None.
 
 **3rd Party Integrations** 
- - Zoho Books (Requires User API Key - actively troubleshooting)
+ - Zoho Books (Requires User API Key — **Scopes were recently updated**)
  - Google Maps API (Requires User API Key)
  - Slack API (Bot token webhook)
  - Emergent Object Storage
  - Gmail API (Internal GCP App OAuth)
 
 **Testing status**
-  - Testing agent used after significant changes: NO (Self-tested via curl and screenshot_tool).
+  - Testing agent used after significant changes: NO (Self-tested via curl and screenshot_tool heavily).
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: None
+  - Test files created: 
   - Known regressions: None
 
 **Credentials to test flow:**
 Refer to 
 
 **What agent forgot to execute**
-- The agent was in the middle of fixing the Zoho address length issue for the  method when the context limit was reached.
-
-**Debugging checklist for current issue**
-    Issue: Zoho Delivery Challan  exceeds 100 chars (Regular Deliveries)
-    Backend files to check: 
-      - : Look at  (around line 2290+). Locate where the delivery/shipping address payload is constructed.
-      - Apply the  or  logic to ensure the concatenated string (Outlet + Address + Phone) doesn't exceed 99 characters on a single line, spilling over into  as needed.</analysis>
+Everything from the user's latest prompts was executed and thoroughly tested. The last action requires user validation.</analysis>

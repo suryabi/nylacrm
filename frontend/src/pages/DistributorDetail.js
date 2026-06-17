@@ -15,12 +15,13 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Checkbox } from '../components/ui/checkbox';
 import { Switch } from '../components/ui/switch';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '../components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2, MoreVertical
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -1930,6 +1931,9 @@ export default function DistributorDetail() {
 
 
   const handleCompleteDelivery = async (deliveryId) => {
+    if (!window.confirm(
+      'Mark this delivery as complete? Stock will be deducted from inventory. This action finalises the delivery.'
+    )) return;
     try {
       await axios.post(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/complete`, {}, {
         headers: { Authorization: `Bearer ${token}` },
@@ -3232,10 +3236,69 @@ export default function DistributorDetail() {
       <Dialog open={showDeliveryDetail} onOpenChange={setShowDeliveryDetail}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              Delivery {selectedDelivery?.delivery_number}
-              {selectedDelivery && getDeliveryStatusBadge(selectedDelivery.status)}
-            </DialogTitle>
+            <div className="flex items-start justify-between gap-3 pr-6">
+              <DialogTitle className="flex items-center gap-3">
+                Delivery {selectedDelivery?.delivery_number}
+                {selectedDelivery && getDeliveryStatusBadge(selectedDelivery.status)}
+              </DialogTitle>
+              {/* Deliberate "Actions" menu — keeps state-changing actions out of
+                  the dialog body/footer so they can't be clicked accidentally. */}
+              {selectedDelivery && canManage && (() => {
+                const st = selectedDelivery.status;
+                const canConfirm = st === 'draft';
+                const canComplete = st === 'confirmed' || st === 'in_transit';
+                const canCancel = st === 'draft' || st === 'confirmed';
+                const canReverse = selectedDelivery.zoho_invoice_id &&
+                  !['draft', 'complete', 'completed', 'delivered', 'cancelled', 'reversed'].includes(st);
+                const canRetryVoid = st === 'reversed' && selectedDelivery.zoho_void_pending;
+                if (!(canConfirm || canComplete || canCancel || canReverse || canRetryVoid)) return null;
+                return (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="shrink-0" data-testid="delivery-actions-menu-btn">
+                        <MoreVertical className="h-4 w-4 mr-1.5" /> Actions
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>Manage delivery</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {canConfirm && (
+                        <DropdownMenuItem onClick={() => handleConfirmDelivery(selectedDelivery.id)} data-testid="confirm-delivery-action">
+                          <Check className="h-4 w-4 mr-2 text-emerald-600" /> Confirm delivery
+                        </DropdownMenuItem>
+                      )}
+                      {canComplete && (
+                        <DropdownMenuItem onClick={() => handleCompleteDelivery(selectedDelivery.id)} data-testid="complete-delivery-action">
+                          <Check className="h-4 w-4 mr-2 text-green-600" /> Complete delivery
+                        </DropdownMenuItem>
+                      )}
+                      {canReverse && (
+                        <DropdownMenuItem onClick={() => handleReverseDelivery(selectedDelivery.id)} data-testid="reverse-delivery-action">
+                          <RotateCcw className="h-4 w-4 mr-2 text-rose-600" /> Reverse (void invoice)
+                        </DropdownMenuItem>
+                      )}
+                      {canRetryVoid && (
+                        <DropdownMenuItem onClick={() => handleRetryDeliveryVoid(selectedDelivery.id)} data-testid="retry-delivery-void-action">
+                          <RefreshCw className="h-4 w-4 mr-2 text-amber-600" /> Retry Zoho void
+                        </DropdownMenuItem>
+                      )}
+                      {canCancel && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleCancelDelivery(selectedDelivery.id)}
+                            className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                            data-testid="cancel-delivery-action"
+                          >
+                            <X className="h-4 w-4 mr-2" /> Cancel delivery
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              })()}
+            </div>
           </DialogHeader>
           {selectedDelivery && (
             <div className="space-y-4">
@@ -3728,79 +3791,14 @@ export default function DistributorDetail() {
                     )
                   )}
                 </div>
-                
-                {/* Status Actions */}
-                <div className="flex gap-2">
-                  {canManage && selectedDelivery.status === 'draft' && (
-                    <>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleCancelDelivery(selectedDelivery.id)}
-                        className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
-                        data-testid="cancel-delivery-btn"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Cancel Delivery
-                      </Button>
-                      <Button onClick={() => handleConfirmDelivery(selectedDelivery.id)}>
-                        <Check className="h-4 w-4 mr-2" />
-                        Confirm
-                      </Button>
-                    </>
-                  )}
-                  {canManage && selectedDelivery.status === 'confirmed' && (
-                    <>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleCancelDelivery(selectedDelivery.id)}
-                        className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
-                        data-testid="cancel-delivery-btn"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Cancel Delivery
-                      </Button>
-                      <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
-                        <Check className="h-4 w-4 mr-2" />
-                        Complete Delivery
-                      </Button>
-                    </>
-                  )}
-                  {canManage && selectedDelivery.status === 'in_transit' && (
-                    <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
-                      <Check className="h-4 w-4 mr-2" />
-                      Complete Delivery
-                    </Button>
-                  )}
-                  {/* Reverse: only for an invoiced delivery that hasn't been delivered yet
-                      (scheduled / assigned / on-the-way / confirmed / in-transit). Voids the
-                      Zoho invoice and releases the committed stock back to inventory. */}
-                  {canManage && selectedDelivery.zoho_invoice_id &&
-                    !['draft', 'complete', 'completed', 'delivered', 'cancelled', 'reversed'].includes(selectedDelivery.status) && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleReverseDelivery(selectedDelivery.id)}
-                      className="text-rose-600 border-rose-300 hover:bg-rose-50 hover:text-rose-700"
-                      data-testid="reverse-delivery-btn"
-                    >
-                      <RotateCcw className="h-4 w-4 mr-2" />
-                      Reverse (Void Invoice)
-                    </Button>
-                  )}
-                  {canManage && selectedDelivery.status === 'reversed' && selectedDelivery.zoho_void_pending && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleRetryDeliveryVoid(selectedDelivery.id)}
-                      className="text-amber-700 border-amber-300 hover:bg-amber-50"
-                      data-testid="retry-delivery-void-btn"
-                    >
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Retry Zoho Void
-                    </Button>
-                  )}
-                </div>
               </div>
             </div>
           )}
+          <DialogFooter className="border-t pt-4 mt-2">
+            <Button variant="outline" onClick={() => setShowDeliveryDetail(false)} data-testid="close-delivery-detail-btn">
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

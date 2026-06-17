@@ -679,7 +679,7 @@ export default function DeliveriesTab({
                     Record Delivery
                   </Button>
                 </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <DialogContent className="max-w-5xl w-[95vw] h-[92vh] max-h-[92vh] flex flex-col overflow-hidden">
               <DialogHeader className="shrink-0">
                 <DialogTitle>Record Account Delivery</DialogTitle>
                 <DialogDescription>
@@ -738,7 +738,7 @@ export default function DeliveriesTab({
                         data-testid="delivery-account-search"
                         className="w-full"
                       />
-                      <div className="border rounded-md max-h-[200px] overflow-y-auto">
+                      <div className="border rounded-md max-h-[320px] overflow-y-auto">
                         {assignedAccounts.length === 0 ? (
                           <div className="p-4 text-sm text-muted-foreground text-center">
                             <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -1303,7 +1303,7 @@ export default function DeliveriesTab({
                         <p className="text-xs text-muted-foreground">
                           Select credit notes to offset the customer billing amount
                         </p>
-                        <div className="border rounded-md divide-y max-h-48 overflow-y-auto">
+                        <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
                           {availableCreditNotes.map(cn => {
                             const isSelected = selectedCreditNotes[cn.id] !== undefined;
                             const selectedAmount = selectedCreditNotes[cn.id] || 0;
