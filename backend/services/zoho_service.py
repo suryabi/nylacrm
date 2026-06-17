@@ -68,6 +68,10 @@ def get_zoho_config() -> dict:
             "ZohoBooks.deliverychallans.DELETE",
             "ZohoBooks.items.READ",
             "ZohoBooks.settings.READ",
+            # settings.UPDATE lets us push a warehouse's full address into its
+            # mapped Zoho Branch so the printed challan/invoice header (the
+            # "From" address) shows the dispatching warehouse, not just the state.
+            "ZohoBooks.settings.UPDATE",
         ],
     }
 
@@ -2202,36 +2206,53 @@ async def create_delivery_challan_for_promo_dispatch(
     src_branch_id = (dispatch.get("source_zoho_branch_id") or "").strip()
     if src_branch_id:
         payload["branch_id"] = src_branch_id
+        # Best-effort: push the source warehouse's full street address into its
+        # mapped Zoho Branch so the printed challan header ("From") shows the
+        # dispatching warehouse address — not just the branch's state. Requires
+        # the ZohoBooks.settings.UPDATE scope (granted on reconnect).
+        try:
+            src_wh = await db.distributor_locations.find_one(
+                {"id": dispatch.get("distributor_location_id"), "tenant_id": tenant_id}, {"_id": 0}
+            )
+            if src_wh:
+                await sync_warehouse_to_zoho_branch(tenant_id=tenant_id, location=src_wh)
+        except Exception as e:
+            logger.warning(
+                f"Could not sync warehouse address to Zoho branch for challan "
+                f"{dispatch.get('challan_number')}: {e}"
+            )
 
     # DELIVER-TO (recipient) address — the lead / contact / employee the promo
-    # stock-out is gifted to. We DON'T send it inline on the create payload:
-    # Zoho rejects an inline `shipping_address` on delivery-challan create with
-    # the spurious code-15 "less than 100 characters" error AND, when omitted,
-    # falls back to the customer's (distributor warehouse) address — which is
-    # exactly the wrong Deliver-To the user reported. Instead we build the
-    # recipient address here and apply it AFTER create via the dedicated
-    # `/address/shipping` endpoint (see `_set_deliverychallan_shipping_address`).
+    # stock-out is gifted to. Two important Zoho quirks drive this design:
+    #   1. Zoho rejects an inline `shipping_address` on delivery-challan *create*
+    #      (spurious code-15), so we set it AFTER create via the dedicated
+    #      `/address/shipping` endpoint (see `_set_deliverychallan_shipping_address`).
+    #   2. Zoho's challan template prints the CUSTOMER (distributor) name as the
+    #      Deliver-To heading and IGNORES the shipping `attention` field — so the
+    #      recipient name would never show. We therefore put the recipient name
+    #      as the first visible ADDRESS line and push the street into `street2`.
     rsa = dispatch.get("recipient_shipping_address") or {}
-    has_structured = any((rsa.get(k) or "").strip() for k in ("address", "city", "state", "zip"))
+    recipient_nm = (rsa.get("attention") or dispatch.get("contact_name") or "").strip()
+    street_block = ", ".join([p for p in [
+        (rsa.get("address") or "").strip(),
+        (rsa.get("street2") or "").strip(),
+    ] if p]).strip()
+    if not street_block and dispatch.get("delivery_address"):
+        street_block = str(dispatch["delivery_address"]).strip()
+    has_addr = bool(recipient_nm or street_block or (rsa.get("city") or "").strip())
     shipping_addr = None
-    if has_structured:
-        shipping_addr = _zoho_shipping_address(
-            attention=rsa.get("attention") or dispatch.get("contact_name") or "",
-            address=rsa.get("address") or "",
-            street2=rsa.get("street2") or "",
-            city=rsa.get("city") or "",
-            state=rsa.get("state") or "",
-            zip=rsa.get("zip") or "",
-            country=rsa.get("country") or "India",
-            phone=rsa.get("phone") or "",
-        )
-    elif dispatch.get("delivery_address"):
-        # Legacy fallback for older dispatches that don't carry the structured
-        # address yet — free-text address, deduped + clipped.
-        shipping_addr = _zoho_shipping_address(
-            attention=dispatch.get("contact_name") or "",
-            address=dispatch["delivery_address"],
-        )
+    if has_addr:
+        shipping_addr = {
+            # attention omitted on purpose — Zoho's template doesn't render it
+            # for challans, and we already surface the name as address line 1.
+            "address": _zoho_clip(recipient_nm) or _zoho_clip(street_block),
+            "street2": _zoho_clip(street_block) if recipient_nm else "",
+            "city": _zoho_clip(rsa.get("city") or ""),
+            "state": _zoho_clip(rsa.get("state") or ""),
+            "zip": _zoho_clip(rsa.get("zip") or ""),
+            "country": rsa.get("country") or "India",
+            "phone": _zoho_clip(rsa.get("phone") or "", 50),
+        }
 
     result = await _post_deliverychallan_resilient(tenant_id, payload, dispatch.get("challan_number"))
     challan = result.get("deliverychallan") or result.get("delivery_challan") or {}

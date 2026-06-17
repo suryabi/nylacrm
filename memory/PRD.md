@@ -36,6 +36,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - **⚠️ Requires admin to RECONNECT Zoho**: scope changes only apply on a fresh authorization — the existing refresh token keeps the old scopes. After redeploy: Settings → Integrations → Zoho Books → Disconnect, then Connect again, then retry Cleanup.
 - **Tested**: scope config asserted (delete scope present); backend healthy. Live delete not exercisable in preview (Zoho not connected). **Redeploy + reconnect Zoho to push to production.**
 
+### 2026-06-17 — 🐛 Fix: promo challan Deliver-To name + missing "From" warehouse address ✅ DONE
+- **Reported (PRODUCTION, after reconnect)**: (1) The challan Deliver-To address now updates to the recipient, but the **heading/first line still shows the distributor (e.g. "Delhi (Godamwale)")** instead of the recipient (lead). (2) The **top "From" block has no street address** — only the branch state + GSTIN.
+- **Root causes**: (1) Zoho's delivery-challan template prints the **customer (distributor) name** as the Deliver-To heading and **ignores the shipping `attention` field**, so the recipient name never appeared. (2) The mapped Zoho **Branch** ("Delhi Branch") had only state + GSTIN, no street — and updating a branch needs the `ZohoBooks.settings.UPDATE` scope we didn't request.
+- **Fix** (`services/zoho_service.py`, `create_delivery_challan_for_promo_dispatch`): (1) the recipient name is now placed as the **first visible address line** (street pushed to `street2`), so the Deliver-To clearly identifies the recipient regardless of the template. (2) Added `ZohoBooks.settings.UPDATE` scope and a best-effort auto-push of the source warehouse's full street address into its Zoho Branch on challan create (via existing `sync_warehouse_to_zoho_branch`), so the header "From" shows the dispatching warehouse address.
+- **⚠️ Requires REDEPLOY + RECONNECT Zoho** (the new `settings.UPDATE` scope only applies on a fresh authorization), then create a NEW promo challan.
+- **Tested**: scopes asserted (`settings.UPDATE` + all deliverychallans present); 8/8 unit tests pass; backend healthy. Live render not exercisable in preview.
+
 
 
 ### 2026-06-17 — Promotional Stock-Out: Draft workflow + Reverse (P1 feature) ✅ DONE
