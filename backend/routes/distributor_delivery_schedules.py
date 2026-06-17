@@ -389,11 +389,35 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
         if account_ids:
             async for a in db.accounts.find(
                 {"id": {"$in": account_ids}, "tenant_id": tenant_id},
-                {"_id": 0, "id": 1, "account_name": 1, "billing_address": 1, "delivery_address": 1,
+                {"_id": 0, "id": 1, "account_id": 1, "account_name": 1, "billing_address": 1, "delivery_address": 1,
                  "contact_number": 1, "delivery_contact_phone": 1, "delivery_contact_name": 1,
                  "billed_by": 1}
             ):
                 accounts_by_id[a["id"]] = a
+
+        # Delivery contact = a contact tagged with category "Delivery" under the
+        # account (entity_contacts → shared `contacts` collection). Account
+        # contacts are keyed by whichever id the UI passed when created — usually
+        # the business `account_id` code (e.g. TOOP-HYD-A26-001), sometimes the
+        # UUID — so we match against BOTH. First (oldest) matching contact wins.
+        contact_account_keys: set = set(account_ids)
+        for a in accounts_by_id.values():
+            if a.get("id"):
+                contact_account_keys.add(a["id"])
+            if a.get("account_id"):
+                contact_account_keys.add(a["account_id"])
+        delivery_contact_by_key: dict = {}
+        if contact_account_keys:
+            async for c in db.contacts.find(
+                {"tenant_id": tenant_id, "account_id": {"$in": list(contact_account_keys)}},
+                {"_id": 0, "account_id": 1, "name": 1, "first_name": 1, "last_name": 1,
+                 "phone": 1, "email": 1, "designation": 1, "category": 1, "created_at": 1}
+            ).sort("created_at", 1):
+                if (c.get("category") or "").strip().lower() != "delivery":
+                    continue
+                key = c.get("account_id")
+                if key and key not in delivery_contact_by_key:
+                    delivery_contact_by_key[key] = c
 
         def _addr_from(src):
             if not isinstance(src, dict):
@@ -430,15 +454,27 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
             if not addr:
                 addr = _addr_from(acct.get("delivery_address")) or _addr_from(acct.get("billing_address"))
             # Delivery contact — the on-ground person the driver should call.
-            # Prefer the delivery row's override, fall back to the account.
+            # Precedence: the account's "Delivery"-category contact (the explicit
+            # delivery contact) → the delivery row's override → the account's
+            # delivery_contact_* fields.
+            dc_contact = (
+                delivery_contact_by_key.get(r.get("account_id"))
+                or delivery_contact_by_key.get(acct.get("id"))
+                or delivery_contact_by_key.get(acct.get("account_id"))
+                or {}
+            )
             delivery_contact_name = (
-                r.get("delivery_contact_name")
+                dc_contact.get("name")
+                or r.get("delivery_contact_name")
                 or acct.get("delivery_contact_name")
             )
             delivery_contact_phone = (
-                r.get("delivery_contact_phone")
+                dc_contact.get("phone")
+                or r.get("delivery_contact_phone")
                 or acct.get("delivery_contact_phone")
             )
+            delivery_contact_designation = dc_contact.get("designation") or None
+            delivery_contact_email = dc_contact.get("email") or None
             # Legacy "contact_phone" — broadest fallback. Kept for backward
             # compatibility with any UI that still reads it.
             phone = (
@@ -489,6 +525,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 "contact_phone": phone,
                 "delivery_contact_name": delivery_contact_name,
                 "delivery_contact_phone": delivery_contact_phone,
+                "delivery_contact_designation": delivery_contact_designation,
+                "delivery_contact_email": delivery_contact_email,
                 "items": items,
                 "total_quantity": total_packages,
                 "total_units": total_units,
@@ -1519,18 +1557,26 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
             )
         items_str = "<br/>".join(items_lines) or "—"
 
-        # Delivery contact block: prefer dedicated delivery_contact_* (the
-        # on-ground person), fall back to the legacy `contact_phone`.
+        # Delivery contact block: the account's "Delivery"-category contact
+        # (resolved in _enrich_schedule), falling back to the account's
+        # delivery_contact_* fields / legacy `contact_phone`.
+        import html as _html
         dc_name = delv.get("delivery_contact_name")
         dc_phone = delv.get("delivery_contact_phone") or delv.get("contact_phone")
-        contact_lines = [f"<b>{delv.get('customer_name') or '—'}</b>"]
+        dc_desig = delv.get("delivery_contact_designation")
+        contact_lines = [f"<b>{_html.escape(str(delv.get('customer_name') or '—'))}</b>"]
         if dc_name or dc_phone:
+            name_part = _html.escape(str(dc_name)) if dc_name else ""
+            if dc_name and dc_desig:
+                name_part += f" <font color='grey' size='8'>({_html.escape(str(dc_desig))})</font>"
             contact_bits = []
-            if dc_name:
-                contact_bits.append(f"<font color='#1f2937'>{dc_name}</font>")
+            if name_part:
+                contact_bits.append(f"<font color='#1f2937'>{name_part}</font>")
             if dc_phone:
-                contact_bits.append(f"<font color='#1f2937'>{dc_phone}</font>")
-            contact_lines.append(" · ".join(contact_bits))
+                contact_bits.append(f"<font color='#1f2937'>{_html.escape(str(dc_phone))}</font>")
+            contact_lines.append(
+                "<font color='grey' size='8'>Delivery contact: </font>" + " · ".join(contact_bits)
+            )
         if delv.get("delivery_number"):
             contact_lines.append(
                 f"<font color='grey' size='8'>{delv.get('delivery_number')}</font>"

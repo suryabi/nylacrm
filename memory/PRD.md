@@ -53,6 +53,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - **Frontend** (`pages/DistributorDetail.js`): "Reverse (Void Invoice)" button in the delivery detail modal (shown for invoiced, not-yet-delivered deliveries), a "Retry Zoho Void" button when a void is pending, and a rose "Reversed" status badge.
 - **Tested**: curl e2e on preview — guards verified (delivered→400, no-invoice→400, not-found→404) and happy path on DEL-2026-0007 (confirmed+invoiced) → status `reversed`, `reversed_by` stamped, stock released; Zoho void correctly deferred (`void_pending`, "Zoho not connected" in preview — will void on production). 12/12 unit tests pass; frontend compiles. **Note**: actual Zoho voiding only verifiable on production (Zoho connected there).
 
+### 2026-06-17 — ✨ Feature: Driver bundle PDF includes the account's Delivery contact ✅ DONE
+- **Request**: When downloading the delivery-schedule driver bundle PDF, include each account's **delivery contact** — i.e. the account contact tagged with **category = "Delivery"**.
+- **Implementation** (`routes/distributor_delivery_schedules.py`):
+  - `_enrich_schedule` now resolves, per stop, the account's "Delivery"-category contact from the shared `contacts` collection. Account contacts are keyed by whichever id the UI passed (usually the business `account_id` code, sometimes the UUID), so it matches against BOTH the delivery's account UUID and the account's business code. Oldest matching contact wins. It's preferred for `delivery_contact_name`/`delivery_contact_phone` (falling back to the delivery row override → account `delivery_contact_*` fields), and now also exposes `delivery_contact_designation`/`delivery_contact_email`.
+  - `_build_schedule_pdf` renders a labelled "Delivery contact: Name (Designation) · Phone" line under each customer in the stops table (all values HTML-escaped).
+- **Tested**: seeded a "Delivery" contact on account TOOP-HYD-A26-001, ran the real schedule e2ec4623 through `_enrich_schedule` + `_build_schedule_pdf` → contact name, phone and designation all present in the extracted PDF text; test contact cleaned up. Backend healthy.
+
 
 
 ### 2026-06-17 — Promotional Stock-Out: Draft workflow + Reverse (P1 feature) ✅ DONE
