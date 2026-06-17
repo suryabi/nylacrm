@@ -652,7 +652,7 @@ async def complete_approval_task(
             'is_approval_task': True,
             'approval_type': approval_type,
             'approval_reference_id': reference_id,
-            'status': {'$in': ['pending', 'in_progress']}
+            'status': {'$in': ['pending', 'open', 'in_progress']}
         },
         {
             '$set': {
@@ -9720,6 +9720,20 @@ async def get_my_pending_approvals(current_user: dict = Depends(get_current_user
             prop = await tdb.lead_proposals.find_one({'lead_id': ref_id}, {'_id': 0, 'status': 1})
             if not prop or prop.get('status') not in ('pending_review', 'revised'):
                 decided = True
+            else:
+                lead = await tdb.leads.find_one({'id': ref_id}, {'_id': 0, 'company': 1, 'contact_person': 1})
+                entity_name = (lead or {}).get('company') or (lead or {}).get('contact_person')
+        elif ref_type == 'contract':
+            # Contracts live in account_contracts, one per account, keyed by account_id
+            contract = await tdb.account_contracts.find_one({'account_id': ref_id}, {'_id': 0, 'status': 1})
+            if not contract or contract.get('status') not in ('pending_review', 'revised'):
+                decided = True
+            else:
+                acct = await tdb.accounts.find_one(
+                    {'$or': [{'account_id': ref_id}, {'id': ref_id}]},
+                    {'_id': 0, 'company_name': 1, 'name': 1},
+                )
+                entity_name = (acct or {}).get('company_name') or (acct or {}).get('name')
         else:
             coll = coll_for_ref.get(ref_type)
             if coll and ref_id:
