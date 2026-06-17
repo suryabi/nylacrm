@@ -142,6 +142,11 @@ export default function BatchPickerCards({
                     );
                   })()}
                 </div>
+                {Number(b.reserved || 0) > 0 && (
+                  <div className="mt-0.5 text-[10px] text-amber-600" title="On-hand stock already committed to other open stock-out / promo orders is excluded from available.">
+                    {Number(b.on_hand || 0).toLocaleString()} on-hand · {Number(b.reserved).toLocaleString()} reserved
+                  </div>
+                )}
               </button>
             );
           })}

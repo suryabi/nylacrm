@@ -118,6 +118,43 @@ async def _load_location(tenant_id: str, location_id: str) -> dict:
     return doc
 
 
+# Statuses where a delivery still RESERVES stock (mirrors
+# routes.distributors.RESERVED_DELIVERY_STATUSES). Once a delivery leaves this
+# set (completed / cancelled / reversed) its reservation is released.
+_RESERVED_DELIVERY_STATUSES = [
+    "draft", "pending", "confirmed",
+    "scheduled", "delivery_scheduled", "delivery_assigned",
+    "on_the_way", "in_transit",
+]
+
+
+async def _reserved_qty_by_batch(tenant_id: str, location_id: str, sku_id: str) -> dict:
+    """Reserved (committed) quantity per `batch_id` for a SKU at a source
+    location, summed across ALL open Stock Out / Promotional Stock-Out orders
+    (regular + promo share the `distributor_deliveries` pipeline). Reservation
+    is derived purely from the open deliveries themselves, so completing /
+    cancelling / reversing an order releases its stock automatically.
+    Returns `{batch_id|None: reserved_qty}`."""
+    open_ids = await db.distributor_deliveries.distinct(
+        "id",
+        {
+            "tenant_id": tenant_id,
+            "distributor_location_id": location_id,
+            "status": {"$in": _RESERVED_DELIVERY_STATUSES},
+        },
+    )
+    if not open_ids:
+        return {}
+    reserved: dict = {}
+    async for it in db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": open_ids}, "sku_id": sku_id},
+        {"_id": 0, "batch_id": 1, "quantity": 1},
+    ):
+        key = it.get("batch_id")
+        reserved[key] = reserved.get(key, 0) + int(it.get("quantity") or 0)
+    return reserved
+
+
 def _extract_pan(gstin: Optional[str]) -> str:
     """Return the 10-character PAN embedded in a GSTIN (positions 3-12).
     Returns '' if the GSTIN is missing or shorter than 12 chars.
@@ -538,13 +575,29 @@ async def list_batches_available(
             r.setdefault("created_at", pb.get("created_at"))
             r["production_date"] = pb.get("production_date")
 
-    out = [{
-        "batch_id": r.get("batch_id"),
-        "batch_code": r.get("batch_code") or ("(legacy / no batch)" if not r.get("batch_id") else r.get("batch_id")),
-        "quantity": int(r.get("quantity") or 0),
-        "received_at": r.get("created_at"),
-        "production_date": r.get("production_date"),
-    } for r in rows]
+    # Net out RESERVED stock — units already committed to OPEN Stock Out /
+    # Promotional Stock-Out orders drawing from THIS location are no longer
+    # available to allocate again. We show available = on-hand − reserved so
+    # the picker never offers stock that's already spoken for.
+    reserved_by_batch = await _reserved_qty_by_batch(tenant_id, location_id, sku_id)
+
+    out = []
+    for r in rows:
+        on_hand = int(r.get("quantity") or 0)
+        reserved = reserved_by_batch.get(r.get("batch_id"), 0)
+        available = on_hand - reserved
+        if available <= 0:
+            # Fully reserved — nothing left to allocate from this batch.
+            continue
+        out.append({
+            "batch_id": r.get("batch_id"),
+            "batch_code": r.get("batch_code") or ("(legacy / no batch)" if not r.get("batch_id") else r.get("batch_id")),
+            "quantity": available,
+            "on_hand": on_hand,
+            "reserved": reserved,
+            "received_at": r.get("created_at"),
+            "production_date": r.get("production_date"),
+        })
     # FIFO — oldest first
     out.sort(key=lambda r: (r.get("received_at") or "9999"))
     return {"track_batches": track_batches, "batches": out}
