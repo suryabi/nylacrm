@@ -407,6 +407,51 @@ async def _post_deliverychallan_resilient(tenant_id: str, payload: dict, ref: Op
         raise
 
 
+async def _set_deliverychallan_shipping_address(tenant_id: str, challan_id: str, addr: dict, ref: Optional[str] = None) -> bool:
+    """Set the *Deliver To* (shipping) address on an existing Zoho delivery
+    challan via the dedicated endpoint:
+        PUT /books/v3/deliverychallans/{id}/address/shipping
+
+    This is done as a post-create step (not inline on the create payload)
+    because Zoho rejects an inline `shipping_address` on create with the
+    spurious code-15 "less than 100 characters" error. The dedicated address
+    endpoint accepts the structured fields reliably and renders the recipient
+    (lead / contact / employee) in the printed challan's Deliver-To block.
+
+    Best-effort: a failure is logged but does NOT fail the sync (the recipient
+    is also captured in the challan `notes`)."""
+    if not challan_id or not addr:
+        return False
+    body = {k: v for k, v in {
+        "attention": addr.get("attention"),
+        "address": addr.get("address"),
+        "street2": addr.get("street2"),
+        "city": addr.get("city"),
+        "state": addr.get("state"),
+        "zip": addr.get("zip"),
+        "country": addr.get("country") or "India",
+        "phone": addr.get("phone"),
+    }.items() if v}
+    # Need at least a street/city for a meaningful Deliver-To.
+    if not (body.get("address") or body.get("city")):
+        return False
+    try:
+        await _zoho_request(
+            "PUT",
+            f"/books/v3/deliverychallans/{challan_id}/address/shipping",
+            tenant_id=tenant_id,
+            json=body,
+        )
+        logger.info(f"Set Deliver-To shipping address on challan {ref or challan_id}")
+        return True
+    except ZohoApiError as e:
+        logger.warning(
+            f"Could not set Deliver-To shipping address on challan {ref or challan_id}: {e.message}"
+        )
+        return False
+
+
+
 
 async def _zoho_request(
     method: str,
@@ -2137,15 +2182,19 @@ async def create_delivery_challan_for_promo_dispatch(
     if src_branch_id:
         payload["branch_id"] = src_branch_id
 
-    # DELIVER-TO address: prefer the recipient's structured shipping address
-    # (lead / contact / employee). Zoho's API only respects field overrides
-    # when the dict carries the *structured* keys (address, city, state, zip
-    # …) — passing just an `address` blob is silently ignored and the customer's
-    # billing address gets used instead, which is the bug the user reported.
+    # DELIVER-TO (recipient) address — the lead / contact / employee the promo
+    # stock-out is gifted to. We DON'T send it inline on the create payload:
+    # Zoho rejects an inline `shipping_address` on delivery-challan create with
+    # the spurious code-15 "less than 100 characters" error AND, when omitted,
+    # falls back to the customer's (distributor warehouse) address — which is
+    # exactly the wrong Deliver-To the user reported. Instead we build the
+    # recipient address here and apply it AFTER create via the dedicated
+    # `/address/shipping` endpoint (see `_set_deliverychallan_shipping_address`).
     rsa = dispatch.get("recipient_shipping_address") or {}
     has_structured = any((rsa.get(k) or "").strip() for k in ("address", "city", "state", "zip"))
+    shipping_addr = None
     if has_structured:
-        payload["shipping_address"] = _zoho_shipping_address(
+        shipping_addr = _zoho_shipping_address(
             attention=rsa.get("attention") or dispatch.get("contact_name") or "",
             address=rsa.get("address") or "",
             street2=rsa.get("street2") or "",
@@ -2157,8 +2206,8 @@ async def create_delivery_challan_for_promo_dispatch(
         )
     elif dispatch.get("delivery_address"):
         # Legacy fallback for older dispatches that don't carry the structured
-        # address yet — put the free-text address in, clipped + overflowed.
-        payload["shipping_address"] = _zoho_shipping_address(
+        # address yet — free-text address, deduped + clipped.
+        shipping_addr = _zoho_shipping_address(
             attention=dispatch.get("contact_name") or "",
             address=dispatch["delivery_address"],
         )
@@ -2167,6 +2216,13 @@ async def create_delivery_challan_for_promo_dispatch(
     challan = result.get("deliverychallan") or result.get("delivery_challan") or {}
     zoho_challan_id = challan.get("deliverychallan_id") or challan.get("delivery_challan_id")
     zoho_challan_number = challan.get("deliverychallan_number") or challan.get("delivery_challan_number")
+
+    # Now set the recipient as the Deliver-To address (best-effort).
+    if shipping_addr and zoho_challan_id:
+        await _set_deliverychallan_shipping_address(
+            tenant_id, zoho_challan_id, shipping_addr, ref=dispatch.get("challan_number")
+        )
+
     challan_url = _zoho_books_url(zoho_challan_id, await get_credentials(tenant_id) or {})
     if challan_url:
         challan_url = challan_url.replace("/invoices/", "/deliverychallans/")

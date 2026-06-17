@@ -23,6 +23,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
   - New `_post_deliverychallan_resilient()` wraps the challan POST: on a code-15 inline-address rejection it **retries once without the inline `shipping_address`/`billing_address`** (the recipient is already fully captured in the challan `notes`, so nothing is lost on the printed PDF). Applied to BOTH `create_delivery_challan_for_promo_dispatch` and `create_delivery_challan_for_stock_transfer`. New `_is_zoho_address_length_error()` detector.
 - **Tested**: `backend/tests/test_promo_challan_shipping_address.py` — 6/6 PASS (sub-fields <100, dedupe removes repeated outlet name, extreme-length clipping, error detector, resilient retry drops inline address, unrelated errors pass through). Live Zoho push not exercisable in preview (Zoho not connected). **Redeploy to push to production.**
 
+### 2026-06-17 — 🐛 Fix: Promo challan "Deliver To" showed the warehouse instead of the recipient ✅ DONE
+- **Reported (PRODUCTION)**: After the code-15 fix, the Zoho challan PDF (DC-00021) printed the SOURCE warehouse (Gurgaon) in the **Deliver To** block. It should show the chosen lead/contact recipient; the warehouse belongs in **Delivery From** (header).
+- **Root cause**: The previous fix recovered from code-15 by dropping the inline `shipping_address`, so Zoho defaulted Deliver-To to the customer (= distributor warehouse) address. Zoho rejects an inline `shipping_address` on delivery-challan *create*, so it can never be set that way.
+- **Fix** (`services/zoho_service.py`): adopted Zoho's documented two-step pattern. `create_delivery_challan_for_promo_dispatch` now (1) creates the challan WITHOUT an inline shipping address, then (2) sets the recipient as Deliver-To via the dedicated `PUT /books/v3/deliverychallans/{id}/address/shipping` endpoint (new `_set_deliverychallan_shipping_address()` — best-effort, recipient also stays in `notes`). FROM/header remains the source warehouse branch (`branch_id`), which was already correct.
+- **Tested**: `backend/tests/test_promo_challan_shipping_address.py` — 8/8 PASS (adds: address-setter PUTs recipient fields to the correct endpoint with all fields <100; skips when empty). Backend healthy. Live Zoho push not exercisable in preview. **Redeploy to push to production.**
+
 
 
 ### 2026-06-17 — Promotional Stock-Out: Draft workflow + Reverse (P1 feature) ✅ DONE

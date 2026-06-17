@@ -114,3 +114,44 @@ def test_resilient_post_passes_through_other_errors(monkeypatch):
         asyncio.get_event_loop().run_until_complete(
             zs._post_deliverychallan_resilient("t1", {"shipping_address": {"a": "b"}}, "DC-1")
         )
+
+
+def test_set_shipping_address_puts_recipient_fields(monkeypatch):
+    """Deliver-To is set via the dedicated /address/shipping endpoint with the
+    recipient (lead/contact) fields — never the warehouse/customer address."""
+    captured = {}
+
+    async def fake_request(method, path, *, tenant_id, json=None, **kw):
+        captured["method"] = method
+        captured["path"] = path
+        captured["body"] = json
+        return {"code": 0, "message": "success"}
+
+    monkeypatch.setattr(zs, "_zoho_request", fake_request)
+    addr = _zoho_shipping_address(
+        attention=RADISSON_ATTN, address=RADISSON_ADDR,
+        city="New Delhi", state="Delhi", zip="110001", phone="+91 11 4690 9090",
+    )
+    ok = asyncio.get_event_loop().run_until_complete(
+        zs._set_deliverychallan_shipping_address("t1", "Z123", addr, ref="DC-2606-0013")
+    )
+    assert ok is True
+    assert captured["method"] == "PUT"
+    assert captured["path"] == "/books/v3/deliverychallans/Z123/address/shipping"
+    body = captured["body"]
+    assert body["city"] == "New Delhi"
+    assert body["attention"] == RADISSON_ATTN
+    assert "G-59 Connaught Circus" in body["address"]
+    # every field stays < 100 chars
+    assert all(len(str(v)) < 100 for v in body.values())
+
+
+def test_set_shipping_address_skips_when_empty(monkeypatch):
+    async def fake_request(*a, **k):
+        raise AssertionError("should not call Zoho when address is empty")
+
+    monkeypatch.setattr(zs, "_zoho_request", fake_request)
+    ok = asyncio.get_event_loop().run_until_complete(
+        zs._set_deliverychallan_shipping_address("t1", "Z123", {"country": "India"})
+    )
+    assert ok is False
