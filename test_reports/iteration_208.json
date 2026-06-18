@@ -1,0 +1,64 @@
+{
+  "summary": "Frontend-only validation of Lead Proposal share migration to the Document Sharing Framework + BCC support. All 5 requested scenarios PASS after fixing a seed-data issue (proposal had tenant_id=null which prevented /api/leads/{id}/proposal from returning the proposal; updated to nyla-air-water).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/leads/{id}/proposal vs share resolver", "issue": "Existing seed proposal for lead 2ac8be7f-7115-4f40-b5ef-b03113146606 had tenant_id=null. The share resolver _resolve_lead_proposal falls back to a no-tenant query and so still worked in curl, but the tenant-scoped get_lead_proposal route returns null, hiding the Share button. Fixed in DB by setting tenant_id='nyla-air-water'. Worth investigating in seed scripts so this doesn't regress."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_208.json"],
+  "action_items": [
+    "Audit seed/test data scripts that create lead_proposals — ensure tenant_id is always set; otherwise /api/leads/{id}/proposal returns null and the proposal Share button never renders even though the share resolver fallback can still find the doc.",
+    "Optional: tighten the resolver in /app/backend/services/share_resolvers.py _resolve_lead_proposal so it does NOT silently fall back to a no-tenant query — that would have surfaced this data issue immediately instead of masking it."
+  ],
+  "critical_code_review_comments": [
+    "share_resolvers._resolve_lead_proposal contains a fallback query without tenant_id (`db.lead_proposals.find_one({\"lead_id\": document_id})`) which is a multi-tenant data-leak risk (in a multi-tenant install another tenant's proposal could be returned for an id collision). Remove the fallback OR scope it to a stricter context.",
+    "LeadDetail.js: the legacy bespoke proposal share dialog code still exists in the file (per the request the share-via-email button now uses <ShareButton>). Confirm the dead dialog code path is fully unreachable and consider removing it to keep file size down (LeadDetail.js is already 2410 lines)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water).",
+  "seed_data_creation": "Updated existing lead_proposals doc for lead 2ac8be7f-7115-4f40-b5ef-b03113146606: set tenant_id='nyla-air-water' (was null). Also, by exercising the admin policy save during testing, an Always-Bcc entry 'archive@nylaairwater.earth' was added to the lead_proposal policy; it now persists as expected (called out as acceptable in the request).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Lead 2ac8be7f-7115-4f40-b5ef-b03113146606 (Citadel Hotels & Conventions By Vinncca) has an APPROVED proposal test_proposal.pdf. The lead's primary contact has NO email so the share dialog's To section is empty (expected). The lead_proposal admin policy now contains archive@nylaairwater.earth in Always-Bcc — that's why the Bcc section auto-reveals with that chip when opening the proposal share dialog. surya has no reporting manager so cc_manager=true only injects the sender (Surya Yadavalli) into CC.",
+  "test_evidence": {
+    "test1_dialog_open_prefill": {
+      "share_button_visible_when_proposal_approved": true,
+      "dialog_testid": "share-dialog-lead-proposal-2ac8be7f-7115-4f40-b5ef-b03113146606",
+      "subject_prefilled": "Nyla Air Water - Proposal for review",
+      "message_starts_with_Dear_SirMadam": true,
+      "message_ends_with_Best_Regards_block": true,
+      "to_section_present_chips": 0,
+      "cc_section_present_chips_first": "Surya Yadavalli <surya.yadavalli@nylaairwater.earth>",
+      "share_add_bcc_link_present": true,
+      "share_bcc_input_revealed_on_click": true
+    },
+    "test2_send": {
+      "added_to_chip": "delivered@resend.dev",
+      "dialog_closed_after_send": true,
+      "note": "Success toast was no longer in DOM after 8s sleep (auto-dismissed). Dialog close on success confirms the POST /api/share succeeded."
+    },
+    "test3_empty_to_validation": {
+      "toast": "Add at least one recipient in To",
+      "dialog_stayed_open": true
+    },
+    "test4_admin_policy_screen": {
+      "policy_cards_found": ["policy-card-delivery_invoice", "policy-card-driver_bundle", "policy-card-lead_proposal", "policy-card-stock_transfer_doc"],
+      "lead_proposal_card_present": true,
+      "policy-ccmanager-lead_proposal_default_on": true,
+      "policy-bcc-lead_proposal-email_present": true,
+      "policy-bcc-lead_proposal-add_present": true,
+      "save_toast": "Saved recipient rules for Lead Proposal"
+    },
+    "test5_policy_reflected_in_dialog": {
+      "share-bcc-input_auto_visible": true,
+      "bcc_chip_present": "archive@nylaairwater.earth"
+    }
+  }
+}

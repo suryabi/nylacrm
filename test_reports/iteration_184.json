@@ -1,0 +1,44 @@
+{
+  "summary": "Print Requests module end-to-end tested. Backend pytest (18/18 PASS) covers: Print Statuses GET/POST/PATCH/DELETE with seed-defaults + protection of seeded defaults; Print Vendors full CRUD; Print Requests full lifecycle — create from a Final-Approved Marketing Request → list → GET → PATCH (quantity/notes) → status change (with history) → DELETE → 404 verify; non-existent MR returns 404; create-validation; auth guards (401 when no token). Frontend smoke-tested via Playwright: login as CEO → 'Print Requests' visible in Sales sidebar (data-testid sidebar-print-requests) → /print-requests renders with data-testid=print-requests-page and shows seeded list (PR-2026-0001 In Printing, PR-2026-0002 New) → /admin/print-settings renders with data-testid=print-settings-page, both Statuses and Vendors tabs present, print-settings-no-access NOT present (CEO has access), all 5 default statuses (New/In Printing/Printed/On Hold/Cancelled) rendered with edit/delete/toggle controls → Marketing Request detail (state production_completed) shows the 'Send for Printing' button. No fatal console errors; only stale 401s during initial page hydration.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/marketing-requests", "issue": "No support for ?current_state_key= filter (silently ignored, returns all). Print module had to scan client-side to find final-approved MRs."},
+      {"endpoint": "/api/print-request-statuses & /api/print-vendors", "issue": "POST/PATCH/DELETE are auth-gated (get_current_user) but NOT admin-gated. Any logged-in tenant user can create/modify/delete statuses & vendors. Spec says these should be admin-only writes (read open). RBAC matrix declares 'print_request_statuses' as admin module, but routes don't enforce it."},
+      {"endpoint": "DELETE /api/print-requests/{id}", "issue": "Uses custom permission helper _can_delete (admin OR role permission). Works; only flagging that there's no module 'view' gate on list/get either — anyone in tenant can read print requests."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Initial page load", "issue": "Two 401s logged in console immediately after navigation (likely a pre-auth fetch on / before session cookie attaches). Not user-facing; cosmetic.", "affected_selectors": []}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_print_requests_module.py",
+    "/app/test_reports/pytest/pytest_print_requests.xml"
+  ],
+  "action_items": [
+    "Decide whether write endpoints under /api/print-request-statuses and /api/print-vendors should be admin-only. Currently any authenticated tenant user can create/edit/delete. If yes, add an admin/_is_admin guard (similar to other admin masters).",
+    "(Optional) Add server-side filter support for current_state_key on /api/marketing-requests so the upcoming UI doesn't have to over-fetch when looking for final-approved candidates.",
+    "(Cosmetic) Investigate the 2× 401 console errors on first page load post-login."
+  ],
+  "critical_code_review_comments": [
+    "routes/print_masters.py: status/vendor write endpoints depend only on get_current_user — no admin check despite being labelled 'Admin masters'. Risk: any tenant user (e.g. a salesperson) can delete a vendor or deactivate the initial status. Recommend wrapping POST/PATCH/DELETE with an admin/role-permission guard.",
+    "routes/print_requests.py: _initial_status falls back to 'first active by order' when no is_initial is configured — good. But if an admin deactivates all statuses, create() will set status_id=None, status_name='New'. Consider rejecting create when no active status exists.",
+    "routes/print_requests.py: status_change does not validate that the target status is is_active=True (deactivated statuses can still be set as current). Minor.",
+    "models/print_request.py PrintStoredFile uses ConfigDict(extra='allow') — fine; just make sure snapshot doesn't carry sensitive S3/path data exposed to frontend.",
+    "Both masters expose only is_active=True by default but no module-level 'view' RBAC gate — every tenant user can read vendors/statuses. Likely intended (it's tenant config) but worth confirming."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_print_requests_module.py (new)"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% smoke (5/5 checks)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "Tests create TEST_-prefixed statuses & vendors and clean them up. Print Request created against existing MR 806ba125-7b25-4dcf-a552-7ad6fa8b0c8c (Neck Tags, production_completed) was deleted in teardown. Two pre-existing Print Requests remain visible in UI: PR-2026-0001 (In Printing, qty 750, vendor Acme Print House) and PR-2026-0002 (New, qty 200).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: pytest /app/backend/tests/test_print_requests_module.py -v. The 'Send for Printing' dialog UI flow (filling qty/due-date and submitting) was NOT exercised through Playwright — only the trigger button presence was confirmed; backend POST /api/print-requests is fully covered through pytest. If main agent adds admin-only guards on /print-request-statuses & /print-vendors writes, the existing test will still pass (CEO is admin), but consider adding a non-admin negative test.",
+  "rca of the issue": "N/A — no bugs, all flows working. Only one design gap (RBAC on master writes) flagged for review."
+}

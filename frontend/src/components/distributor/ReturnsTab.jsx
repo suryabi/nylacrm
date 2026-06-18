@@ -11,9 +11,11 @@ import { Textarea } from '../ui/textarea';
 import { toast } from 'sonner';
 import {
   RotateCcw, Plus, Download, RefreshCw, Search, Calendar, Trash2,
-  Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard
+  Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard,
+  Send, Clock, ExternalLink, Building2
 } from 'lucide-react';
 import axios from 'axios';
+import PayCustomerDialog from './PayCustomerDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -28,7 +30,8 @@ const CATEGORY_COLORS = {
 // Status badges
 const STATUS_BADGES = {
   draft: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Draft' },
-  approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Approved' },
+  approved: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Credit Note Created' },
+  direct_payment_approved: { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300', label: 'Direct Payment Approved' },
   credit_issued: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Credit Issued' },
   processed: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Processed' },
   settled: { bg: 'bg-teal-100', text: 'text-teal-700', label: 'Settled' },
@@ -36,7 +39,7 @@ const STATUS_BADGES = {
 };
 
 export default function ReturnsTab({ distributorId, accounts = [], skus = [], canManage = false, canDelete = false }) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [returns, setReturns] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -54,6 +57,18 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Tracks which return is mid-retry for the Zoho-push action
+  const [retryingZohoPush, setRetryingZohoPush] = useState(null);
+
+  // Pay Customer / Issue Credit dialog — primary action from the Returns grid.
+  // Single state-aware dialog handles submit / approve / mark-issued in one screen.
+  const [payCustomerOpen, setPayCustomerOpen] = useState(false);
+  const [payCustomerReturn, setPayCustomerReturn] = useState(null);
+
+  const openPayCustomer = (ret) => {
+    setPayCustomerReturn(ret);
+    setPayCustomerOpen(true);
+  };
   
   // Create form
   const [createForm, setCreateForm] = useState({
@@ -62,6 +77,11 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
     items: [],
     notes: ''
   });
+
+  // Searchable account picker state — mirrors the Stock Out Record Delivery
+  // experience so users get the same typeahead + selected-card UI everywhere.
+  const [returnAccountSearch, setReturnAccountSearch] = useState('');
+  const selectedReturnAccount = accounts.find(a => a.id === createForm.account_id) || null;
   
   // Item form for adding items
   const [itemForm, setItemForm] = useState({
@@ -96,7 +116,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   // Fetch return reasons
   const fetchReturnReasons = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/return-reasons?is_active=true`, {
+      const response = await axios.get(`${API_URL}/api/return-reasons?is_active=true&applies_to=customer`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setReturnReasons(response.data.reasons || []);
@@ -266,7 +286,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
     setItemForm({ sku_id: '', quantity: 1, reason_id: '', unit_price: '' });
   };
 
-  // Approve return
+  // Approve return — close the Detail dialog and refresh the grid; user
+  // doesn't need to see the approved state in the same dialog they just acted in.
   const approveReturn = async (returnId) => {
     try {
       await axios.post(
@@ -275,10 +296,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success('Return approved');
+      setShowDetailDialog(false);
       fetchReturns();
-      if (selectedReturn?.id === returnId) {
-        viewReturnDetail(returnId);
-      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to approve return');
     }
@@ -328,6 +347,48 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
       setShowDetailDialog(true);
     } catch (error) {
       toast.error('Failed to load return details');
+    }
+  };
+
+  // Retry pushing a previously-failed credit note to Zoho. Useful after the
+  // admin re-connects Zoho with the correct OAuth scopes / fixes SKU mappings.
+  const handleRetryZohoPush = async (ret) => {
+    if (!ret) return;
+    // Look up the local credit_note id for this return
+    setRetryingZohoPush(ret.id);
+    try {
+      const cnRes = await axios.get(
+        `${API_URL}/api/distributors/${distributorId}/credit-notes`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { account_id: ret.account_id }
+        }
+      );
+      const cn = (cnRes.data?.credit_notes || []).find(c => c.return_id === ret.id);
+      if (!cn) {
+        toast.error('No local credit note found for this return');
+        return;
+      }
+      const resp = await axios.post(
+        `${API_URL}/api/distributors/${distributorId}/credit-notes/${cn.id}/retry-zoho-push`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (resp.data?.zoho_creditnote_url) {
+        toast.success(`Pushed to Zoho as ${resp.data.zoho_creditnote_number || 'credit note'}`);
+        // Re-fetch the return so the dialog shows the new link
+        await viewReturnDetail(ret.id);
+        fetchReturns();
+      } else if (resp.data?.already_synced) {
+        toast.info('Already synced to Zoho — refreshing view');
+        await viewReturnDetail(ret.id);
+      } else {
+        toast.error('Push completed but no Zoho URL returned');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Zoho push failed');
+    } finally {
+      setRetryingZohoPush(null);
     }
   };
 
@@ -401,6 +462,18 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
             <CardDescription>
               Track returns from customers and calculate credits
             </CardDescription>
+            <div
+              className="mt-2 inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 py-1 text-[11px] text-slate-600"
+              data-testid="units-banner"
+            >
+              <Package className="h-3 w-3 text-slate-400" />
+              <span>
+                Quantities in <span className="font-semibold text-slate-700">crates</span>
+                <span className="text-slate-400"> — except </span>
+                <span className="font-semibold text-emerald-700">Empty Bottles</span>
+                <span className="text-slate-400"> (raw bottles)</span>
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={downloadExcel} disabled={filteredReturns.length === 0}>
@@ -481,7 +554,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="approved">Credit Note Created</SelectItem>
+              <SelectItem value="direct_payment_approved">Direct Payment Approved</SelectItem>
               <SelectItem value="credit_issued">Credit Issued</SelectItem>
               <SelectItem value="processed">Processed</SelectItem>
               <SelectItem value="settled">Settled</SelectItem>
@@ -556,9 +630,24 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       </td>
                       <td className="p-4 text-center">
                         {ret.credit_note_number ? (
-                          <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
-                            {ret.credit_note_number}
-                          </Badge>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
+                              {ret.credit_note_number}
+                            </Badge>
+                            {ret.zoho_creditnote_url && (
+                              <a
+                                href={ret.zoho_creditnote_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center text-emerald-700 hover:text-emerald-900 transition-colors"
+                                title={`View / download in Zoho Books (${ret.zoho_creditnote_number || ret.credit_note_number})`}
+                                data-testid={`view-zoho-creditnote-${ret.id}`}
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </a>
+                            )}
+                          </div>
                         ) : ret.status === 'approved' ? (
                           <span className="text-xs text-amber-600">Pending</span>
                         ) : (
@@ -573,10 +662,43 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         </div>
                       </td>
                       <td className="p-4 text-center">
-                        <Badge className={`${statusInfo.bg} ${statusInfo.text}`}>{statusInfo.label}</Badge>
+                        <Badge className={`${statusInfo.bg} ${statusInfo.text} font-semibold whitespace-nowrap border ${statusInfo.border || 'border-transparent'}`}>{statusInfo.label}</Badge>
                       </td>
                       <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
+                          {(() => {
+                            // Primary action: pay customer / issue credit. Visible
+                            // for any return that has a credit note with balance OR
+                            // an issuance currently in flight. Single button label
+                            // is state-aware so the user always knows the next step.
+                            if (!ret.credit_note_id) return null;
+                            const ai = ret.active_issuance;
+                            const userRole = (user?.role || '').toLowerCase();
+                            const isApprover = ['ceo', 'system admin', 'admin'].includes(userRole);
+                            let label, Icon, cls;
+                            if (!ai) {
+                              if (ret.status !== 'approved') return null;
+                              label = 'Pay Customer';
+                              Icon = CreditCard;
+                              cls = 'bg-emerald-600 hover:bg-emerald-700 text-white';
+                            } else if (ai.status === 'pending_approval') {
+                              label = isApprover ? 'Approve' : 'Pending';
+                              Icon = Clock;
+                              cls = isApprover ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-amber-100 text-amber-700 hover:bg-amber-200';
+                            } else if (ai.status === 'approved') {
+                              label = 'Mark Issued';
+                              Icon = Send;
+                              cls = 'bg-blue-600 hover:bg-blue-700 text-white';
+                            } else { return null; }
+                            return (
+                              <Button size="sm" className={`h-8 text-xs ${cls}`}
+                                onClick={() => openPayCustomer(ret)}
+                                data-testid={`pay-customer-${ret.id}`}>
+                                <Icon className="h-3.5 w-3.5 mr-1" />
+                                {label}
+                              </Button>
+                            );
+                          })()}
                           <Button variant="ghost" size="sm" onClick={() => viewReturnDetail(ret.id)}>
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -607,20 +729,115 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            {/* Account Selection */}
+            {/* Account Selection — searchable picker (same UX as Stock Out) */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Account *</Label>
-                <Select value={createForm.account_id} onValueChange={(v) => setCreateForm(prev => ({ ...prev, account_id: v }))}>
-                  <SelectTrigger data-testid="return-account-select">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map(acc => (
-                      <SelectItem key={acc.id} value={acc.id}>{acc.account_name || acc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {selectedReturnAccount ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50/40 p-3" data-testid="return-account-selected">
+                    <Building2 className="h-4 w-4 text-blue-700 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900 truncate">{selectedReturnAccount.account_name || selectedReturnAccount.name}</p>
+                        <span className="inline-flex items-center text-[10px] font-medium uppercase tracking-wider text-blue-700 bg-blue-100 border border-blue-200 px-1.5 py-0.5 rounded">
+                          Selected
+                        </span>
+                      </div>
+                      {(selectedReturnAccount.city || selectedReturnAccount.state) && (
+                        <p className="text-xs text-slate-600 mt-0.5">
+                          {selectedReturnAccount.city}{selectedReturnAccount.state ? `, ${selectedReturnAccount.state}` : ''}
+                          {selectedReturnAccount.is_primary && <span className="text-amber-600 ml-1">★ Primary</span>}
+                        </p>
+                      )}
+                      {selectedReturnAccount.contact_name && (
+                        <p className="text-[11px] text-slate-500 mt-0.5">Contact: {selectedReturnAccount.contact_name}</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-500 hover:text-slate-700 h-7 w-7 p-0"
+                      onClick={() => {
+                        setCreateForm(prev => ({ ...prev, account_id: '' }));
+                        setReturnAccountSearch('');
+                      }}
+                      data-testid="return-account-clear"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Search accounts by name or city…"
+                      value={returnAccountSearch}
+                      onChange={(e) => setReturnAccountSearch(e.target.value)}
+                      data-testid="return-account-search"
+                      className="w-full"
+                    />
+                    <div className="border rounded-md max-h-[200px] overflow-y-auto">
+                      {accounts.length === 0 ? (
+                        <div className="p-4 text-sm text-muted-foreground text-center">
+                          <Building2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                          <p>No accounts available</p>
+                        </div>
+                      ) : (
+                        accounts
+                          .filter(account => {
+                            if (!returnAccountSearch) return true;
+                            const s = returnAccountSearch.toLowerCase();
+                            return (
+                              (account.account_name || account.name || '').toLowerCase().includes(s) ||
+                              (account.city || '').toLowerCase().includes(s) ||
+                              (account.contact_name || '').toLowerCase().includes(s) ||
+                              (account.territory || '').toLowerCase().includes(s)
+                            );
+                          })
+                          .map(account => (
+                            <div
+                              key={account.id}
+                              className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
+                              onClick={() => {
+                                setCreateForm(prev => ({ ...prev, account_id: account.id }));
+                                setReturnAccountSearch('');
+                              }}
+                              data-testid={`return-account-option-${account.id}`}
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-sm truncate">
+                                    {account.account_name || account.name}
+                                    {account.is_primary && <span className="ml-2 text-amber-600">★ Primary</span>}
+                                  </p>
+                                  {(account.city || account.state) && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {account.city}{account.state ? `, ${account.state}` : ''}
+                                      {account.territory && ` • ${account.territory}`}
+                                    </p>
+                                  )}
+                                  {account.contact_name && (
+                                    <p className="text-xs text-muted-foreground">Contact: {account.contact_name}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                      )}
+                      {accounts.length > 0 && returnAccountSearch && accounts.filter(a => {
+                        const s = returnAccountSearch.toLowerCase();
+                        return (
+                          (a.account_name || a.name || '').toLowerCase().includes(s) ||
+                          (a.city || '').toLowerCase().includes(s) ||
+                          (a.contact_name || '').toLowerCase().includes(s) ||
+                          (a.territory || '').toLowerCase().includes(s)
+                        );
+                      }).length === 0 && (
+                        <div className="p-3 text-xs text-muted-foreground text-center">No accounts match &quot;{returnAccountSearch}&quot;</div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Return Date</Label>
@@ -677,7 +894,23 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                     type="number"
                     min="1"
                     value={itemForm.quantity}
-                    onChange={(e) => setItemForm(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      // Allow the field to be cleared while typing — backspace must
+                      // work. We only coerce on blur (or when Add is clicked).
+                      if (raw === '') {
+                        setItemForm(prev => ({ ...prev, quantity: '' }));
+                        return;
+                      }
+                      const n = parseInt(raw, 10);
+                      setItemForm(prev => ({ ...prev, quantity: Number.isNaN(n) ? '' : n }));
+                    }}
+                    onBlur={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      if (!Number.isFinite(n) || n < 1) {
+                        setItemForm(prev => ({ ...prev, quantity: 1 }));
+                      }
+                    }}
                     className="h-9"
                   />
                 </div>
@@ -847,12 +1080,48 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <div>
                           <p className="text-sm font-medium text-emerald-700">Credit Note Issued</p>
                           <p className="text-xs text-emerald-600">{selectedReturn.credit_note_number}</p>
+                          {selectedReturn.zoho_creditnote_number &&
+                            selectedReturn.zoho_creditnote_number !== selectedReturn.credit_note_number && (
+                              <p className="text-[11px] text-emerald-600 font-mono mt-0.5">
+                                Zoho: {selectedReturn.zoho_creditnote_number}
+                              </p>
+                            )}
                         </div>
                       </div>
                       <Badge className="bg-emerald-100 text-emerald-700">
                         ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </Badge>
                     </div>
+                    {selectedReturn.zoho_creditnote_url ? (
+                      <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
+                        <span className="text-xs text-emerald-600">Synced to Zoho Books</span>
+                        <a
+                          href={selectedReturn.zoho_creditnote_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 hover:text-emerald-900 transition-colors"
+                          data-testid="view-zoho-creditnote-detail-btn"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          View / download in Zoho
+                        </a>
+                      </div>
+                    ) : (
+                      // New flow: bottle-return CNs are no longer pushed to Zoho as
+                      // separate documents. Instead, when the CN is applied to a
+                      // delivery, the deduction is added as a post-tax
+                      // "Sustainability Incentive" adjustment on the Zoho invoice.
+                      // The local CN doc remains for settlement math & audit.
+                      <div className="mt-3 pt-3 border-t border-emerald-200">
+                        <p className="text-xs text-emerald-700 font-medium">
+                          Tracked locally — appears as a “Sustainability Incentive”
+                          deduction on the Zoho invoice when this CN is applied to a delivery.
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          No separate credit note is pushed to Zoho.
+                        </p>
+                      </div>
+                    )}
                     {selectedReturn.credit_issued_to_delivery_number && (
                       <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
                         <span className="text-xs text-emerald-600">Applied to Delivery:</span>
@@ -874,12 +1143,10 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <th className="text-left p-3 font-medium">Reason</th>
                         <th className="text-right p-3 font-medium">Credit/Unit</th>
                         <th className="text-right p-3 font-medium">Total Credit</th>
-                        <th className="text-center p-3 font-medium">Factory</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(selectedReturn.items || []).map((item, idx) => {
-                        const catInfo = CATEGORY_COLORS[item.reason_category] || CATEGORY_COLORS.promotional;
                         return (
                           <tr key={item.id || idx} className="border-t">
                             <td className="p-3">
@@ -898,23 +1165,6 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                             </td>
                             <td className="p-3 text-right">₹{(item.credit_per_unit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                             <td className="p-3 text-right font-medium text-emerald-600">₹{(item.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-center">
-                              {item.return_to_factory ? (
-                                item.returned_to_factory ? (
-                                  <Badge className="bg-emerald-100 text-emerald-700">
-                                    <Check className="h-3 w-3 mr-1" />
-                                    Returned
-                                  </Badge>
-                                ) : (
-                                  <Badge className="bg-amber-100 text-amber-700">
-                                    <Truck className="h-3 w-3 mr-1" />
-                                    Pending
-                                  </Badge>
-                                )
-                              ) : (
-                                <Badge variant="outline">N/A</Badge>
-                              )}
-                            </td>
                           </tr>
                         );
                       })}
@@ -927,7 +1177,6 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <td className="p-3 text-right font-bold text-emerald-600">
                           ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="p-3"></td>
                       </tr>
                     </tfoot>
                   </table>
@@ -952,23 +1201,25 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       <X className="h-4 w-4 mr-2" />
                       Cancel Return
                     </Button>
-                    <Button onClick={() => approveReturn(selectedReturn.id)}>
+                    <Button onClick={() => approveReturn(selectedReturn.id)} data-testid="create-credit-note-btn">
                       <Check className="h-4 w-4 mr-2" />
-                      Approve Return
+                      Create Credit Note
                     </Button>
                   </>
-                )}
-                {canDelete && selectedReturn.status !== 'draft' && (
-                  <Button variant="destructive" onClick={() => deleteReturn(selectedReturn.id)} data-testid="delete-return-detail-btn">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Return
-                  </Button>
                 )}
               </DialogFooter>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      <PayCustomerDialog
+        open={payCustomerOpen}
+        onOpenChange={setPayCustomerOpen}
+        distributorId={distributorId}
+        returnRecord={payCustomerReturn}
+        onChanged={() => fetchReturns()}
+      />
     </Card>
   );
 }

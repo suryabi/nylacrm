@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 156 — Sampling/Trials feature in Performance Tracker (Top 10 Priorities) verified end-to-end. Backend: 15/15 pytest pass on /api/performance/sampling-trials (GET list, POST create, PUT update, DELETE). Validates end_date formula start+(duration-1), invalid status 400, duration=0 400, nonexistent lead 404, delete-nonexistent 404, total_amount = sum(crates*units_per_package*price_per_unit), recompute end_date on duration/trial_date PUT, status persistence, sku_plans replacement updates total. Frontend: logged in as Surya Yadavalli; /performance route loads with Resource=Surya Yadavalli (default), top10-priorities-section present; clicking Sampling/Trials sub-tab renders sampling-trials-subsection with Total Trials/In Progress/Completed/Pipeline Amount summary cards and '21 leads assigned to selected resource(s)'. New Trial button opens sampling-form with lead-select, trial-date, duration-days, end-date (auto), status-select, notes, save and cancel — all 7 data-testids present. End date auto-updates in UI (2026-05-10 + 5d → 2026-05-14). Lead dropdown lists 21 leads. For a lead without proposed_sku_pricing, Add SKU button correctly adds a manual row. Live row+total amount math verified (2*10*50 = ₹1,000). Save POSTs, form closes, list renders trial with lead name '63 Degrees Modern Regional Buffet', city BENGALURU, NOT STARTED status badge, trial dates '2026-05-10 → 2026-05-14', 5 days, ₹1,000 total, SKU breakdown table. Delete with confirm removes trial. Pipeline Amount summary card updates from ₹0 to ₹1,000. Note: route is /performance (not /performance-tracker as written in problem statement).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sampling/Trials form — Tentative Date", "issues": ["Uses native browser date input (input type='date') instead of shadcn Popover+Calendar. The rest of the app standardised on Calendar in many modules. Cosmetic — same pattern observed in adjacent modules already."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sampling_trials.py",
+    "/app/test_reports/pytest/sampling_trials_results.xml"
+  ],
+  "action_items": [
+    "(Optional, consistency) Replace native <input type='date'> for sampling-trial-date with shadcn Popover+Calendar to match other modules.",
+    "(Optional, code quality) routes/performance.py:1080 _add_days() helper is defined but never used and contains an odd off-by-one expression (max(0, int(days)-1 if int(days)>0 else 0)). Either remove it or replace with the cleaner _compute_end_date()."
+  ],
+  "critical_code_review_comments": [
+    "performance.py:1080 _add_days is dead code and easy to misread; remove or rewrite. _compute_end_date already does the right thing for the actual API.",
+    "performance.py:_compute_end_date — when duration_days <= 0 returns trial_date[:10] silently. Combined with the API's own 400 guard for duration_days < 1 this is fine, but the helper's own contract is unclear. Document or hard-fail.",
+    "performance.py:list_sampling_trials — recomputes end_date on read and total_amount on read defensively; fine. However it does NOT enforce that lead_id on a trial actually belongs to the resource_ids filter (a stale trial whose lead got reassigned to a different resource will still appear because lead_ids is taken from the filtered leads list, but a trial pointing to a now-unfiltered lead would be omitted silently with no lead_name). Acceptable, but worth flagging.",
+    "performance.py:_lead_sku_options — silently drops duplicate sku entries with the same key but possibly different prices/percentages. If a lead has two pricing tiers for the same SKU only the first one wins. Confirm intended.",
+    "PerformanceTracker.js (≈2024 lines) — file is well over the 700-line guideline. Sampling trials subsection adds ~450 lines. Consider splitting SamplingTrialsSubsection and CaseTargetsSubsection into their own files under pages/performance/ for maintainability.",
+    "SamplingTrialsSubsection — Save button is enabled even when lead_id is empty (no client-side validation). Backend will return 404, but a disabled-state with hint would be friendlier. Same for blank trial_date / duration<1.",
+    "Delete confirmation uses window.confirm() — switch to a controlled AlertDialog for parity with the rest of the app (and a11y / mobile)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_sampling_trials.py (NEW — 15 tests covering full module)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% — all 7 form testids + summary cards + list row + delete verified"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "Pytest creates+deletes a TEST sampling_trial against the first available lead. UI test creates+deletes one trial against '63 Degrees Modern Regional Buffet' lead with TEST_UI_SKU manually-added row. All test data cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sampling/Trials module (iteration 156) is fully functional. Test file: /app/backend/tests/test_sampling_trials.py (15 tests, all passing). Note: login response uses key 'session_token' (not 'token' or 'access_token'). Frontend route is /performance (Performance Tracker) — problem statement said /performance-tracker which is wrong. End date formula confirmed = trial_date + (duration_days - 1) days. Lead dropdown is populated by GET /api/performance/sampling-trials?resource_ids=<uid>; for surya the resource defaults to himself returning 21 leads. Most leads in this tenant have empty proposed_sku_pricing — UI correctly falls back to manual Add SKU.",
+  "rca of the issue": "N/A — feature verification, not a bug fix."
+}

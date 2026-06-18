@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 177 verified Phase 1 Batch Tracking for Stock Transfers + Fleet inclusive-city fix. 7/7 backend pytest tests pass (test_iteration_177_batch_tracking_and_fleet.py). Confirmed: (1) GET /batches-available returns track_batches=true with FIFO-sorted batches[] (received_at ASC) carrying batch_id/batch_code/quantity/received_at for the tracked Default-master location; (2) Same endpoint returns track_batches=false for the non-tracked Noida warehouse (note: batches[] still contains rows carrying batch_id propagated forward from prior transfers — UI correctly gates on track_batches flag, not on batches[] length); (3) GET /eligible-sources exposes both `track_batches` (bool) and `is_factory` (bool) on every row — tracked source shows track_batches=true & is_factory=true; (4) POST /stock-transfers/ correctly returns HTTP 400 when track_batches=true and batch_id missing on a line item (error mentions warehouse name + SKU name); (5) POST returns HTTP 400 'Insufficient stock at source' when requested qty exceeds the specific batch's stock; (6) GET /fleet/vehicles + /fleet/drivers via john.distributor@test.com return 200 with `vehicles[]`/`drivers[]` arrays — inclusive _city_match_clause working (no 500, no false-empty for missing-city records). Frontend smoke: /distributor/stock-transfers loads, `new-stock-transfer-btn` testid exists, modal opens with AUTO badge on Rate per package, Create Transfer button is DISABLED until items are completed (visually confirmed). Previous agent had already manually verified the batch picker render + happy-path 5-crate batch-A transfer.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/distributor/stock-transfers New Stock Transfer modal", "issues": ["Missing data-testid on key form inputs/controls inside the modal: source-warehouse-select, destination-warehouse-select, item-sku-select, item-batch-select, item-quantity-input, create-stock-transfer-submit. Open-modal works via new-stock-transfer-btn testid, but the rest of the form has none — automated E2E for the batch picker flow has to fall back to text/role selectors. Adding these testids would enable proper Playwright coverage of the disabled-until-batch-picked rule."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_177_batch_tracking_and_fleet.py",
+    "/app/test_reports/pytest/iteration_177_results.xml"
+  ],
+  "action_items": [
+    "(Minor) Add data-testid attributes to the New Stock Transfer modal form: source-warehouse-select, dest-warehouse-select, item-sku-select, item-batch-select (for tracked sources), item-quantity-input, create-stock-transfer-submit. Currently only the open-modal button + transfer-row-{id}/retry-zoho-{id} have testids.",
+    "(Doc / contract clarification) The review request says '/batches-available returns empty batches[] when source does NOT have track_batches=true' but the implementation returns the propagated batch rows (chain-of-custody) with track_batches=false. The UI correctly gates on the flag, so this is a doc/expectation mismatch, not a bug. Either update the spec wording or have the endpoint suppress batches[] when track_batches=false."
+  ],
+  "critical_code_review_comments": [
+    "_city_match_clause (distributor_delivery_schedules.py:143-158) correctly builds an inclusive OR filter ({city: regex}, {city: null}, {city: ''}, {city: $exists:false}). When city is falsy the function returns None so the caller skips the clause — clean and bug-free; verified live with john.distributor@test.com.",
+    "create_stock_transfer (distributor_stock_transfers.py:802-814) validates batch_id BEFORE stock check — correct order so the user sees the actionable 'select a batch' error first. Error message includes warehouse name + missing SKU names.",
+    "_adjust_factory_stock / _adjust_distributor_stock (lines 154-229) upsert key correctly includes batch_id when set and {$in:[None]} when not — keeps legacy aggregate rows untouched. Matches the spec: 'legacy batch_id=None row is not touched'.",
+    "_read_source_stock (lines 246-288) returns (sku_id, batch_id) keys when batch_ids is provided, falls back to aggregate when not — the dual-shape is well-documented in the docstring.",
+    "list_batches_available (lines 490-543) hydrates batch_code from production_batches when stock rows only have batch_id — defensive against legacy stock seeded without batch_code. FIFO sort on received_at ASC is correct.",
+    "POST flow's batch insufficiency message (line 837-841) helpfully includes batch_code in the error string so the user can pivot to a different batch immediately — good UX.",
+    "TransferItem.rate field (line 73) is still accepted from clients but ignored — no warning is logged. Same comment as iteration 176: a logger.warning when a non-zero value is sent would help detect stale frontends."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_177_batch_tracking_and_fleet.py"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "smoke-pass (modal renders, disabled state correct, AUTO badge shown; deeper E2E blocked by missing testids inside modal)"},
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123 — login returns session_token. Distributor: john.distributor@test.com / nyladist## — has force_password_change=true but login + cookie work, used to hit /fleet/vehicles + /fleet/drivers.",
+  "seed_data_creation": "No new seed data created. Used the pre-seeded fixtures from the review request: tracked source 6eb87219-…, batches d68a630a-… (A, ~60 bottles) and ec94e975-… (B, ~240 bottles). Tests that hit POST /stock-transfers/ are deliberately invalid (missing batch_id or over-quantity) so they get a 400 — no real transfers created during this run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run via: cd /app/backend && REACT_APP_BACKEND_URL=https://supply-chain-sync-3.preview.emergentagent.com python -m pytest tests/test_iteration_177_batch_tracking_and_fleet.py -v. The pytest fixture loads login token from /api/auth/login (key='session_token'). Seeded batch A may continue to be drained by happy-path tests across iterations — if a future agent gets 'Insufficient stock' on batch_id=BATCH-VERIFY-A, top it up via Production or pivot to batch B. UI E2E for the batch picker requires testids inside the New Stock Transfer modal (currently only the trigger button has one); flagged as an action item for the main agent.",
+  "rca of the issue": "Not a bug-fix iteration — feature validation. The Phase 1 Batch Tracking change adds an optional batch_id to TransferItem, forces it when source.track_batches=true, validates stock per-(sku, batch) and propagates batch identity through the upsert key in both factory_warehouse_stock and distributor_stock collections. The pre-existing fleet-picker bug ('empty result when distributor city != record city even though city was null/missing') was fixed by _city_match_clause's inclusive OR ({city: regex} ∪ {city: null} ∪ {city: ''} ∪ {city: $exists:false}) — verified live: both fleet endpoints return 200 with arrays for the Brian-linked distributor user."
+}

@@ -9,12 +9,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { 
   Package, Warehouse, Building2, MapPin, RefreshCw, 
   TrendingUp, TrendingDown, Search, Filter, BarChart3,
-  Boxes, ChevronDown, ChevronUp
+  Boxes, ChevronDown, ChevronUp, ShieldAlert, Factory,
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Safe percentage helper: never returns NaN. Returns 0 when denominator is
+// 0 / undefined / NaN so the UI shows "0%" instead of "NaN%".
+const safePct = (numerator, denominator, decimals = 0) => {
+  const d = Number(denominator);
+  const n = Number(numerator);
+  if (!Number.isFinite(d) || !Number.isFinite(n) || d <= 0) return '0';
+  return ((n / d) * 100).toFixed(decimals);
+};
 
 export default function StockDashboard() {
   const { token } = useAuth();
@@ -25,6 +34,39 @@ export default function StockDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedLocations, setExpandedLocations] = useState({});
   const [distributors, setDistributors] = useState([]);
+  const [safetyData, setSafetyData] = useState(null);
+  const [safetyLoading, setSafetyLoading] = useState(false);
+  // Display unit toggle. "bottles" = raw bottle counts (the underlying storage
+  // unit). "default_crate" = each SKU shown in its own default crate packaging
+  // (e.g. 1L → 12 Bottle Crate, 660ml → 24 Bottle Crate). Reps can switch on
+  // the fly to count what they actually load onto a truck.
+  const [unitMode, setUnitMode] = useState('default_crate');
+
+  // Convert a row's quantity into the active unit. For 'default_crate' mode we
+  // floor-divide bottles by the SKU's default `units_per_package`. Rows that
+  // don't carry a default packaging (or for which it's 1) just return the
+  // bottle count — so empty-bottles etc. keep working as before.
+  const toUnit = (row, qty) => {
+    if (!row) return qty || 0;
+    if (unitMode === 'bottles') return qty || 0;
+    const upp = row.default_units_per_package || 1;
+    if (upp <= 1) return qty || 0;
+    return Math.floor((qty || 0) / upp);
+  };
+  const unitLabelFor = (row) => {
+    if (unitMode === 'bottles') return 'bottles';
+    const name = row?.default_packaging_name;
+    if (!name) return 'bottles';
+    // Pick the last *word* in the packaging name, ignoring numbers, dashes
+    // and other non-letter tokens. "Crate - 12" → "crates", "Carton - 6" →
+    // "cartons", "24 Bottle Crate" → "crates", "Bottle (1)" → "bottles".
+    const words = name
+      .replace(/\(.*\)$/, '')
+      .split(/\s+/)
+      .map(w => w.replace(/[-_]+$/, '').trim())
+      .filter(w => /[a-z]/i.test(w));
+    return ((words[words.length - 1] || 'package').toLowerCase() + 's');
+  };
 
   // Fetch distributors list
   const fetchDistributors = useCallback(async () => {
@@ -69,6 +111,27 @@ export default function StockDashboard() {
   useEffect(() => {
     fetchStockData();
   }, [fetchStockData]);
+
+  // Safety / cross-collection warehouse overview (factory_warehouse_stock +
+  // distributor_stock unified into a single table so admins can spot mismatches).
+  const fetchSafetyData = useCallback(async () => {
+    setSafetyLoading(true);
+    try {
+      const { data } = await axios.get(`${API_URL}/api/distributor/stock-transfers/warehouse-stock-overview`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
+      });
+      setSafetyData(data);
+    } catch (e) {
+      toast.error('Failed to load safety overview');
+    } finally {
+      setSafetyLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchSafetyData();
+  }, [fetchSafetyData]);
 
   const toggleLocationExpand = (locationId) => {
     setExpandedLocations(prev => ({
@@ -165,7 +228,7 @@ export default function StockDashboard() {
                 <p className="text-3xl font-bold text-blue-700" data-testid="total-stock">
                   {stockData?.summary?.total_quantity?.toLocaleString() || 0}
                 </p>
-                <p className="text-xs text-blue-600">units</p>
+                <p className="text-xs text-blue-600">crates</p>
               </div>
               <Boxes className="h-10 w-10 text-blue-500 opacity-80" />
             </div>
@@ -233,7 +296,57 @@ export default function StockDashboard() {
             <Building2 className="h-4 w-4 mr-2" />
             By Distributor
           </TabsTrigger>
+          <TabsTrigger value="safety-overview" data-testid="tab-safety-overview">
+            <ShieldAlert className="h-4 w-4 mr-2" />
+            Safety Overview
+            {(safetyData?.orphans?.length || 0) + (safetyData?.warehouses?.reduce((n, w) => n + (w.warnings?.length || 0), 0) || 0) > 0 && (
+              <Badge variant="destructive" className="ml-2 h-5 px-1.5 text-[10px]" data-testid="safety-issues-badge">
+                {(safetyData?.orphans?.length || 0) + (safetyData?.warehouses?.reduce((n, w) => n + (w.warnings?.length || 0), 0) || 0)}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
+
+        {/* Units toggle — flip the entire dashboard between raw bottles and
+            each SKU's default crate packaging (e.g. 1L → 12 Bottle Crate). */}
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-600"
+          data-testid="units-banner"
+        >
+          <div className="flex items-center gap-2">
+            <Package className="h-3.5 w-3.5 text-slate-400" />
+            <span>
+              Showing each SKU in its
+              {unitMode === 'default_crate' ? (
+                <> <span className="font-semibold text-slate-700">default crate packaging</span> (configured in SKU Management).</>
+              ) : (
+                <> <span className="font-semibold text-slate-700">raw bottle</span> count.</>
+              )}
+            </span>
+          </div>
+          <div className="inline-flex rounded-md border border-slate-200 bg-white p-0.5" role="group" aria-label="Display unit">
+            <button
+              type="button"
+              onClick={() => setUnitMode('default_crate')}
+              className={`px-3 py-1 text-[11px] font-medium rounded-[3px] transition-colors ${
+                unitMode === 'default_crate' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              data-testid="unit-toggle-crate"
+            >
+              Default Crate
+            </button>
+            <button
+              type="button"
+              onClick={() => setUnitMode('bottles')}
+              className={`px-3 py-1 text-[11px] font-medium rounded-[3px] transition-colors ${
+                unitMode === 'bottles' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+              }`}
+              data-testid="unit-toggle-bottles"
+            >
+              Bottles
+            </button>
+          </div>
+        </div>
 
         {/* By Location Tab */}
         <TabsContent value="by-location">
@@ -291,30 +404,42 @@ export default function StockDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {location.items?.sort((a, b) => b.quantity - a.quantity).map((item, idx) => (
+                            {location.items?.sort((a, b) => b.quantity - a.quantity).map((item, idx) => {
+                              const q = toUnit(item, item.quantity);
+                              const lbl = unitLabelFor(item);
+                              return (
                               <tr key={item.sku_id || idx} className="border-b last:border-b-0 hover:bg-muted/30">
                                 <td className="p-3">
                                   <div className="flex items-center gap-2">
                                     <Package className="h-4 w-4 text-muted-foreground" />
-                                    {item.sku_name}
+                                    <div>
+                                      <div>{item.sku_name}</div>
+                                      {unitMode === 'default_crate' && item.default_packaging_name && (
+                                        <div className="text-[10px] text-muted-foreground">in {item.default_packaging_name}</div>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
-                                <td className="p-3 text-right font-medium">{item.quantity?.toLocaleString()}</td>
+                                <td className="p-3 text-right">
+                                  <div className="font-medium tabular-nums">{q.toLocaleString()}</div>
+                                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{lbl}</div>
+                                </td>
                                 <td className="p-3 text-right">
                                   <div className="flex items-center justify-end gap-2">
                                     <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
                                       <div 
                                         className="h-full bg-primary rounded-full"
-                                        style={{ width: `${(item.quantity / location.total_quantity * 100).toFixed(0)}%` }}
+                                        style={{ width: `${safePct(item.quantity, location.total_quantity, 0)}%` }}
                                       />
                                     </div>
                                     <span className="text-muted-foreground">
-                                      {(item.quantity / location.total_quantity * 100).toFixed(0)}%
+                                      {safePct(item.quantity, location.total_quantity, 0)}%
                                     </span>
                                   </div>
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -351,18 +476,27 @@ export default function StockDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {stockData?.by_sku?.map((sku, idx) => (
+                      {stockData?.by_sku?.map((sku, idx) => {
+                        const shownQty = toUnit(sku, sku.total_quantity);
+                        const unitLbl = unitLabelFor(sku);
+                        return (
                         <tr key={sku.sku_id || idx} className="border-b hover:bg-muted/30" data-testid={`sku-row-${idx}`}>
                           <td className="p-3">
                             <div className="flex items-center gap-2">
                               <div className="p-1.5 bg-green-100 rounded">
                                 <Package className="h-4 w-4 text-green-600" />
                               </div>
-                              <span className="font-medium">{sku.sku_name}</span>
+                              <div className="min-w-0">
+                                <div className="font-medium">{sku.sku_name}</div>
+                                {unitMode === 'default_crate' && sku.default_packaging_name && (
+                                  <div className="text-[10px] text-muted-foreground">in {sku.default_packaging_name}</div>
+                                )}
+                              </div>
                             </div>
                           </td>
                           <td className="p-3 text-right">
-                            <span className="text-lg font-bold">{sku.total_quantity?.toLocaleString()}</span>
+                            <div className="text-lg font-bold tabular-nums">{shownQty.toLocaleString()}</div>
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{unitLbl}</div>
                           </td>
                           <td className="p-3 text-right">
                             <Badge variant="outline">{sku.location_count} locations</Badge>
@@ -372,16 +506,16 @@ export default function StockDashboard() {
                               <div className="w-24 h-3 bg-muted rounded-full overflow-hidden">
                                 <div 
                                   className="h-full bg-green-500 rounded-full"
-                                  style={{ width: `${(sku.total_quantity / stockData.summary.total_quantity * 100).toFixed(0)}%` }}
+                                  style={{ width: `${safePct(sku.total_quantity, stockData.summary.total_quantity, 0)}%` }}
                                 />
                               </div>
                               <span className="text-sm text-muted-foreground w-12 text-right">
-                                {(sku.total_quantity / stockData.summary.total_quantity * 100).toFixed(1)}%
+                                {safePct(sku.total_quantity, stockData.summary.total_quantity, 1)}%
                               </span>
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      );})}
                     </tbody>
                   </table>
                 </div>
@@ -426,7 +560,7 @@ export default function StockDashboard() {
                         <div className="flex items-center gap-1 text-muted-foreground">
                           <BarChart3 className="h-4 w-4" />
                           <span className="text-sm">
-                            {(dist.total_quantity / stockData.summary.total_quantity * 100).toFixed(1)}% of total
+                            {safePct(dist.total_quantity, stockData.summary.total_quantity, 1)}% of total
                           </span>
                         </div>
                       </div>
@@ -434,6 +568,119 @@ export default function StockDashboard() {
                   </CardContent>
                 </Card>
               ))
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Safety Overview — cross-collection (factory_warehouse_stock + distributor_stock) */}
+        <TabsContent value="safety-overview" data-testid="safety-overview-panel">
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <ShieldAlert className="h-5 w-5 text-amber-600" />
+                      Cross-Collection Warehouse Stock
+                    </CardTitle>
+                    <CardDescription>
+                      Unified view of on-hand stock across BOTH <code className="text-[11px] bg-slate-100 px-1 py-0.5 rounded">factory_warehouse_stock</code> and <code className="text-[11px] bg-slate-100 px-1 py-0.5 rounded">distributor_stock</code>. Mismatches (stock in wrong collection) and orphan rows are flagged below.
+                    </CardDescription>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Total bottles</p>
+                    <p className="text-2xl font-bold tabular-nums" data-testid="safety-grand-total">
+                      {(safetyData?.totals?.grand_bottles || 0).toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      <span className="text-purple-700 font-semibold">{(safetyData?.totals?.factory_bottles || 0).toLocaleString('en-IN')}</span> factory ·{' '}
+                      <span className="text-blue-700 font-semibold">{(safetyData?.totals?.distributor_bottles || 0).toLocaleString('en-IN')}</span> distributor
+                    </p>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {safetyLoading ? (
+                  <div className="py-8 text-center"><RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div>
+                ) : (safetyData?.warehouses?.length || 0) === 0 ? (
+                  <div className="py-12 text-center text-muted-foreground">No warehouses found.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="text-left p-2">Warehouse</th>
+                          <th className="text-left p-2">Distributor</th>
+                          <th className="text-left p-2">Kind</th>
+                          <th className="text-right p-2">Bottles</th>
+                          <th className="text-left p-2">SKUs</th>
+                          <th className="text-left p-2">Issues</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {safetyData.warehouses.map((w) => {
+                          const skuCount = (w.items_distributor?.length || 0) + (w.items_factory?.length || 0);
+                          return (
+                            <tr key={w.location_id} className="border-b hover:bg-slate-50" data-testid={`safety-row-${w.location_id}`}>
+                              <td className="p-2">
+                                <div className="font-medium">{w.location_name}</div>
+                                <div className="text-[11px] text-muted-foreground">{w.city || '—'}{w.state ? `, ${w.state}` : ''}{w.gstin ? ` · ${w.gstin}` : ''}</div>
+                              </td>
+                              <td className="p-2 text-xs">{w.distributor_name || '—'}</td>
+                              <td className="p-2">
+                                {w.is_factory ? (
+                                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px]"><Factory className="h-3 w-3 mr-1" />Factory</Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]"><Warehouse className="h-3 w-3 mr-1" />Distributor</Badge>
+                                )}
+                              </td>
+                              <td className="p-2 text-right font-mono font-semibold tabular-nums">{(w.total_bottles || 0).toLocaleString('en-IN')}</td>
+                              <td className="p-2 text-xs">{skuCount}</td>
+                              <td className="p-2">
+                                {(w.warnings || []).length === 0 ? (
+                                  <span className="text-emerald-600 text-xs">✓ OK</span>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {w.warnings.map((msg, idx) => (
+                                      <div key={idx} className="text-[11px] text-amber-700 flex items-start gap-1">
+                                        <ShieldAlert className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                                        <span>{msg}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {(safetyData?.orphans?.length || 0) > 0 && (
+              <Card className="border-red-200 bg-red-50/30">
+                <CardHeader>
+                  <CardTitle className="text-red-700 text-base flex items-center gap-2">
+                    <ShieldAlert className="h-4 w-4" /> Orphan stock rows ({safetyData.orphans.length})
+                  </CardTitle>
+                  <CardDescription>Stock rows whose <code>location_id</code> no longer exists. Investigate and either reassign or delete.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1 text-xs">
+                    {safetyData.orphans.map((o, idx) => (
+                      <div key={idx} className="flex items-center gap-2 text-red-700">
+                        <code className="bg-red-100 px-1 rounded text-[10px]">{o.collection}</code>
+                        <span className="font-medium">{o.sku_name}</span>
+                        <span className="tabular-nums">— {o.bottles} bottles</span>
+                        <span className="text-red-500">· {o.hint}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </div>
         </TabsContent>

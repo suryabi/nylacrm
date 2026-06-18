@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 148 — Per-SKU Rejection Cost Configuration verified. Backend pytest 12/12 PASS covering: config endpoint without sku_id returns {skus(8), components(5+), reasons} with NO stages/mappings; config?sku_id=20L Premium (51cbec53...) returns sku + stages={QC Stage 1, QC Stage 2, Labeling, Final QC} + mappings; config?sku_id=PET (ff23d238...) returns empty stages; POST upsert without sku_id → 422; POST with bogus sku_id → 404; POST creates+upserts on (sku_id,stage,reason); same (stage,reason) different sku_id creates SEPARATE mapping; GET ?sku_id=X returns only that SKU's mappings (verified isolation); calculate uses sku-scoped lookup (missing_mapping=true for unmapped stage); /rejection-report rows include sku_id,cost_of_rejection,missing_mapping. Frontend verified via Playwright: page loads with SKU picker + empty state hint 'Select a SKU above'; SKU dropdown shows 8 active master SKUs; selecting SKU loads SKU-scoped view; SKU without QC route (PET) shows warning 'No QC route configured for this SKU yet' + 'Add new mapping for PET' header (SKU name in red) + stage dropdown DISABLED with placeholder 'No stages — add QC route' + matrix shows 'No mappings yet for this SKU' empty state; switching SKU correctly updates page; integration with backend works (sku_id query param is sent, payload is rendered).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_148_rejection_cost_per_sku.py",
+    "/app/test_reports/pytest/iteration_148_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "production_qc.py:823-894 upsert correctly enforces (tenant_id, sku_id, stage_name, reason_id) uniqueness — verified separate mappings created for same (stage,reason) but different sku_id, and re-POST returns same id.",
+    "production_qc.py:777-805 config endpoint correctly omits stages/mappings when sku_id is missing and includes them when sku_id is provided — keeps payload lean for picker bootstrap.",
+    "production_qc.py:1319 mapping_lookup tuple (sku_id, stage_name, reason_name) for /rejection-report enrichment — correctly scoped per SKU; rows of one SKU never use another SKU's mapping.",
+    "production_qc.py:907-982 _calc_rejection_cost queries with sku_id constraint in mapping_q — confirmed missing_mapping=true when querying a stage without a mapping for that specific SKU.",
+    "RejectionCostConfig.js:233 stage Select disabled={skuConfig.stages.length===0} — correctly tied to backend's empty stages array, no client-side hardcoding.",
+    "Minor: production_qc.py:829 Service-level guard `if not data.sku_id…` is unreachable for sku_id (Pydantic 422 fires first) but acts as safety net for empty strings — harmless."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_148_rejection_cost_per_sku.py (new — 12 tests, 4 classes)"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12)",
+    "frontend": "100% (all verified flows pass)"
+  },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, Nyla Air Water tenant)",
+  "seed_data_creation": "Tests created/upserted/deleted mappings for SKU_PREMIUM_20L (51cbec53-a1d5-4e23-b708-a1fd0c014059) on QC Stage 1 + Black Particles, and SKU_PET (ff23d238-07eb-4a5b-98c3-46e268a9e367) on QC Stage 1 + Black Particles. All cleaned up at end of class via DELETE.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run via `pytest backend/tests/test_iteration_148_rejection_cost_per_sku.py -v`. Note: The visible tenant 'Nyla Air Water' SKU dropdown shows 8 SKUs (24 Brand, 4 Nyla Premium variants, 2 Sparkling, PET). The '20L Premium' (id 51cbec53...) used in problem-statement examples exists in the master_skus collection (verified via backend GET response) but is not displayed by name in the UI dropdown of this tenant — its label varies. Frontend 'with QC route' UI path was indirectly validated (the same React code disables vs enables stage Select solely on the response.stages.length, which backend tests proved is correctly populated for routed SKUs and empty for unrouted SKUs). BatchDetail inline preview was NOT directly UI-tested but its backing /rejection-cost-mappings?sku_id=X and /rejection-cost-calculate endpoints are fully covered by backend tests.",
+  "rca of the issue": "No issues found. All 12 backend tests pass; frontend behavior matches spec on PET (empty-state warning + disabled stage dropdown + SKU-scoped 'Add new mapping for PET' card)."
+}

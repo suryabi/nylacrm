@@ -1,106 +1,126 @@
 {
   "theme": "light",
-  "archetype": "3 (Pastel & Soft) mixed with Neo-Brutalism",
-  "design_philosophy": "A fresh, vibrant marketing-focused aesthetic moving away from typical sterile SaaS layouts. It uses soft pastels grounded by deep charcoal text and hard borders (Neo-brutalist twist) to create a structured, approachable, and creative 'marketing vibe' that remains intuitive for non-technical users.",
+  "archetype": "4 (Swiss & High-Contrast / Data-Dense Dashboard)",
+  "domain_context": "B2B CRM / Internal SaaS",
   "colors": {
-    "background": "#FAF9F6",
-    "surface": "#FFFFFF",
-    "primary": "#FF6B6B",
-    "primary_foreground": "#FFFFFF",
-    "secondary": "#FDE74C",
-    "secondary_foreground": "#1C1C1C",
-    "accent": "#A8E6CF",
-    "accent_foreground": "#1C1C1C",
-    "text_primary": "#1C1C1C",
-    "text_secondary": "#4B5563",
-    "border": "#1C1C1C",
-    "muted": "#F3F4F6",
-    "workflow_statuses": {
-      "draft": { "bg": "#E2E8F0", "text": "#1C1C1C", "border": "#1C1C1C" },
-      "review": { "bg": "#FDE74C", "text": "#1C1C1C", "border": "#1C1C1C" },
-      "scheduled": { "bg": "#4EA8DE", "text": "#FFFFFF", "border": "#1C1C1C" },
-      "published": { "bg": "#A8E6CF", "text": "#1C1C1C", "border": "#1C1C1C" }
+    "primary": {
+      "base": "emerald-600",
+      "hover": "emerald-700",
+      "light": "emerald-50",
+      "border": "emerald-200"
     },
-    "platforms": {
-      "linkedin": "#0A66C2",
-      "whatsapp": "#25D366",
-      "youtube": "#FF0000",
-      "instagram": "#E1306C",
-      "facebook": "#1877F2"
+    "neutrals": {
+      "background": "white",
+      "surface": "slate-50",
+      "border": "slate-200",
+      "text_main": "slate-900",
+      "text_muted": "slate-500"
+    },
+    "workflow_states": {
+      "submitted": { "bg": "slate-100", "border": "slate-300", "text": "slate-700", "dot": "slate-400" },
+      "in_progress": { "bg": "blue-50", "border": "blue-200", "text": "blue-700", "dot": "blue-500" },
+      "review": { "bg": "amber-50", "border": "amber-200", "text": "amber-700", "dot": "amber-500" },
+      "final_approved": { "bg": "emerald-50", "border": "emerald-200", "text": "emerald-700", "dot": "emerald-500" },
+      "overdue": { "bg": "red-50", "border": "red-300", "text": "red-700", "dot": "red-500" }
     }
   },
   "typography": {
-    "font_family": {
-      "heading": "'Outfit', sans-serif",
-      "body": "'Manrope', sans-serif"
-    },
-    "hierarchy": {
-      "h1": "text-4xl sm:text-5xl font-black tracking-tight text-[#1C1C1C]",
-      "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-[#1C1C1C]",
-      "h3": "text-xl sm:text-2xl font-bold text-[#1C1C1C]",
-      "body": "text-base font-medium text-[#4B5563] leading-relaxed",
-      "small": "text-sm font-semibold uppercase tracking-widest text-[#4B5563]"
+    "headings": "font-sans tracking-tight font-semibold text-slate-900",
+    "body": "font-sans text-slate-700",
+    "mono_identifiers": "font-mono text-xs tracking-wider text-slate-500",
+    "sizes": {
+      "h3": "text-lg",
+      "body": "text-sm",
+      "small": "text-xs"
     }
   },
-  "spacing_and_layout": {
-    "container_padding": "p-6 sm:p-8 lg:p-12",
-    "calendar_grid": "grid grid-cols-7 gap-0 border-l border-t border-[#1C1C1C]",
-    "calendar_cell": "min-h-[120px] p-2 border-r border-b border-[#1C1C1C] bg-white transition-colors hover:bg-muted/50",
-    "bento_spacing": "gap-6 sm:gap-8",
-    "radius": "rounded-xl"
+  "layout_and_spacing": {
+    "container": "bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full",
+    "row_height": "h-16",
+    "bar_height": "h-8",
+    "left_panel_width": "w-80 shrink-0",
+    "day_column_width": "w-10 shrink-0"
   },
-  "components": {
-    "cards": "bg-white border-2 border-[#1C1C1C] rounded-xl shadow-[4px_4px_0px_#1C1C1C] hover:shadow-[6px_6px_0px_#1C1C1C] transition-shadow duration-200",
-    "buttons": {
-      "primary": "bg-[#FF6B6B] text-white border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg",
-      "secondary": "bg-[#FDE74C] text-[#1C1C1C] border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg",
-      "outline": "bg-white text-[#1C1C1C] border-2 border-[#1C1C1C] shadow-[2px_2px_0px_#1C1C1C] hover:shadow-[4px_4px_0px_#1C1C1C] hover:-translate-y-0.5 transition-all font-bold px-6 py-3 rounded-lg"
+  "component_specifics": {
+    "gantt_container": {
+      "description": "Uses CSS Grid or Flex with a sticky left pane. The right side scrolls horizontally.",
+      "classes": "flex w-full overflow-x-auto relative scrollbar-thin scrollbar-thumb-slate-300"
     },
-    "inputs": "bg-white border-2 border-[#1C1C1C] rounded-lg px-4 py-3 focus:ring-2 focus:ring-[#FF6B6B] focus:border-[#1C1C1C] font-medium transition-all shadow-[inset_2px_2px_0px_rgba(0,0,0,0.05)]",
-    "badges": "px-3 py-1 text-xs font-bold uppercase tracking-wider rounded-full border border-[#1C1C1C] flex items-center gap-1",
-    "sidebar": "w-64 border-r-2 border-[#1C1C1C] bg-white h-screen fixed top-0 left-0 p-6 flex flex-col gap-8 z-50"
-  },
-  "iconography": {
-    "library": "@phosphor-icons/react",
-    "style": "duotone or bold for a playful but professional look",
-    "installation": "yarn add @phosphor-icons/react"
+    "left_panel": {
+      "description": "Sticky column on the left containing request details. 2-line high-density layout.",
+      "classes": "sticky left-0 z-20 bg-white border-r border-slate-200 shadow-[4px_0_12px_rgba(0,0,0,0.03)] flex flex-col",
+      "header_cell": "h-14 flex items-center px-4 border-b border-slate-200 bg-slate-50/80 backdrop-blur text-xs font-semibold uppercase tracking-wider text-slate-500",
+      "row_cell": "h-16 px-4 border-b border-slate-100 flex items-center gap-3 hover:bg-slate-50 transition-colors group cursor-pointer",
+      "row_content": {
+        "layout": "flex flex-col gap-1 w-full min-w-0",
+        "top_line": "flex items-center justify-between",
+        "request_id": "font-mono text-[10px] sm:text-xs text-slate-500",
+        "title": "text-sm font-medium text-slate-900 truncate",
+        "bottom_line": "flex items-center gap-2",
+        "assignee": "flex items-center gap-1.5 text-xs text-slate-500",
+        "avatar": "w-5 h-5 rounded-full bg-slate-200 object-cover"
+      }
+    },
+    "timeline_grid": {
+      "header_area": "sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-200 flex flex-col",
+      "month_row": "flex h-7 items-center border-b border-slate-100",
+      "month_cell": "px-2 text-xs font-medium text-slate-600 sticky left-80",
+      "day_row": "flex h-7 items-center",
+      "day_cell": "w-10 shrink-0 flex flex-col items-center justify-center border-r border-slate-100 text-[10px]",
+      "weekend_cell": "bg-slate-50/50",
+      "grid_row": "flex h-16 border-b border-slate-100 relative group hover:bg-slate-50/30 transition-colors"
+    },
+    "today_marker": {
+      "description": "A sharp, clear vertical line crossing the entire chart.",
+      "classes": "absolute top-0 bottom-0 w-px bg-emerald-500 z-10 pointer-events-none",
+      "node": "absolute -top-1 -translate-x-1/2 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
+    },
+    "timeline_bar": {
+      "description": "The actual task span. Uses subtle borders and solid backgrounds to feel tactile, not flat.",
+      "wrapper": "absolute top-1/2 -translate-y-1/2 h-8 px-1",
+      "inner_bar": "w-full h-full rounded-md border flex items-center px-2.5 shadow-sm transition-transform hover:-translate-y-[1px] hover:shadow-md cursor-pointer",
+      "text": "text-xs font-medium truncate",
+      "overdue_styling": "bg-[repeating-linear-gradient(45deg,theme(colors.red.50),theme(colors.red.50)_10px,theme(colors.white)_10px,theme(colors.white)_20px)] border-red-300 text-red-700"
+    },
+    "edge_cases": {
+      "no_due_date": {
+        "solution": "Do not render a bar. Render a 'TBD Milestone Pill' at the created_date.",
+        "classes": "absolute top-1/2 -translate-y-1/2 h-6 w-16 bg-slate-50 border border-dashed border-slate-400 rounded-full flex items-center justify-center shadow-sm",
+        "text": "text-[10px] font-semibold text-slate-500 uppercase tracking-wide",
+        "trailing_line": "absolute top-1/2 left-full w-8 h-px bg-gradient-to-r from-slate-400 border-dashed to-transparent"
+      },
+      "far_future_infinite_date": {
+        "solution": "Cap the rendering at a maximum date range (e.g., end of currently loaded quarter). If a bar exceeds this, cut it off and apply a fade mask.",
+        "classes": "rounded-r-none border-r-0 relative overflow-visible",
+        "fade_effect": "after:absolute after:top-0 after:-right-4 after:w-8 after:h-full after:bg-gradient-to-r after:from-[color] after:to-transparent after:opacity-50",
+        "indicator_icon": "absolute top-1/2 -right-3 -translate-y-1/2 text-[color] w-3 h-3"
+      }
+    },
+    "legend": {
+      "classes": "flex items-center gap-4 px-4 py-3 border-t border-slate-200 bg-slate-50 text-xs text-slate-600",
+      "item": "flex items-center gap-1.5",
+      "dot": "w-2 h-2 rounded-full"
+    }
   },
   "interactions": {
-    "hover_states": "Elements should lift up (-translate-y-1) and cast a slightly larger hard shadow to emphasize the tactile Neo-Brutalist feel.",
-    "focus_states": "High contrast ring focus (focus:ring-2 focus:ring-[#FF6B6B] focus:outline-none).",
-    "transitions": "transition-all duration-200 ease-in-out"
+    "hover_row": "Highlight both the left panel cell and the timeline grid row simultaneously. Requires shared state or group-hover if structured correctly.",
+    "hover_bar": "Slight upward translation (-translate-y-[1px]), deepen shadow (shadow-md).",
+    "click_row": "Opens a Shadcn Sheet (Side Panel) containing the full request details."
   },
-  "image_assets": {
-    "avatars": [
-      {
-        "url": "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwxfHxwcm9maWxlJTIwcG9ydHJhaXQlMjBwcm9mZXNzaW9uYWx8ZW58MHx8fHwxNzc1MTM4NTIzfDA&ixlib=rb-4.1.0&q=85",
-        "description": "User avatar for the top right profile dropdown."
-      },
-      {
-        "url": "https://images.unsplash.com/photo-1762522926157-bcc04bf0b10a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzl8MHwxfHNlYXJjaHwzfHxwcm9maWxlJTIwcG9ydHJhaXQlMjBwcm9mZXNzaW9uYWx8ZW58MHx8fHwxNzc1MTM4NTIzfDA&ixlib=rb-4.1.0&q=85",
-        "description": "Team member avatar for post reviewer assignments."
-      }
-    ],
-    "content_thumbnails": [
-      {
-        "url": "https://images.unsplash.com/photo-1770368787714-4e5a5ea557fd?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHwyfHxzb2NpYWwlMjBtZWRpYSUyMGNvbnRlbnQlMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzc1MTM4NTI0fDA&ixlib=rb-4.1.0&q=85",
-        "description": "Example thumbnail for a planned social media reel/post in the review sheet."
-      }
+  "testing": {
+    "data_testid_rules": [
+      "data-testid='gantt-container'",
+      "data-testid='gantt-row-mr-2026-0021'",
+      "data-testid='gantt-bar-mr-2026-0021'",
+      "data-testid='gantt-tbd-milestone'",
+      "data-testid='gantt-overdue-bar'"
     ]
   },
-  "testing_attributes": {
-    "requirement": "All interactive elements must include data-testid. E.g., data-testid='calendar-next-month-btn', data-testid='new-post-modal-btn', data-testid='post-status-select'."
-  },
   "instructions_to_main_agent": [
-    "Install and use 'Outfit' (Headings) and 'Manrope' (Body) from Google Fonts.",
-    "Implement the layout with a fixed Left Sidebar and a Main Content area.",
-    "The primary view is the Marketing Calendar. Build a robust grid layout for the Monthly view. Implement a Weekly and Daily toggle as well.",
-    "Calendar cells must look like large bento boxes with 1px dark borders. Use absolute positioning inside relative cells for event pills if there are many, or simple flex columns.",
-    "For the 'Post Planning' feature, use a Shadcn Sheet (sliding in from the right) or Dialog to create/edit posts.",
-    "Ensure Multi-select is implemented properly for platforms (LinkedIn, Instagram, etc.), perhaps using command/combobox from Shadcn UI.",
-    "For Auto-Events (Global/Indian events), display them in the calendar cells as subtle, non-intrusive text/icons at the bottom of the date cell.",
-    "Embrace the Neo-Brutalist aesthetic. Use the specified custom shadow classes (`shadow-[4px_4px_0px_#1C1C1C]`) on cards and buttons instead of the default Shadcn soft shadows. Override Shadcn defaults to match this tactile, fresh marketing vibe.",
-    "Use Phosphor icons heavily to complement the modern, creative tone.",
-    "Ensure full responsive behavior for the calendar. On mobile, the month view might switch to a list view."
+    "Implement the Gantt using standard flex/grid layouts. Keep the left panel sticky with `sticky left-0 z-20`.",
+    "For the timeline bars, use absolute positioning `left: [calc]%` and `width: [calc]%` relative to the grid row.",
+    "To solve the infinite timeline bug: Instead of rendering `due_date || infinity`, compute `actual_due_date = due_date || null`. If null, render the `<NoDueDatePill />` component at `created_date`. If `due_date` exceeds the `max_visible_date` of your chart window, cap the `width` percentage to 100% and apply `rounded-r-none` with an arrow icon.",
+    "Ensure Overdue items (due_date < today && status !== final_approved) use the striped background utility provided in `component_specifics.timeline_bar.overdue_styling`.",
+    "Add `data-testid` to all clickable rows and bars for testing."
   ]
 }

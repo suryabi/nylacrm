@@ -1,0 +1,123 @@
+{
+  "summary": "Frontend UI testing for stage percentages, overall quality bar, and redesigned inspection form. All 10 features verified successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_138.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100% (10/10 features verified)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Used existing TEST-FIX-MULTI-REJ batch, moved 5 crates to QC Stage 1 to create pending crates for inspection form testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All UI features for stage percentages and inspection form redesign verified. Batch 660G-APR-001 has 222 rejected bottles (7.7% rejection rate). TEST-FIX-MULTI-REJ batch now has 5 pending crates at QC Stage 1.",
+  "features_tested": {
+    "stage_percentages": {
+      "status": "PASSED",
+      "details": [
+        "Stage cards show pass % and reject % based on bottles (rejected_bottles / (received_crates * bottles_per_crate) * 100)",
+        "Batch 660G-APR-001: QC Stage 1 (98.1% pass, 1.9% reject), QC Stage 2 (98.4% pass, 1.6% reject), Labeling (98.3% pass, 1.7% reject), Final QC (97.5% pass, 2.5% reject)",
+        "TEST-FIX-MULTI-REJ: QC Stage 1 (93.3% pass, 6.7% reject)"
+      ]
+    },
+    "overall_quality_bar": {
+      "status": "PASSED",
+      "details": [
+        "Overall Quality bar shows total pass % and reject % with progress bar",
+        "Batch 660G-APR-001: 92.3% pass, 7.7% rejected (2,880 total bottles)",
+        "TEST-FIX-MULTI-REJ: 99.0% pass, 1.0% rejected (2,400 total bottles)",
+        "Progress bar shows green (pass) and red (reject) segments proportionally"
+      ]
+    },
+    "summary_bar_reject_percent": {
+      "status": "PASSED",
+      "details": [
+        "Summary bar shows reject % under Total Rejected",
+        "Batch 660G-APR-001: Total Rejected 222 bottles with 7.7% displayed",
+        "TEST-FIX-MULTI-REJ: Total Rejected 24 bottles with 1.0% displayed"
+      ]
+    },
+    "mini_progress_bars": {
+      "status": "PASSED",
+      "details": [
+        "Mini progress bars (green/red) appear under stage balance rows when there are rejections",
+        "Found 4 green progress segments and 5 red segments on batch 660G-APR-001",
+        "Progress bars show proportional pass/reject ratio"
+      ]
+    },
+    "percentages_not_shown_when_received_zero": {
+      "status": "PASSED",
+      "details": [
+        "Percentages are NOT shown when received=0 (no data yet)",
+        "Verified on stages with 0 received crates - no percentage displayed"
+      ]
+    },
+    "inspection_form_redesigned_layout": {
+      "status": "PASSED",
+      "details": [
+        "Emerald gradient header with 'Record Inspection' title",
+        "Header shows stage name, pending count, and bottles/crate info",
+        "Clean entry cards with Resource, Date, Crates Inspected fields",
+        "Add Entry button in header for multiple entries"
+      ]
+    },
+    "inspection_form_live_stats_bar": {
+      "status": "PASSED",
+      "details": [
+        "Live stats bar updates as user enters data",
+        "Shows: crates count, bottles count, rejected count with %, passed count with %",
+        "Progress bar updates in real-time showing pass/reject ratio",
+        "Example: '2 crates | 48 bottles | 3 rejected (6.3%) | 45 passed (93.8%)'"
+      ]
+    },
+    "inspection_form_per_entry_pass_percent": {
+      "status": "PASSED",
+      "details": [
+        "Per-entry pass % with color coding (green/amber/red badge)",
+        "Shows bottles count, rejected count, passed count, and pass % badge",
+        "Color coding: green for >=95%, amber for >=80%, red for <80%",
+        "Example: '48 bottles | 3 rejected | 45 passed | 94% pass'"
+      ]
+    },
+    "inspection_form_rejection_field_styling": {
+      "status": "PASSED",
+      "details": [
+        "Rejection quantity field has red-bordered styling",
+        "Field classes include: border-red-200, text-red-600, bg-red-50/50",
+        "Rejection Details section has clear visual separation"
+      ]
+    },
+    "inspection_form_cancel_resets": {
+      "status": "PASSED",
+      "details": [
+        "Cancel button closes form and resets entries",
+        "Form is no longer visible after clicking Cancel",
+        "Entries are reset to default empty state"
+      ]
+    }
+  },
+  "ui_verification_screenshots": [
+    ".screenshots/batch_detail_all_features.png - Overall quality bar, summary bar, stage cards with percentages",
+    ".screenshots/batch_detail_scrolled.png - All 4 stage cards with mini progress bars",
+    ".screenshots/inspection_form_test.png - Redesigned inspection form with emerald header",
+    ".screenshots/inspection_form_filled.png - Live stats bar, per-entry pass %, rejection styling",
+    ".screenshots/after_cancel.png - Form closed after cancel"
+  ]
+}

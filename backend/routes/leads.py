@@ -12,7 +12,8 @@ import base64
 
 from database import get_tenant_db
 from deps import get_current_user
-from core.tenant import with_tenant_id
+from core.tenant import with_tenant_id, get_current_tenant_id
+from utils.entity_comments import notify_comment_mentions
 
 router = APIRouter()
 
@@ -31,6 +32,7 @@ class Lead(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = 'B2B'  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None
     city: str
@@ -77,6 +79,7 @@ class LeadCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = 'B2B'  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None
     city: str
@@ -107,6 +110,7 @@ class LeadUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = None  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None
     city: Optional[str] = None
@@ -277,6 +281,21 @@ async def create_lead(lead: LeadCreate, current_user: dict = Depends(get_current
     # tenant_id is automatically added by TenantDB
     await tdb.leads.insert_one(lead_data)
     
+    # Best-effort: create a dedicated Drive folder for this lead.
+    try:
+        from utils.google_drive_storage import ensure_lead_folder
+        from core.tenant import get_current_tenant_id as _gctid
+        folder_id = await ensure_lead_folder(_gctid(), lead_data['lead_id'])
+        if folder_id:
+            await tdb.leads.update_one(
+                {'id': lead_data['id']},
+                {'$set': {'drive_folder_id': folder_id}}
+            )
+            lead_data['drive_folder_id'] = folder_id
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).exception('Drive folder creation failed for lead %s', lead_data.get('lead_id'))
+    
     lead_data['created_at'] = datetime.fromisoformat(lead_data['created_at'])
     lead_data['updated_at'] = datetime.fromisoformat(lead_data['updated_at'])
     return Lead(**lead_data)
@@ -434,6 +453,17 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
         raise HTTPException(status_code=404, detail='Lead not found')
     
     update_data = {k: v for k, v in lead_update.model_dump().items() if v is not None}
+
+    # Allow the client to EXPLICITLY clear a nullable field by sending it as
+    # null. The dict-comp above drops every null (so unsent fields don't get
+    # blanked), but we want fields the user actively cleared from the UI to
+    # actually clear in the DB. `model_dump(exclude_unset=True)` only returns
+    # keys the client put in the request body — any explicit null in there
+    # is a deliberate clear and should overwrite the stored value.
+    explicit = lead_update.model_dump(exclude_unset=True)
+    for k, v in explicit.items():
+        if v is None:
+            update_data[k] = None
     
     # Use custom updated_at if provided (admin feature), otherwise use current time
     if 'updated_at' in update_data and update_data['updated_at']:
@@ -761,6 +791,24 @@ async def create_comment(comment: CommentCreate, current_user: dict = Depends(ge
     comment_data['created_at'] = datetime.now(timezone.utc).isoformat()
     
     await tdb.comments.insert_one(comment_data)
+    
+    # @-mention notifications — parse the comment body for inline
+    # `@[Name](user-id)` chips inserted by the frontend MentionTextarea.
+    try:
+        lead = await tdb.leads.find_one({'id': comment_data['lead_id']}, {'_id': 0, 'company': 1, 'contact_person': 1})
+        lead_label = (lead or {}).get('company') or (lead or {}).get('contact_person') or 'lead'
+        await notify_comment_mentions(
+            tenant_id=get_current_tenant_id(),
+            text=comment_data.get('comment') or '',
+            current_user=current_user,
+            link=f"/leads/{comment_data['lead_id']}",
+            title=f"{current_user.get('name') or current_user.get('email') or 'Someone'} mentioned you",
+            body=f"Comment on lead {lead_label}",
+            entity_type='lead',
+            entity_id=comment_data['lead_id'],
+        )
+    except Exception:
+        pass
     
     comment_data['created_at'] = datetime.fromisoformat(comment_data['created_at'])
     return Comment(**comment_data)

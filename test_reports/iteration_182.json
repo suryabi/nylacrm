@@ -1,0 +1,25 @@
+{
+  "summary": "End-to-end validation of the new JSON-driven rule engine on the Marketing Request state machine (guards + required_fields). All 7 scenarios in the review request passed. Backend rule engine + frontend builder UI + Marketing Request detail page enforcement (disabled action button with tooltip, dynamic required-field dialog, applies_when filtering) all behave correctly. Regression on FileAsset thumbnail/download/delete still works. SM has been reverted to its clean default at the end of testing.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/tests/test_rule_engine_e2e.py"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GuardCondition.value is typed Optional[Any]; numeric guards (count_gte/gte) coerce internally via _num so admin entering string '2' still works. Good.",
+    "applies_when for required_fields and guards both call applies_when() — list membership semantics are consistent. Good.",
+    "MarketingRequestDetail renders BOTH action-${key}-btn (disabled with title tooltip) when guards fail. The optional action-${key}-blocked variant is also defined for the secondary blocked-row UI. The review request's expectation (\"button DISABLED with tooltip\") is satisfied by the disabled button + title attribute path. No action needed.",
+    "Cleanup pattern works: setting guards=null and required_fields=[] via PUT correctly drops the rule from the persisted SM. Confirmed by re-GET."
+  ],
+  "updated_files": ["/app/tests/test_rule_engine_e2e.py"],
+  "success_rate": {"backend": "100% (API pre-checks)", "frontend": "100% (builder + 3 MR detail scenarios + regression)"},
+  "test_credentials": "Admin surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). Login returns session_token; FE stores it in localStorage key 'token'.",
+  "seed_data_creation": "Created 3 Marketing Requests for the test (Neck Tags w/ 0 refs, Neck Tags w/ 2 refs, Presentation w/ 2 refs). After testing the SM has been REVERTED to clean state (guards=null, required_fields=[] on submitted→start_working). The 3 MRs themselves were not deleted but two of them have been advanced to 'In Progress' as part of validating the transition flow.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Rule engine is shipping clean. SM file/field catalog endpoint: GET /api/state-machines/fields/catalog?workflow_key=marketing_requests returns fields[] with operators per type and request_type_name.options resolved from master data (currently includes Neck Tags, Presentation, etc.). Frontend testids confirmed: transition-options-<idx>, add-guard-<idx>, guard-row-<idx>-<ci>, guard-field/op/value/message/applies-<idx>-<ci>, add-reqfield-<idx>, reqfield-label/key/type/options/applies-<idx>-<fi>, save-state-machine. On MarketingRequestDetail.js: action-<key>-btn is disabled with title='<block_reason>' when guards_ok=false; transition-fields-dialog with txn-field-<key> inputs and transition-fields-submit-btn for the required-field capture flow. applies_when correctly excludes non-Neck-Tags requests from the tags_quantity capture.",
+  "rca of the issue": "N/A — no issues found."
+}

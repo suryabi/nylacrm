@@ -1,0 +1,26 @@
+{
+  "summary": "Verified the new contemporary UI redesign of the Marketing Request form + detail page. All redesign-specific controls (chip type picker, Popover+Calendar date picker, FileDropzone for logo and references, repeatable LinkListField, emerald hero banner, FileDropzone inside Add Work Version dialog) are functional. End-to-end flow PASSED: created MR-2026-0018 with logo (with thumbnail preview), 2 reference files (with thumbnails), 2 social links + 1 file link via repeatable rows, and a future due date picked via the calendar popover; detail page rendered with mr-hero showing request number, state badge, title, dept, due date and raised-by; Add Work Version dialog on existing MR shows next-version-badge V2 and the new version-files-dropzone. No functional regressions found vs iteration_182.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "NewMarketingRequest.js line 137 has two statements on one line: 'const selectedType = useMemo(...); const minLeadDays = ...;' — works but is a minor readability lint smell; consider splitting.",
+    "FileDropzone hides its native input via className='hidden' and emits onFiles. For automation, the input is reachable via querying input[type=file] inside the dropzone — confirmed working with set_input_files. Good.",
+    "Calendar disabled prop uses 'd < new Date(new Date().setHours(0,0,0,0))' — today is still selectable. Combined with the short-timeline reason gate this is fine, but if the intent is to disable today as well, change to '<=' or move minimum to earliestDate.",
+    "LinkListField stores empty strings — submit filters them out, but the rendered link rows include the trailing empty row in UI; that's intentional for fast 'just type into the last row' UX. OK.",
+    "uploadFile uses axios with 'Content-Type: multipart/form-data' explicitly — this forces the boundary header which can occasionally drop the boundary. In practice axios handles it; if anything breaks in CI consider removing the explicit Content-Type and letting axios set it."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only request)", "frontend": "100% on redesign-critical flows"},
+  "test_credentials": "Admin surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). Backend returns session_token; FE stores it in localStorage 'token'.",
+  "seed_data_creation": "Created MR-2026-0018 (Neck Tags, Design, due 20 Aug 2026) with 1 logo (test_logo.png) + 2 reference files (test_ref1.png, test_ref2.png) + 2 social links + 1 file link. Request was left in Submitted state. Used existing MR 8054b4db-a995-44d9-aff4-aa6d2ca04380 for Add-Version dialog regression (1 existing version V1 → next badge correctly read V2).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Form testids: mr-type-chip-<id>, mr-dept-select, mr-due-input (Popover trigger; opens shadcn Calendar — pick a day button by text content, optionally navigate via button[name=next-month]), mr-details-input, mr-logo-dropzone / mr-logo-remove, mr-references-dropzone / mr-ref-chip-<file_id>, mr-social-input-<i> / mr-social-add / mr-social-remove-<i>, mr-filelink-input-<i> / mr-filelink-add, mr-short-reason-input (only when isShortTimeline), mr-submit-btn. The hidden file input is inside the dropzone — use set_input_files on it. Detail hero: mr-hero. Add Version dialog still uses add-version-btn → next-version-badge, version-files-dropzone, plus existing Work Links composer and Comments. Regression IDs: 8054b4db-a995-44d9-aff4-aa6d2ca04380 (versions+files), 9aa1f811-1120-47fc-aa41-1e5a61e7b81a (3 versions).",
+  "rca of the issue": "N/A — no issues found. (Note: an intermediate test run failed because the calendar popover defaults to current month; clicking day '20' selected today's same-numbered date if the picker was on the current month. Resolved in the script by clicking next-month twice before choosing day '20'. This is purely a test scripting nuance, not a product bug.)"
+}

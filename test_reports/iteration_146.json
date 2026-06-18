@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 146 — Per-SKU COGS feature (single source of truth = SKU master's cogs_components_values). Backend pytest 9/10 PASS (1 schema-validation bug). Frontend: all 5 critical flows pass — SKU edit dialog renders 'COGS Costs' section with only master ₹ components (NO system keys), Update + persistence works ('SKU updated successfully' toast, values persist on reopen), COGS Calculator overlays master values per row (Primary 7.5 / Manufacturing 12.25 visible on PET in Bangalore), auto-sync across cities verified by backend (HYD == BLR for master keys), system columns stay per-city, master/cogs-components page excludes Outbound Logistics / Distribution / Gross Margin. Calculator math validated (Total COGS = sum of master ₹ + logistics; Landing = (Total + GM) / (1 - dist/100)).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "PUT /api/master-skus/{id}",
+        "issue": "Spec says 'sending null/empty for a key removes it'. Implementation merge logic (server.py:2074-2081) handles None correctly, BUT the Pydantic field type is `Dict[str, float]` which rejects null before reaching the handler — request fails with 422 'Input should be a valid number'. Schema should be `Dict[str, Optional[float]]` so the merge's None-removal branch is reachable. Workaround: clients can omit keys (which doesn't remove) — so master values can currently be added/updated but never removed via API.",
+        "priority": "MEDIUM"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_146_cogs_per_sku.py",
+    "/app/test_reports/pytest/iteration_146_results.xml"
+  ],
+  "action_items": [
+    "Change SKUUpdate.cogs_components_values pydantic type from Dict[str, float] to Dict[str, Optional[float]] (and same for SKUCreate) so null values reach the merge handler at server.py:2074 and remove keys as documented in the spec."
+  ],
+  "critical_code_review_comments": [
+    "server.py PUT /master-skus/{id} merge logic is correct (line 2068-2082) and never replaces the dict — partial PATCH semantics confirmed by test test_put_merges_partial_cogs_components_values.",
+    "server.py GET /cogs/{city} overlay (line 2250-2266) correctly maps legacy keys to top-level fields and non-legacy custom rupee keys to custom_components, attaches master_sku_id, recomputes total_cogs / minimum_landing_price.",
+    "server.py PUT /cogs/{sku_id} dispatch (line 2331-2352) only dispatches keys present in master cogs_components rupee set, properly EXCLUDES outbound_logistics_cost / distribution_cost / gross_margin from leaking to SKU master (verified by test_system_columns_stay_per_city).",
+    "Frontend SKU Management dialog 'COGS Costs' section correctly displays only active master ₹ components (Primary, Cap, Manufacturing Variable, Bird Logo, Air Water Label — Secondary is inactive in seed so omitted) and explicitly does NOT show Outbound Logistics / Distribution % / Gross Margin %.",
+    "Frontend /master/cogs-components page does not list system keys; calculator-owned columns are filtered server-side via RESERVED_CALCULATOR_KEYS in routes/cogs_components.py (regression preserved).",
+    "Auto-sync verified end-to-end: setting Primary 7.5 in SKU dialog → COGS Calculator (Bangalore city) shows 7.5 for PET row immediately on next load (master_sku_id wired through)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_146_cogs_per_sku.py (new — 10 tests, 6 test classes)"
+  ],
+  "success_rate": {
+    "backend": "90% (9/10 — only the null-removal test fails due to Pydantic schema)",
+    "frontend": "100% (5/5 flows verified)"
+  },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO)",
+  "seed_data_creation": "Tests mutate PET SKU's cogs_components_values (primary 7.5/8.0/9.99/5.0, manufacturing 12.25/3.0, secondary 0.5/2.0). Final state of PET after this run: primary=5.0, secondary=2.0, manufacturing=3.0 (set by TestCalculatorMath); HYD has logistics=4, dist=10%, gross_margin=25%.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Regression file: /app/backend/tests/test_iteration_146_cogs_per_sku.py — re-run with `pytest backend/tests/test_iteration_146_cogs_per_sku.py -v`. Frontend dialog edit button: cards have 2 buttons per row, button[0] = edit (pencil), button[1] = delete (trash) — no data-testid yet on those icons (consider adding sku-edit-{id} / sku-delete-{id} testids for future stability). PET SKU id: ff23d238-07eb-4a5b-98c3-46e268a9e367.",
+  "rca of the issue": "Null-removal failure RCA: Pydantic v2 strictly validates Dict[str, float]; sending {\"_test_remove\": null} is rejected at the FastAPI body-parsing layer with 422 before reaching update_sku(). Repro: `PUT /api/master-skus/{id}` with body `{\"cogs_components_values\":{\"k\":null}}` → 422 float_type error. Mitigation: declare the dict value type as `Optional[float]` in both SKUCreate and SKUUpdate, so the existing merge code at server.py:2074-2081 (which already does `if v is None or v == '': merged.pop(k, None)`) becomes reachable."
+}

@@ -1,10 +1,12 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
-import { Building2, User, Phone, Mail, CreditCard, FileText } from 'lucide-react';
+import { Building2, User, Phone, Mail, CreditCard, FileText, Factory, Receipt } from 'lucide-react';
+import { Checkbox } from '../ui/checkbox';
 import { PAYMENT_TERMS, STATUS_OPTIONS } from './constants';
 
 export default function OverviewTab({ 
@@ -74,6 +76,49 @@ export default function OverviewTab({
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50/60 border border-blue-100">
+                <Checkbox
+                  id="edit_is_self_managed"
+                  checked={editData.is_self_managed || false}
+                  onCheckedChange={(checked) => setEditData(prev => ({ ...prev, is_self_managed: !!checked }))}
+                  data-testid="edit-self-managed-checkbox"
+                />
+                <label htmlFor="edit_is_self_managed" className="text-sm font-medium text-slate-700 cursor-pointer">
+                  Self Managed (Not Third Party)
+                </label>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_billing_address">Billing Address</Label>
+                <Textarea
+                  id="edit_billing_address"
+                  rows={3}
+                  placeholder="Street, City, State, PIN"
+                  value={editData.billing_address || ''}
+                  onChange={(e) => setEditData(prev => ({ ...prev, billing_address: e.target.value }))}
+                  data-testid="edit-billing-address"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_registered_address">Registered Address</Label>
+                <Textarea
+                  id="edit_registered_address"
+                  rows={3}
+                  placeholder="Same as billing or different"
+                  value={editData.registered_address || ''}
+                  onChange={(e) => setEditData(prev => ({ ...prev, registered_address: e.target.value }))}
+                  data-testid="edit-registered-address"
+                />
+                {editData.billing_address && editData.billing_address !== editData.registered_address && (
+                  <button
+                    type="button"
+                    onClick={() => setEditData(prev => ({ ...prev, registered_address: prev.billing_address }))}
+                    className="text-xs text-blue-600 hover:underline"
+                    data-testid="copy-billing-to-registered"
+                  >
+                    Same as billing address
+                  </button>
+                )}
+              </div>
             </>
           ) : (
             <>
@@ -87,6 +132,12 @@ export default function OverviewTab({
                   <div className="font-medium">{distributor.pan || '-'}</div>
                 </div>
               </div>
+              {distributor.is_self_managed && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-50/60 border border-blue-100" data-testid="self-managed-indicator">
+                  <Factory className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-700">Self Managed (Not Third Party)</span>
+                </div>
+              )}
               <div>
                 <div className="text-sm text-muted-foreground">Billing Address</div>
                 <div className="font-medium">{distributor.billing_address || '-'}</div>
@@ -261,28 +312,69 @@ export default function OverviewTab({
                   onChange={(e) => setEditData(prev => ({ ...prev, security_deposit: parseFloat(e.target.value) || 0 }))}
                 />
               </div>
+              <div className="space-y-2 col-span-2 md:col-span-4">
+                <Label className="flex items-center gap-1.5">
+                  <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                  Distributor Billing Approach
+                </Label>
+                <Select
+                  value={editData.billing_approach || 'margin_upfront'}
+                  onValueChange={(v) => setEditData(prev => ({ ...prev, billing_approach: v }))}
+                >
+                  <SelectTrigger data-testid="edit-billing-approach-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="margin_upfront">Margin Applied Upfront with Reconciliation</SelectItem>
+                    <SelectItem value="cost_based">No Upfront Margin – Post-Sale Adjustment</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-500">
+                  {(editData.billing_approach || 'margin_upfront') === 'margin_upfront'
+                    ? 'Distributor margin is applied on cost card price to arrive at transfer price. Differences settled via reconciliation.'
+                    : 'Distributor is billed at cost card price. Margin is calculated post-sale based on actual selling price.'}
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div>
-                <div className="text-sm text-muted-foreground">Payment Terms</div>
-                <div className="font-medium">
-                  {PAYMENT_TERMS.find(t => t.value === distributor.payment_terms)?.label || distributor.payment_terms}
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div>
+                  <div className="text-sm text-muted-foreground">Payment Terms</div>
+                  <div className="font-medium">
+                    {PAYMENT_TERMS.find(t => t.value === distributor.payment_terms)?.label || distributor.payment_terms}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Credit Days</div>
+                  <div className="font-medium">{distributor.credit_days} days</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Credit Limit</div>
+                  <div className="font-medium">₹{(distributor.credit_limit || 0).toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Security Deposit</div>
+                  <div className="font-medium">₹{(distributor.security_deposit || 0).toLocaleString()}</div>
                 </div>
               </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Credit Days</div>
-                <div className="font-medium">{distributor.credit_days} days</div>
+              <div className="mt-4 p-3 rounded-lg border border-emerald-200 bg-emerald-50/40" data-testid="billing-approach-display">
+                <div className="flex items-center gap-2 mb-1">
+                  <Receipt className="h-4 w-4 text-emerald-600" />
+                  <span className="text-sm font-semibold text-emerald-800">Distributor Billing Approach</span>
+                </div>
+                <div className="text-sm font-medium text-slate-800">
+                  {(distributor.billing_approach || 'margin_upfront') === 'margin_upfront'
+                    ? 'Margin Applied Upfront with Reconciliation'
+                    : 'No Upfront Margin – Post-Sale Adjustment'}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  {(distributor.billing_approach || 'margin_upfront') === 'margin_upfront'
+                    ? 'Transfer price = Cost card price minus distributor margin. Differences settled via reconciliation.'
+                    : 'Billed at cost card price. Margin calculated post-sale based on actual selling price.'}
+                </p>
               </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Credit Limit</div>
-                <div className="font-medium">₹{(distributor.credit_limit || 0).toLocaleString()}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted-foreground">Security Deposit</div>
-                <div className="font-medium">₹{(distributor.security_deposit || 0).toLocaleString()}</div>
-              </div>
-            </div>
+            </>
           )}
         </CardContent>
       </Card>

@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 async def list_return_reasons(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     category: Optional[str] = Query(None, description="Filter by category"),
+    applies_to: Optional[str] = Query(None, description="Filter by applicability — 'customer' or 'distributor'"),
     current_user: dict = Depends(get_current_user)
 ):
     """List all return reasons for the current tenant"""
@@ -36,11 +37,28 @@ async def list_return_reasons(
     
     if category:
         query["category"] = category
+
+    if applies_to:
+        # Match reasons that include the requested side OR have no applies_to set
+        # (legacy data) — those default to 'customer' for backwards compatibility.
+        if applies_to == 'customer':
+            query["$or"] = [
+                {"applies_to": "customer"},
+                {"applies_to": {"$exists": False}},
+                {"applies_to": []},
+            ]
+        else:
+            query["applies_to"] = applies_to
     
     reasons = await db.return_reasons.find(
         query,
         {"_id": 0}
     ).sort("display_order", 1).to_list(100)
+
+    # Backfill default `applies_to` on response so the frontend can rely on it
+    for r in reasons:
+        if not r.get("applies_to"):
+            r["applies_to"] = ["customer"]
     
     return {"reasons": reasons, "total": len(reasons)}
 
@@ -74,6 +92,18 @@ async def get_return_categories(
             "label": "Promotional/FOC",
             "description": "Free of cost or promotional items",
             "color": "#6B7280"
+        },
+        {
+            "value": "unused_refundable",
+            "label": "Unused Stock - Refundable",
+            "description": "Unsold, sellable stock returned by the customer/distributor — eligible for credit/refund",
+            "color": "#0891B2"
+        },
+        {
+            "value": "unused_non_refundable",
+            "label": "Unused Stock - Non-Refundable",
+            "description": "Unsold stock returned but not eligible for credit/refund",
+            "color": "#64748B"
         }
     ]
     return {"categories": categories}

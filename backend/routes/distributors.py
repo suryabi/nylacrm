@@ -2,14 +2,16 @@
 Distributor Management Routes
 CRUD operations for distributors, operating coverage, and locations
 """
-from fastapi import APIRouter, HTTPException, Depends, Query, Response
+from fastapi import APIRouter, HTTPException, Depends, Query, Response, BackgroundTasks
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+import asyncio
 import logging
+import re
 import uuid
 import bcrypt
 
-from database import db
+from database import db, get_tenant_db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.distributor import (
@@ -25,13 +27,13 @@ from models.distributor import (
     ProvisionalInvoiceCreate, ReconciliationCreate, DebitCreditNoteCreate
 )
 from utils.pdf_generator import generate_debit_credit_note_pdf, generate_customer_invoice_pdf
-from utils.object_storage import upload_pdf, download_pdf, init_storage
+from utils.storage import upload_pdf, download_pdf
+from utils.object_storage import init_storage
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Default password for distributor users
-DISTRIBUTOR_DEFAULT_PASSWORD = "nyladist##"
+from core.distributor_auth import DISTRIBUTOR_DEFAULT_PASSWORD  # noqa: E402
 
 
 def hash_password(password: str) -> str:
@@ -44,9 +46,69 @@ def is_distributor_admin(user: dict) -> bool:
     return user.get('role') in ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head']
 
 
+# Common Indian city name aliases (old/anglicized names <-> official local names).
+# Used to normalize city comparisons between accounts and distributor operating coverage,
+# so that an account in "Bangalore" can be assigned to a distributor servicing "Bengaluru".
+CITY_ALIASES = {
+    "bangalore": "bengaluru",
+    "bengaluru": "bengaluru",
+    "bombay": "mumbai",
+    "mumbai": "mumbai",
+    "madras": "chennai",
+    "chennai": "chennai",
+    "calcutta": "kolkata",
+    "kolkata": "kolkata",
+    "poona": "pune",
+    "pune": "pune",
+    "trivandrum": "thiruvananthapuram",
+    "thiruvananthapuram": "thiruvananthapuram",
+    "cochin": "kochi",
+    "kochi": "kochi",
+    "baroda": "vadodara",
+    "vadodara": "vadodara",
+    "mysore": "mysuru",
+    "mysuru": "mysuru",
+    "mangalore": "mangaluru",
+    "mangaluru": "mangaluru",
+    "belgaum": "belagavi",
+    "belagavi": "belagavi",
+    "gurgaon": "gurugram",
+    "gurugram": "gurugram",
+    "allahabad": "prayagraj",
+    "prayagraj": "prayagraj",
+}
+
+
+def normalize_city(city: str) -> str:
+    """Normalize a city name for alias-aware comparison."""
+    if not city:
+        return ""
+    key = city.strip().lower()
+    return CITY_ALIASES.get(key, key)
+
+
+def cities_match(city_a: str, city_b: str) -> bool:
+    """Compare two city names treating common aliases (e.g. Bangalore/Bengaluru) as equivalent."""
+    return normalize_city(city_a) == normalize_city(city_b)
+
+
+def is_delete_authorized(user: dict) -> bool:
+    """Check if user can delete distributors/warehouses (CEO and System Admin only)"""
+    return user.get('role') in ['CEO', 'System Admin']
+
+
 def is_distributor_user(user: dict) -> bool:
     """Check if user is a distributor"""
     return user.get('role') == 'Distributor'
+
+
+def can_manage_distributor_data(user: dict, distributor_id: str) -> bool:
+    """True if user is an admin OR a distributor user operating on their own org."""
+    if is_distributor_admin(user):
+        return True
+    if is_distributor_user(user) and user.get('distributor_id') == distributor_id:
+        return True
+    return False
 
 
 def get_user_distributor_id(user: dict) -> Optional[str]:
@@ -243,6 +305,8 @@ async def create_distributor(
         "credit_days": data.credit_days or 30,
         "credit_limit": data.credit_limit or 0,
         "security_deposit": data.security_deposit or 0,
+        "is_self_managed": data.is_self_managed or False,
+        "billing_approach": data.billing_approach or "margin_upfront",
         "status": data.status or "active",
         "notes": data.notes,
         "created_at": now,
@@ -327,7 +391,7 @@ async def update_distributor(
                   'billing_address', 'registered_address', 'primary_contact_name', 'primary_contact_mobile',
                   'primary_contact_email', 'secondary_contact_name', 'secondary_contact_mobile',
                   'secondary_contact_email', 'payment_terms', 'credit_days', 'credit_limit',
-                  'security_deposit', 'status', 'notes']:
+                  'security_deposit', 'is_self_managed', 'billing_approach', 'status', 'notes']:
         value = getattr(data, field, None)
         if value is not None:
             update_data[field] = value
@@ -349,29 +413,321 @@ async def update_distributor(
 
 @router.delete("/{distributor_id}")
 async def delete_distributor(distributor_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete a distributor (soft delete by setting status to inactive)"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required to delete distributors")
+    """Hard delete a distributor and all child data (CEO/System Admin only)"""
+    if not is_delete_authorized(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can delete distributors")
     
     tenant_id = get_current_tenant_id()
     
     distributor = await db.distributors.find_one(
         {"id": distributor_id, "tenant_id": tenant_id},
-        {"_id": 0}
+        {"_id": 0, "distributor_name": 1}
     )
     
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
     
-    # Soft delete
-    await db.distributors.update_one(
-        {"id": distributor_id, "tenant_id": tenant_id},
-        {"$set": {"status": "inactive", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    dist_name = distributor.get('distributor_name', distributor_id)
+    
+    # Cascading delete all child data
+    child_filter = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    
+    # 1. Get shipment IDs for item cleanup
+    shipment_ids = [s["id"] async for s in db.distributor_shipments.find(child_filter, {"id": 1})]
+    if shipment_ids:
+        await db.distributor_shipment_items.delete_many({"tenant_id": tenant_id, "shipment_id": {"$in": shipment_ids}})
+    
+    # 2. Get delivery IDs for item cleanup
+    delivery_ids = [d["id"] async for d in db.distributor_deliveries.find(child_filter, {"id": 1})]
+    if delivery_ids:
+        await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": {"$in": delivery_ids}})
+    
+    # 3. Get settlement IDs for item cleanup
+    settlement_ids = [s["id"] async for s in db.distributor_settlements.find(child_filter, {"id": 1})]
+    if settlement_ids:
+        await db.distributor_settlement_items.delete_many({"tenant_id": tenant_id, "settlement_id": {"$in": settlement_ids}})
+    
+    # 4. Get reconciliation IDs for line item + note cleanup
+    recon_ids = [r["id"] async for r in db.distributor_reconciliations.find(child_filter, {"id": 1})]
+    if recon_ids:
+        await db.distributor_reconciliation_items.delete_many({"tenant_id": tenant_id, "reconciliation_id": {"$in": recon_ids}})
+        await db.distributor_debit_credit_notes.delete_many({"tenant_id": tenant_id, "reconciliation_id": {"$in": recon_ids}})
+    
+    # 5. Delete top-level child collections
+    del_results = {}
+    for coll_name, collection in [
+        ("operating_coverage", db.distributor_operating_coverage),
+        ("locations", db.distributor_locations),
+        ("margin_matrix", db.distributor_margin_matrix),
+        ("account_assignments", db.account_distributor_assignments),
+        ("shipments", db.distributor_shipments),
+        ("deliveries", db.distributor_deliveries),
+        ("settlements", db.distributor_settlements),
+        ("billing_configs", db.distributor_billing_configs),
+        ("provisional_invoices", db.distributor_provisional_invoices),
+        ("reconciliations", db.distributor_reconciliations),
+    ]:
+        result = await collection.delete_many(child_filter)
+        del_results[coll_name] = result.deleted_count
+    
+    # 6. Delete linked user accounts
+    user_result = await db.users.delete_many({"tenant_id": tenant_id, "distributor_id": distributor_id})
+    del_results["users"] = user_result.deleted_count
+    
+    # 7. Delete the distributor itself
+    await db.distributors.delete_one({"id": distributor_id, "tenant_id": tenant_id})
+    
+    logger.info(f"Distributor '{dist_name}' hard-deleted with all child data by {current_user['email']}. Counts: {del_results}")
+    
+    return {
+        "message": f"Distributor '{dist_name}' and all related data deleted permanently",
+        "deleted_counts": del_results
+    }
+
+
+@router.post("/cleanup/orphaned-data")
+async def cleanup_orphaned_distributor_data(current_user: dict = Depends(get_current_user)):
+    """Remove all transactional data for distributors that no longer exist. CEO/System Admin only."""
+    if not is_delete_authorized(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can run cleanup")
+    
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    
+    # Get all existing distributor IDs
+    existing_ids = await db.distributors.distinct("id", {"tenant_id": tenant_id})
+    existing_set = set(existing_ids)
+    
+    results = {}
+    
+    # Collections with distributor_id field
+    dist_collections = [
+        ("operating_coverage", db.distributor_operating_coverage),
+        ("locations", db.distributor_locations),
+        ("margin_matrix", db.distributor_margin_matrix),
+        ("account_assignments", db.account_distributor_assignments),
+        ("shipments", db.distributor_shipments),
+        ("deliveries", db.distributor_deliveries),
+        ("settlements", db.distributor_settlements),
+        ("billing_configs", db.distributor_billing_configs),
+        ("provisional_invoices", db.distributor_provisional_invoices),
+        ("reconciliations", db.distributor_reconciliations),
+        ("users", db.users),
+    ]
+    
+    for coll_name, collection in dist_collections:
+        # Find orphaned distributor_ids in this collection
+        all_dist_ids = await collection.distinct("distributor_id", {"tenant_id": tenant_id})
+        orphaned = [did for did in all_dist_ids if did and did not in existing_set]
+        if orphaned:
+            r = await collection.delete_many({"tenant_id": tenant_id, "distributor_id": {"$in": orphaned}})
+            results[coll_name] = r.deleted_count
+    
+    # Clean orphaned shipment items (shipment no longer exists)
+    existing_shipment_ids = await db.distributor_shipments.distinct("id", {"tenant_id": tenant_id})
+    all_item_shipment_ids = await db.distributor_shipment_items.distinct("shipment_id", {"tenant_id": tenant_id})
+    orphaned_ship_items = [sid for sid in all_item_shipment_ids if sid not in set(existing_shipment_ids)]
+    if orphaned_ship_items:
+        r = await db.distributor_shipment_items.delete_many({"tenant_id": tenant_id, "shipment_id": {"$in": orphaned_ship_items}})
+        results["shipment_items"] = r.deleted_count
+    
+    # Clean orphaned delivery items
+    existing_delivery_ids = await db.distributor_deliveries.distinct("id", {"tenant_id": tenant_id})
+    all_del_item_ids = await db.distributor_delivery_items.distinct("delivery_id", {"tenant_id": tenant_id})
+    orphaned_del_items = [did for did in all_del_item_ids if did not in set(existing_delivery_ids)]
+    if orphaned_del_items:
+        r = await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": {"$in": orphaned_del_items}})
+        results["delivery_items"] = r.deleted_count
+    
+    # Clean orphaned settlement items
+    existing_settlement_ids = await db.distributor_settlements.distinct("id", {"tenant_id": tenant_id})
+    all_sett_item_ids = await db.distributor_settlement_items.distinct("settlement_id", {"tenant_id": tenant_id})
+    orphaned_sett_items = [sid for sid in all_sett_item_ids if sid not in set(existing_settlement_ids)]
+    if orphaned_sett_items:
+        r = await db.distributor_settlement_items.delete_many({"tenant_id": tenant_id, "settlement_id": {"$in": orphaned_sett_items}})
+        results["settlement_items"] = r.deleted_count
+    
+    # Clean orphaned reconciliation items and debit/credit notes
+    existing_recon_ids = await db.distributor_reconciliations.distinct("id", {"tenant_id": tenant_id})
+    all_recon_item_ids = await db.distributor_reconciliation_items.distinct("reconciliation_id", {"tenant_id": tenant_id})
+    orphaned_recon = [rid for rid in all_recon_item_ids if rid not in set(existing_recon_ids)]
+    if orphaned_recon:
+        r1 = await db.distributor_reconciliation_items.delete_many({"tenant_id": tenant_id, "reconciliation_id": {"$in": orphaned_recon}})
+        r2 = await db.distributor_debit_credit_notes.delete_many({"tenant_id": tenant_id, "reconciliation_id": {"$in": orphaned_recon}})
+        results["reconciliation_items"] = r1.deleted_count
+        results["debit_credit_notes"] = r2.deleted_count
+    
+    # Clean factory warehouse stock for orphaned locations
+    existing_loc_ids = await db.distributor_locations.distinct("id", {"tenant_id": tenant_id})
+    all_fws_loc_ids = await tdb.factory_warehouse_stock.distinct("warehouse_location_id", {"tenant_id": tenant_id})
+    orphaned_fws = [lid for lid in all_fws_loc_ids if lid not in set(existing_loc_ids)]
+    if orphaned_fws:
+        r = await tdb.factory_warehouse_stock.delete_many({"tenant_id": tenant_id, "warehouse_location_id": {"$in": orphaned_fws}})
+        results["factory_warehouse_stock"] = r.deleted_count
+    
+    logger.info(f"Orphaned distributor data cleanup by {current_user['email']}: {results}")
+    
+    return {"message": "Orphaned distributor data cleaned up", "deleted_counts": results}
+
+
+@router.post("/admin/wipe-transactional-data")
+async def wipe_distributor_transactional_data(
+    payload: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Wipe ALL distributor transactional data for the current tenant.
+
+    Wipes (per tenant):
+      • distributor_deliveries + distributor_delivery_items   (Stock Out)
+      • distributor_settlements + distributor_settlement_items (Settlements)
+      • distributor_debit_credit_notes + distributor_reconciliations + items (Billing)
+      • customer_returns + credit_notes + credit_note_issuances (Returns)
+      • distributor_factory_returns                            (Factory Returns)
+
+    Optionally wipes when payload includes `"include_stock_in": true`:
+      • distributor_shipments + distributor_shipment_items     (Stock In)
+      • distributor_stock                                       (current on-hand)
+
+    Keeps untouched:
+      • distributor_shipments + items (Stock In) — unless include_stock_in is true
+      • distributors, locations, coverage, margin_matrix, billing_config, contacts
+      • account_distributor_assignments
+      • accounts, leads, invoices, master data, etc.
+
+    After deletion `distributor_stock` is rebuilt from delivered shipments so
+    on-hand quantities reflect a clean baseline (everything received, nothing
+    dispatched or returned). When `include_stock_in` is true, stock is left
+    fully empty since no shipments remain.
+
+    Guards:
+      • CEO / System Admin only
+      • Body must contain {"confirm": "DELETE_TRANSACTIONS"} to avoid accidents
+    """
+    if not is_delete_authorized(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can run this operation")
+
+    if (payload or {}).get("confirm") != "DELETE_TRANSACTIONS":
+        raise HTTPException(
+            status_code=400,
+            detail='Missing or invalid confirm token. Provide {"confirm": "DELETE_TRANSACTIONS"} to proceed.'
+        )
+
+    include_stock_in = bool((payload or {}).get("include_stock_in"))
+
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+    deleted: dict = {}
+
+    targets = [
+        # Stock Out
+        ("distributor_deliveries", db.distributor_deliveries),
+        ("distributor_delivery_items", db.distributor_delivery_items),
+        # Settlements
+        ("distributor_settlements", db.distributor_settlements),
+        ("distributor_settlement_items", db.distributor_settlement_items),
+        # Billing & Reconciliation
+        ("distributor_debit_credit_notes", db.distributor_debit_credit_notes),
+        ("distributor_reconciliations", db.distributor_reconciliations),
+        ("distributor_reconciliation_items", db.distributor_reconciliation_items),
+        # Returns + linked credits
+        ("customer_returns", db.customer_returns),
+        ("credit_notes", db.credit_notes),
+        ("credit_note_issuances", db.credit_note_issuances),
+        # Factory Returns
+        ("distributor_factory_returns", db.distributor_factory_returns),
+    ]
+    if include_stock_in:
+        targets.extend([
+            # Stock In
+            ("distributor_shipments", db.distributor_shipments),
+            ("distributor_shipment_items", db.distributor_shipment_items),
+        ])
+
+    for coll_name, collection in targets:
+        try:
+            res = await collection.delete_many({"tenant_id": tenant_id})
+            deleted[coll_name] = res.deleted_count
+        except Exception as e:
+            logger.error(f"wipe-transactional: failed to delete {coll_name}: {e}")
+            deleted[coll_name] = f"error: {e}"
+
+    # Rebuild distributor_stock from delivered shipments so on-hand reflects
+    # "everything received, nothing dispatched/returned".
+    # If Stock In was also wiped, simply zero out stock (no shipments left to rebuild from).
+    stock_rebuilt = 0
+    try:
+        if include_stock_in:
+            sres = await db.distributor_stock.delete_many({"tenant_id": tenant_id})
+            deleted["distributor_stock"] = sres.deleted_count
+            stock_rebuilt = 0
+        else:
+            # Collect aggregate qty per (distributor_id, location_id, sku_id) from
+            # delivered shipments only.
+            delivered_shipments = await db.distributor_shipments.find(
+                {"tenant_id": tenant_id, "status": "delivered"},
+                {"_id": 0, "id": 1, "distributor_id": 1, "distributor_location_id": 1,
+                 "distributor_name": 1, "distributor_location_name": 1}
+            ).to_list(10000)
+            ship_meta = {s['id']: s for s in delivered_shipments}
+            ship_ids = list(ship_meta.keys())
+
+            # Wipe existing stock for the tenant first
+            sres = await db.distributor_stock.delete_many({"tenant_id": tenant_id})
+            deleted["distributor_stock"] = sres.deleted_count
+
+            if ship_ids:
+                items = await db.distributor_shipment_items.find(
+                    {"tenant_id": tenant_id, "shipment_id": {"$in": ship_ids}},
+                    {"_id": 0}
+                ).to_list(50000)
+                agg: dict = {}
+                for it in items:
+                    s = ship_meta.get(it.get('shipment_id')) or {}
+                    key = (
+                        s.get('distributor_id'),
+                        s.get('distributor_location_id'),
+                        it.get('sku_id'),
+                    )
+                    if not all(key):
+                        continue
+                    row = agg.setdefault(key, {
+                        "tenant_id": tenant_id,
+                        "distributor_id": key[0],
+                        "distributor_location_id": key[1],
+                        "sku_id": key[2],
+                        "sku_name": it.get('sku_name'),
+                        "sku_code": it.get('sku_code'),
+                        "distributor_name": s.get('distributor_name'),
+                        "location_name": s.get('distributor_location_name'),
+                        "quantity": 0,
+                        "id": str(uuid.uuid4()),
+                        "created_at": now,
+                        "updated_at": now,
+                    })
+                    row["quantity"] += it.get('quantity', 0) or 0
+                if agg:
+                    await db.distributor_stock.insert_many(list(agg.values()))
+                    stock_rebuilt = len(agg)
+    except Exception as e:
+        logger.error(f"wipe-transactional: stock rebuild failed: {e}")
+        deleted["distributor_stock_rebuild_error"] = str(e)
+
+    deleted["distributor_stock_rows_rebuilt"] = stock_rebuilt
+
+    logger.warning(
+        f"WIPE distributor transactional data — tenant={tenant_id} "
+        f"by {current_user.get('email')} (role={current_user.get('role')}) "
+        f"results={deleted}"
     )
-    
-    logger.info(f"Distributor '{distributor['distributor_name']}' deleted by {current_user['email']}")
-    
-    return {"message": f"Distributor '{distributor['distributor_name']}' deleted successfully"}
+
+    return {
+        "message": "Distributor transactional data wiped. Stock rebuilt from delivered shipments.",
+        "tenant_id": tenant_id,
+        "deleted_counts": deleted,
+        "executed_by": current_user.get('email'),
+        "executed_at": now,
+    }
+
 
 
 # ============ Operating Coverage CRUD ============
@@ -598,7 +954,15 @@ async def create_distributor_location(
         "contact_number": data.contact_number,
         "email": data.email,
         "is_default": data.is_default or False,
+        "is_factory": data.is_factory or False,
+        "track_batches": bool(data.track_batches) if data.track_batches is not None else False,
         "status": data.status or "active",
+        "gstin": data.gstin,
+        "zoho_branch_id": data.zoho_branch_id,
+        "zoho_branch_name": data.zoho_branch_name,
+        "lat": data.lat,
+        "lng": data.lng,
+        "formatted_address": data.formatted_address,
         "created_at": now,
         "updated_at": now
     }
@@ -644,7 +1008,9 @@ async def update_distributor_location(
     
     for field in ['location_name', 'location_code', 'address_line_1', 'address_line_2',
                   'state', 'city', 'pincode', 'contact_person', 'contact_number',
-                  'email', 'is_default', 'status']:
+                  'email', 'is_default', 'is_factory', 'track_batches', 'status',
+                  'gstin', 'zoho_branch_id', 'zoho_branch_name',
+                  'lat', 'lng', 'formatted_address']:
         value = getattr(data, field, None)
         if value is not None:
             update_data[field] = value
@@ -662,15 +1028,90 @@ async def update_distributor_location(
     return updated
 
 
+@router.post("/{distributor_id}/locations/{location_id}/sync-to-zoho")
+async def sync_location_to_zoho_branch(
+    distributor_id: str,
+    location_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Push the CRM warehouse's address + GSTIN to the linked Zoho branch.
+
+    This is the one-click "Sync to Zoho" action on each warehouse card. It
+    requires the warehouse to already have a `zoho_branch_id` populated —
+    we do NOT create branches automatically because Zoho enforces
+    tax-settings prerequisites that must be configured in the Zoho UI first.
+    """
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+    location = await db.distributor_locations.find_one(
+        {"id": location_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0},
+    )
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    try:
+        from services.zoho_service import (
+            sync_warehouse_to_zoho_branch,
+            ZohoPushSkippedError,
+            ZohoApiError,
+        )
+        # Bound the total runtime so we always respond well before the gateway
+        # timeout. A slow/unreachable Zoho would otherwise let the request hang
+        # until Cloudflare returns an opaque 502 origin error to the user.
+        branch = await asyncio.wait_for(
+            sync_warehouse_to_zoho_branch(tenant_id=tenant_id, location=location),
+            timeout=25.0,
+        )
+    except ZohoPushSkippedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ZohoApiError as e:
+        raise HTTPException(status_code=502, detail=f"Zoho rejected the sync: {e}")
+    except asyncio.TimeoutError:
+        logger.warning("Zoho branch sync timed out for location %s", location_id)
+        raise HTTPException(
+            status_code=504,
+            detail="Zoho Books didn't respond in time. This is usually a temporary Zoho slowdown — please try the sync again in a moment.",
+        )
+    except Exception as e:
+        logger.exception("Zoho branch sync failed for location %s", location_id)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Couldn't reach Zoho Books to sync this warehouse: {str(e)[:200]}. Please verify Zoho is connected and try again.",
+        )
+
+    # Record when the last successful sync happened so the UI can show it.
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.distributor_locations.update_one(
+        {"id": location_id, "tenant_id": tenant_id},
+        {"$set": {
+            "zoho_branch_synced_at": now_iso,
+            # Keep the cached branch name in sync with whatever Zoho returned.
+            "zoho_branch_name": branch.get("branch_name") or location.get("zoho_branch_name"),
+            "updated_at": now_iso,
+        }},
+    )
+
+    return {
+        "ok": True,
+        "synced_at": now_iso,
+        "zoho_branch_id": location.get("zoho_branch_id"),
+        "zoho_branch_name": branch.get("branch_name") or location.get("zoho_branch_name"),
+        "message": "Warehouse address and GSTIN pushed to Zoho. Future invoices and challans from this warehouse will print the updated header.",
+    }
+
+
 @router.delete("/{distributor_id}/locations/{location_id}")
 async def delete_distributor_location(
     distributor_id: str,
     location_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Delete a distributor location"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """Hard delete a distributor location/warehouse and related data (CEO/System Admin only)"""
+    if not is_delete_authorized(current_user):
+        raise HTTPException(status_code=403, detail="Only CEO and System Admin can delete warehouses")
     
     tenant_id = get_current_tenant_id()
     
@@ -683,13 +1124,27 @@ async def delete_distributor_location(
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
     
-    # Soft delete
-    await db.distributor_locations.update_one(
-        {"id": location_id, "tenant_id": tenant_id},
-        {"$set": {"status": "inactive", "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
+    loc_name = location.get('location_name', location_id)
+    loc_filter = {"tenant_id": tenant_id, "distributor_location_id": location_id}
     
-    return {"message": f"Location '{location['location_name']}' deleted successfully"}
+    # Cascade: delete shipments and their items that target this location
+    shipment_ids = [s["id"] async for s in db.distributor_shipments.find(loc_filter, {"id": 1})]
+    if shipment_ids:
+        await db.distributor_shipment_items.delete_many({"tenant_id": tenant_id, "shipment_id": {"$in": shipment_ids}})
+    await db.distributor_shipments.delete_many(loc_filter)
+    
+    # Cascade: delete deliveries and their items from this location
+    delivery_ids = [d["id"] async for d in db.distributor_deliveries.find(loc_filter, {"id": 1})]
+    if delivery_ids:
+        await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": {"$in": delivery_ids}})
+    await db.distributor_deliveries.delete_many(loc_filter)
+    
+    # Hard delete the location
+    await db.distributor_locations.delete_one({"id": location_id, "tenant_id": tenant_id})
+    
+    logger.info(f"Location '{loc_name}' hard-deleted with related data by {current_user['email']}")
+    
+    return {"message": f"Warehouse '{loc_name}' and all related data deleted permanently"}
 
 
 # ============ Dropdown Data ============
@@ -717,7 +1172,7 @@ async def get_distributor_locations_dropdown(
     
     locations = await db.distributor_locations.find(
         {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "active"},
-        {"_id": 0, "id": 1, "location_name": 1, "location_code": 1, "city": 1, "is_default": 1}
+        {"_id": 0, "id": 1, "location_name": 1, "location_code": 1, "city": 1, "is_default": 1, "is_factory": 1}
     ).sort("location_name", 1).to_list(100)
     
     return {"locations": locations}
@@ -859,10 +1314,19 @@ async def create_margin_entry(
         if sku:
             sku_name = sku.get('name')
     
-    # Calculate transfer price for percentage margin type
+    # Calculate transfer price based on billing approach
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "billing_approach": 1}
+    )
+    billing_approach = (distributor or {}).get('billing_approach', 'margin_upfront')
+    
     transfer_price = None
-    if data.margin_type == 'percentage' and data.base_price:
-        transfer_price = data.base_price * (1 - data.margin_value / 100)
+    if data.base_price:
+        if billing_approach == 'cost_based':
+            transfer_price = data.base_price
+        elif data.margin_type == 'percentage':
+            transfer_price = data.base_price * (1 - data.margin_value / 100)
     
     margin_doc = {
         "id": str(uuid.uuid4()),
@@ -913,6 +1377,7 @@ async def create_bulk_margin_entries(
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
     
+    billing_approach = distributor.get('billing_approach', 'margin_upfront')
     added = []
     skipped = []
     
@@ -947,10 +1412,13 @@ async def create_bulk_margin_entries(
             if sku:
                 sku_name = sku.get('name')
         
-        # Calculate transfer price for percentage margin type
+        # Calculate transfer price based on billing approach
         transfer_price = None
-        if item.margin_type == 'percentage' and item.base_price:
-            transfer_price = item.base_price * (1 - item.margin_value / 100)
+        if item.base_price:
+            if billing_approach == 'cost_based':
+                transfer_price = item.base_price
+            elif item.margin_type == 'percentage':
+                transfer_price = item.base_price * (1 - item.margin_value / 100)
         
         margin_doc = {
             "id": str(uuid.uuid4()),
@@ -1048,13 +1516,22 @@ async def update_margin_entry(
                     detail=f"Date range overlaps with existing entry (ID: {existing.get('id')[:8]}..., Active: {exist_start} to {exist_end if exist_end != '9999-12-31' else 'ongoing'}). Please adjust dates to avoid overlap."
                 )
     
-    # Recalculate transfer price if base_price or margin_value changed
+    # Recalculate transfer price based on billing approach
     base_price = update_data.get('base_price', margin.get('base_price'))
     margin_type = update_data.get('margin_type', margin.get('margin_type'))
     margin_value = update_data.get('margin_value', margin.get('margin_value'))
     
-    if margin_type == 'percentage' and base_price:
-        update_data['transfer_price'] = round(base_price * (1 - margin_value / 100), 2)
+    dist = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "billing_approach": 1}
+    )
+    billing_approach = (dist or {}).get('billing_approach', 'margin_upfront')
+    
+    if base_price:
+        if billing_approach == 'cost_based':
+            update_data['transfer_price'] = round(base_price, 2)
+        elif margin_type == 'percentage':
+            update_data['transfer_price'] = round(base_price * (1 - margin_value / 100), 2)
     
     await db.distributor_margin_matrix.update_one(
         {"id": margin_id, "tenant_id": tenant_id},
@@ -1207,6 +1684,32 @@ async def list_distributor_account_assignments(
         query,
         {"_id": 0}
     ).sort([("servicing_city", 1), ("account_name", 1)]).to_list(1000)
+
+    # Enrich each assignment with the account's GST / PAN / billing details so the
+    # distributor's Account Assignments view can surface compliance info without
+    # an extra round-trip. Read-only — distributors don't edit account-level data.
+    account_ids = list({a.get('account_id') for a in assignments if a.get('account_id')})
+    accounts_map: Dict[str, Dict[str, Any]] = {}
+    if account_ids:
+        async for ad in db.accounts.find(
+            {"id": {"$in": account_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "gst_number": 1, "pan_number": 1, "billing_address": 1,
+             "gst_legal_name": 1, "gst_trade_name": 1, "contact_name": 1, "contact_number": 1,
+             "delivery_address": 1, "delivery_contact_name": 1, "delivery_contact_phone": 1}
+        ):
+            accounts_map[ad['id']] = ad
+    for a in assignments:
+        acc = accounts_map.get(a.get('account_id')) or {}
+        a['gst_number'] = acc.get('gst_number')
+        a['pan_number'] = acc.get('pan_number')
+        a['billing_address'] = acc.get('billing_address')
+        a['gst_legal_name'] = acc.get('gst_legal_name')
+        a['gst_trade_name'] = acc.get('gst_trade_name')
+        a['account_contact_name'] = acc.get('contact_name')
+        a['account_contact_number'] = acc.get('contact_number')
+        a['delivery_address'] = acc.get('delivery_address')
+        a['delivery_contact_name'] = acc.get('delivery_contact_name')
+        a['delivery_contact_phone'] = acc.get('delivery_contact_phone')
     
     # Group by city
     by_city = {}
@@ -1266,21 +1769,35 @@ async def create_account_assignment(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    # Validate account's city matches servicing city
+    # Validate account's city matches servicing city (alias-aware: Bangalore <-> Bengaluru, etc.)
     account_city = account.get('city', '')
-    if account_city and data.servicing_city and account_city.lower() != data.servicing_city.lower():
+    if account_city and data.servicing_city and not cities_match(account_city, data.servicing_city):
         raise HTTPException(
             status_code=400,
             detail=f"Account is located in '{account_city}' but servicing city is '{data.servicing_city}'. Account can only be assigned to distributors serving its city."
         )
-    
-    # Validate city is in distributor's operating coverage
-    coverage = await db.distributor_operating_coverage.find_one({
-        "tenant_id": tenant_id,
-        "distributor_id": distributor_id,
-        "city": data.servicing_city,
-        "status": "active"
-    })
+
+    # Validate city is in distributor's operating coverage (alias-aware)
+    normalized_servicing = normalize_city(data.servicing_city)
+    coverage = None
+    if normalized_servicing:
+        # Try exact match first (case-insensitive)
+        coverage = await db.distributor_operating_coverage.find_one({
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "city": {"$regex": f"^{data.servicing_city}$", "$options": "i"},
+            "status": "active"
+        })
+        if not coverage:
+            # Fallback: scan all active coverage rows for this distributor and alias-match
+            async for cov in db.distributor_operating_coverage.find({
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "status": "active"
+            }):
+                if normalize_city(cov.get('city', '')) == normalized_servicing:
+                    coverage = cov
+                    break
     if not coverage:
         raise HTTPException(
             status_code=400,
@@ -1298,23 +1815,47 @@ async def create_account_assignment(
         if not location:
             raise HTTPException(status_code=400, detail="Invalid distributor location")
     
-    # Check for existing primary assignment for same account + city
+    # ── DEDUP: don't allow the same (account, distributor, city) to be assigned twice. ──
+    # An active assignment for this exact triple already exists → return 409 with the
+    # existing assignment so the caller can surface a clear message and link the user
+    # to it instead of inserting a duplicate row.
+    existing_same = await db.account_distributor_assignments.find_one({
+        "tenant_id": tenant_id,
+        "account_id": data.account_id,
+        "distributor_id": distributor_id,
+        "status": "active",
+    }, {"_id": 0})
+    if existing_same:
+        # Match if the city aliases match (Bangalore <-> Bengaluru, etc.)
+        if cities_match(existing_same.get('servicing_city', ''), data.servicing_city):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Account '{existing_same.get('account_name')}' is already assigned to "
+                    f"distributor '{existing_same.get('distributor_name')}' for "
+                    f"'{existing_same.get('servicing_city')}'. Edit the existing assignment "
+                    "instead of creating a new one."
+                ),
+            )
+
+    # Check for existing primary assignment for same account + city (alias-aware)
     if data.is_primary:
-        existing_primary = await db.account_distributor_assignments.find_one({
+        existing_primaries = db.account_distributor_assignments.find({
             "tenant_id": tenant_id,
             "account_id": data.account_id,
-            "servicing_city": data.servicing_city,
             "is_primary": True,
             "status": "active"
         })
-        if existing_primary and existing_primary.get('distributor_id') != distributor_id:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Account already has a primary distributor for {data.servicing_city}. Remove or change existing assignment first."
-            )
+        async for existing_primary in existing_primaries:
+            if cities_match(existing_primary.get('servicing_city', ''), data.servicing_city) \
+               and existing_primary.get('distributor_id') != distributor_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Account already has a primary distributor for {data.servicing_city}. Remove or change existing assignment first."
+                )
     
     # Get names for denormalization
-    account_name = data.account_name or account.get('company') or account.get('name')
+    account_name = data.account_name or account.get('account_name') or account.get('company') or account.get('name')
     distributor_name = data.distributor_name or distributor.get('distributor_name')
     location_name = data.distributor_location_name
     if data.distributor_location_id and not location_name:
@@ -1535,16 +2076,30 @@ async def search_assignable_accounts_for_distributor(
     
     if not covered_cities:
         return {"accounts": [], "message": "Distributor has no operating coverage configured. Please add coverage first."}
-    
-    # Search accounts only in covered cities
+
+    # Expand covered cities with their aliases so e.g. "Bengaluru" coverage also matches accounts in "Bangalore"
+    expanded_cities = set()
+    for city in covered_cities:
+        expanded_cities.add(city)
+        normalized = normalize_city(city)
+        for alias_key, alias_canonical in CITY_ALIASES.items():
+            if alias_canonical == normalized:
+                expanded_cities.add(alias_key.title())
+                expanded_cities.add(alias_key)
+    # Build case-insensitive city match
+    city_regex_list = [{"city": {"$regex": f"^{c}$", "$options": "i"}} for c in expanded_cities]
+
+    # Search accounts only in covered cities (alias-aware)
     query = {
         "tenant_id": tenant_id,
-        "city": {"$in": covered_cities},
-        "$or": [
-            {"account_name": {"$regex": q, "$options": "i"}},
-            {"contact_name": {"$regex": q, "$options": "i"}},
-            {"account_id": {"$regex": q, "$options": "i"}},
-            {"city": {"$regex": q, "$options": "i"}}
+        "$and": [
+            {"$or": city_regex_list},
+            {"$or": [
+                {"account_name": {"$regex": q, "$options": "i"}},
+                {"contact_name": {"$regex": q, "$options": "i"}},
+                {"account_id": {"$regex": q, "$options": "i"}},
+                {"city": {"$regex": q, "$options": "i"}}
+            ]}
         ]
     }
     
@@ -1567,6 +2122,7 @@ SHIPMENT_STATUSES = {
     "in_transit": "In Transit - On the way to distributor",
     "delivered": "Delivered - Received by distributor",
     "partially_delivered": "Partially Delivered - Some items received",
+    "discrepancy_pending": "Discrepancy - Awaiting supplier approval",
     "cancelled": "Cancelled"
 }
 
@@ -1810,14 +2366,52 @@ async def create_shipment(
     # Validate location exists and belongs to distributor
     location = await db.distributor_locations.find_one(
         {"id": data.distributor_location_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
-        {"_id": 0, "location_name": 1, "address_line_1": 1, "city": 1, "state": 1, "pincode": 1}
+        {"_id": 0, "location_name": 1, "address_line_1": 1, "city": 1, "state": 1, "pincode": 1, "track_batches": 1}
     )
     if not location:
         raise HTTPException(status_code=400, detail="Invalid distributor location")
+    dest_tracks_batches = bool(location.get("track_batches"))
     
+    # Validate source factory warehouse if provided
+    source_warehouse_name = None
+    source_tracks_batches = False
+    if data.source_warehouse_id:
+        source_warehouse = await db.distributor_locations.find_one(
+            {"id": data.source_warehouse_id, "tenant_id": tenant_id, "is_factory": True, "status": "active"},
+            {"_id": 0, "location_name": 1, "track_batches": 1}
+        )
+        if not source_warehouse:
+            raise HTTPException(status_code=400, detail="Invalid source factory warehouse")
+        source_warehouse_name = source_warehouse.get('location_name')
+        source_tracks_batches = bool(source_warehouse.get('track_batches'))
+
     # Validate items
     if not data.items or len(data.items) == 0:
         raise HTTPException(status_code=400, detail="At least one item is required")
+
+    # Phase 2 batch tracking: when EITHER the source factory warehouse has
+    # `track_batches=True` OR the destination distributor location does,
+    # every line MUST carry a `batch_id`. Reject up-front with a friendly
+    # error if any line is missing one.
+    if source_tracks_batches or dest_tracks_batches:
+        missing_batch = [
+            (item.sku_name or item.sku_id)
+            for item in data.items
+            if not item.batch_id
+        ]
+        if missing_batch:
+            who = (
+                f"Source warehouse '{source_warehouse_name}'" if source_tracks_batches
+                else f"Destination location '{location.get('location_name')}'"
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{who} tracks batches — "
+                    f"please pick a production batch for: {', '.join(missing_batch[:5])}"
+                    + (f" and {len(missing_batch) - 5} more" if len(missing_batch) > 5 else "")
+                ),
+            )
     
     # Generate shipment number
     shipment_number = await generate_shipment_number(tenant_id)
@@ -1861,7 +2455,11 @@ async def create_shipment(
             'unit_price': item_data.unit_price,
             'discount_percent': item_data.discount_percent or 0,
             'tax_percent': item_data.tax_percent or 0,
-            'remarks': item_data.remarks
+            'remarks': item_data.remarks,
+            # Batch identity (Phase 2). Always written so downstream code can
+            # rely on the field existing — None when source doesn't track batches.
+            'batch_id': item_data.batch_id,
+            'batch_code': item_data.batch_code,
         }
         
         # Calculate amounts
@@ -1871,8 +2469,12 @@ async def create_shipment(
         total_quantity += item_data.quantity
         total_gross_amount += item_dict['gross_amount']
         total_discount_amount += item_dict['discount_amount']
-        total_tax_amount += item_dict['tax_amount']
-        total_net_amount += item_dict['net_amount']
+    
+    # Calculate GST at shipment level (not per-item)
+    subtotal_after_discount = total_gross_amount - total_discount_amount
+    gst_pct = data.gst_percent or 0
+    total_tax_amount = round(subtotal_after_discount * (gst_pct / 100), 2)
+    total_net_amount = round(subtotal_after_discount + total_tax_amount, 2)
     
     # Create shipment document
     shipment_doc = {
@@ -1884,6 +2486,8 @@ async def create_shipment(
         "distributor_code": distributor.get('distributor_code'),
         "distributor_location_id": data.distributor_location_id,
         "distributor_location_name": location.get('location_name'),
+        "source_warehouse_id": data.source_warehouse_id,
+        "source_warehouse_name": source_warehouse_name,
         "shipment_date": data.shipment_date,
         "expected_delivery_date": data.expected_delivery_date,
         "actual_delivery_date": None,
@@ -1898,6 +2502,7 @@ async def create_shipment(
         "total_discount_amount": round(total_discount_amount, 2),
         "total_tax_amount": round(total_tax_amount, 2),
         "total_net_amount": round(total_net_amount, 2),
+        "gst_percent": data.gst_percent or 0,
         "remarks": data.remarks,
         "created_at": now,
         "updated_at": now,
@@ -2029,6 +2634,69 @@ async def confirm_shipment(
     
     now = datetime.now(timezone.utc).isoformat()
     
+    # Deduct stock from source factory warehouse if specified
+    source_warehouse_id = shipment.get('source_warehouse_id')
+    if source_warehouse_id:
+        tdb = get_tenant_db()
+        # Check whether the source warehouse tracks batches — drives whether
+        # the per-batch stock check applies (batch-aware deduction) vs the
+        # legacy per-SKU aggregate.
+        src_loc = await db.distributor_locations.find_one(
+            {"id": source_warehouse_id, "tenant_id": tenant_id},
+            {"_id": 0, "track_batches": 1, "location_name": 1},
+        )
+        src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+
+        # Get shipment items (now also batch_id / batch_code)
+        items = await db.distributor_shipment_items.find(
+            {"shipment_id": shipment_id, "tenant_id": tenant_id},
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1, "batch_code": 1}
+        ).to_list(500)
+
+        # Validate stock availability before deducting.
+        # When the source warehouse tracks batches, every item must carry a
+        # batch_id (we already enforced this on create) and we validate per
+        # (sku_id, batch_id) — not aggregated against the SKU's total.
+        insufficient = []
+        for item in items:
+            stock_query = {
+                "tenant_id": tenant_id,
+                "warehouse_location_id": source_warehouse_id,
+                "sku_id": item["sku_id"],
+            }
+            if src_tracks_batches and item.get("batch_id"):
+                stock_query["batch_id"] = item["batch_id"]
+            stock = await tdb.factory_warehouse_stock.find_one(stock_query)
+            available = stock.get("quantity", 0) if stock else 0
+            if available < item["quantity"]:
+                label = item.get("sku_name") or item["sku_id"]
+                if item.get("batch_code"):
+                    label = f"{label} (batch {item['batch_code']})"
+                insufficient.append(f"{label}: need {item['quantity']}, have {available}")
+
+        if insufficient:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock in factory warehouse: {'; '.join(insufficient)}"
+            )
+
+        # Deduct stock for each line. Same key shape as the validation — when
+        # tracking batches, deduct from the specific batch row only.
+        for item in items:
+            update_query = {
+                "tenant_id": tenant_id,
+                "warehouse_location_id": source_warehouse_id,
+                "sku_id": item["sku_id"],
+            }
+            if src_tracks_batches and item.get("batch_id"):
+                update_query["batch_id"] = item["batch_id"]
+            await tdb.factory_warehouse_stock.update_one(
+                update_query,
+                {"$inc": {"quantity": -item["quantity"]}, "$set": {"updated_at": now}}
+            )
+
+        logger.info(f"Deducted stock from factory warehouse {source_warehouse_id} for shipment {shipment['shipment_number']}")
+    
     await db.distributor_shipments.update_one(
         {"id": shipment_id, "tenant_id": tenant_id},
         {"$set": {
@@ -2136,44 +2804,408 @@ async def mark_shipment_delivered(
         {"$set": update_data}
     )
     
-    # Update distributor stock (add to location inventory)
+    # Update distributor stock (add to location inventory). When the source
+    # factory tracked batches, the line carries the batch_id forward so the
+    # destination's `distributor_stock` row is keyed by (loc, sku, batch).
     items = await db.distributor_shipment_items.find(
         {"shipment_id": shipment_id, "tenant_id": tenant_id},
         {"_id": 0}
     ).to_list(500)
-    
+
     for item in items:
-        # Upsert stock record
+        batch_id = item.get('batch_id')
+        stock_key = {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": shipment.get('distributor_location_id'),
+            "sku_id": item.get('sku_id'),
+        }
+        # Add batch to the key so batched and legacy aggregate rows stay separate.
+        # `{"$in": [None]}` matches a stored None OR missing field, which is
+        # what aggregate-only legacy rows have.
+        stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+
+        set_on_insert = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": shipment.get('distributor_location_id'),
+            "sku_id": item.get('sku_id'),
+            "batch_id": batch_id,
+            "created_at": now,
+        }
+        set_fields = {
+            "sku_name": item.get('sku_name'),
+            "sku_code": item.get('sku_code'),
+            "distributor_name": shipment.get('distributor_name'),
+            "location_name": shipment.get('distributor_location_name'),
+            "updated_at": now,
+        }
+        if item.get('batch_code'):
+            set_fields["batch_code"] = item.get('batch_code')
+
         await db.distributor_stock.update_one(
-            {
-                "tenant_id": tenant_id,
-                "distributor_id": distributor_id,
-                "distributor_location_id": shipment.get('distributor_location_id'),
-                "sku_id": item.get('sku_id')
-            },
+            stock_key,
             {
                 "$inc": {"quantity": item.get('quantity', 0)},
-                "$set": {
-                    "sku_name": item.get('sku_name'),
-                    "sku_code": item.get('sku_code'),
-                    "distributor_name": shipment.get('distributor_name'),
-                    "location_name": shipment.get('distributor_location_name'),
-                    "updated_at": now
-                },
-                "$setOnInsert": {
-                    "id": str(uuid.uuid4()),
-                    "tenant_id": tenant_id,
-                    "distributor_id": distributor_id,
-                    "distributor_location_id": shipment.get('distributor_location_id'),
-                    "sku_id": item.get('sku_id'),
-                    "created_at": now
-                }
+                "$set": set_fields,
+                "$setOnInsert": set_on_insert,
             },
             upsert=True
         )
     
     logger.info(f"Shipment {shipment['shipment_number']} delivered by {current_user['email']}")
     
+
+
+# ============ Stock-In Receipt Acknowledgement Flow ============
+# Workflow:
+#   1) Admin dispatches shipment (status: in_transit)
+#   2) Distributor reviews & acknowledges actual received quantity per item
+#        - If all received qty == sent qty -> status: delivered (stock added)
+#        - If any discrepancy             -> status: discrepancy_pending
+#   3) Supplier admin reviews discrepancy and either approves or rejects:
+#        - approve  -> shipment item quantity becomes received_quantity, status: delivered,
+#                      stock added at received qty, factory stock refunded the delta
+#        - reject   -> received_quantity cleared, status back to in_transit; distributor re-acknowledges
+
+
+def _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, qty_field, now):
+    """Helper: upsert distributor stock for delivered items using given quantity field.
+    Batch-aware: keys on `(loc, sku, batch_id)` when the line carries a batch,
+    otherwise falls back to the aggregate per-SKU row used by legacy data."""
+    ops = []
+    for item in items:
+        batch_id = item.get('batch_id')
+        stock_key = {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": shipment.get('distributor_location_id'),
+            "sku_id": item.get('sku_id'),
+        }
+        stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+        set_fields = {
+            "sku_name": item.get('sku_name'),
+            "sku_code": item.get('sku_code'),
+            "distributor_name": shipment.get('distributor_name'),
+            "location_name": shipment.get('distributor_location_name'),
+            "updated_at": now,
+        }
+        if item.get('batch_code'):
+            set_fields["batch_code"] = item.get('batch_code')
+        ops.append(db.distributor_stock.update_one(
+            stock_key,
+            {
+                "$inc": {"quantity": int(item.get(qty_field, 0) or 0)},
+                "$set": set_fields,
+                "$setOnInsert": {
+                    "id": str(uuid.uuid4()),
+                    "tenant_id": tenant_id,
+                    "distributor_id": distributor_id,
+                    "distributor_location_id": shipment.get('distributor_location_id'),
+                    "sku_id": item.get('sku_id'),
+                    "batch_id": batch_id,
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        ))
+    return ops
+
+
+@router.post("/{distributor_id}/shipments/{shipment_id}/acknowledge")
+async def acknowledge_shipment_receipt(
+    distributor_id: str,
+    shipment_id: str,
+    payload: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Distributor acknowledges receipt of a shipment, entering actual received qty per item.
+
+    payload = {
+       "items": [{"item_id": "...", "received_quantity": 10, "discrepancy_remark": "..."}],
+       "acknowledgement_note": "Optional overall note"
+    }
+
+    - If all received qty == sent qty -> shipment marked delivered, stock added
+    - If any discrepancy -> shipment marked discrepancy_pending for supplier review
+    """
+    tenant_id = get_current_tenant_id()
+
+    # Allow either the supplier-admin (override) or the distributor owner
+    if is_distributor_user(current_user):
+        if current_user.get('distributor_id') != distributor_id:
+            raise HTTPException(status_code=403, detail="You can only acknowledge your own shipments")
+    elif not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Not authorised to acknowledge shipments")
+
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+
+    if shipment.get('status') not in ['in_transit', 'partially_delivered']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Shipment cannot be acknowledged in status '{shipment.get('status')}' — it must be dispatched (in_transit) first."
+        )
+
+    received_items = payload.get('items') or []
+    if not received_items:
+        raise HTTPException(status_code=400, detail="Received items required")
+
+    # Load existing items keyed by id
+    db_items = await db.distributor_shipment_items.find(
+        {"shipment_id": shipment_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).to_list(500)
+    items_by_id = {it['id']: it for it in db_items}
+
+    # Validate & determine if there is any discrepancy
+    has_discrepancy = False
+    parsed = []  # (item_doc, received_qty, remark)
+    for entry in received_items:
+        item_id = entry.get('item_id')
+        if not item_id or item_id not in items_by_id:
+            raise HTTPException(status_code=400, detail=f"Unknown shipment item: {item_id}")
+        received_qty = int(entry.get('received_quantity', 0) or 0)
+        if received_qty < 0:
+            raise HTTPException(status_code=400, detail="Received quantity must be >= 0")
+        sent_qty = int(items_by_id[item_id].get('quantity', 0) or 0)
+        if received_qty > sent_qty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Received qty ({received_qty}) cannot exceed sent qty ({sent_qty}) for {items_by_id[item_id].get('sku_name', item_id)}"
+            )
+        if received_qty != sent_qty:
+            has_discrepancy = True
+        parsed.append((items_by_id[item_id], received_qty, (entry.get('discrepancy_remark') or '').strip()))
+
+    # Persist received quantities on each item
+    now = datetime.now(timezone.utc).isoformat()
+    for item_doc, received_qty, remark in parsed:
+        await db.distributor_shipment_items.update_one(
+            {"id": item_doc['id'], "tenant_id": tenant_id},
+            {"$set": {
+                "received_quantity": received_qty,
+                "discrepancy_remark": remark or None,
+                "acknowledged_at": now,
+                "acknowledged_by": current_user.get('id')
+            }}
+        )
+
+    new_status = 'discrepancy_pending' if has_discrepancy else 'delivered'
+    update_data = {
+        "status": new_status,
+        "acknowledged_at": now,
+        "acknowledged_by": current_user.get('id'),
+        "acknowledgement_note": payload.get('acknowledgement_note'),
+        "has_discrepancy": has_discrepancy,
+        "updated_at": now,
+    }
+    if not has_discrepancy:
+        update_data["actual_delivery_date"] = now[:10]
+        update_data["delivered_at"] = now
+        update_data["delivered_by"] = current_user.get('id')
+
+    await db.distributor_shipments.update_one(
+        {"id": shipment_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+
+    # If no discrepancy, add stock immediately
+    if not has_discrepancy:
+        refreshed_items = await db.distributor_shipment_items.find(
+            {"shipment_id": shipment_id, "tenant_id": tenant_id},
+            {"_id": 0}
+        ).to_list(500)
+        for op in _apply_stock_on_delivery(tenant_id, distributor_id, shipment, refreshed_items, 'received_quantity', now):
+            await op
+
+    logger.info(
+        f"Shipment {shipment['shipment_number']} acknowledged by {current_user['email']} - "
+        f"status={new_status}, discrepancy={has_discrepancy}"
+    )
+
+    return {
+        "message": (
+            f"Receipt acknowledged. Shipment marked {'delivered' if not has_discrepancy else 'pending supplier approval due to discrepancy'}."
+        ),
+        "status": new_status,
+        "has_discrepancy": has_discrepancy,
+    }
+
+
+@router.post("/{distributor_id}/shipments/{shipment_id}/approve-receipt")
+async def approve_shipment_receipt(
+    distributor_id: str,
+    shipment_id: str,
+    payload: Optional[dict] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Supplier admin approves a discrepancy-acknowledged shipment.
+    The received_quantity becomes final. Stock added to distributor at received_qty.
+    Factory warehouse stock refunded for the (sent - received) delta.
+    """
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    if shipment.get('status') != 'discrepancy_pending':
+        raise HTTPException(status_code=400, detail="Only shipments in 'discrepancy_pending' status can be approved")
+
+    now = datetime.now(timezone.utc).isoformat()
+    items = await db.distributor_shipment_items.find(
+        {"shipment_id": shipment_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).to_list(500)
+
+    # Refund factory stock for the under-received delta
+    source_warehouse_id = shipment.get('source_warehouse_id')
+    if source_warehouse_id:
+        tdb = get_tenant_db()
+        for it in items:
+            sent_qty = int(it.get('quantity', 0) or 0)
+            recv_qty = int(it.get('received_quantity', sent_qty) or 0)
+            delta = sent_qty - recv_qty
+            if delta > 0:
+                await tdb.factory_warehouse_stock.update_one(
+                    {
+                        "tenant_id": tenant_id,
+                        "warehouse_location_id": source_warehouse_id,
+                        "sku_id": it["sku_id"]
+                    },
+                    {"$inc": {"quantity": delta}, "$set": {"updated_at": now}}
+                )
+
+    # Lock in received_quantity as the final quantity on items (and recompute amounts)
+    new_total_qty = 0
+    new_total_gross = 0.0
+    new_total_discount = 0.0
+    new_total_taxable = 0.0
+    for it in items:
+        recv_qty = int(it.get('received_quantity', it.get('quantity', 0)) or 0)
+        unit_price = float(it.get('unit_price') or 0)
+        discount_percent = float(it.get('discount_percent') or 0)
+        gross = recv_qty * unit_price
+        discount_amount = gross * (discount_percent / 100.0)
+        taxable = gross - discount_amount
+        await db.distributor_shipment_items.update_one(
+            {"id": it['id'], "tenant_id": tenant_id},
+            {"$set": {
+                "original_sent_quantity": it.get('original_sent_quantity', int(it.get('quantity', 0) or 0)),
+                "quantity": recv_qty,
+                "gross_amount": round(gross, 2),
+                "discount_amount": round(discount_amount, 2),
+                "taxable_amount": round(taxable, 2),
+                # tax_amount/net_amount re-computed at shipment-level GST below
+                "updated_at": now,
+            }}
+        )
+        new_total_qty += recv_qty
+        new_total_gross += gross
+        new_total_discount += discount_amount
+        new_total_taxable += taxable
+
+    gst_percent = float(shipment.get('gst_percent') or 0)
+    new_tax_amount = new_total_taxable * (gst_percent / 100.0)
+    new_net_amount = new_total_taxable + new_tax_amount
+
+    update_data = {
+        "status": "delivered",
+        "actual_delivery_date": now[:10],
+        "delivered_at": now,
+        "delivered_by": current_user.get('id'),
+        "discrepancy_approved_at": now,
+        "discrepancy_approved_by": current_user.get('id'),
+        "discrepancy_approval_note": (payload or {}).get('note'),
+        "total_quantity": new_total_qty,
+        "total_gross_amount": round(new_total_gross, 2),
+        "total_discount_amount": round(new_total_discount, 2),
+        "total_tax_amount": round(new_tax_amount, 2),
+        "total_net_amount": round(new_net_amount, 2),
+        "updated_at": now,
+    }
+    await db.distributor_shipments.update_one(
+        {"id": shipment_id, "tenant_id": tenant_id},
+        {"$set": update_data}
+    )
+
+    # Add stock to distributor at received quantity
+    for op in _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, 'received_quantity', now):
+        await op
+
+    logger.info(f"Shipment {shipment['shipment_number']} discrepancy approved by {current_user['email']}")
+
+    return {
+        "message": f"Shipment {shipment['shipment_number']} approved. Quantities reconciled.",
+        "status": "delivered",
+    }
+
+
+@router.post("/{distributor_id}/shipments/{shipment_id}/reject-receipt")
+async def reject_shipment_receipt(
+    distributor_id: str,
+    shipment_id: str,
+    payload: Optional[dict] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Supplier admin rejects a discrepancy submission, asking distributor to re-verify.
+    Resets received_quantity and reverts status to in_transit.
+    """
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    if shipment.get('status') != 'discrepancy_pending':
+        raise HTTPException(status_code=400, detail="Only shipments in 'discrepancy_pending' status can be rejected")
+
+    now = datetime.now(timezone.utc).isoformat()
+    reason = ((payload or {}).get('reason') or '').strip()
+
+    await db.distributor_shipment_items.update_many(
+        {"shipment_id": shipment_id, "tenant_id": tenant_id},
+        {"$unset": {"received_quantity": "", "discrepancy_remark": "", "acknowledged_at": "", "acknowledged_by": ""}}
+    )
+    await db.distributor_shipments.update_one(
+        {"id": shipment_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "in_transit",
+            "discrepancy_rejected_at": now,
+            "discrepancy_rejected_by": current_user.get('id'),
+            "discrepancy_rejection_reason": reason or None,
+            "acknowledged_at": None,
+            "acknowledged_by": None,
+            "has_discrepancy": False,
+            "updated_at": now,
+        }}
+    )
+
+    logger.info(f"Shipment {shipment['shipment_number']} discrepancy rejected by {current_user['email']}: {reason}")
+
+    return {
+        "message": f"Shipment {shipment['shipment_number']} sent back to distributor for re-verification.",
+        "status": "in_transit",
+        "rejection_reason": reason,
+    }
+
+
     return {"message": f"Shipment {shipment['shipment_number']} delivered", "status": "delivered"}
 
 
@@ -2385,144 +3417,275 @@ async def get_stock_dashboard_summary(
     distributor_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get stock dashboard summary across all distributors"""
+    """Tenant-wide stock dashboard.
+
+    Pulls from BOTH `distributor_stock` (regular distributor warehouses) AND
+    `factory_warehouse_stock` (factory / master warehouses) and reports
+    **everything in crates** (numbers in the raw collections are bottles —
+    converted per-SKU via `bottles_per_crate`).
+
+    Bug fixes vs. earlier:
+      • Factory warehouses were entirely missing.
+      • Numbers were bottles, labelled as units; the UI then showed inflated
+        counts (e.g. 27,613 instead of ~1,150 crates).
+      • Negative rows polluted totals — floored to zero per row (the negative
+        is surfaced as a warehouse-overview anomaly elsewhere).
+    """
     tenant_id = get_current_tenant_id()
-    
-    # Build query
-    query = {"tenant_id": tenant_id}
+
+    # ── 1. Pull raw stock from both collections ───────────────────────────
+    dist_query: dict = {"tenant_id": tenant_id}
     if distributor_id:
-        query["distributor_id"] = distributor_id
-    
-    # Get all stock records
-    stock = await db.distributor_stock.find(query, {"_id": 0}).to_list(5000)
-    
-    # If city filter is applied, filter by distributor locations in that city
+        dist_query["distributor_id"] = distributor_id
+    distributor_rows = await db.distributor_stock.find(dist_query, {"_id": 0}).to_list(5000)
+
+    fwh_query: dict = {"tenant_id": tenant_id}
+    factory_rows = await db.factory_warehouse_stock.find(fwh_query, {"_id": 0}).to_list(5000)
+
+    # ── 2. Apply optional city filter (works for both collections) ────────
     if city:
-        # Get locations in this city
-        locations_in_city = await db.distributor_locations.find(
-            {"tenant_id": tenant_id, "city": city},
-            {"id": 1}
-        ).to_list(500)
-        location_ids = [loc['id'] for loc in locations_in_city]
-        stock = [s for s in stock if s.get('distributor_location_id') in location_ids]
-    
-    # Calculate summary metrics
-    total_quantity = sum(s.get('quantity', 0) for s in stock)
-    total_skus = len(set(s.get('sku_id') for s in stock if s.get('sku_id')))
-    total_locations = len(set(s.get('distributor_location_id') for s in stock if s.get('distributor_location_id')))
-    total_distributors = len(set(s.get('distributor_id') for s in stock if s.get('distributor_id')))
-    
-    # Group by distributor
-    by_distributor = {}
-    for item in stock:
-        dist_id = item.get('distributor_id')
-        dist_name = item.get('distributor_name', 'Unknown')
-        if dist_id not in by_distributor:
-            by_distributor[dist_id] = {
-                'distributor_id': dist_id,
-                'distributor_name': dist_name,
-                'total_quantity': 0,
-                'sku_count': set(),
-                'locations': set()
-            }
-        by_distributor[dist_id]['total_quantity'] += item.get('quantity', 0)
-        by_distributor[dist_id]['sku_count'].add(item.get('sku_id'))
-        by_distributor[dist_id]['locations'].add(item.get('distributor_location_id'))
-    
-    # Convert sets to counts
-    distributor_summary = []
-    for dist_id, data in by_distributor.items():
-        distributor_summary.append({
-            'distributor_id': dist_id,
-            'distributor_name': data['distributor_name'],
-            'total_quantity': data['total_quantity'],
-            'sku_count': len(data['sku_count']),
-            'location_count': len(data['locations'])
+        loc_ids_in_city = {
+            loc["id"] for loc in await db.distributor_locations.find(
+                {"tenant_id": tenant_id, "city": city}, {"_id": 0, "id": 1}
+            ).to_list(2000)
+        }
+        distributor_rows = [s for s in distributor_rows if s.get("distributor_location_id") in loc_ids_in_city]
+        factory_rows = [s for s in factory_rows if s.get("warehouse_location_id") in loc_ids_in_city]
+
+    # If a specific distributor was requested, factory warehouses owned by
+    # that distributor (self-managed factories) should still be included; the
+    # link is via `distributor_locations.distributor_id`.
+    if distributor_id:
+        loc_owned = {
+            loc["id"] for loc in await db.distributor_locations.find(
+                {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_factory": True},
+                {"_id": 0, "id": 1},
+            ).to_list(500)
+        }
+        factory_rows = [s for s in factory_rows if s.get("warehouse_location_id") in loc_owned]
+
+    # ── 3. Stock quantities are stored **already in crates** in both
+    #       `distributor_stock` and `factory_warehouse_stock` (the per-SKU
+    #       bottles-per-crate conversion happens at the moment stock is
+    #       received / dispatched, never on read). We therefore do NOT divide
+    #       again here — doing so previously made small crate counts collapse
+    #       to 0 (e.g. 12 crates ÷ 24 bpc = 0). We only floor negatives so
+    #       any reconciliation glitch can't pollute totals.
+    def crates(_sku_id: str, qty) -> int:
+        try:
+            return max(0, int(qty))
+        except Exception:
+            try:
+                return max(0, int(qty or 0))
+            except Exception:
+                return 0
+
+    # ── 4. Resolve location metadata for factory rows ─────────────────────
+    fwh_loc_ids = list({s.get("warehouse_location_id") for s in factory_rows if s.get("warehouse_location_id")})
+    fwh_locs: dict = {}
+    if fwh_loc_ids:
+        fwh_locs = {loc["id"]: loc for loc in await db.distributor_locations.find(
+            {"tenant_id": tenant_id, "id": {"$in": fwh_loc_ids}},
+            {"_id": 0, "id": 1, "distributor_id": 1, "location_name": 1, "city": 1, "is_factory": 1},
+        ).to_list(len(fwh_loc_ids) + 1)}
+    parent_dist_ids = list({loc.get("distributor_id") for loc in fwh_locs.values() if loc.get("distributor_id")})
+    parent_dists: dict = {}
+    if parent_dist_ids:
+        parent_dists = {d["id"]: d for d in await db.distributors.find(
+            {"tenant_id": tenant_id, "id": {"$in": parent_dist_ids}},
+            {"_id": 0, "id": 1, "distributor_name": 1},
+        ).to_list(len(parent_dist_ids) + 1)}
+
+    # ── 5. Build a unified "stock_rows" list of crate-denominated entries ─
+    unified: list[dict] = []
+    for s in distributor_rows:
+        unified.append({
+            "kind": "distributor",
+            "distributor_id": s.get("distributor_id"),
+            "distributor_name": s.get("distributor_name") or "Unknown",
+            "location_id": s.get("distributor_location_id"),
+            "location_name": s.get("location_name") or "Unknown",
+            "sku_id": s.get("sku_id"),
+            "sku_name": s.get("sku_name") or "Unknown",
+            "quantity": crates(s.get("sku_id", ""), s.get("quantity", 0)),
+            "is_factory": False,
         })
-    
-    # Sort by quantity descending
-    distributor_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
-    
-    # Group by SKU
-    by_sku = {}
-    for item in stock:
-        sku_id = item.get('sku_id')
-        sku_name = item.get('sku_name', 'Unknown')
-        if sku_id not in by_sku:
-            by_sku[sku_id] = {
-                'sku_id': sku_id,
-                'sku_name': sku_name,
-                'total_quantity': 0,
-                'locations': set()
-            }
-        by_sku[sku_id]['total_quantity'] += item.get('quantity', 0)
-        by_sku[sku_id]['locations'].add(item.get('distributor_location_id'))
-    
-    sku_summary = []
-    for sku_id, data in by_sku.items():
-        sku_summary.append({
-            'sku_id': sku_id,
-            'sku_name': data['sku_name'],
-            'total_quantity': data['total_quantity'],
-            'location_count': len(data['locations'])
+    for s in factory_rows:
+        loc = fwh_locs.get(s.get("warehouse_location_id"), {})
+        parent = parent_dists.get(loc.get("distributor_id"), {})
+        unified.append({
+            "kind": "factory",
+            "distributor_id": loc.get("distributor_id"),
+            "distributor_name": parent.get("distributor_name") or s.get("warehouse_name") or "Factory",
+            "location_id": s.get("warehouse_location_id"),
+            "location_name": s.get("warehouse_name") or loc.get("location_name") or "Factory Warehouse",
+            "sku_id": s.get("sku_id"),
+            "sku_name": s.get("sku_name") or "Unknown",
+            "quantity": crates(s.get("sku_id", ""), s.get("quantity", 0)),
+            "is_factory": True,
         })
-    
-    sku_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
-    
-    # Group by location
-    by_location = {}
-    for item in stock:
-        loc_id = item.get('distributor_location_id')
-        loc_name = item.get('location_name', 'Unknown')
-        dist_name = item.get('distributor_name', 'Unknown')
-        if loc_id not in by_location:
-            by_location[loc_id] = {
-                'location_id': loc_id,
-                'location_name': loc_name,
-                'distributor_name': dist_name,
-                'total_quantity': 0,
-                'sku_count': set(),
-                'items': []
-            }
-        by_location[loc_id]['total_quantity'] += item.get('quantity', 0)
-        by_location[loc_id]['sku_count'].add(item.get('sku_id'))
-        by_location[loc_id]['items'].append({
-            'sku_id': item.get('sku_id'),
-            'sku_name': item.get('sku_name'),
-            'quantity': item.get('quantity', 0)
+
+    # ── 6. Top-level summary ──────────────────────────────────────────────
+    total_quantity = sum(r["quantity"] for r in unified)
+    total_skus = len({r["sku_id"] for r in unified if r.get("sku_id")})
+    total_locations = len({r["location_id"] for r in unified if r.get("location_id")})
+    total_distributors = len({r["distributor_id"] for r in unified if r.get("distributor_id")})
+
+    # ── 7. Groupings (by_distributor / by_sku / by_location) ──────────────
+    by_dist: dict = {}
+    for r in unified:
+        did = r.get("distributor_id") or "__factory__"
+        bucket = by_dist.setdefault(did, {
+            "distributor_id": did,
+            "distributor_name": r.get("distributor_name"),
+            "total_quantity": 0,
+            "sku_count": set(),
+            "locations": set(),
         })
-    
+        bucket["total_quantity"] += r["quantity"]
+        if r.get("sku_id"):
+            bucket["sku_count"].add(r["sku_id"])
+        if r.get("location_id"):
+            bucket["locations"].add(r["location_id"])
+    distributor_summary = sorted([
+        {"distributor_id": v["distributor_id"], "distributor_name": v["distributor_name"],
+         "total_quantity": v["total_quantity"], "sku_count": len(v["sku_count"]),
+         "location_count": len(v["locations"])}
+        for v in by_dist.values()
+    ], key=lambda x: x["total_quantity"], reverse=True)
+
+    by_sku: dict = {}
+    for r in unified:
+        sid = r.get("sku_id")
+        if not sid:
+            continue
+        bucket = by_sku.setdefault(sid, {
+            "sku_id": sid, "sku_name": r.get("sku_name"),
+            "total_quantity": 0, "locations": set(),
+        })
+        bucket["total_quantity"] += r["quantity"]
+        if r.get("location_id"):
+            bucket["locations"].add(r["location_id"])
+    sku_summary = sorted([
+        {"sku_id": v["sku_id"], "sku_name": v["sku_name"],
+         "total_quantity": v["total_quantity"], "location_count": len(v["locations"])}
+        for v in by_sku.values()
+    ], key=lambda x: x["total_quantity"], reverse=True)
+
+    by_loc: dict = {}
+    for r in unified:
+        lid = r.get("location_id")
+        if not lid:
+            continue
+        bucket = by_loc.setdefault(lid, {
+            "location_id": lid, "location_name": r.get("location_name"),
+            "distributor_name": r.get("distributor_name"),
+            "is_factory": r.get("is_factory", False),
+            "total_quantity": 0, "sku_count": set(), "items": [],
+        })
+        # If the same location surfaces from both collections (rare) mark as
+        # factory if either row says so — factories are the more specific kind.
+        if r.get("is_factory"):
+            bucket["is_factory"] = True
+        bucket["total_quantity"] += r["quantity"]
+        bucket["sku_count"].add(r.get("sku_id"))
+        bucket["items"].append({
+            "sku_id": r.get("sku_id"),
+            "sku_name": r.get("sku_name"),
+            "quantity": r["quantity"],
+        })
+    # Aggregate duplicate SKU lines within a location (when the same SKU
+    # appears in both distributor_stock and factory_warehouse_stock — yes,
+    # this happens for self-managed factories — or across multiple batches).
     location_summary = []
-    for loc_id, data in by_location.items():
+    for v in by_loc.values():
+        items_by_sku: dict = {}
+        for it in v["items"]:
+            sid = it.get("sku_id")
+            if not sid:
+                continue
+            items_by_sku.setdefault(sid, {"sku_id": sid, "sku_name": it.get("sku_name"), "quantity": 0})
+            items_by_sku[sid]["quantity"] += int(it.get("quantity") or 0)
         location_summary.append({
-            'location_id': loc_id,
-            'location_name': data['location_name'],
-            'distributor_name': data['distributor_name'],
-            'total_quantity': data['total_quantity'],
-            'sku_count': len(data['sku_count']),
-            'items': data['items']
+            "location_id": v["location_id"],
+            "location_name": v["location_name"],
+            "distributor_name": v["distributor_name"],
+            "is_factory": v["is_factory"],
+            "total_quantity": v["total_quantity"],
+            "sku_count": len([s for s in v["sku_count"] if s]),
+            "items": sorted(items_by_sku.values(), key=lambda x: (x.get("sku_name") or "").lower()),
         })
-    
-    location_summary.sort(key=lambda x: x['total_quantity'], reverse=True)
-    
-    # Get list of cities with stock
+    location_summary.sort(key=lambda x: x["total_quantity"], reverse=True)
+
+    # ── 8. Enrich each SKU with its DEFAULT crate packaging ────────────────
+    # The rep can then toggle the dashboard from raw bottles to that SKU's
+    # default crate (e.g. "12 Bottle Crate" for 1L) on the frontend. We use
+    # `packaging_config.stock_out` (customer-facing) as the canonical default
+    # because that's the unit reps think in when reading the dashboard. Falls
+    # back to `packaging_config.stock_in`, then to any first packaging found.
+    sku_ids_in_play = list({r.get("sku_id") for r in unified if r.get("sku_id")})
+    sku_pkg: dict = {}
+    if sku_ids_in_play:
+        # Master SKUs may pre-date the tenant_id field — accept rows without it
+        # too, mirroring how the rest of the dashboard treats legacy masters.
+        async for sku in db.master_skus.find(
+            {
+                "id": {"$in": sku_ids_in_play},
+                "$or": [{"tenant_id": tenant_id}, {"tenant_id": {"$exists": False}}],
+            },
+            {"_id": 0, "id": 1, "packaging_config": 1},
+        ):
+            cfg = sku.get("packaging_config") or {}
+            chosen = None
+            for ctx in ("stock_out", "stock_in", "production", "promo_stock_out"):
+                rows = cfg.get(ctx) or []
+                if not rows:
+                    continue
+                pick = next((p for p in rows if p.get("is_default")), None) or rows[0]
+                if pick and (pick.get("units_per_package") or 0) > 1:
+                    chosen = pick
+                    break
+                if pick and not chosen:
+                    chosen = pick  # fallback (e.g. "Bottle (1)") — used if no crate exists
+            if chosen:
+                sku_pkg[sku["id"]] = {
+                    "default_packaging_name": chosen.get("packaging_type_name"),
+                    "default_units_per_package": int(chosen.get("units_per_package") or 1),
+                }
+
+    def _attach(item: dict):
+        """Add default-packaging fields + the converted crate count to a row."""
+        pkg = sku_pkg.get(item.get("sku_id"))
+        item["default_packaging_name"] = (pkg or {}).get("default_packaging_name")
+        item["default_units_per_package"] = (pkg or {}).get("default_units_per_package") or 1
+        upp = item["default_units_per_package"]
+        qty = int(item.get("total_quantity") if "total_quantity" in item else item.get("quantity", 0))
+        item["default_packaging_quantity"] = qty // upp if upp > 0 else qty
+        return item
+
+    for row in sku_summary:
+        _attach(row)
+    for loc in location_summary:
+        loc["items"] = [_attach(dict(it)) for it in loc.get("items", [])]
+
+    # Cities (just the ones whose locations actually have stock)
     cities_with_stock = await db.distributor_locations.distinct(
         "city",
-        {"tenant_id": tenant_id, "id": {"$in": list(set(s.get('distributor_location_id') for s in stock))}}
+        {"tenant_id": tenant_id, "id": {"$in": list({r.get("location_id") for r in unified if r.get("location_id")})}}
     )
-    
+
     return {
         "summary": {
             "total_quantity": total_quantity,
             "total_skus": total_skus,
             "total_locations": total_locations,
-            "total_distributors": total_distributors
+            "total_distributors": total_distributors,
+            "unit": "crates",
         },
         "by_distributor": distributor_summary,
         "by_sku": sku_summary,
         "by_location": location_summary,
         "cities": sorted(cities_with_stock) if cities_with_stock else [],
-        "raw_stock": stock
     }
 
 
@@ -2574,6 +3737,12 @@ async def get_distributor_stock(
 DELIVERY_STATUSES = {
     "draft": "Draft - Not yet confirmed",
     "confirmed": "Confirmed - Ready for delivery",
+    "delivery_assigned": "Delivery Assigned - Attached to a schedule",
+    "delivery_scheduled": "Delivery Scheduled - Schedule approved",
+    "on_the_way": "On the Way - Driver started the run",
+    "complete": "Complete - Delivered to customer",
+    # Legacy values kept for backward compatibility (older rows):
+    "scheduled": "Scheduled - On a confirmed delivery schedule",
     "in_transit": "In Transit - On the way",
     "delivered": "Delivered - Completed",
     "partially_delivered": "Partially Delivered",
@@ -2592,7 +3761,7 @@ async def generate_delivery_number(tenant_id: str) -> str:
     return f"DEL-{year}-{count + 1:04d}"
 
 
-def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None, transfer_price: float = None, base_price: float = None) -> dict:
+def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_value: float = None, transfer_price: float = None, base_price: float = None, billing_approach: str = 'margin_upfront') -> dict:
     """Calculate amounts for a delivery item including margin and adjustment calculations
     
     Columns (in display order):
@@ -2618,11 +3787,15 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     # Get commission/margin percentage from item or margin_value
     commission_percent = item.get('distributor_commission_percent') or margin_value or 0
     
-    # Transfer Price = base_price × (1 - margin%)
-    item_transfer_price = item.get('transfer_price') or (round(item_base_price * (1 - commission_percent / 100), 2) if item_base_price and commission_percent else item_base_price)
-    
-    # New Transfer Price = customer_price × (1 - margin%)
-    new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
+    # Transfer Price: for cost_based, equals base price; for margin_upfront, base × (1 - margin%)
+    is_cost_based = billing_approach == 'cost_based'
+    if is_cost_based:
+        item_transfer_price = item_base_price  # Cost-based: always use base price (no margin deducted at transfer)
+        # Factory's due = customer price × (1 - margin%) — always deduct margin for factory's share
+        new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
+    else:
+        item_transfer_price = item.get('transfer_price') or (round(item_base_price * (1 - commission_percent / 100), 2) if item_base_price and commission_percent else item_base_price)
+        new_transfer_price = round(customer_selling_price * (1 - commission_percent / 100), 2) if customer_selling_price and commission_percent else customer_selling_price
     
     # Billed to Distributor = qty × transfer_price (initial billing based on base price)
     billed_to_dist = round(quantity * item_transfer_price, 2) if item_transfer_price else 0
@@ -2652,7 +3825,7 @@ def calculate_delivery_item_amounts(item: dict, margin_type: str = None, margin_
     
     # Legacy calculations (kept for backward compatibility)
     distributor_earnings = round(gross_amount * commission_percent / 100, 2) if commission_percent else 0
-    margin_at_transfer_price = round(quantity * item_base_price * commission_percent / 100, 2) if item_base_price and commission_percent else 0
+    margin_at_transfer_price = 0 if is_cost_based else (round(quantity * item_base_price * commission_percent / 100, 2) if item_base_price and commission_percent else 0)
     adjustment_payable = round(distributor_earnings - margin_at_transfer_price, 2)
     price_premium_payable = round(quantity * (customer_selling_price - item_base_price), 2) if customer_selling_price > item_base_price and item_base_price > 0 else 0
     
@@ -2730,7 +3903,7 @@ async def list_all_deliveries(
     deliveries = await db.distributor_deliveries.find(
         query,
         {"_id": 0}
-    ).sort("delivery_date", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    ).sort([("delivery_date", -1), ("created_at", -1)]).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     
     return {
         "deliveries": deliveries,
@@ -2758,7 +3931,7 @@ async def get_deliveries_summary(
     # Count by status
     draft = await db.distributor_deliveries.count_documents({**query, "status": "draft"})
     confirmed = await db.distributor_deliveries.count_documents({**query, "status": "confirmed"})
-    delivered = await db.distributor_deliveries.count_documents({**query, "status": "delivered"})
+    delivered = await db.distributor_deliveries.count_documents({**query, "status": {"$in": ["delivered", "complete"]}})
     cancelled = await db.distributor_deliveries.count_documents({**query, "status": "cancelled"})
     
     # Calculate totals
@@ -2853,7 +4026,7 @@ async def list_distributor_deliveries(
     deliveries = await db.distributor_deliveries.find(
         query,
         {"_id": 0}
-    ).sort("delivery_date", -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
+    ).sort([("delivery_date", -1), ("created_at", -1)]).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
     
     # Fetch items for each delivery
     for delivery in deliveries:
@@ -2896,6 +4069,37 @@ async def get_delivery(
     ).to_list(500)
     
     delivery['items'] = items
+
+    # Surface the account's billed_by flag on the delivery so the frontend can
+    # hide Zoho invoice affordances for accounts billed by a third-party
+    # distributor. This avoids an extra round-trip on the popup.
+    if delivery.get('account_id'):
+        acc = await db.accounts.find_one(
+            {"id": delivery['account_id'], "tenant_id": tenant_id},
+            {"_id": 0, "billed_by": 1}
+        )
+        delivery['account_billed_by'] = (acc or {}).get('billed_by') or 'company'
+    else:
+        delivery['account_billed_by'] = 'company'
+
+    # Enrich applied_credit_notes with current Zoho deep-link / status — the
+    # snapshot stored on the delivery doesn't carry Zoho fields, and a CN may
+    # be synced to Zoho AFTER the delivery was created.
+    applied = delivery.get('applied_credit_notes') or []
+    cn_ids = [a.get('credit_note_id') for a in applied if a.get('credit_note_id')]
+    if cn_ids:
+        cns = await db.credit_notes.find(
+            {'id': {'$in': cn_ids}, 'tenant_id': tenant_id},
+            {'_id': 0, 'id': 1, 'zoho_creditnote_id': 1, 'zoho_creditnote_number': 1, 'zoho_creditnote_url': 1, 'status': 1}
+        ).to_list(len(cn_ids))
+        cn_map = {c['id']: c for c in cns}
+        for a in applied:
+            c = cn_map.get(a.get('credit_note_id'))
+            if c:
+                a['zoho_creditnote_id'] = c.get('zoho_creditnote_id')
+                a['zoho_creditnote_number'] = c.get('zoho_creditnote_number')
+                a['zoho_creditnote_url'] = c.get('zoho_creditnote_url')
+        delivery['applied_credit_notes'] = applied
     
     return delivery
 
@@ -2931,8 +4135,41 @@ async def get_assigned_accounts_for_delivery(
             {"_id": 0, "id": 1, "account_name": 1, "contact_name": 1, "city": 1, "state": 1, "delivery_address": 1, "territory": 1, "contact_number": 1, "sku_pricing": 1}
         )
         if account:
-            # Get SKU pricing and enrich with master SKU data for ID mapping
-            sku_pricing = account.get('sku_pricing', [])
+            # ── SKU pricing — pick the row that is ACTIVE today for each SKU.
+            # `account.sku_pricing` may contain historical / future-dated rows;
+            # we filter to the one matching today's date window. If multiple
+            # rows overlap, the one with the latest `active_from` wins (most
+            # recently scheduled price wins). Rows without dates are treated
+            # as "always active" but lose to a dated overlapping row.
+            from datetime import date as _date
+            raw_pricing = account.get('sku_pricing', []) or []
+            today_iso = _date.today().isoformat()
+
+            def _in_window(row):
+                af = (row.get('active_from') or '').strip()
+                at = (row.get('active_to') or '').strip()
+                if af and today_iso < af:
+                    return False
+                if at and today_iso > at:
+                    return False
+                return True
+
+            by_sku: dict[str, dict] = {}
+            for row in raw_pricing:
+                if not _in_window(row):
+                    continue
+                key = (row.get('sku') or '').strip()
+                if not key:
+                    continue
+                cur = by_sku.get(key)
+                if cur is None:
+                    by_sku[key] = row
+                    continue
+                # Prefer the row with the latest active_from (dated > undated).
+                if (row.get('active_from') or '') > (cur.get('active_from') or ''):
+                    by_sku[key] = row
+            sku_pricing = list(by_sku.values())
+
             enriched_skus = []
             if sku_pricing:
                 # Get all master SKUs to map names to IDs
@@ -2979,6 +4216,44 @@ async def get_assigned_accounts_for_delivery(
     return {"accounts": accounts}
 
 
+# Statuses where a Stock Out order still HOLDS a reservation on stock — i.e.
+# every open order that has not yet been delivered or cancelled. Stock on these
+# orders is "Reserved" (committed) and must not be re-allocated to other orders.
+RESERVED_DELIVERY_STATUSES = [
+    "draft", "pending", "confirmed",
+    "scheduled", "delivery_scheduled", "delivery_assigned",
+    "on_the_way", "in_transit",
+]
+
+
+async def _reserved_qty_map(tenant_id, distributor_id, location_id, tracks_batches, exclude_delivery_id=None):
+    """Reserved (committed) quantity per (sku_id, batch_id|None) at a source
+    location, summed across all OPEN Stock Out orders. Fully derived from the
+    deliveries themselves, so cancel/complete/delete need no extra bookkeeping —
+    the reservation simply disappears once the order leaves the open set."""
+    open_ids = await db.distributor_deliveries.distinct(
+        "id",
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": location_id,
+            "status": {"$in": RESERVED_DELIVERY_STATUSES},
+        },
+    )
+    if exclude_delivery_id:
+        open_ids = [i for i in open_ids if i != exclude_delivery_id]
+    if not open_ids:
+        return {}
+    reserved: dict = {}
+    async for it in db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": open_ids}},
+        {"_id": 0, "sku_id": 1, "batch_id": 1, "quantity": 1},
+    ):
+        key = (it.get("sku_id"), it.get("batch_id") if tracks_batches else None)
+        reserved[key] = reserved.get(key, 0) + int(it.get("quantity") or 0)
+    return reserved
+
+
 @router.post("/{distributor_id}/deliveries")
 async def create_delivery(
     distributor_id: str,
@@ -2986,8 +4261,8 @@ async def create_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Create a new delivery to an account"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -2995,18 +4270,22 @@ async def create_delivery(
     # Validate distributor exists
     distributor = await db.distributors.find_one(
         {"id": distributor_id, "tenant_id": tenant_id},
-        {"_id": 0, "distributor_name": 1, "distributor_code": 1}
+        {"_id": 0, "distributor_name": 1, "distributor_code": 1, "billing_approach": 1}
     )
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
     
+    billing_approach = distributor.get('billing_approach', 'margin_upfront')
+    
     # Validate location
     location = await db.distributor_locations.find_one(
         {"id": data.distributor_location_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
-        {"_id": 0, "location_name": 1, "city": 1}
+        {"_id": 0, "location_name": 1, "city": 1, "track_batches": 1, "is_factory": 1}
     )
     if not location:
         raise HTTPException(status_code=400, detail="Invalid distributor location")
+    source_tracks_batches = bool(location.get("track_batches"))
+    source_is_factory = bool(location.get("is_factory"))
     
     # Validate account exists
     account = await db.accounts.find_one(
@@ -3019,7 +4298,168 @@ async def create_delivery(
     # Validate items
     if not data.items or len(data.items) == 0:
         raise HTTPException(status_code=400, detail="At least one item is required")
-    
+
+    # Phase 2 batch tracking: when the source distributor warehouse has
+    # `track_batches=True`, every line MUST carry a `batch_id`. Reject up
+    # front with a clear list of missing SKUs.
+    if source_tracks_batches:
+        missing_batch = [
+            (item.sku_name or item.sku_id)
+            for item in data.items
+            if not item.batch_id
+        ]
+        if missing_batch:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Warehouse '{location.get('location_name')}' tracks batches — "
+                    f"please pick a production batch for: {', '.join(missing_batch[:5])}"
+                    + (f" and {len(missing_batch) - 5} more" if len(missing_batch) > 5 else "")
+                ),
+            )
+
+    # ── Stock availability validation ─────────────────────────────────────
+    # Reject the delivery up-front if any line exceeds the on-hand quantity
+    # at the source warehouse. Without this, drivers could silently record
+    # deliveries that drive the inventory negative (or worse, leave it
+    # untouched if the deduction path fails to match a row).
+    #
+    # Same row-lookup convention as `complete_delivery`:
+    #   • factory source       → factory_warehouse_stock (warehouse_location_id)
+    #   • distributor source   → distributor_stock (distributor_location_id)
+    #   • track_batches=True   → row keyed by batch_id
+    #   • track_batches=False  → aggregated row
+    #
+    # Aggregate per (sku_id, batch_id) so multi-line deliveries of the same
+    # SKU/batch are summed before checking.
+    stock_demand: dict = {}
+    for item in data.items:
+        qty = int(item.quantity or 0)
+        if qty <= 0:
+            continue
+        key = (item.sku_id, item.batch_id if source_tracks_batches else None)
+        stock_demand[key] = stock_demand.get(key, 0) + qty
+
+    shortages: list = []
+
+    # ── Pre-aggregate the "derived" view of on-hand for non-factory,
+    # non-batch-tracked sources. This mirrors the dashboard's formula
+    # (received − delivered − pending), so the guard NEVER disagrees with the
+    # dashboard the user just saw. Critical for distributors where
+    # `distributor_stock` rows may be missing/stale (legacy data, partial
+    # migrations) but the shipment/delivery history is intact.
+    derived_on_hand_by_sku: dict = {}
+    if not source_is_factory and not source_tracks_batches:
+        sku_ids_needed = list({sku for (sku, _) in stock_demand.keys() if sku})
+        if sku_ids_needed:
+            # Received = sum(delivered shipment_items at this location for these SKUs)
+            delivered_ship_ids = await db.distributor_shipments.distinct(
+                "id",
+                {
+                    "tenant_id": tenant_id,
+                    "distributor_id": distributor_id,
+                    "distributor_location_id": data.distributor_location_id,
+                    "status": "delivered",
+                },
+            )
+            for it in await db.distributor_shipment_items.find(
+                {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_ship_ids}, "sku_id": {"$in": sku_ids_needed}},
+                {"_id": 0, "sku_id": 1, "quantity": 1, "received_quantity": 1},
+            ).to_list(20000):
+                # `received_quantity` is the source of truth when acknowledgement
+                # was used; otherwise the dispatched `quantity`. Either way they
+                # match what the dashboard tallies as "received".
+                q = int(it.get("received_quantity") or it.get("quantity") or 0)
+                derived_on_hand_by_sku[it["sku_id"]] = derived_on_hand_by_sku.get(it["sku_id"], 0) + q
+            # Delivered out = sum(items on completed deliveries at this location)
+            done_delivery_ids = await db.distributor_deliveries.distinct(
+                "id",
+                {
+                    "tenant_id": tenant_id, "distributor_id": distributor_id,
+                    "distributor_location_id": data.distributor_location_id,
+                    "status": {"$in": ["delivered", "completed", "complete"]},
+                },
+            )
+            for it in await db.distributor_delivery_items.find(
+                {"tenant_id": tenant_id, "delivery_id": {"$in": done_delivery_ids}, "sku_id": {"$in": sku_ids_needed}},
+                {"_id": 0, "sku_id": 1, "quantity": 1},
+            ).to_list(20000):
+                derived_on_hand_by_sku[it["sku_id"]] = derived_on_hand_by_sku.get(it["sku_id"], 0) - int(it.get("quantity") or 0)
+            # NOTE: open/pending orders are NOT subtracted here — they are
+            # handled uniformly below via the Reserved map so every source type
+            # (factory / batch / distributor) nets out committed stock the same
+            # way and we never double-count.
+
+    # Reserved = stock already committed to OTHER open Stock Out orders at this
+    # source location. Available = on-hand − reserved. Reserving here makes that
+    # stock unavailable for allocation to any other customer/order.
+    reserved_map = await _reserved_qty_map(
+        tenant_id, distributor_id, data.distributor_location_id, source_tracks_batches
+    )
+
+    for (sku_id, batch_id), demand in stock_demand.items():
+        if source_is_factory:
+            stock_query = {
+                "tenant_id": tenant_id,
+                "warehouse_location_id": data.distributor_location_id,
+                "sku_id": sku_id,
+            }
+            stock_collection = db.factory_warehouse_stock
+        else:
+            stock_query = {
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "distributor_location_id": data.distributor_location_id,
+                "sku_id": sku_id,
+            }
+            stock_collection = db.distributor_stock
+        if source_tracks_batches and batch_id:
+            stock_query["batch_id"] = batch_id
+        elif source_tracks_batches:
+            # Legacy aggregate row (no batch_id stored).
+            stock_query["batch_id"] = {"$in": [None]}
+
+        rows = await stock_collection.find(
+            stock_query, {"_id": 0, "quantity": 1, "sku_name": 1, "batch_code": 1}
+        ).to_list(50)
+        on_hand_rows = sum((r.get("quantity") or 0) for r in rows)
+
+        # When source is a non-batch distributor warehouse, take the MAX of
+        # the row-derived (`distributor_stock`) and the dashboard-derived
+        # view. Two reasons:
+        #   1. Some legacy distributor_stock rows were never populated, but
+        #      shipments/deliveries are intact — the dashboard is right.
+        #   2. We never want the guard to be MORE restrictive than the value
+        #      the user just saw on the dashboard. Otherwise the UX is "you
+        #      have 3,468 crates" and the API says "you have 0", which we
+        #      hit in production on 2026-05-28.
+        if not source_is_factory and not source_tracks_batches:
+            on_hand = max(on_hand_rows, derived_on_hand_by_sku.get(sku_id, 0))
+        else:
+            on_hand = on_hand_rows
+
+        reserved = reserved_map.get((sku_id, batch_id if source_tracks_batches else None), 0)
+        available = on_hand - reserved
+
+        if demand > available:
+            label = (rows[0].get("sku_name") if rows else None) or sku_id
+            batch_label = ""
+            if source_tracks_batches and batch_id:
+                bc = (rows[0].get("batch_code") if rows else None) or batch_id[:8]
+                batch_label = f" (batch {bc})"
+            committed = f", {reserved} reserved" if reserved else ""
+            shortages.append(f"{label}{batch_label}: need {demand}, available {available} ({on_hand} on-hand{committed})")
+
+    if shortages:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Not enough stock at '{location.get('location_name')}' — "
+                + "; ".join(shortages[:5])
+                + (f"; and {len(shortages) - 5} more" if len(shortages) > 5 else "")
+            ),
+        )
+
     # Generate delivery number
     delivery_number = await generate_delivery_number(tenant_id)
     delivery_id = str(uuid.uuid4())
@@ -3105,11 +4545,16 @@ async def create_delivery(
             'base_price': item_data.base_price or base_price,
             'discount_percent': item_data.discount_percent or 0,
             'tax_percent': item_data.tax_percent or 0,
-            'remarks': item_data.remarks
+            'remarks': item_data.remarks,
+            # Phase 2 batch identity — None when the source warehouse doesn't
+            # track batches. Stored on every row so downstream code can rely
+            # on the field existing.
+            'batch_id': item_data.batch_id,
+            'batch_code': item_data.batch_code,
         }
         
         # Calculate amounts with margin and transfer price
-        item_dict = calculate_delivery_item_amounts(item_dict, margin_type, margin_value, transfer_price, base_price)
+        item_dict = calculate_delivery_item_amounts(item_dict, margin_type, margin_value, transfer_price, base_price, billing_approach)
         items_to_insert.append(item_dict)
         
         total_quantity += item_data.quantity
@@ -3228,8 +4673,8 @@ async def apply_credit_notes_to_delivery(
     """Apply credit notes to a delivery"""
     from routes.credit_notes import apply_credit_note_to_delivery
     
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -3310,8 +4755,8 @@ async def update_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Update a delivery"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -3359,11 +4804,12 @@ async def update_delivery(
 async def confirm_delivery(
     distributor_id: str,
     delivery_id: str,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
     """Confirm a draft delivery"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -3390,8 +4836,146 @@ async def confirm_delivery(
     )
     
     logger.info(f"Delivery {delivery['delivery_number']} confirmed by {current_user['email']}")
-    
+
+    # NOTE: Zoho invoice push is intentionally NOT triggered here anymore. The
+    # business flow moved to: stock-out confirm → schedule confirm (Zoho push
+    # happens then, once per attached delivery). The retry endpoint below can
+    # still be called manually if a particular delivery needs to be re-synced.
+
     return {"message": f"Delivery {delivery['delivery_number']} confirmed", "status": "confirmed"}
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/retry-zoho-push")
+async def retry_delivery_zoho_push(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually re-attempt the Zoho Books invoice push for a confirmed delivery.
+
+    Surfaces specific reasons via ZohoPushSkippedError (non-factory warehouse,
+    account not linked, etc.) so the user sees exactly what to fix.
+    """
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
+
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0},
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    if delivery.get('status') not in ('confirmed', 'scheduled', 'delivered', 'complete', 'delivery_assigned', 'delivery_scheduled', 'on_the_way'):
+        raise HTTPException(status_code=400, detail="Delivery must be confirmed before pushing to Zoho")
+
+    from services.zoho_service import sync_delivery_to_zoho, ZohoPushSkippedError
+    try:
+        await sync_delivery_to_zoho(tenant_id, distributor_id, delivery_id)
+    except ZohoPushSkippedError as skip:
+        # Known reason — friendly 400 so the user sees the exact blocker
+        raise HTTPException(status_code=400, detail=str(skip))
+    except Exception as e:
+        logger.exception(f"Manual Zoho push failed for delivery {delivery_id}")
+        raise HTTPException(status_code=400, detail=f"Zoho push failed: {e}")
+
+    # Read back to pick up zoho_invoice_url written by the sync
+    fresh = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"_id": 0, "zoho_invoice_url": 1, "zoho_invoice_number": 1, "zoho_invoice_id": 1},
+    ) or {}
+    if not fresh.get('zoho_invoice_url'):
+        # Surface the exact reason recorded by the sync (e.g. warehouse not
+        # mapped to a Zoho Branch, no agreed price, no SKU mapping) instead of a
+        # generic catch-all, so the user knows precisely what to fix.
+        failure = await db.zoho_invoice_mappings.find_one(
+            {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery_id},
+            {"_id": 0, "error": 1},
+            sort=[("synced_at", -1)],
+        )
+        reason = (failure or {}).get("error")
+        raise HTTPException(
+            status_code=400,
+            detail=reason or (
+                "Zoho push completed but no invoice URL was produced. Most common causes: account has no Zoho contact ID, line items have no agreed price, or the source warehouse is not a Factory warehouse and its distributor is not marked Self-Managed."
+            ),
+        )
+    return {
+        "message": "Zoho invoice generated.",
+        "zoho_invoice_url": fresh.get('zoho_invoice_url'),
+        "zoho_invoice_number": fresh.get('zoho_invoice_number'),
+        "zoho_invoice_id": fresh.get('zoho_invoice_id'),
+    }
+
+
+@router.get("/{distributor_id}/deliveries/{delivery_id}/invoice-pdf")
+async def download_delivery_invoice_pdf(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Download the Zoho-generated invoice for this delivery as a PDF.
+
+    Streams the binary back with `Content-Disposition: attachment; filename="INV-00017.pdf"`
+    so the saved file matches the Zoho invoice number. Returning a server-streamed
+    response (rather than a direct Zoho URL) keeps the access token server-side
+    and lets us force the filename — the Zoho hosted URL is cross-origin and
+    ignores the HTML `download` attribute.
+    """
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to download this invoice")
+
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "zoho_invoice_id": 1, "zoho_invoice_number": 1, "delivery_number": 1},
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    zoho_id = delivery.get("zoho_invoice_id")
+    if not zoho_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Zoho invoice has been generated for this delivery yet. Confirm the delivery schedule first or use 'Retry Zoho push'.",
+        )
+
+    from services.zoho_service import fetch_invoice_pdf, ZohoApiError
+    try:
+        pdf_bytes, invoice_number = await fetch_invoice_pdf(tenant_id, zoho_id)
+    except ZohoApiError as e:
+        # Try to extract Zoho's `message` field from the JSON body so the
+        # caller sees the real reason (e.g. "Template not found", "Invalid
+        # invoice id", "Insufficient permission to download PDF").
+        zoho_msg = ""
+        try:
+            import json as _json
+            parsed = _json.loads(e.message) if e.message else None
+            if isinstance(parsed, dict):
+                zoho_msg = parsed.get("message") or parsed.get("error") or ""
+        except Exception:
+            pass
+        detail = f"Zoho returned {e.status_code} while fetching the invoice PDF."
+        if zoho_msg:
+            detail = f"{detail} Reason: {zoho_msg}"
+        elif e.message:
+            detail = f"{detail} Reason: {str(e.message)[:200]}"
+        raise HTTPException(status_code=400, detail=detail)
+    except Exception as e:
+        logger.exception(f"Failed to download invoice PDF for delivery {delivery_id}")
+        raise HTTPException(status_code=400, detail=f"Failed to download invoice: {e}")
+
+    invoice_number = invoice_number or delivery.get("zoho_invoice_number") or zoho_id
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", invoice_number).strip("_") or "invoice"
+    filename = f"{safe_name}.pdf"
+    from fastapi.responses import Response as _Response
+    return _Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post("/{distributor_id}/deliveries/{delivery_id}/complete")
@@ -3403,8 +4987,8 @@ async def complete_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Mark delivery as completed - deducts from distributor stock"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -3415,14 +4999,14 @@ async def complete_delivery(
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
     
-    if delivery.get('status') not in ['draft', 'confirmed', 'in_transit']:
+    if delivery.get('status') not in ['draft', 'confirmed', 'scheduled', 'in_transit', 'delivery_assigned', 'delivery_scheduled', 'on_the_way']:
         raise HTTPException(status_code=400, detail="Delivery cannot be completed in current status")
     
     now = datetime.now(timezone.utc).isoformat()
     actual_date = delivery_date or now[:10]
     
     update_data = {
-        "status": "delivered",
+        "status": "complete",
         "delivery_date": actual_date,
         "delivered_at": now,
         "delivered_by": current_user.get('id'),
@@ -3437,29 +5021,94 @@ async def complete_delivery(
         {"$set": update_data}
     )
     
-    # Deduct from distributor stock
+    # Deduct from the source warehouse stock — distributor_stock for a
+    # regular distributor location, factory_warehouse_stock when the source
+    # is a factory warehouse (is_factory=true). Without this branch the
+    # factory's at-hand never decremented after a direct factory→account
+    # delivery — a silent inventory-integrity bug.
+    src_loc = await db.distributor_locations.find_one(
+        {"id": delivery.get("distributor_location_id"), "tenant_id": tenant_id},
+        {"_id": 0, "is_factory": 1, "track_batches": 1, "location_name": 1},
+    )
+    src_is_factory = bool(src_loc and src_loc.get("is_factory"))
+    src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+
     items = await db.distributor_delivery_items.find(
         {"delivery_id": delivery_id, "tenant_id": tenant_id},
         {"_id": 0}
     ).to_list(500)
-    
+
     for item in items:
-        await db.distributor_stock.update_one(
-            {
+        batch_id = item.get('batch_id')
+        qty = item.get('quantity', 0)
+
+        if src_is_factory:
+            stock_key = {
+                "tenant_id": tenant_id,
+                "warehouse_location_id": delivery.get('distributor_location_id'),
+                "sku_id": item.get('sku_id'),
+            }
+            if src_tracks_batches and batch_id:
+                stock_key["batch_id"] = batch_id
+            await db.factory_warehouse_stock.update_one(
+                stock_key,
+                {"$inc": {"quantity": -qty}, "$set": {"updated_at": now}},
+            )
+        else:
+            stock_key = {
                 "tenant_id": tenant_id,
                 "distributor_id": distributor_id,
                 "distributor_location_id": delivery.get('distributor_location_id'),
-                "sku_id": item.get('sku_id')
-            },
-            {
-                "$inc": {"quantity": -item.get('quantity', 0)},
-                "$set": {"updated_at": now}
+                "sku_id": item.get('sku_id'),
             }
+            # Tracked batches deduct from the specific batch row; legacy aggregate
+            # rows (no batch_id stored) match `{"$in": [None]}`.
+            stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+            await db.distributor_stock.update_one(
+                stock_key,
+                {
+                    "$inc": {"quantity": -qty},
+                    "$set": {"updated_at": now}
+                }
+            )
+
+    # If the account is billed by a third-party distributor, generate an
+    # External Billing Entry instead of a Zoho invoice. Idempotent — running
+    # complete_delivery again won't create a duplicate.
+    try:
+        account_doc = await db.accounts.find_one(
+            {"id": delivery.get("account_id"), "tenant_id": tenant_id},
+            {"_id": 0},
+        )
+        if account_doc and (account_doc.get("billed_by") or "company") == "distributor":
+            from services.external_billing import generate_external_billing_entry
+            distributor_doc = await db.distributors.find_one(
+                {"id": distributor_id, "tenant_id": tenant_id},
+                {"_id": 0, "id": 1, "distributor_name": 1},
+            )
+            # Refresh the delivery after the status flip so EBE captures the
+            # post-completion `delivered_at`.
+            fresh_delivery = await db.distributor_deliveries.find_one(
+                {"id": delivery_id, "tenant_id": tenant_id}, {"_id": 0},
+            )
+            await generate_external_billing_entry(
+                tenant_id=tenant_id,
+                delivery=fresh_delivery or delivery,
+                account=account_doc,
+                distributor=distributor_doc,
+                items=items,
+            )
+    except Exception as e:
+        # Failing the EBE side must not roll back the stock deduction — the
+        # delivery is already complete. Surface in logs for admin backfill.
+        logger.warning(
+            f"complete_delivery succeeded but EBE generation failed for "
+            f"delivery {delivery_id}: {e}"
         )
     
     logger.info(f"Delivery {delivery['delivery_number']} completed by {current_user['email']}")
     
-    return {"message": f"Delivery {delivery['delivery_number']} completed", "status": "delivered"}
+    return {"message": f"Delivery {delivery['delivery_number']} completed", "status": "complete"}
 
 
 @router.delete("/{distributor_id}/deliveries/{delivery_id}")
@@ -3469,8 +5118,8 @@ async def delete_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete a delivery - CEO/Admin can delete any status, others only draft"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     user_role = current_user.get('role', '').lower()
@@ -3511,8 +5160,8 @@ async def cancel_delivery(
     current_user: dict = Depends(get_current_user)
 ):
     """Cancel a delivery"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
     
     tenant_id = get_current_tenant_id()
     
@@ -3562,6 +5211,172 @@ async def cancel_delivery(
     }
 
 
+# Statuses for which a delivery is "done" and can no longer be reversed.
+_NON_REVERSIBLE_DELIVERY_STATUSES = {"complete", "completed", "delivered", "cancelled", "reversed"}
+
+
+async def _reverse_delivery_invoice_mirror(tenant_id: str, delivery: dict) -> None:
+    """Undo the local accounting side-effects of a delivery's Zoho invoice mirror:
+    remove the mirror `invoices` doc and decrement the account's running
+    `outstanding_balance` by the amount that was added when the invoice synced.
+    Idempotent — only decrements when the mirror was actually counted."""
+    mirror = await db.invoices.find_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery.get("id")},
+        {"_id": 0},
+    )
+    if not mirror:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    if mirror.get("outstanding_counted"):
+        gross = float(mirror.get("gross_invoice_value") or mirror.get("net_invoice_value") or 0)
+        if gross:
+            await db.accounts.update_one(
+                {"tenant_id": tenant_id,
+                 "$or": [{"id": delivery.get("account_id")}, {"account_id": delivery.get("account_id")}]},
+                {"$inc": {"outstanding_balance": round(-gross, 2)}, "$set": {"updated_at": now}},
+            )
+    await db.invoices.delete_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery.get("id")},
+    )
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/reverse")
+async def reverse_delivery(
+    distributor_id: str,
+    delivery_id: str,
+    reason: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reverse a NOT-YET-DELIVERED delivery whose Zoho invoice was already
+    generated (e.g. scheduled + invoiced, but the delivery fell through):
+      1. Void the Zoho invoice (kept as VOID for audit).
+      2. Undo the local invoice mirror + account outstanding balance.
+      3. Revert any applied credit notes back to available.
+      4. Mark the delivery 'reversed' — this drops it from the reserved set, so
+         the committed stock is released back to available inventory.
+
+    Completed/delivered deliveries CANNOT be reversed (stock already moved)."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
+
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0},
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+
+    status = (delivery.get("status") or "").lower()
+    if status in _NON_REVERSIBLE_DELIVERY_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="Only a not-yet-delivered delivery can be reversed. Completed/delivered, "
+                   "cancelled or already-reversed deliveries cannot be reversed.",
+        )
+    if delivery.get("settlement_id"):
+        raise HTTPException(status_code=400, detail="Cannot reverse a delivery that is part of a settlement.")
+
+    zoho_invoice_id = delivery.get("zoho_invoice_id")
+    if not zoho_invoice_id:
+        raise HTTPException(
+            status_code=400,
+            detail="This delivery has no Zoho invoice to reverse. Use Cancel instead.",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1) Void the Zoho invoice (best-effort — reversal still completes on failure).
+    from services.zoho_service import void_invoice
+    void_pending = False
+    void_error = None
+    try:
+        await void_invoice(tenant_id, zoho_invoice_id)
+    except Exception as exc:
+        void_pending = True
+        void_error = str(exc)[:500]
+        logger.exception(f"Zoho invoice void failed during reverse for delivery {delivery.get('delivery_number')}")
+
+    # 2) Undo the local invoice mirror + outstanding balance.
+    try:
+        await _reverse_delivery_invoice_mirror(tenant_id, delivery)
+    except Exception:
+        logger.exception(f"Failed to reverse invoice mirror for delivery {delivery_id}")
+
+    # 3) Revert applied credit notes.
+    reverted_notes = []
+    if delivery.get("applied_credit_notes"):
+        from routes.credit_notes import revert_credit_note_application
+        reverted_notes = await revert_credit_note_application(
+            tenant_id=tenant_id, delivery_id=delivery_id,
+            delivery_number=delivery.get("delivery_number"),
+        )
+
+    # 4) Mark reversed (drops it from the reserved set → stock released).
+    remarks = delivery.get("remarks", "") or ""
+    if reason:
+        remarks = f"{remarks}\nReversed: {reason}".strip()
+    set_fields = {
+        "status": "reversed",
+        "remarks": remarks,
+        "reversed_at": now,
+        "reversed_by": current_user.get("id"),
+        "reversed_by_name": current_user.get("name"),
+        "updated_at": now,
+        "applied_credit_notes": [],
+        "zoho_void_pending": void_pending,
+        "zoho_void_error": void_error,
+    }
+    if not void_pending:
+        set_fields["zoho_invoice_voided"] = True
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id}, {"$set": set_fields})
+
+    msg = f"Delivery {delivery.get('delivery_number')} reversed — stock released"
+    msg += " (Zoho invoice void pending — will retry)" if void_pending else " and Zoho invoice voided"
+    updated = await db.distributor_deliveries.find_one({"id": delivery_id, "tenant_id": tenant_id}, {"_id": 0})
+    return {
+        "ok": True, "message": msg, "delivery": updated,
+        "zoho_void_pending": void_pending, "zoho_void_error": void_error,
+        "reverted_credit_notes": reverted_notes,
+    }
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/reverse-zoho-cleanup")
+async def retry_delivery_void(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Re-attempt voiding the Zoho invoice for a reversed delivery whose void is
+    still pending (e.g. a transient Zoho error during the original reverse)."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
+    tenant_id = get_current_tenant_id()
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0},
+    )
+    if not delivery:
+        raise HTTPException(status_code=404, detail="Delivery not found")
+    if delivery.get("status") != "reversed" or not delivery.get("zoho_void_pending"):
+        raise HTTPException(status_code=400, detail="No pending Zoho void for this delivery.")
+    now = datetime.now(timezone.utc).isoformat()
+    from services.zoho_service import void_invoice
+    try:
+        await void_invoice(tenant_id, delivery.get("zoho_invoice_id"))
+    except Exception as exc:
+        err = str(exc)[:500]
+        await db.distributor_deliveries.update_one(
+            {"id": delivery_id, "tenant_id": tenant_id},
+            {"$set": {"zoho_void_error": err, "updated_at": now}})
+        raise HTTPException(status_code=400, detail=f"Zoho void failed: {err}")
+    await db.distributor_deliveries.update_one(
+        {"id": delivery_id, "tenant_id": tenant_id},
+        {"$set": {"zoho_void_pending": False, "zoho_void_error": None,
+                  "zoho_invoice_voided": True, "updated_at": now}})
+    return {"ok": True, "message": "Zoho invoice voided."}
+
+
+
 @router.get("/{distributor_id}/deliveries/{delivery_id}/customer-invoice")
 async def generate_customer_invoice(
     distributor_id: str,
@@ -3585,6 +5400,13 @@ async def generate_customer_invoice(
     
     if not delivery:
         raise HTTPException(status_code=404, detail="Delivery not found")
+
+    # Attach line items — they live in a separate collection. Without this the
+    # PDF "Item Details" table is silently empty.
+    delivery["items"] = await db.distributor_delivery_items.find(
+        {"delivery_id": delivery_id, "tenant_id": tenant_id},
+        {"_id": 0},
+    ).to_list(500)
     
     # Get distributor
     distributor = await db.distributors.find_one({"id": distributor_id, "tenant_id": tenant_id})
@@ -3616,7 +5438,28 @@ async def generate_customer_invoice(
     
     # Get GST rate from tenant settings (default 18%)
     gst_percent = settings.get('default_distributor_gst_percent', 18.0)
-    
+
+    # If the account is billed by a distributor, render this as an External
+    # Billing Entry (no GST, banner indicating it's not a tax invoice).
+    is_ebe = (account.get("billed_by") or "company") == "distributor"
+    ebe_number = None
+    if is_ebe:
+        # Reuse / lazily create the EBE so the printed number matches what we
+        # stored in the `invoices` table.
+        from services.external_billing import generate_external_billing_entry, get_existing_ebe
+        existing = await get_existing_ebe(tenant_id, delivery_id)
+        if existing:
+            ebe_number = existing.get("invoice_number")
+        else:
+            created = await generate_external_billing_entry(
+                tenant_id=tenant_id,
+                delivery=delivery,
+                account=account,
+                distributor=distributor,
+                items=delivery["items"],
+            )
+            ebe_number = (created or {}).get("invoice_number")
+
     # Generate PDF
     try:
         pdf_bytes = generate_customer_invoice_pdf(
@@ -3625,13 +5468,19 @@ async def generate_customer_invoice(
             account_data=account,
             distributor_data=distributor,
             gst_percent=gst_percent,
-            branding=branding
+            branding=branding,
+            is_external_billing=is_ebe,
+            external_billing_number=ebe_number,
         )
-        
+
         # Generate filename
-        invoice_number = f"INV-{delivery.get('delivery_number', 'N-A').replace('DEL-', '')}"
-        filename = f"customer_invoice_{invoice_number}.pdf"
-        
+        if is_ebe:
+            invoice_number = ebe_number or f"EXT-{delivery.get('delivery_number', 'N-A')}"
+            filename = f"external_billing_entry_{invoice_number}.pdf"
+        else:
+            invoice_number = f"INV-{delivery.get('delivery_number', 'N-A').replace('DEL-', '')}"
+            filename = f"customer_invoice_{invoice_number}.pdf"
+
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
@@ -3642,6 +5491,72 @@ async def generate_customer_invoice(
     except Exception as e:
         logger.error(f"Failed to generate customer invoice PDF: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate invoice: {str(e)}")
+
+
+@router.post("/{distributor_id}/external-billing/backfill")
+async def backfill_external_billing_entries(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """One-shot generator for historical completed deliveries whose accounts
+    are billed by a third-party distributor but never had an External Billing
+    Entry created (e.g., the delivery completed before this feature shipped).
+
+    Idempotent — only creates EBEs where none exist. Returns a count summary.
+    """
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+    from services.external_billing import generate_external_billing_entry, get_existing_ebe
+
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "distributor_name": 1},
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+
+    completed = await db.distributor_deliveries.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$in": ["delivered", "completed", "complete"]},
+        },
+        {"_id": 0},
+    ).to_list(10000)
+
+    created, skipped, errors = 0, 0, 0
+    for delivery in completed:
+        try:
+            account = await db.accounts.find_one(
+                {"id": delivery.get("account_id"), "tenant_id": tenant_id},
+                {"_id": 0},
+            )
+            if not account or (account.get("billed_by") or "company") != "distributor":
+                skipped += 1
+                continue
+            if await get_existing_ebe(tenant_id, delivery["id"]):
+                skipped += 1
+                continue
+            await generate_external_billing_entry(
+                tenant_id=tenant_id,
+                delivery=delivery,
+                account=account,
+                distributor=distributor,
+            )
+            created += 1
+        except Exception as e:
+            errors += 1
+            logger.warning(f"EBE backfill failed for delivery {delivery.get('id')}: {e}")
+
+    return {
+        "distributor_id": distributor_id,
+        "examined": len(completed),
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+    }
 
 
 
@@ -3797,7 +5712,11 @@ async def list_distributor_settlements(
         query,
         {"_id": 0}
     ).sort([("settlement_year", -1), ("settlement_month", -1), ("created_at", -1)]).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
-    
+
+    # Enrich each settlement with stockout_totals so the parent page uses the
+    # SAME math as the Settlement Detail popup (single source of truth).
+    await _enrich_settlements_with_stockout_totals(tenant_id, settlements)
+
     return {
         "settlements": settlements,
         "total": total,
@@ -3807,13 +5726,219 @@ async def list_distributor_settlements(
     }
 
 
+def _compute_delivery_stockout_view(delivery: dict, delivery_items: list) -> dict:
+    """Compute the EXACT per-delivery numbers shown on the Stock Out / Deliveries
+    tab so any consumer (settlement detail, reconciliation, etc.) can render the
+    same single-source-of-truth values without re-deriving them.
+
+    Mirrors the math in /app/frontend/src/components/distributor/DeliveriesTab.jsx
+    (rows ~1163-1193) so settlements never drift from delivery vocabulary.
+    """
+    customer_order_value = 0.0     # sum(qty × customer_price × (1 - disc%))
+    distributor_margin = 0.0       # sum(qty × customer_price × commission%)
+    actual_billable = 0.0          # sum(qty × customer_price × (1 - commission%))
+    billed_at_transfer = 0.0       # sum(qty × transfer_price)  ← what dist was already billed
+
+    for it in delivery_items or []:
+        qty = it.get('quantity') or 0
+        customer_price = it.get('customer_selling_price') or it.get('unit_price') or 0
+        disc_pct = it.get('discount_percent') or 0
+        commission_pct = (
+            it.get('distributor_commission_percent')
+            or it.get('margin_percent')
+            or 0
+        )
+        transfer_price = it.get('transfer_price') or 0
+        gross = qty * customer_price
+        customer_order_value += gross * (1 - disc_pct / 100)
+        distributor_margin += gross * (commission_pct / 100)
+        if customer_price > 0:
+            new_transfer = customer_price * (1 - commission_pct / 100)
+            actual_billable += qty * new_transfer
+        billed_at_transfer += qty * transfer_price
+
+    credit_applied = float(delivery.get('total_credit_applied') or 0)
+    net_billable = actual_billable - credit_applied
+
+    return {
+        "customer_order_value": round(customer_order_value, 2),
+        "distributor_margin": round(distributor_margin, 2),
+        "actual_billable": round(actual_billable, 2),
+        "credit_applied": round(credit_applied, 2),
+        "net_billable": round(net_billable, 2),
+        "billed_at_transfer": round(billed_at_transfer, 2),
+        "applied_credit_notes": delivery.get('applied_credit_notes') or [],
+    }
+
+
+async def _enrich_settlements_with_stockout_totals(tenant_id: str, settlements: list) -> list:
+    """Enrich a list of settlement docs in-place with `items` (each enriched with
+    the per-delivery stockout view) and `stockout_totals`. Single source of truth
+    shared between list and detail endpoints so the parent Settlements page and
+    the popup never drift.
+    """
+    if not settlements:
+        return settlements
+
+    settlement_ids = [s['id'] for s in settlements if s.get('id')]
+    items_by_settlement: dict[str, list] = {}
+    all_items = await db.distributor_settlement_items.find(
+        {"settlement_id": {"$in": settlement_ids}, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).sort("delivery_date", 1).to_list(5000)
+    for it in all_items:
+        items_by_settlement.setdefault(it['settlement_id'], []).append(it)
+
+    delivery_ids = list({it['delivery_id'] for it in all_items if it.get('delivery_id')})
+    delivery_map: dict[str, dict] = {}
+    delivery_items_map: dict[str, list] = {}
+    if delivery_ids:
+        deliveries = await db.distributor_deliveries.find(
+            {"tenant_id": tenant_id, "id": {"$in": delivery_ids}},
+            {"_id": 0}
+        ).to_list(len(delivery_ids))
+        for d in deliveries:
+            delivery_map[d['id']] = d
+        di_rows = await db.distributor_delivery_items.find(
+            {"tenant_id": tenant_id, "delivery_id": {"$in": delivery_ids}},
+            {"_id": 0}
+        ).to_list(20000)
+        for di in di_rows:
+            delivery_items_map.setdefault(di['delivery_id'], []).append(di)
+
+    for s in settlements:
+        items = items_by_settlement.get(s['id'], [])
+        for it in items:
+            d = delivery_map.get(it.get('delivery_id'))
+            if not d:
+                continue
+            view = _compute_delivery_stockout_view(d, delivery_items_map.get(d['id'], []))
+            it.update(view)
+            it['delivery_status'] = d.get('status')
+        s['items'] = items
+
+        # Direct credit notes paid to customer outside any delivery (standalone
+        # issuances) for this account in the settlement period. Distributor paid
+        # the customer out-of-pocket on the factory's behalf, so this reduces
+        # what the distributor owes the factory in the settlement.
+        # Only `issued` (actually handed over) issuances count.
+        #
+        # IMPORTANT (no-double-count): a single Credit Note can be drained via
+        # TWO independent channels — (a) applied to a delivery, contributing to
+        # `delivery.total_credit_applied` (which we already sum into
+        # `credit_applied`) and (b) paid as cash via an issuance row. To avoid
+        # counting the same money twice, per CN we cap the issuance contribution
+        # at `max(0, original_amount − delivery_applied)`. Truly-standalone CNs
+        # (no return_id) are unaffected by this cap, since they have no
+        # delivery applications by construction.
+        direct_credit_amount = 0.0
+        direct_issuances: list[dict] = []
+        if s.get('account_id'):
+            year = s.get('settlement_year')
+            month = s.get('settlement_month')
+            month_match: dict = {
+                "tenant_id": tenant_id,
+                "distributor_id": s['distributor_id'],
+                "account_id": s['account_id'],
+                "status": "issued",
+            }
+            if year and month:
+                # issued_at is stored as YYYY-MM-DD string
+                start = f"{year:04d}-{month:02d}-01"
+                # exclusive upper bound (next month)
+                if month == 12:
+                    end = f"{year + 1:04d}-01-01"
+                else:
+                    end = f"{year:04d}-{month + 1:02d}-01"
+                month_match["issued_at"] = {"$gte": start, "$lt": end}
+            iss_rows = await db.credit_note_issuances.find(
+                month_match,
+                {"_id": 0, "id": 1, "amount": 1, "credit_note_id": 1,
+                 "credit_note_number": 1, "issuance_method": 1, "issued_at": 1,
+                 "reason": 1, "return_id": 1}
+            ).to_list(500)
+
+            # Group by CN so we can apply the per-CN cap once.
+            cn_ids = list({r.get('credit_note_id') for r in iss_rows if r.get('credit_note_id')})
+            cn_meta: dict = {}
+            if cn_ids:
+                async for cn in db.credit_notes.find(
+                    {"id": {"$in": cn_ids}, "tenant_id": tenant_id},
+                    {"_id": 0, "id": 1, "original_amount": 1, "amount": 1, "applications": 1}
+                ):
+                    delivery_applied = sum(
+                        (app or {}).get('amount_applied', 0)
+                        for app in (cn.get('applications') or [])
+                    )
+                    original = cn.get('original_amount') or cn.get('amount') or 0
+                    cn_meta[cn['id']] = {
+                        "original": float(original),
+                        "delivery_applied": float(delivery_applied),
+                        "remaining_capacity": max(0.0, float(original) - float(delivery_applied)),
+                    }
+
+            # Sum issuance amount per CN, then cap at remaining_capacity.
+            issuance_sum_by_cn: dict = {}
+            for r in iss_rows:
+                cid = r.get('credit_note_id')
+                if not cid:
+                    continue
+                issuance_sum_by_cn[cid] = issuance_sum_by_cn.get(cid, 0.0) + float(r.get('amount') or 0)
+
+            kept_iss_ids: set = set()
+            running_per_cn: dict = {}
+            for r in iss_rows:
+                cid = r.get('credit_note_id')
+                amount = float(r.get('amount') or 0)
+                if not cid or amount <= 0:
+                    continue
+                meta = cn_meta.get(cid)
+                if not meta:
+                    # No parent CN found (orphan issuance) — count as-is.
+                    direct_credit_amount += amount
+                    kept_iss_ids.add(r.get('id'))
+                    continue
+                cap = meta["remaining_capacity"]
+                used = running_per_cn.get(cid, 0.0)
+                allowed = max(0.0, min(amount, cap - used))
+                if allowed > 0:
+                    direct_credit_amount += allowed
+                    running_per_cn[cid] = used + allowed
+                    kept_iss_ids.add(r.get('id'))
+
+            direct_credit_amount = round(direct_credit_amount, 2)
+            # Surface only the issuances that actually contributed (so the UI
+            # popup reflects what was counted, not what was filtered out as
+            # already-covered-by-delivery).
+            direct_issuances = [r for r in iss_rows if r.get('id') in kept_iss_ids]
+
+        s['direct_credit_issuances'] = direct_issuances
+        s['stockout_totals'] = {
+            "customer_order_value": round(sum(i.get('customer_order_value', 0) for i in items), 2),
+            "distributor_margin": round(sum(i.get('distributor_margin', 0) for i in items), 2),
+            "actual_billable": round(sum(i.get('actual_billable', 0) for i in items), 2),
+            "credit_applied": round(sum(i.get('credit_applied', 0) for i in items), 2),
+            "net_billable": round(sum(i.get('net_billable', 0) for i in items), 2),
+            "billed_at_transfer": round(sum(i.get('billed_at_transfer', 0) for i in items), 2),
+            "direct_credit_issued": direct_credit_amount,
+        }
+
+    return settlements
+
+
 @router.get("/{distributor_id}/settlements/{settlement_id}")
 async def get_settlement(
     distributor_id: str,
     settlement_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get a specific settlement with items"""
+    """Get a specific settlement with items.
+
+    Each item in the response is enriched with the EXACT per-delivery numbers
+    calculated at Stock Out time (see _compute_delivery_stockout_view) so the
+    settlement screen renders the same numbers as the Delivery preview — no
+    recalculation, no drift.
+    """
     tenant_id = get_current_tenant_id()
     
     settlement = await db.distributor_settlements.find_one(
@@ -3823,15 +5948,8 @@ async def get_settlement(
     
     if not settlement:
         raise HTTPException(status_code=404, detail="Settlement not found")
-    
-    # Get settlement items (deliveries)
-    items = await db.distributor_settlement_items.find(
-        {"settlement_id": settlement_id, "tenant_id": tenant_id},
-        {"_id": 0}
-    ).sort("delivery_date", 1).to_list(500)
-    
-    settlement['items'] = items
-    
+
+    await _enrich_settlements_with_stockout_totals(tenant_id, [settlement])
     return settlement
 
 
@@ -3859,7 +5977,7 @@ async def get_unsettled_deliveries(
     query = {
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "id": {"$nin": settled_delivery_ids}
     }
     
@@ -3943,7 +6061,7 @@ async def get_settlement_preview(
     deliveries = await db.distributor_deliveries.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "id": {"$nin": settled_delivery_ids},
         "delivery_date": {"$gte": start_date, "$lt": end_date}
     }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
@@ -4042,7 +6160,7 @@ async def create_settlement(
     deliveries = await db.distributor_deliveries.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "delivery_date": {"$gte": data.period_start, "$lte": data.period_end},
         "id": {"$nin": settled_delivery_ids}
     }, {"_id": 0}).sort("delivery_date", 1).to_list(500)
@@ -4111,8 +6229,9 @@ async def create_settlement(
             "adjustment_dist_to_factory": delivery.get('total_adjustment_dist_to_factory', 0)
         })
     
-    # Final payout = Margin + Net Adjustments
-    final_payout = total_margin_amount + net_adjustments
+    # Final payout = Net Adjustments only (margin is already retained by distributor from customer collections)
+    # Net = -(Dist→Factory Adj) + Credit Notes + Factory Returns
+    final_payout = net_adjustments
     
     # Create settlement document
     settlement_doc = {
@@ -4216,7 +6335,7 @@ async def generate_monthly_settlements(
     query = {
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "id": {"$nin": settled_delivery_ids},
         "delivery_date": {"$gte": start_date, "$lt": end_date}
     }
@@ -5189,7 +7308,7 @@ async def calculate_reconciliation(
     deliveries = await db.distributor_deliveries.find({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "delivery_date": {"$gte": data.period_start, "$lte": data.period_end}
     }).to_list(1000)
     
@@ -5803,7 +7922,50 @@ async def get_stock_dashboard(
     )
     if not distributor:
         raise HTTPException(status_code=404, detail="Distributor not found")
-    
+
+    tdb = get_tenant_db()
+
+    # ── Units helper ────────────────────────────────────────────────────────
+    # The dashboard displays everything in CRATES. Some data sources store
+    # bottles, some store crates, and master_skus often lacks bpc. We solve
+    # this by:
+    #   1. Reading the per-item `packaging_units` field when present (delivery
+    #      / shipment items always store it).
+    #   2. Falling back to `bpc_by_sku` (seeded from master_skus +
+    #      factory_warehouse_stock rows below) for sources that don't store
+    #      packaging_units (returns).
+    bpc_by_sku: dict = {}
+
+    def _to_crates(sku_id: str, bottles_qty, row_bpc=None) -> int:
+        bpc = row_bpc or bpc_by_sku.get(sku_id) or 1
+        try:
+            return int(bottles_qty) // int(bpc) if int(bpc) > 0 else int(bottles_qty)
+        except Exception:
+            return int(bottles_qty)
+
+    def _bottle_to_crates(item: dict) -> int:
+        """Convert an item dict whose `quantity` is in bottles to crates,
+        preferring the per-item `packaging_units` field (most accurate)."""
+        bottles = int(item.get('quantity') or 0)
+        pu = int(item.get('packaging_units') or 0)
+        if pu > 0:
+            if not bpc_by_sku.get(item.get('sku_id')):
+                bpc_by_sku[item['sku_id']] = pu     # seed for downstream returns
+            return bottles // pu
+        return _to_crates(item.get('sku_id', ''), bottles)
+
+    def _item_crates(item: dict) -> int:
+        """Stock-In/Out line items are ENTERED AND STORED IN CRATES (users type
+        crates, not bottles). So the stored quantity is already the crate count
+        — do NOT divide by bottles-per-crate. The only exception is legacy rows
+        that explicitly carried a per-item `packaging_units` (>1), meaning they
+        were recorded in bottles; those we still convert."""
+        qty = int(item.get('quantity') or 0)
+        pu = int(item.get('packaging_units') or 0)
+        if pu > 1:
+            return qty // pu
+        return qty
+
     # === 1. STOCK IN: Shipments received (only delivered shipments) ===
     delivered_shipment_ids = await db.distributor_shipments.distinct(
         "id",
@@ -5811,7 +7973,7 @@ async def get_stock_dashboard(
     )
     shipment_items = await db.distributor_shipment_items.find(
         {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_shipment_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
     ).to_list(50000)
     
     stock_in_by_sku = {}
@@ -5819,16 +7981,112 @@ async def get_stock_dashboard(
         sid = si.get('sku_id', '')
         if sid not in stock_in_by_sku:
             stock_in_by_sku[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'), "qty": 0}
-        stock_in_by_sku[sid]["qty"] += si.get('quantity', 0)
+        stock_in_by_sku[sid]["qty"] += _item_crates(si)
+
+    # === 1b. FACTORY WAREHOUSE STOCK (from production transfers) ===
+    # Get factory warehouse IDs belonging to this distributor
+    factory_location_ids = await db.distributor_locations.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_factory": True, "status": "active"}
+    )
+    factory_wh_stock_by_sku = {}
+    factory_wh_by_location = {}  # location_id -> {location_name, skus: [...]}
+    total_factory_wh_stock = 0
+
+    if factory_location_ids:
+        fws_docs = await tdb.factory_warehouse_stock.find(
+            {"tenant_id": tenant_id, "warehouse_location_id": {"$in": factory_location_ids}},
+            {"_id": 0}
+        ).to_list(5000)
+
+        # Build a sku_id → bottles_per_crate map so we can convert bottles
+        # (stored on the row) → crates (what the dashboard displays).
+        # We prefer the value stored on the row itself (set at transfer time)
+        # but fall back to master_skus.packaging_config / unit so legacy rows
+        # still convert correctly.
+        sku_ids_needed = list({fws.get("sku_id", "") for fws in fws_docs if fws.get("sku_id")})
+        if sku_ids_needed:
+            async for ms in tdb.master_skus.find(
+                {"id": {"$in": sku_ids_needed}},
+                {"_id": 0, "id": 1, "packaging_config": 1, "unit": 1, "bottles_per_crate": 1}
+            ):
+                # Order of preference: explicit bottles_per_crate field →
+                # production packaging default 'units' → leave as None.
+                bpc = ms.get("bottles_per_crate")
+                if not bpc:
+                    pc = (ms.get("packaging_config") or {}).get("production") or []
+                    default = next((p for p in pc if p.get("is_default")), None)
+                    if default and default.get("units"):
+                        bpc = default["units"]
+                # Only set when we have a real bpc — never poison the lookup
+                # with the "or 1" fallback (which would override more accurate
+                # row-level / item-level seeds done elsewhere).
+                if bpc:
+                    bpc_by_sku.setdefault(ms["id"], bpc)
+
+        for fws in fws_docs:
+            sid = fws.get("sku_id", "")
+            bottles_qty = fws.get("quantity", 0)
+            if bottles_qty <= 0:
+                continue
+            # Persist the row-level bpc back into the shared lookup so all the
+            # downstream bottles→crates conversions (deliveries, returns,
+            # pending out) agree with the factory_wh row's truth. Master SKU
+            # often lacks `bottles_per_crate`, leaving the lookup at 1 (which
+            # was the silent unit-mismatch bug on the dashboard).
+            if fws.get("bottles_per_crate") and not bpc_by_sku.get(sid):
+                bpc_by_sku[sid] = fws["bottles_per_crate"]
+            crates_qty = _to_crates(sid, bottles_qty, fws.get("bottles_per_crate"))
+            total_factory_wh_stock += crates_qty
+            if sid not in factory_wh_stock_by_sku:
+                factory_wh_stock_by_sku[sid] = {"sku_id": sid, "sku_name": fws.get("sku_name", "Unknown"), "qty": 0}
+            factory_wh_stock_by_sku[sid]["qty"] += crates_qty
+            # Per-location breakdown — aggregate per SKU so a SKU with
+            # multiple `factory_warehouse_stock` rows (one per batch) shows
+            # as a single line with the summed crate quantity instead of
+            # one row per batch. We also keep the per-batch breakdown
+            # under `batches` so the UI can disclose it on demand.
+            wh_id = fws.get("warehouse_location_id", "")
+            if wh_id not in factory_wh_by_location:
+                factory_wh_by_location[wh_id] = {
+                    "warehouse_name": fws.get("warehouse_name", ""),
+                    "skus_by_id": {},
+                }
+            bucket = factory_wh_by_location[wh_id]["skus_by_id"].setdefault(
+                sid, {"sku_id": sid, "sku_name": fws.get("sku_name", ""), "quantity": 0, "batches": []}
+            )
+            bucket["quantity"] += crates_qty
+            bucket["batches"].append({
+                "batch_id": fws.get("batch_id"),
+                "batch_code": fws.get("batch_code") or "(legacy)",
+                "quantity": crates_qty,
+                "production_date": fws.get("production_date"),
+                "received_at": fws.get("created_at"),
+            })
+
+    # Build a sku_id → list-of-batches (with warehouse_name) lookup so the
+    # main Stock-by-SKU table can expose a per-batch disclosure on every row.
+    fwh_batches_by_sku = {}
+    for wh_id, wh_data in factory_wh_by_location.items():
+        wh_name = wh_data.get("warehouse_name", "")
+        for sid_key, bucket in wh_data["skus_by_id"].items():
+            entry = fwh_batches_by_sku.setdefault(sid_key, [])
+            for b in bucket.get("batches", []):
+                entry.append({**b, "warehouse_id": wh_id, "warehouse_name": wh_name})
+    # FIFO per SKU — oldest first
+    for sid_key in fwh_batches_by_sku:
+        fwh_batches_by_sku[sid_key].sort(
+            key=lambda b: (b.get("production_date") or b.get("received_at") or "9999")
+        )
     
-    # === 2. STOCK OUT: Deliveries to customers (delivered/completed) ===
+    # === 2. STOCK OUT: Deliveries to customers (delivered/completed/complete) ===
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
         "id",
-        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed"]}}
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed", "complete"]}}
     )
     delivery_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
     ).to_list(50000)
     
     stock_out_by_sku = {}
@@ -5836,7 +8094,30 @@ async def get_stock_dashboard(
         sid = di.get('sku_id', '')
         if sid not in stock_out_by_sku:
             stock_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
-        stock_out_by_sku[sid]["qty"] += di.get('quantity', 0)
+        stock_out_by_sku[sid]["qty"] += _item_crates(di)
+
+    # === 2b. RESERVED — committed to any OPEN Stock Out order, not yet delivered ===
+    # Every open order (draft → in-transit) reserves stock so it can't be
+    # re-allocated to another customer. On-hand still includes these units;
+    # Available = On-hand − Reserved. Excludes terminal statuses
+    # (delivered / cancelled).
+    pending_delivery_ids = await db.distributor_deliveries.distinct(
+        "id",
+        {
+            "tenant_id": tenant_id, "distributor_id": distributor_id,
+            "status": {"$in": RESERVED_DELIVERY_STATUSES},
+        },
+    )
+    pending_items = await db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": pending_delivery_ids}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
+    ).to_list(50000)
+    stock_pending_out_by_sku = {}
+    for di in pending_items:
+        sid = di.get('sku_id', '')
+        if sid not in stock_pending_out_by_sku:
+            stock_pending_out_by_sku[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'), "qty": 0}
+        stock_pending_out_by_sku[sid]["qty"] += _item_crates(di)
     
     # Weekly delivery data (last 12 weeks) for average calculation
     from datetime import timedelta
@@ -5848,7 +8129,7 @@ async def get_stock_dashboard(
         {
             "tenant_id": tenant_id,
             "distributor_id": distributor_id,
-            "status": {"$in": ["delivered", "completed"]},
+            "status": {"$in": ["delivered", "completed", "complete"]},
             "delivery_date": {"$gte": twelve_weeks_ago}
         },
         {"_id": 0, "id": 1, "delivery_date": 1}
@@ -5930,85 +8211,179 @@ async def get_stock_dashboard(
             factory_return_by_sku[sid]["total"] += qty
     
     # === BUILD PER-SKU SUMMARY ===
-    all_sku_ids = set(list(stock_in_by_sku.keys()) + list(stock_out_by_sku.keys()) + list(cust_return_by_sku.keys()) + list(factory_return_by_sku.keys()))
-    
+    all_sku_ids = set(
+        list(stock_in_by_sku.keys()) +
+        list(stock_out_by_sku.keys()) +
+        list(stock_pending_out_by_sku.keys()) +
+        list(cust_return_by_sku.keys()) +
+        list(factory_return_by_sku.keys()) +
+        list(factory_wh_stock_by_sku.keys())
+    )
+
+    # bpc lookup for every SKU we touch (not just factory-warehouse ones) so
+    # we can convert shipments / deliveries / returns from BOTTLES → CRATES
+    # consistently with factory_warehouse_stock (which is already in crates).
+    # Without this, the at-hand math mixed crates + bottles and looked wrong.
+    extra_sku_ids = [sid for sid in all_sku_ids if sid and sid not in bpc_by_sku]
+    if extra_sku_ids:
+        async for ms in tdb.master_skus.find(
+            {"id": {"$in": extra_sku_ids}},
+            {"_id": 0, "id": 1, "packaging_config": 1, "unit": 1, "bottles_per_crate": 1},
+        ):
+            bpc = ms.get("bottles_per_crate")
+            if not bpc:
+                pc = (ms.get("packaging_config") or {}).get("production") or []
+                default = next((p for p in pc if p.get("is_default")), None)
+                if default and default.get("units"):
+                    bpc = default["units"]
+            if bpc:
+                bpc_by_sku.setdefault(ms["id"], bpc)
+
     sku_summaries = []
     total_stock_in = 0
     total_stock_out = 0
+    total_stock_pending_out = 0
     total_at_hand = 0
     total_cust_returns = 0
+    total_empty_bottles_returned = 0
+    total_product_returns = 0
     total_factory_returns = 0
-    
+
     for sid in all_sku_ids:
         si = stock_in_by_sku.get(sid, {})
         so = stock_out_by_sku.get(sid, {})
+        po = stock_pending_out_by_sku.get(sid, {})
         cr_data = cust_return_by_sku.get(sid, {})
         fr_data = factory_return_by_sku.get(sid, {})
-        
-        qty_in = si.get('qty', 0)
-        qty_out = so.get('qty', 0)
-        qty_cust_returned = cr_data.get('total', 0)
-        qty_factory_returned = fr_data.get('total', 0)
-        
-        # Stock at hand = received - delivered to customers - returned to factory + customer returns back
-        # Customer returns come back to distributor, factory returns leave distributor
-        stock_at_hand = qty_in - qty_out - qty_factory_returned + qty_cust_returned
-        
+        fws_data = factory_wh_stock_by_sku.get(sid, {})
+
+        # Bottle-level inputs → convert to crates. Shipment/delivery/pending
+        # were already converted at the aggregation step (using each item's
+        # `packaging_units`). Returns and factory-warehouse rows weren't,
+        # so do them now.
+        qty_in_shipments  = si.get('qty', 0)                            # already crates
+        qty_out           = so.get('qty', 0)                            # already crates
+        qty_pending_out   = po.get('qty', 0)                            # already crates
+        qty_cust_returned = _to_crates(sid, cr_data.get('total', 0))
+        qty_factory_returned = _to_crates(sid, fr_data.get('total', 0))
+        qty_factory_wh    = fws_data.get('qty', 0)                       # already crates
+
+        # `stock_received` = everything the distributor has been *given*:
+        # primary stock-in shipments + production-to-warehouse transfers.
+        # Returns are NEVER part of received — they're a separate flow back
+        # to the factory and not deliverable (used / damaged / expired bottles).
+        qty_in = qty_in_shipments + qty_factory_wh
+
+        # NEW formula — what's actually deliverable RIGHT NOW:
+        #
+        #   stock_at_hand = received
+        #                   − delivered_to_customers
+        #                   − scheduled_or_in_transit (committed but not yet out)
+        #                   − sent_back_to_factory
+        #
+        # No `+ customer_returns` add-back: returned bottles can't be re-sold
+        # without going through factory QC first. The user explicitly flagged
+        # this on May 27 — over-deliveries would otherwise be possible.
+        stock_at_hand = qty_in - qty_out - qty_pending_out - qty_factory_returned
+
+        # Explicit reserve→deliver model (derived):
+        #   on_hand  = physical balance still held (incl. reserved units)
+        #   reserved = committed to open Stock Out orders
+        #   available= on_hand − reserved  (== stock_at_hand, what's deliverable now)
+        #   delivered= permanently consumed/delivered out
+        stock_on_hand = qty_in - qty_out - qty_factory_returned
+        stock_reserved = qty_pending_out
+        stock_available = stock_at_hand
+
         # Weekly average (last 12 weeks)
         weekly_data = weekly_by_sku.get(sid, {})
         weeks_with_data = len(weekly_data)
         total_recent_qty = sum(weekly_data.values())
         weekly_avg = round(total_recent_qty / max(weeks_with_data, 1), 1) if weeks_with_data > 0 else 0
-        
-        # % stock at hand
+
+        # % stock at hand — measured against received (so 100% means nothing
+        # has been committed yet).
         pct_at_hand = round((stock_at_hand / qty_in * 100), 1) if qty_in > 0 else 0
-        
+
         # Days of stock remaining
         daily_avg = weekly_avg / 7 if weekly_avg > 0 else 0
         days_remaining = round(stock_at_hand / daily_avg, 0) if daily_avg > 0 and stock_at_hand > 0 else None
-        
-        sku_name = si.get('sku_name') or so.get('sku_name') or fr_data.get('sku_name') or 'Unknown'
-        
+
+        sku_name = si.get('sku_name') or so.get('sku_name') or po.get('sku_name') or fr_data.get('sku_name') or fws_data.get('sku_name') or 'Unknown'
+
         sku_summaries.append({
             "sku_id": sid,
             "sku_name": sku_name,
             "stock_received": qty_in,
             "stock_delivered": qty_out,
+            "stock_pending_out": qty_pending_out,
             "customer_returns": qty_cust_returned,
             "customer_returns_breakdown": {
-                "empty_reusable": cr_data.get('empty_reusable', 0),
-                "damaged": cr_data.get('damaged', 0),
-                "expired": cr_data.get('expired', 0),
-                "promotional": cr_data.get('promotional', 0),
+                "empty_reusable": _to_crates(sid, cr_data.get('empty_reusable', 0)),
+                "damaged": _to_crates(sid, cr_data.get('damaged', 0)),
+                "expired": _to_crates(sid, cr_data.get('expired', 0)),
+                "promotional": _to_crates(sid, cr_data.get('promotional', 0)),
             },
+            # Grouped view: Empty/Reusable + Promotional(FOC) are empty USED bottles
+            # cycling back for recycling (a returnable asset, NOT lost product);
+            # Damaged + Expired are genuinely unsellable finished goods.
+            #
+            # ⚠️ UNITS: `empty_bottles_returned` stays in **raw bottles** —
+            # they are returned individually for cleaning/refill and almost
+            # never in clean crate multiples. Every other column on this
+            # dashboard is in **crates**.
+            "empty_bottles_returned": (
+                int(cr_data.get('empty_reusable', 0))
+                + int(cr_data.get('promotional', 0))
+            ),
+            "empty_bottles_returned_unit": "bottles",
+            "product_returns": (
+                _to_crates(sid, cr_data.get('damaged', 0))
+                + _to_crates(sid, cr_data.get('expired', 0))
+            ),
             "factory_returns": qty_factory_returned,
             "factory_returns_breakdown": {
-                "empty_reusable": fr_data.get('empty_reusable', 0),
-                "damaged": fr_data.get('damaged', 0),
-                "expired": fr_data.get('expired', 0),
+                "empty_reusable": _to_crates(sid, fr_data.get('empty_reusable', 0)),
+                "damaged": _to_crates(sid, fr_data.get('damaged', 0)),
+                "expired": _to_crates(sid, fr_data.get('expired', 0)),
             },
-            "pending_factory_return": cr_data.get('pending_factory', 0),
+            "pending_factory_return": _to_crates(sid, cr_data.get('pending_factory', 0)),
+            "factory_warehouse_stock": qty_factory_wh,
+            # Per-batch breakdown of the factory warehouse stock for this SKU
+            # so the Stock-by-SKU table can expose a batch-level disclosure on
+            # every row. Empty list when this SKU has no factory stock.
+            "factory_warehouse_batches": fwh_batches_by_sku.get(sid, []),
             "stock_at_hand": stock_at_hand,
+            "stock_on_hand": stock_on_hand,
+            "stock_reserved": stock_reserved,
+            "stock_available": stock_available,
             "pct_stock_at_hand": pct_at_hand,
             "weekly_avg_deliveries": weekly_avg,
             "days_of_stock": days_remaining,
             "weeks_analyzed": weeks_with_data,
         })
-    
+
     # Sort by stock_at_hand descending
     sku_summaries.sort(key=lambda x: x['stock_at_hand'], reverse=True)
-    
+
     for s in sku_summaries:
         total_stock_in += s['stock_received']
         total_stock_out += s['stock_delivered']
+        total_stock_pending_out += s['stock_pending_out']
         total_at_hand += s['stock_at_hand']
         total_cust_returns += s['customer_returns']
+        total_empty_bottles_returned += s['empty_bottles_returned']
+        total_product_returns += s['product_returns']
         total_factory_returns += s['factory_returns']
     
-    # Aggregate bottle tracking
+    # Aggregate bottle tracking — these are in BOTTLES (kept as-is so the
+    # bottle counters in the UI reflect the actual number of physical bottles,
+    # not crates). Don't confuse with the per-SKU breakdown above which is
+    # crates for consistency with stock_at_hand math.
     total_empty = sum(cr_data.get('empty_reusable', 0) for cr_data in cust_return_by_sku.values())
     total_damaged = sum(cr_data.get('damaged', 0) for cr_data in cust_return_by_sku.values())
     total_expired = sum(cr_data.get('expired', 0) for cr_data in cust_return_by_sku.values())
+    total_promotional = sum(cr_data.get('promotional', 0) for cr_data in cust_return_by_sku.values())
     total_pending_factory = sum(cr_data.get('pending_factory', 0) for cr_data in cust_return_by_sku.values())
     
     return {
@@ -6018,17 +8393,49 @@ async def get_stock_dashboard(
         "totals": {
             "stock_received": total_stock_in,
             "stock_delivered": total_stock_out,
+            "stock_pending_out": total_stock_pending_out,
+            "stock_reserved": total_stock_pending_out,
+            "stock_on_hand": total_stock_in - total_stock_out - total_factory_returns,
+            "stock_available": total_at_hand,
             "stock_at_hand": total_at_hand,
             "customer_returns": total_cust_returns,
+            "empty_bottles_returned": total_empty_bottles_returned,
+            "product_returns": total_product_returns,
             "factory_returns": total_factory_returns,
+            "factory_warehouse_stock": total_factory_wh_stock,
             "pct_stock_at_hand": round((total_at_hand / total_stock_in * 100), 1) if total_stock_in > 0 else 0,
         },
         "bottle_tracking": {
             "empty_reusable": total_empty,
+            "promotional": total_promotional,
             "damaged": total_damaged,
             "expired": total_expired,
             "pending_factory_return": total_pending_factory,
         },
+        "factory_warehouses": [
+            {
+                "warehouse_id": wh_id,
+                "warehouse_name": wh_data["warehouse_name"],
+                # Convert the aggregated dict back to a list, sorted by name
+                # for stable, alphabetical display in the UI. Each entry now
+                # also carries a `batches` array (FIFO sorted) used by the
+                # "N batches" disclosure in the dashboard card.
+                "skus": sorted(
+                    [
+                        {
+                            **s,
+                            "batches": sorted(
+                                s.get("batches", []),
+                                key=lambda b: (b.get("production_date") or b.get("received_at") or "9999"),
+                            ),
+                        }
+                        for s in wh_data["skus_by_id"].values()
+                    ],
+                    key=lambda s: (s.get("sku_name") or "").lower(),
+                ),
+            }
+            for wh_id, wh_data in factory_wh_by_location.items()
+        ],
         "sku_count": len(sku_summaries),
         "skus": sku_summaries,
     }
@@ -6108,7 +8515,7 @@ async def get_billing_summary(
     unreconciled_count = await db.distributor_deliveries.count_documents({
         "tenant_id": tenant_id,
         "distributor_id": distributor_id,
-        "status": "delivered",
+        "status": {"$in": ["delivered", "complete"]},
         "id": {"$nin": reconciled_delivery_ids}
     })
     
@@ -6175,7 +8582,99 @@ async def get_monthly_reconciliation_data(
         {"_id": 0, "id": 1, "note_number": 1, "note_type": 1, "amount": 1, "status": 1, "created_at": 1}
     ).sort("created_at", -1).to_list(100)
     
-    # Calculate totals for unreconciled settlements only
+    # ===== Single source of truth: enrich with stockout_totals (same data the
+    # Settlements tab + popup use) so Billing & Settlements ALWAYS show the same Net.
+    await _enrich_settlements_with_stockout_totals(tenant_id, unreconciled_settlements)
+    await _enrich_settlements_with_stockout_totals(tenant_id, reconciled_settlements)
+
+    def _net_settlement(s: dict) -> float:
+        """Mirror of the per-settlement Net Settlement formula used in
+        SettlementsTab.jsx so the two tabs cannot drift.
+            net_settlement = net_billable − billed_at_transfer − direct_credit_issued − factory_return_credit
+        Positive ⇒ Distributor pays Supplier (Debit Note).
+        Negative ⇒ Supplier pays Distributor (Credit Note).
+        """
+        t = s.get('stockout_totals') or {}
+        net_billable = t.get('net_billable') or 0
+        billed_at_transfer = t.get('billed_at_transfer') or 0
+        direct_credit = t.get('direct_credit_issued') or 0
+        fr_credit = s.get('total_factory_return_credit') or 0
+        return net_billable - billed_at_transfer - direct_credit - fr_credit
+
+    def _aggregate_stockout(settlements_list: list) -> dict:
+        agg = {
+            "customer_order_value": 0.0,
+            "distributor_margin": 0.0,
+            "actual_billable": 0.0,
+            "credit_applied": 0.0,
+            "net_billable": 0.0,
+            "billed_at_transfer": 0.0,
+            "direct_credit_issued": 0.0,
+            "factory_return_credit": 0.0,
+            "net_settlement": 0.0,
+        }
+        for s in settlements_list:
+            t = s.get('stockout_totals') or {}
+            agg["customer_order_value"] += t.get('customer_order_value') or 0
+            agg["distributor_margin"] += t.get('distributor_margin') or 0
+            agg["actual_billable"] += t.get('actual_billable') or 0
+            agg["credit_applied"] += t.get('credit_applied') or 0
+            agg["net_billable"] += t.get('net_billable') or 0
+            agg["billed_at_transfer"] += t.get('billed_at_transfer') or 0
+            agg["direct_credit_issued"] += t.get('direct_credit_issued') or 0
+            agg["factory_return_credit"] += s.get('total_factory_return_credit') or 0
+            agg["net_settlement"] += _net_settlement(s)
+        return {k: round(v, 2) for k, v in agg.items()}
+
+    stockout_unreconciled = _aggregate_stockout(unreconciled_settlements)
+    stockout_reconciled = _aggregate_stockout(reconciled_settlements)
+
+    # ===== Customer-wise reconciliation rollup (across both unreconciled + reconciled
+    # settlements for the selected month). One row per Customer (account_id).
+    def _build_customer_recon(all_settlements: list) -> tuple[list, dict]:
+        by_account: dict = {}
+        for s in all_settlements:
+            aid = s.get('account_id') or 'unknown'
+            t = s.get('stockout_totals') or {}
+            row = by_account.setdefault(aid, {
+                "account_id": aid,
+                "account_name": s.get('account_name') or 'Unknown',
+                "delivery_count": 0,
+                "customer_order_value": 0.0,
+                "credit_notes_paid": 0.0,
+                "customer_invoice_value": 0.0,
+                "transfer_price_value": 0.0,
+            })
+            row["delivery_count"] += int(s.get('total_deliveries') or 0)
+            row["customer_order_value"] += t.get('customer_order_value') or 0
+            row["credit_notes_paid"] += (t.get('credit_applied') or 0) + (t.get('direct_credit_issued') or 0)
+            row["transfer_price_value"] += t.get('billed_at_transfer') or 0
+        rows = []
+        totals = {"delivery_count": 0, "customer_order_value": 0.0,
+                  "credit_notes_paid": 0.0, "customer_invoice_value": 0.0,
+                  "transfer_price_value": 0.0}
+        for r in by_account.values():
+            r["customer_invoice_value"] = round(r["customer_order_value"] - r["credit_notes_paid"], 2)
+            r["customer_order_value"] = round(r["customer_order_value"], 2)
+            r["credit_notes_paid"] = round(r["credit_notes_paid"], 2)
+            r["transfer_price_value"] = round(r["transfer_price_value"], 2)
+            rows.append(r)
+            totals["delivery_count"] += r["delivery_count"]
+            totals["customer_order_value"] += r["customer_order_value"]
+            totals["credit_notes_paid"] += r["credit_notes_paid"]
+            totals["customer_invoice_value"] += r["customer_invoice_value"]
+            totals["transfer_price_value"] += r["transfer_price_value"]
+        rows.sort(key=lambda x: x["account_name"].lower())
+        for k, v in list(totals.items()):
+            if isinstance(v, float):
+                totals[k] = round(v, 2)
+        return rows, totals
+
+    customer_recon_rows, customer_recon_totals = _build_customer_recon(
+        unreconciled_settlements + reconciled_settlements
+    )
+
+    # Calculate totals for unreconciled settlements only (legacy fields kept for compatibility)
     total_billing = sum(s.get('total_billing_value', 0) for s in unreconciled_settlements)
     total_earnings = sum(s.get('distributor_earnings', 0) for s in unreconciled_settlements)
     total_factory_adj = sum(s.get('factory_distributor_adjustment', 0) for s in unreconciled_settlements)
@@ -6275,14 +8774,15 @@ async def get_monthly_reconciliation_data(
                 "deliveries": 0
             })
     
-    # === ENTRY 2: Monthly Settlement (All Adjustments → Debit/Credit Note) ===
-    # Selling price adjustments (when customer price ≠ base price)
-    settlement_selling_price_adj = total_factory_adj
-    # Credit notes (customer return reimbursements) + factory returns (warehouse stock return credit)
-    settlement_credits = total_credit_notes + total_factory_return_credit
-    # Net: positive = distributor owes more (debit note), negative = factory owes (credit note)
-    net_adjustment_amount = settlement_selling_price_adj - settlement_credits
+    # === ENTRY 2: Monthly Settlement (= Sum of Net Settlement from Settlements tab) ===
+    # We use the stockout-driven Net Settlement so Billing tab can never diverge
+    # from Settlements tab. Positive ⇒ Debit Note (Distributor owes Supplier),
+    # negative ⇒ Credit Note (Supplier owes Distributor).
+    net_adjustment_amount = stockout_unreconciled["net_settlement"]
     settlement_note_type = "debit" if net_adjustment_amount > 0 else "credit" if net_adjustment_amount < 0 else "none"
+    # Legacy (kept so older clients still render something sensible)
+    settlement_selling_price_adj = total_factory_adj
+    settlement_credits = total_credit_notes + total_factory_return_credit
     
     # === Calculate totals for already reconciled ===
     reconciled_at_tp = sum(s.get('total_at_transfer_price', 0) for s in reconciled_settlements)
@@ -6357,9 +8857,9 @@ async def get_monthly_reconciliation_data(
                     "label": wr['label'], "amount": 0, "deliveries": 0
                 })
     
-    # Reconciled Entry 2 adjustment details
+    # Reconciled Entry 2: same stockout-driven Net Settlement
     reconciled_selling_price_adj = reconciled_factory_adj
-    reconciled_net_adj = reconciled_selling_price_adj - reconciled_credit_notes - reconciled_factory_return_credit
+    reconciled_net_adj = stockout_reconciled["net_settlement"]
     reconciled_note_type = "debit" if reconciled_net_adj > 0 else "credit" if reconciled_net_adj < 0 else "none"
     
     return {
@@ -6376,11 +8876,17 @@ async def get_monthly_reconciliation_data(
         # Entry 1: Billing at margin matrix transfer price
         "total_at_transfer_price": round(total_at_transfer_price, 2),
         "weekly_billing": weekly_billing,
-        # Entry 2: Settlement adjustments
+        # Entry 2: Settlement adjustments (stockout-driven, single source of truth)
         "settlement_selling_price_adj": round(settlement_selling_price_adj, 2),
         "settlement_credits": round(settlement_credits, 2),
         "net_adjustment_amount": round(net_adjustment_amount, 2),
         "settlement_note_type": settlement_note_type,
+        # NEW: stockout-driven aggregates (same source as Settlements tab)
+        "stockout_aggregate": stockout_unreconciled,
+        "stockout_aggregate_reconciled": stockout_reconciled,
+        # NEW: customer-wise reconciliation rollup (across both reconciled + unreconciled)
+        "customer_reconciliation": customer_recon_rows,
+        "customer_reconciliation_totals": customer_recon_totals,
         # Reconciled - full Two-Entry data
         "reconciled_at_transfer_price": round(reconciled_at_tp, 2),
         "reconciled_weekly_billing": reconciled_weekly_billing,
@@ -6442,10 +8948,19 @@ async def generate_monthly_note(
     if total_at_transfer_price == 0 and total_billing > 0:
         total_at_transfer_price = total_billing - total_earnings - total_factory_adj
     
-    # Entry 2: All adjustments → Debit/Credit Note
+    # Entry 2: Net = stockout-driven Net Settlement (same as Settlements tab)
+    await _enrich_settlements_with_stockout_totals(tenant_id, settlements)
+    net_adjustment_amount = 0.0
+    for s in settlements:
+        t = s.get('stockout_totals') or {}
+        net_billable = t.get('net_billable') or 0
+        billed_at_transfer = t.get('billed_at_transfer') or 0
+        direct_credit = t.get('direct_credit_issued') or 0
+        fr_credit = s.get('total_factory_return_credit') or 0
+        net_adjustment_amount += (net_billable - billed_at_transfer - direct_credit - fr_credit)
+    net_adjustment_amount = round(net_adjustment_amount, 2)
     settlement_selling_price_adj = total_factory_adj
     settlement_credits = total_credit_notes + total_factory_return_credit
-    net_adjustment_amount = settlement_selling_price_adj - settlement_credits
     
     if net_adjustment_amount == 0:
         raise HTTPException(status_code=400, detail="Net adjustment is zero - no note required")
@@ -6521,7 +9036,7 @@ async def generate_monthly_note(
         
         # Upload PDF to object storage
         pdf_filename = f"{note_number}.pdf"
-        storage_result = upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
+        storage_result = await upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
         
         # Store PDF reference in note document
         note_doc["pdf_path"] = storage_result.get("path")
@@ -6602,7 +9117,7 @@ async def download_note_pdf(
             
             # Upload and store reference
             pdf_filename = f"{note.get('note_number', note_id)}.pdf"
-            storage_result = upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
+            storage_result = await upload_pdf(pdf_filename, pdf_bytes, subfolder=f"debit-credit-notes/{distributor_id}")
             
             # Update note with PDF path
             await db.distributor_debit_credit_notes.update_one(
@@ -6622,7 +9137,7 @@ async def download_note_pdf(
     
     # Download PDF from storage
     try:
-        pdf_content = download_pdf(pdf_path)
+        pdf_content = await download_pdf(pdf_path)
         
         filename = f"{note.get('note_number', note_id)}.pdf"
         

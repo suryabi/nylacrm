@@ -6,6 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
+import GooglePlacesAddressSearch from '../components/GooglePlacesAddressSearch';
 import {
   Dialog,
   DialogContent,
@@ -39,74 +40,101 @@ import { toast } from 'sonner';
 import { 
   Plus, Search, Filter, Loader2, Users, Phone, Mail, Building2,
   MapPin, Pencil, Trash2, Upload, Camera, X, CreditCard, Eye,
-  ChevronLeft, ChevronRight, ScanLine, Sparkles, RotateCcw
+  ChevronLeft, ChevronRight, ScanLine, Sparkles, RotateCcw,
+  Share2, Copy, Check, MessageCircle, ExternalLink, Link2Off
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-// Contact Card Component
-const ContactCard = ({ contact, onEdit, onDelete, onView }) => (
-  <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => onView(contact)}>
-    <CardContent className="p-4">
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div 
-            className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold text-lg"
-            style={{ backgroundColor: contact.category_color || '#6366f1' }}
-          >
-            {contact.name?.charAt(0)?.toUpperCase() || '?'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold truncate">{contact.name}</h3>
-            {contact.designation && (
-              <p className="text-sm text-muted-foreground truncate">{contact.designation}</p>
-            )}
-            {contact.company && (
-              <p className="text-sm text-muted-foreground truncate flex items-center gap-1">
-                <Building2 className="h-3 w-3" /> {contact.company}
-              </p>
-            )}
-          </div>
-        </div>
-        <Badge 
-          variant="outline" 
-          className="text-xs shrink-0"
-          style={{ borderColor: contact.category_color, color: contact.category_color }}
+// Contact Row (table) Component
+const ContactRow = ({ contact, onEdit, onDelete, onView, onShare }) => (
+  <TableRow
+    className="cursor-pointer hover:bg-slate-50/80"
+    onClick={() => onView(contact)}
+    data-testid={`contact-row-${contact.id}`}
+  >
+    {/* Name + avatar + designation */}
+    <TableCell className="min-w-[200px]">
+      <div className="flex items-center gap-3">
+        <div
+          className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-sm shrink-0"
+          style={{ backgroundColor: contact.category_color || '#6366f1' }}
         >
-          {contact.category_name}
-        </Badge>
+          {contact.name?.charAt(0)?.toUpperCase() || '?'}
+        </div>
+        <div className="min-w-0">
+          <p className="font-medium text-slate-900 truncate" title={contact.name}>{contact.name}</p>
+          {contact.designation && (
+            <p className="text-xs text-muted-foreground truncate" title={contact.designation}>{contact.designation}</p>
+          )}
+        </div>
       </div>
-      
-      <div className="mt-3 space-y-1">
-        {contact.phone && (
-          <p className="text-sm flex items-center gap-2 text-muted-foreground">
-            <Phone className="h-3 w-3" /> {contact.phone}
-          </p>
-        )}
-        {contact.email && (
-          <p className="text-sm flex items-center gap-2 text-muted-foreground truncate">
-            <Mail className="h-3 w-3" /> {contact.email}
-          </p>
-        )}
-        {contact.city && (
-          <p className="text-sm flex items-center gap-2 text-muted-foreground">
-            <MapPin className="h-3 w-3" /> {contact.city}
-          </p>
-        )}
-      </div>
+    </TableCell>
 
-      <div className="mt-3 pt-3 border-t flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-        <Button variant="ghost" size="sm" onClick={() => onEdit(contact)}>
+    {/* Company */}
+    <TableCell className="text-sm text-slate-600">
+      {contact.company ? (
+        <span className="inline-flex items-center gap-1.5 max-w-[180px] truncate" title={contact.company}>
+          <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{contact.company}</span>
+        </span>
+      ) : <span className="text-muted-foreground">—</span>}
+    </TableCell>
+
+    {/* Category */}
+    <TableCell>
+      <Badge
+        variant="outline"
+        className="text-xs whitespace-nowrap"
+        style={{ borderColor: contact.category_color, color: contact.category_color }}
+      >
+        {contact.category_name}
+      </Badge>
+    </TableCell>
+
+    {/* Phone */}
+    <TableCell className="text-sm text-slate-600 whitespace-nowrap">
+      {contact.phone ? (
+        <a href={`tel:${contact.phone}`} className="inline-flex items-center gap-1.5 hover:text-primary" onClick={(e) => e.stopPropagation()}>
+          <Phone className="h-3.5 w-3.5 text-slate-400" /> {contact.phone}
+        </a>
+      ) : <span className="text-muted-foreground">—</span>}
+    </TableCell>
+
+    {/* Email */}
+    <TableCell className="text-sm text-slate-600">
+      {contact.email ? (
+        <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1.5 hover:text-primary max-w-[200px] truncate" title={contact.email} onClick={(e) => e.stopPropagation()}>
+          <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" /> <span className="truncate">{contact.email}</span>
+        </a>
+      ) : <span className="text-muted-foreground">—</span>}
+    </TableCell>
+
+    {/* City */}
+    <TableCell className="text-sm text-slate-600 whitespace-nowrap">
+      {contact.city ? (
+        <span className="inline-flex items-center gap-1.5">
+          <MapPin className="h-3.5 w-3.5 text-slate-400" /> {contact.city}
+        </span>
+      ) : <span className="text-muted-foreground">—</span>}
+    </TableCell>
+
+    {/* Actions */}
+    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+      <div className="flex justify-end gap-0.5">
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" onClick={() => onShare(contact)} data-testid={`contact-share-${contact.id}`} title="Share contact">
+          <Share2 className="h-4 w-4" />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEdit(contact)} data-testid={`contact-edit-${contact.id}`} title="Edit">
           <Pencil className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" className="text-red-500" onClick={() => onDelete(contact)}>
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => onDelete(contact)} data-testid={`contact-delete-${contact.id}`} title="Delete">
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
-    </CardContent>
-  </Card>
+    </TableCell>
+  </TableRow>
 );
 
 // Image Upload Component with Preview
@@ -208,9 +236,14 @@ export default function ContactsList() {
     phone: '',
     email: '',
     address: '',
+    address_line2: '',
     city: '',
     state: '',
     country: '',
+    pincode: '',
+    lat: null,
+    lng: null,
+    formatted_address: '',
     notes: ''
   });
 
@@ -220,6 +253,78 @@ export default function ContactsList() {
 
   // View Contact Dialog
   const [viewContact, setViewContact] = useState(null);
+
+  // Share Contact Dialog
+  const [shareContact, setShareContact] = useState(null);
+  const [shareToken, setShareToken] = useState(null);
+  const [shareEnabled, setShareEnabled] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const shareUrl = shareToken ? `${window.location.origin}/c/${shareToken}` : '';
+
+  const openShare = async (contact) => {
+    setShareContact(contact);
+    setShareToken(contact.share_token || null);
+    setShareEnabled(false);
+    setCopied(false);
+    setShareLoading(true);
+    try {
+      // Enabling is idempotent and returns a stable token
+      const res = await fetch(`${API_URL}/api/contacts/${contact.id}/share`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setShareToken(data.share_token);
+      setShareEnabled(data.share_enabled);
+    } catch {
+      toast.error('Failed to create share link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const revokeShare = async () => {
+    if (!shareContact) return;
+    setShareLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/contacts/${shareContact.id}/share`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) throw new Error();
+      setShareEnabled(false);
+      toast.success('Share link turned off');
+    } catch {
+      toast.error('Failed to revoke link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const reEnableShare = async () => {
+    if (!shareContact) return;
+    setShareLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/contacts/${shareContact.id}/share`, { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setShareToken(data.share_token);
+      setShareEnabled(data.share_enabled);
+      toast.success('Share link turned on');
+    } catch {
+      toast.error('Failed to enable link');
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const copyShareLink = () => {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopied(true);
+      toast.success('Link copied');
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => toast.error('Could not copy'));
+  };
+
+  const shareMsg = shareContact
+    ? `Contact: ${shareContact.name}${shareContact.company ? ` (${shareContact.company})` : ''}\n${shareUrl}`
+    : '';
 
   // Fetch contacts
   const fetchContacts = useCallback(async () => {
@@ -269,6 +374,19 @@ export default function ContactsList() {
     fetchContacts();
   }, [fetchContacts]);
 
+  // Deep link: /contacts?view={id} opens that contact's card (used by the
+  // "Open in CRM" button on the public share page).
+  useEffect(() => {
+    const viewId = new URLSearchParams(window.location.search).get('view');
+    if (!viewId) return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/contacts/${viewId}`, { credentials: 'include' });
+        if (res.ok) setViewContact(await res.json());
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
   useEffect(() => {
     fetchFilterOptions();
   }, []);
@@ -308,9 +426,14 @@ export default function ContactsList() {
       phone: '',
       email: '',
       address: '',
+      address_line2: '',
       city: '',
       state: '',
       country: '',
+      pincode: '',
+      lat: null,
+      lng: null,
+      formatted_address: '',
       notes: ''
     });
     setCardFront(null);
@@ -330,9 +453,14 @@ export default function ContactsList() {
       phone: contact.phone || '',
       email: contact.email || '',
       address: contact.address || '',
+      address_line2: contact.address_line2 || '',
       city: contact.city || '',
       state: contact.state || '',
       country: contact.country || '',
+      pincode: contact.pincode || '',
+      lat: contact.lat ?? null,
+      lng: contact.lng ?? null,
+      formatted_address: contact.formatted_address || '',
       notes: contact.notes || ''
     });
     setCardFront(contact.card_front_url || null);
@@ -583,17 +711,35 @@ export default function ContactsList() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {contacts.map((contact) => (
-            <ContactCard
-              key={contact.id}
-              contact={contact}
-              onEdit={openEditSheet}
-              onDelete={handleDelete}
-              onView={setViewContact}
-            />
-          ))}
-        </div>
+        <Card>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50/60 hover:bg-slate-50/60">
+                  <TableHead>Name</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>City</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {contacts.map((contact) => (
+                  <ContactRow
+                    key={contact.id}
+                    contact={contact}
+                    onEdit={openEditSheet}
+                    onDelete={handleDelete}
+                    onView={setViewContact}
+                    onShare={openShare}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
       )}
 
       {/* Pagination */}
@@ -758,41 +904,106 @@ export default function ContactsList() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Address</Label>
-                <Textarea
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="Street address"
-                  rows={2}
+              {/* Address with Google Places autocomplete (same as Lead / Account) */}
+              <div className="space-y-3 rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Search Address</Label>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span>Powered by</span>
+                    <span className="font-semibold text-[#4285F4]">G</span>
+                    <span className="font-semibold text-[#EA4335]">o</span>
+                    <span className="font-semibold text-[#FBBC05]">o</span>
+                    <span className="font-semibold text-[#4285F4]">g</span>
+                    <span className="font-semibold text-[#34A853]">l</span>
+                    <span className="font-semibold text-[#EA4335]">e</span>
+                  </div>
+                </div>
+                <GooglePlacesAddressSearch
+                  cityHint={formData.city}
+                  placeholder="Search for a place (3+ chars)…"
+                  testId="contact-address-search"
+                  onPick={(p) => setFormData((prev) => ({
+                    ...prev,
+                    address: p.address_line_1 || prev.address,
+                    address_line2: p.address_line_2 || prev.address_line2,
+                    city: p.city || prev.city,
+                    state: p.state || prev.state,
+                    pincode: p.pincode || prev.pincode,
+                    lat: p.lat ?? prev.lat,
+                    lng: p.lng ?? prev.lng,
+                    formatted_address: p.formatted_address || prev.formatted_address,
+                  }))}
                 />
-              </div>
+                <p className="text-xs text-muted-foreground">
+                  Fields below auto-fill when you pick a result — you can still edit them.
+                </p>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>City</Label>
-                  <Input
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    placeholder="City"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Address Line 1</Label>
+                    <Input
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      placeholder="Building, street"
+                      data-testid="contact-address-line1"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Address Line 2</Label>
+                    <Input
+                      value={formData.address_line2}
+                      onChange={(e) => setFormData({ ...formData, address_line2: e.target.value })}
+                      placeholder="Area, locality (optional)"
+                      data-testid="contact-address-line2"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>State</Label>
-                  <Input
-                    value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                    placeholder="State"
-                  />
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">City</Label>
+                    <Input
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      placeholder="City"
+                      data-testid="contact-address-city"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">State</Label>
+                    <Input
+                      value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                      placeholder="State"
+                      data-testid="contact-address-state"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Pincode</Label>
+                    <Input
+                      value={formData.pincode}
+                      onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                      placeholder="Pincode"
+                      data-testid="contact-address-pincode"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Country</Label>
+                    <Input
+                      value={formData.country}
+                      onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                      placeholder="Country"
+                      data-testid="contact-address-country"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Country</Label>
-                  <Input
-                    value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    placeholder="Country"
-                  />
-                </div>
+
+                {formData.lat != null && formData.lng != null && (
+                  <p className="text-[11px] font-mono text-emerald-600 flex items-center gap-1">
+                    <MapPin className="h-3 w-3" />
+                    GPS captured: {Number(formData.lat).toFixed(6)}, {Number(formData.lng).toFixed(6)}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -873,11 +1084,11 @@ export default function ContactsList() {
                     </a>
                   </div>
                 )}
-                {(viewContact.address || viewContact.city) && (
+                {(viewContact.address || viewContact.address_line2 || viewContact.city) && (
                   <div className="flex items-start gap-3">
                     <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <span>
-                      {[viewContact.address, viewContact.city, viewContact.state, viewContact.country]
+                      {[viewContact.address, viewContact.address_line2, viewContact.city, viewContact.state, viewContact.pincode, viewContact.country]
                         .filter(Boolean)
                         .join(', ')}
                     </span>
@@ -920,6 +1131,10 @@ export default function ContactsList() {
             <Button variant="outline" onClick={() => setViewContact(null)}>
               Close
             </Button>
+            <Button variant="outline" className="text-emerald-600 border-emerald-200" onClick={() => { const c = viewContact; setViewContact(null); openShare(c); }} data-testid="contact-view-share-btn">
+              <Share2 className="h-4 w-4 mr-2" />
+              Share
+            </Button>
             <Button onClick={() => {
               openEditSheet(viewContact);
               setViewContact(null);
@@ -927,6 +1142,66 @@ export default function ContactsList() {
               <Pencil className="h-4 w-4 mr-2" />
               Edit
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Contact Dialog */}
+      <Dialog open={!!shareContact} onOpenChange={(o) => !o && setShareContact(null)}>
+        <DialogContent className="max-w-md" data-testid="contact-share-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-emerald-600" /> Share Contact
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Anyone with this link can view the card for <span className="font-medium text-slate-700">{shareContact?.name}</span> (name,
+              company, designation, phone, email &amp; address). No login required.
+            </p>
+
+            {shareLoading && (
+              <div className="flex items-center justify-center py-6 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Working…
+              </div>
+            )}
+
+            {!shareLoading && shareEnabled && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Input readOnly value={shareUrl} className="font-mono text-xs" data-testid="contact-share-url" onFocus={(e) => e.target.select()} />
+                  <Button onClick={copyShareLink} className="bg-emerald-600 hover:bg-emerald-700 shrink-0" data-testid="contact-share-copy">
+                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <a href={`https://wa.me/?text=${encodeURIComponent(shareMsg)}`} target="_blank" rel="noopener noreferrer" data-testid="contact-share-whatsapp">
+                    <Button variant="outline" className="w-full text-green-700 border-green-200"><MessageCircle className="h-4 w-4 mr-1.5" /> WhatsApp</Button>
+                  </a>
+                  <a href={`mailto:?subject=${encodeURIComponent(`Contact: ${shareContact?.name || ''}`)}&body=${encodeURIComponent(shareMsg)}`} data-testid="contact-share-email">
+                    <Button variant="outline" className="w-full"><Mail className="h-4 w-4 mr-1.5" /> Email</Button>
+                  </a>
+                  <a href={shareUrl} target="_blank" rel="noopener noreferrer" data-testid="contact-share-open">
+                    <Button variant="outline" className="w-full"><ExternalLink className="h-4 w-4 mr-1.5" /> Open</Button>
+                  </a>
+                </div>
+                <Button variant="ghost" className="w-full text-red-600 hover:text-red-700 hover:bg-red-50" onClick={revokeShare} data-testid="contact-share-revoke">
+                  <Link2Off className="h-4 w-4 mr-2" /> Turn off link (revoke access)
+                </Button>
+              </>
+            )}
+
+            {!shareLoading && !shareEnabled && shareContact && (
+              <div className="rounded-lg border border-dashed p-4 text-center space-y-3">
+                <p className="text-sm text-muted-foreground">This link is currently turned off.</p>
+                <Button onClick={reEnableShare} className="bg-emerald-600 hover:bg-emerald-700" data-testid="contact-share-enable">
+                  <Share2 className="h-4 w-4 mr-2" /> Turn on share link
+                </Button>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShareContact(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

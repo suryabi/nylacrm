@@ -16,6 +16,50 @@ import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
+// Helper to render a single activity bullet with styled client name + status pill
+// (Mirrors the renderer used in DailyStatusUpdate.js so the rendering is consistent)
+const renderStyledActivityLine = (text) => {
+  if (!text) return null;
+  const dashIndex = text.indexOf(' - ');
+  const statusMatch = text.match(/\[Status:\s*([^\]]+)\]/);
+
+  let clientName = '';
+  let description = text;
+  let statusText = '';
+  let isStatusChange = false;
+
+  if (dashIndex > 0) {
+    clientName = text.substring(0, dashIndex).trim();
+    description = text.substring(dashIndex + 3);
+  }
+  if (statusMatch) {
+    statusText = statusMatch[1].trim();
+    isStatusChange = statusText.includes('→');
+    description = description.replace(statusMatch[0], '').trim();
+  }
+
+  return (
+    <span className="leading-relaxed">
+      {clientName && (
+        <>
+          <span className="font-semibold text-primary">{clientName}</span>
+          <span className="text-muted-foreground"> - </span>
+        </>
+      )}
+      <span>{description}</span>
+      {statusText && (
+        <span className={`ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+          isStatusChange
+            ? 'bg-gradient-to-r from-amber-100 to-green-100 text-amber-800 border border-amber-200'
+            : 'bg-blue-100 text-blue-700 border border-blue-200'
+        }`}>
+          {isStatusChange ? '↗ ' : '● '}{statusText}
+        </span>
+      )}
+    </span>
+  );
+};
+
 // Helper to render bulleted content with proper formatting for headers and summary
 const BulletedContent = ({ text }) => {
   if (!text) return <p className="text-sm text-muted-foreground italic">No updates provided</p>;
@@ -59,12 +103,12 @@ const BulletedContent = ({ text }) => {
           );
         }
         
-        // Regular bullet items
+        // Regular bullet items — render client name + status with the same styling as Daily Status
         const cleanLine = trimmedLine.replace(/^[•\-\*]\s*/, '').trim();
         return (
           <div key={index} className="flex items-start gap-2 text-sm pl-2">
-            <span className="text-primary mt-0.5">•</span>
-            <span className="leading-relaxed">{cleanLine}</span>
+            <span className="text-muted-foreground mt-0.5">•</span>
+            <span className="text-sm">{renderStyledActivityLine(cleanLine)}</span>
           </div>
         );
       })}

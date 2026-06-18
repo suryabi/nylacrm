@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -13,7 +14,7 @@ import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
 import { 
-  Search, Trash2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, 
+  Search, Trash2, ChevronLeft, ChevronRight, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Package,
   LayoutGrid, List, Filter, Loader2, RotateCcw, FileText, DollarSign, 
   Building2, Calendar, CheckCircle, XCircle
 } from 'lucide-react';
@@ -64,9 +65,11 @@ const STATUS_OPTIONS = [
 export default function InvoicesList() {
   const { navigateTo } = useNavigation();
   const { user } = useAuth();
+  const location = useLocation();
+  const initialQS = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState({ total_gross: 0, total_net: 0 });
+  const [summary, setSummary] = useState({ total_gross: 0, total_net: 0, total_credit: 0, total_outstanding: 0 });
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -78,21 +81,39 @@ export default function InvoicesList() {
   const [selectedInvoices, setSelectedInvoices] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Expandable line-items state — keyed by invoice id/no
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const toggleExpanded = (key) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   
   // View modes
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState('table');
   
-  // Filters
+  // Filters — prefill from URL query string when coming from Account detail "View all" deep-link
   const [searchQuery, setSearchQuery] = useState('');
   const [territory, setTerritory] = useState('all');
   const [state, setState] = useState('all');
   const [city, setCity] = useState('all');
-  const [accountName, setAccountName] = useState('');
+  const [accountName, setAccountName] = useState(initialQS.get('account_name') || '');
   const [status, setStatus] = useState('all');
-  const [timeFilter, setTimeFilter] = useState('lifetime');
+  const [timeFilter, setTimeFilter] = useState(initialQS.get('time_filter') || 'lifetime');
   const [sortBy, setSortBy] = useState('invoice_date');
   const [sortOrder, setSortOrder] = useState('desc');
+  
+  // Open the filters panel automatically if a deep-linked filter was applied
+  useEffect(() => {
+    if (initialQS.get('account_name') || initialQS.get('time_filter')) {
+      setShowFilters(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   // Master locations for filters
   const { 
@@ -112,8 +133,8 @@ export default function InvoicesList() {
     ? getCityNamesByStateName(state) 
     : cities.map(c => c.name);
   
-  // Check if user can delete invoices
-  const canDelete = user && ['ceo', 'system admin', 'admin', 'director'].some(
+  // Check if user can delete invoices — restricted to CEO and Admin only
+  const canDelete = user && ['ceo', 'system admin', 'admin'].some(
     role => user.role?.toLowerCase().includes(role)
   );
 
@@ -136,13 +157,13 @@ export default function InvoicesList() {
       params.append('limit', pageSize.toString());
       
       const response = await axios.get(`${API_URL}/api/invoices?${params.toString()}`, {
-        withCredentials: true
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       
       setInvoices(response.data.invoices || []);
       setTotalPages(response.data.pages || 1);
       setTotalCount(response.data.total || 0);
-      setSummary(response.data.summary || { total_gross: 0, total_net: 0 });
+      setSummary(response.data.summary || { total_gross: 0, total_net: 0, total_credit: 0, total_outstanding: 0 });
       setSelectedInvoices([]);
       setSelectAll(false);
     } catch (error) {
@@ -196,13 +217,12 @@ export default function InvoicesList() {
     try {
       if (selectedInvoices.length === 1) {
         await axios.delete(`${API_URL}/api/invoices/${selectedInvoices[0]}`, {
-          withCredentials: true
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
       } else {
         await axios.delete(`${API_URL}/api/invoices`, {
           data: selectedInvoices,
-          withCredentials: true,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }
         });
       }
       
@@ -303,7 +323,7 @@ export default function InvoicesList() {
             <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
             <span className="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-200">Invoice Summary</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <div className="p-3 sm:p-4 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800">
               <div className="flex items-center gap-2 mb-1">
                 <FileText className="h-4 w-4 text-blue-500" />
@@ -331,6 +351,13 @@ export default function InvoicesList() {
                 <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">Net Value</span>
               </div>
               <p className="text-xl sm:text-2xl font-bold text-purple-700 dark:text-purple-300">{formatCurrency(summary.total_net)}</p>
+            </div>
+            <div className="p-3 sm:p-4 rounded-xl bg-rose-50 dark:bg-rose-900/30 border border-rose-100 dark:border-rose-800">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="h-4 w-4 text-rose-500" />
+                <span className="text-xs text-rose-600 dark:text-rose-400 font-medium">Outstanding</span>
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-rose-700 dark:text-rose-300">{formatCurrency(summary.total_outstanding || 0)}</p>
             </div>
           </div>
         </Card>
@@ -556,6 +583,7 @@ export default function InvoicesList() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50 dark:bg-slate-800/50">
+                    <TableHead className="w-10" />
                     {canDelete && (
                       <TableHead className="w-10">
                         <Checkbox
@@ -597,6 +625,11 @@ export default function InvoicesList() {
                         Net {getSortIcon('net_invoice_value')}
                       </div>
                     </TableHead>
+                    <TableHead className="text-right cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors" onClick={() => handleSort('outstanding')}>
+                      <div className="flex items-center justify-end font-semibold">
+                        Outstanding {getSortIcon('outstanding')}
+                      </div>
+                    </TableHead>
                     <TableHead>
                       <div className="font-semibold">Status</div>
                     </TableHead>
@@ -606,9 +639,21 @@ export default function InvoicesList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => (
+                  {invoices.map((invoice) => {
+                    const rowKey = invoice.id || invoice.invoice_no;
+                    const items = Array.isArray(invoice.items) ? invoice.items : [];
+                    const hasLineItems = items.length > 0;
+                    const isExpanded = expandedRows.has(rowKey);
+                    const totalBottlesExp = hasLineItems
+                      ? items.reduce((s, it) => s + Number(it.bottles ?? it.quantity ?? 0), 0)
+                      : 0;
+                    const totalCratesExp = hasLineItems
+                      ? items.reduce((s, it) => s + Number(it.crates ?? it.crateCount ?? 0), 0)
+                      : 0;
+                    const colSpan = canDelete ? 10 : 9;
+                    return (
+                      <React.Fragment key={rowKey}>
                     <TableRow 
-                      key={invoice.id || invoice.invoice_no}
                       className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
                       onClick={() => {
                         if (invoice.account_id) {
@@ -616,6 +661,22 @@ export default function InvoicesList() {
                         }
                       }}
                     >
+                      <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
+                        {hasLineItems ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => toggleExpanded(rowKey)}
+                            data-testid={`expand-invoice-${rowKey}`}
+                            aria-label={isExpanded ? 'Collapse line items' : 'Expand line items'}
+                          >
+                            {isExpanded
+                              ? <ChevronDown className="h-4 w-4" />
+                              : <ChevronRight className="h-4 w-4" />}
+                          </Button>
+                        ) : null}
+                      </TableCell>
                       {canDelete && (
                         <TableCell onClick={(e) => e.stopPropagation()}>
                           <Checkbox
@@ -644,6 +705,9 @@ export default function InvoicesList() {
                       <TableCell className="text-right font-semibold text-purple-700 dark:text-purple-300">
                         {formatCurrency(invoice.net_invoice_value)}
                       </TableCell>
+                      <TableCell className={`text-right font-semibold ${(invoice.outstanding || 0) > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {formatCurrency(invoice.outstanding || 0)}
+                      </TableCell>
                       <TableCell>
                         <Badge 
                           className={invoice.status === 'matched' 
@@ -662,7 +726,69 @@ export default function InvoicesList() {
                         {[invoice.account_city, invoice.account_state].filter(Boolean).join(', ') || '-'}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    {isExpanded && hasLineItems && (
+                      <TableRow className="bg-slate-50/40 dark:bg-slate-800/20 hover:bg-slate-50/40 dark:hover:bg-slate-800/20">
+                        <TableCell colSpan={colSpan} className="p-0">
+                          <div className="p-4" data-testid={`line-items-${rowKey}`}>
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="text-xs text-muted-foreground">
+                                  <th className="text-left py-2 px-3 font-medium">SKU</th>
+                                  <th className="text-right py-2 px-3 font-medium">Crates</th>
+                                  <th className="text-right py-2 px-3 font-medium">Bottles</th>
+                                  <th className="text-right py-2 px-3 font-medium">Line Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {items.map((item, idx) => {
+                                  const crates = item.crates ?? item.crateCount ?? null;
+                                  const cap = item.crate_capacity ?? item.crateCapacity ?? null;
+                                  return (
+                                    <tr key={idx} className="border-t border-slate-100 dark:border-slate-800">
+                                      <td className="py-2 px-3">
+                                        <p className="font-medium">{item.sku_name || item.sku || 'N/A'}</p>
+                                        {item.sku_code && <p className="text-xs text-muted-foreground">{item.sku_code}</p>}
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums">
+                                        {crates != null ? (
+                                          <div>
+                                            <p>{Number(crates).toLocaleString()}</p>
+                                            {cap != null && <p className="text-[10px] text-muted-foreground">× {Number(cap)}/crate</p>}
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground">-</span>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-3 text-right tabular-nums">{(item.bottles || item.quantity || 0).toLocaleString()}</td>
+                                      <td className="py-2 px-3 text-right font-medium tabular-nums">
+                                        ₹{Math.round(item.lineTotal ?? item.line_total ?? item.net_amount ?? item.total ?? 0).toLocaleString()}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot className="border-t border-slate-200 dark:border-slate-700">
+                                <tr>
+                                  <td className="py-2 px-3 font-semibold">Total</td>
+                                  <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                                    {totalCratesExp > 0 ? totalCratesExp.toLocaleString() : '-'}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-semibold tabular-nums">
+                                    {totalBottlesExp.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-semibold text-green-600 tabular-nums">
+                                    ₹{Math.round(invoice.gross_invoice_value || 0).toLocaleString()}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                      </React.Fragment>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

@@ -1,0 +1,44 @@
+{
+  "summary": "Tested NEW Marketing Requests Module (Sales→Marketing→Delivery) end-to-end. 19/19 backend pytest cases pass against the production preview URL covering masters auto-seed, lead-time guardrail, MR-YYYY-NNNN numbering, all queue counts, ALLOWED_TRANSITIONS, comments, versions, production-submit (incl. final_approved guard), production-status, file upload/download, and default-protected master deletes. Frontend pages /marketing-requests, /marketing-requests/new and /marketing-requests/:id all render correctly with Sales/Marketing/Delivery tab groups + counts badges, transition buttons, work versions, and comments timeline. Sidebar entry 'Marketing Requests' visible under Sales (verified) and Marketing (verified) module contexts.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/marketing-requests/{id}/status", "issue": "Admin override of ALLOWED_TRANSITIONS is intentional (CEO/director can shortcut), but it makes it impossible for an admin-tester to verify the deny-path through the API; non-admin role is needed to assert HTTP 400 on illegal jumps. Server-side gate is otherwise correct."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/marketing-requests/new", "issues": ["'Requested Due Date' uses native HTML <input type=\"date\"> instead of the shadcn Calendar/Popover component used elsewhere in the app — inconsistent UX (system prompt explicitly flags this pattern)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketing_requests_lifecycle.py",
+    "/app/test_reports/pytest/marketing_requests_lifecycle_results.xml"
+  ],
+  "action_items": [
+    "Optional: Replace native <input type=\"date\"> on NewMarketingRequest.js with the shadcn Calendar/Popover Date Picker for visual consistency.",
+    "Optional: Add a role-based negative test for illegal status transitions using a non-admin Marketing user account."
+  ],
+  "critical_code_review_comments": [
+    "ALLOWED_TRANSITIONS dict + status_key map is clean and centralised — good.",
+    "ObjectStorage uploads stored in collection 'marketing_request_files' with tenant scoping — files endpoint properly tenant-isolated. Good.",
+    "Mongo _id is excluded via projection {'_id':0} throughout — good.",
+    "Department matching uses title-case + lower-case OR list to tolerate mixed-case user.department values — pragmatic but a normalised collation index would be cleaner long-term.",
+    "production-submit transitions to production_in_progress AND sets production.production_status='pending'. The 'production_pending' queue filter therefore picks it up correctly, but the lifecycle status_key is already 'production_in_progress' at that moment — a small naming dissonance (consider keeping status_key='final_approved' until Delivery actually starts work, OR renaming the queue to 'production_assigned').",
+    "QUEUE_FILTERS.production_pending requires 'production.production_status: pending' but also relies on lifecycle status_key default; not strictly broken just slightly redundant.",
+    "marketing_requests.py is ~553 lines — still within the 700-line guideline but starting to get heavy; future refactor into router + service layer would help."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_marketing_requests_lifecycle.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Admin: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water).",
+  "seed_data_creation": "Test created several TEST_QA_* marketing requests + one TEST_QA_DEPT master department (deleted as part of test). MR-2026-000x numbers were consumed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression test suite is /app/backend/tests/test_marketing_requests_lifecycle.py (19 cases). It auto-creates new MR requests so the request_number counter will keep advancing per run. If you need to test role-gated 403 paths, log in as a non-admin user (e.g., a Sales-only role) — admin overrides ALLOWED_TRANSITIONS and most permission gates.",
+  "rca of the issue": "N/A — no bugs found. All required features in the review request are working end-to-end."
+}

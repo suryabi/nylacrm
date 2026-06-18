@@ -13,11 +13,25 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap, Factory, Truck, Megaphone, Package, Boxes, ShieldCheck, Sparkles, Receipt } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Decide where to send a user after login based on their role/department.
+// Dedicated teams land directly in their own module; everyone else → Sales home.
+const landingRouteFor = (u) => {
+  if (!u) return '/home';
+  if (u.role === 'Driver') return '/driver/schedules';
+  if (u.role === 'Distributor') return '/distributor-home';
+  const depts = Array.isArray(u.department)
+    ? u.department.map((d) => (d || '').toLowerCase())
+    : [(u.department || '').toLowerCase()];
+  // Marketing-only users go straight to the Marketing module (Design Requests).
+  if (depts.includes('marketing') && !depts.includes('sales')) return '/marketing-requests';
+  return '/home';
+};
 
 export default function Login() {
   const navigate = useNavigate();
@@ -96,7 +110,7 @@ export default function Login() {
   // Redirect to home if user is already authenticated (not during login process)
   useEffect(() => {
     if (user && !authLoading && !loading) {
-      navigate('/home', { replace: true });
+      navigate(landingRouteFor(user), { replace: true });
     }
   }, [user, authLoading, loading, navigate]);
   
@@ -137,7 +151,7 @@ export default function Login() {
         // Small delay to ensure state is synced before redirect
         await new Promise(resolve => setTimeout(resolve, 100));
         // Use navigate with replace to prevent back button issues
-        navigate('/home', { replace: true });
+        navigate(landingRouteFor(userData), { replace: true });
       } else {
         toast.error('Login failed - no user data received');
         setLoading(false);
@@ -219,118 +233,8 @@ export default function Login() {
           filter: 'blur(60px)',
         }} />
 
-        <div className="relative z-10 px-16 max-w-lg">
-          {/* Icon cluster illustration */}
-          <div className="relative mb-12 flex justify-center">
-            {/* Main card */}
-            <motion.div 
-              className="w-56 h-40 bg-white/[0.07] backdrop-blur-sm rounded-2xl border border-white/10 p-5 relative"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              {/* Mini bar chart */}
-              <div className="flex items-end gap-2 h-20 mb-3">
-                {[40, 65, 45, 80, 55, 70, 90].map((h, i) => (
-                  <motion.div 
-                    key={i} 
-                    className="flex-1 rounded-t-sm"
-                    style={{ height: `${h}%`, background: i === 6 ? '#3b82f6' : i === 3 ? '#3b82f6' : 'rgba(148,163,184,0.3)' }}
-                    initial={{ height: 0 }}
-                    animate={{ height: `${h}%` }}
-                    transition={{ delay: 0.8 + i * 0.08, duration: 0.4 }}
-                  />
-                ))}
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Revenue Pipeline</span>
-                <span className="text-xs text-emerald-400 font-semibold">+24%</span>
-              </div>
-            </motion.div>
-
-            {/* Floating metric cards */}
-            <motion.div 
-              className="absolute -top-6 -right-4 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.4, type: "spring" }}
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                  <TrendingUp size={14} className="text-emerald-400" />
-                </div>
-                <div>
-                  <div className="text-white text-sm font-bold">127</div>
-                  <div className="text-[9px] text-slate-400 uppercase">Deals Won</div>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              className="absolute -bottom-5 -left-6 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.6, type: "spring" }}
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                  <Users size={14} className="text-blue-400" />
-                </div>
-                <div>
-                  <div className="text-white text-sm font-bold">2,840</div>
-                  <div className="text-[9px] text-slate-400 uppercase">Contacts</div>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              className="absolute top-8 -left-10 bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-3 py-2"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.8, type: "spring" }}
-            >
-              <div className="flex items-center gap-1.5">
-                <div className="w-6 h-6 rounded-md bg-amber-500/20 flex items-center justify-center">
-                  <Target size={11} className="text-amber-400" />
-                </div>
-                <span className="text-[10px] text-slate-300 font-medium">94% hit</span>
-              </div>
-            </motion.div>
-          </div>
-
-          {/* Text content */}
-          <motion.div 
-            className="text-center"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-          >
-            <h2 className="text-3xl font-bold text-white tracking-tight leading-tight">
-              Your Sales,<br />Supercharged.
-            </h2>
-            <p className="text-slate-400 mt-4 text-sm leading-relaxed max-w-sm mx-auto">
-              Track leads, manage pipelines, close deals faster. Everything your team needs to grow revenue — in one place.
-            </p>
-          </motion.div>
-
-          {/* Feature pills */}
-          <motion.div 
-            className="flex flex-wrap justify-center gap-2 mt-8"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6, duration: 0.6 }}
-          >
-            {[
-              { icon: BarChart3, label: 'Analytics' },
-              { icon: Users, label: 'Team CRM' },
-              { icon: PieChart, label: 'Reports' },
-              { icon: Zap, label: 'Automation' },
-            ].map(({ icon: Icon, label }, i) => (
-              <span key={label} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[11px] text-slate-300 font-medium">
-                <Icon size={11} className="text-blue-400" /> {label}
-              </span>
-            ))}
-          </motion.div>
+        <div className="relative z-10 px-16 max-w-lg w-full">
+          <RotatingHero />
         </div>
       </div>
 
@@ -590,5 +494,278 @@ function RegisterForm({ onBack }) {
         {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating account...</> : 'Create Account'}
       </Button>
     </form>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RotatingHero — auto-cycles through Sales / Production / Distribution / Marketing.
+// All copy is intentionally generic so any business can use this product.
+// ─────────────────────────────────────────────────────────────────────────────
+const HERO_SLIDES = [
+  {
+    id: 'sales',
+    label: 'Sales',
+    accent: '#10b981',
+    accentDot: 'bg-emerald-400',
+    bars: [40, 65, 45, 80, 55, 70, 90],
+    highlightIdx: [3, 6],
+    barColor: '#10b981',
+    cardLabel: 'Revenue Pipeline',
+    delta: '+24%',
+    headline: 'Sales, end to end.',
+    sub: 'Track leads, manage pipelines and close deals faster — with full visibility into every stage.',
+    metrics: [
+      { pos: 'top-right', icon: TrendingUp, color: 'emerald', value: '127', label: 'Deals Won' },
+      { pos: 'bottom-left', icon: Users, color: 'blue', value: '2,840', label: 'Contacts' },
+      { pos: 'top-left-chip', icon: Target, color: 'amber', text: '94% hit rate' },
+    ],
+  },
+  {
+    id: 'production',
+    label: 'Production',
+    accent: '#f59e0b',
+    accentDot: 'bg-amber-400',
+    bars: [55, 70, 60, 85, 75, 90, 95],
+    highlightIdx: [3, 5, 6],
+    barColor: '#f59e0b',
+    cardLabel: 'QC Throughput',
+    delta: '98.6%',
+    headline: 'Production, in control.',
+    sub: 'Run batches, log QC at every stage and catch defects before they ship — one source of truth.',
+    metrics: [
+      { pos: 'top-right', icon: ShieldCheck, color: 'amber', value: '38', label: 'Batches Passed' },
+      { pos: 'bottom-left', icon: Boxes, color: 'blue', value: '14', label: 'SKUs Active' },
+      { pos: 'top-left-chip', icon: Target, color: 'cyan', text: '0.4% reject rate' },
+    ],
+  },
+  {
+    id: 'distribution',
+    label: 'Distribution',
+    accent: '#3b82f6',
+    accentDot: 'bg-blue-400',
+    bars: [35, 50, 45, 65, 70, 60, 85],
+    highlightIdx: [3, 4, 6],
+    barColor: '#3b82f6',
+    cardLabel: 'Stock Movement',
+    delta: '+12%',
+    headline: 'Distribution, transparent.',
+    sub: 'Stock, deliveries and settlements wired together end-to-end — distributors get their own portal.',
+    metrics: [
+      { pos: 'top-right', icon: Truck, color: 'blue', value: '412', label: 'Deliveries / wk' },
+      { pos: 'bottom-left', icon: Package, color: 'emerald', value: '12.4k', label: 'Units in Stock' },
+      { pos: 'top-left-chip', icon: Target, color: 'cyan', text: '96% on-time' },
+    ],
+  },
+  {
+    id: 'marketing',
+    label: 'Marketing',
+    accent: '#d946ef',
+    accentDot: 'bg-fuchsia-400',
+    bars: [30, 55, 70, 60, 80, 75, 95],
+    highlightIdx: [4, 6],
+    barColor: '#d946ef',
+    cardLabel: 'Campaign Reach',
+    delta: '+31%',
+    headline: 'Marketing, on plan.',
+    sub: 'Campaigns, requests and content calendar — all in sync with sales, no spreadsheet juggling.',
+    metrics: [
+      { pos: 'top-right', icon: Megaphone, color: 'fuchsia', value: '2.4k', label: 'Reach / wk' },
+      { pos: 'bottom-left', icon: Sparkles, color: 'cyan', value: '18', label: 'Active Posts' },
+      { pos: 'top-left-chip', icon: Zap, color: 'amber', text: '6 open requests' },
+    ],
+  },
+];
+
+const COLOR_TINTS = {
+  emerald: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+  blue: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  amber: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+  fuchsia: { bg: 'bg-fuchsia-500/20', text: 'text-fuchsia-400' },
+  cyan: { bg: 'bg-cyan-500/20', text: 'text-cyan-400' },
+  violet: { bg: 'bg-violet-500/20', text: 'text-violet-400' },
+};
+
+const POS_CLASS = {
+  'top-right': 'absolute -top-6 -right-4',
+  'bottom-left': 'absolute -bottom-5 -left-6',
+  'top-left-chip': 'absolute top-12 -left-12',
+};
+
+function FloatingMetric({ metric }) {
+  const Icon = metric.icon;
+  const tint = COLOR_TINTS[metric.color] || COLOR_TINTS.blue;
+  if (metric.pos === 'top-left-chip') {
+    return (
+      <motion.div
+        className={`${POS_CLASS[metric.pos]} bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-3 py-2`}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        transition={{ delay: 0.25, type: 'spring' }}
+      >
+        <div className="flex items-center gap-1.5">
+          <div className={`w-6 h-6 rounded-md ${tint.bg} flex items-center justify-center`}>
+            <Icon size={11} className={tint.text} />
+          </div>
+          <span className="text-[10px] text-slate-300 font-medium">{metric.text}</span>
+        </div>
+      </motion.div>
+    );
+  }
+  return (
+    <motion.div
+      className={`${POS_CLASS[metric.pos]} bg-white/[0.08] backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3`}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ delay: metric.pos === 'top-right' ? 0.1 : 0.18, type: 'spring' }}
+    >
+      <div className="flex items-center gap-2">
+        <div className={`w-8 h-8 rounded-lg ${tint.bg} flex items-center justify-center`}>
+          <Icon size={14} className={tint.text} />
+        </div>
+        <div>
+          <div className="text-white text-sm font-bold">{metric.value}</div>
+          <div className="text-[9px] text-slate-400 uppercase tracking-wider">{metric.label}</div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function RotatingHero() {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+
+  useEffect(() => {
+    if (paused) return undefined;
+    const t = setInterval(() => setIndex((i) => (i + 1) % HERO_SLIDES.length), 5000);
+    return () => clearInterval(t);
+  }, [paused]);
+
+  const slide = HERO_SLIDES[index];
+
+  return (
+    <div
+      className="w-full"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      data-testid="rotating-hero"
+    >
+      {/* Module label tab */}
+      <div className="flex justify-center mb-6">
+        <AnimatePresence mode="wait">
+          <motion.span
+            key={`label-${slide.id}`}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.25 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.06] border border-white/[0.08] text-[10px] uppercase tracking-[0.18em] text-slate-300 font-medium"
+            data-testid={`hero-module-label-${slide.id}`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${slide.accentDot}`} />
+            {slide.label}
+          </motion.span>
+        </AnimatePresence>
+      </div>
+
+      {/* Card cluster */}
+      <div className="relative mb-12 flex justify-center min-h-[200px]">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`card-${slide.id}`}
+            className="w-56 h-40 bg-white/[0.07] backdrop-blur-sm rounded-2xl border border-white/10 p-5 relative"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.45 }}
+          >
+            {/* Mini bar chart */}
+            <div className="flex items-end gap-2 h-20 mb-3">
+              {slide.bars.map((h, i) => (
+                <motion.div
+                  key={`${slide.id}-${i}`}
+                  className="flex-1 rounded-t-sm"
+                  style={{
+                    height: `${h}%`,
+                    background: slide.highlightIdx.includes(i) ? slide.barColor : 'rgba(148,163,184,0.3)',
+                  }}
+                  initial={{ height: 0 }}
+                  animate={{ height: `${h}%` }}
+                  transition={{ delay: 0.2 + i * 0.05, duration: 0.35 }}
+                />
+              ))}
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                {slide.cardLabel}
+              </span>
+              <span className="text-xs font-semibold" style={{ color: slide.accent }}>
+                {slide.delta}
+              </span>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+
+        {/* Metrics rerender as a group when the slide changes (key-based remount) */}
+        {slide.metrics.map((m) => (
+          <FloatingMetric key={`${slide.id}-${m.pos}`} metric={m} />
+        ))}
+      </div>
+
+      {/* Headline + sub */}
+      <div className="text-center min-h-[140px]">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`text-${slide.id}`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.4 }}
+          >
+            <h2 className="text-3xl font-bold text-white tracking-tight leading-tight">
+              {slide.headline}
+            </h2>
+            <p className="text-slate-400 mt-4 text-sm leading-relaxed max-w-sm mx-auto">
+              {slide.sub}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      {/* Dot indicators */}
+      <div className="flex justify-center gap-2 mt-6">
+        {HERO_SLIDES.map((s, i) => (
+          <button
+            key={s.id}
+            onClick={() => { setIndex(i); setPaused(true); setTimeout(() => setPaused(false), 8000); }}
+            aria-label={`Show ${s.label}`}
+            data-testid={`hero-dot-${s.id}`}
+            className={`h-1.5 rounded-full transition-all ${i === index ? 'w-6 bg-white/80' : 'w-1.5 bg-white/30 hover:bg-white/50'}`}
+          />
+        ))}
+      </div>
+
+      {/* Static feature pills (cover all modules + cross-cutting) */}
+      <div className="flex flex-wrap justify-center gap-2 mt-8">
+        {[
+          { icon: BarChart3, label: 'Sales', tint: 'text-emerald-400' },
+          { icon: Factory, label: 'Production & QC', tint: 'text-amber-400' },
+          { icon: Truck, label: 'Distribution', tint: 'text-blue-400' },
+          { icon: Megaphone, label: 'Marketing', tint: 'text-fuchsia-400' },
+          { icon: Receipt, label: 'Reports', tint: 'text-violet-400' },
+          { icon: Sparkles, label: 'AI Assistant', tint: 'text-cyan-400' },
+        ].map(({ icon: Icon, label, tint }) => (
+          <span
+            key={label}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[11px] text-slate-300 font-medium"
+          >
+            <Icon size={11} className={tint} /> {label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

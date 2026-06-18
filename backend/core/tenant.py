@@ -50,8 +50,16 @@ def extract_tenant_from_request(request: Request) -> str:
     # Extract from host
     host = request.headers.get('host', '')
     
-    # Handle localhost and preview environments (including internal cluster hostnames)
-    if 'localhost' in host or 'preview.emergentagent.com' in host or 'emergentcf.cloud' in host or '127.0.0.1' in host:
+    # Handle localhost and preview/production emergent domains
+    # (all of these fall back to the default tenant; per-tenant subdomains can override via header)
+    if (
+        'localhost' in host
+        or '127.0.0.1' in host
+        or 'preview.emergentagent.com' in host
+        or 'emergentagent.com' in host
+        or 'emergent.host' in host
+        or 'emergentcf.cloud' in host
+    ):
         return DEFAULT_TENANT_ID
     
     # Domain-to-tenant mapping for production
@@ -84,23 +92,33 @@ async def tenant_middleware(request: Request, call_next):
     Middleware to extract and set tenant context for each request.
     Should be added to FastAPI app.
     """
-    # Skip tenant resolution for health checks and static files
+    # Skip tenant resolution for health checks, static files, and system probes.
+    # These paths must return quickly even without a valid tenant context.
     path = request.url.path
-    if path in ['/health', '/api/health', '/favicon.ico']:
-        return await call_next(request)
-    
-    # Extract tenant ID
-    tenant_id = extract_tenant_from_request(request)
-    
-    # Set tenant in context
-    set_current_tenant(tenant_id)
-    
-    # Store in request state for easy access
-    request.state.tenant_id = tenant_id
-    
-    # Continue with request
+    SKIP_PATHS = {
+        '/health', '/healthz', '/ready', '/livez', '/',
+        '/api/', '/api/health', '/api/healthz', '/api/ping',
+        '/favicon.ico',
+    }
+    if path in SKIP_PATHS or path.startswith('/api/static/'):
+        try:
+            return await call_next(request)
+        except Exception:
+            # Never let a downstream error turn a health probe into 5xx
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"status": "degraded"}, status_code=200)
+
+    try:
+        # Extract tenant ID (never let this raise to the ASGI layer)
+        tenant_id = extract_tenant_from_request(request)
+        set_current_tenant(tenant_id)
+        request.state.tenant_id = tenant_id
+    except Exception:
+        # Fall back to default tenant if extraction unexpectedly fails
+        set_current_tenant(DEFAULT_TENANT_ID)
+        request.state.tenant_id = DEFAULT_TENANT_ID
+
     response = await call_next(request)
-    
     return response
 
 

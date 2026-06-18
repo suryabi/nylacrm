@@ -1,0 +1,72 @@
+{
+  "summary": "Bottle-based rejection testing complete. Backend: 9/9 tests passed (100%). Frontend: All UI elements verified - inspection form shows 'Crates Inspected' and 'Rejected Bottles' labels, stage balance shows correct units (crates for received/pending/passed, bottles for rejected), summary bar shows correct units, activity log shows 'X crates inspected, Y bottles rejected' format.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_bottle_rejection.py",
+    "/app/test_reports/pytest/bottle_rejection_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_bottle_rejection.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% - All UI elements and integrations verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Used existing test batch: BATCH-TEST-001 (ID: 5833eb23-8664-4a53-8fc7-eedb9ff18178)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bottle-based rejection fully tested. Key changes from previous crate-based rejection: 1) InspectionRecord model no longer has qty_passed field - backend auto-sets qty_passed = qty_inspected (all crates pass through). 2) qty_rejected is now in BOTTLES, not crates. 3) Validation: qty_rejected cannot exceed qty_inspected * bottles_per_crate. 4) Frontend inspection form shows 'Crates Inspected' and 'Rejected Bottles' in two-column layout. 5) Stage balance row shows unit labels: crates for received/pending/passed, bottles for rejected. 6) Summary bar shows 'crates' under Unallocated/Delivery Ready, 'bottles' under Total Rejected. 7) Activity log shows 'X crates inspected, Y bottles rejected' format.",
+  "features_tested": {
+    "Backend_API_Tests": {
+      "POST_inspect_new_format": "PASSED - Accepts qty_inspected (crates) and qty_rejected (bottles), no qty_passed field",
+      "POST_inspect_validation_qty_inspected_positive": "PASSED - Returns 400 'Inspected quantity must be > 0'",
+      "POST_inspect_validation_qty_rejected_negative": "PASSED - Returns 400 'Rejected bottles cannot be negative'",
+      "POST_inspect_validation_max_bottles": "PASSED - Returns 400 'Cannot reject more than X bottles (Y crates x Z)'",
+      "POST_inspect_all_crates_pass_through": "PASSED - passed += qty_inspected (all crates pass)",
+      "POST_inspect_rejected_bottles_tracked": "PASSED - stage.rejected and total_rejected increase by qty_rejected",
+      "GET_history_format": "PASSED - Shows qty_inspected, qty_rejected, qty_passed (auto-set)",
+      "GET_batch_detail_units": "PASSED - Returns correct structure with stage_balances",
+      "POST_inspect_zero_rejection": "PASSED - Zero rejection is valid"
+    },
+    "Frontend_UI_Tests": {
+      "Summary_bar_Unallocated": "PASSED - Shows 'crates' unit label",
+      "Summary_bar_Total_Rejected": "PASSED - Shows 'bottles' unit label",
+      "Summary_bar_Delivery_Ready": "PASSED - Shows 'crates' unit label",
+      "Stage_balance_Received": "PASSED - Shows 'crates' unit label",
+      "Stage_balance_Pending": "PASSED - Shows 'crates' unit label",
+      "Stage_balance_Passed": "PASSED - Shows 'crates' unit label",
+      "Stage_balance_Rejected": "PASSED - Shows 'bottles' unit label",
+      "Inspection_form_Crates_Inspected_label": "PASSED - Shows 'Crates Inspected *' label",
+      "Inspection_form_Rejected_Bottles_label": "PASSED - Shows 'Rejected Bottles' label",
+      "Inspection_form_two_column_layout": "PASSED - grid-cols-2 layout detected",
+      "Inspection_form_max_bottles_helper": "PASSED - Shows 'Max X bottles' helper text",
+      "Inspection_form_rejection_reason_conditional": "PASSED - Rejection Reason field appears when rejected > 0",
+      "Inspection_submission": "PASSED - Successfully submits and updates balances",
+      "Activity_log_format": "PASSED - Shows 'X crates inspected, Y bottles rejected' format"
+    }
+  },
+  "data_testids_verified": [
+    "batch-detail-page",
+    "stage-card-{stage_id}",
+    "inspect-{stage_id}",
+    "insp-qty-{stage_id}",
+    "insp-rej-{stage_id}",
+    "insp-submit-{stage_id}",
+    "toggle-history"
+  ]
+}

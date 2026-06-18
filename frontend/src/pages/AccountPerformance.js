@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { Building2, Filter, Loader2, TrendingUp, AlertTriangle, Calendar, ShoppingCart, DollarSign, CreditCard, Receipt, Wallet, AlertCircle, MapPin, Layers } from 'lucide-react';
+import { Building2, Filter, Loader2, TrendingUp, AlertTriangle, Calendar, ShoppingCart, DollarSign, CreditCard, Receipt, Wallet, AlertCircle, MapPin, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMasterLocations } from '../hooks/useMasterLocations';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -37,12 +37,12 @@ const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' }
 ];
 
-const ACCOUNT_TYPES = ['Tier 1', 'Tier 2', 'Tier 3'];
+const LEAD_TYPES = ['B2B', 'Retail', 'Individual'];
 
-const accountTypeColors = {
-  'Tier 1': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300',
-  'Tier 2': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
-  'Tier 3': 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+const leadTypeColors = {
+  'B2B': 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300',
+  'Retail': 'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-300',
+  'Individual': 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300',
 };
 
 function formatCurrency(value) {
@@ -69,13 +69,39 @@ export default function AccountPerformance() {
   
   const { territories: masterTerritories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
   
-  const [timeFilter, setTimeFilter] = useState('this_week');
+  const [timeFilter, setTimeFilter] = useState('this_month');
   const [territoryFilter, setTerritoryFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
-  const [accountTypeFilter, setAccountTypeFilter] = useState('all');
+  const [leadTypeFilter, setLeadTypeFilter] = useState('all');
+  const [businessCategoryFilter, setBusinessCategoryFilter] = useState('all');
+  const [businessCategories, setBusinessCategories] = useState([]);
 
-  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, accountTypeFilter]);
+  // Pagination (client-side — backend returns the full filtered set; usually 50-500 rows max)
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Reset to page 1 whenever any filter changes
+  useEffect(() => { setPage(1); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter, businessCategoryFilter]);
+
+  useEffect(() => { fetchData(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, leadTypeFilter, businessCategoryFilter]);
+
+  // Load business categories once for the dropdown (master list, tenant-scoped).
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/master/business-categories`, {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true,
+        });
+        setBusinessCategories(res.data?.categories || []);
+      } catch (e) {
+        // Non-blocking — filter just won't have options.
+        console.warn('Failed to load business categories', e);
+      }
+    })();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -86,8 +112,9 @@ export default function AccountPerformance() {
       if (territoryFilter !== 'all') params.append('territory', territoryFilter);
       if (stateFilter !== 'all') params.append('state', stateFilter);
       if (cityFilter !== 'all') params.append('city', cityFilter);
-      if (accountTypeFilter !== 'all') params.append('account_type', accountTypeFilter);
-      
+      if (leadTypeFilter !== 'all') params.append('lead_type', leadTypeFilter);
+      if (businessCategoryFilter !== 'all') params.append('business_category', businessCategoryFilter);
+
       const res = await axios.get(`${API_URL}/reports/account-performance?${params}`, { 
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true 
@@ -104,7 +131,8 @@ export default function AccountPerformance() {
     setTerritoryFilter('all');
     setStateFilter('all');
     setCityFilter('all');
-    setAccountTypeFilter('all');
+    setLeadTypeFilter('all');
+    setBusinessCategoryFilter('all');
   };
 
   const allTerritoryNames = masterTerritories.map(t => t.name);
@@ -149,7 +177,8 @@ export default function AccountPerformance() {
             territoryFilter !== 'all', 
             stateFilter !== 'all', 
             cityFilter !== 'all', 
-            accountTypeFilter !== 'all'
+            leadTypeFilter !== 'all',
+            businessCategoryFilter !== 'all'
           ].filter(Boolean).length}
           onReset={handleResetFilters}
           className="mb-6"
@@ -207,15 +236,31 @@ export default function AccountPerformance() {
               </Select>
             </FilterItem>
             
-            <FilterItem label="Account Type" icon={Layers}>
-              <Select value={accountTypeFilter} onValueChange={setAccountTypeFilter}>
-                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="account-type-filter">
+            <FilterItem label="Lead Type" icon={Layers}>
+              <Select value={leadTypeFilter} onValueChange={setLeadTypeFilter}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="lead-type-filter">
                   <SelectValue placeholder="All Types" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="all" className="rounded-lg">All Types</SelectItem>
-                  {ACCOUNT_TYPES.map(t => (
+                  {LEAD_TYPES.map(t => (
                     <SelectItem key={t} value={t} className="rounded-lg">{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FilterItem>
+
+            <FilterItem label="Business Category" icon={Layers}>
+              <Select value={businessCategoryFilter} onValueChange={setBusinessCategoryFilter}>
+                <SelectTrigger className="h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-all" data-testid="business-category-filter">
+                  <SelectValue placeholder="All Categories" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl max-h-72">
+                  <SelectItem value="all" className="rounded-lg">All Categories</SelectItem>
+                  {businessCategories.map(bc => (
+                    <SelectItem key={bc.id || bc.name} value={bc.name} className="rounded-lg" data-testid={`business-category-option-${bc.name}`}>
+                      {bc.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -259,59 +304,55 @@ export default function AccountPerformance() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm" data-testid="account-performance-table">
+              <table className="w-full text-sm table-fixed" data-testid="account-performance-table">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Account</th>
-                    <th className="text-left py-4 px-4 font-semibold text-slate-600 dark:text-slate-400">Type</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Invoice Value</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Avg Order</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Bottle Credit</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Contribution</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Last Payment</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Outstanding</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Overdue</th>
+                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[24%]">Account</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[14%]">Invoice Value</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[12%]">Avg Order</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[10%]">Bottle Credit</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[10%]">Contribution</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[12%]">Last Payment</th>
+                    <th className="text-right py-4 px-3 font-semibold text-slate-600 dark:text-slate-400 w-[10%]">Outstanding</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[8%]">Overdue</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {data.accounts.map((row, idx) => (
+                  {data.accounts.slice((page - 1) * pageSize, page * pageSize).map((row, idx) => (
                     <tr 
                       key={row.account_id || idx} 
-                      className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
+                      className="group border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors"
                       onClick={() => navigate(`/accounts/${row.account_id}`)}
                       data-testid={`account-row-${row.account_id}`}
                     >
-                      <td className="py-4 px-5">
+                      <td className="py-4 px-5 max-w-0">
+                        <p
+                          className="font-semibold text-slate-800 dark:text-white group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors truncate"
+                          title={row.account_name}
+                        >
+                          {row.account_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate" title={[row.city, row.state].filter(Boolean).join(', ')}>
+                          {[row.city, row.state].filter(Boolean).join(', ') || '—'}
+                        </p>
+                      </td>
+                      <td className="py-4 px-3 text-right">
                         <div>
-                          <p className="font-medium text-primary hover:underline">{row.account_name}</p>
-                          <p className="text-xs text-muted-foreground">{row.city}, {row.state}</p>
-                          <p className="text-xs text-muted-foreground/70 font-mono">{row.account_id}</p>
+                          <p className="font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{formatCurrency(row.gross_invoice_total)}</p>
+                          <p className="text-xs text-blue-600 dark:text-blue-400 tabular-nums">Net: {formatCurrency(row.net_invoice_total)}</p>
                         </div>
                       </td>
-                      <td className="py-4 px-4">
-                        {row.account_type ? (
-                          <Badge className={accountTypeColors[row.account_type] || 'bg-slate-100 dark:bg-slate-800'}>{row.account_type}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
-                      <td className="py-4 px-5 text-right">
-                        <div>
-                          <p className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.gross_invoice_total)}</p>
-                          <p className="text-xs text-blue-600 dark:text-blue-400">Net: {formatCurrency(row.net_invoice_total)}</p>
-                        </div>
-                      </td>
-                      <td className="py-4 px-5 text-right">
+                      <td className="py-4 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <ShoppingCart className="h-3 w-3 text-indigo-400" />
-                          <span className="font-medium text-indigo-600 dark:text-indigo-400">{formatCurrency(row.average_order_amount)}</span>
+                          <span className="font-medium text-indigo-600 dark:text-indigo-400 tabular-nums">{formatCurrency(row.average_order_amount)}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">{row.invoice_count} orders</p>
                       </td>
-                      <td className="py-4 px-5 text-right text-purple-600 dark:text-purple-400">{formatCurrency(row.bottle_credit)}</td>
-                      <td className="py-4 px-5 text-right">
+                      <td className="py-4 px-3 text-right text-purple-600 dark:text-purple-400 tabular-nums">{formatCurrency(row.bottle_credit)}</td>
+                      <td className="py-4 px-3 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <span className={`font-semibold ${
+                          <span className={`font-semibold tabular-nums ${
                             row.contribution_pct >= 10 ? 'text-emerald-600 dark:text-emerald-400' :
                             row.contribution_pct >= 5 ? 'text-blue-600 dark:text-blue-400' :
                             row.contribution_pct > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'
@@ -319,23 +360,23 @@ export default function AccountPerformance() {
                           {row.contribution_pct >= 10 && <TrendingUp className="h-3 w-3 text-emerald-500" />}
                         </div>
                       </td>
-                      <td className="py-4 px-5 text-right">
+                      <td className="py-4 px-3 text-right">
                         <div>
-                          <p className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(row.last_payment_amount)}</p>
+                          <p className="font-medium text-slate-700 dark:text-slate-300 tabular-nums">{formatCurrency(row.last_payment_amount)}</p>
                           <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
                             <Calendar className="h-3 w-3" />{formatDate(row.last_payment_date)}
                           </p>
                         </div>
                       </td>
-                      <td className="py-4 px-5 text-right">
-                        <span className={row.outstanding_balance > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-green-600 dark:text-green-400'}>
+                      <td className="py-4 px-3 text-right">
+                        <span className={`tabular-nums ${row.outstanding_balance > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-green-600 dark:text-green-400'}`}>
                           {formatCurrency(row.outstanding_balance)}
                         </span>
                       </td>
                       <td className="py-4 px-5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           {row.overdue_amount > 0 && <AlertTriangle className="h-3 w-3 text-red-500" />}
-                          <span className={row.overdue_amount > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-green-600 dark:text-green-400'}>
+                          <span className={`tabular-nums ${row.overdue_amount > 0 ? 'text-red-600 dark:text-red-400 font-medium' : 'text-green-600 dark:text-green-400'}`}>
                             {formatCurrency(row.overdue_amount)}
                           </span>
                         </div>
@@ -346,6 +387,56 @@ export default function AccountPerformance() {
               </table>
             </div>
           )}
+
+          {/* Pagination footer */}
+          {!loading && (data.accounts?.length || 0) > 0 && (() => {
+            const total = data.accounts.length;
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+            const startIdx = (page - 1) * pageSize;
+            const endIdx = Math.min(page * pageSize, total);
+            return (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>Show</span>
+                  <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
+                    <SelectTrigger className="w-[80px] h-8" data-testid="account-perf-page-size">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <span>per page · showing {startIdx + 1}–{endIdx} of {total}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    data-testid="account-perf-prev-page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 tabular-nums">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    data-testid="account-perf-next-page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </Card>
 
         {/* Info Note */}

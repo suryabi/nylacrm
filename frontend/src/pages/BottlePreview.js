@@ -283,13 +283,18 @@ export default function BottlePreview() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file (PNG, JPG, or SVG)');
+    // Some browsers (especially Safari with HEIC/HEIF/AVIF) leave file.type empty.
+    // Fall back to filename extension so we don't reject valid uploads here.
+    const allowedExt = ['png','jpg','jpeg','svg','webp','gif','bmp','tif','tiff','heic','heif','avif','ico'];
+    const ext = (file.name?.split('.').pop() || '').toLowerCase();
+    const looksLikeImage = (file.type || '').startsWith('image/') || allowedExt.includes(ext);
+    if (!looksLikeImage) {
+      toast.error('Please upload an image file (PNG, JPG, SVG, WebP, GIF, BMP, TIFF, HEIC, or AVIF)');
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size must be less than 5MB');
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('File size must be less than 15MB');
       return;
     }
 
@@ -313,7 +318,9 @@ export default function BottlePreview() {
       setLogoScale(100);
       toast.success('Logo uploaded! You can now edit it.');
     } catch (error) {
-      toast.error('Failed to upload logo');
+      // Surface backend message (e.g. "Couldn't read this image…") instead of the generic toast
+      const msg = error?.response?.data?.detail || 'Failed to upload logo';
+      toast.error(msg);
     } finally {
       setUploading(false);
     }
@@ -847,7 +854,7 @@ export default function BottlePreview() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                  accept="image/*,.heic,.heif,.avif"
                   onChange={handleFileSelect}
                   className="hidden"
                   data-testid="logo-file-input"

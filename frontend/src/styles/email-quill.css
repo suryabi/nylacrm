@@ -1,0 +1,19 @@
+.email-quill .ql-container {
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  font-size: 14px;
+}
+.email-quill .ql-toolbar {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  background: #f8fafc;
+}
+.email-quill .ql-editor {
+  min-height: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.email-quill .ql-editor.ql-blank::before {
+  font-style: normal;
+  color: #94a3b8;
+}

@@ -192,6 +192,7 @@ async def get_or_create_scoring_model(city: str = "default"):
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
     await tdb.scoring_models.insert_one(default_model)
+    default_model.pop('_id', None)
     return default_model
 
 
@@ -786,6 +787,119 @@ async def get_lead_score(lead_id: str, current_user: dict = Depends(get_current_
         'lead_id': lead_id,
         'company': lead.get('company'),
         'city': lead.get('city'),
+        'scored': True,
+        **scoring
+    }
+
+
+@router.post("/accounts/{account_id}/score")
+async def score_account(
+    account_id: str,
+    score_input: LeadScoreInput,
+    current_user: dict = Depends(get_current_user)
+):
+    """Score an account based on selected tiers - uses the account's city to determine which model to use"""
+    tdb = get_tdb()
+
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    account_city = account.get('city') or 'default'
+
+    model = await get_model_for_lead(account_city)
+    if not model:
+        raise HTTPException(status_code=400, detail="No scoring model available. Please configure the default scoring model first.")
+
+    categories = model.get('categories', [])
+    if not categories:
+        raise HTTPException(status_code=400, detail="No scoring categories defined. Please configure the scoring model first.")
+
+    total_score = 0
+    category_scores = {}
+    volume_score = 0
+    volume_weight = 0
+    commercial_score = 0
+    commercial_weight = 0
+
+    for category in categories:
+        cat_id = category['id']
+        cat_name = category.get('name', '').lower()
+        cat_weight = category.get('weight', 0)
+
+        selected_tier_id = score_input.category_scores.get(cat_id)
+
+        if selected_tier_id:
+            tier = next((t for t in category.get('tiers', []) if t['id'] == selected_tier_id), None)
+            if tier:
+                score = tier.get('score', 0)
+                total_score += score
+                category_scores[cat_id] = {
+                    'score': score,
+                    'tier_id': tier['id'],
+                    'tier_label': tier.get('label', ''),
+                    'category_name': category.get('name', ''),
+                    'category_weight': cat_weight
+                }
+
+                if 'volume' in cat_name:
+                    volume_score += score
+                    volume_weight += cat_weight
+                else:
+                    commercial_score += score
+                    commercial_weight += cat_weight
+
+    quadrant = calculate_quadrant(total_score, volume_score, volume_weight, commercial_score, commercial_weight)
+
+    score_data = {
+        'total_score': total_score,
+        'category_scores': category_scores,
+        'quadrant': quadrant,
+        'model_city': model.get('city', 'default'),
+        'scored_at': datetime.now(timezone.utc).isoformat(),
+        'scored_by': current_user['id']
+    }
+
+    await tdb.accounts.update_one(
+        {'id': account_id},
+        {'$set': {
+            'scoring': score_data,
+            'updated_at': datetime.now(timezone.utc).isoformat()
+        }}
+    )
+
+    return {
+        'account_id': account_id,
+        'account_name': account.get('account_name'),
+        'city': account_city,
+        'scored': True,
+        **score_data
+    }
+
+
+@router.get("/accounts/{account_id}/score")
+async def get_account_score(account_id: str, current_user: dict = Depends(get_current_user)):
+    """Get the score for a specific account"""
+    tdb = get_tdb()
+
+    account = await tdb.accounts.find_one({'id': account_id}, {'_id': 0})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    scoring = account.get('scoring')
+    if not scoring:
+        return {
+            'account_id': account_id,
+            'account_name': account.get('account_name'),
+            'city': account.get('city'),
+            'scored': False,
+            'message': 'Account has not been scored yet'
+        }
+
+    return {
+        'account_id': account_id,
+        'account_name': account.get('account_name'),
+        'city': account.get('city'),
         'scored': True,
         **scoring
     }

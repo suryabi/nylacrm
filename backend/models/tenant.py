@@ -132,6 +132,25 @@ class TenantSettings(BaseModel):
     # Distribution Module Settings
     default_distributor_gst_percent: float = 18.0  # Default GST % for distributor transactions
 
+    # Sales/Field Settings
+    check_in_radius_meters: int = 50  # Geo-fence radius for "I am here" sales rep check-ins on leads
+
+    # Factory / company HQ address — used by distributor delivery schedules to
+    # compute the "last delivery → factory" leg of the route distance.
+    # Stored as a single free-text line OR a structured address dict; both forms
+    # are accepted by the distance route.
+    factory_address: Optional[str] = None
+
+    # Driver app — how frequently the driver's device pushes GPS coordinates to
+    # the backend (and how often distributor/admin map views poll for them).
+    # Configurable per tenant; default 5 minutes.
+    gps_ping_interval_minutes: int = 5
+
+    # Auto-logout: log a user out after this many minutes of INACTIVITY (no mouse,
+    # keyboard, scroll or touch). The timer resets on any activity, so actively
+    # working users are never logged out. Configurable per tenant; default 20 min.
+    idle_timeout_minutes: int = 20
+
 
 # ============= INDUSTRY PROFILE SYSTEM =============
 
@@ -429,6 +448,8 @@ class ReturnReasonCategory(str):
     EXPIRED = "expired"  # Expired stock to be returned to factory for disposal
     DAMAGED = "damaged"  # Damaged stock to be returned to factory
     PROMOTIONAL = "promotional"  # FOC/Promo items - may or may not return to factory
+    UNUSED_REFUNDABLE = "unused_refundable"  # Unsold sellable stock returned - eligible for credit
+    UNUSED_NON_REFUNDABLE = "unused_non_refundable"  # Unsold stock returned - not eligible for credit
 
 
 class ReturnReason(BaseModel):
@@ -451,6 +472,10 @@ class ReturnReason(BaseModel):
     # Factory return configuration
     return_to_factory: bool = True  # Whether this type needs to be returned to factory
     requires_inspection: bool = False  # Whether quality inspection is required
+
+    # Applicability — which return flows can use this reason.
+    # Possible values: 'customer', 'distributor'. Default: both.
+    applies_to: List[str] = Field(default_factory=lambda: ['customer', 'distributor'])
     
     # Status
     is_active: bool = True
@@ -481,6 +506,7 @@ class ReturnReasonCreate(BaseModel):
     credit_percentage: Optional[float] = None
     return_to_factory: bool = True
     requires_inspection: bool = False
+    applies_to: List[str] = Field(default_factory=lambda: ['customer', 'distributor'])
     display_order: int = 0
     color: Optional[str] = None
 
@@ -494,6 +520,7 @@ class ReturnReasonUpdate(BaseModel):
     credit_percentage: Optional[float] = None
     return_to_factory: Optional[bool] = None
     requires_inspection: Optional[bool] = None
+    applies_to: Optional[List[str]] = None
     is_active: Optional[bool] = None
     display_order: Optional[int] = None
     color: Optional[str] = None
@@ -509,6 +536,7 @@ DEFAULT_RETURN_REASONS = [
         "credit_type": "sku_return_credit",
         "return_to_factory": True,
         "requires_inspection": False,
+        "applies_to": ["customer", "distributor"],
         "is_system": True,
         "display_order": 1,
         "color": "#10B981"  # Emerald
@@ -521,6 +549,7 @@ DEFAULT_RETURN_REASONS = [
         "credit_type": "full_price",
         "return_to_factory": True,
         "requires_inspection": True,
+        "applies_to": ["customer", "distributor"],
         "is_system": True,
         "display_order": 2,
         "color": "#F59E0B"  # Amber
@@ -533,6 +562,7 @@ DEFAULT_RETURN_REASONS = [
         "credit_type": "full_price",
         "return_to_factory": True,
         "requires_inspection": True,
+        "applies_to": ["customer", "distributor"],
         "is_system": True,
         "display_order": 3,
         "color": "#EF4444"  # Red
@@ -545,6 +575,7 @@ DEFAULT_RETURN_REASONS = [
         "credit_type": "no_credit",
         "return_to_factory": True,
         "requires_inspection": False,
+        "applies_to": ["customer"],
         "is_system": True,
         "display_order": 4,
         "color": "#6B7280"  # Gray

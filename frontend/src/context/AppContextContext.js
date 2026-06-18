@@ -6,12 +6,16 @@ const AppContextContext = createContext(null);
 // Roles that can access all modules
 const ADMIN_ROLES = ['CEO', 'Director'];
 
+// Roles allowed in the Admin context (fleet, masters, settings, integrations)
+const ADMIN_CONTEXT_ROLES = ['CEO', 'Director', 'Admin', 'System Admin'];
+
 // Module definitions
 const MODULES = {
   sales: { id: 'sales', label: 'Sales', icon: 'Store', defaultRoute: '/home' },
-  production: { id: 'production', label: 'Production', icon: 'Factory', defaultRoute: '/maintenance' },
+  production: { id: 'production', label: 'Production', icon: 'Factory', defaultRoute: '/production-dashboard' },
   distribution: { id: 'distribution', label: 'Distribution', icon: 'Truck', defaultRoute: '/distributors' },
   marketing: { id: 'marketing', label: 'Marketing', icon: 'Megaphone', defaultRoute: '/marketing-calendar' },
+  admin: { id: 'admin', label: 'Admin', icon: 'ShieldCheck', defaultRoute: '/admin/vehicles' },
 };
 
 export function AppContextProvider({ children }) {
@@ -27,6 +31,11 @@ export function AppContextProvider({ children }) {
       return moduleId === 'distribution';
     }
     
+    // Admin context is restricted to a fixed set of admin-capable roles
+    if (moduleId === 'admin') {
+      return ADMIN_CONTEXT_ROLES.includes(user.role);
+    }
+
     // Admin roles can always access all modules
     if (ADMIN_ROLES.includes(user.role)) return true;
     // Check department-based access (support both string and array)
@@ -34,8 +43,8 @@ export function AppContextProvider({ children }) {
     if (depts.includes('both') || depts.includes('all')) return true;
     if (moduleId === 'sales' && (depts.includes('sales') || depts.length === 0)) return true;
     if (moduleId === 'production' && depts.includes('production')) return true;
-    if (moduleId === 'distribution' && (depts.includes('distribution') || depts.includes('sales'))) return true;
-    if (moduleId === 'marketing' && (depts.includes('marketing') || depts.includes('both') || depts.includes('all'))) return true;
+    if (moduleId === 'distribution' && depts.includes('distribution')) return true;
+    if (moduleId === 'marketing' && depts.includes('marketing')) return true;
     return false;
   };
   
@@ -91,14 +100,23 @@ export function AppContextProvider({ children }) {
       return;
     }
     
+    // Set based on department (support both string and array)
+    const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
+    
+    // Dedicated single-department teams land directly in their own module.
+    // Marketing-only users (no sales) go straight to the Marketing module —
+    // checked before admin-role defaulting so a Marketing-only lead lands there too.
+    if (depts.includes('marketing') && !depts.includes('sales')) {
+      setCurrentContext('marketing');
+      return;
+    }
+    
     // Admin roles default to sales
     if (ADMIN_ROLES.includes(user.role)) {
       setCurrentContext('sales');
       return;
     }
     
-    // Set based on department (support both string and array)
-    const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
     if (depts.includes('production') && !depts.includes('sales')) {
       setCurrentContext('production');
     } else if (depts.includes('distribution') && !depts.includes('sales')) {
@@ -131,6 +149,7 @@ export function AppContextProvider({ children }) {
     canAccessProduction: canAccessProduction(),
     canAccessDistribution: canAccessDistribution(),
     canAccessMarketing: canAccessModule('marketing'),
+    canAccessAdmin: canAccessModule('admin'),
     getAccessibleModules,
     modules: MODULES,
     isDistributorUser: isDistributorUser(),

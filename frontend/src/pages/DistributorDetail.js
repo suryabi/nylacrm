@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ShareButton } from '../components/share/ShareButton';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import useMasterLocations from '../hooks/useMasterLocations';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -15,17 +16,19 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Checkbox } from '../components/ui/checkbox';
 import { Switch } from '../components/ui/switch';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from '../components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2, MoreVertical
 } from 'lucide-react';
 import axios from 'axios';
 
 // Import tab components
 import OverviewTab from '../components/distributor/OverviewTab';
+import ContactsSection from '../components/distributor/ContactsSection';
 import CoverageTab from '../components/distributor/CoverageTab';
 import LocationsTab from '../components/distributor/LocationsTab';
 import MarginsTab from '../components/distributor/MarginsTab';
@@ -36,7 +39,10 @@ import ReturnsTab from '../components/distributor/ReturnsTab';
 import SettlementsTab from '../components/distributor/SettlementsTab';
 import BillingTab from '../components/distributor/BillingTab';
 import StockDashboardTab from '../components/distributor/StockDashboardTab';
+import PageHelp from '../components/PageHelp';
 import { PAYMENT_TERMS, STATUS_OPTIONS, MARGIN_TYPES, formatMarginValue } from '../components/distributor/constants';
+
+import Breadcrumbs from '../components/Breadcrumbs';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -55,11 +61,26 @@ export default function DistributorDetail() {
   
   // Get default GST from tenant settings
   const tenantSettings = getSettings();
-  const defaultGstPercent = tenantSettings.default_distributor_gst_percent || 18;
+  const defaultGstPercent = tenantSettings.default_distributor_gst_percent ?? 5;
   
   const [loading, setLoading] = useState(true);
   const [distributor, setDistributor] = useState(null);
-  const [activeTab, setActiveTab] = useState('stock-dashboard');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'stock-dashboard');
+
+  // Sync ?tab= URL param ↔ activeTab state (so sidebar deep-links work for distributor users)
+  useEffect(() => {
+    const urlTab = searchParams.get('tab');
+    if (urlTab && urlTab !== activeTab) setActiveTab(urlTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleTabChange = useCallback((next) => {
+    setActiveTab(next);
+    const sp = new URLSearchParams(searchParams);
+    sp.set('tab', next);
+    setSearchParams(sp, { replace: true });
+  }, [searchParams, setSearchParams]);
   
   // Edit mode
   const [isEditing, setIsEditing] = useState(false);
@@ -74,6 +95,7 @@ export default function DistributorDetail() {
   
   // Location dialog
   const [showLocationDialog, setShowLocationDialog] = useState(false);
+  const [editingLocationId, setEditingLocationId] = useState(null);
   const [newLocation, setNewLocation] = useState({
     location_name: '',
     address_line_1: '',
@@ -84,13 +106,24 @@ export default function DistributorDetail() {
     contact_person: '',
     contact_number: '',
     email: '',
-    is_default: false
+    is_default: false,
+    is_factory: false,
+    track_batches: false,
+    gstin: '',
+    zoho_branch_id: '',
+    zoho_branch_name: '',
+    lat: null,
+    lng: null,
+    formatted_address: '',
   });
   const [addingLocation, setAddingLocation] = useState(false);
   
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteDistributorDialog, setShowDeleteDistributorDialog] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deletingDistributor, setDeletingDistributor] = useState(false);
   
   // Account Assignment state
   const [assignments, setAssignments] = useState([]);
@@ -117,6 +150,7 @@ export default function DistributorDetail() {
   const [marginsLoading, setMarginsLoading] = useState(false);
   const [selectedMarginCity, setSelectedMarginCity] = useState('');
   const [showOnlyActiveMargins, setShowOnlyActiveMargins] = useState(false);
+  const [costCardPrices, setCostCardPrices] = useState({});
   const [skus, setSkus] = useState([]);
   const [marginGrid, setMarginGrid] = useState({}); // Legacy - for grid view
   const [hasMarginChanges, setHasMarginChanges] = useState(false);
@@ -145,18 +179,40 @@ export default function DistributorDetail() {
   const [showShipmentDialog, setShowShipmentDialog] = useState(false);
   const [shipmentForm, setShipmentForm] = useState({
     distributor_location_id: '',
+    source_warehouse_id: '',
     shipment_date: new Date().toISOString().split('T')[0],
     expected_delivery_date: '',
     reference_number: '',
     vehicle_number: '',
     driver_name: '',
     driver_contact: '',
-    remarks: ''
+    remarks: '',
+    gst_percent: String(defaultGstPercent)
   });
   const [shipmentItems, setShipmentItems] = useState([]);
   const [savingShipment, setSavingShipment] = useState(false);
+
+  // Sync GST default when tenant settings load
+  useEffect(() => {
+    setShipmentForm(prev => ({ ...prev, gst_percent: String(defaultGstPercent) }));
+  }, [defaultGstPercent]);
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [showShipmentDetail, setShowShipmentDetail] = useState(false);
+  // Receipt acknowledgement dialog state
+  const [showAcknowledgeDialog, setShowAcknowledgeDialog] = useState(false);
+  const [acknowledgeItems, setAcknowledgeItems] = useState([]);  // [{item_id, sku_name, sent_quantity, received_quantity, discrepancy_remark}]
+  const [acknowledgementNote, setAcknowledgementNote] = useState('');
+  const [acknowledging, setAcknowledging] = useState(false);
+  // Supplier-side discrepancy review dialog
+  const [discrepancyReviewNote, setDiscrepancyReviewNote] = useState('');
+  const [reviewingDiscrepancy, setReviewingDiscrepancy] = useState(false);
+  const [factoryWarehouses, setFactoryWarehouses] = useState([]);
+  const [warehouseStock, setWarehouseStock] = useState([]); // stock for selected source warehouse
+  // Phase 2: batches available per SKU at the selected source warehouse.
+  // Keyed by sku_id → list of {batch_id, batch_code, quantity, received_at}.
+  // Populated on-demand whenever a tracked source + an item's sku_id is set.
+  const [shipmentBatchesBySku, setShipmentBatchesBySku] = useState({});
+  const [deliveryBatchesBySku, setDeliveryBatchesBySku] = useState({});
   
   // Delivery state
   const [deliveries, setDeliveries] = useState([]);
@@ -178,7 +234,8 @@ export default function DistributorDetail() {
     vehicle_number: '',
     driver_name: '',
     driver_contact: '',
-    remarks: ''
+    remarks: '',
+    gst_percent: String(defaultGstPercent)
   });
   const [deliveryItems, setDeliveryItems] = useState([]);
   const [savingDelivery, setSavingDelivery] = useState(false);
@@ -246,9 +303,12 @@ export default function DistributorDetail() {
   
   // Permission checks - Distributor role users have limited permissions
   const isDistributorRole = user?.role === 'Distributor';
+  // Distributor users have write access on the Stock Out, Returns and Profile tabs.
+  // Every other tab is rendered read-only for them.
+  const distributorWritableTab = activeTab === 'stockout' || activeTab === 'profile' || activeTab === 'returns';
   const canManage = user && (
     ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role) ||
-    isDistributorRole // Distributors can manage their own profile and create deliveries
+    (isDistributorRole && distributorWritableTab)
   );
   const canDelete = user && ['CEO', 'Admin', 'System Admin'].includes(user.role);
   const canApprove = user && ['CEO', 'Director', 'Vice President'].includes(user.role);
@@ -282,6 +342,16 @@ export default function DistributorDetail() {
   useEffect(() => {
     fetchDistributor();
   }, [fetchDistributor]);
+
+  // Auto-select the distributor location when there's only one — saves an extra click
+  // for every Stock In / Stock Out / Factory Return form.
+  useEffect(() => {
+    const locations = distributor?.locations || [];
+    if (locations.length !== 1) return;
+    const onlyLocId = locations[0].id;
+    setShipmentForm(prev => prev.distributor_location_id ? prev : { ...prev, distributor_location_id: onlyLocId });
+    setDeliveryForm(prev => prev.distributor_location_id ? prev : { ...prev, distributor_location_id: onlyLocId });
+  }, [distributor]);
 
   // Fetch margins when tab changes to margins
   const fetchMargins = useCallback(async () => {
@@ -353,8 +423,18 @@ export default function DistributorDetail() {
   useEffect(() => {
     if (activeTab === 'commercial' && selectedMarginCity) {
       fetchMargins();
+      // Fetch cost card prices for this city
+      axios.get(`${API_URL}/api/cost-cards?city=${encodeURIComponent(selectedMarginCity)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        const priceMap = {};
+        (res.data.cost_cards || []).forEach(cc => {
+          priceMap[cc.sku_id] = cc.cost_per_unit;
+        });
+        setCostCardPrices(priceMap);
+      }).catch(() => {});
     }
-  }, [activeTab, selectedMarginCity, fetchMargins]);
+  }, [activeTab, selectedMarginCity, fetchMargins, token]);
 
   // Fetch account assignments
   const fetchAssignments = useCallback(async () => {
@@ -397,8 +477,106 @@ export default function DistributorDetail() {
   useEffect(() => {
     if (activeTab === 'stockin') {
       fetchShipments();
+      // Fetch factory warehouses for "From Warehouse" dropdown
+      axios.get(`${API_URL}/api/production/factory-warehouses`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        const whs = res.data.warehouses || [];
+        setFactoryWarehouses(whs);
+        // Auto-select: single warehouse wins; else the one marked as default
+        const autoPick = whs.length === 1 ? whs[0] : whs.find(w => w.is_default);
+        if (autoPick && !shipmentForm.source_warehouse_id) {
+          setShipmentForm(prev => ({ ...prev, source_warehouse_id: autoPick.id }));
+        }
+      }).catch(() => {});
     }
   }, [activeTab, fetchShipments]);
+
+  // Fetch stock for selected source warehouse
+  useEffect(() => {
+    if (shipmentForm.source_warehouse_id) {
+      axios.get(`${API_URL}/api/production/factory-warehouse-stock?warehouse_id=${shipmentForm.source_warehouse_id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => setWarehouseStock(res.data.stock || []))
+        .catch(() => setWarehouseStock([]));
+    } else {
+      setWarehouseStock([]);
+    }
+  }, [shipmentForm.source_warehouse_id, token]);
+
+  // Phase 2: batch picker on Stock In is shown when EITHER the source
+  // factory warehouse tracks batches OR the destination distributor
+  // location tracks batches. Batch list source depends on which:
+  //   • source factory tracks  → /batches-available (stock at factory, FIFO)
+  //   • only destination tracks → /production-batches (canonical SKU list)
+  const sourceFactoryTracksBatches = !!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches);
+  const destDistributorTracksBatches = !!(
+    (distributor?.locations || []).find(loc => loc.id === shipmentForm.distributor_location_id)?.track_batches
+  );
+  const shipmentNeedsBatch = sourceFactoryTracksBatches || destDistributorTracksBatches;
+  // 🐛 FIX: batches are scoped to (source warehouse, destination location).
+  // Resetting the cache whenever either side changes prevents the picker from
+  // showing stale batches/quantities from the previously selected warehouse.
+  useEffect(() => {
+    setShipmentBatchesBySku({});
+  }, [shipmentForm.source_warehouse_id, shipmentForm.distributor_location_id]);
+  useEffect(() => {
+    if (!shipmentNeedsBatch) {
+      setShipmentBatchesBySku({});
+      return;
+    }
+    const needed = Array.from(new Set(
+      (shipmentItems || [])
+        .map(i => i.sku_id)
+        .filter(sid => sid && !shipmentBatchesBySku[sid])
+    ));
+    if (!needed.length) return;
+    needed.forEach(sid => {
+      const url = sourceFactoryTracksBatches && shipmentForm.source_warehouse_id
+        ? `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${shipmentForm.source_warehouse_id}&sku_id=${sid}`
+        : `${API_URL}/api/distributor/stock-transfers/production-batches?sku_id=${sid}`;
+      axios.get(url, { headers: { Authorization: `Bearer ${token}` } }).then(res => {
+        setShipmentBatchesBySku(prev => ({ ...prev, [sid]: res.data.batches || [] }));
+      }).catch(() => {
+        setShipmentBatchesBySku(prev => ({ ...prev, [sid]: [] }));
+      });
+    });
+  }, [shipmentForm.source_warehouse_id, shipmentForm.distributor_location_id, shipmentItems, shipmentNeedsBatch, sourceFactoryTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stock OUT — same idea. Source is a distributor warehouse; check its
+  // `track_batches` flag on the loaded `distributor.locations` array.
+  const sourceDistributorTracksBatches = !!(
+    (distributor?.locations || []).find(loc => loc.id === deliveryForm.distributor_location_id)?.track_batches
+  );
+  // 🐛 FIX: batches are scoped to the source location. Reset the cache
+  // whenever the user switches `distributor_location_id`, otherwise the
+  // picker keeps showing the previous warehouse's batches and quantities.
+  useEffect(() => {
+    setDeliveryBatchesBySku({});
+  }, [deliveryForm.distributor_location_id]);
+  useEffect(() => {
+    if (!sourceDistributorTracksBatches || !deliveryForm.distributor_location_id) {
+      setDeliveryBatchesBySku({});
+      return;
+    }
+    const needed = Array.from(new Set(
+      (deliveryItems || [])
+        .map(i => i.sku_id)
+        .filter(sid => sid && !deliveryBatchesBySku[sid])
+    ));
+    if (!needed.length) return;
+    needed.forEach(sid => {
+      axios.get(
+        `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${deliveryForm.distributor_location_id}&sku_id=${sid}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(res => {
+        setDeliveryBatchesBySku(prev => ({ ...prev, [sid]: res.data.batches || [] }));
+      }).catch(() => {
+        setDeliveryBatchesBySku(prev => ({ ...prev, [sid]: [] }));
+      });
+    });
+  }, [deliveryForm.distributor_location_id, deliveryItems, sourceDistributorTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // Fetch deliveries
   const fetchDeliveries = useCallback(async () => {
@@ -656,6 +834,22 @@ export default function DistributorDetail() {
     }
   };
 
+  const handleDeleteDistributor = async () => {
+    try {
+      setDeletingDistributor(true);
+      await axios.delete(`${API_URL}/api/distributors/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true
+      });
+      toast.success('Distributor and all related data deleted permanently');
+      navigate('/distributors');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete distributor');
+    } finally {
+      setDeletingDistributor(false);
+    }
+  };
+
   const handleAddCoverage = async () => {
     if (!selectedState || selectedCities.length === 0) {
       toast.error('Please select state and at least one city');
@@ -715,40 +909,81 @@ export default function DistributorDetail() {
     }
   };
 
+  const resetLocationForm = () => setNewLocation({
+    location_name: '',
+    address_line_1: '',
+    address_line_2: '',
+    state: '',
+    city: '',
+    pincode: '',
+    contact_person: '',
+    contact_number: '',
+    email: '',
+    is_default: false,
+    is_factory: false,
+    track_batches: false,
+    gstin: '',
+    zoho_branch_id: '',
+    zoho_branch_name: '',
+    lat: null,
+    lng: null,
+    formatted_address: '',
+  });
+
+  const handleEditLocation = (location) => {
+    setEditingLocationId(location.id);
+    setNewLocation({
+      location_name: location.location_name || '',
+      address_line_1: location.address_line_1 || '',
+      address_line_2: location.address_line_2 || '',
+      state: location.state || '',
+      city: location.city || '',
+      pincode: location.pincode || '',
+      contact_person: location.contact_person || '',
+      contact_number: location.contact_number || '',
+      email: location.email || '',
+      is_default: !!location.is_default,
+      is_factory: !!location.is_factory,
+      track_batches: !!location.track_batches,
+      gstin: location.gstin || '',
+      zoho_branch_id: location.zoho_branch_id || '',
+      zoho_branch_name: location.zoho_branch_name || '',
+      lat: location.lat ?? null,
+      lng: location.lng ?? null,
+      formatted_address: location.formatted_address || '',
+    });
+    setShowLocationDialog(true);
+  };
+
   const handleAddLocation = async () => {
     if (!newLocation.location_name || !newLocation.state || !newLocation.city) {
       toast.error('Location name, state, and city are required');
       return;
     }
-    
+
     try {
       setAddingLocation(true);
-      await axios.post(
-        `${API_URL}/api/distributors/${id}/locations`,
-        { ...newLocation, distributor_id: id },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          withCredentials: true
-        }
-      );
-      
-      toast.success('Location added successfully');
+      if (editingLocationId) {
+        await axios.put(
+          `${API_URL}/api/distributors/${id}/locations/${editingLocationId}`,
+          newLocation,
+          { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+        );
+        toast.success('Location updated');
+      } else {
+        await axios.post(
+          `${API_URL}/api/distributors/${id}/locations`,
+          { ...newLocation, distributor_id: id },
+          { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+        );
+        toast.success('Location added successfully');
+      }
       setShowLocationDialog(false);
-      setNewLocation({
-        location_name: '',
-        address_line_1: '',
-        address_line_2: '',
-        state: '',
-        city: '',
-        pincode: '',
-        contact_person: '',
-        contact_number: '',
-        email: '',
-        is_default: false
-      });
+      setEditingLocationId(null);
+      resetLocationForm();
       fetchDistributor();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to add location');
+      toast.error(error.response?.data?.detail || `Failed to ${editingLocationId ? 'update' : 'add'} location`);
     } finally {
       setAddingLocation(false);
     }
@@ -1118,6 +1353,7 @@ export default function DistributorDetail() {
       const shipmentData = {
         distributor_id: id,
         distributor_location_id: shipmentForm.distributor_location_id,
+        source_warehouse_id: shipmentForm.source_warehouse_id || null,
         shipment_date: shipmentForm.shipment_date,
         expected_delivery_date: shipmentForm.expected_delivery_date || null,
         reference_number: shipmentForm.reference_number || null,
@@ -1125,16 +1361,28 @@ export default function DistributorDetail() {
         driver_name: shipmentForm.driver_name || null,
         driver_contact: shipmentForm.driver_contact || null,
         remarks: shipmentForm.remarks || null,
-        items: shipmentItems.map(item => ({
-          sku_id: item.sku_id,
-          sku_name: item.sku_name,
-          quantity: parseInt(item.quantity),
-          base_price: item.base_price ? parseFloat(item.base_price) : null,
-          distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
-          unit_price: parseFloat(item.unit_price),
-          discount_percent: parseFloat(item.discount_percent) || 0,
-          tax_percent: parseFloat(item.tax_percent) || 0
-        }))
+        gst_percent: parseFloat(shipmentForm.gst_percent) || 0,
+        items: shipmentItems.map(item => {
+          const pkgUnits = parseInt(item.packaging_units) || 1;
+          const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+          return {
+            sku_id: item.sku_id,
+            sku_name: item.sku_name,
+            quantity: totalUnits,
+            packaging_units: pkgUnits,
+            packages: parseInt(item.quantity) || 0,
+            base_price: item.base_price ? parseFloat(item.base_price) : null,
+            distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
+            unit_price: parseFloat(item.unit_price),
+            discount_percent: parseFloat(item.discount_percent) || 0,
+            tax_percent: 0,
+            // Phase 2 batch identity — sent on every line. Backend will reject
+            // with HTTP 400 if the source warehouse tracks batches and any
+            // line is missing batch_id.
+            batch_id: item.batch_id || null,
+            batch_code: item.batch_code || null,
+          };
+        })
       };
       
       const response = await axios.post(`${API_URL}/api/distributors/${id}/shipments`, shipmentData, {
@@ -1154,15 +1402,22 @@ export default function DistributorDetail() {
   };
 
   const resetShipmentForm = () => {
+    // Preserve auto-selected single warehouse / single location so the user doesn't lose them on reset
+    const onlyLoc = (distributor?.locations || []).length === 1 ? distributor.locations[0].id : '';
+    const onlyFactoryWh = factoryWarehouses.length === 1
+      ? factoryWarehouses[0].id
+      : (factoryWarehouses.find(w => w.is_default)?.id || '');
     setShipmentForm({
-      distributor_location_id: '',
+      distributor_location_id: onlyLoc,
+      source_warehouse_id: onlyFactoryWh,
       shipment_date: new Date().toISOString().split('T')[0],
       expected_delivery_date: '',
       reference_number: '',
       vehicle_number: '',
       driver_name: '',
       driver_contact: '',
-      remarks: ''
+      remarks: '',
+      gst_percent: String(defaultGstPercent)
     });
     setShipmentItems([]);
   };
@@ -1177,7 +1432,9 @@ export default function DistributorDetail() {
       distributor_margin: null,
       unit_price: 0,
       discount_percent: 0,
-      tax_percent: defaultGstPercent
+      tax_percent: defaultGstPercent,
+      batch_id: '',
+      batch_code: '',
     }]);
   };
 
@@ -1213,8 +1470,10 @@ export default function DistributorDetail() {
       );
       
       if (activeMargin) {
+        // For cost_based distributors, transfer price = base price (no margin deduction)
+        const isCostBased = distributor?.billing_approach === 'cost_based';
         return {
-          transfer_price: activeMargin.transfer_price,
+          transfer_price: isCostBased ? activeMargin.base_price : activeMargin.transfer_price,
           base_price: activeMargin.base_price,
           margin_value: activeMargin.margin_value
         };
@@ -1228,9 +1487,15 @@ export default function DistributorDetail() {
 
   // Enhanced function to update shipment item with price lookup
   const updateShipmentItemWithPrice = async (itemId, skuId, skuName) => {
-    // First update the SKU info immediately
+    // Find the SKU's default stock_in packaging
+    const selectedSku = skus.find(s => s.id === skuId);
+    const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
+    const defaultPkg = stockInPkg.find(p => p.is_default) || stockInPkg[0];
+    const pkgUnits = defaultPkg?.units_per_package || '';
+
+    // First update the SKU info + packaging immediately
     setShipmentItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName } : item
+      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName, packaging_units: pkgUnits ? String(pkgUnits) : '' } : item
     ));
     
     // Then look up the transfer price if we have a location selected
@@ -1295,6 +1560,117 @@ export default function DistributorDetail() {
     }
   };
 
+  // -------- Receipt Acknowledgement --------
+  const openAcknowledgeDialog = () => {
+    if (!selectedShipment?.items?.length) {
+      toast.error('No items to acknowledge on this shipment.');
+      return;
+    }
+    setAcknowledgeItems((selectedShipment.items || []).map(it => ({
+      item_id: it.id,
+      sku_name: it.sku_name || it.sku_id,
+      sent_quantity: it.quantity,
+      received_quantity: it.quantity,
+      discrepancy_remark: ''
+    })));
+    setAcknowledgementNote('');
+    setShowAcknowledgeDialog(true);
+  };
+
+  const updateAcknowledgeItem = (itemId, field, value) => {
+    setAcknowledgeItems(prev => prev.map(it => it.item_id === itemId ? { ...it, [field]: value } : it));
+  };
+
+  const setAllReceivedFull = () => {
+    setAcknowledgeItems(prev => prev.map(it => ({ ...it, received_quantity: it.sent_quantity, discrepancy_remark: '' })));
+  };
+
+  const hasAckDiscrepancy = acknowledgeItems.some(it => Number(it.received_quantity) !== Number(it.sent_quantity));
+
+  const submitAcknowledgement = async () => {
+    // Validate
+    for (const it of acknowledgeItems) {
+      const recv = Number(it.received_quantity);
+      if (Number.isNaN(recv) || recv < 0) {
+        toast.error(`Invalid received quantity for ${it.sku_name}`);
+        return;
+      }
+      if (recv > Number(it.sent_quantity)) {
+        toast.error(`Received qty cannot exceed sent qty for ${it.sku_name}`);
+        return;
+      }
+      if (recv !== Number(it.sent_quantity) && !(it.discrepancy_remark || '').trim()) {
+        toast.error(`Please add a remark for the discrepancy on ${it.sku_name}`);
+        return;
+      }
+    }
+    try {
+      setAcknowledging(true);
+      const resp = await axios.post(
+        `${API_URL}/api/distributors/${id}/shipments/${selectedShipment.id}/acknowledge`,
+        {
+          items: acknowledgeItems.map(it => ({
+            item_id: it.item_id,
+            received_quantity: Number(it.received_quantity),
+            discrepancy_remark: it.discrepancy_remark || null
+          })),
+          acknowledgement_note: acknowledgementNote || null
+        },
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success(resp.data?.message || 'Receipt acknowledged');
+      setShowAcknowledgeDialog(false);
+      setShowShipmentDetail(false);
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to acknowledge receipt');
+    } finally {
+      setAcknowledging(false);
+    }
+  };
+
+  const approveDiscrepancy = async (shipmentId) => {
+    try {
+      setReviewingDiscrepancy(true);
+      await axios.post(
+        `${API_URL}/api/distributors/${id}/shipments/${shipmentId}/approve-receipt`,
+        { note: discrepancyReviewNote || null },
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success('Discrepancy approved. Shipment marked delivered.');
+      setShowShipmentDetail(false);
+      setDiscrepancyReviewNote('');
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to approve');
+    } finally {
+      setReviewingDiscrepancy(false);
+    }
+  };
+
+  const rejectDiscrepancy = async (shipmentId) => {
+    if (!(discrepancyReviewNote || '').trim()) {
+      toast.error('Please provide a reason for rejection.');
+      return;
+    }
+    try {
+      setReviewingDiscrepancy(true);
+      await axios.post(
+        `${API_URL}/api/distributors/${id}/shipments/${shipmentId}/reject-receipt`,
+        { reason: discrepancyReviewNote },
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success('Sent back to distributor for re-verification.');
+      setShowShipmentDetail(false);
+      setDiscrepancyReviewNote('');
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reject');
+    } finally {
+      setReviewingDiscrepancy(false);
+    }
+  };
+
   const handleCancelShipment = async (shipmentId) => {
     try {
       await axios.post(`${API_URL}/api/distributors/${id}/shipments/${shipmentId}/cancel`, {}, {
@@ -1346,6 +1722,7 @@ export default function DistributorDetail() {
       in_transit: { label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
       delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
       partially_delivered: { label: 'Partial', color: 'bg-orange-100 text-orange-800' },
+      discrepancy_pending: { label: 'Discrepancy — Awaiting Approval', color: 'bg-amber-100 text-amber-900' },
       cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
     };
     const config = statusConfig[status] || statusConfig.draft;
@@ -1385,15 +1762,25 @@ export default function DistributorDetail() {
         driver_name: deliveryForm.driver_name || null,
         driver_contact: deliveryForm.driver_contact || null,
         remarks: deliveryForm.remarks || null,
-        items: deliveryItems.map(item => ({
-          sku_id: item.sku_id,
-          sku_name: item.sku_name,
-          quantity: parseInt(item.quantity),
-          unit_price: parseFloat(item.unit_price),
-          customer_selling_price: parseFloat(item.unit_price), // unit_price is the customer selling price
-          discount_percent: parseFloat(item.discount_percent) || 0,
-          tax_percent: parseFloat(item.tax_percent) || 0
-        })),
+        gst_percent: parseFloat(deliveryForm.gst_percent) || 0,
+        items: deliveryItems.map(item => {
+          const pkgUnits = parseInt(item.packaging_units) || 1;
+          const totalUnits = (parseInt(item.quantity) || 0) * pkgUnits;
+          return {
+            sku_id: item.sku_id,
+            sku_name: item.sku_name,
+            quantity: totalUnits,
+            packaging_units: pkgUnits,
+            packages: parseInt(item.quantity) || 0,
+            unit_price: parseFloat(item.unit_price),
+            customer_selling_price: parseFloat(item.unit_price),
+            discount_percent: parseFloat(item.discount_percent) || 0,
+            tax_percent: 0,
+            // Phase 2 batch identity — the user picks the batch per line.
+            batch_id: item.batch_id || null,
+            batch_code: item.batch_code || null,
+          };
+        }),
         // Include credit notes if any
         credit_notes_to_apply: creditNotesToApply.length > 0 ? creditNotesToApply : null
       };
@@ -1421,15 +1808,17 @@ export default function DistributorDetail() {
   };
 
   const resetDeliveryForm = () => {
+    const onlyLoc = (distributor?.locations || []).length === 1 ? distributor.locations[0].id : '';
     setDeliveryForm({
-      distributor_location_id: '',
+      distributor_location_id: onlyLoc,
       account_id: '',
       delivery_date: new Date().toISOString().split('T')[0],
       reference_number: '',
       vehicle_number: '',
       driver_name: '',
       driver_contact: '',
-      remarks: ''
+      remarks: '',
+      gst_percent: String(defaultGstPercent)
     });
     setDeliveryItems([]);
     setSelectedDeliveryAccount(null);
@@ -1437,15 +1826,19 @@ export default function DistributorDetail() {
   };
 
   const addDeliveryItem = () => {
-    setDeliveryItems(prev => [...prev, {
+    // Prepend so the newest line appears at the TOP of the list — the user can
+    // immediately fill it in without scrolling past previously-added items.
+    setDeliveryItems(prev => [{
       id: Date.now(),
       sku_id: '',
       sku_name: '',
       quantity: 1,
       unit_price: 0,
       discount_percent: 0,
-      tax_percent: defaultGstPercent
-    }]);
+      tax_percent: 0,
+      batch_id: '',
+      batch_code: '',
+    }, ...prev]);
   };
 
   const updateDeliveryItem = (itemId, field, value) => {
@@ -1464,15 +1857,84 @@ export default function DistributorDetail() {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
       });
-      toast.success('Delivery confirmed');
+      toast.success('Delivery confirmed. Invoice will be generated when its Delivery Schedule is confirmed.');
       fetchDeliveries();
-      setShowDeliveryDetail(false);
+      // Optimistically reflect the new status in the open dialog so the action buttons switch immediately.
+      setSelectedDelivery(prev => prev && prev.id === deliveryId
+        ? { ...prev, status: 'confirmed' }
+        : prev);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to confirm delivery');
     }
   };
 
+  const handleRetryZohoPush = async (deliveryId) => {    try {
+      setDownloadingInvoice(true);
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/retry-zoho-push`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success('Zoho invoice generated.');
+      // Refresh the dialog with the freshly-pushed Zoho URL
+      setSelectedDelivery(prev => prev && prev.id === deliveryId
+        ? { ...prev, zoho_invoice_url: data.zoho_invoice_url, zoho_invoice_number: data.zoho_invoice_number, zoho_invoice_id: data.zoho_invoice_id }
+        : prev);
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Zoho push failed');
+    } finally {
+      setDownloadingInvoice(false);
+    }
+  };
+
+  // Downloads the Zoho invoice PDF via our server-side proxy so the saved file
+  // is named after the Zoho invoice number (e.g. INV-00017.pdf). Going through
+  // the proxy is necessary because Zoho's hosted URL is cross-origin and ignores
+  // the HTML `download` attribute.
+  const handleDownloadZohoInvoice = async (deliveryId, invoiceNumber) => {
+    try {
+      setDownloadingInvoice(true);
+      const response = await axios.get(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/invoice-pdf`,
+        {
+          responseType: 'blob',
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true,
+        }
+      );
+      const cd = response.headers['content-disposition'] || '';
+      const match = /filename="?([^"]+)"?/.exec(cd);
+      const filename = match?.[1] || `${invoiceNumber || 'invoice'}.pdf`;
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${filename}`);
+    } catch (error) {
+      let detail = error.response?.data?.detail;
+      if (!detail && error.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          detail = JSON.parse(text).detail;
+        } catch (_) { /* keep null */ }
+      }
+      toast.error(detail || 'Failed to download invoice');
+    } finally {
+      setDownloadingInvoice(false);
+    }
+  };
+
+
   const handleCompleteDelivery = async (deliveryId) => {
+    if (!window.confirm(
+      'Mark this delivery as complete? Stock will be deducted from inventory. This action finalises the delivery.'
+    )) return;
     try {
       await axios.post(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/complete`, {}, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1487,6 +1949,9 @@ export default function DistributorDetail() {
   };
 
   const handleCancelDelivery = async (deliveryId) => {
+    if (!window.confirm(
+      'Cancel this delivery? Stock will be returned to the source warehouse and any pushed Zoho invoice will be voided. This cannot be undone.'
+    )) return;
     try {
       await axios.post(`${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/cancel`, {}, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1494,6 +1959,7 @@ export default function DistributorDetail() {
       });
       toast.success('Delivery cancelled');
       setDeleteTarget(null);
+      setShowDeliveryDetail(false);
       fetchDeliveries();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to cancel delivery');
@@ -1514,6 +1980,40 @@ export default function DistributorDetail() {
       toast.error(error.response?.data?.detail || 'Failed to delete delivery');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleReverseDelivery = async (deliveryId) => {
+    if (!window.confirm(
+      'Reverse this delivery? The Zoho invoice will be VOIDED, the committed stock released back to inventory, and any applied credit notes returned to available. Use this only when an already-invoiced delivery did NOT actually happen. This cannot be undone.'
+    )) return;
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/reverse`, {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success(data?.message || 'Delivery reversed');
+      if (data?.zoho_void_pending) {
+        toast.warning('Zoho invoice void is pending — retry from the delivery once Zoho is reachable.');
+      }
+      setShowDeliveryDetail(false);
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reverse delivery');
+    }
+  };
+
+  const handleRetryDeliveryVoid = async (deliveryId) => {
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/reverse-zoho-cleanup`, {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success(data?.message || 'Zoho invoice voided');
+      setShowDeliveryDetail(false);
+      fetchDeliveries();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to void Zoho invoice');
     }
   };
 
@@ -1576,9 +2076,16 @@ export default function DistributorDetail() {
     const statusConfig = {
       draft: { label: 'Draft', color: 'bg-gray-100 text-gray-800' },
       confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
+      delivery_assigned: { label: 'Delivery Assigned', color: 'bg-indigo-100 text-indigo-800' },
+      delivery_scheduled: { label: 'Delivery Scheduled', color: 'bg-violet-100 text-violet-800' },
+      on_the_way: { label: 'On the Way', color: 'bg-amber-100 text-amber-800' },
+      complete: { label: 'Complete', color: 'bg-green-100 text-green-800' },
+      // Legacy statuses (older rows before the new flow):
+      scheduled: { label: 'Scheduled', color: 'bg-violet-100 text-violet-800' },
       in_transit: { label: 'In Transit', color: 'bg-yellow-100 text-yellow-800' },
       delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
       returned: { label: 'Returned', color: 'bg-orange-100 text-orange-800' },
+      reversed: { label: 'Reversed', color: 'bg-rose-100 text-rose-800' },
       cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
     };
     const config = statusConfig[status] || statusConfig.draft;
@@ -1998,17 +2505,26 @@ export default function DistributorDetail() {
 
   return (
     <div className="p-6 space-y-6" data-testid="distributor-detail-page">
+      <Breadcrumbs items={[
+        { label: 'Distribution' },
+        { label: 'Distributors', href: '/distributors' },
+        { label: distributor.distributor_name || 'Detail' },
+      ]} />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate('/distributors')}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+          {!isDistributorRole && (
+            <Button variant="ghost" size="sm" onClick={() => navigate('/distributors')}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold">{distributor.distributor_name}</h1>
               <Badge variant="outline">{distributor.distributor_code}</Badge>
               {getStatusBadge(distributor.status)}
+              {/* Distributor-only contextual help — content swaps with the active tab */}
+              <PageHelp pageKey={activeTab} />
             </div>
             {distributor.legal_entity_name && (
               <p className="text-muted-foreground">{distributor.legal_entity_name}</p>
@@ -2016,11 +2532,24 @@ export default function DistributorDetail() {
           </div>
         </div>
         
-        {canManage && !isEditing && (
-          <Button onClick={() => setIsEditing(true)}>
-            <Edit2 className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+        {canManage && !isEditing && activeTab === 'profile' && (
+          <div className="flex items-center gap-2">
+            <Button onClick={() => setIsEditing(true)} data-testid="edit-distributor-btn">
+              <Edit2 className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            {canDelete && (
+              <Button
+                variant="outline"
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                onClick={() => setShowDeleteDistributorDialog(true)}
+                data-testid="delete-distributor-btn"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
+          </div>
         )}
         
         {isEditing && (
@@ -2037,8 +2566,9 @@ export default function DistributorDetail() {
       </div>
 
       {/* Tabs - Consolidated Structure */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-8 h-auto p-1">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+        {!isDistributorRole && (
+        <TabsList className={`grid w-full ${distributor?.is_self_managed ? 'grid-cols-9' : 'grid-cols-8'} h-auto p-1`}>
           <TabsTrigger value="stock-dashboard" className="flex items-center gap-2 py-2.5" data-testid="stock-dashboard-tab">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Stock</span>
@@ -2069,9 +2599,10 @@ export default function DistributorDetail() {
           </TabsTrigger>
           <TabsTrigger value="billing" className="flex items-center gap-2 py-2.5" data-testid="billing-tab">
             <Calculator className="h-4 w-4" />
-            <span className="hidden sm:inline">Billing</span>
+            <span className="hidden sm:inline">Reconciliation</span>
           </TabsTrigger>
         </TabsList>
+        )}
 
         {/* Profile Tab: Overview + Coverage + Locations */}
         <TabsContent value="profile" className="space-y-8">
@@ -2086,6 +2617,18 @@ export default function DistributorDetail() {
               isEditing={isEditing}
               editData={editData}
               setEditData={setEditData}
+            />
+          </div>
+
+          {/* Contacts Section */}
+          <div className="border-t pt-8">
+            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <User className="h-5 w-5 text-muted-foreground" />
+              Contacts
+            </h3>
+            <ContactsSection
+              distributorId={distributor.id}
+              canManage={canManage || isDistributorRole}
             />
           </div>
           
@@ -2132,6 +2675,9 @@ export default function DistributorDetail() {
               handleAddLocation={handleAddLocation}
               addingLocation={addingLocation}
               setDeleteTarget={setDeleteTarget}
+              editingLocationId={editingLocationId}
+              setEditingLocationId={setEditingLocationId}
+              onEditLocation={handleEditLocation}
             />
           </div>
         </TabsContent>
@@ -2156,6 +2702,7 @@ export default function DistributorDetail() {
               setShowOnlyActiveMargins={setShowOnlyActiveMargins}
               getCoveredCities={getCoveredCities}
               skus={skus}
+              costCardPrices={costCardPrices}
               showCopyDialog={showCopyDialog}
               setShowCopyDialog={setShowCopyDialog}
               copyTargetCity={copyTargetCity}
@@ -2217,6 +2764,8 @@ export default function DistributorDetail() {
             shipments={shipments}
             shipmentsLoading={shipmentsLoading}
             skus={skus}
+            factoryWarehouses={factoryWarehouses}
+            warehouseStock={warehouseStock}
             showShipmentDialog={showShipmentDialog}
             setShowShipmentDialog={setShowShipmentDialog}
             shipmentForm={shipmentForm}
@@ -2232,6 +2781,9 @@ export default function DistributorDetail() {
             viewShipmentDetail={viewShipmentDetail}
             setDeleteTarget={setDeleteTarget}
             getShipmentStatusBadge={getShipmentStatusBadge}
+            sourceTracksBatches={!!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches)}
+            destTracksBatches={destDistributorTracksBatches}
+            batchesBySku={shipmentBatchesBySku}
           />
         </TabsContent>
 
@@ -2275,6 +2827,8 @@ export default function DistributorDetail() {
             getDeliveryStatusBadge={getDeliveryStatusBadge}
             API_URL={API_URL}
             token={token}
+            sourceTracksBatches={sourceDistributorTracksBatches}
+            batchesBySku={deliveryBatchesBySku}
           />
         </TabsContent>
 
@@ -2346,7 +2900,7 @@ export default function DistributorDetail() {
             viewNoteDetail={viewNoteDetail}
             getNoteStatusBadge={getNoteStatusBadge}
             getSettlementStatusBadge={getSettlementStatusBadge}
-            setActiveTab={setActiveTab}
+            setActiveTab={handleTabChange}
             setDeleteTarget={setDeleteTarget}
             API_URL={API_URL}
             token={token}
@@ -2364,7 +2918,7 @@ export default function DistributorDetail() {
 
       {/* Shipment Detail Dialog */}
       <Dialog open={showShipmentDetail} onOpenChange={setShowShipmentDetail}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
               Shipment {selectedShipment?.shipment_number}
@@ -2404,39 +2958,146 @@ export default function DistributorDetail() {
               </div>
 
               {/* Items */}
-              <div className="border rounded-md">
+              <div className="border rounded-md overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50">
-                      <th className="text-left p-2 font-medium">SKU</th>
-                      <th className="text-right p-2 font-medium">Qty</th>
-                      <th className="text-right p-2 font-medium">Price</th>
-                      <th className="text-right p-2 font-medium">Amount</th>
+                      <th className="text-left p-2.5 font-medium">SKU</th>
+                      <th className="text-right p-2.5 font-medium">Qty</th>
+                      <th className="text-right p-2.5 font-medium">Base Price</th>
+                      <th className="text-right p-2.5 font-medium">Margin %</th>
+                      <th className="text-right p-2.5 font-medium">Transfer Price</th>
+                      <th className="text-right p-2.5 font-medium">Disc %</th>
+                      <th className="text-right p-2.5 font-medium">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedShipment.items || []).map((item, idx) => (
-                      <tr key={idx} className="border-b">
-                        <td className="p-2">{item.sku_name || item.sku_id}</td>
-                        <td className="p-2 text-right">{item.quantity}</td>
-                        <td className="p-2 text-right">₹{item.unit_price}</td>
-                        <td className="p-2 text-right">₹{item.net_amount?.toFixed(2)}</td>
+                    {(selectedShipment.items || []).map((item, idx) => {
+                      const showReceived = ['discrepancy_pending', 'delivered'].includes(selectedShipment.status) && item.received_quantity != null;
+                      const hasDelta = showReceived && Number(item.received_quantity) !== Number(item.quantity);
+                      return (
+                      <React.Fragment key={idx}>
+                      <tr className={`border-b ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                        <td className="p-2.5">{item.sku_name || item.sku_id}</td>
+                        <td className="p-2.5 text-right tabular-nums">
+                          {item.quantity}
+                          {showReceived && (
+                            <div className={`text-[11px] mt-0.5 ${hasDelta ? 'text-amber-700 font-semibold' : 'text-emerald-700'}`}>
+                              Recv: {item.received_quantity}
+                              {hasDelta && <span className="ml-1">(Δ {Number(item.received_quantity) - Number(item.quantity)})</span>}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.base_price ? `₹${Number(item.base_price).toFixed(2)}` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.distributor_margin != null ? `${item.distributor_margin}%` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums font-medium">{item.unit_price ? `₹${Number(item.unit_price).toFixed(2)}` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums text-muted-foreground">{item.discount_percent ? `${item.discount_percent}%` : '-'}</td>
+                        <td className="p-2.5 text-right tabular-nums font-medium">₹{(item.net_amount || item.gross_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
-                    ))}
+                      {hasDelta && item.discrepancy_remark && (
+                        <tr className="bg-amber-50/50 border-b">
+                          <td colSpan="7" className="px-3 py-1.5 text-xs text-amber-800">
+                            <span className="font-semibold">Distributor remark:</span> {item.discrepancy_remark}
+                          </td>
+                        </tr>
+                      )}
+                      </React.Fragment>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
+                    {(selectedShipment.total_discount_amount || 0) > 0 && (
+                      <tr className="border-t">
+                        <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">Discount:</td>
+                        <td className="p-2.5 text-right text-sm font-medium text-red-600">-₹{selectedShipment.total_discount_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    )}
+                    <tr className="border-t">
+                      <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">Subtotal:</td>
+                      <td className="p-2.5 text-right text-sm font-semibold">₹{((selectedShipment.total_gross_amount || 0) - (selectedShipment.total_discount_amount || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                    {(selectedShipment.total_tax_amount || 0) > 0 && (
+                      <tr>
+                        <td colSpan="6" className="p-2.5 text-right text-sm text-muted-foreground">
+                          GST {selectedShipment.gst_percent ? `(${selectedShipment.gst_percent}%)` : ''}:
+                        </td>
+                        <td className="p-2.5 text-right text-sm font-medium">₹{selectedShipment.total_tax_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    )}
                     <tr className="bg-muted/30">
-                      <td colSpan="3" className="p-2 text-right font-medium">Total:</td>
-                      <td className="p-2 text-right font-bold">₹{selectedShipment.total_net_amount?.toLocaleString()}</td>
+                      <td colSpan="6" className="p-2.5 text-right font-bold">Grand Total:</td>
+                      <td className="p-2.5 text-right font-bold text-base">₹{selectedShipment.total_net_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
 
+              {/* Billing Configuration Note */}
+              <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2 text-xs text-amber-800">
+                <span className="font-semibold">Billing Config:</span>{' '}
+                {distributor?.billing_approach === 'margin_upfront'
+                  ? 'Margin applied upfront at the time of shipment. Transfer price = Base price - Margin.'
+                  : 'Cost-based pricing. Margin applied at the time of reconciliation based on customer sell-through.'}
+              </div>
+
+              {/* Discrepancy review panel (admin) */}
+              {selectedShipment.status === 'discrepancy_pending' && (
+                <div className="border border-amber-300 rounded-lg bg-amber-50/60 p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Distributor reported a discrepancy</p>
+                      <p className="text-xs text-amber-800/80">
+                        Review the received quantities above. Approve to lock in the received qty (factory stock will be refunded for the under-delivered units),
+                        or reject to send it back to the distributor for re-verification.
+                      </p>
+                    </div>
+                  </div>
+                  {selectedShipment.acknowledgement_note && (
+                    <div className="text-xs text-amber-900 bg-white/60 rounded p-2 border border-amber-200">
+                      <span className="font-semibold">Distributor note:</span> {selectedShipment.acknowledgement_note}
+                    </div>
+                  )}
+                  {!isDistributorRole && (
+                    <>
+                      <Textarea
+                        rows={2}
+                        placeholder="Optional approval note / required reason if rejecting…"
+                        value={discrepancyReviewNote}
+                        onChange={(e) => setDiscrepancyReviewNote(e.target.value)}
+                        data-testid="discrepancy-review-note"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => rejectDiscrepancy(selectedShipment.id)}
+                          disabled={reviewingDiscrepancy}
+                          data-testid="reject-discrepancy-btn"
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Reject & Re-verify
+                        </Button>
+                        <Button
+                          onClick={() => approveDiscrepancy(selectedShipment.id)}
+                          disabled={reviewingDiscrepancy}
+                          className="bg-emerald-600 hover:bg-emerald-700"
+                          data-testid="approve-discrepancy-btn"
+                        >
+                          <Check className="h-4 w-4 mr-2" />
+                          Approve Reconciled Qty
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                  {isDistributorRole && (
+                    <p className="text-xs text-amber-800 italic">Awaiting supplier approval. We'll update you once they review.</p>
+                  )}
+                </div>
+              )}
+
               {/* Actions */}
-              {canManage && (
+              {(canManage || isDistributorRole) && (
                 <div className="flex justify-end gap-2 pt-4 border-t">
-                  {selectedShipment.status === 'draft' && (
+                  {selectedShipment.status === 'draft' && !isDistributorRole && (
                     <>
                       <Button variant="outline" onClick={() => handleCancelShipment(selectedShipment.id)}>
                         Cancel Shipment
@@ -2447,7 +3108,7 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
-                  {selectedShipment.status === 'confirmed' && (
+                  {selectedShipment.status === 'confirmed' && !isDistributorRole && (
                     <>
                       <Button variant="outline" onClick={() => handleCancelShipment(selectedShipment.id)}>
                         Cancel
@@ -2458,10 +3119,15 @@ export default function DistributorDetail() {
                       </Button>
                     </>
                   )}
-                  {['confirmed', 'in_transit', 'partially_delivered'].includes(selectedShipment.status) && (
-                    <Button onClick={() => handleDeliverShipment(selectedShipment.id)} className="bg-green-600 hover:bg-green-700">
+                  {/* Acknowledge Receipt — available only after the shipment has been dispatched (in_transit / partial). */}
+                  {['in_transit', 'partially_delivered'].includes(selectedShipment.status) && (
+                    <Button
+                      onClick={openAcknowledgeDialog}
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      data-testid="acknowledge-receipt-btn"
+                    >
                       <Check className="h-4 w-4 mr-2" />
-                      Mark Delivered
+                      Acknowledge Receipt
                     </Button>
                   )}
                 </div>
@@ -2471,14 +3137,169 @@ export default function DistributorDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Acknowledge Receipt Dialog */}
+      <Dialog open={showAcknowledgeDialog} onOpenChange={setShowAcknowledgeDialog}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="acknowledge-receipt-dialog">
+          <DialogHeader>
+            <DialogTitle>Acknowledge Receipt — {selectedShipment?.shipment_number}</DialogTitle>
+            <DialogDescription>
+              Verify what physically arrived. Edit the "Received" column if it differs from what was sent.
+              {' '}A discrepancy will be sent to the supplier for approval; matching quantities mark the shipment as delivered immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-end">
+              <Button variant="outline" size="sm" onClick={setAllReceivedFull} data-testid="reset-received-full">
+                <Check className="h-4 w-4 mr-1.5" />
+                Mark all received in full
+              </Button>
+            </div>
+            <div className="border rounded-md overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left p-2.5 font-medium">SKU</th>
+                    <th className="text-right p-2.5 font-medium w-20">Sent</th>
+                    <th className="text-right p-2.5 font-medium w-28">Received</th>
+                    <th className="text-right p-2.5 font-medium w-20">Δ</th>
+                    <th className="text-left p-2.5 font-medium">Discrepancy Remark</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {acknowledgeItems.map((it, idx) => {
+                    const delta = Number(it.received_quantity) - Number(it.sent_quantity);
+                    const isDiff = delta !== 0;
+                    return (
+                      <tr key={it.item_id} className={`border-b ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
+                        <td className="p-2.5">{it.sku_name}</td>
+                        <td className="p-2.5 text-right tabular-nums font-medium">{it.sent_quantity}</td>
+                        <td className="p-2.5 text-right">
+                          <Input
+                            type="number"
+                            min="0"
+                            max={it.sent_quantity}
+                            value={it.received_quantity}
+                            onChange={(e) => updateAcknowledgeItem(it.item_id, 'received_quantity', e.target.value)}
+                            className={`h-9 text-right tabular-nums ${isDiff ? 'border-amber-400' : ''}`}
+                            data-testid={`ack-qty-${idx}`}
+                          />
+                        </td>
+                        <td className={`p-2.5 text-right tabular-nums font-semibold ${isDiff ? 'text-amber-700' : 'text-muted-foreground'}`}>
+                          {isDiff ? delta : '—'}
+                        </td>
+                        <td className="p-2.5">
+                          <Input
+                            placeholder={isDiff ? 'Required: reason for shortage' : 'Optional'}
+                            value={it.discrepancy_remark}
+                            onChange={(e) => updateAcknowledgeItem(it.item_id, 'discrepancy_remark', e.target.value)}
+                            className={`h-9 ${isDiff && !it.discrepancy_remark ? 'border-red-300' : ''}`}
+                            data-testid={`ack-remark-${idx}`}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Overall note (optional)</Label>
+              <Textarea
+                rows={2}
+                placeholder="Any general remarks about this receipt…"
+                value={acknowledgementNote}
+                onChange={(e) => setAcknowledgementNote(e.target.value)}
+                data-testid="ack-overall-note"
+              />
+            </div>
+            {hasAckDiscrepancy && (
+              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
+                Discrepancies detected. Submitting will send this shipment to the supplier for approval before stock is added.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAcknowledgeDialog(false)} disabled={acknowledging}>Cancel</Button>
+            <Button
+              onClick={submitAcknowledgement}
+              disabled={acknowledging || acknowledgeItems.length === 0}
+              className={hasAckDiscrepancy ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'}
+              data-testid="submit-acknowledgement-btn"
+            >
+              {acknowledging ? 'Submitting…' : (hasAckDiscrepancy ? 'Submit for Supplier Approval' : 'Confirm Full Receipt')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       {/* Delivery Detail Dialog */}
       <Dialog open={showDeliveryDetail} onOpenChange={setShowDeliveryDetail}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              Delivery {selectedDelivery?.delivery_number}
-              {selectedDelivery && getDeliveryStatusBadge(selectedDelivery.status)}
-            </DialogTitle>
+            <div className="flex items-start justify-between gap-3 pr-6">
+              <DialogTitle className="flex items-center gap-3">
+                Delivery {selectedDelivery?.delivery_number}
+                {selectedDelivery && getDeliveryStatusBadge(selectedDelivery.status)}
+              </DialogTitle>
+              {/* Deliberate "Actions" menu — keeps state-changing actions out of
+                  the dialog body/footer so they can't be clicked accidentally. */}
+              {selectedDelivery && canManage && (() => {
+                const st = selectedDelivery.status;
+                const canConfirm = st === 'draft';
+                const canComplete = st === 'confirmed' || st === 'in_transit';
+                const canCancel = st === 'draft' || st === 'confirmed';
+                const canReverse = selectedDelivery.zoho_invoice_id &&
+                  !['draft', 'complete', 'completed', 'delivered', 'cancelled', 'reversed'].includes(st);
+                const canRetryVoid = st === 'reversed' && selectedDelivery.zoho_void_pending;
+                if (!(canConfirm || canComplete || canCancel || canReverse || canRetryVoid)) return null;
+                return (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" className="shrink-0" data-testid="delivery-actions-menu-btn">
+                        <MoreVertical className="h-4 w-4 mr-1.5" /> Actions
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel>Manage delivery</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {canConfirm && (
+                        <DropdownMenuItem onClick={() => handleConfirmDelivery(selectedDelivery.id)} data-testid="confirm-delivery-action">
+                          <Check className="h-4 w-4 mr-2 text-emerald-600" /> Confirm delivery
+                        </DropdownMenuItem>
+                      )}
+                      {canComplete && (
+                        <DropdownMenuItem onClick={() => handleCompleteDelivery(selectedDelivery.id)} data-testid="complete-delivery-action">
+                          <Check className="h-4 w-4 mr-2 text-green-600" /> Complete delivery
+                        </DropdownMenuItem>
+                      )}
+                      {canReverse && (
+                        <DropdownMenuItem onClick={() => handleReverseDelivery(selectedDelivery.id)} data-testid="reverse-delivery-action">
+                          <RotateCcw className="h-4 w-4 mr-2 text-rose-600" /> Reverse (void invoice)
+                        </DropdownMenuItem>
+                      )}
+                      {canRetryVoid && (
+                        <DropdownMenuItem onClick={() => handleRetryDeliveryVoid(selectedDelivery.id)} data-testid="retry-delivery-void-action">
+                          <RefreshCw className="h-4 w-4 mr-2 text-amber-600" /> Retry Zoho void
+                        </DropdownMenuItem>
+                      )}
+                      {canCancel && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => handleCancelDelivery(selectedDelivery.id)}
+                            className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                            data-testid="cancel-delivery-action"
+                          >
+                            <X className="h-4 w-4 mr-2" /> Cancel delivery
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                );
+              })()}
+            </div>
           </DialogHeader>
           {selectedDelivery && (
             <div className="space-y-4">
@@ -2512,6 +3333,51 @@ export default function DistributorDetail() {
                     <span className="ml-2 font-medium">{selectedDelivery.vehicle_number}</span>
                   </div>
                 )}
+                {(selectedDelivery.driver_name || selectedDelivery.driver_contact) && (
+                  <div className="sm:col-span-2">
+                    <span className="text-muted-foreground">Driver:</span>
+                    <span className="ml-2 font-medium">
+                      {selectedDelivery.driver_name || '—'}
+                      {selectedDelivery.driver_contact ? ` · ${selectedDelivery.driver_contact}` : ''}
+                    </span>
+                  </div>
+                )}
+                {/* Remarks captured at delivery creation time (admin) */}
+                {selectedDelivery.remarks && (
+                  <div className="sm:col-span-2" data-testid="delivery-detail-remarks">
+                    <div className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5">Remarks</div>
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm whitespace-pre-wrap">
+                      {selectedDelivery.remarks}
+                    </div>
+                  </div>
+                )}
+                {/* Delivery notes captured by the driver at completion time */}
+                {selectedDelivery.delivery_notes && (
+                  <div className="sm:col-span-2" data-testid="delivery-detail-driver-notes">
+                    <div className="text-muted-foreground text-xs uppercase tracking-wider mb-0.5 flex items-center gap-1.5">
+                      Driver notes
+                      {selectedDelivery.delivered_at && (
+                        <span className="text-[10px] text-slate-400 font-normal normal-case">
+                          captured {new Date(selectedDelivery.delivered_at).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm whitespace-pre-wrap">
+                      {selectedDelivery.delivery_notes}
+                    </div>
+                  </div>
+                )}
+                {(selectedDelivery.total_credit_applied || 0) > 0 && (
+                  <div className="sm:col-span-2 mt-1 inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-rose-50 border border-rose-200 self-start" data-testid="delivery-credit-note-applied">
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-rose-700">Credit Note applied</span>
+                    <span className="text-sm font-semibold text-rose-700">
+                      − ₹{Number(selectedDelivery.total_credit_applied).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    {selectedDelivery.credit_note_number && (
+                      <span className="text-[11px] text-rose-600/80">· {selectedDelivery.credit_note_number}</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Detailed Items Table */}
@@ -2524,9 +3390,7 @@ export default function DistributorDetail() {
                       <th className="text-right p-2 font-medium text-blue-700">Base Price</th>
                       <th className="text-right p-2 font-medium text-blue-700">Billed to Dist</th>
                       <th className="text-right p-2 font-medium text-emerald-700">Cust. Price</th>
-                      <th className="text-right p-2 font-medium text-emerald-700">Actual Billable</th>
-                      <th className="text-right p-2 font-medium text-amber-700">Adj. (Cust. Price)</th>
-                      <th className="text-right p-2 font-medium text-purple-700">Net Adj. (After Credit)</th>
+                      <th className="text-right p-2 font-medium text-emerald-700">Customer Order Value</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2535,26 +3399,30 @@ export default function DistributorDetail() {
                       const customerPrice = item.customer_selling_price || item.unit_price || 0;
                       const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                       const basePrice = item.base_price || item.transfer_price || 0;
-                      const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                      const isCostBased = distributor?.billing_approach === 'cost_based';
+                      const transferPrice = isCostBased ? basePrice : (basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0);
                       const billedToDist = qty * transferPrice;
-                      const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                      const newTransferPrice = isCostBased ? customerPrice : (customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0);
                       const actualBillable = qty * newTransferPrice;
-                      const adjustment = actualBillable - billedToDist;
                       return (
                         <tr key={idx} className="border-b">
                           <td className="p-2">
-                            <span className="font-medium">{item.sku_name || item.sku_id}</span>
-                            <span className="text-xs text-muted-foreground ml-1">({commissionPct}%)</span>
+                            <div>
+                              <span className="font-medium">{item.sku_name || item.sku_id}</span>
+                              <span className="text-xs text-muted-foreground ml-1">({commissionPct}%)</span>
+                            </div>
+                            {item.batch_code && (
+                              <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-mono font-medium text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded" data-testid={`delivery-detail-item-batch-${idx}`}>
+                                <Package className="h-2.5 w-2.5" />
+                                {item.batch_code}
+                              </div>
+                            )}
                           </td>
                           <td className="p-2 text-right font-medium">{qty}</td>
                           <td className="p-2 text-right text-blue-700">₹{basePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2 text-right text-blue-800 font-medium">₹{billedToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2 text-right text-emerald-700">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2 text-right text-emerald-800 font-medium">₹{actualBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-2 text-right font-semibold ${adjustment > 0 ? 'text-emerald-600' : adjustment < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                            {adjustment > 0 ? '+' : ''}₹{adjustment.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="p-2 text-right text-slate-400">—</td>
                         </tr>
                       );
                     })}
@@ -2562,20 +3430,18 @@ export default function DistributorDetail() {
                   <tfoot>
                     {(() => {
                       const items = selectedDelivery.items || [];
-                      const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
-                      let totBilled = 0, totActual = 0, totAdj = 0;
+                      let totBilled = 0, totActual = 0;
                       items.forEach(item => {
                         const qty = item.quantity || 0;
                         const customerPrice = item.customer_selling_price || item.unit_price || 0;
                         const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                         const basePrice = item.base_price || item.transfer_price || 0;
-                        const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
+                        const isCB = distributor?.billing_approach === 'cost_based';
+                        const transferPrice = isCB ? basePrice : (basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0);
                         totBilled += qty * transferPrice;
-                        const newTP = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+                        const newTP = isCB ? customerPrice : (customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0);
                         totActual += qty * newTP;
-                        totAdj += (qty * newTP) - (qty * transferPrice);
                       });
-                      const netAdj = totAdj - totalCreditApplied;
                       return (
                         <tr className="bg-muted/30 font-semibold">
                           <td colSpan="2" className="p-2 text-right">Total:</td>
@@ -2583,12 +3449,6 @@ export default function DistributorDetail() {
                           <td className="p-2 text-right text-blue-800">₹{totBilled.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2"></td>
                           <td className="p-2 text-right text-emerald-800">₹{totActual.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-2 text-right ${totAdj > 0 ? 'text-emerald-600' : totAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                            {totAdj > 0 ? '+' : ''}₹{totAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className={`p-2 text-right ${netAdj > 0 ? 'text-emerald-600' : netAdj < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                            {netAdj > 0 ? '+' : ''}₹{netAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
                         </tr>
                       );
                     })()}
@@ -2620,7 +3480,7 @@ export default function DistributorDetail() {
                   <div className="border rounded-lg p-4 bg-blue-50/40 space-y-2" data-testid="delivery-customer-summary">
                     <h4 className="font-semibold text-sm mb-2 text-blue-800">Customer Summary</h4>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Customer Billing Amount:</span>
+                      <span className="text-muted-foreground">Customer Order Value:</span>
                       <span className="font-medium">₹{custBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
                     {hasCN && (
@@ -2629,18 +3489,11 @@ export default function DistributorDetail() {
                         <span className="font-medium">- ₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="font-semibold">Total Billable Amount:</span>
-                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-slate-600">
-                      <span>GST ({gstPctDisplay}%):</span>
-                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
                     <div className="flex justify-between text-base border-t pt-2">
-                      <span className="font-bold text-blue-800">Customer Invoice Value (Incl. GST):</span>
-                      <span className="font-bold text-blue-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-bold text-blue-800">Customer Invoice Value:</span>
+                      <span className="font-bold text-blue-800">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </div>
+                    <p className="text-[10px] text-slate-400 text-right italic">All values exclusive of GST</p>
                   </div>
                 );
               })()}
@@ -2649,53 +3502,138 @@ export default function DistributorDetail() {
               {(() => {
                 const items = selectedDelivery.items || [];
                 const totalCreditApplied = selectedDelivery.total_credit_applied || 0;
-                let distBilling = 0, totActual = 0, custBilling = 0, totalTax = 0;
+                const isCostBased = distributor?.billing_approach === 'cost_based';
+                
+                let totalBasePrice = 0, totalCustomerPrice = 0, totalMarginAtTransfer = 0, totalApplicableMargin = 0;
+                let totalBilledAtTransfer = 0, totalFactoryDue = 0;
+                let avgMarginPct = 0, marginPctCount = 0;
+                
                 items.forEach(item => {
                   const qty = item.quantity || 0;
-                  const price = item.customer_selling_price || item.unit_price || 0;
-                  const disc = item.discount_percent || 0;
-                  const taxPct = item.tax_percent || 0;
-                  const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+                  const custPrice = item.customer_selling_price || item.unit_price || 0;
+                  const commPct = item.distributor_commission_percent || item.margin_percent || 2.5;
                   const basePrice = item.base_price || item.transfer_price || 0;
-                  const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
-                  distBilling += qty * transferPrice;
-                  const newTP = price > 0 ? price * (1 - commissionPct / 100) : 0;
-                  totActual += qty * newTP;
-                  const preTax = qty * price * (1 - disc / 100);
-                  custBilling += preTax;
-                  totalTax += preTax * taxPct / 100;
+                  
+                  totalBasePrice += qty * basePrice;
+                  totalCustomerPrice += qty * custPrice;
+                  
+                  // What was billed to distributor at transfer
+                  const billedAtTransfer = isCostBased ? (qty * basePrice) : (qty * basePrice * (1 - commPct / 100));
+                  totalBilledAtTransfer += billedAtTransfer;
+                  
+                  // Factory's due from customer price (always margin-excluded)
+                  const factoryDue = qty * custPrice * (1 - commPct / 100);
+                  totalFactoryDue += factoryDue;
+                  
+                  // Margin info
+                  totalMarginAtTransfer += isCostBased ? 0 : (qty * basePrice * commPct / 100);
+                  totalApplicableMargin += qty * custPrice * (commPct / 100);
+                  avgMarginPct += commPct;
+                  marginPctCount += 1;
                 });
-                const priceAdj = totActual - distBilling;
-                const combinedAdj = priceAdj - totalCreditApplied;
-                const totalBillable = distBilling + combinedAdj;
-                const effectiveGstRate = custBilling > 0 ? totalTax / custBilling : 0;
-                const gstAmount = totalBillable * effectiveGstRate;
-                const invoiceValue = totalBillable + gstAmount;
-                const gstPctDisplay = (effectiveGstRate * 100).toFixed(1);
+                
+                const marginPctDisplay = marginPctCount > 0 ? (avgMarginPct / marginPctCount).toFixed(1) : '0';
+                const returnCredit = totalCreditApplied;
+
+                // Simplified math:
+                //   Billable to Dist = Customer Price − Margin       (= totalFactoryDue)
+                //   Final Billable   = Billable − Credit Note        (when CN paid by dist to customer)
+                //   Adjustment       = Final Billable − Billed at Transfer
+                //     >0  → distributor owes supplier
+                //     <0  → supplier owes distributor
+                const billableToDist = totalFactoryDue;
+                const finalBillableToDist = billableToDist - returnCredit;
+                const adjustmentAmt = finalBillableToDist - totalBilledAtTransfer;
+                const distOwesSupplier = adjustmentAmt > 0;
+                const supplierOwesDist = adjustmentAmt < 0;
+                const distributorName = distributor?.distributor_name || 'Distributor';
+
+                const fmt = (n) => `₹${Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
                 return (
-                  <div className="border rounded-lg p-4 bg-purple-50/40 space-y-2" data-testid="delivery-distributor-summary">
-                    <h4 className="font-semibold text-sm mb-2 text-purple-800">Distributor Summary</h4>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Distributor Billing Amount:</span>
-                      <span className="font-medium">₹{distBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Adjustment (Customer Price + Return Credit):</span>
-                      <span className={`font-medium ${combinedAdj > 0 ? 'text-emerald-600' : combinedAdj < 0 ? 'text-red-600' : 'text-slate-500'}`}>
-                        {combinedAdj > 0 ? '+' : ''}₹{combinedAdj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  <div className="border rounded-lg overflow-hidden bg-white" data-testid="delivery-distributor-summary">
+                    {/* Header with billing approach indicator */}
+                    <div className={`px-4 py-2.5 flex items-center justify-between ${isCostBased ? 'bg-amber-50 border-b border-amber-200' : 'bg-purple-50 border-b border-purple-200'}`}>
+                      <h4 className={`font-semibold text-sm ${isCostBased ? 'text-amber-800' : 'text-purple-800'}`}>
+                        Distributor Settlement Summary
+                      </h4>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${isCostBased ? 'bg-amber-200 text-amber-800' : 'bg-purple-200 text-purple-800'}`}>
+                        {isCostBased ? 'Post-Sale Adjustment' : 'Margin Upfront'}
                       </span>
                     </div>
-                    <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="font-semibold">Total Billable Amount:</span>
-                      <span className="font-bold">₹{totalBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-sm text-slate-600">
-                      <span>GST ({gstPctDisplay}%):</span>
-                      <span className="font-medium">₹{gstAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between text-base border-t pt-2">
-                      <span className="font-bold text-purple-800">Distributor Invoice Value (Incl. GST):</span>
-                      <span className="font-bold text-purple-800">₹{invoiceValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+
+                    <div className="p-4 space-y-4">
+                      {/* Pricing */}
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Pricing</p>
+
+                        <div className="flex justify-between text-sm" data-testid="row-billed-to-customer">
+                          <span className="text-slate-600">Customer Order Value</span>
+                          <span className="font-medium text-slate-900">{fmt(totalCustomerPrice)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm" data-testid="row-margin-on-sale">
+                          <span className="text-slate-600">Margin on sale for {distributorName} <span className="text-slate-400 text-[11px]">({marginPctDisplay}%)</span></span>
+                          <span className="font-medium text-purple-700">{fmt(totalApplicableMargin)}</span>
+                        </div>
+
+                        <div className="border-t border-dashed border-slate-200 my-1" />
+
+                        <div className="flex justify-between text-sm" data-testid="row-billable-to-dist">
+                          <span className="text-slate-600">Billable to {distributorName}</span>
+                          <span className="font-semibold text-slate-900">{fmt(billableToDist)}</span>
+                        </div>
+
+                        {returnCredit > 0 && (
+                          <div className="flex justify-between text-sm" data-testid="row-credit-note">
+                            <span className="text-slate-600">Credit Note Paid by Distributor to Customer</span>
+                            <span className="font-medium text-rose-600">− {fmt(returnCredit)}</span>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between text-sm bg-slate-50 -mx-4 px-4 py-2 border-y border-slate-200" data-testid="row-final-billable">
+                          <span className="font-semibold text-slate-800">Final Billable to {distributorName}</span>
+                          <span className="font-bold text-slate-900">{fmt(finalBillableToDist)}</span>
+                        </div>
+
+                        <div className="flex justify-between text-sm" data-testid="row-billed-at-transfer">
+                          <span className="text-slate-600">Billed at Transfer</span>
+                          <span className="font-medium text-slate-900">{fmt(totalBilledAtTransfer)}</span>
+                        </div>
+                      </div>
+
+                      {/* Settlement */}
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Settlement</p>
+
+                        {Math.abs(adjustmentAmt) < 0.01 ? (
+                          <div className="rounded-lg px-3 py-2.5 border-2 bg-slate-50 border-slate-200" data-testid="net-adjustment-box">
+                            <div className="flex justify-between items-center">
+                              <span className="font-semibold text-sm text-slate-700">Settled — No adjustment needed</span>
+                              <span className="font-bold text-sm text-slate-500">{fmt(0)}</span>
+                            </div>
+                          </div>
+                        ) : distOwesSupplier ? (
+                          <div className="rounded-lg px-3 py-2.5 border-2 bg-amber-50 border-amber-300" data-testid="net-adjustment-box">
+                            <div className="flex justify-between items-center">
+                              <span className="font-semibold text-sm text-amber-800">
+                                Adjustment to Supplier <span className="font-normal">(from {distributorName})</span>
+                              </span>
+                              <span className="font-bold text-lg text-amber-700">{fmt(adjustmentAmt)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rounded-lg px-3 py-2.5 border-2 bg-emerald-50 border-emerald-300" data-testid="net-adjustment-box">
+                            <div className="flex justify-between items-center">
+                              <span className="font-semibold text-sm text-emerald-800">
+                                Adjustment to {distributorName} <span className="font-normal">from Supplier</span>
+                              </span>
+                              <span className="font-bold text-lg text-emerald-700">{fmt(adjustmentAmt)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 text-right italic">All values exclusive of GST</p>
                     </div>
                   </div>
                 );
@@ -2711,13 +3649,26 @@ export default function DistributorDetail() {
                   <div className="space-y-2">
                     {selectedDelivery.applied_credit_notes.map((cn, idx) => (
                       <div key={cn.credit_note_id || idx} className="flex justify-between items-center text-sm">
-                        <div>
+                        <div className="flex items-center gap-2 min-w-0">
                           <span className="font-medium">{cn.credit_note_number}</span>
+                          {cn.zoho_creditnote_url && (
+                            <a
+                              href={cn.zoho_creditnote_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium bg-white text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                              title={`Open in Zoho Books${cn.zoho_creditnote_number ? ` — ${cn.zoho_creditnote_number}` : ''}`}
+                              data-testid={`applied-cn-zoho-link-${cn.credit_note_id || idx}`}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              <span>Zoho</span>
+                            </a>
+                          )}
                           {cn.return_number && (
-                            <span className="text-muted-foreground ml-2">(Return: {cn.return_number})</span>
+                            <span className="text-muted-foreground text-xs">(Return: {cn.return_number})</span>
                           )}
                         </div>
-                        <span className="font-medium text-emerald-600">
+                        <span className="font-medium text-emerald-600 shrink-0 ml-2">
                           - ₹{cn.amount_applied?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </div>
@@ -2728,72 +3679,152 @@ export default function DistributorDetail() {
 
               {/* Actions */}
               <div className="flex justify-between items-center pt-4 border-t">
-                {/* Invoice Download - Available for delivered/confirmed deliveries */}
-                <div>
-                  {(selectedDelivery.status === 'delivered' || selectedDelivery.status === 'confirmed') && (
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleDownloadCustomerInvoice(selectedDelivery.id)}
-                      disabled={downloadingInvoice}
-                      className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                      data-testid="download-customer-invoice-btn"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      {downloadingInvoice ? 'Generating...' : 'Download Invoice (GST)'}
-                    </Button>
-                  )}
-                </div>
-                
-                {/* Status Actions */}
-                <div className="flex gap-2">
-                  {canManage && selectedDelivery.status === 'draft' && (
-                    <>
-                      <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
-                        Cancel Delivery
-                      </Button>
-                      <Button onClick={() => handleConfirmDelivery(selectedDelivery.id)}>
-                        <Check className="h-4 w-4 mr-2" />
-                        Confirm
-                      </Button>
-                    </>
-                  )}
-                  {canManage && selectedDelivery.status === 'confirmed' && (
-                    <>
-                      <Button variant="outline" onClick={() => handleCancelDelivery(selectedDelivery.id)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
-                        <Check className="h-4 w-4 mr-2" />
-                        Complete Delivery
-                      </Button>
-                    </>
-                  )}
-                  {canManage && selectedDelivery.status === 'in_transit' && (
-                    <Button onClick={() => handleCompleteDelivery(selectedDelivery.id)} className="bg-green-600 hover:bg-green-700">
-                      <Check className="h-4 w-4 mr-2" />
-                      Complete Delivery
-                    </Button>
+                {/* Zoho Invoice — invoices are generated when the *delivery
+                    schedule* is confirmed (not the stock-out itself). Once it
+                    exists, we show two affordances: "Download" (PDF saved as
+                    INV-00017.pdf via server proxy) and "View in Zoho" (web app
+                    link). While pending we offer a manual Retry. */}
+                <div className="flex gap-2 flex-wrap">
+                  {/* When the account is billed by a third-party distributor we
+                      don't generate a Zoho invoice. Instead, on completed
+                      deliveries we issue an "External Billing Entry" (EBE)
+                      with EXT_NNNNN numbering — analytics-only, no
+                      receivables/aging. The PDF endpoint will lazily create
+                      the EBE row on first download. */}
+                  {selectedDelivery.account_billed_by === 'distributor' ? (
+                    <div className="flex items-center gap-2 flex-wrap" data-testid="external-billing-block">
+                      <div
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-violet-200 bg-violet-50 text-violet-800 text-xs"
+                        data-testid="external-billing-pill"
+                      >
+                        <Receipt className="h-3 w-3" />
+                        External Billing Entry
+                        {selectedDelivery.external_billing_entry_number && (
+                          <span className="font-mono font-medium ml-1">
+                            {selectedDelivery.external_billing_entry_number}
+                          </span>
+                        )}
+                      </div>
+                      {(selectedDelivery.status === 'complete' || selectedDelivery.status === 'completed' || selectedDelivery.status === 'delivered') ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDownloadCustomerInvoice(selectedDelivery.id, selectedDelivery.delivery_number)}
+                          disabled={downloadingInvoice}
+                          className="text-violet-700 border-violet-300 hover:bg-violet-50"
+                          data-testid="download-external-billing-btn"
+                        >
+                          {downloadingInvoice ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Generating…</>
+                          ) : (
+                            <><Download className="h-4 w-4 mr-2" /> Download EBE PDF</>
+                          )}
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-slate-500">
+                          EBE will be generated when this stop is marked delivered.
+                        </span>
+                      )}
+                    </div>
+                  ) : (['delivered', 'complete', 'confirmed', 'scheduled', 'delivery_assigned', 'delivery_scheduled', 'on_the_way'].includes(selectedDelivery.status)) && (
+                    selectedDelivery.zoho_invoice_url ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleDownloadZohoInvoice(selectedDelivery.id, selectedDelivery.zoho_invoice_number)}
+                          disabled={downloadingInvoice}
+                          className="text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                          data-testid="download-zoho-invoice-btn"
+                        >
+                          {downloadingInvoice ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Downloading…</>
+                          ) : (
+                            <>
+                              <Download className="h-4 w-4 mr-2" />
+                              Download Invoice
+                              {selectedDelivery.zoho_invoice_number && (
+                                <span className="ml-2 text-xs text-emerald-500 font-mono">
+                                  {selectedDelivery.zoho_invoice_number}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </Button>
+                        <ShareButton
+                          documentType="delivery_invoice"
+                          documentId={selectedDelivery.id}
+                          label="Share"
+                          variant="outline"
+                          size="default"
+                          testId={`delivery-invoice-${selectedDelivery.id}`}
+                        />
+                        <a
+                          href={selectedDelivery.zoho_invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid="view-zoho-invoice-btn"
+                        >
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-violet-700 hover:bg-violet-50"
+                          >
+                            <ExternalLink className="h-4 w-4 mr-1.5" />
+                            View in Zoho
+                          </Button>
+                        </a>
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-amber-200 bg-amber-50 text-amber-800 text-xs"
+                          data-testid="zoho-pending-pill"
+                        >
+                          Zoho invoice is generated when the delivery schedule is confirmed
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRetryZohoPush(selectedDelivery.id)}
+                          disabled={downloadingInvoice}
+                          className="text-violet-700 border-violet-300 hover:bg-violet-50"
+                          data-testid="retry-zoho-push-btn"
+                        >
+                          {downloadingInvoice ? (
+                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Pushing…</>
+                          ) : (
+                            <><RefreshCw className="h-4 w-4 mr-2" /> Generate Now</>
+                          )}
+                        </Button>
+                      </div>
+                    )
                   )}
                 </div>
               </div>
             </div>
           )}
+          <DialogFooter className="border-t pt-4 mt-2">
+            <Button variant="outline" onClick={() => setShowDeliveryDetail(false)} data-testid="close-delivery-detail-btn">
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Settlement Detail Dialog */}
       <Dialog open={showSettlementDetail} onOpenChange={setShowSettlementDetail}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden" data-testid="settlement-detail-dialog">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
             <DialogTitle className="flex items-center gap-3">
               Settlement {selectedSettlement?.settlement_number}
               {selectedSettlement && getSettlementStatusBadge(selectedSettlement.status)}
             </DialogTitle>
           </DialogHeader>
           {selectedSettlement && (
-            <div className="space-y-4">
-              {/* Settlement Info */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+            <div className="relative flex-1 overflow-y-auto px-6 py-4 settlement-scroll" data-testid="settlement-detail-scroll">
+              <div className="space-y-4 pb-2">
+                {/* Settlement Info */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Month/Year:</span>
                   <div className="font-medium">
@@ -2820,60 +3851,199 @@ export default function DistributorDetail() {
                 </div>
               </div>
 
-              {/* Summary Cards */}
-              <div className="grid grid-cols-4 gap-4">
-                <div className="bg-muted/30 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Total Customer Billing</div>
-                  <div className="text-xl font-bold">₹{(selectedSettlement.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Distributor Earnings</div>
-                  <div className="text-xl font-bold text-blue-600">₹{(selectedSettlement.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-slate-100 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Margin at Transfer Price</div>
-                  <div className="text-xl font-bold">₹{(selectedSettlement.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4 text-center">
-                  <div className="text-sm text-muted-foreground">Adjustment Payable</div>
-                  <div className={`text-xl font-bold ${(selectedSettlement.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {(selectedSettlement.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(selectedSettlement.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {/* Summary Cards — driven by stockout_totals (single source of truth) */}
+              {(() => {
+                const items = selectedSettlement.items || [];
+                const totals = selectedSettlement.stockout_totals || {
+                  customer_order_value: items.reduce((s, it) => s + (it.customer_order_value || 0), 0),
+                  distributor_margin: items.reduce((s, it) => s + (it.distributor_margin || 0), 0),
+                  actual_billable: items.reduce((s, it) => s + (it.actual_billable || 0), 0),
+                  credit_applied: items.reduce((s, it) => s + (it.credit_applied || 0), 0),
+                  net_billable: items.reduce((s, it) => s + (it.net_billable || 0), 0),
+                  billed_at_transfer: items.reduce((s, it) => s + (it.billed_at_transfer || 0), 0),
+                  direct_credit_issued: 0,
+                };
+                const cov = totals.customer_order_value || 0;
+                const margin = totals.distributor_margin || 0;
+                const credit = totals.credit_applied || 0;
+                const netBillable = totals.net_billable || 0;
+                const billedAtTransfer = totals.billed_at_transfer || 0;
+                const directCredit = totals.direct_credit_issued || 0;
+                const frVal = selectedSettlement.total_factory_return_credit || 0;
+                // Net Settlement = (what dist owes factory after sale) − (what was already billed)
+                //                  − (direct credit notes paid out-of-pocket) − (factory return credit owed back)
+                // Positive ⇒ Distributor pays Supplier. Negative ⇒ Supplier pays Distributor.
+                const finalDue = netBillable - billedAtTransfer - directCredit - frVal;
+
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+                      <div className="bg-slate-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Customer Order Value</div>
+                        <div className="text-lg font-bold text-slate-900 tabular-nums mt-1" data-testid="settlement-cov">₹{cov.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">across deliveries</div>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-blue-600 font-medium">Distributor Margin</div>
+                        <div className="text-lg font-bold text-blue-700 tabular-nums mt-1" data-testid="settlement-margin">₹{margin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-blue-500/80 mt-0.5">earned by distributor</div>
+                      </div>
+                      <div className="bg-rose-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-rose-600 font-medium">CN Linked to Deliveries</div>
+                        <div className="text-lg font-bold text-rose-700 tabular-nums mt-1" data-testid="settlement-credit">{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-rose-500/80 mt-0.5">already in Net Billable</div>
+                      </div>
+                      <div className="bg-rose-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-rose-600 font-medium">CN Paid Directly</div>
+                        <div className="text-lg font-bold text-rose-700 tabular-nums mt-1" data-testid="settlement-direct-credit">{directCredit > 0 ? '−' : ''}₹{directCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-rose-500/80 mt-0.5">outside any delivery</div>
+                      </div>
+                      <div className="bg-emerald-50 rounded-lg p-3">
+                        <div className="text-[10px] uppercase tracking-wider text-emerald-600 font-medium">Factory Return Credit</div>
+                        <div className="text-lg font-bold text-emerald-700 tabular-nums mt-1" data-testid="settlement-factory-return">{frVal > 0 ? '+' : ''}₹{frVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-emerald-500/80 mt-0.5">stock returned to supplier</div>
+                      </div>
+                      {(() => {
+                        const settled = Math.abs(finalDue) < 0.01;
+                        const distOwes = finalDue > 0;
+                        const cls = settled ? 'bg-slate-100 border-slate-200' : distOwes ? 'bg-amber-50 border-amber-300' : 'bg-emerald-50 border-emerald-300';
+                        const valCls = settled ? 'text-slate-500' : distOwes ? 'text-amber-700' : 'text-emerald-700';
+                        return (
+                          <div className={`rounded-lg p-3 border-2 ${cls}`} data-testid="settlement-net-tile">
+                            <div className="text-[10px] uppercase tracking-wider text-slate-600 font-medium">Net Settlement</div>
+                            <div className={`text-lg font-bold tabular-nums mt-1 ${valCls}`}>
+                              {settled ? '₹0.00' : `${distOwes ? '+' : '−'}₹${Math.abs(finalDue).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                            </div>
+                            <div className={`text-[10px] mt-0.5 ${valCls}`}>
+                              {settled ? 'Settled' : distOwes ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Delivery Items */}
               <div className="border rounded-lg">
-                <div className="bg-muted/50 p-3 font-medium text-sm border-b">Included Deliveries</div>
-                <div className="max-h-64 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/30 sticky top-0">
+                <div className="bg-muted/50 p-3 font-medium text-sm border-b flex items-center justify-between">
+                  <span>Included Deliveries</span>
+                  <span className="text-[11px] text-muted-foreground font-normal">Same numbers as Stock Out → Delivery preview</span>
+                </div>
+                <div>
+                  <table className="w-full text-sm" data-testid="settlement-deliveries-table">
+                    <thead className="bg-muted/30">
                       <tr>
                         <th className="text-left p-2">Delivery #</th>
                         <th className="text-left p-2">Date</th>
                         <th className="text-right p-2">Qty</th>
-                        <th className="text-right p-2">Billing Value</th>
-                        <th className="text-right p-2">Earnings</th>
-                        <th className="text-right p-2">Margin at Transfer</th>
-                        <th className="text-right p-2">Adjustment</th>
+                        <th className="text-right p-2">Customer Order Value</th>
+                        <th className="text-right p-2 text-blue-700">Distributor Margin</th>
+                        <th className="text-right p-2 text-rose-700">Credit Note</th>
+                        <th className="text-right p-2">Net Billable</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(selectedSettlement.items || []).map((item, idx) => (
-                        <tr key={idx} className="border-t">
-                          <td className="p-2">{item.delivery_number}</td>
-                          <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
-                          <td className="p-2 text-right">{item.total_quantity || 0}</td>
-                          <td className="p-2 text-right">₹{(item.total_billing_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-2 text-right text-blue-600">₹{(item.distributor_earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className="p-2 text-right">₹{(item.margin_at_transfer_price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                          <td className={`p-2 text-right font-medium ${(item.adjustment_payable || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {(item.adjustment_payable || 0) >= 0 ? '+' : ''}₹{(item.adjustment_payable || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
+                      {(selectedSettlement.items || []).map((item, idx) => {
+                        const cov = item.customer_order_value || 0;
+                        const margin = item.distributor_margin || 0;
+                        const credit = item.credit_applied || 0;
+                        const netBillable = item.net_billable !== undefined
+                          ? item.net_billable
+                          : ((item.actual_billable || 0) - credit);
+                        return (
+                          <tr key={idx} className="border-t" data-testid={`settlement-delivery-row-${item.delivery_number}`}>
+                            <td className="p-2 font-medium text-emerald-700">{item.delivery_number}</td>
+                            <td className="p-2">{item.delivery_date ? new Date(item.delivery_date).toLocaleDateString() : '-'}</td>
+                            <td className="p-2 text-right tabular-nums">{item.total_quantity || 0}</td>
+                            <td className="p-2 text-right tabular-nums">₹{cov.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right text-blue-600 tabular-nums font-medium">₹{margin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-2 text-right tabular-nums font-medium ${credit > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right tabular-nums font-bold text-slate-900">₹{netBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
+                    <tfoot>
+                      {(() => {
+                        const items = selectedSettlement.items || [];
+                        const totals = selectedSettlement.stockout_totals || {
+                          customer_order_value: items.reduce((s, it) => s + (it.customer_order_value || 0), 0),
+                          distributor_margin: items.reduce((s, it) => s + (it.distributor_margin || 0), 0),
+                          credit_applied: items.reduce((s, it) => s + (it.credit_applied || 0), 0),
+                          net_billable: items.reduce((s, it) => s + (it.net_billable || 0), 0),
+                          billed_at_transfer: items.reduce((s, it) => s + (it.billed_at_transfer || 0), 0),
+                          direct_credit_issued: 0,
+                        };
+                        const credit = totals.credit_applied || 0;
+                        const netBillable = totals.net_billable || 0;
+                        const billedAtTransfer = totals.billed_at_transfer || 0;
+                        const directCredit = totals.direct_credit_issued || 0;
+                        const frVal = selectedSettlement.total_factory_return_credit || 0;
+                        const netSettlement = netBillable - billedAtTransfer - directCredit - frVal;
+                        const distPays = netSettlement > 0;
+                        const settled = Math.abs(netSettlement) < 0.01;
+                        return (
+                          <>
+                            <tr className="bg-slate-50 border-t-2 font-semibold" data-testid="settlement-deliveries-totals">
+                              <td colSpan={3} className="p-2 text-right">Total</td>
+                              <td className="p-2 text-right tabular-nums">₹{(totals.customer_order_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className="p-2 text-right text-blue-700 tabular-nums">₹{(totals.distributor_margin || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className={`p-2 text-right tabular-nums ${credit > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{credit > 0 ? '−' : ''}₹{credit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              <td className="p-2 text-right tabular-nums text-slate-900">₹{netBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+
+                            {/* Math ladder — explicit breakdown of how Net Settlement is arrived.
+                               The Total row above already includes delivery-linked credit notes
+                               in Net Billable. Below we only show DIRECT (standalone) credit
+                               notes paid to customer outside any delivery so we don't double-deduct. */}
+                            <tr className="bg-slate-50/60 font-semibold border-t" data-testid="settlement-row-net-billable">
+                              <td colSpan={6} className="p-2 text-right text-slate-700">Net Billable (after delivery-linked Credit Notes)</td>
+                              <td className="p-2 text-right tabular-nums text-slate-900">₹{netBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr className="border-t" data-testid="settlement-row-direct-credit">
+                              <td colSpan={6} className="p-2 text-right text-slate-600">
+                                <span className="inline-flex items-center gap-1.5">
+                                  Less: Direct Credit Notes Paid (Not Linked to Deliveries)
+                                  <span
+                                    className="cursor-help text-slate-400 text-[10px] border border-slate-300 rounded-full w-4 h-4 inline-flex items-center justify-center"
+                                    title="This amount represents credit notes adjusted directly and not associated with any delivery. Credit notes linked to deliveries are already included in the Net Billable calculation above."
+                                    data-testid="direct-credit-help"
+                                  >?</span>
+                                </span>
+                              </td>
+                              <td className={`p-2 text-right tabular-nums font-medium ${directCredit > 0 ? 'text-rose-700' : 'text-slate-400'}`}>{directCredit > 0 ? '−' : ''}₹{directCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            <tr className="border-t" data-testid="settlement-row-billed-at-transfer">
+                              <td colSpan={6} className="p-2 text-right text-slate-600">Less: Already Billed to Distributor (Transfer Price)</td>
+                              <td className={`p-2 text-right tabular-nums ${billedAtTransfer > 0 ? 'text-indigo-700' : 'text-slate-400'}`}>{billedAtTransfer > 0 ? '−' : ''}₹{billedAtTransfer.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                            {frVal > 0 && (
+                              <tr className="border-t" data-testid="settlement-row-factory-return">
+                                <td colSpan={6} className="p-2 text-right text-slate-600">Less: Factory Return Credit</td>
+                                <td className="p-2 text-right tabular-nums text-emerald-700">−₹{frVal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                              </tr>
+                            )}
+                            <tr className={`border-t-2 ${settled ? 'bg-slate-100' : distPays ? 'bg-amber-50' : 'bg-emerald-50'}`} data-testid="settlement-row-net-settlement">
+                              <td colSpan={6} className="p-2 text-right font-bold uppercase tracking-wider text-xs">
+                                Net Settlement
+                                <span className="block text-[10px] font-normal normal-case text-slate-500 mt-0.5">
+                                  {settled ? 'Settled' : distPays ? 'Distributor pays Supplier' : 'Supplier pays Distributor'}
+                                </span>
+                              </td>
+                              <td className={`p-2 text-right tabular-nums font-bold text-base ${settled ? 'text-slate-500' : distPays ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                {settled ? '₹0.00' : `${distPays ? '+' : '−'}₹${Math.abs(netSettlement).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`}
+                              </td>
+                            </tr>
+                          </>
+                        );
+                      })()}
+                    </tfoot>
                   </table>
+                </div>
+                <div className="px-3 py-2 bg-slate-50 border-t text-[11px] text-muted-foreground">
+                  <strong>How Net Settlement is calculated:</strong> Customer Order Value − Distributor Margin = Actual Billable. Less delivery-linked Credit Notes = Net Billable. Less Direct Credit Notes (paid outside deliveries), Less Already Billed at Transfer Price, Less Factory Return Credit = Net Settlement.
                 </div>
               </div>
 
@@ -2893,9 +4063,14 @@ export default function DistributorDetail() {
                   Payment Reference: {selectedSettlement.payment_reference}
                 </div>
               )}
-
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-4 border-t">
+              </div>
+              {/* Visual hint that there's more to scroll */}
+              <div className="pointer-events-none sticky bottom-0 left-0 right-0 h-6 -mt-6 bg-gradient-to-t from-white to-transparent" aria-hidden="true" />
+            </div>
+          )}
+          {selectedSettlement && (
+            <div className="shrink-0 border-t bg-slate-50 px-6 py-3 flex items-center justify-end gap-2" data-testid="settlement-detail-actions">
+              <div className="flex justify-end gap-2">
                 {selectedSettlement.status === 'draft' && canManage && (
                   <>
                     <Button variant="outline" onClick={() => {
@@ -2974,6 +4149,51 @@ export default function DistributorDetail() {
               }}
             >
               {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Distributor Confirmation Dialog */}
+      <AlertDialog open={showDeleteDistributorDialog} onOpenChange={(open) => {
+        setShowDeleteDistributorDialog(open);
+        if (!open) setDeleteConfirmName('');
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-600">Delete Distributor Permanently</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span className="block">
+                This will permanently delete <strong>{distributor?.distributor_name}</strong> and all related data including:
+              </span>
+              <span className="block text-xs text-slate-500 bg-red-50 border border-red-100 rounded-lg p-3 space-y-1">
+                <span className="block">Warehouse locations, Operating coverage, Margin matrix</span>
+                <span className="block">Account assignments, Shipments, Deliveries</span>
+                <span className="block">Settlements, Billing configs, Invoices, Reconciliations</span>
+                <span className="block">Linked user accounts</span>
+              </span>
+              <span className="block font-medium text-red-600">This action cannot be undone.</span>
+              <span className="block text-sm">
+                Type <strong>{distributor?.distributor_name}</strong> to confirm:
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={deleteConfirmName}
+            onChange={(e) => setDeleteConfirmName(e.target.value)}
+            placeholder="Type distributor name to confirm"
+            className="border-red-200 focus:ring-red-500/20"
+            data-testid="delete-confirm-input"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingDistributor}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deletingDistributor || deleteConfirmName !== distributor?.distributor_name}
+              onClick={handleDeleteDistributor}
+              data-testid="delete-confirm-btn"
+            >
+              {deletingDistributor ? 'Deleting...' : 'Delete Permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

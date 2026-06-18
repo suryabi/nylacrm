@@ -5,15 +5,37 @@ Production QC Tracking Module
 - Rejection Cost Rules (per-stage cost config)
 """
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Depends
-from deps import get_current_user
+from deps import get_current_user, get_user_or_api_key
 from core.tenant import get_current_tenant_id
 from database import db, get_tenant_db
 
 router = APIRouter(prefix="/production", tags=["Production QC"])
+
+# ──────────────────────────────────────────────
+# Role helpers
+# ──────────────────────────────────────────────
+
+# Only these roles can reset master factory stock or bypass QC on a production.
+ELEVATED_ROLES = {"ceo", "system admin"}
+
+
+def _is_elevated(user: dict) -> bool:
+    """True if the user is a CEO or System Admin. Matched case-insensitively
+    against `user.role` to align with seed data ('CEO', 'System Admin')."""
+    return (user.get("role") or "").strip().lower() in ELEVATED_ROLES
+
+
+def _require_elevated(user: dict):
+    if not _is_elevated(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only CEO and System Admin can perform this action.",
+        )
+
 
 # ──────────────────────────────────────────────
 # Models
@@ -37,33 +59,351 @@ class QCRouteUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class BatchCreate(BaseModel):
-    sku_id: str
-    sku_name: str
+    sku_id: Optional[str] = None
+    # External callers may identify the SKU by its code or its external SKU id
+    # (their own system's identifier) instead of the internal id.
+    sku_code: Optional[str] = None
+    external_sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
     batch_code: str
     production_date: str
     total_crates: int
-    bottles_per_crate: int
-    production_line: Optional[str] = None
+    # Optional — auto-filled from the SKU's default production packaging when omitted.
+    bottles_per_crate: Optional[int] = None
+    ph_value: Optional[float] = None
     notes: Optional[str] = None
+    # When True (CEO / System Admin only), the batch skips every QC stage and
+    # is created in a `completed` state with all bottles marked warehouse-ready.
+    # The audit fields `qc_bypassed_by`/`qc_bypassed_at`/`qc_bypassed_reason`
+    # are populated for later reporting.
+    skip_qc: bool = False
+    skip_qc_reason: Optional[str] = None
+
+class WarehouseReset(BaseModel):
+    """Payload for resetting all stock at master factory warehouses."""
+    # `mode` controls what "reset" means:
+    #   "zero"   → leave the rows in place but set quantity = 0 (preserves SKU/warehouse mapping for reports)
+    #   "purge"  → delete every factory_warehouse_stock row (fresh slate; rows
+    #              reappear as new transfers happen)
+    mode: str = Field("zero", pattern="^(zero|purge)$")
+    warehouse_location_id: Optional[str] = None  # if omitted: applies to ALL factory warehouses
 
 class BatchUpdate(BaseModel):
+    batch_code: Optional[str] = None
+    production_date: Optional[str] = None
     total_crates: Optional[int] = None
     bottles_per_crate: Optional[int] = None
-    production_line: Optional[str] = None
+    ph_value: Optional[float] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
 
-class RejectionCostRuleCreate(BaseModel):
+class RejectionCostMappingUpsert(BaseModel):
+    sku_id: str
     stage_name: str
-    stage_type: str
-    cost_per_unit: float  # cost per bottle/crate rejected at this stage
-    cost_components: Optional[List[str]] = []  # e.g. ["bottle", "cap", "water", "production"]
-    description: Optional[str] = None
+    reason_id: str
+    impacted_component_keys: List[str] = []
+    notes: Optional[str] = None
 
-class RejectionCostRuleUpdate(BaseModel):
-    cost_per_unit: Optional[float] = None
-    cost_components: Optional[List[str]] = None
-    description: Optional[str] = None
+
+class RejectionCostCalcRequest(BaseModel):
+    sku_id: str
+    stage_name: str
+    reason_id: Optional[str] = None
+    reason_name: Optional[str] = None
+    qty_rejected: int = 0
+
+
+class WarehouseTransfer(BaseModel):
+    warehouse_location_id: str
+    quantity: int  # crates to transfer
+    notes: Optional[str] = None
+
+
+# ──────────────────────────────────────────────
+# Production Dashboard
+# ──────────────────────────────────────────────
+
+@router.get("/dashboard")
+async def production_dashboard(
+    time_filter: Optional[str] = "this_month",
+    current_user: dict = Depends(get_current_user),
+):
+    """Aggregate stock + rejections, grouped by SKU and stage. Filterable by time range."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    # ── Resolve date range from time_filter (mirrors Sales Revenue dashboard logic) ──
+    start_date_iso = None
+    end_date_iso = None
+    if time_filter and time_filter not in ("all", "lifetime"):
+        now = datetime.now(timezone.utc)
+        start_date = None
+        end_date = None
+        if time_filter == "this_week":
+            start_date = now - timedelta(days=now.weekday())
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_week":
+            start_date = now - timedelta(days=now.weekday() + 7)
+            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        elif time_filter == "this_month":
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_month":
+            first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            last_month_last_day = first_of_this_month - timedelta(seconds=1)
+            start_date = last_month_last_day.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = first_of_this_month - timedelta(seconds=1)
+        elif time_filter == "last_3_months":
+            start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_6_months":
+            start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "this_quarter":
+            q = (now.month - 1) // 3
+            start_date = now.replace(month=q * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_quarter":
+            q = (now.month - 1) // 3 - 1
+            year = now.year - 1 if q < 0 else now.year
+            if q < 0:
+                q = 3
+            start_date = datetime(year, q * 3 + 1, 1, tzinfo=timezone.utc)
+            em = (q + 1) * 3
+            if em > 12:
+                end_date = datetime(year + 1, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+            else:
+                end_date = datetime(year, em + 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+        elif time_filter == "this_year":
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == "last_year":
+            start_date = datetime(now.year - 1, 1, 1, tzinfo=timezone.utc)
+            end_date = datetime(now.year, 1, 1, tzinfo=timezone.utc) - timedelta(seconds=1)
+        if start_date:
+            start_date_iso = start_date.isoformat()
+        if end_date:
+            end_date_iso = end_date.isoformat()
+
+    batch_query = {"tenant_id": tenant_id}
+    if start_date_iso:
+        # Filter batches by production_date (YYYY-MM-DD string), inclusive.
+        # Falls back to created_at for batches missing production_date.
+        sd_date = start_date_iso[:10]
+        ed_date = end_date_iso[:10] if end_date_iso else None
+        prod_cond = {"$gte": sd_date}
+        if ed_date:
+            prod_cond["$lte"] = ed_date
+        created_cond = {"$gte": start_date_iso}
+        if end_date_iso:
+            created_cond["$lte"] = end_date_iso
+        batch_query["$or"] = [
+            {"production_date": prod_cond},
+            {"production_date": {"$in": [None, ""]}, "created_at": created_cond},
+            {"production_date": {"$exists": False}, "created_at": created_cond},
+        ]
+
+    batches = await tdb.production_batches.find(
+        batch_query,
+        {"_id": 0, "id": 1, "sku_id": 1, "sku_name": 1, "total_crates": 1, "bottles_per_crate": 1,
+         "total_bottles": 1, "unallocated_crates": 1, "stage_balances": 1,
+         "total_passed_final": 1, "transferred_to_warehouse": 1, "total_rejected": 1,
+         "status": 1, "qc_stages": 1, "ph_value": 1, "created_at": 1, "production_date": 1}
+    ).to_list(5000)
+
+    # Aggregate per SKU
+    sku_map = {}
+    total_crates_all = 0
+    total_unallocated_all = 0
+    total_in_qc_crates = 0
+    total_ready_all = 0
+    total_transferred_all = 0
+    total_rejected_all = 0
+    active_batches = 0
+    batch_id_set = set()
+
+    for b in batches:
+        batch_id_set.add(b.get("id"))
+        sid = b.get("sku_id", "unknown")
+        # Crates currently in some QC stage for this batch.
+        # Bypassed batches have total_passed_final == total_bottles (already
+        # warehouse-ready), so converting that to crates and subtracting puts
+        # them at zero in-QC — which is correct.
+        b_total_crates = b.get("total_crates", 0) or 0
+        b_unallocated = b.get("unallocated_crates", 0) or 0
+        b_bpc = b.get("bottles_per_crate", 0) or 0
+        b_passed_final_bottles = b.get("total_passed_final", 0) or 0
+        b_passed_final_crates = (b_passed_final_bottles // b_bpc) if b_bpc > 0 else 0
+        b_in_qc = max(0, b_total_crates - b_unallocated - b_passed_final_crates)
+        total_in_qc_crates += b_in_qc
+        if sid not in sku_map:
+            sku_map[sid] = {
+                "sku_id": sid,
+                "sku_name": b.get("sku_name", "Unknown"),
+                "total_crates": 0,
+                "total_bottles": 0,
+                "bottles_per_crate": b.get("bottles_per_crate") or 0,
+                "unallocated_crates": 0,
+                "total_passed_final": 0,
+                "transferred_to_warehouse": 0,
+                "total_rejected": 0,
+                "rejection_cost": 0.0,
+                "batch_count": 0,
+                "stages": {},
+                "stage_order": [],
+            }
+        sku = sku_map[sid]
+        if not sku.get("bottles_per_crate") and b.get("bottles_per_crate"):
+            sku["bottles_per_crate"] = b.get("bottles_per_crate")
+        sku["total_crates"] += b.get("total_crates", 0)
+        sku["total_bottles"] += b.get("total_bottles", 0)
+        sku["unallocated_crates"] += b.get("unallocated_crates", 0)
+        sku["total_passed_final"] += b.get("total_passed_final", 0)
+        sku["transferred_to_warehouse"] += b.get("transferred_to_warehouse", 0) or 0
+        sku["total_rejected"] += b.get("total_rejected", 0)
+        sku["batch_count"] += 1
+
+        total_crates_all += b.get("total_crates", 0)
+        total_unallocated_all += b.get("unallocated_crates", 0)
+        total_ready_all += b.get("total_passed_final", 0)
+        total_transferred_all += b.get("transferred_to_warehouse", 0) or 0
+        total_rejected_all += b.get("total_rejected", 0)
+        if b.get("status") not in ("completed",):
+            active_batches += 1
+
+        if not sku["stage_order"] and b.get("qc_stages"):
+            sorted_stages = sorted(b["qc_stages"], key=lambda s: s.get("order", 0))
+            sku["stage_order"] = [
+                {"id": s["id"], "name": s["name"], "type": s.get("stage_type", "qc"), "order": s.get("order", 0)}
+                for s in sorted_stages
+            ]
+        for stage_id, bal in (b.get("stage_balances") or {}).items():
+            sname = bal.get("stage_name", stage_id)
+            if sname not in sku["stages"]:
+                sku["stages"][sname] = {"pending": 0, "passed": 0, "rejected": 0, "received": 0}
+            for k in ("pending", "passed", "rejected", "received"):
+                sku["stages"][sname][k] += bal.get(k, 0)
+
+    # ── Rejection cost metrics from inspections within the in-range batches ──
+    total_rejection_cost = 0.0
+    rejection_events = 0
+    rejection_unmapped = 0
+    by_reason_cost = {}
+    by_stage_cost = {}
+    top_costly_skus = []
+
+    if batch_id_set:
+        # Bulk-load mappings + master COGS values
+        all_mappings = await tdb.rejection_cost_mappings.find(
+            {"tenant_id": tenant_id}, {"_id": 0}
+        ).to_list(5000)
+        mapping_lookup = {(m.get("sku_id", ""), m.get("stage_name", ""), m.get("reason_name", "")): m for m in all_mappings}
+
+        from database import db as _global_db
+        sku_cogs_docs = await _global_db.master_skus.find(
+            {"id": {"$in": list({s["sku_id"] for s in sku_map.values()})}},
+            {"_id": 0, "id": 1, "cogs_components_values": 1},
+        ).to_list(500)
+        sku_cogs_map = {s["id"]: (s.get("cogs_components_values") or {}) for s in sku_cogs_docs}
+
+        # Pull inspections for batches in scope
+        ins_docs = await tdb.inspections.find(
+            {"tenant_id": tenant_id, "batch_id": {"$in": list(batch_id_set)}},
+            {"_id": 0, "batch_id": 1, "stage_name": 1, "rejections": 1, "entries": 1,
+             "qty_rejected": 1, "rejection_reason": 1}
+        ).to_list(50000)
+
+        # Build a map batch_id -> sku_id (so we can locate the SKU per inspection)
+        batch_sku_map = {b.get("id"): b.get("sku_id") for b in batches}
+
+        def add(sku_id_l, stage_l, reason_l, qty_l):
+            nonlocal total_rejection_cost, rejection_events, rejection_unmapped
+            qty_l = int(qty_l or 0)
+            if qty_l <= 0:
+                return
+            rejection_events += 1
+            m = mapping_lookup.get((sku_id_l, stage_l, reason_l))
+            if not m:
+                rejection_unmapped += 1
+                return
+            sku_v = sku_cogs_map.get(sku_id_l, {})
+            unit = 0.0
+            for k in m.get("impacted_component_keys", []):
+                unit += float(sku_v.get(k) or 0)
+            cost = unit * qty_l
+            total_rejection_cost += cost
+            by_reason_cost[reason_l] = by_reason_cost.get(reason_l, 0.0) + cost
+            by_stage_cost[stage_l] = by_stage_cost.get(stage_l, 0.0) + cost
+            if sku_id_l in sku_map:
+                sku_map[sku_id_l]["rejection_cost"] += cost
+
+        for ins in ins_docs:
+            sku_id_for = batch_sku_map.get(ins.get("batch_id"), "")
+            stage = ins.get("stage_name", "")
+            entries = ins.get("entries") or []
+            if entries:
+                for ent in entries:
+                    for r in ent.get("rejections") or []:
+                        add(sku_id_for, stage, r.get("reason", ""), r.get("qty_rejected", 0))
+            else:
+                rej_list = ins.get("rejections") or []
+                if rej_list:
+                    for r in rej_list:
+                        add(sku_id_for, stage, r.get("reason", ""), r.get("qty_rejected", 0))
+                elif ins.get("qty_rejected"):
+                    add(sku_id_for, stage, ins.get("rejection_reason", ""), ins.get("qty_rejected", 0))
+
+        # Top 5 costly SKUs
+        top_costly_skus = sorted(
+            [{"sku_id": s["sku_id"], "sku_name": s["sku_name"], "rejection_cost": round(s["rejection_cost"], 2),
+              "total_rejected": s["total_rejected"]}
+             for s in sku_map.values() if s["rejection_cost"] > 0],
+            key=lambda x: x["rejection_cost"], reverse=True
+        )[:5]
+
+    # Round per-SKU rejection cost
+    for s in sku_map.values():
+        s["rejection_cost"] = round(s["rejection_cost"], 2)
+
+    skus = sorted(sku_map.values(), key=lambda s: s["total_crates"], reverse=True)
+
+    # Crate-equivalents of aggregate bottle figures, by walking each SKU and
+    # using that SKU's bottles_per_crate. This is more accurate than dividing
+    # the global bottle total by an average BPC.
+    total_ready_crates = 0
+    total_transferred_crates = 0
+    for s in skus:
+        bpc = s.get("bottles_per_crate", 0) or 0
+        if bpc <= 0:
+            continue
+        s_ready_bottles = max(0, (s.get("total_passed_final", 0) or 0) - (s.get("transferred_to_warehouse", 0) or 0))
+        s_transferred_bottles = s.get("transferred_to_warehouse", 0) or 0
+        total_ready_crates += s_ready_bottles // bpc
+        total_transferred_crates += s_transferred_bottles // bpc
+
+    return {
+        "summary": {
+            "total_skus": len(skus),
+            "total_batches": len(batches),
+            "active_batches": active_batches,
+            "total_crates": total_crates_all,
+            "unallocated_crates": total_unallocated_all,
+            "in_qc_crates": total_in_qc_crates,
+            "ready_for_warehouse": total_ready_all - total_transferred_all,
+            "ready_for_warehouse_crates": total_ready_crates,
+            "transferred_to_warehouse": total_transferred_all,
+            "transferred_to_warehouse_crates": total_transferred_crates,
+            "total_rejected": total_rejected_all,
+            "total_rejection_cost": round(total_rejection_cost, 2),
+            "rejection_events": rejection_events,
+            "rejection_unmapped": rejection_unmapped,
+            "time_filter": time_filter or "this_month",
+        },
+        "skus": skus,
+        "rejection_breakdown": {
+            "by_reason": [{"reason": k, "cost": round(v, 2)} for k, v in sorted(by_reason_cost.items(), key=lambda x: x[1], reverse=True)],
+            "by_stage": [{"stage": k, "cost": round(v, 2)} for k, v in sorted(by_stage_cost.items(), key=lambda x: x[1], reverse=True)],
+            "top_skus": top_costly_skus,
+        },
+    }
 
 
 # ──────────────────────────────────────────────
@@ -182,9 +522,55 @@ async def get_batch(batch_id: str, current_user: dict = Depends(get_current_user
     return batch
 
 @router.post("/batches")
-async def create_batch(data: BatchCreate, current_user: dict = Depends(get_current_user)):
+async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_or_api_key)):
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
+
+    # Gate the QC-bypass fast path to CEO / System Admin (never available to API keys).
+    if data.skip_qc and not _is_elevated(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Only CEO and System Admin can skip QC when creating a production batch.",
+        )
+
+    # Resolve SKU + packaging. Full in-app payloads (sku_id + sku_name +
+    # bottles_per_crate all present) are trusted as-is for backward compatibility.
+    # Partial payloads (typically from external API callers) are resolved against
+    # the SKU master: SKU lookup by sku_id or sku_code, with sku_name and
+    # bottles_per_crate auto-filled from the SKU's default production packaging.
+    if data.sku_id and data.sku_name and data.bottles_per_crate:
+        sku_id = data.sku_id
+        sku_name = data.sku_name
+        bottles_per_crate = int(data.bottles_per_crate)
+    else:
+        sku_doc = None
+        if data.sku_id:
+            sku_doc = await tdb.master_skus.find_one({"id": data.sku_id}, {"_id": 0})
+        elif data.sku_code:
+            sku_doc = await tdb.master_skus.find_one({"sku_code": data.sku_code}, {"_id": 0})
+        elif data.external_sku_id:
+            # External systems only know their own SKU identifier, not our internal id.
+            sku_doc = await tdb.master_skus.find_one({"external_sku_id": data.external_sku_id}, {"_id": 0})
+        else:
+            raise HTTPException(status_code=400, detail="Provide sku_id, sku_code, or external_sku_id.")
+        if not sku_doc:
+            raise HTTPException(status_code=404, detail="SKU not found for the given sku_id/sku_code/external_sku_id.")
+        sku_id = sku_doc["id"]
+        sku_name = data.sku_name or sku_doc.get("sku_name") or sku_doc.get("name")
+        bottles_per_crate = data.bottles_per_crate
+        if not bottles_per_crate:
+            prod_pkg = (sku_doc.get("packaging_config") or {}).get("production") or []
+            default_pkg = next((p for p in prod_pkg if p.get("is_default")), None) or (prod_pkg[0] if prod_pkg else None)
+            bottles_per_crate = default_pkg.get("units_per_package") if default_pkg else None
+        if not bottles_per_crate or int(bottles_per_crate) <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="bottles_per_crate is required (the SKU has no default production packaging configured).",
+            )
+        bottles_per_crate = int(bottles_per_crate)
+
+    if not data.total_crates or int(data.total_crates) <= 0:
+        raise HTTPException(status_code=400, detail="total_crates must be greater than 0.")
 
     # Check if batch code already exists
     existing = await tdb.production_batches.find_one({"batch_code": data.batch_code, "tenant_id": tenant_id})
@@ -192,9 +578,9 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
 
     # Get QC route for this SKU
-    qc_route = await tdb.qc_routes.find_one({"sku_id": data.sku_id, "tenant_id": tenant_id}, {"_id": 0})
+    qc_route = await tdb.qc_routes.find_one({"sku_id": sku_id, "tenant_id": tenant_id}, {"_id": 0})
 
-    total_bottles = data.total_crates * data.bottles_per_crate
+    total_bottles = data.total_crates * bottles_per_crate
     now = datetime.now(timezone.utc).isoformat()
 
     # Initialize stage balances from QC route
@@ -220,13 +606,14 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_curre
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "batch_code": data.batch_code,
-        "sku_id": data.sku_id,
-        "sku_name": data.sku_name,
+        "sku_id": sku_id,
+        "sku_name": sku_name,
         "production_date": data.production_date,
         "total_crates": data.total_crates,
-        "bottles_per_crate": data.bottles_per_crate,
+        "bottles_per_crate": bottles_per_crate,
         "total_bottles": total_bottles,
-        "production_line": data.production_line or "",
+        "production_line": "",
+        "ph_value": data.ph_value,
         "notes": data.notes or "",
         "status": "created",  # created, in_qc, in_labeling, in_final_qc, completed
         "qc_route_id": qc_route_id,
@@ -235,11 +622,26 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_curre
         "unallocated_crates": data.total_crates,  # crates not yet moved to any stage
         "total_rejected": 0,
         "total_passed_final": 0,
+        "qc_bypassed": False,
         "created_by": current_user.get("id"),
         "created_by_name": current_user.get("name"),
         "created_at": now,
         "updated_at": now,
     }
+
+    if data.skip_qc:
+        # Treat every bottle as warehouse-ready. Skip stage-by-stage tracking
+        # entirely. We still preserve the QC route snapshot for context.
+        batch["status"] = "completed"
+        batch["unallocated_crates"] = 0
+        batch["total_passed_final"] = total_bottles
+        batch["transferred_to_warehouse"] = 0
+        batch["qc_bypassed"] = True
+        batch["qc_bypassed_by"] = current_user.get("id")
+        batch["qc_bypassed_by_name"] = current_user.get("name")
+        batch["qc_bypassed_at"] = now
+        batch["qc_bypassed_reason"] = (data.skip_qc_reason or "").strip() or None
+
     await tdb.production_batches.insert_one(batch)
     batch.pop("_id", None)
     return batch
@@ -253,24 +655,90 @@ async def update_batch(batch_id: str, data: BatchUpdate, current_user: dict = De
     if not existing:
         raise HTTPException(status_code=404, detail="Batch not found")
 
+    is_created = (existing.get("status") == "created")
     updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    for field in ["total_crates", "bottles_per_crate", "production_line", "notes", "status"]:
+
+    # Always-editable fields (no impact on QC math)
+    for field in ["ph_value", "notes", "production_date"]:
         val = getattr(data, field, None)
         if val is not None:
             updates[field] = val
 
-    # Recalculate total_bottles if crates or bottles_per_crate changed
-    new_crates = data.total_crates or existing.get("total_crates", 0)
-    new_bpc = data.bottles_per_crate or existing.get("bottles_per_crate", 0)
-    if data.total_crates is not None or data.bottles_per_crate is not None:
-        updates["total_bottles"] = new_crates * new_bpc
+    # batch_code: enforce uniqueness when changed
+    if data.batch_code is not None and data.batch_code != existing.get("batch_code"):
+        dup = await tdb.production_batches.find_one(
+            {"batch_code": data.batch_code, "tenant_id": tenant_id, "id": {"$ne": batch_id}}
+        )
+        if dup:
+            raise HTTPException(status_code=400, detail=f"Batch code '{data.batch_code}' already exists")
+        updates["batch_code"] = data.batch_code
+
+    # SKU can be corrected at any time (e.g. the wrong product was selected when
+    # the batch was created). master_skus is a GLOBAL collection. We validate the
+    # new SKU exists and sync the denormalised sku_name from the master record.
+    if data.sku_id is not None and data.sku_id != existing.get("sku_id"):
+        sku = await db.master_skus.find_one({"id": data.sku_id}, {"_id": 0})
+        if not sku:
+            raise HTTPException(status_code=404, detail="Selected SKU not found")
+        updates["sku_id"] = data.sku_id
+        updates["sku_name"] = sku.get("sku_name") or sku.get("name") or data.sku_name or existing.get("sku_name")
+
+    # Bottles-per-crate stays locked once QC has started (it changes bottle-level
+    # math + warehouse transfers). Total crates, however, can be corrected at any
+    # time — but never below the crates already moved into QC / allocations.
+    bpc_changed = data.bottles_per_crate is not None and data.bottles_per_crate != existing.get("bottles_per_crate")
+    if bpc_changed and not is_created:
+        raise HTTPException(
+            status_code=400,
+            detail="Bottles-per-crate can only be changed before QC starts.",
+        )
+
+    crates_changed = data.total_crates is not None and data.total_crates != existing.get("total_crates")
+    if crates_changed or bpc_changed:
+        new_crates = data.total_crates if data.total_crates is not None else existing.get("total_crates", 0)
+        new_bpc = data.bottles_per_crate if data.bottles_per_crate is not None else existing.get("bottles_per_crate", 0)
+        if new_crates is None or int(new_crates) <= 0:
+            raise HTTPException(status_code=400, detail="Total crates must be greater than 0.")
+
+        old_total = existing.get("total_crates", 0) or 0
+        old_unalloc = existing.get("unallocated_crates", 0) or 0
+        moved = old_total - old_unalloc  # crates already pushed into QC stages / allocations
+        new_unalloc = int(new_crates) - moved
+        if new_unalloc < 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Can't set total crates to {new_crates}: {moved} crates are already "
+                    f"in QC/allocations. The minimum is {moved}."
+                ),
+            )
+
+        updates["total_crates"] = int(new_crates)
+        updates["bottles_per_crate"] = int(new_bpc)
+        updates["total_bottles"] = int(new_crates) * int(new_bpc)
+        updates["unallocated_crates"] = new_unalloc
 
     await tdb.production_batches.update_one({"id": batch_id}, {"$set": updates})
     updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
     return updated
 
 @router.delete("/batches/{batch_id}")
-async def delete_batch(batch_id: str, current_user: dict = Depends(get_current_user)):
+async def delete_batch(
+    batch_id: str,
+    force: bool = False,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a production batch.
+
+    Default behaviour (any role): only batches in `created` status can be
+    deleted — no cascade is needed because nothing downstream exists yet.
+
+    Force mode (`?force=true`, CEO/System Admin only): cascade-deletes every
+    child record tied to this batch — inspections (which hold QC stage
+    rejections/rework data), stage movements, warehouse transfers — and
+    rolls back the factory-warehouse stock that this batch contributed.
+    A `production_batch_deletions` audit row is written for traceability.
+    """
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
 
@@ -278,12 +746,102 @@ async def delete_batch(batch_id: str, current_user: dict = Depends(get_current_u
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
 
-    # Only allow deleting batches that haven't moved to QC yet
-    if batch.get("status") not in ("created",):
-        raise HTTPException(status_code=400, detail="Cannot delete a batch that is already in QC process")
+    if not force:
+        if batch.get("status") not in ("created",):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete a batch that is already in QC process. CEO/Admin can use force-delete to cascade.",
+            )
+        await tdb.production_batches.delete_one({"id": batch_id})
+        return {"message": "Batch deleted", "cascade": False}
 
+    # ── Force cascade delete (CEO / System Admin only) ──
+    _require_elevated(current_user)
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1. Roll back factory warehouse stock contributed by this batch.
+    transfers = await tdb.warehouse_transfers.find(
+        {"tenant_id": tenant_id, "batch_id": batch_id}, {"_id": 0}
+    ).to_list(10000)
+    stock_rollback = []
+    for t in transfers:
+        wh_id = t.get("warehouse_location_id")
+        sku_id = t.get("sku_id")
+        qty = int(t.get("quantity") or 0)
+        if not wh_id or not sku_id or qty <= 0:
+            continue
+        stock_row = await tdb.factory_warehouse_stock.find_one({
+            "tenant_id": tenant_id,
+            "warehouse_location_id": wh_id,
+            "sku_id": sku_id,
+        })
+        if not stock_row:
+            continue
+        new_qty = max(0, int(stock_row.get("quantity") or 0) - qty)
+        if new_qty == 0:
+            await tdb.factory_warehouse_stock.delete_one({"id": stock_row["id"]})
+            stock_rollback.append({
+                "warehouse_location_id": wh_id, "sku_id": sku_id,
+                "previous_qty": stock_row.get("quantity"), "deleted": True,
+            })
+        else:
+            await tdb.factory_warehouse_stock.update_one(
+                {"id": stock_row["id"]},
+                {"$set": {"quantity": new_qty, "updated_at": now}},
+            )
+            stock_rollback.append({
+                "warehouse_location_id": wh_id, "sku_id": sku_id,
+                "previous_qty": stock_row.get("quantity"), "new_qty": new_qty,
+            })
+
+    # 2. Delete child collections tied to this batch.
+    transfers_res = await tdb.warehouse_transfers.delete_many(
+        {"tenant_id": tenant_id, "batch_id": batch_id}
+    )
+    inspections_res = await tdb.inspections.delete_many(
+        {"tenant_id": tenant_id, "batch_id": batch_id}
+    )
+    movements_res = await tdb.stage_movements.delete_many(
+        {"tenant_id": tenant_id, "batch_id": batch_id}
+    )
+
+    # 3. Audit row before the parent delete so we never lose the trail.
+    audit = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "batch_id": batch_id,
+        "batch_code": batch.get("batch_code"),
+        "sku_id": batch.get("sku_id"),
+        "sku_name": batch.get("sku_name"),
+        "status_at_delete": batch.get("status"),
+        "total_crates": batch.get("total_crates"),
+        "bottles_per_crate": batch.get("bottles_per_crate"),
+        "total_bottles": batch.get("total_bottles"),
+        "transfers_deleted": transfers_res.deleted_count,
+        "inspections_deleted": inspections_res.deleted_count,
+        "movements_deleted": movements_res.deleted_count,
+        "stock_rollback": stock_rollback,
+        "deleted_by": current_user.get("id"),
+        "deleted_by_name": current_user.get("name"),
+        "deleted_by_role": current_user.get("role"),
+        "deleted_at": now,
+    }
+    await tdb.production_batch_deletions.insert_one(audit)
+    audit.pop("_id", None)
+
+    # 4. Finally, drop the batch itself.
     await tdb.production_batches.delete_one({"id": batch_id})
-    return {"message": "Batch deleted"}
+
+    return {
+        "message": "Batch and all child records deleted",
+        "cascade": True,
+        "transfers_deleted": transfers_res.deleted_count,
+        "inspections_deleted": inspections_res.deleted_count,
+        "movements_deleted": movements_res.deleted_count,
+        "stock_rollback_count": len(stock_rollback),
+        "audit_id": audit["id"],
+    }
 
 
 # ──────────────────────────────────────────────
@@ -295,12 +853,20 @@ class StageMovement(BaseModel):
     quantity: int  # crates to move
     notes: Optional[str] = None
 
+class RejectionItem(BaseModel):
+    qty_rejected: int  # bottles rejected
+    reason: str
+
+class InspectionEntry(BaseModel):
+    resource_id: str
+    resource_name: str
+    date: str
+    qty_inspected: int  # crates inspected by this resource on this date
+    rejections: List[RejectionItem] = []
+
 class InspectionRecord(BaseModel):
     stage_id: str
-    qty_inspected: int
-    qty_passed: int
-    qty_rejected: int
-    rejection_reason: Optional[str] = None
+    entries: List[InspectionEntry] = []
     remarks: Optional[str] = None
 
 @router.post("/batches/{batch_id}/move")
@@ -401,7 +967,8 @@ async def move_stock(batch_id: str, data: StageMovement, current_user: dict = De
 
 @router.post("/batches/{batch_id}/inspect")
 async def record_inspection(batch_id: str, data: InspectionRecord, current_user: dict = Depends(get_current_user)):
-    """Record QC inspection at a stage: pass/reject crates from pending."""
+    """Record QC inspection: each entry = resource + date + crates inspected,
+    with multiple rejection items (count + reason) per entry."""
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
 
@@ -417,29 +984,51 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
 
     bal = balances.get(data.stage_id, {})
     pending = bal.get("pending", 0)
+    bottles_per_crate = batch.get("bottles_per_crate", 1)
 
-    if data.qty_inspected <= 0:
-        raise HTTPException(status_code=400, detail="Inspected quantity must be > 0")
-    if data.qty_passed + data.qty_rejected != data.qty_inspected:
-        raise HTTPException(status_code=400, detail="Passed + Rejected must equal Inspected")
-    if data.qty_inspected > pending:
+    if not data.entries:
+        raise HTTPException(status_code=400, detail="At least one inspection entry is required")
+
+    # Compute totals from entries
+    total_crates_inspected = sum(e.qty_inspected for e in data.entries)
+    total_rej_bottles = 0
+    for e in data.entries:
+        entry_rejected = sum(r.qty_rejected for r in e.rejections)
+        total_rej_bottles += entry_rejected
+
+    if total_crates_inspected <= 0:
+        raise HTTPException(status_code=400, detail="Total crates inspected must be > 0")
+    if total_crates_inspected > pending:
         raise HTTPException(status_code=400, detail=f"Only {pending} crates pending at {stage['name']}")
 
-    # Update balances
-    bal["pending"] = pending - data.qty_inspected
-    bal["passed"] = bal.get("passed", 0) + data.qty_passed
-    bal["rejected"] = bal.get("rejected", 0) + data.qty_rejected
+    # Validate each entry
+    for e in data.entries:
+        if e.qty_inspected <= 0:
+            raise HTTPException(status_code=400, detail="Crates inspected must be > 0 for each entry")
+        entry_rejected = sum(r.qty_rejected for r in e.rejections)
+        max_bottles = e.qty_inspected * bottles_per_crate
+        if entry_rejected > max_bottles:
+            raise HTTPException(status_code=400, detail=f"Total rejected ({entry_rejected}) exceeds max {max_bottles} bottles for {e.resource_name}")
+        for r in e.rejections:
+            if r.qty_rejected < 0:
+                raise HTTPException(status_code=400, detail="Rejected count cannot be negative")
+
+    # Convert rejected bottles to crate equivalents; only net-passed crates move forward
+    rejected_crate_equiv = total_rej_bottles // bottles_per_crate if bottles_per_crate > 0 else 0
+    passed_crates = max(total_crates_inspected - rejected_crate_equiv, 0)
+    bal["pending"] = pending - total_crates_inspected
+    bal["passed"] = bal.get("passed", 0) + passed_crates
+    bal["rejected"] = bal.get("rejected", 0) + total_rej_bottles
     balances[data.stage_id] = bal
 
-    # Track total rejections and final QC pass-through
-    total_rejected = batch.get("total_rejected", 0) + data.qty_rejected
+    batch_total_rejected = batch.get("total_rejected", 0) + total_rej_bottles
     total_passed_final = batch.get("total_passed_final", 0)
-
-    # If this is the final_qc stage, passed crates become delivery-ready
     if stage.get("stage_type") == "final_qc":
-        total_passed_final += data.qty_passed
+        # Warehouse ready = only bottles that passed (total inspected bottles - rejected bottles)
+        total_bottles_inspected = total_crates_inspected * (batch.get("bottles_per_crate", 1) or 1)
+        passed_bottles_this_inspection = total_bottles_inspected - total_rej_bottles
+        total_passed_final += max(passed_bottles_this_inspection, 0)
 
-    # Check if batch is completed (all crates accounted for)
     sorted_stages = sorted(stages, key=lambda s: s["order"])
     all_done = batch.get("unallocated_crates", 0) == 0
     if all_done:
@@ -453,13 +1042,12 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
 
     updates = {
         "stage_balances": balances,
-        "total_rejected": total_rejected,
+        "total_rejected": batch_total_rejected,
         "total_passed_final": total_passed_final,
         "status": new_status,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # Record inspection
     now = datetime.now(timezone.utc).isoformat()
     inspection = {
         "id": str(uuid.uuid4()),
@@ -467,10 +1055,10 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
         "stage_id": data.stage_id,
         "stage_name": stage["name"],
         "stage_type": stage.get("stage_type", "qc"),
-        "qty_inspected": data.qty_inspected,
-        "qty_passed": data.qty_passed,
-        "qty_rejected": data.qty_rejected,
-        "rejection_reason": data.rejection_reason or "",
+        "qty_inspected": total_crates_inspected,
+        "qty_passed": total_crates_inspected,
+        "qty_rejected": total_rej_bottles,
+        "entries": [e.model_dump() for e in data.entries],
         "remarks": data.remarks or "",
         "inspected_by": current_user.get("id"),
         "inspected_by_name": current_user.get("name"),
@@ -480,6 +1068,82 @@ async def record_inspection(batch_id: str, data: InspectionRecord, current_user:
     await tdb.inspections.insert_one(inspection)
 
     await tdb.production_batches.update_one({"id": batch_id}, {"$set": updates})
+    updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
+    return updated
+
+
+
+@router.put("/batches/{batch_id}/inspections/{inspection_id}")
+async def update_inspection(batch_id: str, inspection_id: str, data: InspectionRecord, current_user: dict = Depends(get_current_user)):
+    """Update an existing inspection record and recalculate stage balances."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    old_insp = await tdb.inspections.find_one({"id": inspection_id, "batch_id": batch_id, "tenant_id": tenant_id})
+    if not old_insp:
+        raise HTTPException(status_code=404, detail="Inspection not found")
+
+    stage_id = old_insp["stage_id"]
+    stage = next((s for s in batch.get("qc_stages", []) if s["id"] == stage_id), None)
+    if not stage:
+        raise HTTPException(status_code=400, detail="Stage not found")
+
+    bottles_per_crate = batch.get("bottles_per_crate", 1) or 1
+
+    # Calculate old totals
+    old_crates = old_insp.get("qty_inspected", 0)
+    old_rej = old_insp.get("qty_rejected", 0)
+    old_rej_crate_equiv = old_rej // bottles_per_crate if bottles_per_crate > 0 else 0
+    old_passed = max(old_crates - old_rej_crate_equiv, 0)
+
+    # Calculate new totals
+    new_crates = sum(int(e.qty_inspected) for e in data.entries)
+    new_rej = sum(sum(int(r.qty_rejected) for r in e.rejections) for e in data.entries)
+    new_rej_crate_equiv = new_rej // bottles_per_crate if bottles_per_crate > 0 else 0
+    new_passed = max(new_crates - new_rej_crate_equiv, 0)
+
+    # Update stage balances: reverse old, apply new
+    balances = batch.get("stage_balances", {})
+    bal = balances.get(stage_id, {})
+    bal["pending"] = bal.get("pending", 0) + old_crates - new_crates
+    bal["passed"] = bal.get("passed", 0) - old_passed + new_passed
+    bal["rejected"] = bal.get("rejected", 0) - old_rej + new_rej
+    balances[stage_id] = bal
+
+    # Update total_rejected on batch
+    total_rejected = (batch.get("total_rejected", 0) or 0) - old_rej + new_rej
+
+    # Update total_passed_final if final_qc stage
+    total_passed_final = batch.get("total_passed_final", 0) or 0
+    if stage.get("stage_type") == "final_qc":
+        old_final_passed = old_crates * bottles_per_crate - old_rej
+        new_final_passed = new_crates * bottles_per_crate - new_rej
+        total_passed_final = max(0, total_passed_final - old_final_passed + new_final_passed)
+
+    # Update inspection document
+    await tdb.inspections.update_one({"id": inspection_id}, {"$set": {
+        "qty_inspected": new_crates,
+        "qty_passed": new_crates,
+        "qty_rejected": new_rej,
+        "entries": [e.model_dump() for e in data.entries],
+        "remarks": data.remarks or "",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_by": current_user.get("id"),
+        "updated_by_name": current_user.get("name"),
+    }})
+
+    # Update batch
+    await tdb.production_batches.update_one({"id": batch_id}, {"$set": {
+        "stage_balances": balances,
+        "total_rejected": total_rejected,
+        "total_passed_final": total_passed_final,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }})
+
     updated = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
     return updated
 
@@ -510,66 +1174,288 @@ async def get_batch_history(batch_id: str, current_user: dict = Depends(get_curr
 
 
 # ──────────────────────────────────────────────
-# Rejection Cost Rules
+# Rejection Cost Mappings  (per Stage × Reason → impacted COGS components)
 # ──────────────────────────────────────────────
 
-@router.get("/rejection-cost-rules")
-async def list_rejection_cost_rules(current_user: dict = Depends(get_current_user)):
-    tenant_id = get_current_tenant_id()
-    tdb = get_tenant_db()
-    rules = await tdb.rejection_cost_rules.find({"tenant_id": tenant_id}, {"_id": 0}).sort("stage_name", 1).to_list(100)
-    return rules
+async def _resolve_master_components(tenant_id: str) -> dict:
+    """Returns active rupee COGS components (key -> {label, sort_order, unit})."""
+    try:
+        # Master cogs_components is global (not tenant-scoped in db.cogs_components)
+        from database import db as _db
+        comps = await _db.cogs_components.find(
+            {"tenant_id": tenant_id, "is_active": True},
+            {"_id": 0, "key": 1, "label": 1, "unit": 1, "sort_order": 1},
+        ).sort("sort_order", 1).to_list(200)
+    except Exception:
+        comps = []
+    return {c["key"]: c for c in comps if c.get("unit") == "rupee"}
 
-@router.post("/rejection-cost-rules")
-async def create_rejection_cost_rule(data: RejectionCostRuleCreate, current_user: dict = Depends(get_current_user)):
+
+@router.get("/rejection-cost-config")
+async def get_rejection_cost_config(
+    sku_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """SKU-scoped configuration data.
+
+    Without `sku_id` → returns the list of active SKUs (for the picker) plus
+    master COGS components and master rejection reasons.
+    With `sku_id` → also returns that SKU's QC-route stages and existing
+    mappings for it.
+    """
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
+
+    # Active master ₹ components
+    comps_map = await _resolve_master_components(tenant_id)
+    components = sorted(comps_map.values(), key=lambda c: c.get("sort_order", 99))
+
+    # Active SKUs from master (global db.master_skus), ordered by master sort_order
+    from database import db as _db
+    sku_docs = await _db.master_skus.find(
+        {"is_active": {"$ne": False}},
+        {"_id": 0, "id": 1, "sku_name": 1, "external_sku_id": 1, "category": 1, "sort_order": 1},
+    ).sort([("sort_order", 1), ("sku_name", 1)]).to_list(500)
+
+    # Master rejection reasons
+    reasons = await tdb.rejection_reasons.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "name": 1},
+    ).sort("name", 1).to_list(500)
+
+    payload = {
+        "components": components,
+        "skus": sku_docs,
+        "reasons": reasons,
+    }
+
+    if sku_id:
+        # Stages from this SKU's QC route(s) — there can be multiple routes per SKU; union
+        routes = await tdb.qc_routes.find(
+            {"tenant_id": tenant_id, "sku_id": sku_id, "is_active": {"$ne": False}},
+            {"_id": 0, "stages": 1},
+        ).to_list(50)
+        stage_seen = {}
+        for r in routes:
+            for s in r.get("stages", []):
+                nm = s.get("name")
+                if nm and nm not in stage_seen:
+                    stage_seen[nm] = s.get("order", 99)
+        stages = [{"name": k, "order": v} for k, v in sorted(stage_seen.items(), key=lambda kv: kv[1])]
+
+        # Mappings for this SKU only
+        mappings = await tdb.rejection_cost_mappings.find(
+            {"tenant_id": tenant_id, "sku_id": sku_id},
+            {"_id": 0},
+        ).to_list(2000)
+
+        sku_doc = next((s for s in sku_docs if s.get("id") == sku_id), None)
+        if not sku_doc:
+            sku_doc = await _db.master_skus.find_one(
+                {"id": sku_id},
+                {"_id": 0, "id": 1, "sku_name": 1, "external_sku_id": 1, "category": 1},
+            )
+        # Always include cogs_components_values so the UI can show live cost per row
+        sku_full = await _db.master_skus.find_one(
+            {"id": sku_id},
+            {"_id": 0, "id": 1, "sku_name": 1, "cogs_components_values": 1},
+        )
+        if sku_doc and sku_full:
+            sku_doc = {**sku_doc, "cogs_components_values": sku_full.get("cogs_components_values") or {}}
+        payload["sku"] = sku_doc
+        payload["stages"] = stages
+        payload["mappings"] = mappings
+
+    return payload
+
+
+@router.get("/rejection-cost-mappings")
+async def list_rejection_cost_mappings(
+    sku_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    q = {"tenant_id": tenant_id}
+    if sku_id:
+        q["sku_id"] = sku_id
+    return await tdb.rejection_cost_mappings.find(q, {"_id": 0}).to_list(5000)
+
+
+@router.post("/rejection-cost-mappings")
+async def upsert_rejection_cost_mapping(data: RejectionCostMappingUpsert, current_user: dict = Depends(get_current_user)):
+    """Create or update a (sku_id, stage_name, reason_id) mapping atomically."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    if not data.sku_id or not data.stage_name or not data.reason_id:
+        raise HTTPException(status_code=400, detail="sku_id, stage_name and reason_id are required")
+
+    # Validate SKU exists
+    from database import db as _db
+    sku = await _db.master_skus.find_one(
+        {"id": data.sku_id},
+        {"_id": 0, "id": 1, "sku_name": 1},
+    )
+    if not sku:
+        raise HTTPException(status_code=404, detail="SKU not found")
+
+    # Validate reason exists & resolve name
+    reason = await tdb.rejection_reasons.find_one(
+        {"id": data.reason_id, "tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "name": 1},
+    )
+    if not reason:
+        raise HTTPException(status_code=404, detail="Rejection reason not found")
+
+    # Validate components against master (ignore unknown silently)
+    comps_map = await _resolve_master_components(tenant_id)
+    impacted = [k for k in (data.impacted_component_keys or []) if k in comps_map]
 
     now = datetime.now(timezone.utc).isoformat()
-    rule = {
+    existing = await tdb.rejection_cost_mappings.find_one(
+        {"tenant_id": tenant_id, "sku_id": data.sku_id, "stage_name": data.stage_name, "reason_id": data.reason_id},
+        {"_id": 0},
+    )
+    if existing:
+        await tdb.rejection_cost_mappings.update_one(
+            {"id": existing["id"]},
+            {"$set": {
+                "impacted_component_keys": impacted,
+                "notes": data.notes,
+                "reason_name": reason["name"],
+                "sku_name": sku["sku_name"],
+                "updated_at": now,
+                "updated_by": current_user.get("id"),
+            }},
+        )
+        existing.update({
+            "impacted_component_keys": impacted,
+            "notes": data.notes,
+            "reason_name": reason["name"],
+            "sku_name": sku["sku_name"],
+            "updated_at": now,
+        })
+        return existing
+
+    doc = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
+        "sku_id": data.sku_id,
+        "sku_name": sku["sku_name"],
         "stage_name": data.stage_name,
-        "stage_type": data.stage_type,
-        "cost_per_unit": data.cost_per_unit,
-        "cost_components": data.cost_components or [],
-        "description": data.description or "",
+        "reason_id": data.reason_id,
+        "reason_name": reason["name"],
+        "impacted_component_keys": impacted,
+        "notes": data.notes,
         "created_at": now,
         "updated_at": now,
+        "created_by": current_user.get("id"),
     }
-    await tdb.rejection_cost_rules.insert_one(rule)
-    rule.pop("_id", None)
-    return rule
+    await tdb.rejection_cost_mappings.insert_one(dict(doc))
+    return doc
 
-@router.put("/rejection-cost-rules/{rule_id}")
-async def update_rejection_cost_rule(rule_id: str, data: RejectionCostRuleUpdate, current_user: dict = Depends(get_current_user)):
+
+@router.delete("/rejection-cost-mappings/{mapping_id}")
+async def delete_rejection_cost_mapping(mapping_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
     tdb = get_tenant_db()
-
-    existing = await tdb.rejection_cost_rules.find_one({"id": rule_id, "tenant_id": tenant_id})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Rule not found")
-
-    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    if data.cost_per_unit is not None:
-        updates["cost_per_unit"] = data.cost_per_unit
-    if data.cost_components is not None:
-        updates["cost_components"] = data.cost_components
-    if data.description is not None:
-        updates["description"] = data.description
-
-    await tdb.rejection_cost_rules.update_one({"id": rule_id}, {"$set": updates})
-    updated = await tdb.rejection_cost_rules.find_one({"id": rule_id}, {"_id": 0})
-    return updated
-
-@router.delete("/rejection-cost-rules/{rule_id}")
-async def delete_rejection_cost_rule(rule_id: str, current_user: dict = Depends(get_current_user)):
-    tenant_id = get_current_tenant_id()
-    tdb = get_tenant_db()
-    result = await tdb.rejection_cost_rules.delete_one({"id": rule_id, "tenant_id": tenant_id})
+    result = await tdb.rejection_cost_mappings.delete_one({"id": mapping_id, "tenant_id": tenant_id})
     if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Rule not found")
-    return {"message": "Rule deleted"}
+        raise HTTPException(status_code=404, detail="Mapping not found")
+    return {"message": "Mapping deleted"}
+
+
+async def _calc_rejection_cost(
+    tenant_id: str,
+    sku_id: str,
+    stage_name: str,
+    reason_id: Optional[str],
+    reason_name: Optional[str],
+    qty_rejected: int,
+) -> dict:
+    """Internal helper used by the calculate endpoint AND for enrichment in reports."""
+    tdb = get_tenant_db()
+
+    # SKU master values
+    from database import db as _db
+    sku = await _db.master_skus.find_one(
+        {"id": sku_id},
+        {"_id": 0, "id": 1, "sku_name": 1, "cogs_components_values": 1},
+    )
+    if not sku:
+        return {
+            "qty_rejected": qty_rejected,
+            "stage_name": stage_name,
+            "reason_id": reason_id,
+            "reason_name": reason_name,
+            "breakdown": [],
+            "unit_cost": 0.0,
+            "total_cost": 0.0,
+            "missing_mapping": False,
+            "missing_sku": True,
+        }
+
+    # Find mapping (sku-scoped, by reason_id preferred, fallback to reason_name)
+    mapping_q = {"tenant_id": tenant_id, "sku_id": sku_id, "stage_name": stage_name}
+    mapping = None
+    if reason_id:
+        mapping = await tdb.rejection_cost_mappings.find_one({**mapping_q, "reason_id": reason_id}, {"_id": 0})
+    if not mapping and reason_name:
+        mapping = await tdb.rejection_cost_mappings.find_one({**mapping_q, "reason_name": reason_name}, {"_id": 0})
+
+    impacted_keys = (mapping or {}).get("impacted_component_keys", [])
+    sku_vals = sku.get("cogs_components_values") or {}
+    comps_map = await _resolve_master_components(tenant_id)
+
+    breakdown = []
+    missing_sku_values = []
+    unit_cost = 0.0
+    for k in impacted_keys:
+        comp = comps_map.get(k)
+        if not comp:
+            continue
+        v = sku_vals.get(k)
+        if v is None:
+            missing_sku_values.append(k)
+            v = 0.0
+        v = float(v or 0)
+        breakdown.append({
+            "component_key": k,
+            "label": comp.get("label", k),
+            "unit_cost": round(v, 2),
+            "qty": qty_rejected,
+            "line_total": round(v * qty_rejected, 2),
+        })
+        unit_cost += v
+
+    return {
+        "sku_id": sku_id,
+        "sku_name": sku.get("sku_name"),
+        "qty_rejected": qty_rejected,
+        "stage_name": stage_name,
+        "reason_id": reason_id or (mapping or {}).get("reason_id"),
+        "reason_name": reason_name or (mapping or {}).get("reason_name"),
+        "breakdown": breakdown,
+        "unit_cost": round(unit_cost, 2),
+        "total_cost": round(unit_cost * qty_rejected, 2),
+        "missing_mapping": mapping is None,
+        "missing_sku_values": missing_sku_values,
+    }
+
+
+@router.post("/rejection-cost-calculate")
+async def rejection_cost_calculate(data: RejectionCostCalcRequest, current_user: dict = Depends(get_current_user)):
+    """Live calculator — used by the QC inspection form preview."""
+    tenant_id = get_current_tenant_id()
+    return await _calc_rejection_cost(
+        tenant_id,
+        data.sku_id,
+        data.stage_name,
+        data.reason_id,
+        data.reason_name,
+        max(int(data.qty_rejected or 0), 0),
+    )
 
 
 # ──────────────────────────────────────────────
@@ -608,3 +1494,668 @@ async def get_production_stats(current_user: dict = Depends(get_current_user)):
         "total_rejected": totals.get("total_rejected", 0),
         "total_passed_final": totals.get("total_passed_final", 0),
     }
+
+
+# ──────────────────────────────────────────────
+# QC Team Master Data
+# ──────────────────────────────────────────────
+
+class QCTeamMemberCreate(BaseModel):
+    name: str
+    role: Optional[str] = None
+
+class QCTeamMemberUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+
+@router.get("/qc-team")
+async def list_qc_team(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    members = await tdb.qc_team.find({"tenant_id": tenant_id}, {"_id": 0}).sort("name", 1).to_list(500)
+    return members
+
+@router.post("/qc-team")
+async def create_qc_team_member(data: QCTeamMemberCreate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    existing = await tdb.qc_team.find_one({"name": data.name, "tenant_id": tenant_id})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"QC team member '{data.name}' already exists")
+    now = datetime.now(timezone.utc).isoformat()
+    member = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": data.name,
+        "role": data.role or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tdb.qc_team.insert_one(member)
+    member.pop("_id", None)
+    return member
+
+@router.put("/qc-team/{member_id}")
+async def update_qc_team_member(member_id: str, data: QCTeamMemberUpdate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    existing = await tdb.qc_team.find_one({"id": member_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="QC team member not found")
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.name is not None:
+        dup = await tdb.qc_team.find_one({"name": data.name, "tenant_id": tenant_id, "id": {"$ne": member_id}})
+        if dup:
+            raise HTTPException(status_code=400, detail=f"QC team member '{data.name}' already exists")
+        updates["name"] = data.name
+    if data.role is not None:
+        updates["role"] = data.role
+    await tdb.qc_team.update_one({"id": member_id}, {"$set": updates})
+    updated = await tdb.qc_team.find_one({"id": member_id}, {"_id": 0})
+    return updated
+
+@router.delete("/qc-team/{member_id}")
+async def delete_qc_team_member(member_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    result = await tdb.qc_team.delete_one({"id": member_id, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="QC team member not found")
+    return {"message": "QC team member deleted"}
+
+
+# ──────────────────────────────────────────────
+# Rejection Reasons Master Data
+# ──────────────────────────────────────────────
+
+class RejectionReasonCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class RejectionReasonUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+@router.get("/rejection-reasons")
+async def list_rejection_reasons(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    reasons = await tdb.rejection_reasons.find({"tenant_id": tenant_id}, {"_id": 0}).sort("name", 1).to_list(500)
+    return reasons
+
+@router.post("/rejection-reasons")
+async def create_rejection_reason(data: RejectionReasonCreate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    existing = await tdb.rejection_reasons.find_one({"name": data.name, "tenant_id": tenant_id})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Rejection reason '{data.name}' already exists")
+    now = datetime.now(timezone.utc).isoformat()
+    reason = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": data.name,
+        "description": data.description or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await tdb.rejection_reasons.insert_one(reason)
+    reason.pop("_id", None)
+    return reason
+
+@router.put("/rejection-reasons/{reason_id}")
+async def update_rejection_reason(reason_id: str, data: RejectionReasonUpdate, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    existing = await tdb.rejection_reasons.find_one({"id": reason_id, "tenant_id": tenant_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Rejection reason not found")
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.name is not None:
+        dup = await tdb.rejection_reasons.find_one({"name": data.name, "tenant_id": tenant_id, "id": {"$ne": reason_id}})
+        if dup:
+            raise HTTPException(status_code=400, detail=f"Rejection reason '{data.name}' already exists")
+        updates["name"] = data.name
+    if data.description is not None:
+        updates["description"] = data.description
+    await tdb.rejection_reasons.update_one({"id": reason_id}, {"$set": updates})
+    updated = await tdb.rejection_reasons.find_one({"id": reason_id}, {"_id": 0})
+    return updated
+
+@router.delete("/rejection-reasons/{reason_id}")
+async def delete_rejection_reason(reason_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    result = await tdb.rejection_reasons.delete_one({"id": reason_id, "tenant_id": tenant_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Rejection reason not found")
+    return {"message": "Rejection reason deleted"}
+
+
+# ──────────────────────────────────────────────
+# Rejection Report (cross-batch)
+# ──────────────────────────────────────────────
+
+@router.get("/rejection-report")
+async def get_rejection_report(
+    month: Optional[int] = None,
+    year: Optional[int] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    batch_id: Optional[str] = None,
+    sku_id: Optional[str] = None,
+    resource_id: Optional[str] = None,
+    stage_type: Optional[str] = None,
+    rejection_reason: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get rejection report: per resource, per date, per stage with totals."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    query = {"tenant_id": tenant_id, "qty_rejected": {"$gt": 0}}
+    if batch_id:
+        query["batch_id"] = batch_id
+    if resource_id:
+        query["inspected_by"] = resource_id
+    if stage_type:
+        query["stage_type"] = stage_type
+
+    # Month/year filter takes precedence over date_from/date_to
+    if month and year:
+        m_start = f"{year}-{month:02d}-01"
+        if month == 12:
+            m_end = f"{year + 1}-01-01"
+        else:
+            m_end = f"{year}-{month + 1:02d}-01"
+        query["inspected_at"] = {"$gte": m_start, "$lt": m_end}
+    elif date_from or date_to:
+        date_filter = {}
+        if date_from:
+            date_filter["$gte"] = date_from
+        if date_to:
+            date_filter["$lte"] = date_to + "T23:59:59"
+        query["inspected_at"] = date_filter
+
+    inspections = await tdb.inspections.find(query, {"_id": 0}).sort("inspected_at", -1).to_list(5000)
+
+    # If sku_id filter, get matching batch IDs first
+    sku_batch_ids = None
+    if sku_id:
+        sku_batches = await tdb.production_batches.find(
+            {"sku_id": sku_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1}
+        ).to_list(5000)
+        sku_batch_ids = {b["id"] for b in sku_batches}
+        inspections = [i for i in inspections if i["batch_id"] in sku_batch_ids]
+
+    # Enrich with batch info
+    batch_ids = list(set(i["batch_id"] for i in inspections))
+    batches_map = {}
+    if batch_ids:
+        batches = await tdb.production_batches.find(
+            {"id": {"$in": batch_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "batch_code": 1, "sku_name": 1, "sku_id": 1}
+        ).to_list(len(batch_ids))
+        batches_map = {b["id"]: b for b in batches}
+
+    rows = []
+    total_rejected = 0
+    for ins in inspections:
+        b = batches_map.get(ins["batch_id"], {})
+        # New nested format: entries[].rejections[]
+        entries = ins.get("entries", [])
+        if entries:
+            for entry in entries:
+                for rej in entry.get("rejections", []):
+                    if rej.get("qty_rejected", 0) > 0:
+                        rows.append({
+                            "id": ins["id"] + "-" + entry.get("resource_id", "") + "-" + rej.get("reason", ""),
+                            "inspection_id": ins["id"],
+                            "batch_id": ins["batch_id"],
+                            "batch_code": b.get("batch_code", ""),
+                            "sku_id": b.get("sku_id", ""),
+                            "sku_name": b.get("sku_name", ""),
+                            "stage_name": ins.get("stage_name", ""),
+                            "stage_type": ins.get("stage_type", ""),
+                            "date": entry.get("date", ins.get("inspected_at", "")[:10]),
+                            "resource_name": entry.get("resource_name", ""),
+                            "resource_id": entry.get("resource_id", ""),
+                            "qty_inspected": entry.get("qty_inspected", 0),
+                            "qty_rejected": rej.get("qty_rejected", 0),
+                            "rejection_reason": rej.get("reason", ""),
+                            "remarks": ins.get("remarks", ""),
+                        })
+        else:
+            # Legacy flat format: rejections[] or single rejection
+            rejection_entries = ins.get("rejections", [])
+            if rejection_entries:
+                for rej in rejection_entries:
+                    if rej.get("qty_rejected", 0) > 0:
+                        rows.append({
+                            "id": ins["id"] + "-" + rej.get("resource_id", ""),
+                            "inspection_id": ins["id"],
+                            "batch_id": ins["batch_id"],
+                            "batch_code": b.get("batch_code", ""),
+                            "sku_id": b.get("sku_id", ""),
+                            "sku_name": b.get("sku_name", ""),
+                            "stage_name": ins.get("stage_name", ""),
+                            "stage_type": ins.get("stage_type", ""),
+                            "date": rej.get("date", ins.get("inspected_at", "")[:10]),
+                            "resource_name": rej.get("resource_name", ""),
+                            "resource_id": rej.get("resource_id", ""),
+                            "qty_inspected": rej.get("qty_inspected", ins.get("qty_inspected", 0)),
+                            "qty_rejected": rej.get("qty_rejected", 0),
+                            "rejection_reason": rej.get("reason", ""),
+                            "remarks": ins.get("remarks", ""),
+                        })
+            elif ins.get("qty_rejected", 0) > 0:
+                rows.append({
+                    "id": ins["id"],
+                    "inspection_id": ins["id"],
+                    "batch_id": ins["batch_id"],
+                    "batch_code": b.get("batch_code", ""),
+                    "sku_id": b.get("sku_id", ""),
+                    "sku_name": b.get("sku_name", ""),
+                    "stage_name": ins.get("stage_name", ""),
+                    "stage_type": ins.get("stage_type", ""),
+                    "date": ins.get("inspected_at", "")[:10],
+                    "resource_name": ins.get("inspected_by_name", ""),
+                    "resource_id": ins.get("inspected_by", ""),
+                    "qty_inspected": ins.get("qty_inspected", 0),
+                    "qty_rejected": ins.get("qty_rejected", 0),
+                    "rejection_reason": ins.get("rejection_reason", ""),
+                    "remarks": ins.get("remarks", ""),
+                })
+        total_rejected += ins.get("qty_rejected", 0)
+
+    # Filter by rejection_reason if specified
+    if rejection_reason:
+        rows = [r for r in rows if r.get("rejection_reason", "").lower() == rejection_reason.lower()]
+        total_rejected = sum(r["qty_rejected"] for r in rows)
+
+    # ── Enrich each row with cost_of_rejection ──
+    # Bulk-load mappings (stage_name + reason_name → impacted keys)
+    all_mappings = await tdb.rejection_cost_mappings.find(
+        {"tenant_id": tenant_id}, {"_id": 0}
+    ).to_list(2000)
+    mapping_lookup = {(m.get("sku_id", ""), m.get("stage_name", ""), m.get("reason_name", "")): m for m in all_mappings}
+
+    # Bulk-load SKU master values
+    sku_ids = {r.get("sku_id") for r in rows if r.get("sku_id")}
+    from database import db as _global_db
+    sku_docs = []
+    if sku_ids:
+        sku_docs = await _global_db.master_skus.find(
+            {"id": {"$in": list(sku_ids)}},
+            {"_id": 0, "id": 1, "cogs_components_values": 1},
+        ).to_list(len(sku_ids))
+    sku_vals_map = {s["id"]: (s.get("cogs_components_values") or {}) for s in sku_docs}
+
+    total_cost = 0.0
+    for r in rows:
+        m = mapping_lookup.get((r.get("sku_id", ""), r.get("stage_name", ""), r.get("rejection_reason", "")))
+        if not m:
+            r["cost_of_rejection"] = 0.0
+            r["cost_breakdown"] = []
+            r["missing_mapping"] = True
+            continue
+        sku_v = sku_vals_map.get(r.get("sku_id", ""), {})
+        unit_cost = 0.0
+        breakdown = []
+        for k in m.get("impacted_component_keys", []):
+            v = float(sku_v.get(k) or 0)
+            unit_cost += v
+            breakdown.append({"component_key": k, "unit_cost": round(v, 2)})
+        r["cost_of_rejection"] = round(unit_cost * (r.get("qty_rejected") or 0), 2)
+        r["cost_breakdown"] = breakdown
+        r["missing_mapping"] = False
+        total_cost += r["cost_of_rejection"]
+
+    # Summary aggregations (qty + cost) by resource / date / reason / stage / sku
+    by_resource = {}  # name -> {bottles, cost}
+    by_date = {}      # date -> {bottles, cost}
+    by_reason = {}    # reason -> {bottles, cost}
+    by_stage = {}     # stage -> {bottles, cost}
+    by_sku = {}       # sku_id -> {sku_name, bottles, cost}
+    unmapped_count = 0
+
+    def _bump(d, key, qty, cost, extra=None):
+        slot = d.setdefault(key, {"bottles": 0, "cost": 0.0, **(extra or {})})
+        slot["bottles"] += qty
+        slot["cost"] += cost
+
+    for r in rows:
+        qty = r.get("qty_rejected", 0) or 0
+        cost = r.get("cost_of_rejection", 0.0) or 0.0
+        if r.get("missing_mapping"):
+            unmapped_count += 1
+        _bump(by_resource, r.get("resource_name") or "—", qty, cost)
+        _bump(by_date, r.get("date") or "—", qty, cost)
+        _bump(by_reason, r.get("rejection_reason") or "—", qty, cost)
+        _bump(by_stage, r.get("stage_name") or "—", qty, cost)
+        _bump(by_sku, r.get("sku_id") or "", qty, cost, {"sku_name": r.get("sku_name") or "—"})
+
+    def _round(d):
+        d["cost"] = round(d.get("cost", 0.0), 2)
+        return d
+
+    return {
+        "rows": rows,
+        "total_rejected": total_rejected,
+        "total_cost": round(total_cost, 2),
+        "unmapped_count": unmapped_count,
+        "by_resource": [{"name": k, "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in sorted(by_resource.items(), key=lambda x: x[1]["cost"], reverse=True)],
+        "by_date":     [{"date": k, "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in sorted(by_date.items())],
+        "by_reason":   [{"reason": k, "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in sorted(by_reason.items(), key=lambda x: x[1]["cost"], reverse=True)],
+        "by_stage":    [{"stage": k, "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in sorted(by_stage.items(), key=lambda x: x[1]["cost"], reverse=True)],
+        "top_skus":    sorted(
+            [{"sku_id": k, "sku_name": v["sku_name"], "bottles": v["bottles"], "cost": round(v["cost"], 2)} for k, v in by_sku.items() if v["cost"] > 0],
+            key=lambda x: x["cost"], reverse=True
+        )[:5],
+    }
+
+
+
+# ──────────────────────────────────────────────
+# Warehouse Transfer (Production → Factory Warehouse)
+# ──────────────────────────────────────────────
+
+@router.get("/factory-warehouses")
+async def list_factory_warehouses(current_user: dict = Depends(get_current_user)):
+    """Get all factory warehouse locations across all distributors."""
+    tenant_id = get_current_tenant_id()
+    locations = await db.distributor_locations.find(
+        {"tenant_id": tenant_id, "is_factory": True, "status": "active"},
+        {"_id": 0, "id": 1, "location_name": 1, "location_code": 1, "city": 1,
+         "state": 1, "distributor_id": 1, "is_default": 1, "track_batches": 1}
+    ).sort("location_name", 1).to_list(100)
+
+    # Enrich with distributor name
+    dist_ids = list(set(loc.get("distributor_id") for loc in locations if loc.get("distributor_id")))
+    dist_map = {}
+    if dist_ids:
+        dists = await db.distributors.find(
+            {"id": {"$in": dist_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "distributor_name": 1}
+        ).to_list(500)
+        dist_map = {d["id"]: d["distributor_name"] for d in dists}
+
+    for loc in locations:
+        loc["distributor_name"] = dist_map.get(loc.get("distributor_id"), "")
+
+    return {"warehouses": locations}
+
+
+@router.get("/factory-warehouse-stock")
+async def get_factory_warehouse_stock(
+    warehouse_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get stock levels in factory warehouses."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    query = {"tenant_id": tenant_id}
+    if warehouse_id:
+        query["warehouse_location_id"] = warehouse_id
+
+    stock_docs = await tdb.factory_warehouse_stock.find(query, {"_id": 0}).to_list(5000)
+    return {"stock": stock_docs}
+
+
+@router.post("/batches/{batch_id}/transfer-to-warehouse")
+async def transfer_to_warehouse(
+    batch_id: str,
+    data: WarehouseTransfer,
+    current_user: dict = Depends(get_current_user)
+):
+    """Transfer warehouse-ready crates from a batch to a factory warehouse."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id})
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+
+    if data.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be > 0")
+
+    available = (batch.get("total_passed_final", 0) or 0) - (batch.get("transferred_to_warehouse", 0) or 0)
+    if data.quantity > available:
+        raise HTTPException(status_code=400, detail=f"Only {available} bottles available for transfer (warehouse-ready minus already transferred)")
+
+    # Validate factory warehouse exists and is_factory
+    warehouse = await db.distributor_locations.find_one(
+        {"id": data.warehouse_location_id, "tenant_id": tenant_id, "is_factory": True, "status": "active"},
+        {"_id": 0, "id": 1, "location_name": 1, "city": 1, "distributor_id": 1, "track_batches": 1}
+    )
+    if not warehouse:
+        raise HTTPException(status_code=400, detail="Invalid factory warehouse location")
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1. Update batch: increment transferred_to_warehouse
+    new_transferred = (batch.get("transferred_to_warehouse", 0) or 0) + data.quantity
+    await tdb.production_batches.update_one(
+        {"id": batch_id},
+        {"$set": {"transferred_to_warehouse": new_transferred, "updated_at": now}}
+    )
+
+    # 2. Upsert factory_warehouse_stock (per warehouse + sku [+ batch when
+    #    the destination warehouse tracks batches]). Batch-keyed rows are
+    #    REQUIRED for shipments-out + deliveries to pick the right lineage.
+    sku_id = batch.get("sku_id")
+    sku_name = batch.get("sku_name")
+    wh_tracks_batches = bool(warehouse.get("track_batches"))
+    stock_query = {
+        "tenant_id": tenant_id,
+        "warehouse_location_id": data.warehouse_location_id,
+        "sku_id": sku_id,
+    }
+    if wh_tracks_batches:
+        stock_query["batch_id"] = batch_id
+    existing_stock = await tdb.factory_warehouse_stock.find_one(stock_query)
+
+    if existing_stock:
+        new_qty = existing_stock.get("quantity", 0) + data.quantity
+        set_doc = {
+            "quantity": new_qty,
+            # Keep bottles_per_crate in sync with the most recent batch so
+            # the dashboard can convert bottles → crates accurately.
+            "bottles_per_crate": batch.get("bottles_per_crate") or existing_stock.get("bottles_per_crate"),
+            "updated_at": now,
+        }
+        if wh_tracks_batches:
+            set_doc["batch_id"] = batch_id
+            set_doc["batch_code"] = batch.get("batch_code")
+        await tdb.factory_warehouse_stock.update_one(
+            {"id": existing_stock["id"]},
+            {"$set": set_doc}
+        )
+    else:
+        stock_doc = {
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "warehouse_location_id": data.warehouse_location_id,
+            "warehouse_name": warehouse.get("location_name"),
+            "sku_id": sku_id,
+            "sku_name": sku_name,
+            "quantity": data.quantity,  # stored in BOTTLES
+            "bottles_per_crate": batch.get("bottles_per_crate"),
+            "created_at": now,
+            "updated_at": now,
+        }
+        if wh_tracks_batches:
+            stock_doc["batch_id"] = batch_id
+            stock_doc["batch_code"] = batch.get("batch_code")
+        await tdb.factory_warehouse_stock.insert_one(stock_doc)
+
+    # 3. Record transfer in history
+    transfer_doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "batch_id": batch_id,
+        "batch_code": batch.get("batch_code"),
+        "sku_id": sku_id,
+        "sku_name": sku_name,
+        "warehouse_location_id": data.warehouse_location_id,
+        "warehouse_name": warehouse.get("location_name"),
+        "quantity": data.quantity,
+        "notes": data.notes or "",
+        "transferred_by": current_user.get("id"),
+        "transferred_by_name": current_user.get("name"),
+        "transferred_at": now,
+    }
+    await tdb.warehouse_transfers.insert_one(transfer_doc)
+
+    updated_batch = await tdb.production_batches.find_one({"id": batch_id}, {"_id": 0})
+    return {
+        "batch": updated_batch,
+        "transfer": {k: v for k, v in transfer_doc.items() if k != "_id"},
+    }
+
+
+@router.get("/batches/{batch_id}/warehouse-transfers")
+async def get_batch_warehouse_transfers(
+    batch_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get warehouse transfer history for a batch."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    transfers = await tdb.warehouse_transfers.find(
+        {"batch_id": batch_id, "tenant_id": tenant_id},
+        {"_id": 0}
+    ).sort("transferred_at", -1).to_list(500)
+
+    return {"transfers": transfers, "total": len(transfers)}
+
+
+# ──────────────────────────────────────────────
+# Master factory warehouse — RESET (CEO / System Admin only)
+# ──────────────────────────────────────────────
+
+@router.post("/factory-warehouse-stock/reset")
+async def reset_factory_warehouse_stock(
+    data: WarehouseReset,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reset stock at master factory warehouses.
+
+    Restricted to CEO and System Admin. Two modes:
+      - "zero"  → set quantity = 0 on every matching factory_warehouse_stock row
+      - "purge" → delete every matching row (clean slate)
+
+    If `warehouse_location_id` is provided the reset is scoped to that
+    warehouse; otherwise it affects ALL factory warehouses in the tenant.
+
+    Every reset writes a `warehouse_stock_resets` audit document with the
+    actor's id/name, the previous-quantity snapshot, and the timestamp.
+    """
+    _require_elevated(current_user)
+
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+
+    query = {"tenant_id": tenant_id}
+    if data.warehouse_location_id:
+        query["warehouse_location_id"] = data.warehouse_location_id
+
+    # Snapshot the rows we're about to modify — used for audit + UI
+    # confirmation. Even with hundreds of warehouses this is small.
+    snapshot = await tdb.factory_warehouse_stock.find(query, {"_id": 0}).to_list(10000)
+
+    now = datetime.now(timezone.utc).isoformat()
+    if data.mode == "zero":
+        result = await tdb.factory_warehouse_stock.update_many(
+            query, {"$set": {"quantity": 0, "updated_at": now}}
+        )
+        affected = result.modified_count
+    else:  # purge
+        result = await tdb.factory_warehouse_stock.delete_many(query)
+        affected = result.deleted_count
+
+    # Also wipe `distributor_stock` rows that point at the same warehouse —
+    # those hold legacy quantities from the now-removed Manual Stock Entry
+    # feature. Without this the master warehouse widget would still show
+    # phantom stock from confirmed manual entries.
+    dist_stock_q = {"tenant_id": tenant_id}
+    if data.warehouse_location_id:
+        dist_stock_q["distributor_location_id"] = data.warehouse_location_id
+    dist_affected = 0
+    if data.mode == "zero":
+        r2 = await tdb.distributor_stock.update_many(
+            dist_stock_q, {"$set": {"quantity": 0, "updated_at": now}}
+        )
+        dist_affected = r2.modified_count
+    else:
+        r2 = await tdb.distributor_stock.delete_many(dist_stock_q)
+        dist_affected = r2.deleted_count
+
+    # Mark every manual stock entry as cancelled so historical audit is
+    # preserved but they no longer contribute to derived reports.
+    manual_cancel_q = {"tenant_id": tenant_id, "status": {"$ne": "cancelled"}}
+    if data.warehouse_location_id:
+        manual_cancel_q["distributor_location_id"] = data.warehouse_location_id
+    manual_res = await tdb.distributor_manual_stock_entries.update_many(
+        manual_cancel_q,
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": now,
+            "cancelled_by": current_user.get("id"),
+            "cancelled_by_email": current_user.get("email"),
+            "cancel_reason": "Auto-cancelled by factory warehouse stock reset.",
+            "updated_at": now,
+        }},
+    )
+
+    audit = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "mode": data.mode,
+        "warehouse_location_id": data.warehouse_location_id,
+        "affected_rows": affected,
+        "distributor_stock_affected": dist_affected,
+        "manual_entries_cancelled": manual_res.modified_count,
+        "snapshot": [
+            {
+                "warehouse_location_id": s.get("warehouse_location_id"),
+                "warehouse_name": s.get("warehouse_name"),
+                "sku_id": s.get("sku_id"),
+                "sku_name": s.get("sku_name"),
+                "quantity_before": s.get("quantity"),
+            }
+            for s in snapshot
+        ],
+        "actor_id": current_user.get("id"),
+        "actor_name": current_user.get("name"),
+        "actor_role": current_user.get("role"),
+        "performed_at": now,
+    }
+    await tdb.warehouse_stock_resets.insert_one(audit)
+    audit.pop("_id", None)
+
+    return {
+        "mode": data.mode,
+        "affected_rows": affected,
+        "distributor_stock_affected": dist_affected,
+        "manual_entries_cancelled": manual_res.modified_count,
+        "performed_at": now,
+        "audit_id": audit["id"],
+    }
+
+
+@router.get("/factory-warehouse-stock/resets")
+async def list_factory_warehouse_resets(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return the most recent warehouse-stock resets (audit trail)."""
+    tenant_id = get_current_tenant_id()
+    tdb = get_tenant_db()
+    rows = (
+        await tdb.warehouse_stock_resets.find({"tenant_id": tenant_id}, {"_id": 0})
+        .sort("performed_at", -1)
+        .to_list(50)
+    )
+    return {"resets": rows}

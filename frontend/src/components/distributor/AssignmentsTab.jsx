@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -8,8 +8,10 @@ import { Textarea } from '../ui/textarea';
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Truck, RefreshCw, X } from 'lucide-react';
+import { MapPin, Plus, Trash2, Truck, RefreshCw, X, ChevronDown, ChevronRight, Receipt, Copy, ExternalLink, Phone } from 'lucide-react';
+import { toast } from 'sonner';
 import { MARGIN_TYPES, formatMarginValue, STATUS_OPTIONS } from './constants';
+import TaxBillingCard from '../TaxBillingCard';
 
 function getStatusBadge(status) {
   const statusConfig = STATUS_OPTIONS.find(s => s.value === status) || STATUS_OPTIONS[1];
@@ -41,6 +43,9 @@ export default function AssignmentsTab({
   savingAssignment,
   setDeleteTarget
 }) {
+  const [expandedId, setExpandedId] = useState(null);
+  const toggleExpand = (id) => setExpandedId(prev => prev === id ? null : id);
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -324,6 +329,7 @@ export default function AssignmentsTab({
             <table className="w-full" data-testid="assignments-table">
               <thead>
                 <tr className="border-b bg-muted/50">
+                  <th className="w-8 p-3"></th>
                   <th className="text-left p-3 font-medium">Account</th>
                   <th className="text-left p-3 font-medium">Servicing City</th>
                   <th className="text-left p-3 font-medium">Location</th>
@@ -334,11 +340,33 @@ export default function AssignmentsTab({
                 </tr>
               </thead>
               <tbody>
-                {assignments.map((assignment) => (
-                  <tr key={assignment.id} className="border-b hover:bg-muted/30" data-testid={`assignment-row-${assignment.id}`}>
+                {assignments.map((assignment) => {
+                  const isExpanded = expandedId === assignment.id;
+                  const hasTaxInfo = !!(assignment.gst_number || assignment.pan_number || (assignment.billing_address && (assignment.billing_address.address_line1 || assignment.billing_address.city)));
+                  return (
+                  <React.Fragment key={assignment.id}>
+                  <tr className="border-b hover:bg-muted/30" data-testid={`assignment-row-${assignment.id}`}>
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(assignment.id)}
+                        className="text-muted-foreground hover:text-foreground"
+                        title={isExpanded ? 'Hide tax & billing' : 'Show tax & billing'}
+                        data-testid={`expand-assignment-${assignment.id}`}
+                      >
+                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </button>
+                    </td>
                     <td className="p-3">
                       <div>
-                        <p className="font-medium">{assignment.account_name}</p>
+                        <p className="font-medium flex items-center gap-2">
+                          {assignment.account_name}
+                          {hasTaxInfo && (
+                            <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 px-1.5 py-0">
+                              <Receipt className="h-2.5 w-2.5" /> GST
+                            </Badge>
+                          )}
+                        </p>
                         <p className="text-sm text-muted-foreground">{assignment.servicing_state}</p>
                       </div>
                     </td>
@@ -394,11 +422,167 @@ export default function AssignmentsTab({
                       )}
                     </td>
                   </tr>
-                ))}
+                  {isExpanded && (
+                    <tr className="bg-emerald-50/20">
+                      <td></td>
+                      <td colSpan={7} className="p-3 pr-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                          <TaxBillingCard
+                            data={{
+                              gst_number: assignment.gst_number,
+                              pan_number: assignment.pan_number,
+                              billing_address: assignment.billing_address,
+                              gst_legal_name: assignment.gst_legal_name,
+                              gst_trade_name: assignment.gst_trade_name,
+                            }}
+                            editable={false}
+                            compact={true}
+                            titleSuffix="(read-only)"
+                            testId={`assignment-tax-card-${assignment.id}`}
+                          />
+                          <DeliveryCard
+                            assignment={assignment}
+                            testId={`assignment-delivery-card-${assignment.id}`}
+                          />
+                          <Card className="border border-emerald-100/60">
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-base flex items-center gap-2">
+                                <Truck className="h-4 w-4 text-emerald-600" />
+                                Account Contact
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2 text-sm">
+                              <div className="grid grid-cols-1 gap-2">
+                                <div>
+                                  <Label className="text-xs uppercase tracking-wider text-slate-500">Contact Name</Label>
+                                  <p className="text-slate-800">{assignment.account_contact_name || <span className="text-slate-400 italic">Not set</span>}</p>
+                                </div>
+                                <div>
+                                  <Label className="text-xs uppercase tracking-wider text-slate-500">Contact Number</Label>
+                                  <p className="text-slate-800 font-mono">{assignment.account_contact_number || <span className="text-slate-400 italic">Not set</span>}</p>
+                                </div>
+                              </div>
+                              {assignment.remarks && (
+                                <div>
+                                  <Label className="text-xs uppercase tracking-wider text-slate-500">Assignment Remarks</Label>
+                                  <p className="text-slate-700 text-xs whitespace-pre-wrap">{assignment.remarks}</p>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Delivery address & contact card (read-only) for the expanded assignment row ──
+function DeliveryCard({ assignment, testId }) {
+  const addr = assignment.delivery_address || {};
+  const formatted = [addr.address_line1, addr.address_line2, addr.city, addr.state, addr.pincode]
+    .filter(Boolean)
+    .join(', ');
+  const hasGps = Number.isFinite(addr.lat) && Number.isFinite(addr.lng);
+  const mapsUrl = hasGps
+    ? `https://www.google.com/maps?q=${addr.lat},${addr.lng}`
+    : (formatted ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatted)}` : null);
+
+  const copy = (val, label) => {
+    if (!val) return;
+    navigator.clipboard.writeText(val).then(
+      () => toast.success(`${label} copied`),
+      () => toast.error('Copy failed'),
+    );
+  };
+
+  return (
+    <Card className="border border-emerald-100/60" data-testid={testId}>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Truck className="h-4 w-4 text-emerald-600" />
+          Delivery Details
+          {hasGps && (
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> GPS
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <div>
+          <Label className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <MapPin className="h-3 w-3" /> Delivery Address
+          </Label>
+          {formatted ? (
+            <div className="text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-md p-2.5 mt-1 flex items-start justify-between gap-2">
+              <span className="whitespace-pre-wrap leading-relaxed">{formatted}</span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => copy(formatted, 'Delivery address')}
+                  className="text-slate-400 hover:text-slate-700"
+                  title="Copy address"
+                  data-testid={`${testId}-copy`}
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+                {mapsUrl && (
+                  <a
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-400 hover:text-slate-700"
+                    title="Open in Google Maps"
+                    data-testid={`${testId}-maps`}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 italic mt-1">Not set</p>
+          )}
+        </div>
+        <div className="grid grid-cols-1 gap-2">
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-slate-500">Delivery Contact</Label>
+            <p className="text-slate-800">{assignment.delivery_contact_name || <span className="text-slate-400 italic">Not set</span>}</p>
+          </div>
+          <div>
+            <Label className="text-xs uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+              <Phone className="h-3 w-3" /> Phone
+            </Label>
+            {assignment.delivery_contact_phone ? (
+              <div className="flex items-center gap-2">
+                <a
+                  href={`tel:${assignment.delivery_contact_phone}`}
+                  className="text-slate-800 font-mono hover:text-emerald-700"
+                >
+                  {assignment.delivery_contact_phone}
+                </a>
+                <button
+                  onClick={() => copy(assignment.delivery_contact_phone, 'Phone')}
+                  className="text-slate-400 hover:text-slate-700"
+                  title="Copy phone"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <span className="text-slate-400 italic text-sm">Not set</span>
+            )}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

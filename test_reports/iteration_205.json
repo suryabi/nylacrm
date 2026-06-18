@@ -1,0 +1,25 @@
+{
+  "summary": "Distributor Stock-Out RESERVATION feature: backend tests for stock-dashboard fields/invariants, create-delivery reserving stock (on_hand unchanged, reserved +qty, available -qty), over-allocation 400 rejection, cancel/delete releasing reservation. Plus a frontend smoke check on the 4 summary cards. All 4 backend tests PASS; frontend cards render with the expected data-testids.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_205_distributor_stock_reservation.py",
+    "/app/test_reports/pytest/iteration_205.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/distributors.py is 8,834 lines — well past the 700-line guideline. Reservation helper _reserved_qty_map, create_delivery and get_stock_dashboard would each benefit from being split into focused modules (e.g. distributor_stock_service.py, distributor_delivery_service.py).",
+    "Reservation is derived purely from open deliveries — clean design with no migration needed. RESERVED_DELIVERY_STATUSES list is duplicated in two spots (line 4091 and used again in get_stock_dashboard at 7788); consider importing the same constant in both places (it does already, so this is a non-issue — verified).",
+    "Per-SKU dashboard fields stock_on_hand/stock_reserved/stock_available are returned but per-location breakdown does NOT include reserved/available split. UI users who want to know reserved-at-location can't get it from this endpoint."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_205_distributor_stock_reservation.py (new)"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% smoke"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "Test deliveries are auto-cleaned via module-scope DELETE fixture; reference numbers prefixed TEST-RES-* / TEST-RES-DEL-* / TEST-RES-OVER-*.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Surya 1 distributor stock for the Sparkling SKU sits in the BATCHED factory warehouse 'Default master' (id 6eb87219-...). Tests use batch d68a630a-... (36 bottles = 3 crates available) with 12 bottles per crate, ordering 12 bottles = 1 crate to get a clean reservation delta on the dashboard. Margin matrix only has one active row (Hyderabad + Sparkling SKU). Do NOT call /complete (pushes to live Zoho).",
+  "rca_of_the_issue": "N/A — feature validation, no bugs found. During iteration we surfaced two test-design gotchas worth recording: (1) delivery_items.quantity is in BOTTLES while the dashboard reports CRATES via _bottle_to_crates(packaging_units || bottles_per_crate from master_skus/factory_warehouse_stock); small bottle quantities round to 0 crates. (2) Most stock for Surya 1 lives in a track_batches=true factory warehouse, so a batch_id is mandatory on the create_delivery payload."
+}

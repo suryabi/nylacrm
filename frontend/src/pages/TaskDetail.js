@@ -7,6 +7,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
+import MentionTextarea, { renderMentionedText } from '../components/MentionTextarea';
 import { Label } from '../components/ui/label';
 import {
   Select,
@@ -534,11 +535,12 @@ export default function TaskDetail() {
                       {getInitials(user?.name)}
                     </div>
                     <div className="flex-1 space-y-2">
-                      <Textarea
+                      <MentionTextarea
                         value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Write a comment..."
+                        onChange={setNewComment}
+                        placeholder="Write a comment… (type @ to mention a teammate)"
                         rows={2}
+                        testid="task-comment-input"
                       />
                       <div className="flex justify-end">
                         <Button 
@@ -581,7 +583,7 @@ export default function TaskDetail() {
                                 </Button>
                               )}
                             </div>
-                            <p className="text-slate-700 mt-1 whitespace-pre-wrap">{comment.content}</p>
+                            <p className="text-slate-700 mt-1 whitespace-pre-wrap">{renderMentionedText(comment.content)}</p>
                           </div>
                         </div>
                       ))

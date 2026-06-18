@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Card } from '../components/ui/card';
+import StatTile from '../components/StatTile';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import { Package, Filter, Loader2, TrendingUp, TrendingDown, ShoppingBag } from 'lucide-react';
@@ -110,8 +111,8 @@ export default function SKUPerformance() {
   const availableCities = stateFilter !== 'all' && stateFilter !== 'All States' ? ['All Cities', ...getCityNamesByStateName(stateFilter)] : ['All Cities'];
 
   const stats = [
-    { label: 'Total Achieved', value: formatCurrency(data.summary.total_achieved), icon: TrendingUp, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', textColor: 'text-emerald-700 dark:text-emerald-300' },
-    { label: 'Units Sold', value: data.summary.total_units?.toLocaleString() || '0', icon: ShoppingBag, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', iconBg: 'bg-blue-100 dark:bg-blue-900/50', textColor: 'text-blue-700 dark:text-blue-300' }
+    { label: 'Total Achieved', value: data.summary.total_achieved || 0, format: 'currency', icon: TrendingUp, colorIndex: 1 /* emerald */ },
+    { label: 'Units Sold', value: data.summary.total_units || 0, icon: ShoppingBag, colorIndex: 0 /* indigo */ }
   ];
 
   return (
@@ -188,23 +189,16 @@ export default function SKUPerformance() {
 
         {/* Summary Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={stat.label} className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5`}>
-                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
-                <div className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                      <p className={`text-2xl lg:text-3xl font-bold ${stat.textColor} tabular-nums`}>{stat.value}</p>
-                    </div>
-                    <div className={`p-2.5 rounded-xl ${stat.iconBg}`}><Icon className={`h-5 w-5 ${stat.textColor}`} /></div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
+          {stats.map((stat) => (
+            <StatTile
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              format={stat.format}
+              icon={stat.icon}
+              colorIndex={stat.colorIndex}
+            />
+          ))}
         </div>
 
         {/* Data Table */}
@@ -228,7 +222,8 @@ export default function SKUPerformance() {
                     <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">SKU</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Achieved</th>
                     <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Units Sold</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Leads</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">% of Units</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">No. of Accounts</th>
                     <th className="text-center py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Trend</th>
                   </tr>
                 </thead>
@@ -237,8 +232,9 @@ export default function SKUPerformance() {
                     <tr key={idx} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                       <td className="py-4 px-5 font-medium text-slate-800 dark:text-white">{row.sku}</td>
                       <td className="py-4 px-5 text-right font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(row.achieved_revenue)}</td>
-                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300">{row.units_sold?.toLocaleString() || 0}</td>
-                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300">{row.leads_count || 0}</td>
+                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300 tabular-nums">{row.units_sold?.toLocaleString() || 0}</td>
+                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300 tabular-nums">{(row.units_pct ?? 0).toFixed(1)}%</td>
+                      <td className="py-4 px-5 text-right text-slate-700 dark:text-slate-300 tabular-nums">{row.accounts_count ?? row.leads_count ?? 0}</td>
                       <td className="py-4 px-5 text-center">
                         {row.achieved_revenue > 0 ? <TrendingUp className="h-5 w-5 text-emerald-500 mx-auto" /> : <TrendingDown className="h-5 w-5 text-red-500 mx-auto" />}
                       </td>

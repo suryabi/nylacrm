@@ -1,6 +1,6 @@
 """User models"""
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import Optional
+from typing import Optional, Union, List
 from datetime import datetime, timezone
 import uuid
 
@@ -14,7 +14,7 @@ class User(BaseModel):
     name: str
     role: str  # 'ceo', 'director', 'vp', 'admin', 'sales_manager', 'sales_rep'
     designation: Optional[str] = None
-    department: str = 'sales'  # 'sales', 'production', 'both'
+    department: Union[str, List[str]] = 'sales'  # 'sales', 'production', 'marketing', or a list
     phone: Optional[str] = None
     avatar: Optional[str] = None
     city: Optional[str] = None
@@ -32,7 +32,7 @@ class UserCreate(BaseModel):
     name: str
     role: str = 'sales_rep'
     designation: Optional[str] = None
-    department: str = 'sales'
+    department: Union[str, List[str]] = 'sales'
     phone: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None

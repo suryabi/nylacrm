@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Card } from '../components/ui/card';
+import StatTile from '../components/StatTile';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
@@ -114,10 +115,10 @@ export default function SalesRevenueDashboard() {
     : ['All Cities'];
 
   const stats = [
-    { label: 'Won Deals', value: data.summary.total_leads || 0, icon: Target, gradient: 'from-emerald-500 to-teal-600', bgGradient: 'from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/20', iconBg: 'bg-emerald-100 dark:bg-emerald-900/50', textColor: 'text-emerald-700 dark:text-emerald-300' },
-    { label: 'Gross Revenue', value: formatCurrency(data.summary.total_gross), icon: DollarSign, gradient: 'from-green-500 to-emerald-600', bgGradient: 'from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20', iconBg: 'bg-green-100 dark:bg-green-900/50', textColor: 'text-green-700 dark:text-green-300' },
-    { label: 'Net Revenue', value: formatCurrency(data.summary.total_net), icon: Receipt, gradient: 'from-blue-500 to-indigo-600', bgGradient: 'from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20', iconBg: 'bg-blue-100 dark:bg-blue-900/50', textColor: 'text-blue-700 dark:text-blue-300' },
-    { label: 'Credit Notes', value: formatCurrency(data.summary.total_credit), icon: CreditCard, gradient: 'from-amber-500 to-orange-600', bgGradient: 'from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20', iconBg: 'bg-amber-100 dark:bg-amber-900/50', textColor: 'text-amber-700 dark:text-amber-300' }
+    { label: 'Won Deals', value: data.summary.total_leads || 0, icon: Target, colorIndex: 1 /* emerald */ },
+    { label: 'Gross Revenue', value: data.summary.total_gross || 0, format: 'currency', icon: DollarSign, colorIndex: 1 /* emerald */ },
+    { label: 'Net Revenue', value: data.summary.total_net || 0, format: 'currency', icon: Receipt, colorIndex: 0 /* indigo */ },
+    { label: 'Credit Notes', value: data.summary.total_credit || 0, format: 'currency', icon: CreditCard, colorIndex: 2 /* amber */ }
   ];
 
   return (
@@ -199,25 +200,16 @@ export default function SalesRevenueDashboard() {
 
         {/* Summary Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {stats.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={stat.label} className={`relative overflow-hidden border-0 bg-gradient-to-br ${stat.bgGradient} backdrop-blur-sm shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-0.5`}>
-                <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.gradient}`} />
-                <div className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                      <p className={`text-2xl lg:text-3xl font-bold ${stat.textColor} tabular-nums`}>{stat.value}</p>
-                    </div>
-                    <div className={`p-2.5 rounded-xl ${stat.iconBg}`}>
-                      <Icon className={`h-5 w-5 ${stat.textColor}`} />
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
+          {stats.map((stat) => (
+            <StatTile
+              key={stat.label}
+              label={stat.label}
+              value={stat.value}
+              format={stat.format}
+              icon={stat.icon}
+              colorIndex={stat.colorIndex}
+            />
+          ))}
         </div>
 
         {/* Data Table */}
@@ -238,43 +230,44 @@ export default function SalesRevenueDashboard() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm table-fixed">
                 <thead>
                   <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Lead ID</th>
-                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Company</th>
-                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">City</th>
-                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Territory</th>
-                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Assigned To</th>
-                    <th className="text-center py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Invoices</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Gross</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Net</th>
-                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400">Credit</th>
+                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[34%]">Account</th>
+                    <th className="text-left py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[18%]">Assigned To</th>
+                    <th className="text-center py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[10%]">Invoices</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[12%]">Gross</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[12%]">Net</th>
+                    <th className="text-right py-4 px-5 font-semibold text-slate-600 dark:text-slate-400 w-[14%]">Credit</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.leads.map((lead, idx) => (
                     <tr key={lead.id} onClick={() => navigate(`/leads/${lead.id}`)}
-                      className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors">
-                      <td className="py-4 px-5"><span className="font-mono text-xs text-primary bg-primary/10 px-2 py-1 rounded">{lead.lead_id || '-'}</span></td>
-                      <td className="py-4 px-5 font-medium text-slate-800 dark:text-white">{lead.company}</td>
-                      <td className="py-4 px-5 text-muted-foreground">{lead.city || '-'}</td>
-                      <td className="py-4 px-5 text-muted-foreground">{lead.territory || '-'}</td>
-                      <td className="py-4 px-5 text-slate-700 dark:text-slate-300">{lead.assigned_to_name}</td>
+                      className="group border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30 cursor-pointer transition-colors">
+                      <td className="py-4 px-5 max-w-0">
+                        <p className="font-semibold text-slate-800 dark:text-white group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors truncate" title={lead.company}>
+                          {lead.company}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5" title={[lead.city, lead.territory].filter(Boolean).join(' · ') || '—'}>
+                          {[lead.city, lead.territory].filter(Boolean).join(' · ') || '—'}
+                        </p>
+                      </td>
+                      <td className="py-4 px-5 text-slate-700 dark:text-slate-300 truncate" title={lead.assigned_to_name}>{lead.assigned_to_name}</td>
                       <td className="py-4 px-5 text-center"><Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800">{lead.invoice_count}</Badge></td>
-                      <td className="py-4 px-5 text-right font-semibold text-green-600 dark:text-green-400">{formatCurrency(lead.gross_invoice_value)}</td>
-                      <td className="py-4 px-5 text-right font-semibold text-blue-600 dark:text-blue-400">{formatCurrency(lead.net_invoice_value)}</td>
-                      <td className="py-4 px-5 text-right font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(lead.credit_note_value)}</td>
+                      <td className="py-4 px-5 text-right font-semibold text-green-600 dark:text-green-400 tabular-nums">{formatCurrency(lead.gross_invoice_value)}</td>
+                      <td className="py-4 px-5 text-right font-semibold text-blue-600 dark:text-blue-400 tabular-nums">{formatCurrency(lead.net_invoice_value)}</td>
+                      <td className="py-4 px-5 text-right font-semibold text-amber-600 dark:text-amber-400 tabular-nums">{formatCurrency(lead.credit_note_value)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-200 dark:border-slate-700">
-                    <td className="py-4 px-5 font-bold text-slate-800 dark:text-white" colSpan="5">Total ({data.leads.length} deals)</td>
+                    <td className="py-4 px-5 font-bold text-slate-800 dark:text-white" colSpan="2">Total ({data.leads.length} deals)</td>
                     <td className="py-4 px-5 text-center font-bold">{data.leads.reduce((sum, l) => sum + (l.invoice_count || 0), 0)}</td>
-                    <td className="py-4 px-5 text-right font-bold text-green-700 dark:text-green-400">{formatCurrency(data.summary.total_gross)}</td>
-                    <td className="py-4 px-5 text-right font-bold text-blue-700 dark:text-blue-400">{formatCurrency(data.summary.total_net)}</td>
-                    <td className="py-4 px-5 text-right font-bold text-amber-700 dark:text-amber-400">{formatCurrency(data.summary.total_credit)}</td>
+                    <td className="py-4 px-5 text-right font-bold text-green-700 dark:text-green-400 tabular-nums">{formatCurrency(data.summary.total_gross)}</td>
+                    <td className="py-4 px-5 text-right font-bold text-blue-700 dark:text-blue-400 tabular-nums">{formatCurrency(data.summary.total_net)}</td>
+                    <td className="py-4 px-5 text-right font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatCurrency(data.summary.total_credit)}</td>
                   </tr>
                 </tfoot>
               </table>

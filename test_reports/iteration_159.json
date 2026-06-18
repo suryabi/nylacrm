@@ -1,0 +1,42 @@
+{
+  "summary": "Top-10 Priorities → Collections/Outstanding split into 'New Accounts' (green pill) and 'Existing Accounts' (blue pill) sub-tabs. Backend (/api/performance/account-collections) extended with mode={all|new|existing}+period_start+period_end and verified end-to-end. Backend pytest 33/33 PASS (12 NEW mode tests + 21 regression). Frontend on /performance verified: old 'Account Metrics' section removed, old sub-tab-collections gone, 5 sub-tabs render in correct order (case_targets, sampling_trials, focus_leads, new_accounts, existing_accounts). Both new tabs render the spec'd period banner ('NEW ACCOUNTS / Accounts onboarded during 01 Apr 2026 → 30 Apr 2026' and 'EXISTING ACCOUNTS / Accounts onboarded before 01 Apr 2026'), 6 summary cards, search, 9-column table, zebra-striped rows, and clickable rows. For default Apr 2026 (current month) UI shows new=0 / existing=6 — this is correct because the 6 seed accounts were created in Feb 2026 (verified at API level: NEW Feb2026=6, EXISTING<Feb1=0). The two sets are disjoint and both are subsets of mode=all (verified by pytest).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Top-10 Priorities → New/Existing Accounts subsections", "issues": ["6 summary cards (Accounts, Invoice Value, Bottle Credit, Avg Order, Outstanding, Overdue) render correctly but have no individual data-testid (use unnamed SummaryStat). Consistent with other Top-10 subsections — not a regression, but adding data-testid={`${testIdPrefix}-summary-<name>`} would improve test stability."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_account_collections_modes.py",
+    "/app/backend/tests/test_account_collections.py",
+    "/app/test_reports/pytest/account_collections_modes.xml"
+  ],
+  "action_items": [
+    "None blocking — feature complete and verified.",
+    "(Optional) Add per-card data-testid={`${testIdPrefix}-summary-...`} to AccountsSubsection summary cards for finer test coverage.",
+    "(Carry-over from iter 158) PerformanceTracker.js is now ~2760 lines — split AccountsSubsection / FocusLeadsSubsection / SamplingTrialsSubsection / CaseTargetsSubsection into /pages/performance/<name>.js modules.",
+    "(Carry-over) performance.py invoice→account substring fuzzy match can cause cross-account bleed when one account name is a prefix of another. Consider exact-match-first then fall back to fuzzy."
+  ],
+  "critical_code_review_comments": [
+    "performance.py:1582 — period_end is concatenated with 'T23:59:59' (string) and compared against created_at stored as ISO string. Works for the current data model but fragile if any account stores created_at as BSON Date — lexicographic comparison would silently misbehave. Recommend normalising on insert OR using $or with both string and date forms.",
+    "performance.py:1584 — mode='existing' uses created_at < period_start (a YYYY-MM-DD string with no time component). Boundary semantics: an account created at 2026-02-01T00:00:00Z is treated as NOT existing (correct, since it's in the period). Verified by disjointness test (new ∩ existing = ∅).",
+    "PerformanceTracker.js AccountsSubsection (~line 2570+) — fetch has no try/catch wrapper; a 5xx response would leave loading=true and surface no toast. Wrap fetch in try/finally setLoading(false) and surface a UI error.",
+    "PerformanceTracker.js — Period selector uses month-mode Select / target_plan dropdown but the resolvePeriodDates() helper is only triggered after Generate. If the user changes month while a tab is open, the banner does not refresh until next Generate — confirm if this is intentional UX.",
+    "performance.py:1568 to_list(2000) silent cap on accounts and to_list(20000) on invoices remains; consider aggregation pipeline for production scale."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_account_collections_modes.py (NEW — 12 pytest tests covering mode=all/new/existing, far-past/far-future windows, disjointness, subset-of-all, summary fields preserved across modes, no _id leak)"
+  ],
+  "success_rate": {"backend": "100% (33/33 pytest)", "frontend": "100% on verified flows — all required data-testids present (sub-tab-new_accounts, sub-tab-existing_accounts, new-accounts-subsection, existing-accounts-subsection, existing-accounts-table, existing-accounts-row-{id}, ${prefix}-search, ${prefix}-period, ${prefix}-empty); old sub-tab-collections confirmed REMOVED; old 'Account Metrics' section confirmed REMOVED."},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "None — read-only endpoint. Existing seed: 6 accounts created in Feb 2026 (Toopa Ice-creamery, Lead Seventeen Test, Empire Restaurant, Oceans Fresh Seafood, Taj Sarees, +1) + Surya assigned to 2 of them.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "GET /api/performance/account-collections now accepts mode={all|new|existing}, period_start=YYYY-MM-DD, period_end=YYYY-MM-DD. mode='new' requires both dates; mode='existing' requires only period_start; mode='all' is legacy default. Frontend testIdPrefix is 'new-accounts' or 'existing-accounts' — same component AccountsSubsection. Default month on first load is the current month (Apr 2026 at test time). Test seed has 6 accounts in Feb 2026 so Feb→new=6/existing=0, Apr→new=0/existing=6, lifetime mode='all' (all-tenant)=7. Surya has only 2 of those 6 accounts assigned. Sub-tabs in order: case_targets, sampling_trials, focus_leads, new_accounts, existing_accounts (collections is GONE). Empty state replaces table when no rows — table data-testid disappears in empty state, but ${prefix}-empty appears.",
+  "rca of the issue": "N/A — feature verification iteration. Both backend and frontend behave per spec."
+}

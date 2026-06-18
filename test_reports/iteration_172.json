@@ -1,0 +1,35 @@
+{
+  "summary": "Comprehensive backend + frontend testing of the SM-driven Marketing Requests rebuild (Phase B). All 6 backend tests across 2 test files pass (lifecycle + permission gates). Frontend smoke confirmed: list page shows SM-driven queue tabs, lifecycle name, dynamic state filter chips with counts; detail page renders dynamic action buttons from /available-transitions with SM-defined state badge colors; clicking a transition button hits POST /transition (200), shows 'Transition applied' toast, and appends a status_change comment with the SM action label. No regressions found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketing_requests_lifecycle.py",
+    "/app/backend/tests/test_marketing_requests_permissions.py",
+    "/app/test_reports/pytest/mr_lifecycle.xml",
+    "/app/test_reports/pytest/mr_permissions.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sm_helpers.find_transitions_from: when current_state matches initial state, ALSO returns transitions with from_state==None (treated as initial-only). Confirm this is intentional — if a non-initial transition were ever defined with from_state=None it would incorrectly surface only at the initial state. The default seed has no such case, so behavior is safe today.",
+    "user_can_trigger compares user.department (could be list or string) to allowed_department_ids by both raw id and resolved name — solid fallback handling. Worth adding a unit test for the case where allowed_department_ids contains a name (legacy) vs id.",
+    "Frontend list page emits two background API calls that return 401 on first render (likely an unrelated module probing endpoints before auth context settles). Doesn't affect Marketing Requests but pollutes console.",
+    "Marketing Requests endpoints both POST '' and POST '/' route to the same handler — fine, just be aware of the duplicate route registration if you ever add middleware."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_marketing_requests_permissions.py (new)"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest cases)", "frontend": "100% (list + detail + transition smoke)"},
+  "test_credentials": "Admin surya.yadavalli@nylaairwater.earth / test123 (CEO, admin bypass), non-admin john.distributor@test.com / nyladist## (Distributor role) — both verified working.",
+  "seed_data_creation": "Backend test runs created ~10 MR docs (MR-2026-0001 through MR-2026-0010) for state-machine flow validation. These remain in DB and are visible in the UI listing — fine for a fresh rebuild but main agent may want a teardown if true cleanliness is desired.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Tests cover: default SM auto-seed, create→initial state, /available-transitions allowed flag, action_key validation (200 + 400 'No transition'), auto-assign department side-effect, allowed_role_keys 403 for non-admin + admin bypass, requestor_only 403 for non-creator non-admin, comment_required 400, queue=my_raised filter, counts endpoint (by_state + queues + states). Frontend verified: list page with queue tabs + dynamic state chips + lifecycle name, detail page with dynamic action buttons from SM, transition button → POST /transition → 200 + toast + status_change comment. NOT covered: NewMarketingRequest.js create-form UI flow (request says it was untouched and create works via backend) — main agent should manually smoke that page once. File upload tested via curl (200 OK, returns id/path/size).",
+  "rca of the issue": "N/A — no bugs found"
+}

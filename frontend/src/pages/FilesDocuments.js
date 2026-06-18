@@ -559,23 +559,25 @@ export default function FilesDocuments() {
                     <p>{doc.uploaded_by_name}</p>
                     <p>{formatDate(doc.created_at)}</p>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-2">
                     <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
+                      variant="default"
+                      size="sm"
+                      className="h-9 px-3 gap-1.5"
                       onClick={() => handleDownloadDocument(doc)}
                       data-testid={`download-doc-${doc.id}`}
                     >
                       <Download className="h-4 w-4" />
+                      Download
                     </Button>
                     {(doc.uploaded_by === user?.id || canManageCategories) && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => handleDeleteDocument(doc.id)}
                         data-testid={`delete-doc-${doc.id}`}
+                        title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -923,7 +925,7 @@ export default function FilesDocuments() {
             )}
             {previewDocument && previewDocument.document_type === 'pdf' && previewDocument.file_data && (
               <embed
-                src={`data:application/pdf;base64,${previewDocument.file_data}#toolbar=1&navpanes=1&scrollbar=1`}
+                src={`${API_URL}/documents/${previewDocument.id}/download#toolbar=1&navpanes=1&scrollbar=1`}
                 type="application/pdf"
                 className="w-full h-[65vh]"
               />

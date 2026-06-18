@@ -1,0 +1,35 @@
+{
+  "summary": "Verified Performance Tracker Support Needed Save→Edit toggle end-to-end via Playwright on the public URL. All 7 scenarios from the review request pass: (1) new row starts in EDIT mode with Save button + editable textarea, (2) successful POST /api/performance/save flips row to READ-ONLY with Edit pencil + disabled textarea, (3) clicking Edit pencil restores EDIT mode, (4) multiple rows maintain independent states (saved row shows Edit, newly-added row shows Save), (5) trash/remove works in edit mode, (6) after hard page reload the saved row re-renders in READ-ONLY mode (Edit pencil shown, Save absent, textarea disabled), (7) when POST /api/performance/save is intercepted to return 500, the row STAYS in edit mode (Save still visible) — confirming saveRecord returns boolean and saveSupportRow only flips on ok===true. data-testid contract (support-row-{slug}, support-save-{slug}, support-edit-{slug}, support-details-{slug}, support-remove-{slug}, support-add-select) all honored.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "verified_acceptance_criteria": [
+    "New row added via + Add a support area... starts in edit mode: support-save-{slug} visible, support-edit-{slug} absent, textarea disabled attr is null (editable), amber border class applied.",
+    "On successful save: support-edit-{slug} becomes visible, support-save-{slug} removed from DOM, textarea gets disabled attribute (empty string === present), bg-slate-50 cursor-not-allowed classes applied.",
+    "Clicking support-edit-{slug} re-enters edit mode: Save button reappears, Edit button removed, textarea editable again.",
+    "Forcing POST /api/performance/save to respond 500 (via page.route) keeps row in edit mode — Save button still visible, Edit button not rendered, textarea still editable. Confirms saveRecord() returns false on non-ok and saveSupportRow gates setSupportEditing[cat]=false behind ok===true.",
+    "Hard page reload: GET /api/performance/generate returns saved support_needed, UI loads rows in read-only mode (setSupportEditing reset to {} in generate()).",
+    "Two rows simultaneously: first row (saved) shows Edit while second (just added) shows Save — per-category supportEditing map works correctly.",
+    "Trash button removes row from UI in edit mode; supportEditing entry for that category is deleted.",
+    "Support add dropdown 'N of 6 areas added' counter updates correctly as rows are added/removed."
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "saveSupportRow currently triggers a full saveRecord which persists ALL support rows + remarks + revenue overrides for that single per-row Save click. This means clicking Save on one row also commits pending edits in other rows. Acceptable given current UX but worth noting if partial-row saves ever become a requirement.",
+    "After a successful save, generate() refetches and resets supportEditing={}. For other rows that were mid-edit (Save visible, unsaved text), this would flip them to read-only and their unsaved text remains in state — OK because saveRecord commits all rows' current state before the refetch. No data loss observed.",
+    "PerformanceTracker.js is 3146 lines — should be split into subcomponents (SupportNeeded, RevenueOverrides, ComparisonTable already partially extracted) for maintainability.",
+    "removeSupport does not persist to server automatically; user must click Save on another row or submit to commit the deletion. This is pre-existing behavior, not in scope of current fix."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (frontend-only)", "frontend": "100% (7/7)" },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, Nyla Air Water). Used Month view + Surya Yadavalli as the single resource so saveRecord's selectedResource[0] guard is satisfied.",
+  "seed_data_creation": "One Support Needed row (Pricing) was created during testing against month=4/year=2026 for resource=Surya. Final cleanup via UI removed rows; a stale server-side 'pricing' support row for that month may persist as a harmless test artifact.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "To exercise Save success on Performance Tracker, (1) switch view to Month, (2) open MultiSelect [data-testid=select-resource] and pick a single resource like 'Surya Yadavalli' (selectedResource[0] must be truthy), (3) click [data-testid=generate-btn]. The 'Target Plan' default view has selectedResource=[] until a plan is picked, which causes 'Pick at least one resource before saving' toast. data-testid pattern: support-row-{slug}, support-save-{slug}, support-edit-{slug}, support-details-{slug}, support-remove-{slug} where slug = category.toLowerCase().replace(/\\s+/g,'-'). Failure path best tested with page.route('**/api/performance/save', fulfill 500) rather than clearing selectedResource (the guard fires client-side before fetch).",
+  "rca of the issue": "Original bug: saveSupportRow always called setSupportEditing[cat]=false regardless of save outcome, so failed saves still flipped the UI to read-only, hiding the Save button. Fix verified in this iteration: saveRecord now returns true/false (false on !selectedResource[0], false on !res.ok, false on thrown exception), and saveSupportRow only flips supportEditing[cat]=false when saveRecord resolves to true. Failure path (intercepted 500) confirmed to keep row in edit mode. generate() after success resets supportEditing={} so newly-fetched saved rows render in read-only mode consistently."
+}

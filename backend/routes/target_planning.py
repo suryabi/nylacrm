@@ -1,0 +1,927 @@
+"""
+Target Planning Module (V2)
+Provides target plans, allocations, city achievement, and dashboard analytics.
+"""
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+from typing import Optional, List, Dict
+from datetime import datetime, timezone, timedelta
+import uuid
+
+from database import db, get_tenant_db
+from deps import get_current_user
+
+router = APIRouter()
+
+
+def get_tdb():
+    return get_tenant_db()
+
+
+async def _resolve_user_name(user_id):
+    """Resolve a tenant user's display name from their id (None-safe)."""
+    if not user_id:
+        return None
+    u = await get_tenant_db().users.find_one(
+        {'id': user_id}, {'_id': 0, 'name': 1, 'email': 1}
+    )
+    if u:
+        return u.get('name') or u.get('email')
+    return None
+
+
+async def _backfill_owner_names(plans):
+    """Fill missing created_by_name / assigned_to_name for legacy plans from the
+    users collection (one batch) and persist them back, so the UI can render
+    consistent initials and group-by-assignee reliably."""
+    missing_ids = set()
+    for p in plans:
+        if p.get('created_by') and not p.get('created_by_name'):
+            missing_ids.add(p['created_by'])
+        if p.get('assigned_to') and not p.get('assigned_to_name'):
+            missing_ids.add(p['assigned_to'])
+    if not missing_ids:
+        return
+    users = await get_tenant_db().users.find(
+        {'id': {'$in': list(missing_ids)}}, {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+    ).to_list(1000)
+    name_map = {u['id']: (u.get('name') or u.get('email')) for u in users}
+    for p in plans:
+        update = {}
+        if p.get('created_by') and not p.get('created_by_name') and name_map.get(p['created_by']):
+            p['created_by_name'] = name_map[p['created_by']]
+            update['created_by_name'] = p['created_by_name']
+        if p.get('assigned_to') and not p.get('assigned_to_name') and name_map.get(p['assigned_to']):
+            p['assigned_to_name'] = name_map[p['assigned_to']]
+            update['assigned_to_name'] = p['assigned_to_name']
+        if update:
+            await db.target_plans_v2.update_one({'id': p['id']}, {'$set': update})
+
+
+# ============= Pydantic Models =============
+
+class TargetPlanCreateV2(BaseModel):
+    name: str
+    start_date: str  # YYYY-MM-DD
+    end_date: str    # YYYY-MM-DD
+    goal_type: str = "run_rate"
+    total_amount: float
+    milestones: int = 4
+    description: Optional[str] = None
+    assigned_to: Optional[str] = None  # user id this plan is assigned to
+
+
+class TargetPlanUpdateV2(BaseModel):
+    name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    goal_type: Optional[str] = None
+    total_amount: Optional[float] = None
+    milestones: Optional[int] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    assigned_to: Optional[str] = None  # '' clears the assignment
+
+
+class TargetAllocationCreateV2(BaseModel):
+    territory_id: str
+    territory_name: str
+    city: Optional[str] = None
+    state: Optional[str] = None
+    resource_id: Optional[str] = None
+    resource_name: Optional[str] = None
+    sku_id: Optional[str] = None
+    sku_name: Optional[str] = None
+    parent_allocation_id: Optional[str] = None
+    level: str = 'territory'
+    amount: float
+
+
+class TargetAllocationUpdateV2(BaseModel):
+    amount: Optional[float] = None
+
+
+class MonthlyAllocationRowV2(BaseModel):
+    allocation_id: str
+    monthly: Dict[str, float] = {}
+
+
+class MonthlyAllocationSaveV2(BaseModel):
+    rows: List[MonthlyAllocationRowV2] = []
+    finalize: bool = False
+
+
+# Sales roles for resource filtering
+SALES_ROLES_V2 = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business']
+
+
+# ============= Helper =============
+
+async def get_monthly_breakdown(plan, start_date, end_date, today):
+    """Calculate monthly revenue breakdown for a target plan"""
+    monthly_data = []
+    current = start_date.replace(day=1)
+
+    while current <= end_date:
+        month_start = current.strftime('%Y-%m-01')
+        if current.month == 12:
+            next_month = current.replace(year=current.year + 1, month=1, day=1)
+        else:
+            next_month = current.replace(month=current.month + 1, day=1)
+        month_end = (next_month - timedelta(days=1)).strftime('%Y-%m-%d')
+
+        is_past_or_current = current <= today
+
+        month_entry = {
+            'month': current.strftime('%b %Y'),
+            'month_short': current.strftime('%b'),
+            'month_num': current.month,
+            'year': current.year,
+            'is_current': current.month == today.month and current.year == today.year,
+            'is_past': current < today.replace(day=1),
+            'invoice_value': 0,
+            'collections': 0,
+            'target': plan['total_amount']
+        }
+
+        if is_past_or_current:
+            invoices = await get_tdb().invoices.find({
+                'invoice_date': {'$gte': month_start, '$lte': month_end}
+            }, {'_id': 0}).to_list(500)
+            month_entry['invoice_value'] = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+            month_entry['invoices_count'] = len(invoices)
+
+            payments = await db.payments.find({
+                'payment_date': {'$gte': month_start, '$lte': month_end}
+            }, {'_id': 0}).to_list(500)
+            month_entry['collections'] = sum(p.get('amount', 0) or 0 for p in payments)
+            month_entry['payments_count'] = len(payments)
+
+        monthly_data.append(month_entry)
+
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+
+    return monthly_data
+
+
+# ============= Endpoints =============
+
+@router.get("/target-planning")
+async def get_target_planning_list(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all target plans with monthly revenue breakdown"""
+    query = {}
+    if status:
+        query['status'] = status
+
+    plans = await db.target_plans_v2.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
+
+    # Backfill denormalized owner names for legacy plans (consistent UI titles)
+    await _backfill_owner_names(plans)
+
+    for plan in plans:
+        start = datetime.fromisoformat(plan['start_date'])
+        end = datetime.fromisoformat(plan['end_date'])
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        monthly_data = []
+        current = start.replace(day=1)
+
+        while current <= end:
+            month_start = current.strftime('%Y-%m-01')
+            if current.month == 12:
+                next_month = current.replace(year=current.year + 1, month=1, day=1)
+            else:
+                next_month = current.replace(month=current.month + 1, day=1)
+            month_end = (next_month - timedelta(days=1)).strftime('%Y-%m-%d')
+
+            is_past_or_current = current <= now
+
+            month_entry = {
+                'month': current.strftime('%b %Y'),
+                'month_num': current.month,
+                'year': current.year,
+                'is_current': current.month == now.month and current.year == now.year,
+                'is_past': current < now.replace(day=1),
+                'invoice_value': 0,
+                'collections': 0
+            }
+
+            if is_past_or_current:
+                invoices = await get_tdb().invoices.find({
+                    'invoice_date': {'$gte': month_start, '$lte': month_end}
+                }, {'_id': 0}).to_list(500)
+                month_entry['invoice_value'] = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+
+                payments = await db.payments.find({
+                    'payment_date': {'$gte': month_start, '$lte': month_end}
+                }, {'_id': 0}).to_list(500)
+                month_entry['collections'] = sum(p.get('amount', 0) or 0 for p in payments)
+
+            monthly_data.append(month_entry)
+
+            if current.month == 12:
+                current = current.replace(year=current.year + 1, month=1)
+            else:
+                current = current.replace(month=current.month + 1)
+
+        plan['monthly_breakdown'] = monthly_data
+        current_month_data = next((m for m in monthly_data if m['is_current']), None)
+        plan['current_month'] = current_month_data
+        plan['total_invoice_value'] = sum(m['invoice_value'] for m in monthly_data)
+        plan['total_collections'] = sum(m['collections'] for m in monthly_data)
+
+    return plans
+
+
+@router.post("/target-planning")
+async def create_target_planning(
+    plan: TargetPlanCreateV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new target plan (v2)"""
+    assigned_to = plan.assigned_to or None
+    assigned_to_name = await _resolve_user_name(assigned_to)
+    plan_data = {
+        'id': str(uuid.uuid4()),
+        'name': plan.name,
+        'start_date': plan.start_date,
+        'end_date': plan.end_date,
+        'goal_type': plan.goal_type,
+        'total_amount': plan.total_amount,
+        'milestones': plan.milestones,
+        'allocated_amount': 0,
+        'description': plan.description,
+        'status': 'draft',
+        'assigned_to': assigned_to,
+        'assigned_to_name': assigned_to_name,
+        'created_by': current_user['id'],
+        'created_by_name': current_user.get('name', current_user.get('email')),
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'updated_at': datetime.now(timezone.utc).isoformat()
+    }
+
+    await db.target_plans_v2.insert_one(plan_data)
+    created = await db.target_plans_v2.find_one({'id': plan_data['id']}, {'_id': 0})
+    return created
+
+
+@router.get("/target-planning/achievement")
+async def get_achievement_by_resource_or_sku(
+    start_date: str,
+    end_date: str,
+    resource_id: Optional[str] = None,
+    sku_id: Optional[str] = None,
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get achieved revenue filtered by resource (sales person) or SKU within a date range"""
+    tdb = get_tdb()
+
+    if resource_id:
+        pipeline = [
+            {
+                '$lookup': {
+                    'from': 'leads',
+                    'localField': 'ca_lead_id',
+                    'foreignField': 'lead_id',
+                    'as': 'lead'
+                }
+            },
+            {'$unwind': {'path': '$lead', 'preserveNullAndEmptyArrays': False}},
+            {
+                '$match': {
+                    'lead.assigned_to': resource_id,
+                    'invoice_date': {'$gte': start_date, '$lte': end_date},
+                    **(({'lead.city': city} if city else {}))
+                }
+            },
+            {'$group': {'_id': None, 'achieved': {'$sum': '$net_invoice_value'}}}
+        ]
+        result = await tdb.invoices.aggregate(pipeline).to_list(1)
+        return {'achieved': result[0]['achieved'] if result else 0}
+
+    if sku_id:
+        pipeline = [
+            {'$match': {'invoice_date': {'$gte': start_date, '$lte': end_date}}},
+            {'$unwind': {'path': '$items', 'preserveNullAndEmptyArrays': True}},
+            {'$match': {'$or': [{'items.sku_id': sku_id}, {'items.sku': sku_id}]}},
+            {'$group': {'_id': None, 'achieved': {'$sum': {'$ifNull': ['$items.amount', 0]}}}}
+        ]
+        result = await tdb.invoices.aggregate(pipeline).to_list(1)
+        if not result:
+            return {'achieved': 0, 'note': 'SKU-level tracking not available'}
+        return {'achieved': result[0]['achieved']}
+
+    return {'achieved': 0, 'error': 'Either resource_id or sku_id is required'}
+
+
+@router.get("/target-planning/city-achievement")
+async def get_city_achievement(
+    city: str,
+    start_date: str,
+    end_date: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get achievement for a city within a date range"""
+    accounts = await get_tdb().accounts.find({'city': city}, {'account_id': 1}).to_list(1000)
+    account_ids = [a['account_id'] for a in accounts]
+
+    invoices_query = {
+        'account_id': {'$in': account_ids},
+        'invoice_date': {'$gte': start_date, '$lte': end_date}
+    }
+    invoices = await get_tdb().invoices.find(invoices_query, {'_id': 0}).to_list(1000)
+    achieved = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+
+    won_leads = await get_tdb().leads.find({
+        'city': city,
+        'status': 'won',
+        'updated_at': {'$gte': start_date, '$lte': end_date}
+    }, {'_id': 0}).to_list(1000)
+    estimated = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
+
+    return {
+        'city': city,
+        'achieved': achieved,
+        'estimated': estimated,
+        'invoices_count': len(invoices),
+        'won_leads_count': len(won_leads)
+    }
+
+
+@router.get("/target-planning/resources/by-location")
+async def get_resources_by_location(
+    territory: Optional[str] = None,
+    city: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get sales resources filtered by territory or city"""
+    query = {'is_active': True}
+    query['department'] = {'$in': ['Sales', 'Admin', 'sales', 'admin']}
+
+    if city:
+        query['city'] = city
+    elif territory:
+        query['territory'] = territory
+
+    users = await get_tdb().users.find(
+        query,
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'department': 1, 'city': 1, 'state': 1, 'territory': 1}
+    ).to_list(200)
+    return users
+
+
+@router.get("/target-planning/resources/sales")
+async def get_sales_resources_v2(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all sales and admin department members for target allocation"""
+    users = await get_tdb().users.find(
+        {'is_active': True, 'department': {'$in': ['Sales', 'Admin', 'sales', 'admin']}},
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'department': 1, 'city': 1, 'territory': 1}
+    ).to_list(200)
+    return users
+
+
+@router.get("/target-planning/{plan_id}")
+async def get_target_planning_detail(
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a specific target plan with allocations"""
+    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+
+    allocations = await db.target_allocations_v2.find(
+        {'plan_id': plan_id}, {'_id': 0}
+    ).to_list(500)
+
+    plan['allocations'] = allocations
+    return plan
+
+
+@router.put("/target-planning/{plan_id}")
+async def update_target_planning(
+    plan_id: str,
+    plan_update: TargetPlanUpdateV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update a target plan"""
+    existing = await db.target_plans_v2.find_one({'id': plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+
+    update_data = {k: v for k, v in plan_update.model_dump().items() if v is not None}
+    # Resolve the assignee's display name whenever assignment changes.
+    # An empty string clears the assignment.
+    if 'assigned_to' in update_data:
+        aid = update_data['assigned_to'] or None
+        update_data['assigned_to'] = aid
+        update_data['assigned_to_name'] = await _resolve_user_name(aid)
+    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+
+    await db.target_plans_v2.update_one({'id': plan_id}, {'$set': update_data})
+
+    updated = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    return updated
+
+
+@router.delete("/target-planning/{plan_id}")
+async def delete_target_planning(
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete a target plan and its allocations"""
+    existing = await db.target_plans_v2.find_one({'id': plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+
+    await db.target_allocations_v2.delete_many({'plan_id': plan_id})
+    await db.target_plans_v2.delete_one({'id': plan_id})
+
+    return {"message": "Target plan deleted successfully"}
+
+
+@router.post("/target-planning/{plan_id}/allocations")
+async def create_target_allocation_v2(
+    plan_id: str,
+    allocation: TargetAllocationCreateV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Add an allocation to a target plan"""
+    plan = await db.target_plans_v2.find_one({'id': plan_id})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+
+    level = allocation.level
+    if not level or level == 'territory':
+        if allocation.resource_id:
+            level = 'resource'
+        elif allocation.sku_id:
+            level = 'sku'
+        elif allocation.city:
+            level = 'city'
+        else:
+            level = 'territory'
+
+    allocation_data = {
+        'id': str(uuid.uuid4()),
+        'plan_id': plan_id,
+        'territory_id': allocation.territory_id,
+        'territory_name': allocation.territory_name,
+        'city': allocation.city,
+        'state': allocation.state,
+        'resource_id': allocation.resource_id,
+        'resource_name': allocation.resource_name,
+        'sku_id': allocation.sku_id,
+        'sku_name': allocation.sku_name,
+        'parent_allocation_id': allocation.parent_allocation_id,
+        'level': level,
+        'amount': allocation.amount,
+        'created_at': datetime.now(timezone.utc).isoformat()
+    }
+
+    await db.target_allocations_v2.insert_one(allocation_data)
+
+    territory_allocations = await db.target_allocations_v2.aggregate([
+        {'$match': {'plan_id': plan_id, 'level': 'territory'}},
+        {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
+    ]).to_list(1)
+
+    allocated = territory_allocations[0]['total'] if territory_allocations else 0
+    await db.target_plans_v2.update_one(
+        {'id': plan_id},
+        {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+
+    allocation_data.pop('_id', None)
+    return allocation_data
+
+
+@router.delete("/target-planning/{plan_id}/allocations/{allocation_id}")
+async def delete_target_allocation_v2(
+    plan_id: str,
+    allocation_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Delete an allocation and its child allocations"""
+    existing = await db.target_allocations_v2.find_one({'id': allocation_id, 'plan_id': plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Allocation not found")
+
+    await db.target_allocations_v2.delete_many({
+        '$or': [
+            {'id': allocation_id},
+            {'parent_allocation_id': allocation_id}
+        ]
+    })
+
+    territory_allocations = await db.target_allocations_v2.aggregate([
+        {'$match': {'plan_id': plan_id, 'level': 'territory'}},
+        {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
+    ]).to_list(1)
+
+    allocated = territory_allocations[0]['total'] if territory_allocations else 0
+    await db.target_plans_v2.update_one(
+        {'id': plan_id},
+        {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+
+    return {"message": "Allocation deleted successfully"}
+
+
+@router.get("/target-planning/{plan_id}/allocations/{allocation_id}/children")
+async def get_allocation_children(
+    plan_id: str,
+    allocation_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get child allocations for a parent allocation"""
+    children = await db.target_allocations_v2.find(
+        {'plan_id': plan_id, 'parent_allocation_id': allocation_id},
+        {'_id': 0}
+    ).to_list(500)
+    return children
+
+
+@router.put("/target-planning/{plan_id}/allocations/{allocation_id}")
+async def update_target_allocation_v2(
+    plan_id: str,
+    allocation_id: str,
+    update_data: TargetAllocationUpdateV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update an existing allocation amount"""
+    existing = await db.target_allocations_v2.find_one({'id': allocation_id, 'plan_id': plan_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Allocation not found")
+
+    update_fields = {'updated_at': datetime.now(timezone.utc).isoformat()}
+    if update_data.amount is not None:
+        update_fields['amount'] = update_data.amount
+
+    await db.target_allocations_v2.update_one(
+        {'id': allocation_id},
+        {'$set': update_fields}
+    )
+
+    if existing.get('level') == 'territory' or not existing.get('level'):
+        territory_allocations = await db.target_allocations_v2.aggregate([
+            {'$match': {'plan_id': plan_id, 'level': 'territory'}},
+            {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
+        ]).to_list(1)
+
+        allocated = territory_allocations[0]['total'] if territory_allocations else 0
+        await db.target_plans_v2.update_one(
+            {'id': plan_id},
+            {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+        )
+
+    updated = await db.target_allocations_v2.find_one({'id': allocation_id}, {'_id': 0})
+    return updated
+
+
+@router.get("/target-planning/{plan_id}/dashboard")
+async def get_target_planning_dashboard(
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get dashboard data for a target plan"""
+    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+
+    # Backfill owner names so the detail header renders consistent initials
+    await _backfill_owner_names([plan])
+
+    start_date = datetime.fromisoformat(plan['start_date'])
+    end_date = datetime.fromisoformat(plan['end_date'])
+    today = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    total_days = (end_date - start_date).days
+    days_elapsed = max(0, (today - start_date).days)
+    days_remaining = max(0, (end_date - today).days)
+
+    all_allocations = await db.target_allocations_v2.find(
+        {'plan_id': plan_id}, {'_id': 0}
+    ).to_list(500)
+
+    territory_allocations = [a for a in all_allocations if a.get('level', 'territory') == 'territory']
+    city_allocations = [a for a in all_allocations if a.get('level') == 'city']
+    resource_allocations = [a for a in all_allocations if a.get('level') == 'resource']
+
+    territories_with_children = []
+    for t_alloc in territory_allocations:
+        t_children = [c for c in city_allocations if c.get('parent_allocation_id') == t_alloc['id']]
+        t_alloc['children'] = []
+        t_alloc['allocated_to_children'] = 0
+
+        for c_alloc in t_children:
+            c_children = [r for r in resource_allocations if r.get('parent_allocation_id') == c_alloc['id']]
+            c_alloc['children'] = c_children
+            c_alloc['allocated_to_children'] = sum(r.get('amount', 0) for r in c_children)
+            t_alloc['children'].append(c_alloc)
+            t_alloc['allocated_to_children'] += c_alloc['amount']
+
+        territories_with_children.append(t_alloc)
+
+    cities = list(set(a['city'] for a in all_allocations if a.get('city')))
+
+    won_leads_query = {
+        'status': 'won',
+        'updated_at': {'$gte': plan['start_date'], '$lte': plan['end_date']}
+    }
+    if cities:
+        won_leads_query['city'] = {'$in': cities}
+
+    won_leads = await get_tdb().leads.find(won_leads_query, {'_id': 0}).to_list(1000)
+    # MRR — the plan target is a Monthly Run Rate, so "achieved" must also be
+    # MRR. We sum each won-lead's `estimated_monthly_revenue` (computed from
+    # `proposed_sku_pricing × monthly_bottles`). Falls back to recomputing
+    # on-the-fly when the cached field is missing, mirroring `list_leads`.
+    def _monthly_for(lead: dict) -> float:
+        est = (lead.get('opportunity_estimation') or {})
+        cached = est.get('estimated_monthly_revenue')
+        if cached:
+            return float(cached or 0)
+        monthly_bottles = est.get('final_monthly') or est.get('calculated_monthly') or 0
+        proposed = lead.get('proposed_sku_pricing') or []
+        if not (monthly_bottles and proposed):
+            return 0.0
+        total = 0.0
+        for sku in proposed:
+            pct = sku.get('percentage', 0)
+            ppu = sku.get('price_per_unit', 0)
+            qty = round((monthly_bottles * pct) / 100) if pct else 0
+            total += qty * ppu
+        return float(total)
+
+    estimated_revenue = sum(_monthly_for(lead) for lead in won_leads)
+
+    invoices_query = {
+        'invoice_date': {'$gte': plan['start_date'], '$lte': plan['end_date']}
+    }
+    invoices = await get_tdb().invoices.find(invoices_query, {'_id': 0}).to_list(1000)
+    actual_revenue = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
+
+    num_milestones = plan.get('milestones', 4)
+    days_per_milestone = total_days // num_milestones if num_milestones > 0 else total_days
+
+    milestones = []
+    current = start_date
+    cumulative_days = 0
+    target_per_milestone = plan['total_amount'] / num_milestones if num_milestones > 0 else plan['total_amount']
+
+    for i in range(num_milestones):
+        milestone_end = start_date + timedelta(days=days_per_milestone * (i + 1))
+        if i == num_milestones - 1:
+            milestone_end = end_date
+
+        cumulative_days += days_per_milestone if i < num_milestones - 1 else (end_date - current).days
+        milestone_date = milestone_end
+
+        is_completed = today >= milestone_end
+        is_current = not is_completed and (i == 0 or today >= start_date + timedelta(days=days_per_milestone * i))
+
+        milestones.append({
+            'milestone': i + 1,
+            'days': cumulative_days,
+            'date': milestone_date.strftime('%Y-%m-%d'),
+            'date_label': milestone_date.strftime('%b %d'),
+            'target_amount': target_per_milestone * (i + 1),
+            'is_completed': is_completed,
+            'is_current': is_current
+        })
+
+        current = milestone_end
+
+    territory_breakdown = {}
+    for lead in won_leads:
+        territory = lead.get('territory', 'Unknown')
+        if territory not in territory_breakdown:
+            territory_breakdown[territory] = {'count': 0, 'value': 0}
+        territory_breakdown[territory]['count'] += 1
+        # Use MRR contribution per lead, not the lifetime/estimated_value.
+        territory_breakdown[territory]['value'] += _monthly_for(lead)
+
+    city_breakdown = {}
+    for inv in invoices:
+        account_id = inv.get('account_id')
+        if account_id:
+            account = await get_tdb().accounts.find_one({'account_id': account_id}, {'city': 1})
+            city = account.get('city', 'Unknown') if account else 'Unknown'
+        else:
+            city = 'Unknown'
+
+        if city not in city_breakdown:
+            city_breakdown[city] = {'count': 0, 'value': 0}
+        city_breakdown[city]['count'] += 1
+        city_breakdown[city]['value'] += inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0
+
+    return {
+        'plan': plan,
+        'timeline': {
+            'total_days': total_days,
+            'days_elapsed': days_elapsed,
+            'days_remaining': days_remaining,
+            'progress_percent': round((days_elapsed / total_days) * 100, 1) if total_days > 0 else 0,
+            'milestones': milestones
+        },
+        'estimated_revenue': {
+            'achieved': estimated_revenue,
+            'remaining': max(0, plan['total_amount'] - estimated_revenue),
+            'percent': round((estimated_revenue / plan['total_amount']) * 100, 1) if plan['total_amount'] > 0 else 0,
+            'won_leads_count': len(won_leads),
+            'territory_breakdown': territory_breakdown
+        },
+        'actual_revenue': {
+            'achieved': actual_revenue,
+            'remaining': max(0, plan['total_amount'] - actual_revenue),
+            'percent': round((actual_revenue / plan['total_amount']) * 100, 1) if plan['total_amount'] > 0 else 0,
+            'invoices_count': len(invoices),
+            'city_breakdown': city_breakdown
+        },
+        'monthly_breakdown': await get_monthly_breakdown(plan, start_date, end_date, today),
+        'allocations': territories_with_children,
+        'all_allocations': all_allocations
+    }
+
+
+
+# ============= Monthly Allocation (City × Month matrix) =============
+
+def _plan_months(start_str: str, end_str: str):
+    """Return the list of calendar months spanned by [start, end] inclusive."""
+    start = datetime.fromisoformat(start_str)
+    end = datetime.fromisoformat(end_str)
+    months = []
+    current = start.replace(day=1)
+    while current <= end:
+        months.append({
+            'key': current.strftime('%Y-%m'),
+            'label': current.strftime('%b %Y'),
+            'short': current.strftime('%b'),
+            'month_num': current.month,
+            'year': current.year,
+        })
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+    return months
+
+
+async def _build_monthly_allocation(plan: dict):
+    """Build the city × month allocation matrix for a plan."""
+    plan_id = plan['id']
+    months = _plan_months(plan['start_date'], plan['end_date'])
+    month_keys = [m['key'] for m in months]
+
+    city_allocs = await db.target_allocations_v2.find(
+        {'plan_id': plan_id, 'level': 'city'}, {'_id': 0}
+    ).to_list(500)
+    territory_allocs = await db.target_allocations_v2.find(
+        {'plan_id': plan_id, 'level': 'territory'}, {'_id': 0}
+    ).to_list(500)
+    terr_by_id = {t['id']: t for t in territory_allocs}
+
+    rows = []
+    month_totals = {k: 0.0 for k in month_keys}
+    grand_target = 0.0
+    grand_allocated = 0.0
+
+    for a in city_allocs:
+        stored = a.get('monthly_allocation') or {}
+        monthly = {k: round(float(stored.get(k, 0) or 0), 2) for k in month_keys}
+        allocated_total = round(sum(monthly.values()), 2)
+        total_target = round(float(a.get('amount', 0) or 0), 2)
+        balance = round(total_target - allocated_total, 2)
+        terr_name = (
+            a.get('territory_name')
+            or terr_by_id.get(a.get('parent_allocation_id'), {}).get('territory_name')
+            or '—'
+        )
+        for k in month_keys:
+            month_totals[k] += monthly[k]
+        grand_target += total_target
+        grand_allocated += allocated_total
+        rows.append({
+            'allocation_id': a['id'],
+            'city': a.get('city') or '—',
+            'state': a.get('state'),
+            'territory_id': a.get('parent_allocation_id') or a.get('territory_id'),
+            'territory_name': terr_name,
+            'total_target': total_target,
+            'monthly': monthly,
+            'allocated_total': allocated_total,
+            'balance': balance,
+            'is_balanced': abs(balance) < 0.01,
+        })
+
+    rows.sort(key=lambda r: ((r['territory_name'] or '').lower(), (r['city'] or '').lower()))
+    is_balanced = len(rows) > 0 and all(r['is_balanced'] for r in rows)
+
+    return {
+        'plan_id': plan_id,
+        'plan_name': plan.get('name'),
+        'start_date': plan['start_date'],
+        'end_date': plan['end_date'],
+        'months': months,
+        'rows': rows,
+        'month_totals': {k: round(v, 2) for k, v in month_totals.items()},
+        'grand_target': round(grand_target, 2),
+        'grand_allocated': round(grand_allocated, 2),
+        'grand_balance': round(grand_target - grand_allocated, 2),
+        'is_balanced': is_balanced,
+        'finalized': bool(plan.get('monthly_allocation_finalized')),
+        'finalized_at': plan.get('monthly_allocation_finalized_at'),
+    }
+
+
+@router.get("/target-planning/{plan_id}/monthly-allocation")
+async def get_monthly_allocation(
+    plan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Return the city × month monthly-target allocation matrix for a plan."""
+    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+    return await _build_monthly_allocation(plan)
+
+
+@router.put("/target-planning/{plan_id}/monthly-allocation")
+async def save_monthly_allocation(
+    plan_id: str,
+    payload: MonthlyAllocationSaveV2,
+    current_user: dict = Depends(get_current_user)
+):
+    """Persist the monthly-target allocation. Drafts save freely; finalize is
+    blocked unless every city's monthly cells sum exactly to its total target."""
+    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    if not plan:
+        raise HTTPException(status_code=404, detail="Target plan not found")
+
+    month_keys = {m['key'] for m in _plan_months(plan['start_date'], plan['end_date'])}
+    city_allocs = {
+        a['id']: a
+        for a in await db.target_allocations_v2.find(
+            {'plan_id': plan_id, 'level': 'city'}, {'_id': 0}
+        ).to_list(500)
+    }
+
+    sanitized = {}
+    mismatches = []
+    for row in payload.rows:
+        a = city_allocs.get(row.allocation_id)
+        if not a:
+            continue  # ignore rows that don't belong to this plan
+        clean = {
+            k: round(float(v or 0), 2)
+            for k, v in (row.monthly or {}).items()
+            if k in month_keys
+        }
+        sanitized[row.allocation_id] = clean
+        total_target = round(float(a.get('amount', 0) or 0), 2)
+        allocated = round(sum(clean.values()), 2)
+        balance = round(total_target - allocated, 2)
+        if abs(balance) >= 0.01:
+            mismatches.append({
+                'allocation_id': a['id'],
+                'city': a.get('city'),
+                'total_target': total_target,
+                'allocated': allocated,
+                'balance': balance,
+            })
+
+    if payload.finalize and mismatches:
+        raise HTTPException(status_code=400, detail={
+            'message': 'Monthly allocation must match each city\'s total target before submitting. Fix the highlighted rows.',
+            'mismatches': mismatches,
+        })
+
+    now = datetime.now(timezone.utc).isoformat()
+    for alloc_id, clean in sanitized.items():
+        await db.target_allocations_v2.update_one(
+            {'id': alloc_id, 'plan_id': plan_id},
+            {'$set': {'monthly_allocation': clean, 'updated_at': now}}
+        )
+
+    plan_update = {'updated_at': now}
+    if payload.finalize:
+        plan_update['monthly_allocation_finalized'] = True
+        plan_update['monthly_allocation_finalized_at'] = now
+    else:
+        plan_update['monthly_allocation_finalized'] = False
+        plan_update['monthly_allocation_finalized_at'] = None
+    await db.target_plans_v2.update_one({'id': plan_id}, {'$set': plan_update})
+
+    fresh = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
+    return await _build_monthly_allocation(fresh)

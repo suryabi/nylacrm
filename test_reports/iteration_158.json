@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 158 — Collections / Outstanding moved out of the Performance Tracker main body and re-added as a NEW 4th sub-tab inside Top 10 Priorities. Backend (/api/performance/account-collections): 21/21 pytest pass — auth, response shape, summary fields, row fields, no-mongo-id leaks, resource filtering (single, all-tenant, unknown-id => empty), all 5 time_filter values supported (lifetime/this_month/last_month/this_quarter/this_year), account list invariant across time_filter (only invoice aggregation narrows), sort by outstanding_balance desc → gross_invoice_total desc, summary totals == sum of rows, average_order_amount = total_gross / total_invoice_count. Frontend (Surya Yadavalli on /performance): Generate produces 2 accounts; OLD data-testid='outstanding-section' is GONE from main body (verified absent); Top 10 Priorities renders 4 sub-tabs case_targets / sampling_trials / focus_leads / collections; clicking sub-tab-collections renders collections-subsection with 6 summary cards (Accounts, Invoice Value, Bottle Credit, Avg Order, Outstanding, Overdue), toolbar (collections-time-filter + collections-search), collections-table with 2 rows (collections-row-TOOP-HYD-A26-001, collections-row-...), and footer cell collections-total-outstanding (₹0). Row click on first row successfully navigated to /accounts/TOOP-HYD-A26-001. All required data-testids present and wired to backend.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_account_collections.py",
+    "/app/test_reports/pytest/account_collections_results.xml"
+  ],
+  "action_items": [
+    "None — feature complete and verified."
+  ],
+  "critical_code_review_comments": [
+    "performance.py:1577-1600 invoice→account matching uses (a) lead_id == acc.lead_id OR (b) substring fuzzy-match on lowercased customer_name vs account_name. Substring match is bidirectional ('cust in acc' OR 'acc in cust'). Could cause cross-account bleed when one account name is a prefix of another (e.g., 'Toopa' would match 'Toopa Ice-creamery' AND 'Toopa Foods'). Once first match wins the inner break short-circuits, so behaviour is order-dependent on the accounts list ordering returned by Mongo. Recommend: prefer exact-equality after normalization, fall back to fuzzy only when no exact hit; or require a tighter match score.",
+    "performance.py:1573 invoice time-window uses {created_at: {$gte iso, $lte iso}} — relies on created_at being a stringified ISO timestamp consistent across all invoices. If any invoice stores created_at as a BSON Date the lexicographic comparison is silently wrong. Suggest normalising on insert OR using a $or with both string and date forms.",
+    "performance.py:1543 _collections_time_range 'this_quarter' branch uses now.replace(month=q*3+1, day=1, …). Works for Q1/Q2/Q3 but for Q4 (q=3) yields month=10 which is fine; correctness verified — flag retained as a future-proof note.",
+    "performance.py:1568 to_list(2000) silently caps at 2000 accounts per tenant. Adequate today, but should be paginated long-term.",
+    "performance.py:1574 to_list(20000) for invoices is generous; for very large tenants this materialises the entire collection in memory. Consider an aggregation pipeline ($lookup or $match→$group on lead_id) for production scale.",
+    "PerformanceTracker.js is now ~2544 lines. Well over the 700-line guideline. CollectionsSubsection / FocusLeadsSubsection / SamplingTrialsSubsection / CaseTargetsSubsection should be split into /pages/performance/<name>.js modules.",
+    "PerformanceTracker.js CollectionsSubsection — error handling on fetch is implicit (no try/catch); a 5xx will throw and the loading flag may stay true. Wrap in try/catch/finally to set loading=false and surface a toast on failure."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_account_collections.py (NEW — 21 pytest tests, all passing)"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "100% — all required data-testids found, sub-tab navigation verified, row navigation to /accounts/{id} verified"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "None — read-only endpoint; relied on existing 2 accounts assigned to Surya in nyla-air-water tenant.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "GET /api/performance/account-collections?resource_ids=&time_filter= returns {accounts, summary, time_filter, resource_ids}. resource_ids is a comma-separated string in the query, returned as a list in the response. Empty resource_ids returns ALL accounts for the tenant. Time-filter values: lifetime|this_month|last_month|this_quarter|this_year — only narrows invoice aggregation, not the account list (verified). Sort = outstanding desc → gross desc. Backend tests: /app/backend/tests/test_account_collections.py — pytest passes 21/21 in ~2.8s. Surya has 2 accounts (Toopa Ice-creamery TOOP-HYD-A26-001 + Lead Seventeen Test). All invoice totals are 0 in this test tenant (no invoices linked) so contribution_pct/avg_order/bottle_credit are 0 in UI but the structure is fully correct. Top 10 Priorities card is expanded BY DEFAULT after Generate; clicking the section header collapses it. To navigate to the collections sub-tab, click directly on data-testid='sub-tab-collections' without toggling the section header. Login redirect goes to /home (not /dashboard); use page.wait_for_url(lambda u: '/login' not in u).",
+  "rca of the issue": "N/A — feature verification iteration."
+}

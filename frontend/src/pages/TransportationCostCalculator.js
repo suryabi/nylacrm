@@ -182,7 +182,7 @@ export default function TransportationCostCalculator() {
       setter('');
       return;
     }
-    const regex = allowDecimal ? /^\d*\.?\d{0,2}$/ : /^\d*$/;
+    const regex = allowDecimal ? /^\d*\.?\d*$/ : /^\d*$/;
     if (regex.test(value)) {
       setter(value);
     }

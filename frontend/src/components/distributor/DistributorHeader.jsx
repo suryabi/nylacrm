@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Edit2, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Edit2, MoreVertical, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
@@ -7,13 +7,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 
 export const DistributorHeader = ({ 
   distributor, 
   onEdit, 
+  onDelete,
   canManage,
+  canDelete,
   isEditing,
   onSave,
   onCancel,
@@ -125,6 +128,19 @@ export const DistributorHeader = ({
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem>Download Report</DropdownMenuItem>
                     <DropdownMenuItem>View History</DropdownMenuItem>
+                    {canDelete && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                          onClick={onDelete}
+                          data-testid="delete-distributor-btn"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Distributor
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </>

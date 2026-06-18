@@ -45,6 +45,8 @@ class DistributorCreate(BaseModel):
     credit_days: Optional[int] = 30
     credit_limit: Optional[float] = 0
     security_deposit: Optional[float] = 0
+    is_self_managed: Optional[bool] = False
+    billing_approach: Optional[str] = "margin_upfront"
     status: Optional[str] = "active"
     notes: Optional[str] = None
 
@@ -67,6 +69,8 @@ class DistributorUpdate(BaseModel):
     credit_days: Optional[int] = None
     credit_limit: Optional[float] = None
     security_deposit: Optional[float] = None
+    is_self_managed: Optional[bool] = None
+    billing_approach: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
 
@@ -91,6 +95,8 @@ class Distributor(BaseModel):
     credit_days: int = 30
     credit_limit: float = 0
     security_deposit: float = 0
+    is_self_managed: bool = False
+    billing_approach: str = "margin_upfront"
     status: str = "active"
     notes: Optional[str] = None
     created_at: str
@@ -145,7 +151,24 @@ class DistributorLocationCreate(BaseModel):
     contact_number: Optional[str] = None
     email: Optional[str] = None
     is_default: Optional[bool] = False
+    is_factory: Optional[bool] = False
+    # When True, every stock-in / stock-out / stock-transfer involving this
+    # warehouse REQUIRES a batch_id per line. Default False (feature opt-in).
+    track_batches: Optional[bool] = False
     status: Optional[str] = "active"
+    # Per-warehouse GST identity. GST registration in India is state-wise, so a
+    # self-managed entity with warehouses in multiple states has one GSTIN per
+    # warehouse. `zoho_branch_id` maps this warehouse to the matching Zoho Books
+    # Branch so stock-out invoices carry the correct GSTIN + place-of-supply.
+    gstin: Optional[str] = None
+    zoho_branch_id: Optional[str] = None
+    zoho_branch_name: Optional[str] = None
+    # Google Places-derived geocoding fields. Populated when the user picks an
+    # address from the Places autocomplete; used for "Open in Google Maps" and
+    # potentially for routing/distance calcs in future.
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
 
 
 class DistributorLocationUpdate(BaseModel):
@@ -160,7 +183,15 @@ class DistributorLocationUpdate(BaseModel):
     contact_number: Optional[str] = None
     email: Optional[str] = None
     is_default: Optional[bool] = None
+    is_factory: Optional[bool] = None
+    track_batches: Optional[bool] = None
     status: Optional[str] = None
+    gstin: Optional[str] = None
+    zoho_branch_id: Optional[str] = None
+    zoho_branch_name: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
 
 
 class DistributorLocation(BaseModel):
@@ -178,7 +209,15 @@ class DistributorLocation(BaseModel):
     contact_number: Optional[str] = None
     email: Optional[str] = None
     is_default: bool = False
+    is_factory: bool = False
+    track_batches: bool = False
     status: str = "active"
+    gstin: Optional[str] = None
+    zoho_branch_id: Optional[str] = None
+    zoho_branch_name: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
     created_at: str
     updated_at: str
 
@@ -333,6 +372,12 @@ class ShipmentItemCreate(BaseModel):
     discount_percent: Optional[float] = 0
     tax_percent: Optional[float] = 0
     remarks: Optional[str] = None
+    # Phase 2 batch tracking — required when the source factory warehouse has
+    # `track_batches=True`. Carries the specific production batch this line
+    # consumes from source and credits at destination. Optional for legacy
+    # callers / warehouses that don't track batches.
+    batch_id: Optional[str] = None
+    batch_code: Optional[str] = None
 
 
 class ShipmentItemUpdate(BaseModel):
@@ -369,6 +414,7 @@ class ShipmentItem(BaseModel):
 class PrimaryShipmentCreate(BaseModel):
     distributor_id: str
     distributor_location_id: str
+    source_warehouse_id: Optional[str] = None
     shipment_date: str  # ISO date string
     expected_delivery_date: Optional[str] = None
     reference_number: Optional[str] = None  # External reference like PO number
@@ -377,6 +423,7 @@ class PrimaryShipmentCreate(BaseModel):
     driver_contact: Optional[str] = None
     shipping_address: Optional[str] = None
     remarks: Optional[str] = None
+    gst_percent: Optional[float] = 0
     items: List[ShipmentItemCreate]
 
 
@@ -450,6 +497,12 @@ class DeliveryItemCreate(BaseModel):
     discount_percent: Optional[float] = 0
     tax_percent: Optional[float] = 0
     remarks: Optional[str] = None
+    # Phase 2 batch tracking — required when the source distributor warehouse
+    # has `track_batches=True`. Carries the specific batch consumed for this
+    # line so we can decrement the right batch in `distributor_stock` and
+    # surface batch lineage on customer invoices.
+    batch_id: Optional[str] = None
+    batch_code: Optional[str] = None
 
 
 class DeliveryItemUpdate(BaseModel):
@@ -509,6 +562,44 @@ class AccountDeliveryCreate(BaseModel):
     items: List[DeliveryItemCreate]
     # Credit notes to apply
     credit_notes_to_apply: Optional[List[CreditNoteApplicationCreate]] = None
+
+
+class PromoDeliveryItemCreate(BaseModel):
+    """A line on a promotional / non-sale stock-out. `unit_price` is an
+    INDICATIVE value (for transport / e-way reference) — there is no sale."""
+    sku_id: str
+    sku_name: Optional[str] = None
+    quantity: int
+    unit_price: float = 0  # indicative value per unit (not a sale price)
+    batch_id: Optional[str] = None
+    batch_code: Optional[str] = None
+    # Packaging — mirrors stock-transfer line items. The SKU's
+    # `packaging_config.promo_stock_out` drives the dropdown in the dialog.
+    packaging_type_id: Optional[str] = None
+    packaging_type_name: Optional[str] = None  # e.g. "Crate - 12", "Carton - 6"
+    units_per_package: Optional[int] = None
+    remarks: Optional[str] = None
+
+
+class PromoDeliveryCreate(BaseModel):
+    """A promotional / non-sale stock-out dispatched to a CRM Contact, a Lead, or
+    an internal Employee (sales team / staff). Deducts stock, generates a
+    Delivery Challan, never invoices."""
+    distributor_location_id: str
+    recipient_type: str = 'contact'   # 'contact' | 'lead' | 'employee'
+    contact_id: Optional[str] = None
+    lead_id: Optional[str] = None
+    employee_id: Optional[str] = None
+    delivery_date: str
+    reason: str                       # must match an active promo reason
+    reference_number: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    driver_name: Optional[str] = None
+    driver_contact: Optional[str] = None
+    delivery_address: Optional[str] = None
+    remarks: Optional[str] = None
+    items: List[PromoDeliveryItemCreate]
+    as_draft: bool = False            # save without deducting stock / Zoho push
 
 
 class AccountDeliveryUpdate(BaseModel):

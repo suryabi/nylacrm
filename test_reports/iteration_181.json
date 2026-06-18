@@ -1,0 +1,21 @@
+{
+  "summary": "Frontend-only validation of new Promotional Stock-Out (Delivery Challan) feature on Distributor Detail → Stock Out tab for Brian (bb12d90e-4d33-4890-ac5f-17573c551b5c). All 8 scenarios from the review request passed end-to-end: section appears in correct position, existing DC-2606-0001 row + PDF button present, full create flow (contact search → select Promo Test Contact, location Bangalore Warehouse, reason Sampling, SKU 600ml auto-fills MRP ₹45.50, qty 2) generates a new challan DC-2606-0002 with sonner success toast, PDF download returns 200 application/pdf, admin Reasons Manager add+deactivate works, negative test confirms Generate Challan stays disabled without contact, and regression items (Record Delivery button + Factory Returns section) still render unaffected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PromoDispatchSection.jsx is self-contained and well structured. Indicative price falls back through mrp -> base_price -> 0; this is fine but worth confirming with product if non-MRP SKUs should be blocked from promo dispatch (otherwise a 0-value challan can be generated)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "Admin surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). Note: login response uses session_token; FE stores it in localStorage key 'token'.",
+  "seed_data_creation": "Created 1 new promo dispatch DC-2606-0002 (Promo Test Contact, Sampling, 2 units of 600 ml / Silver, indicative ₹91 total). Added master reason 'QA Test Reason' via the Reasons manager and then deactivated it (now shown line-through / inactive). No active pollution left in reasons list.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Promo Stock-Out UI is fully wired and working. data-testids used: promo-section-trigger, promo-dispatches-table, promo-empty-state, create-promo-dispatch-btn, manage-promo-reasons-btn, promo-contact-search, promo-contact-option-{id}, promo-selected-contact, promo-location-select, promo-reason-select, promo-date-input, add-promo-item-btn, promo-item-{idx}, promo-sku-select-{idx}, promo-batch-select-{idx}, promo-qty-{idx}, promo-price-{idx}, promo-grand-total, save-promo-dispatch-btn, download-challan-{id}, new-reason-input, add-reason-btn, reason-row-{id}. Login flow: POST /api/auth/login (email, password, tenant_id) → session_token, store in localStorage as 'token'. Brian has 2 non-factory locations (no batch picker shown), which matched expectation."
+}

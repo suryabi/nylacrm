@@ -4,9 +4,11 @@ import { leadsAPI, activitiesAPI, commentsAPI, usersAPI, accountsAPI, skusAPI } 
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
+import { ShareButton } from '../components/share/ShareButton';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
+import MentionTextarea, { renderMentionedText } from '../components/MentionTextarea';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
@@ -27,7 +29,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
+import { MapPin } from 'lucide-react';
 import ActivityTimeline from '../components/ActivityTimeline';
+import ActionItemsSection from '../components/ActionItemsSection';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
 import LogoUploader from '../components/LogoUploader';
@@ -40,6 +45,9 @@ import OpportunityEstimation from '../components/OpportunityEstimation';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import LeadScoringCard from '../components/LeadScoringCard';
 import LeadGroupCard from '../components/LeadGroupCard';
+import LeadDeliveryAddressCard from '../components/LeadDeliveryAddressCard';
+import ContactEmails from '../components/gmail/ContactEmails';
+import EntityContactsSection from '../components/EntityContactsSection';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -95,6 +103,9 @@ export default function LeadDetail() {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
   
+  // Mobile: toggle visibility of secondary right-column cards (Lead Scoring, Lead Group, Proposal, Activity Timeline, Lead Details)
+  const [showSecondaryMobile, setShowSecondaryMobile] = useState(false);
+  
   // Check if user is admin (CEO or Director)
   const isAdmin = user?.role === 'CEO' || user?.role === 'Director';
   
@@ -114,6 +125,9 @@ export default function LeadDetail() {
   const [activityFollowUpDate, setActivityFollowUpDate] = useState('');
   const [activityDate, setActivityDate] = useState(''); // Admin-only: backdate activity
   const [convertingToAccount, setConvertingToAccount] = useState(false);
+  const [showConvertDialog, setShowConvertDialog] = useState(false);
+  // 'copy' = use lead's address; 'different' = different delivery address
+  const [convertAddressChoice, setConvertAddressChoice] = useState('copy');
   const [generatingLeadId, setGeneratingLeadId] = useState(false);
   
   // Lead Group state for copying activities
@@ -744,18 +758,41 @@ ${userEmail}`;
       toast.error('Please ensure all SKUs have a valid name and price greater than 0');
       return;
     }
-    
+
+    // If the lead has a captured delivery address, ask the user whether to
+    // copy it to the new account. Otherwise convert straight away.
+    if (lead?.delivery_address?.address_line1) {
+      setConvertAddressChoice('copy');
+      setShowConvertDialog(true);
+      return;
+    }
+    await performConvert(false);
+  };
+
+  const performConvert = async (copyAddress) => {
+    setShowConvertDialog(false);
     setConvertingToAccount(true);
     try {
-      const response = await accountsAPI.convertFromLead(lead.id);
-      
+      const response = await accountsAPI.convertFromLead(lead.id, copyAddress);
+
       // Trigger celebration for customer activation
       setCelebrationType('customer');
       setShowCelebration(true);
-      
+
       // Wait for celebration to show briefly before navigating
       setTimeout(() => {
-        toast.success(`Account created: ${response.data.account_id}`);
+        if (response.data.already_existed) {
+          // Lead was linked to a pre-existing account — make this visible to the user
+          // so they understand we didn't create a duplicate. `matched_on` tells us
+          // whether the match was on GSTIN or on company+city.
+          const matched = response.data.matched_on === 'gstin' ? 'matching GSTIN' : 'matching company name & city';
+          toast.success(
+            `Lead linked to existing account ${response.data.account_id}`,
+            { description: `An account with ${matched} already existed — no duplicate created.`, duration: 7000 },
+          );
+        } else {
+          toast.success(`Account created: ${response.data.account_id}`);
+        }
         navigate(`/accounts/${response.data.account_id}`);
       }, 1500);
     } catch (error) {
@@ -783,7 +820,7 @@ ${userEmail}`;
 
   // SKU Pricing handlers
   const handleAddProposedSKU = () => {
-    setProposedSkuPricing([...proposedSkuPricing, { sku: '', percentage: 0, price_per_unit: 0, return_bottle_credit: 0 }]);
+    setProposedSkuPricing([...proposedSkuPricing, { sku_id: '', sku: '', percentage: 0, price_per_unit: 0, return_bottle_credit: 0 }]);
     setIsEditingPricing(true);
   };
 
@@ -791,9 +828,34 @@ ${userEmail}`;
     setProposedSkuPricing(proposedSkuPricing.filter((_, i) => i !== index));
   };
 
+  // Resolve current SKU name from master_skus via stable `sku_id`. Falls back
+  // to the row's legacy `sku` string for rows created before sku_id existed.
+  const resolveProposedSkuName = (row) => {
+    if (row?.sku_id) {
+      const m = masterSkus.find(s => s.id === row.sku_id);
+      if (m) return m.sku_name || m.sku;
+    }
+    return row?.sku || '';
+  };
+  const isOrphanProposedRow = (row) =>
+    !row?.sku_id &&
+    !!row?.sku &&
+    !masterSkus.some(m => (m.sku_name || m.sku || '').toLowerCase() === String(row.sku).toLowerCase());
+
   const handleProposedSKUChange = (index, field, value) => {
     const updated = [...proposedSkuPricing];
-    updated[index] = { ...updated[index], [field]: field === 'sku' ? value : parseFloat(value) || 0 };
+    const stringFields = ['sku', 'sku_id'];
+    updated[index] = {
+      ...updated[index],
+      [field]: stringFields.includes(field) ? value : (parseFloat(value) || 0),
+    };
+    // When the user picks an SKU from the dropdown we get its id. Keep the
+    // legacy `sku` name field in sync so downstream code that still reads
+    // `sku` continues to show the right master name.
+    if (field === 'sku_id') {
+      const m = masterSkus.find(s => s.id === value);
+      if (m) updated[index].sku = m.sku_name || m.sku || '';
+    }
     setProposedSkuPricing(updated);
   };
 
@@ -856,7 +918,7 @@ ${userEmail}`;
   const assignedUser = users.find(u => u.id === lead.assigned_to);
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0" data-testid="lead-detail-page">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-0 pb-24 sm:pb-0" data-testid="lead-detail-page">
       {/* Breadcrumb */}
       <AppBreadcrumb />
       
@@ -922,6 +984,19 @@ ${userEmail}`;
             {lead.category && (
               <Badge variant="outline" className="text-[10px] sm:text-sm capitalize hidden sm:inline-flex">
                 {lead.category}
+              </Badge>
+            )}
+            {lead.lead_type && (
+              <Badge
+                variant="outline"
+                className={`text-[10px] sm:text-sm hidden sm:inline-flex ${
+                  lead.lead_type === 'Retail'
+                    ? 'bg-violet-50 text-violet-700 border-violet-300'
+                    : 'bg-sky-50 text-sky-700 border-sky-300'
+                }`}
+                data-testid="lead-type-badge"
+              >
+                {lead.lead_type}
               </Badge>
             )}
           </div>
@@ -992,6 +1067,20 @@ ${userEmail}`;
                   <>+ ID</>
                 )}
               </Button>
+            )}
+
+            {/* Drive folder shortcut */}
+            {lead.drive_folder_id && (
+              <a
+                href={`https://drive.google.com/drive/folders/${lead.drive_folder_id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-2 py-1"
+                data-testid="lead-drive-folder-link"
+                title="Open this lead's folder in Google Drive"
+              >
+                <span>📁</span> Open in Drive
+              </a>
             )}
             
             {/* Follow-up date - Hidden on very small screens */}
@@ -1177,22 +1266,29 @@ ${userEmail}`;
                           <td className="px-3 py-2">
                             {isEditingPricing ? (
                               <Select
-                                value={item.sku}
-                                onValueChange={(val) => handleProposedSKUChange(index, 'sku', val)}
+                                value={item.sku_id || ''}
+                                onValueChange={(val) => handleProposedSKUChange(index, 'sku_id', val)}
                               >
-                                <SelectTrigger className="w-[160px]" data-testid={`proposed-sku-select-${index}`}>
-                                  <SelectValue placeholder="Select SKU" />
+                                <SelectTrigger className="w-[180px]" data-testid={`proposed-sku-select-${index}`}>
+                                  <SelectValue placeholder={isOrphanProposedRow(item) ? `⚠ ${item.sku || 'Select SKU'} (re-link)` : 'Select SKU'}>
+                                    {item.sku_id ? resolveProposedSkuName(item) : (isOrphanProposedRow(item) ? `⚠ ${item.sku} (re-link)` : (item.sku || 'Select SKU'))}
+                                  </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                   {masterSkus.map((skuItem) => (
-                                    <SelectItem key={skuItem.sku} value={skuItem.sku}>
-                                      {skuItem.sku}
+                                    <SelectItem key={skuItem.id} value={skuItem.id}>
+                                      {skuItem.sku_name || skuItem.sku}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
                             ) : (
-                              <span className="font-medium">{item.sku}</span>
+                              <span className="font-medium" title={item.sku_id ? `sku_id: ${item.sku_id}` : 'No sku_id linked'}>
+                                {resolveProposedSkuName(item)}
+                                {isOrphanProposedRow(item) && (
+                                  <span className="ml-2 text-xs text-amber-700" title="This row no longer matches any current SKU. Edit and re-link.">⚠ re-link</span>
+                                )}
+                              </span>
                             )}
                           </td>
                           <td className="px-3 py-2 text-center">
@@ -1295,33 +1391,7 @@ ${userEmail}`;
                   <p className="font-medium">{lead.company}</p>
                 </div>
               </div>
-              {lead.contact_person && (
-                <div className="flex items-center gap-3">
-                  <User className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Contact Person</p>
-                    <p className="font-medium">{lead.contact_person}</p>
-                  </div>
-                </div>
-              )}
-              {lead.email && (
-                <div className="flex items-center gap-3">
-                  <Mail className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Email</p>
-                    <p className="font-medium">{lead.email}</p>
-                  </div>
-                </div>
-              )}
-              {lead.phone && (
-                <div className="flex items-center gap-3">
-                  <Phone className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Phone</p>
-                    <p className="font-medium">{lead.phone}</p>
-                  </div>
-                </div>
-              )}
+              {/* Per-contact details now live in the multi-contact Contacts table below */}
               {assignedUser && (
                 <div className="flex items-center gap-3 md:col-span-2">
                   <User className="h-5 w-5 text-muted-foreground" />
@@ -1333,6 +1403,17 @@ ${userEmail}`;
               )}
             </div>
           </Card>
+
+          {/* Multi-contact table (synced to the Contacts module) */}
+          <EntityContactsSection parentType="lead" parentId={lead.id} />
+
+          {/* Email history with this contact (Gmail) */}
+          {lead.email && (
+            <Card className="p-6" data-testid="lead-emails-card">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Mail className="h-5 w-5 text-rose-600" /> Emails</h2>
+              <ContactEmails email={lead.email} name={lead.contact_person || lead.company} leadId={lead.id} onLogged={async () => { try { const r = await activitiesAPI.getByLeadId(id); setActivities(r.data); } catch (e) { /* ignore */ } }} />
+            </Card>
+          )}
 
           {/* Location Information */}
           <Card className="p-6">
@@ -1364,6 +1445,13 @@ ${userEmail}`;
               )}
             </div>
           </Card>
+
+          {/* Lead Delivery Address — Google Places autocomplete + I-am-here check-in */}
+          <LeadDeliveryAddressCard
+            lead={lead}
+            onLeadUpdated={fetchData}
+            onActivityLogged={fetchData}
+          />
 
           {/* Current Brand Details */}
           {((lead.current_brands && lead.current_brands.length > 0) || lead.current_water_brand || lead.current_volume || lead.current_landing_price || lead.current_selling_price) && (
@@ -1457,18 +1545,18 @@ ${userEmail}`;
                         {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
                       </p>
                     </div>
-                    <p className="text-sm">{comment.comment}</p>
+                    <p className="text-sm whitespace-pre-wrap">{renderMentionedText(comment.comment)}</p>
                   </div>
                 );
               })}
             </div>
             <form onSubmit={handleAddComment} className="space-y-3">
-              <Textarea
-                placeholder="Add a comment..."
+              <MentionTextarea
+                placeholder="Add a comment… (type @ to mention a teammate)"
                 value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
+                onChange={setNewComment}
                 rows={3}
-                data-testid="comment-input"
+                testid="comment-input"
               />
               <Button type="submit" disabled={submittingComment || !newComment.trim()} data-testid="add-comment-button">
                 <Send className="h-4 w-4 mr-2" />
@@ -1476,6 +1564,11 @@ ${userEmail}`;
               </Button>
             </form>
           </Card>
+
+          <ActionItemsSection
+            actionItems={activities.filter(a => a.activity_type === 'action_item')}
+            activities={activities}
+          />
         </div>
 
         {/* Right Column - Activity Timeline */}
@@ -1490,6 +1583,21 @@ ${userEmail}`;
             />
           )}
 
+          {/* ── Mobile: Show more toggle for secondary cards (Lead Score, Related Leads) ── */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSecondaryMobile(s => !s)}
+            className="w-full lg:hidden justify-center gap-2 border-dashed"
+            data-testid="toggle-secondary-mobile-btn"
+          >
+            <svg className={`w-4 h-4 transition-transform ${showSecondaryMobile ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+            {showSecondaryMobile ? 'Hide scoring & related leads' : 'Show lead scoring & related leads'}
+          </Button>
+
+          <div className={`space-y-6 ${showSecondaryMobile ? '' : 'hidden lg:block lg:space-y-6'}`}>
           {/* Lead Scoring Card */}
           <LeadScoringCard
             leadId={lead.id}
@@ -1503,6 +1611,7 @@ ${userEmail}`;
             leadCompany={lead.company}
             brandingColor={branding?.primary_color}
           />
+          </div>{/* /Mobile-collapsible secondary section */}
 
           {/* Log Activity Section - Featured Component */}
           <Card className={`overflow-hidden transition-all duration-300 ${showActivityForm ? 'ring-2 ring-primary/20 shadow-lg' : 'hover:shadow-md'}`}>
@@ -1863,15 +1972,15 @@ ${userEmail}`;
                       <Download className="h-4 w-4 mr-1" /> Download
                     </Button>
                     {proposal.status === 'approved' && (
-                      <Button
+                      <ShareButton
+                        documentType="lead_proposal"
+                        documentId={lead?.id}
+                        label="Share via Email"
                         variant="outline"
                         size="sm"
-                        onClick={openShareDialog}
                         className="text-primary"
-                        data-testid="proposal-share-email-btn"
-                      >
-                        <Share2 className="h-4 w-4 mr-1" /> Share via Email
-                      </Button>
+                        testId={`lead-proposal-${lead?.id}`}
+                      />
                     )}
                     {canDeleteProposal && (
                       <Button
@@ -1999,14 +2108,14 @@ ${userEmail}`;
             )}
           </Card>
 
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Activity Timeline</h2>
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Activity Timeline</h2>
             <ActivityTimeline activities={activities} />
           </Card>
 
           {/* Lead Details */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Lead Details</h2>
+          <Card className="p-4 sm:p-6">
+            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Lead Details</h2>
             <div className="space-y-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Source</p>
@@ -2209,6 +2318,80 @@ ${userEmail}`;
             <Button onClick={handleProposalDownload}>
               <Download className="h-4 w-4 mr-2" />
               Download
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Convert to Account — confirm delivery address dialog */}
+      <Dialog open={showConvertDialog} onOpenChange={setShowConvertDialog}>
+        <DialogContent className="sm:max-w-md" data-testid="convert-account-dialog">
+          <DialogHeader>
+            <DialogTitle>Convert to Account</DialogTitle>
+            <DialogDescription>
+              Choose how to set the delivery address for the new account.
+            </DialogDescription>
+          </DialogHeader>
+
+          {lead?.delivery_address?.address_line1 && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide mb-1.5">
+                <MapPin className="h-3.5 w-3.5" />
+                Lead's address
+              </div>
+              <div className="text-slate-900 leading-snug" data-testid="convert-lead-address">
+                {lead.delivery_address.address_line1}
+                {lead.delivery_address.address_line2 ? `, ${lead.delivery_address.address_line2}` : ''}
+                {lead.delivery_address.city ? `, ${lead.delivery_address.city}` : ''}
+                {lead.delivery_address.state ? `, ${lead.delivery_address.state}` : ''}
+                {lead.delivery_address.pincode ? ` - ${lead.delivery_address.pincode}` : ''}
+              </div>
+            </div>
+          )}
+
+          <RadioGroup value={convertAddressChoice} onValueChange={setConvertAddressChoice} className="gap-2">
+            <label
+              htmlFor="convert-addr-copy"
+              className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${convertAddressChoice === 'copy' ? 'border-blue-500 bg-blue-50/60' : 'border-slate-200 hover:bg-slate-50'}`}
+            >
+              <RadioGroupItem value="copy" id="convert-addr-copy" className="mt-0.5" data-testid="convert-addr-copy" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-slate-900">Use this address as Delivery address</div>
+                <div className="text-xs text-slate-500 mt-0.5">The lead's address will be copied onto the new account.</div>
+              </div>
+            </label>
+            <label
+              htmlFor="convert-addr-different"
+              className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${convertAddressChoice === 'different' ? 'border-blue-500 bg-blue-50/60' : 'border-slate-200 hover:bg-slate-50'}`}
+            >
+              <RadioGroupItem value="different" id="convert-addr-different" className="mt-0.5" data-testid="convert-addr-different" />
+              <div className="flex-1">
+                <div className="text-sm font-medium text-slate-900">Do not use this address as Delivery address</div>
+                <div className="text-xs text-slate-500 mt-0.5">Account will start with an empty delivery address — you can add the actual delivery location later.</div>
+              </div>
+            </label>
+          </RadioGroup>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowConvertDialog(false)}
+              disabled={convertingToAccount}
+              data-testid="convert-dialog-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => performConvert(convertAddressChoice === 'copy')}
+              disabled={convertingToAccount}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              data-testid="convert-dialog-confirm"
+            >
+              {convertingToAccount ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Converting…</>
+              ) : (
+                <><ArrowRightCircle className="h-4 w-4 mr-2" /> Convert to Account</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

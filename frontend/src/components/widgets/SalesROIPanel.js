@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../context/AuthContext';
-import { Loader2, TrendingUp, TrendingDown, ChevronDown, ChevronRight, IndianRupee } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, ChevronDown, ChevronRight, IndianRupee, Eye, EyeOff } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -48,6 +48,24 @@ export default function SalesROIPanel() {
     ctc: false,
     expenses: false
   });
+
+  // Privacy toggle — when ON, mask every monetary amount + ROI percent so the
+  // user can confidently share their screen without exposing CTC / earnings.
+  // Persisted in localStorage so the choice survives a refresh / re-login.
+  const [hidden, setHidden] = useState(() => {
+    try { return localStorage.getItem('sales_roi_hidden') === '1'; } catch { return false; }
+  });
+  const toggleHidden = () => {
+    setHidden(prev => {
+      const next = !prev;
+      try { localStorage.setItem('sales_roi_hidden', next ? '1' : '0'); } catch {/* ignore */}
+      return next;
+    });
+  };
+  const MASK_CURRENCY = '₹ •••••';
+  const MASK_PERCENT = '••• %';
+  const maskC = (v) => (hidden ? MASK_CURRENCY : formatFullCurrency(v));
+  const maskP = (v) => (hidden ? MASK_PERCENT : `${v >= 0 ? '+' : ''}${v}%`);
 
   // Check if user is in Sales department (check if department contains 'sales')
   const isSalesDepartment = Array.isArray(user?.department) ? user.department.some(d => d?.toLowerCase() === 'sales') : user?.department?.toLowerCase()?.includes('sales');
@@ -114,15 +132,42 @@ export default function SalesROIPanel() {
     <div className="h-full bg-white border-l border-slate-200 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
-        <h2 className="text-sm font-semibold text-slate-800 uppercase tracking-wide">
-          Sales ROI Statement
-        </h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          {period.start_date} to {period.end_date} ({period.days} days)
-        </p>
-        <p className="text-xs text-slate-400 mt-0.5">
-          Team Size: {team.total_members} member{team.total_members !== 1 ? 's' : ''}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-slate-800 uppercase tracking-wide">
+              Sales ROI Statement
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {period.start_date} to {period.end_date} ({period.days} days)
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Team Size: {team.total_members} member{team.total_members !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleHidden}
+            className={cn(
+              "shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+              hidden
+                ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+            )}
+            title={hidden ? "Show sensitive numbers" : "Hide sensitive numbers (safe to share screen)"}
+            data-testid="sales-roi-privacy-toggle"
+          >
+            {hidden ? (
+              <><EyeOff className="h-3 w-3" /> Hidden</>
+            ) : (
+              <><Eye className="h-3 w-3" /> Visible</>
+            )}
+          </button>
+        </div>
+        {hidden && (
+          <p className="mt-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+            🔒 Numbers hidden — safe for screen sharing. Click <span className="font-semibold">Hidden</span> above to reveal.
+          </p>
+        )}
       </div>
 
       {/* Scrollable Content */}
@@ -150,7 +195,7 @@ export default function SalesROIPanel() {
                   Team Cost to Company (CTC)
                 </span>
                 <span className="text-sm font-medium text-slate-900 tabular-nums">
-                  {formatFullCurrency(cost.team_ctc.total)}
+                  {maskC(cost.team_ctc.total)}
                 </span>
               </button>
               
@@ -160,7 +205,7 @@ export default function SalesROIPanel() {
                   {cost.team_ctc.details.map((member, idx) => (
                     <div key={idx} className="flex justify-between text-xs text-slate-500">
                       <span className="truncate max-w-[140px]">{member.name}</span>
-                      <span className="tabular-nums">{formatFullCurrency(member.prorated_ctc)}</span>
+                      <span className="tabular-nums">{maskC(member.prorated_ctc)}</span>
                     </div>
                   ))}
                 </div>
@@ -182,7 +227,7 @@ export default function SalesROIPanel() {
                   Sales Expenses
                 </span>
                 <span className="text-sm font-medium text-slate-900 tabular-nums">
-                  {formatFullCurrency(cost.expenses.total)}
+                  {maskC(cost.expenses.total)}
                 </span>
               </button>
               
@@ -193,7 +238,7 @@ export default function SalesROIPanel() {
                     cost.expenses.breakdown.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-xs text-slate-500">
                         <span className="truncate max-w-[140px]">{item.category}</span>
-                        <span className="tabular-nums">{formatFullCurrency(item.amount)}</span>
+                        <span className="tabular-nums">{maskC(item.amount)}</span>
                       </div>
                     ))
                   ) : (
@@ -208,7 +253,7 @@ export default function SalesROIPanel() {
               <div className="flex justify-between">
                 <span className="text-sm font-semibold text-slate-800">Total Cost</span>
                 <span className="text-sm font-bold text-slate-900 tabular-nums">
-                  {formatFullCurrency(cost.total_cost)}
+                  {maskC(cost.total_cost)}
                 </span>
               </div>
             </div>
@@ -224,25 +269,25 @@ export default function SalesROIPanel() {
               <div className="flex justify-between text-sm">
                 <span className="text-slate-700">Gross Invoice Value</span>
                 <span className="font-medium text-slate-900 tabular-nums">
-                  {formatFullCurrency(revenue.gross_invoice_value)}
+                  {maskC(revenue.gross_invoice_value)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-700">Less: Distribution ({revenue.distribution_percent}%)</span>
                 <span className="font-medium text-red-600 tabular-nums">
-                  ({formatFullCurrency(revenue.distribution_cost)})
+                  {hidden ? MASK_CURRENCY : `(${formatFullCurrency(revenue.distribution_cost)})`}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-700">Less: Logistics ({revenue.logistics_percent}%)</span>
                 <span className="font-medium text-red-600 tabular-nums">
-                  ({formatFullCurrency(revenue.logistics_cost)})
+                  {hidden ? MASK_CURRENCY : `(${formatFullCurrency(revenue.logistics_cost)})`}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-700">Less: COGS</span>
                 <span className="font-medium text-red-600 tabular-nums">
-                  ({formatFullCurrency(revenue.total_cogs)})
+                  {hidden ? MASK_CURRENCY : `(${formatFullCurrency(revenue.total_cogs)})`}
                 </span>
               </div>
             </div>
@@ -256,10 +301,10 @@ export default function SalesROIPanel() {
                     "text-sm font-bold tabular-nums",
                     revenue.gross_margin >= 0 ? "text-green-700" : "text-red-600"
                   )}>
-                    {formatFullCurrency(revenue.gross_margin)}
+                    {maskC(revenue.gross_margin)}
                   </span>
                   <span className="text-xs text-slate-500 ml-1">
-                    ({revenue.gross_margin_percent}%)
+                    ({hidden ? '••• %' : `${revenue.gross_margin_percent}%`})
                   </span>
                 </div>
               </div>
@@ -279,8 +324,7 @@ export default function SalesROIPanel() {
                 "font-semibold tabular-nums",
                 profitability.net_contribution >= 0 ? "text-green-700" : "text-red-600"
               )}>
-                {profitability.net_contribution >= 0 ? '+' : ''}
-                {formatFullCurrency(profitability.net_contribution)}
+                {hidden ? MASK_CURRENCY : `${profitability.net_contribution >= 0 ? '+' : ''}${formatFullCurrency(profitability.net_contribution)}`}
               </span>
             </div>
             
@@ -293,17 +337,16 @@ export default function SalesROIPanel() {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-slate-800">ROI</span>
                 <div className="flex items-center gap-2">
-                  {isNegativeROI ? (
+                  {!hidden && (isNegativeROI ? (
                     <TrendingDown className="h-4 w-4 text-red-500" />
                   ) : (
                     <TrendingUp className="h-4 w-4 text-green-500" />
-                  )}
+                  ))}
                   <span className={cn(
                     "text-lg font-bold tabular-nums",
-                    isNegativeROI ? "text-red-600" : "text-green-700"
+                    hidden ? "text-slate-500" : (isNegativeROI ? "text-red-600" : "text-green-700")
                   )}>
-                    {profitability.roi_percentage >= 0 ? '+' : ''}
-                    {profitability.roi_percentage}%
+                    {maskP(profitability.roi_percentage)}
                   </span>
                 </div>
               </div>

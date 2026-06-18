@@ -1,0 +1,98 @@
+{
+  "summary": "Comprehensive frontend testing of BatchDetail.js redesign (iteration 140). All 14 features verified successfully: two-column layout, pH inline badge, readable text-lg numbers, summary row, quality bar, monochrome stage headers, pass/reject percentages, quality micro-bars, rejection panel with breakdowns, detail view with filters, activity log, inspection form, move/receive form, and warehouse transfer section.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_140.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend only testing)",
+    "frontend": "100% (14/14 features verified)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Used existing test batches: 660G-APR-001 (pH 8.5, 222 rejected, rich data), TEST-FIX-001 (pH 7.5, 8 pending at Stage 2)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "BatchDetail.js redesign v2 complete. All features working correctly. Key data-testid values verified: batch-detail-page, ph-badge, overall-pass-reject-bar, stage-card-{id}, rejection-summary-section, rej-metric-total, toggle-rejections, toggle-history, move-to-{id}, inspect-{id}, insp-submit-{id}. PhScale component removed and replaced with inline ph-badge. RejectionPanel and ActivityLog are extracted components on right side.",
+  "features_tested": {
+    "two_column_layout": {
+      "status": "PASSED",
+      "details": "Stages on left (lg:col-span-7), rejection panel + activity on right (lg:col-span-5)"
+    },
+    "ph_badge_inline": {
+      "status": "PASSED",
+      "details": "pH shown as inline badge next to batch code (not slider). pH 8.5 shows blue, pH 7.5 shows teal/sky color"
+    },
+    "info_cards_readable_numbers": {
+      "status": "PASSED",
+      "details": "Production Date, Total Crates (120), Bottles/Crate (24), Total Bottles (2,880), Unallocated (0) - all with text-base/text-lg sizes"
+    },
+    "summary_row": {
+      "status": "PASSED",
+      "details": "Unallocated (0 crates), Total Rejected (222 bottles with 7.7%), Warehouse Ready (120 bottles with 30 transferred)"
+    },
+    "quality_bar": {
+      "status": "PASSED",
+      "details": "Overall quality bar showing 92.3% pass (green) and 7.7% rej (red) with visual bar"
+    },
+    "stage_cards_monochrome_headers": {
+      "status": "PASSED",
+      "details": "QC Stage 1, QC Stage 2, Labeling, Final QC - all have monochrome headers (no colored backgrounds)"
+    },
+    "stage_cards_text_lg_numbers": {
+      "status": "PASSED",
+      "details": "Received (120), Pending (0), Passed (0/120), Rejected (55/46/49/72) - all readable text-lg"
+    },
+    "stage_cards_pass_reject_percentages": {
+      "status": "PASSED",
+      "details": "Shows percentages like 98.1%, 1.9%, 98.4%, 1.6%, 98.3%, 1.7%, 97.5%, 2.5%"
+    },
+    "stage_cards_quality_microbar": {
+      "status": "PASSED",
+      "details": "Green/red micro-bar visible under each stage card when there are rejections"
+    },
+    "rejection_panel_right_side": {
+      "status": "PASSED",
+      "details": "By Resource (Surya Yadavalli - 222) and By Reason (Seal Defect - 222) breakdowns with progress bars"
+    },
+    "rejection_detail_view": {
+      "status": "PASSED",
+      "details": "Expandable with filters (Resource, Reason, Stage, Date) and table showing all rejection records"
+    },
+    "activity_log_collapsible": {
+      "status": "PASSED",
+      "details": "Shows Activity (8) with toggle, displays movement and inspection entries with timestamps"
+    },
+    "inspection_form_inline": {
+      "status": "PASSED",
+      "details": "Opens inline with Resource dropdown, Date picker, Crates Inspected input, Rejection Details (Count + Reason), Add Entry/Rejection buttons, Submit/Cancel"
+    },
+    "move_receive_form": {
+      "status": "PASSED",
+      "details": "Receive button visible on stages with available items, shows source label and available quantity"
+    },
+    "warehouse_transfer_section": {
+      "status": "PASSED",
+      "details": "Shows available bottles (90 bottles, 3 crates), Transfer to Master Warehouse button, transfer history table"
+    }
+  },
+  "ui_verification_screenshots": [
+    ".screenshots/batch_detail_redesign_v2.png - Two-column layout, pH badge, quality bar, stage cards with percentages",
+    ".screenshots/inspection_form_v2_detail.png - Inline inspection form with entry card, rejection details",
+    ".screenshots/warehouse_transfer_form_v2.png - Warehouse transfer section with button"
+  ]
+}

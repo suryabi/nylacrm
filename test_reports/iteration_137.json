@@ -1,0 +1,74 @@
+{
+  "summary": "Tested the passed stock fix for inspection rejection crate equivalents. All 10 backend API tests passed. Frontend UI verified - stage cards correctly display passed count after inspection with rejections, and move form shows correct available quantity from previous stage's passed count.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_passed_stock_fix.py",
+    "/app/test_reports/pytest/passed_stock_fix_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_passed_stock_fix.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "Created test batches TEST-FIX-* for testing various edge cases. Batches are in 'in_qc' status with inspection data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Passed stock fix verified. Key change in /app/backend/routes/production_qc.py lines 558-563: rejected_crate_equiv = total_rej_bottles // bottles_per_crate, passed_crates = max(total_crates_inspected - rejected_crate_equiv, 0). Frontend correctly displays passed count in stage cards and move form shows correct available quantity from prev_stage.passed.",
+  "features_tested": {
+    "backend_api_tests": [
+      "test_01_login_and_verify_api_access - PASSED",
+      "test_02_edge_case_zero_rejections - PASSED (0 rejections → all 10 crates pass)",
+      "test_03_edge_case_rejected_less_than_one_crate - PASSED (5 bottles < 24 BPC → 0 crate deduction, 10 pass)",
+      "test_04_edge_case_rejected_exactly_one_crate - PASSED (24 bottles = 1 crate → 1 deducted, 9 pass)",
+      "test_05_edge_case_rejected_more_than_one_crate - PASSED (48 bottles = 2 crates → 2 deducted, 8 pass)",
+      "test_06_move_to_next_stage_uses_passed_count - PASSED (move 8 crates succeeds when 8 passed)",
+      "test_07_move_fails_if_quantity_exceeds_passed - PASSED (move 10 fails when only 8 passed)",
+      "test_08_move_succeeds_if_quantity_equals_passed - PASSED (move 9 succeeds when 9 passed)",
+      "test_09_partial_crate_rejection_floor_division - PASSED (30 bottles → floor(30/24)=1 → 9 pass)",
+      "test_10_multiple_rejection_entries_sum - PASSED (12+12=24 bottles → 1 crate deducted)"
+    ],
+    "frontend_ui_tests": [
+      "BatchDetail page loads correctly - PASSED",
+      "Stage cards display correct balance values - PASSED",
+      "QC Stage 1 shows Passed=9 after 24 bottles rejected from 10 crates - PASSED",
+      "Move form shows 'Move from QC Stage 1 (9 available)' - PASSED",
+      "Move form input placeholder shows 'Max 9' - PASSED",
+      "Rejection Summary section displays correctly - PASSED",
+      "Total Rejected metric shows 24 bottles - PASSED"
+    ]
+  },
+  "bug_fix_verification": {
+    "original_bug": "When stock moves from one stage to another, rejected stock was also moving (count was wrong). Previously passed = inspected_crates (all inspected crates passed regardless of rejections).",
+    "fix_applied": "record_inspection function now converts rejected bottles to crate equivalents using floor division (rejected_bottles // bottles_per_crate) and subtracts from passed crates.",
+    "formula": "passed_crates = inspected_crates - floor(rejected_bottles / bottles_per_crate)",
+    "code_location": "/app/backend/routes/production_qc.py lines 558-563",
+    "verification_results": {
+      "0_rejections": "10 inspected → 10 passed (correct)",
+      "5_bottles_rejected_24_bpc": "10 inspected, floor(5/24)=0 → 10 passed (correct)",
+      "24_bottles_rejected_24_bpc": "10 inspected, floor(24/24)=1 → 9 passed (correct)",
+      "48_bottles_rejected_24_bpc": "10 inspected, floor(48/24)=2 → 8 passed (correct)",
+      "30_bottles_rejected_24_bpc": "10 inspected, floor(30/24)=1 → 9 passed (correct)"
+    }
+  },
+  "api_endpoints_verified": {
+    "POST /api/production/batches/{batch_id}/inspect": "Correctly calculates passed = inspected - floor(rejected/bpc)",
+    "POST /api/production/batches/{batch_id}/move": "Correctly uses prev_stage.passed for available quantity validation"
+  }
+}

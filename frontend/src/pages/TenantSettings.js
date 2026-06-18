@@ -17,10 +17,14 @@ import {
   Globe, Clock, DollarSign, Calendar, RefreshCw, MapPin,
   Users, Kanban, Target, CalendarDays, Contact, Plane, Wallet, FolderOpen,
   Wrench, Boxes, ShieldCheck, Box, Landmark, Phone, Mail, FileText,
-  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList
+  Plus, Trash2, User, Shield, Edit2, Truck, Package, Tag, RotateCcw, ClipboardList, BookOpen, Sparkles, BarChart3, PenLine
 } from 'lucide-react';
 import axios from 'axios';
 import RoleManagement from '../components/RoleManagement';
+import InvoiceRelinkTool from '../components/InvoiceRelinkTool';
+import EmailSignatureSettings from '../components/gmail/EmailSignatureSettings';
+import OutstandingBackfillTool from '../components/OutstandingBackfillTool';
+import SkuAliasTool from '../components/SkuAliasTool';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -45,6 +49,7 @@ const MODULE_CONFIG = {
     modules: [
       { key: 'report_sales_overview', label: 'Sales Overview', icon: Kanban, description: 'Sales dashboard overview' },
       { key: 'report_revenue', label: 'Revenue Report', icon: DollarSign, description: 'Revenue analytics' },
+      { key: 'report_revenue_analytics', label: 'Revenue Analytics', icon: BarChart3, description: 'Revenue by city / category / SKU / territory / state + MoM compare' },
       { key: 'report_sku_performance', label: 'SKU Performance', icon: Boxes, description: 'Product/SKU analysis' },
       { key: 'report_resource_performance', label: 'Resource Performance', icon: Users, description: 'Team performance metrics' },
       { key: 'report_account_performance', label: 'Account Performance', icon: Building2, description: 'Account-level analytics' },
@@ -152,6 +157,14 @@ const MODULE_CONFIG = {
       { key: 'marketing_masters', label: 'Marketing Masters', icon: Settings, description: 'Categories, platforms & events' },
       { key: 'meeting_minutes', label: 'Meeting Minutes', icon: ClipboardList, description: 'Record meeting notes & action items' },
     ]
+  },
+  ai_knowledge: {
+    title: 'AI & Knowledge',
+    description: 'AI assistant and knowledge base management',
+    modules: [
+      { key: 'knowledge_base', label: 'Knowledge Base', icon: BookOpen, description: 'Admin-managed library of docs, FAQs, and URLs powering Ask Nyla' },
+      { key: 'ask_nyla', label: 'Ask Nyla', icon: Sparkles, description: 'Floating AI chat assistant grounded in your knowledge base' },
+    ]
   }
 };
 
@@ -223,7 +236,10 @@ export default function TenantSettings() {
     currency_symbol: '₹',
     date_format: 'DD/MM/YYYY',
     fiscal_year_start: '04-01',
-    default_distributor_gst_percent: 18
+    default_distributor_gst_percent: 18,
+    check_in_radius_meters: 50,
+    gps_ping_interval_minutes: 5,
+    idle_timeout_minutes: 20,
   });
   
   // Auth config for Google Workspace SSO
@@ -254,6 +270,7 @@ export default function TenantSettings() {
     credit_percentage: null,
     return_to_factory: true,
     requires_inspection: false,
+    applies_to: ['customer', 'distributor'],
     color: '#10B981'
   });
   
@@ -624,6 +641,7 @@ export default function TenantSettings() {
       credit_percentage: null,
       return_to_factory: true,
       requires_inspection: false,
+      applies_to: ['customer', 'distributor'],
       color: '#10B981'
     });
   };
@@ -640,6 +658,9 @@ export default function TenantSettings() {
       credit_percentage: reason.credit_percentage,
       return_to_factory: reason.return_to_factory,
       requires_inspection: reason.requires_inspection,
+      applies_to: Array.isArray(reason.applies_to) && reason.applies_to.length > 0
+        ? reason.applies_to
+        : ['customer'],  // legacy data → customer-only
       color: reason.color || '#10B981'
     });
     setShowReasonDialog(true);
@@ -699,7 +720,7 @@ export default function TenantSettings() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-7 lg:w-[840px]">
+        <TabsList className="grid w-full grid-cols-8 lg:w-[960px]">
           <TabsTrigger value="company" className="flex items-center gap-2" data-testid="tab-company">
             <Building2 className="h-4 w-4" />
             Company
@@ -723,6 +744,10 @@ export default function TenantSettings() {
           <TabsTrigger value="returns" className="flex items-center gap-2" data-testid="tab-returns">
             <RotateCcw className="h-4 w-4" />
             Returns
+          </TabsTrigger>
+          <TabsTrigger value="signature" className="flex items-center gap-2" data-testid="tab-signature">
+            <PenLine className="h-4 w-4" />
+            Signature
           </TabsTrigger>
           <TabsTrigger value="settings" className="flex items-center gap-2" data-testid="tab-settings">
             <Settings className="h-4 w-4" />
@@ -1519,6 +1544,19 @@ export default function TenantSettings() {
                                 Inspection Required
                               </span>
                             )}
+                            {(() => {
+                              const at = (reason.applies_to && reason.applies_to.length > 0) ? reason.applies_to : ['customer'];
+                              return (
+                                <span className="flex items-center gap-1" data-testid={`reason-applies-${reason.reason_code}`}>
+                                  {at.includes('customer') && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-violet-300 bg-violet-50 text-violet-700">Customer</Badge>
+                                  )}
+                                  {at.includes('distributor') && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-300 bg-amber-50 text-amber-700">Distributor</Badge>
+                                  )}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>
@@ -1681,6 +1719,35 @@ export default function TenantSettings() {
                     <Label className="cursor-pointer">Requires Inspection</Label>
                   </div>
                 </div>
+
+                {/* Applicable to — controls where this reason shows up */}
+                <div className="space-y-2 pt-2 border-t">
+                  <Label className="text-sm">Applicable to</Label>
+                  <p className="text-xs text-muted-foreground -mt-1">
+                    Determines whether this reason is selectable when handling Customer returns, Distributor returns, or both.
+                  </p>
+                  <div className="flex flex-wrap gap-4">
+                    {['customer', 'distributor'].map((target) => (
+                      <label key={target} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={(reasonForm.applies_to || []).includes(target)}
+                          onChange={(e) => {
+                            const current = new Set(reasonForm.applies_to || []);
+                            if (e.target.checked) current.add(target); else current.delete(target);
+                            setReasonForm(prev => ({ ...prev, applies_to: Array.from(current) }));
+                          }}
+                          data-testid={`reason-applies-to-${target}`}
+                        />
+                        <span className="text-sm capitalize">{target}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {(reasonForm.applies_to || []).length === 0 && (
+                    <p className="text-xs text-rose-600">Select at least one — the reason won't appear anywhere otherwise.</p>
+                  )}
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowReasonDialog(false)}>Cancel</Button>
@@ -1693,8 +1760,22 @@ export default function TenantSettings() {
           </Dialog>
         </TabsContent>
 
+        {/* Email Signature Tab */}
+        <TabsContent value="signature" className="space-y-6">
+          <EmailSignatureSettings />
+        </TabsContent>
+
         {/* Settings Tab */}
         <TabsContent value="settings" className="space-y-6">
+          {/* Data maintenance — relink invoices to accounts by ID */}
+          <InvoiceRelinkTool />
+
+          {/* Data maintenance — back-fill outstanding for system-generated invoices */}
+          <OutstandingBackfillTool />
+
+          {/* Data maintenance — map old/retired SKU codes & names to current SKUs */}
+          <SkuAliasTool />
+
           {/* Google Workspace SSO */}
           <Card>
             <CardHeader>
@@ -1855,6 +1936,72 @@ export default function TenantSettings() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   This GST percentage will be applied to shipments and deliveries in the Distribution module
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Field Check-in Radius
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="5"
+                    max="2000"
+                    step="5"
+                    value={settings.check_in_radius_meters ?? 50}
+                    onChange={(e) => setSettings(prev => ({ ...prev, check_in_radius_meters: parseInt(e.target.value, 10) || 0 }))}
+                    className="max-w-[120px]"
+                    data-testid="input-check-in-radius"
+                  />
+                  <span className="text-muted-foreground">meters</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Sales reps clicking "I am here" on a lead are flagged as off-site when they are farther than this radius from the lead's saved GPS location.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Driver GPS Ping Interval
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="60"
+                    step="1"
+                    value={settings.gps_ping_interval_minutes ?? 5}
+                    onChange={(e) => setSettings(prev => ({ ...prev, gps_ping_interval_minutes: parseInt(e.target.value, 10) || 5 }))}
+                    className="max-w-[120px]"
+                    data-testid="input-gps-ping-interval"
+                  />
+                  <span className="text-muted-foreground">minutes</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  How often the Driver mobile app pushes GPS coordinates while a delivery is in progress. Distributor & admin live maps poll at this cadence too.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Idle Session Timeout
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="480"
+                    step="1"
+                    value={settings.idle_timeout_minutes ?? 20}
+                    onChange={(e) => setSettings(prev => ({ ...prev, idle_timeout_minutes: parseInt(e.target.value, 10) || 20 }))}
+                    className="max-w-[120px]"
+                    data-testid="input-idle-timeout"
+                  />
+                  <span className="text-muted-foreground">minutes</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Users are automatically logged out after this many minutes of inactivity (no mouse, keyboard, scroll or touch). The timer resets on any activity, so people actively working are never logged out. Range: 1–480 minutes.
                 </p>
               </div>
             </CardContent>

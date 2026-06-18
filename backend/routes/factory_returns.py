@@ -29,7 +29,9 @@ class FactoryReturnItemCreate(BaseModel):
 class FactoryReturnCreate(BaseModel):
     distributor_location_id: str
     source: str = Field(pattern="^(customer_return|warehouse)$")
-    reason: str = Field(pattern="^(expired|damaged|empty_reusable)$")
+    reason: str = Field(pattern="^(expired|damaged|empty_reusable|promotional|unused_refundable|unused_non_refundable)$")
+    reason_id: Optional[str] = None
+    reason_name: Optional[str] = None
     customer_return_id: Optional[str] = None
     return_date: Optional[str] = None
     items: List[FactoryReturnItemCreate]
@@ -45,6 +47,15 @@ def is_distributor_admin(user: dict) -> bool:
     return role in ['ceo', 'admin', 'coo', 'distribution_manager', 'distribution_admin']
 
 
+def can_manage_distributor_data(user: dict, distributor_id: str) -> bool:
+    """Allow admins OR a distributor user operating on their own org."""
+    if is_distributor_admin(user):
+        return True
+    if (user.get('role') or '') == 'Distributor' and user.get('distributor_id') == distributor_id:
+        return True
+    return False
+
+
 async def generate_factory_return_number(tenant_id: str) -> str:
     year = datetime.now().year
     latest = await db.distributor_factory_returns.find_one(
@@ -56,6 +67,137 @@ async def generate_factory_return_number(tenant_id: str) -> str:
         last_num = int(latest['return_number'].split('-')[-1])
         return f"FR-{year}-{str(last_num + 1).zfill(4)}"
     return f"FR-{year}-0001"
+
+
+async def compute_available_stock_at_distributor(tenant_id: str, distributor_id: str) -> dict:
+    """
+    Returns per-SKU available stock at the distributor for factory returns.
+
+    available[sku_id] = {
+        sku_id, sku_name,
+        warehouse_available: shipped_in - delivered_out - factory_returned(source=warehouse),
+        customer_pending_factory: customer_returned - factory_returned(source=customer_return),
+        total_available: warehouse_available + customer_pending_factory
+    }
+    """
+    # 1. STOCK IN: delivered shipments
+    delivered_shipment_ids = await db.distributor_shipments.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "delivered"}
+    )
+    shipment_items = await db.distributor_shipment_items.find(
+        {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_shipment_ids}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+    ).to_list(50000)
+
+    stock = {}  # sku_id -> dict
+    for si in shipment_items:
+        sid = si.get('sku_id', '')
+        if not sid:
+            continue
+        if sid not in stock:
+            stock[sid] = {"sku_id": sid, "sku_name": si.get('sku_name', 'Unknown'),
+                          "shipped_in": 0, "delivered_out": 0,
+                          "factory_returned_warehouse": 0, "factory_returned_customer": 0,
+                          "customer_returned": 0}
+        stock[sid]["shipped_in"] += si.get('quantity', 0) or 0
+
+    # 2. STOCK OUT: deliveries to customers
+    delivered_delivery_ids = await db.distributor_deliveries.distinct(
+        "id",
+        {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": {"$in": ["delivered", "completed", "complete"]}}
+    )
+    delivery_items = await db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1}
+    ).to_list(50000)
+    for di in delivery_items:
+        sid = di.get('sku_id', '')
+        if not sid:
+            continue
+        if sid not in stock:
+            stock[sid] = {"sku_id": sid, "sku_name": di.get('sku_name', 'Unknown'),
+                          "shipped_in": 0, "delivered_out": 0,
+                          "factory_returned_warehouse": 0, "factory_returned_customer": 0,
+                          "customer_returned": 0}
+        stock[sid]["delivered_out"] += di.get('quantity', 0) or 0
+
+    # 3. CUSTOMER RETURNS (returned to distributor)
+    cust_returns = await db.customer_returns.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$nin": ["cancelled", "draft"]}
+        },
+        {"_id": 0, "items": 1}
+    ).to_list(10000)
+    for cr in cust_returns:
+        for item in cr.get('items', []) or []:
+            sid = item.get('sku_id', '')
+            if not sid:
+                continue
+            if sid not in stock:
+                stock[sid] = {"sku_id": sid, "sku_name": item.get('sku_name', 'Unknown'),
+                              "shipped_in": 0, "delivered_out": 0,
+                              "factory_returned_warehouse": 0, "factory_returned_customer": 0,
+                              "customer_returned": 0}
+            stock[sid]["customer_returned"] += item.get('quantity', 0) or 0
+
+    # 4. FACTORY RETURNS (split by source)
+    fr_docs = await db.distributor_factory_returns.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "status": {"$nin": ["cancelled"]}
+        },
+        {"_id": 0, "items": 1, "source": 1}
+    ).to_list(10000)
+    for fr in fr_docs:
+        src = fr.get('source', 'warehouse')
+        for item in fr.get('items', []) or []:
+            sid = item.get('sku_id', '')
+            if not sid:
+                continue
+            if sid not in stock:
+                stock[sid] = {"sku_id": sid, "sku_name": item.get('sku_name', 'Unknown'),
+                              "shipped_in": 0, "delivered_out": 0,
+                              "factory_returned_warehouse": 0, "factory_returned_customer": 0,
+                              "customer_returned": 0}
+            qty = item.get('quantity', 0) or 0
+            if src == "customer_return":
+                stock[sid]["factory_returned_customer"] += qty
+            else:
+                stock[sid]["factory_returned_warehouse"] += qty
+
+    # Compute derived availability
+    out = {}
+    for sid, s in stock.items():
+        warehouse_available = max(0, s["shipped_in"] - s["delivered_out"] - s["factory_returned_warehouse"])
+        customer_pending_factory = max(0, s["customer_returned"] - s["factory_returned_customer"])
+        out[sid] = {
+            "sku_id": sid,
+            "sku_name": s["sku_name"],
+            "warehouse_available": warehouse_available,
+            "customer_pending_factory": customer_pending_factory,
+            "total_available": warehouse_available + customer_pending_factory,
+        }
+    return out
+
+
+@router.get("/{distributor_id}/available-stock")
+async def get_available_stock(
+    distributor_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Returns per-SKU stock available at the distributor for factory returns."""
+    tenant_id = get_current_tenant_id()
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1}
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+    stock = await compute_available_stock_at_distributor(tenant_id, distributor_id)
+    return {"available_stock": list(stock.values())}
 
 
 @router.get("/{distributor_id}/factory-returns")
@@ -134,8 +276,8 @@ async def create_factory_return(
     data: FactoryReturnCreate,
     current_user: dict = Depends(get_current_user)
 ):
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -174,6 +316,31 @@ async def create_factory_return(
     return_id = str(uuid.uuid4())
     return_number = await generate_factory_return_number(tenant_id)
     return_date = data.return_date or now[:10]
+
+    # === Validate available stock at distributor (per SKU, by source) ===
+    available_map = await compute_available_stock_at_distributor(tenant_id, distributor_id)
+    # Aggregate requested qty per SKU
+    requested_by_sku: dict = {}
+    for it in data.items:
+        requested_by_sku[it.sku_id] = requested_by_sku.get(it.sku_id, 0) + it.quantity
+    for sid, req_qty in requested_by_sku.items():
+        avail = available_map.get(sid)
+        if not avail:
+            raise HTTPException(
+                status_code=400,
+                detail="No stock available at distributor for SKU. Cannot create factory return."
+            )
+        if data.source == "customer_return":
+            cap = avail["customer_pending_factory"]
+            label = "customer-returned (pending factory)"
+        else:
+            cap = avail["warehouse_available"]
+            label = "warehouse"
+        if req_qty > cap:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Requested {req_qty} of {avail['sku_name']} exceeds available {label} stock ({cap})."
+            )
 
     # Build items with transfer price lookup (price at which distributor was billed)
     items = []
@@ -221,6 +388,8 @@ async def create_factory_return(
         "distributor_location_id": data.distributor_location_id,
         "distributor_location_name": location.get('location_name'),
         "reason": data.reason,
+        "reason_id": data.reason_id,
+        "reason_name": data.reason_name,
         "source": data.source,
         "customer_return_id": data.customer_return_id,
         "customer_return_number": customer_return_number,
@@ -266,8 +435,8 @@ async def confirm_factory_return(
     current_user: dict = Depends(get_current_user)
 ):
     """Confirm factory return - deducts stock from warehouse"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -322,8 +491,8 @@ async def receive_factory_return(
     current_user: dict = Depends(get_current_user)
 ):
     """Mark factory return as received by factory"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -363,8 +532,8 @@ async def cancel_factory_return(
     current_user: dict = Depends(get_current_user)
 ):
     """Cancel a factory return - restores stock if was confirmed"""
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     now = datetime.now(timezone.utc).isoformat()
@@ -419,8 +588,8 @@ async def delete_factory_return(
     return_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    if not is_distributor_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's factory returns")
 
     tenant_id = get_current_tenant_id()
     user_role = current_user.get('role', '').lower()

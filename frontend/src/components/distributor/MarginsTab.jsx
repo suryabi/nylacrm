@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Package, RefreshCw, Percent, Edit2, FileText } from 'lucide-react';
+import { MapPin, Plus, Trash2, Package, RefreshCw, Percent, Edit2, FileText, Receipt } from 'lucide-react';
 
 export default function MarginsTab({
   distributor,
@@ -20,6 +20,7 @@ export default function MarginsTab({
   setShowOnlyActiveMargins,
   getCoveredCities,
   skus,
+  costCardPrices,
   // Copy dialog
   showCopyDialog,
   setShowCopyDialog,
@@ -54,6 +55,33 @@ export default function MarginsTab({
 
   return (
     <>
+      {/* Billing Approach Banner */}
+      <div className={`flex items-center gap-3 p-3 rounded-xl border mb-4 ${
+        (distributor?.billing_approach || 'margin_upfront') === 'margin_upfront'
+          ? 'bg-emerald-50/60 border-emerald-200'
+          : 'bg-amber-50/60 border-amber-200'
+      }`} data-testid="billing-approach-banner">
+        <Receipt className={`h-5 w-5 ${
+          (distributor?.billing_approach || 'margin_upfront') === 'margin_upfront' ? 'text-emerald-600' : 'text-amber-600'
+        }`} />
+        <div>
+          <span className={`text-sm font-semibold ${
+            (distributor?.billing_approach || 'margin_upfront') === 'margin_upfront' ? 'text-emerald-800' : 'text-amber-800'
+          }`}>
+            {(distributor?.billing_approach || 'margin_upfront') === 'margin_upfront'
+              ? 'Billing: Margin Applied Upfront'
+              : 'Billing: No Upfront Margin – Cost Based'}
+          </span>
+          <p className={`text-xs ${
+            (distributor?.billing_approach || 'margin_upfront') === 'margin_upfront' ? 'text-emerald-600' : 'text-amber-600'
+          }`}>
+            {(distributor?.billing_approach || 'margin_upfront') === 'margin_upfront'
+              ? 'Transfer price = Cost card price − margin%. Differences settled via reconciliation.'
+              : 'Billed at cost card price. Margin calculated post-sale.'}
+          </p>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -240,7 +268,9 @@ export default function MarginsTab({
                               </span>
                             </td>
                             <td className="p-3 text-right font-medium text-green-600">
-                              {margin.transfer_price ? `₹${margin.transfer_price.toLocaleString()}` : '-'}
+                              {(distributor?.billing_approach === 'cost_based')
+                                ? (margin.base_price ? `₹${margin.base_price.toLocaleString()}` : '-')
+                                : (margin.transfer_price ? `₹${margin.transfer_price.toLocaleString()}` : '-')}
                             </td>
                             <td className="p-3 text-center text-sm">
                               {margin.active_from || '-'}
@@ -340,10 +370,12 @@ export default function MarginsTab({
                 value={newMarginForm.sku_id}
                 onValueChange={(v) => {
                   const sku = skus.find(s => s.id === v);
+                  const costCardPrice = costCardPrices?.[v];
                   setNewMarginForm(prev => ({
                     ...prev,
                     sku_id: v,
-                    sku_name: sku?.name || sku?.sku_name || ''
+                    sku_name: sku?.name || sku?.sku_name || '',
+                    base_price: costCardPrice != null ? costCardPrice.toFixed(2) : prev.base_price
                   }));
                 }}
               >
@@ -368,7 +400,16 @@ export default function MarginsTab({
                   placeholder="100"
                   value={newMarginForm.base_price}
                   onChange={(e) => setNewMarginForm(prev => ({ ...prev, base_price: e.target.value }))}
+                  data-testid="margin-base-price-input"
                 />
+                {newMarginForm.sku_id && costCardPrices?.[newMarginForm.sku_id] != null && (
+                  <p className="text-xs text-emerald-600">
+                    Cost Card: ₹{costCardPrices[newMarginForm.sku_id].toFixed(2)} for {selectedMarginCity}
+                  </p>
+                )}
+                {newMarginForm.sku_id && costCardPrices?.[newMarginForm.sku_id] == null && (
+                  <p className="text-xs text-amber-500">No cost card defined for this SKU in {selectedMarginCity}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Margin % *</Label>
@@ -385,8 +426,13 @@ export default function MarginsTab({
               <div className="p-3 bg-green-50 rounded-lg text-center">
                 <p className="text-sm text-muted-foreground">Transfer Price</p>
                 <p className="text-xl font-bold text-green-600">
-                  ₹{(parseFloat(newMarginForm.base_price) * (1 - parseFloat(newMarginForm.margin_value) / 100)).toFixed(2)}
+                  {(distributor?.billing_approach === 'cost_based')
+                    ? `₹${parseFloat(newMarginForm.base_price).toFixed(2)}`
+                    : `₹${(parseFloat(newMarginForm.base_price) * (1 - parseFloat(newMarginForm.margin_value) / 100)).toFixed(2)}`}
                 </p>
+                {(distributor?.billing_approach === 'cost_based') && (
+                  <p className="text-xs text-amber-600 mt-1">Cost-based billing: Transfer price equals base price. Margin applied post-sale.</p>
+                )}
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
@@ -460,8 +506,13 @@ export default function MarginsTab({
                 <div className="p-3 bg-green-50 rounded-lg text-center">
                   <p className="text-sm text-muted-foreground">Transfer Price</p>
                   <p className="text-xl font-bold text-green-600">
-                    ₹{(parseFloat(editMarginEntry.base_price) * (1 - parseFloat(editMarginEntry.margin_value) / 100)).toFixed(2)}
+                    {(distributor?.billing_approach === 'cost_based')
+                      ? `₹${parseFloat(editMarginEntry.base_price).toFixed(2)}`
+                      : `₹${(parseFloat(editMarginEntry.base_price) * (1 - parseFloat(editMarginEntry.margin_value) / 100)).toFixed(2)}`}
                   </p>
+                  {(distributor?.billing_approach === 'cost_based') && (
+                    <p className="text-xs text-amber-600 mt-1">Cost-based billing: Transfer price equals base price.</p>
+                  )}
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4">

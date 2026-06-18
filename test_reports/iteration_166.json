@@ -1,0 +1,49 @@
+{
+  "summary": "Verified per-user home widget reorder feature end-to-end. 7/7 backend pytest cases pass (GET default, PUT persist, sanitize/dedupe/append missing, empty-list 400, single-doc upsert, default flag after doc deletion, per-user isolation across two live sessions). Frontend Playwright smoke confirmed default order renders, hover reveals reorder overlay, first/last move buttons disabled at edges, move-up on pipeline swaps with meetings, order persists across hard reload, and move-down also works. Cleanup reset to default ['meetings','pipeline','followups'] confirmed at Mongo level.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_home_widget_order.py",
+    "/app/test_reports/pytest/home_widget_order.xml"
+  ],
+  "verified_acceptance_criteria": [
+    "GET /api/preferences/home-widget-order returns {order, is_default}; default order = ['meetings','pipeline','followups']; is_default=true when no saved doc (verified by deleting doc via pymongo and re-fetching).",
+    "PUT /api/preferences/home-widget-order persists order; subsequent GET returns same order with is_default=false.",
+    "PUT sanitizes payload: {'order':['pipeline','unknown_id','pipeline','followups']} returned ['pipeline','followups','meetings'] (unknown dropped, dedup applied, missing 'meetings' appended at end, length stays 3).",
+    "PUT with empty order returns HTTP 400.",
+    "After 3 successive PUTs for same user, user_preferences collection contains exactly 1 doc for (user_id, key='home_widget_order') — upsert confirmed via pymongo count.",
+    "Per-user isolation: user A saved ['pipeline','followups','meetings']; a second live-login user (different id) saw is_default=true + default order on their GET, while user A still sees custom.",
+    "Frontend /home renders 3 sections in GET-returned order (data-testid home-widget-meetings|pipeline|followups).",
+    "Reorder overlay (data-testid home-widget-{id}-reorder) has opacity-0 by default, becomes visible on widget hover (verified is_visible=True on hover).",
+    "home-widget-meetings-move-up is disabled when meetings is first; home-widget-followups-move-down is disabled when followups is last.",
+    "Click home-widget-pipeline-move-up swapped pipeline with meetings; DOM order became ['pipeline','meetings','followups']; after hard page reload, order remained persisted.",
+    "Click home-widget-meetings-move-down further reordered to ['pipeline','followups','meetings'], frontend immediately PUTs new order.",
+    "Cleanup: order reset to default ['meetings','pipeline','followups'] — verified in Mongo (single doc, correct order)."
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "user_preferences.py is small, focused, correctly async, no _id leakage (projection {_id:0}), uses upsert — good.",
+    "Minor: GET returns is_default based on 'saved' (truthy check of doc.order list); if someone saves an empty list it would 400 at PUT, so is_default stays consistent. No change needed.",
+    "HomeDashboard useEffect for loading order has empty dep array and omits API_URL — acceptable since API_URL is module-scope constant; no ESLint warning observed.",
+    "moveWidget optimistically updates state and fires PUT; on PUT failure it shows a toast but does NOT revert the optimistic state, so UI could drift from backend if the network fails. Non-blocking for MVP; consider rollback-on-error for polish."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_home_widget_order.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (7/7)",
+    "frontend": "100% (all reorder interactions + persistence + per-user isolation verified)"
+  },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water). Second user in isolation test discovered dynamically from DB via pymongo (test123 password).",
+  "seed_data_creation": "None. State cleaned: user_preferences doc for CEO reset to default ['meetings','pipeline','followups'] after tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reusable regression tests live at /app/backend/tests/test_home_widget_order.py. The test file uses pymongo (sync) to bypass motor event-loop issues in pytest — reuse the _sync_db() helper pattern for future DB-inspection tests. Reorder controls appear on :hover and :focus-within of each home-widget-{id} section; data-testid contract: home-widget-{id}, home-widget-{id}-reorder, home-widget-{id}-move-up/-move-down."
+}

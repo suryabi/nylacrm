@@ -1,0 +1,30 @@
+{
+  "summary": "Tested iteration_163 Sampling/Trials SKU + Bottles/Crate dropdown feature end-to-end. All 10 acceptance criteria PASS. Backend GET /api/performance/sampling-trials correctly returns sku_options[].packaging_options with packaging_type_id, name, units_per_package, is_default. units_per_package on sku_option correctly defaults to the is_default packaging (falls back to first otherwise). Empire Restaurant + Nyla – 600 ml / Silver shows 2 packaging options (Carton-6 & Crate-12 with Crate-12 as default, upp=12) exactly per spec. POST /api/performance/sampling-trials persists packaging_type_id on each sku_plan; PUT correctly updates packaging_type_id and units_per_package; DELETE cleans up. Amount = crates × units_per_package × price_per_unit computed correctly server-side. Frontend UI: Selecting Empire lead auto-populates 1 sku_plan row with SKU pre-selected (Nyla – 600 ml / Silver) and packaging pre-selected to Crate-12 (12 bottles). SKU column is shadcn Select (data-testid sampling-sku-name-0) with options restricted to leadSkuOptions; Bottles/Crate is Select (data-testid sampling-sku-units-0) showing 'Carton - 6 (6 bottles)' and 'Crate - 12 (12 bottles)'. Switching packaging updates units_per_package live; amount recomputes (2 × 6 × 10 = ₹120). After Save + Edit reopen, SKU, packaging (6 bottles), crates (2) and price (10) all round-trip correctly — confirming packaging_type_id persistence.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sampling_trials_packaging.py",
+    "/app/test_reports/pytest/sampling_packaging_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SamplingTrialsSubsection still lives inside the 3100+ line PerformanceTracker.js. Splitting per-section subsections into separate files remains overdue (carryover from iteration_161/162).",
+    "Frontend getPackagingOptionsForSku and getPriceForSku both do lead.find and sku_options.find on every render and for every row. For trials with many SKU rows this is O(rows × sku_options). Memoize via useMemo on form.lead_id change if the SKU list grows large.",
+    "The sampling section required two clicks on the section-toggle to actually expand during the first test run — the first click registered but body stayed hidden. This is likely the lazy-mount + collapse state race noted in iteration_161. Not blocking but worth investigating if users report 'I clicked and nothing happened'.",
+    "SelectItem uses value={o.packaging_type_id || o.name} as a fallback when packaging_type_id is missing. If two packaging entries share the same fallback name in a malformed SKU, both options will collide. Consider always seeding a synthetic id for malformed master_sku rows or surfacing an admin warning.",
+    "SkuPlan Pydantic model accepts packaging_type_id: Optional[str] but does NOT validate that the id actually exists in master_skus.packaging_config.stock_out for the referenced SKU. A malicious/stale client could persist an arbitrary string. Consider cross-validating against _sku_units_map during POST/PUT or at least logging a warning.",
+    "Price column remains a free-text Input (sampling-sku-price-{idx}) even though the proposed price is already known from the lead. Spec doesn't require price to be a dropdown but pre-filling from getPriceForSku already happens on SKU change — good. Optionally lock the input or show a 'reset to proposed price' pill."
+  ],
+  "updated_files": ["/app/backend/tests/test_sampling_trials_packaging.py"],
+  "success_rate": {"backend": "5/5 PASS", "frontend": "10/10 acceptance criteria PASS"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water). Login returns 'session_token' (not 'token' or 'access_token').",
+  "seed_data_creation": "Test trial was created on Empire Restaurant with packaging_type_id pointing to Carton-6 and DELETED in cleanup.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sampling feature fully working — both backend (5/5 pytest) and frontend (round-trip persistence verified). Gotchas: (1) /api/auth/login returns session_token (not token). (2) Sampling section occasionally needs 2 clicks on the toggle to fully expand — first click sometimes just flips state without mounting body. (3) Save button testid is sampling-save-btn (not sampling-save-trial-btn). (4) Test file reused: /app/backend/tests/test_sampling_trials_packaging.py — pytest run requires REACT_APP_BACKEND_URL env var explicitly since pytest doesn't inherit the shell's .env automatically.",
+  "rca of the issue": "No bug. Feature works end-to-end. Minor UX note on section-toggle needing occasional double click — see iteration_161 context."
+}

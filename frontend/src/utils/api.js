@@ -10,7 +10,7 @@ const getAuthHeaders = () => {
 // Leads API with server-side pagination
 export const leadsAPI = {
   getAll: (params = {}) => {
-    const { page = 1, pageSize = 25, status, city, state, country, region, search, territory, assigned_to, time_filter, quadrant, sort_by, sort_order, target_closure_month, target_closure_year } = params;
+    const { page = 1, pageSize = 25, status, city, state, country, region, search, territory, assigned_to, time_filter, quadrant, sort_by, sort_order, target_closure_month, target_closure_year, target_closure_months, target_closure_years, pipeline_view } = params;
     const queryParams = new URLSearchParams();
     queryParams.append('page', page);
     queryParams.append('page_size', pageSize);
@@ -28,6 +28,9 @@ export const leadsAPI = {
     if (sort_order) queryParams.append('sort_order', sort_order);
     if (target_closure_month) queryParams.append('target_closure_month', target_closure_month);
     if (target_closure_year) queryParams.append('target_closure_year', target_closure_year);
+    if (target_closure_months) queryParams.append('target_closure_months', target_closure_months);
+    if (target_closure_years) queryParams.append('target_closure_years', target_closure_years);
+    if (pipeline_view) queryParams.append('pipeline_view', pipeline_view);
     return axios.get(`${API_URL}/leads?${queryParams.toString()}`, { headers: getAuthHeaders() });
   },
   getById: (id) => axios.get(`${API_URL}/leads/${id}`, { headers: getAuthHeaders() }),
@@ -81,7 +84,7 @@ export const accountsAPI = {
     return axios.get(`${API_URL}/accounts?${queryParams.toString()}`, { headers: getAuthHeaders() });
   },
   getById: (id) => axios.get(`${API_URL}/accounts/${id}`, { headers: getAuthHeaders() }),
-  convertFromLead: (leadId) => axios.post(`${API_URL}/accounts/convert-lead`, { lead_id: leadId }, { headers: getAuthHeaders() }),
+  convertFromLead: (leadId, copyLeadAddress = false) => axios.post(`${API_URL}/accounts/convert-lead`, { lead_id: leadId, copy_lead_address: copyLeadAddress }, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/accounts/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/accounts/${id}`, { headers: getAuthHeaders() }),
   getInvoices: (id, params = {}) => {
@@ -93,6 +96,8 @@ export const accountsAPI = {
     return axios.get(`${API_URL}/accounts/${id}/invoices${queryString ? '?' + queryString : ''}`, { headers: getAuthHeaders() });
   },
   createInvoice: (id, data) => axios.post(`${API_URL}/accounts/${id}/invoices`, data, { headers: getAuthHeaders() }),
+  relinkInvoices: (dryRun = false) => axios.post(`${API_URL}/accounts/relink-invoices?dry_run=${dryRun}`, {}, { headers: getAuthHeaders() }),
+  backfillSystemOutstanding: () => axios.post(`${API_URL}/accounts/maintenance/backfill-system-outstanding`, {}, { headers: getAuthHeaders() }),
 };
 
 // Invoices API
@@ -121,6 +126,7 @@ export const skusAPI = {
   create: (data) => axios.post(`${API_URL}/master-skus`, data, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/master-skus/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/master-skus/${id}`, { headers: getAuthHeaders() }),
+  deletePermanent: (id) => axios.delete(`${API_URL}/master-skus/${id}/permanent`, { headers: getAuthHeaders() }),
   getCategories: () => axios.get(`${API_URL}/sku-categories`, { headers: getAuthHeaders() }),
 };
 
@@ -214,6 +220,26 @@ export const marketingAPI = {
   exportPosts: (month, year) => axios.get(`${API_URL}/marketing/export?month=${month}&year=${year}`, { headers: getAuthHeaders(), responseType: 'blob' }),
   uploadPreview: (file) => { const fd = new FormData(); fd.append('file', file); const h = getAuthHeaders(); delete h['Content-Type']; return axios.post(`${API_URL}/marketing/upload-preview`, fd, { headers: h }); },
   uploadConfirm: (month, year, rows) => axios.post(`${API_URL}/marketing/upload-confirm`, { month, year, rows }, { headers: getAuthHeaders() }),
+  // Event Types (master data)
+  getEventTypes: () => axios.get(`${API_URL}/marketing/event-types`, { headers: getAuthHeaders() }),
+  createEventType: (data) => axios.post(`${API_URL}/marketing/event-types`, data, { headers: getAuthHeaders() }),
+  updateEventType: (id, data) => axios.put(`${API_URL}/marketing/event-types/${id}`, data, { headers: getAuthHeaders() }),
+  deleteEventType: (id) => axios.delete(`${API_URL}/marketing/event-types/${id}`, { headers: getAuthHeaders() }),
+  // Calendar Events (full events with requirements & tasks)
+  getCalendarEvents: (month, year) => {
+    const q = new URLSearchParams();
+    if (month) q.append('month', month);
+    if (year) q.append('year', year);
+    return axios.get(`${API_URL}/marketing/calendar-events?${q.toString()}`, { headers: getAuthHeaders() });
+  },
+  getCalendarEvent: (id) => axios.get(`${API_URL}/marketing/calendar-events/${id}`, { headers: getAuthHeaders() }),
+  createCalendarEvent: (data) => axios.post(`${API_URL}/marketing/calendar-events`, data, { headers: getAuthHeaders() }),
+  updateCalendarEvent: (id, data) => axios.put(`${API_URL}/marketing/calendar-events/${id}`, data, { headers: getAuthHeaders() }),
+  deleteCalendarEvent: (id) => axios.delete(`${API_URL}/marketing/calendar-events/${id}`, { headers: getAuthHeaders() }),
+  // Comments (shared for posts & events)
+  getComments: (entityType, entityId) => axios.get(`${API_URL}/marketing/comments/${entityType}/${entityId}`, { headers: getAuthHeaders() }),
+  addComment: (entityType, entityId, content) => axios.post(`${API_URL}/marketing/comments/${entityType}/${entityId}`, { content }, { headers: getAuthHeaders() }),
+  deleteComment: (commentId) => axios.delete(`${API_URL}/marketing/comments/${commentId}`, { headers: getAuthHeaders() }),
 };
 
 
@@ -231,4 +257,13 @@ export const meetingMinutesAPI = {
   create: (data) => axios.post(`${API_URL}/meeting-minutes`, data, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/meeting-minutes/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/meeting-minutes/${id}`, { headers: getAuthHeaders() }),
+};
+
+
+// SKU Aliases (admin) — map retired SKU codes/names to current master SKUs
+export const skuAliasAPI = {
+  list: () => axios.get(`${API_URL}/admin/sku-aliases`, { headers: getAuthHeaders() }),
+  unmapped: () => axios.get(`${API_URL}/admin/sku-aliases/unmapped`, { headers: getAuthHeaders() }),
+  upsert: (data) => axios.post(`${API_URL}/admin/sku-aliases`, data, { headers: getAuthHeaders() }),
+  remove: (id) => axios.delete(`${API_URL}/admin/sku-aliases/${id}`, { headers: getAuthHeaders() }),
 };

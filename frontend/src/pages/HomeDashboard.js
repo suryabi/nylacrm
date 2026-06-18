@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,11 +21,12 @@ import {
   TaskMetricsWidget,
   UpcomingFollowupsWidget,
   UpcomingMeetingsWidget,
-  PipelineSummaryWidget,
   SalesROIPanel,
   NewMeetingDialog,
   MeetingDetailDialog
 } from '../components/widgets';
+import DistributorMessagesCard from '../components/DistributorMessagesCard';
+import PendingApprovalsWidget from '../components/widgets/PendingApprovalsWidget';
 // Quote widgets temporarily disabled - uncomment to re-enable
 // import WaterQuoteWidget from '../components/widgets/WaterQuoteWidget';
 // import SalesQuoteWidget from '../components/widgets/SalesQuoteWidget';
@@ -66,6 +67,30 @@ export default function HomeDashboard() {
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [locationName, setLocationName] = useState('');
+
+  // Per-user widget order (saved in user_preferences)
+  const DEFAULT_WIDGET_ORDER = ['meetings', 'followups'];
+  const [widgetOrder, setWidgetOrder] = useState(DEFAULT_WIDGET_ORDER);
+
+  useEffect(() => {
+    axios.get(`${API_URL}/preferences/home-widget-order`, { withCredentials: true })
+      .then(r => { if (r.data?.order?.length) setWidgetOrder(r.data.order); })
+      .catch(() => {});
+  }, []);
+
+  const moveWidget = useCallback((widgetId, direction) => {
+    setWidgetOrder(prev => {
+      const idx = prev.indexOf(widgetId);
+      if (idx === -1) return prev;
+      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      axios.put(`${API_URL}/preferences/home-widget-order`, { order: next }, { withCredentials: true })
+        .catch(() => toast.error('Could not save widget order'));
+      return next;
+    });
+  }, []);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -279,7 +304,7 @@ export default function HomeDashboard() {
     );
   }
 
-  const { upcoming_leads, upcoming_meetings, pipeline } = dashboardData || {};
+  const { upcoming_leads, upcoming_meetings } = dashboardData || {};
   
   // Check if user is in Sales department for ROI Panel
   const userDepts = Array.isArray(user?.department) ? user.department : [user?.department || ''];
@@ -333,33 +358,97 @@ export default function HomeDashboard() {
             <TaskMetricsWidget />
           </section>
 
-          {/* Main Content - Bento Grid */}
-          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-12">
-            {/* Left Column - Primary Content (full width on mobile, 8 cols on desktop) */}
-            <div className="lg:col-span-8 space-y-4 sm:space-y-6 order-2 lg:order-1">
-              {/* Bottom Row - Upcoming Follow-ups full width */}
-              <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />
-            </div>
+          {/* Pending Approvals — auto-hides when nothing needs the user's action */}
+          <section className="mb-6 sm:mb-8">
+            <PendingApprovalsWidget />
+          </section>
 
-            {/* Right Column - Secondary Content (full width on mobile, 4 cols on desktop) */}
-            <div className="lg:col-span-4 space-y-4 sm:space-y-6 order-1 lg:order-2">
-              {/* Meetings - Featured Card */}
-              <UpcomingMeetingsWidget
-                upcomingMeetings={upcoming_meetings}
-                onNewMeeting={() => {
-                  setNewMeeting(getDefaultMeetingState());
-                  setEditMode(false);
-                  setShowNewMeetingDialog(true);
-                }}
-                onViewMeeting={handleViewMeeting}
-                onEditMeeting={handleEditMeeting}
-                onCancelMeeting={handleCancelMeeting}
-              />
-              
-              {/* Pipeline - Compact Card */}
-              <PipelineSummaryWidget pipeline={pipeline} />
-            </div>
-          </div>
+          {/* Distributor messages alert (suppliers only — auto-hides for others) */}
+          <section className="mb-6 sm:mb-8">
+            <DistributorMessagesCard />
+          </section>
+
+          {/* Reorderable widgets — order saved per user */}
+          {(() => {
+            const widgetConfigs = {
+              meetings: {
+                render: () => (
+                  <UpcomingMeetingsWidget
+                    upcomingMeetings={upcoming_meetings}
+                    onNewMeeting={(selectedDate) => {
+                      const base = getDefaultMeetingState();
+                      setNewMeeting({
+                        ...base,
+                        meeting_date: selectedDate || base.meeting_date,
+                      });
+                      setEditMode(false);
+                      setShowNewMeetingDialog(true);
+                    }}
+                    onViewMeeting={handleViewMeeting}
+                    onEditMeeting={handleEditMeeting}
+                    onCancelMeeting={handleCancelMeeting}
+                  />
+                ),
+              },
+              followups: {
+                render: () => <UpcomingFollowupsWidget upcomingLeads={upcoming_leads} />,
+              },
+            };
+            return widgetOrder.map((id, idx) => {
+              const cfg = widgetConfigs[id];
+              if (!cfg) return null;
+              const isFirst = idx === 0;
+              const isLast = idx === widgetOrder.length - 1;
+              return (
+                <section key={id} className="mb-4 sm:mb-6 relative group/widget" data-testid={`home-widget-${id}`}>
+                  {/* Reorder controls — appear on hover (or always on touch) */}
+                  <div className="absolute top-3 right-3 z-20 flex items-center gap-1 opacity-0 group-hover/widget:opacity-100 focus-within:opacity-100 transition-opacity" data-testid={`home-widget-${id}-reorder`}>
+                    <div className="hidden sm:flex items-center gap-0.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm px-1 py-0.5">
+                      <span className="text-slate-300 mr-0.5"><GripVertical className="h-3.5 w-3.5" /></span>
+                      <button
+                        onClick={() => !isFirst && moveWidget(id, 'up')}
+                        disabled={isFirst}
+                        className="p-1 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Move up"
+                        data-testid={`home-widget-${id}-move-up`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => !isLast && moveWidget(id, 'down')}
+                        disabled={isLast}
+                        className="p-1 rounded text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Move down"
+                        data-testid={`home-widget-${id}-move-down`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  {cfg.render()}
+                </section>
+              );
+            });
+          })()}
+
+          {/* Sales ROI Panel — accessible on mobile/tablet via collapsible section.
+              Hidden here on lg+ where the right-rail panel takes over. */}
+          {showSalesROIPanel && (
+            <details className="lg:hidden mt-4 sm:mt-6 group rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg overflow-hidden">
+              <summary className="cursor-pointer list-none p-4 flex items-center justify-between hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition-colors">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-violet-100 to-fuchsia-100 dark:from-violet-900/50 dark:to-fuchsia-900/30">
+                    <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-800 dark:text-white">Sales ROI Statement</span>
+                </div>
+                <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="border-t border-slate-100 dark:border-slate-800">
+                <SalesROIPanel />
+              </div>
+            </details>
+          )}
 
         </div>
       </div>

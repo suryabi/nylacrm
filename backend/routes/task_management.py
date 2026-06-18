@@ -10,6 +10,9 @@ import uuid
 
 from database import get_tenant_db
 from deps import get_current_user
+from core.tenant import get_current_tenant_id
+import logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -307,11 +310,19 @@ async def get_tasks(
     if can_view_all_tasks(current_user):
         # Admin/CEO/Director can see all tasks
         if department_id:
-            query['department_id'] = department_id
+            dept_list = [d.strip() for d in department_id.split(',') if d.strip()]
+            if len(dept_list) == 1:
+                query['department_id'] = dept_list[0]
+            elif len(dept_list) > 1:
+                query['department_id'] = {'$in': dept_list}
     else:
         # Regular users can only see their department's tasks OR tasks assigned to them
         if department_id:
-            query['department_id'] = department_id
+            dept_list = [d.strip() for d in department_id.split(',') if d.strip()]
+            if len(dept_list) == 1:
+                query['department_id'] = dept_list[0]
+            elif len(dept_list) > 1:
+                query['department_id'] = {'$in': dept_list}
         else:
             query['$or'] = [
                 {'department_id': user_department},
@@ -326,6 +337,13 @@ async def get_tasks(
         query['created_by'] = user_id
     elif view == 'watching':
         query['watchers'] = user_id
+    elif view == 'mine':
+        # Combined: assigned to me OR created by me
+        mine_or = [{'assignees': user_id}, {'created_by': user_id}]
+        if '$or' in query:
+            query['$and'] = [{'$or': query.pop('$or')}, {'$or': mine_or}]
+        else:
+            query['$or'] = mine_or
     
     # Other filters
     if status:
@@ -413,7 +431,16 @@ async def get_task_stats(
     
     # Build base query based on visibility
     if can_view_all_tasks(current_user):
-        base_query = {'department_id': department_id} if department_id else {}
+        if department_id:
+            dept_list = [d.strip() for d in department_id.split(',') if d.strip()]
+            if len(dept_list) == 1:
+                base_query = {'department_id': dept_list[0]}
+            elif len(dept_list) > 1:
+                base_query = {'department_id': {'$in': dept_list}}
+            else:
+                base_query = {}
+        else:
+            base_query = {}
     else:
         base_query = {'$or': [
             {'department_id': user_department},
@@ -443,7 +470,7 @@ async def get_task_stats(
         {'created_by': user_id, 'status': {'$ne': 'closed'}}
     )
     
-    # Get overdue count
+    # Get overdue count (within base query scope)
     today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     overdue_query = {
         **base_query,
@@ -452,13 +479,41 @@ async def get_task_stats(
     }
     overdue_count = await tdb.tasks_v2.count_documents(overdue_query)
     
+    # Personal stats (for "My Tasks" tab)
+    my_overdue = await tdb.tasks_v2.count_documents({
+        '$or': [{'assignees': user_id}, {'created_by': user_id}],
+        'due_date': {'$lt': today, '$ne': None},
+        'status': {'$nin': ['closed', 'resolved']}
+    })
+    my_in_progress = await tdb.tasks_v2.count_documents({
+        '$or': [{'assignees': user_id}, {'created_by': user_id}],
+        'status': 'in_progress'
+    })
+    my_high = await tdb.tasks_v2.count_documents({
+        '$or': [{'assignees': user_id}, {'created_by': user_id}],
+        'severity': 'high',
+        'status': {'$ne': 'closed'}
+    })
+    my_completed = await tdb.tasks_v2.count_documents({
+        '$or': [{'assignees': user_id}, {'created_by': user_id}],
+        'status': 'closed'
+    })
+    my_total = await tdb.tasks_v2.count_documents({
+        '$or': [{'assignees': user_id}, {'created_by': user_id}]
+    })
+    
     return {
         'by_status': {item['_id']: item['count'] for item in status_counts},
         'by_severity': {item['_id']: item['count'] for item in severity_counts},
         'my_tasks': my_tasks_count,
         'created_by_me': created_by_me_count,
         'overdue': overdue_count,
-        'total': sum(item['count'] for item in status_counts)
+        'total': sum(item['count'] for item in status_counts),
+        'my_overdue': my_overdue,
+        'my_in_progress': my_in_progress,
+        'my_high_severity': my_high,
+        'my_completed': my_completed,
+        'my_total': my_total,
     }
 
 
@@ -619,6 +674,25 @@ async def create_task(task: TaskCreate, current_user: dict = Depends(get_current
     }
     
     await tdb.tasks_v2.insert_one(task_data)
+
+    # Notify each assignee (skips creator-assigning-self via dedup in notify_users)
+    try:
+        from utils.notify import notify_users
+        recipients = [a for a in (task.assignees or []) if a and a != current_user['id']]
+        if recipients:
+            await notify_users(
+                tenant_id=get_current_tenant_id(),
+                user_ids=recipients,
+                title=f"New task: {task.title}",
+                body=(task.description or '')[:200],
+                link=f"/tasks/{task_data['id']}",
+                kind="task_assigned",
+                category="task",
+                entity_type="task",
+                entity_id=task_data['id'],
+            )
+    except Exception as e:
+        logger.warning(f"notify task assignees failed: {e}")
     
     # Log activity
     await log_activity(tdb, task_data['id'], 'created', None, None, current_user)
@@ -711,11 +785,26 @@ async def add_comment(task_id: str, comment: CommentCreate, current_user: dict =
     # Log activity
     await log_activity(tdb, task_id, 'commented', None, comment.content[:100], current_user)
     
-    # Add mentioned users to watchers
-    if comment.mentions:
+    # Mentions: collect from the explicit `mentions` array AND any inline
+    # `@[name](id)` chips in the content, add them as watchers, and notify them.
+    from utils.mentions import extract_mentions
+    all_mentions = list({*(comment.mentions or []), *extract_mentions(comment.content or '')})
+    if all_mentions:
         await tdb.tasks_v2.update_one(
             {'id': task_id},
-            {'$addToSet': {'watchers': {'$each': comment.mentions}}}
+            {'$addToSet': {'watchers': {'$each': all_mentions}}}
+        )
+        from utils.entity_comments import notify_comment_mentions
+        await notify_comment_mentions(
+            tenant_id=get_current_tenant_id(),
+            text=comment.content or '',
+            current_user=current_user,
+            link=f"/tasks/{task_id}",
+            title=f"{current_user.get('name') or current_user.get('email') or 'Someone'} mentioned you",
+            body=f"Comment on {task.get('task_number') or 'a task'}: {task.get('title','')[:60]}",
+            entity_type='task',
+            entity_id=task_id,
+            extra_ids=comment.mentions or [],
         )
     
     return comment_data

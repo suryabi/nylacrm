@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card } from '../components/ui/card';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -25,7 +24,6 @@ import {
   Plus,
   Target,
   Calendar,
-  IndianRupee,
   ArrowRight,
   MoreVertical,
   Pencil,
@@ -33,12 +31,11 @@ import {
   Copy,
   Lock,
   Loader2,
-  TrendingUp,
-  Clock,
   CheckCircle2,
-  Receipt,
-  Banknote,
-  ChevronRight
+  Send,
+  Ban,
+  Users,
+  UserCheck
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -46,6 +43,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
+import { cn } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -69,20 +68,71 @@ const formatCurrency = (amount, short = false) => {
 
 const getStatusBadge = (status) => {
   const styles = {
-    draft: 'bg-gray-100 text-gray-700',
-    active: 'bg-green-100 text-green-700',
-    completed: 'bg-blue-100 text-blue-700',
-    locked: 'bg-amber-100 text-amber-700'
+    draft: 'bg-slate-50 text-slate-700 border border-slate-200/60',
+    active: 'bg-emerald-50 text-emerald-700 border border-emerald-200/60',
+    completed: 'bg-blue-50 text-blue-700 border border-blue-200/60',
+    inactive: 'bg-zinc-100 text-zinc-600 border border-zinc-200',
+    locked: 'bg-amber-50 text-amber-700 border border-amber-200/60'
   };
   return styles[status] || styles.draft;
 };
 
+const getInitials = (name) => {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+};
+
+// Color-hashed initials avatar (matches the Leads list style)
+const AVATAR_COLORS = [
+  'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500',
+  'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-red-500',
+  'bg-cyan-500', 'bg-amber-500', 'bg-emerald-500', 'bg-violet-500'
+];
+const getNameAvatar = (name) => {
+  const n = (name || '').trim();
+  const parts = n.split(/\s+/).filter(Boolean);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (n.slice(0, 2).toUpperCase() || '?');
+  const seed = (n || '?').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  return { initials, bgColor: AVATAR_COLORS[seed % AVATAR_COLORS.length] };
+};
+
+// Consistent computed plan title: "<Month / YY>" (single month) or
+// "<Start Month / YY> - <End Month / YY>" (multi-month). Parsed from the
+// YYYY-MM-DD strings directly to avoid any timezone drift.
+const TP_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const fmtPlanMonth = (dateStr) => {
+  if (!dateStr) return '';
+  const [y, m] = dateStr.split('-').map(Number);
+  return `${TP_MONTHS[(m || 1) - 1]} / ${String(y).slice(-2)}`;
+};
+const getPlanPeriodLabel = (plan) => {
+  if (!plan?.start_date || !plan?.end_date) return plan?.name || 'Target Plan';
+  const [sy, sm] = plan.start_date.split('-').map(Number);
+  const [ey, em] = plan.end_date.split('-').map(Number);
+  const single = sy === ey && sm === em;
+  return single
+    ? fmtPlanMonth(plan.start_date)
+    : `${fmtPlanMonth(plan.start_date)} - ${fmtPlanMonth(plan.end_date)}`;
+};
+// Initials owner = assigned user, falling back to the creator when unassigned
+const getPlanOwnerName = (plan) => plan?.assigned_to_name || plan?.created_by_name || '';
+
 export default function TargetPlanningList() {
   const navigate = useNavigate();
+  const { planId: editParamId } = useParams();
+  const { user } = useAuth();
   const [plans, setPlans] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [assignedToMe, setAssignedToMe] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     start_date: '',
@@ -90,12 +140,27 @@ export default function TargetPlanningList() {
     goal_type: 'run_rate',  // "run_rate" or "cumulative"
     total_amount: '',
     milestones: '4',
-    description: ''
+    description: '',
+    assigned_to: ''
   });
 
   useEffect(() => {
     fetchPlans();
+    fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (editParamId && plans.length > 0) {
+      const plan = plans.find((p) => p.id === editParamId);
+      if (plan) {
+        handleOpenEditDialog(plan);
+      } else {
+        toast.error('Target plan not found');
+        navigate('/target-planning', { replace: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editParamId, plans]);
 
   const fetchPlans = async () => {
     try {
@@ -113,6 +178,22 @@ export default function TargetPlanningList() {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_URL}/users?is_active=true`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : (data.data || []);
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        setUsers(list);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
   const handleCreatePlan = async () => {
     if (!formData.name || !formData.start_date || !formData.end_date || !formData.total_amount) {
       toast.error('Please fill all required fields');
@@ -121,8 +202,12 @@ export default function TargetPlanningList() {
 
     setCreating(true);
     try {
-      const response = await fetch(`${API_URL}/target-planning`, {
-        method: 'POST',
+      const isEdit = !!editingPlanId;
+      const url = isEdit
+        ? `${API_URL}/target-planning/${editingPlanId}`
+        : `${API_URL}/target-planning`;
+      const response = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
@@ -135,19 +220,69 @@ export default function TargetPlanningList() {
       });
 
       if (response.ok) {
-        const newPlan = await response.json();
-        toast.success('Target plan created');
+        const savedPlan = await response.json();
+        toast.success(isEdit ? 'Target plan updated' : 'Target plan created');
         setShowCreateDialog(false);
-        setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '' });
-        navigate(`/target-planning/${newPlan.id}`);
+        setEditingPlanId(null);
+        setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '', assigned_to: '' });
+        if (isEdit) {
+          if (editParamId) {
+            navigate('/target-planning', { replace: true });
+          } else {
+            fetchPlans();
+          }
+        } else {
+          navigate(`/target-planning/${savedPlan.id}`);
+        }
       } else {
         const error = await response.json();
-        toast.error(error.detail || 'Failed to create plan');
+        toast.error(error.detail || `Failed to ${isEdit ? 'update' : 'create'} plan`);
       }
     } catch (error) {
-      toast.error('Failed to create plan');
+      toast.error(`Failed to ${editingPlanId ? 'update' : 'create'} plan`);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleOpenEditDialog = (plan) => {
+    setEditingPlanId(plan.id);
+    setFormData({
+      name: plan.name || '',
+      start_date: plan.start_date || '',
+      end_date: plan.end_date || '',
+      goal_type: plan.goal_type || 'run_rate',
+      total_amount: plan.total_amount != null ? String(plan.total_amount) : '',
+      milestones: plan.milestones != null ? String(plan.milestones) : '4',
+      description: plan.description || '',
+      assigned_to: plan.assigned_to || ''
+    });
+    setShowCreateDialog(true);
+  };
+
+  const handleOpenCreateDialog = () => {
+    setEditingPlanId(null);
+    setFormData({ name: '', start_date: '', end_date: '', goal_type: 'run_rate', total_amount: '', milestones: '4', description: '', assigned_to: '' });
+    setShowCreateDialog(true);
+  };
+
+  const handleUpdateStatus = async (planId, newStatus) => {
+    try {
+      const response = await fetch(`${API_URL}/target-planning/${planId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (response.ok) {
+        const labels = { active: 'activated', inactive: 'inactivated', completed: 'marked completed', draft: 'reverted to draft' };
+        toast.success(`Target plan ${labels[newStatus] || 'updated'}`);
+        fetchPlans();
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(error.detail || 'Failed to update status');
+      }
+    } catch (error) {
+      toast.error('Failed to update status');
     }
   };
 
@@ -212,6 +347,40 @@ export default function TargetPlanningList() {
     return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
   };
 
+  // ---- Filters: status + assigned-to-me ----
+  const matchesAssignee = (p) => !assignedToMe || (!!user?.id && p.assigned_to === user.id);
+  const matchesStatus = (p) => statusFilter === 'all' || (p.status || 'draft') === statusFilter;
+
+  // Counts respect the assignee filter so the status tabs reflect the visible set
+  const assigneeBase = plans.filter(matchesAssignee);
+  const statusCount = (val) =>
+    val === 'all' ? assigneeBase.length : assigneeBase.filter((p) => (p.status || 'draft') === val).length;
+
+  const STATUS_TABS = [
+    { value: 'all', label: 'All' },
+    { value: 'active', label: 'Active' },
+    { value: 'draft', label: 'Draft' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'inactive', label: 'Inactive' },
+  ];
+
+  const filteredPlans = plans.filter((p) => matchesAssignee(p) && matchesStatus(p));
+  const clearFilters = () => { setStatusFilter('all'); setAssignedToMe(false); };
+
+  // Group plans by the user they are assigned to (alphabetical; Unassigned last)
+  const UNASSIGNED = 'Unassigned';
+  const groupedPlans = Object.entries(
+    filteredPlans.reduce((acc, p) => {
+      const key = p.assigned_to_name || UNASSIGNED;
+      (acc[key] = acc[key] || []).push(p);
+      return acc;
+    }, {})
+  ).sort((a, b) => {
+    if (a[0] === UNASSIGNED) return 1;
+    if (b[0] === UNASSIGNED) return -1;
+    return a[0].localeCompare(b[0]);
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -221,68 +390,192 @@ export default function TargetPlanningList() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="max-w-[1600px] mx-auto px-6 py-8 md:px-8 md:py-10">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-10">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Target className="h-7 w-7 text-primary" />
-            Target Planning
-          </h1>
-          <p className="text-muted-foreground mt-1">Create and manage revenue targets across territories, cities, and resources</p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-zinc-900">Target Planning</h1>
+          <p className="text-sm text-zinc-500 mt-2 max-w-xl">Create and manage revenue targets across territories, cities, and resources.</p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)} data-testid="create-plan-btn">
+        <Button
+          onClick={handleOpenCreateDialog}
+          className="bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm active:scale-95 transition-transform shrink-0"
+          data-testid="create-plan-btn"
+        >
           <Plus className="h-4 w-4 mr-2" /> New Target Plan
         </Button>
       </div>
 
+      {/* Filter bar */}
+      {plans.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-8" data-testid="tp-filter-bar">
+          <div className="inline-flex items-center gap-1 bg-zinc-100/80 p-1 rounded-lg w-full sm:w-auto overflow-x-auto">
+            {STATUS_TABS.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => setStatusFilter(s.value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap',
+                  statusFilter === s.value
+                    ? 'bg-white text-zinc-900 shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-800'
+                )}
+                data-testid={`status-filter-${s.value}`}
+              >
+                {s.label}
+                <span className={cn('text-xs', statusFilter === s.value ? 'text-zinc-400' : 'text-zinc-400')}>
+                  {statusCount(s.value)}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <Button
+            variant="outline"
+            onClick={() => setAssignedToMe((v) => !v)}
+            className={cn(
+              'sm:ml-auto border-zinc-200 shrink-0',
+              assignedToMe && 'bg-zinc-900 text-white border-zinc-900 hover:bg-zinc-800 hover:text-white'
+            )}
+            data-testid="assigned-to-me-toggle"
+            aria-pressed={assignedToMe}
+          >
+            <UserCheck className="h-4 w-4 mr-2" /> Assigned to me
+          </Button>
+        </div>
+      )}
+
       {/* Plans Grid */}
       {plans.length === 0 ? (
-        <Card className="p-12 text-center">
-          <Target className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No Target Plans Yet</h3>
-          <p className="text-muted-foreground mb-4">Create your first target plan to start tracking revenue goals</p>
-          <Button onClick={() => setShowCreateDialog(true)}>
+        <div className="flex flex-col items-center justify-center py-24 px-4 text-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50">
+          <Target className="size-12 text-zinc-300 mb-4" />
+          <h3 className="text-lg font-medium text-zinc-900 mb-2">No Target Plans Yet</h3>
+          <p className="text-sm text-zinc-500 max-w-sm mb-6">Create your first target plan to start tracking revenue goals across territories, cities, and resources.</p>
+          <Button onClick={handleOpenCreateDialog} className="bg-zinc-900 text-white hover:bg-zinc-800 shadow-sm">
             <Plus className="h-4 w-4 mr-2" /> Create Target Plan
           </Button>
-        </Card>
+        </div>
+      ) : groupedPlans.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 px-4 text-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50" data-testid="tp-no-matches">
+          <Target className="size-12 text-zinc-300 mb-4" />
+          <h3 className="text-lg font-medium text-zinc-900 mb-2">No plans match these filters</h3>
+          <p className="text-sm text-zinc-500 max-w-sm mb-6">
+            {assignedToMe ? 'No plans are assigned to you' : 'No plans'} with the selected status. Try changing the filters.
+          </p>
+          <Button variant="outline" onClick={clearFilters} className="border-zinc-200" data-testid="clear-filters-btn">
+            Clear filters
+          </Button>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {plans.map((plan) => {
+        <div>
+          {groupedPlans.map(([creator, creatorPlans]) => (
+            <div key={creator} className="mt-10 first:mt-0" data-testid={`plan-group-${creator}`}>
+              {/* Assigned-user group header */}
+              <div className="flex items-center gap-3 py-4 mb-5 border-b border-zinc-100">
+                <div className="size-8 rounded-full bg-zinc-900 text-white flex items-center justify-center text-xs font-semibold">
+                  {getInitials(creator)}
+                </div>
+                <h2 className="text-lg font-medium tracking-tight text-zinc-900">{creator}</h2>
+                <span className="text-sm text-zinc-400">{creatorPlans.length} {creatorPlans.length === 1 ? 'plan' : 'plans'}</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {creatorPlans.map((plan) => {
             const progress = calculateProgress(plan);
             const allocationPercent = plan.total_amount > 0 
-              ? Math.round((plan.allocated_amount / plan.total_amount) * 100) 
+              ? Math.round(((plan.allocated_amount || 0) / plan.total_amount) * 100) 
               : 0;
             const currentMonth = plan.current_month;
             const currentMonthPercent = currentMonth && plan.total_amount > 0
-              ? Math.round((currentMonth.invoice_value / plan.total_amount) * 100)
+              ? Math.round(((currentMonth.invoice_value || 0) / plan.total_amount) * 100)
               : 0;
 
             return (
-              <Card 
-                key={plan.id} 
-                className="p-5 hover:shadow-lg transition-shadow cursor-pointer group"
+              <div
+                key={plan.id}
+                className="group relative flex flex-col bg-white rounded-xl border border-zinc-200 p-6 cursor-pointer transition-all duration-200 hover:border-zinc-300 hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] hover:-translate-y-0.5"
                 onClick={() => navigate(`/target-planning/${plan.id}`)}
                 data-testid={`plan-card-${plan.id}`}
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge className={getStatusBadge(plan.status)}>{plan.status}</Badge>
-                      {plan.status === 'locked' && <Lock className="h-3 w-3 text-amber-600" />}
+                <div className="flex items-start justify-between gap-3 mb-5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {(() => {
+                      const owner = getPlanOwnerName(plan);
+                      const av = getNameAvatar(owner);
+                      return (
+                        <span
+                          className={`size-9 rounded-full ${av.bgColor} flex items-center justify-center text-white text-xs font-semibold shadow-sm shrink-0`}
+                          title={owner || 'Unassigned'}
+                        >
+                          {av.initials}
+                        </span>
+                      );
+                    })()}
+                    <div className="min-w-0 flex items-center gap-2 flex-wrap">
+                      <h3 className="text-lg font-semibold tracking-tight text-zinc-900" data-testid={`plan-title-${plan.id}`}>
+                        {getPlanPeriodLabel(plan)}
+                      </h3>
+                      <span className="text-xs bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md font-medium" data-testid={`plan-owner-pill-${plan.id}`}>
+                        {getPlanOwnerName(plan) || 'Unassigned'}
+                      </span>
                     </div>
-                    <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">{plan.name}</h3>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getStatusBadge(plan.status)}`} data-testid={`plan-status-pill-${plan.id}`}>
+                      {plan.status}
+                    </span>
+                    {plan.status === 'locked' && <Lock className="h-3 w-3 text-amber-600" />}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="size-8 rounded-md text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/target-planning/${plan.id}/edit`); }}>
+                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenEditDialog(plan); }}>
                         <Pencil className="h-4 w-4 mr-2" /> Edit Plan
                       </DropdownMenuItem>
+                      {plan.status === 'draft' && (
+                        <DropdownMenuItem
+                          className="text-green-700"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'active'); }}
+                          data-testid={`publish-plan-${plan.id}`}
+                        >
+                          <Send className="h-4 w-4 mr-2" /> Publish Plan
+                        </DropdownMenuItem>
+                      )}
+                      {plan.status === 'active' && (
+                        <DropdownMenuItem
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'completed'); }}
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-2" /> Mark Completed
+                        </DropdownMenuItem>
+                      )}
+                      {plan.status === 'active' && (
+                        <DropdownMenuItem
+                          className="text-zinc-700"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'inactive'); }}
+                          data-testid={`inactivate-plan-${plan.id}`}
+                        >
+                          <Ban className="h-4 w-4 mr-2" /> Inactivate
+                        </DropdownMenuItem>
+                      )}
+                      {plan.status === 'inactive' && (
+                        <DropdownMenuItem
+                          className="text-green-700"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'active'); }}
+                          data-testid={`reactivate-plan-${plan.id}`}
+                        >
+                          <Send className="h-4 w-4 mr-2" /> Reactivate
+                        </DropdownMenuItem>
+                      )}
+                      {(plan.status === 'active' || plan.status === 'completed' || plan.status === 'inactive') && (
+                        <DropdownMenuItem
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(plan.id, 'draft'); }}
+                        >
+                          <Pencil className="h-4 w-4 mr-2" /> Revert to Draft
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDuplicatePlan(plan); }}>
                         <Copy className="h-4 w-4 mr-2" /> Duplicate
                       </DropdownMenuItem>
@@ -293,82 +586,98 @@ export default function TargetPlanningList() {
                         <Trash2 className="h-4 w-4 mr-2" /> Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
-                  </DropdownMenu>
+                    </DropdownMenu>
+                  </div>
                 </div>
 
-                {/* Duration & Target */}
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} - {new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                    <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{calculateDuration(plan.start_date, plan.end_date)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Target className="h-4 w-4 text-primary" />
-                    <span className="text-xl font-bold">{formatCurrency(plan.total_amount)}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {plan.goal_type === 'cumulative' ? 'total target' : '/month goal'}
-                    </span>
-                  </div>
-                  <Badge variant="outline" className="text-[10px]">
+                {/* Meta: date range */}
+                <div className="flex items-center gap-2 text-xs text-zinc-500 mb-5">
+                  <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                  <span>{new Date(plan.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })} - {new Date(plan.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                  <span className="text-zinc-300">·</span>
+                  <span>{calculateDuration(plan.start_date, plan.end_date)}</span>
+                </div>
+
+                {/* Metric */}
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-semibold tracking-tighter text-zinc-900">{formatCurrency(plan.total_amount)}</span>
+                  <span className="text-xs text-zinc-500">{plan.goal_type === 'cumulative' ? 'total target' : '/ month goal'}</span>
+                </div>
+                <div className="mt-2">
+                  <span className="inline-flex items-center text-[10px] font-medium uppercase tracking-wider text-zinc-500 border border-zinc-200 rounded px-2 py-0.5">
                     {plan.goal_type === 'cumulative' ? 'Cumulative' : 'Monthly Run Rate'}
-                  </Badge>
+                  </span>
                 </div>
 
-                {/* Progress Bars */}
-                <div className="space-y-3 mb-4">
-                  {/* Time Progress */}
+                {/* Progress section */}
+                <div className="flex flex-col gap-3 mt-auto pt-6 border-t border-zinc-100">
                   <div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Time Elapsed</span>
-                      <span>{progress}%</span>
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                      <span>Time Elapsed</span>
+                      <span className="text-zinc-700">{progress}%</span>
                     </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${progress}%` }} />
-                    </div>
-                  </div>
-                  
-                  {/* Allocation Progress */}
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                      <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3" /> Allocated</span>
-                      <span>{formatCurrency(plan.allocated_amount, true)} ({allocationPercent}%)</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${allocationPercent >= 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, allocationPercent)}%` }} />
+                    <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
                     </div>
                   </div>
 
-                  {/* Current Month Achievement */}
+                  <div>
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                      <span>Allocated</span>
+                      <span className="text-zinc-700">{formatCurrency(plan.allocated_amount, true)} · {allocationPercent}%</span>
+                    </div>
+                    <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ease-out ${allocationPercent >= 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, allocationPercent)}%` }} />
+                    </div>
+                  </div>
+
                   {currentMonth && (
                     <div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                        <span className="flex items-center gap-1"><Receipt className="h-3 w-3" /> {currentMonth.month}</span>
-                        <span>{formatCurrency(currentMonth.invoice_value, true)} ({currentMonthPercent}%)</span>
+                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                        <span>{currentMonth.month}</span>
+                        <span className="text-zinc-700">{formatCurrency(currentMonth.invoice_value, true)} · {currentMonthPercent}%</span>
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${currentMonthPercent >= 100 ? 'bg-green-600' : currentMonthPercent >= 50 ? 'bg-teal-500' : 'bg-purple-500'}`} style={{ width: `${Math.min(100, currentMonthPercent)}%` }} />
+                      <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out" style={{ width: `${Math.min(100, currentMonthPercent)}%` }} />
                       </div>
                     </div>
                   )}
-                </div>
 
-                <div className="flex items-center justify-end text-sm text-primary font-medium group-hover:underline">
-                  View Details <ArrowRight className="h-4 w-4 ml-1" />
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <span
+                      className="text-xs text-zinc-500 truncate"
+                      title={plan.name}
+                      data-testid={`plan-name-${plan.id}`}
+                    >
+                      {plan.name}
+                    </span>
+                    <span className="flex items-center text-sm font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0">
+                      View Details <ArrowRight className="h-4 w-4 ml-1" />
+                    </span>
+                  </div>
                 </div>
-              </Card>
+              </div>
             );
           })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Create Plan Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      {/* Create/Edit Plan Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={(open) => {
+        setShowCreateDialog(open);
+        if (!open) {
+          setEditingPlanId(null);
+          if (editParamId) navigate('/target-planning', { replace: true });
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Target className="h-5 w-5 text-primary" />
-              Create Target Plan
+              {editingPlanId ? 'Edit Target Plan' : 'Create Target Plan'}
             </DialogTitle>
           </DialogHeader>
 
@@ -470,6 +779,27 @@ export default function TargetPlanningList() {
             </div>
 
             <div>
+              <Label className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Assign To</Label>
+              <Select
+                value={formData.assigned_to || '__unassigned__'}
+                onValueChange={(v) => setFormData({ ...formData, assigned_to: v === '__unassigned__' ? '' : v })}
+              >
+                <SelectTrigger className="mt-1" data-testid="plan-assignee-select">
+                  <SelectValue placeholder="Unassigned" />
+                </SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.id} value={u.id} data-testid={`assignee-option-${u.id}`}>
+                      {u.name}{u.role ? <span className="text-muted-foreground"> · {u.role}</span> : null}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Plans are grouped by their assigned user on the dashboard</p>
+            </div>
+
+            <div>
               <Label>Description (Optional)</Label>
               <Textarea
                 value={formData.description}
@@ -482,9 +812,11 @@ export default function TargetPlanningList() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setShowCreateDialog(false); setEditingPlanId(null); if (editParamId) navigate('/target-planning', { replace: true }); }}>Cancel</Button>
             <Button onClick={handleCreatePlan} disabled={creating} data-testid="submit-plan-btn">
-              {creating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</> : 'Create Plan'}
+              {creating ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {editingPlanId ? 'Saving...' : 'Creating...'}</>
+              ) : (editingPlanId ? 'Save Changes' : 'Create Plan')}
             </Button>
           </DialogFooter>
         </DialogContent>

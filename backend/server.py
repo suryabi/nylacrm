@@ -9,7 +9,7 @@ import logging
 import urllib.parse
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
@@ -185,22 +185,55 @@ security = HTTPBearer()
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-# Health check endpoint for deployment - must be at root level
+# ============= HEALTH CHECK ENDPOINTS =============
+# These MUST be defined FIRST and kept simple to guarantee availability
+# for Kubernetes probes, Cloudflare checks, and deployment orchestrators.
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Kubernetes/deployment health probes"""
     return {"status": "healthy", "service": "backend"}
+
+@app.get("/healthz")
+async def healthz():
+    """K8s-style health probe"""
+    return {"status": "healthy"}
+
+@app.get("/ready")
+async def ready():
+    """K8s-style readiness probe"""
+    return {"status": "ready"}
+
+@app.get("/livez")
+async def livez():
+    """K8s-style liveness probe"""
+    return {"status": "alive"}
 
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {"status": "ok", "service": "nyla-crm-api"}
 
-# Also add health check under /api prefix for ingress routing
+# Health checks also under /api prefix (in case ingress strips or requires /api)
+@api_router.get("/")
+async def api_root():
+    """API root endpoint"""
+    return {"status": "ok", "service": "nyla-crm-api"}
+
 @api_router.get("/health")
 async def api_health_check():
     """Health check endpoint under /api prefix"""
     return {"status": "healthy", "service": "backend"}
+
+@api_router.get("/healthz")
+async def api_healthz():
+    """K8s-style health probe under /api prefix"""
+    return {"status": "healthy"}
+
+@api_router.get("/ping")
+async def api_ping():
+    """Simple ping endpoint"""
+    return {"pong": True}
 
 # Import modular routes
 from routes import routes_router
@@ -219,12 +252,19 @@ async def tenant_context_middleware(request: Request, call_next):
 # As we migrate more routes to the modular structure, we'll remove them from here
 # Keeping both during transition to ensure backward compatibility
 
-# Static files for logos
+# Static files for logos - resilient to read-only filesystems (best-effort)
 from fastapi.staticfiles import StaticFiles
 import os
 logos_dir = '/app/backend/static/logos'
-os.makedirs(logos_dir, exist_ok=True)
-app.mount("/api/static", StaticFiles(directory="/app/backend/static"), name="static")
+try:
+    os.makedirs(logos_dir, exist_ok=True)
+except OSError as _mkdir_err:
+    # Filesystem may be read-only in some deployment environments; ignore
+    logger.warning(f"Could not create static dir {logos_dir}: {_mkdir_err}")
+try:
+    app.mount("/api/static", StaticFiles(directory="/app/backend/static"), name="static")
+except Exception as _mount_err:
+    logger.warning(f"Static mount failed: {_mount_err}")
 
 # ============= HELPER FUNCTIONS =============
 
@@ -534,6 +574,63 @@ async def create_approval_task(
     return {k: v for k, v in task_doc.items() if k != '_id'}
 
 
+async def resolve_request_approver(requester_id: str) -> Optional[dict]:
+    """Resolve who should approve a request raised by `requester_id`.
+
+    Priority: direct reporting manager (`reports_to`) -> dotted-line manager
+    (`dotted_line_to`) -> any active Director/CEO -> any active Admin.
+    Returns the approver user dict ({id, name, email}) or None.
+    """
+    tdb = get_tdb()
+    requester = await tdb.users.find_one(
+        {'id': requester_id},
+        {'_id': 0, 'reports_to': 1, 'dotted_line_to': 1}
+    ) or {}
+    for key in ('reports_to', 'dotted_line_to'):
+        uid = requester.get(key)
+        if uid:
+            mgr = await tdb.users.find_one(
+                {'id': uid, 'is_active': True},
+                {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+            )
+            if mgr:
+                return mgr
+    # Fallback: any active Director or CEO
+    fallback = await tdb.users.find_one(
+        {'role': {'$in': ['Director', 'CEO']}, 'is_active': True},
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+    )
+    if fallback:
+        return fallback
+    # Last resort: any active Admin / System Admin
+    return await tdb.users.find_one(
+        {'role': {'$in': ['Admin', 'System Admin']}, 'is_active': True},
+        {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+    )
+
+
+async def notify_approver(approver: dict, *, title: str, body: str, link: str,
+                          entity_type: str, entity_id: str, kind: str = 'approval'):
+    """Best-effort in-app + email notification to a user. Never raises."""
+    if not approver or not approver.get('id'):
+        return
+    try:
+        from utils.notify import notify_users
+        await notify_users(
+            get_current_tenant_id(),
+            [approver['id']],
+            title=title,
+            body=body,
+            link=link,
+            kind=kind,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            send_email_too=True,
+        )
+    except Exception:
+        logger.exception('notify_approver failed')
+
+
 async def complete_approval_task(
     approval_type: str,
     reference_id: str,
@@ -555,7 +652,7 @@ async def complete_approval_task(
             'is_approval_task': True,
             'approval_type': approval_type,
             'approval_reference_id': reference_id,
-            'status': {'$in': ['pending', 'in_progress']}
+            'status': {'$in': ['pending', 'open', 'in_progress']}
         },
         {
             '$set': {
@@ -665,6 +762,9 @@ class Lead(BaseModel):
     # Lead Category
     category: Optional[str] = None  # Restaurant, Bar & Kitchen, Star Hotel, etc.
     
+    # Lead Type — B2B or Retail (defaults to B2B)
+    lead_type: Optional[str] = 'B2B'
+    
     # Customer Tier
     tier: Optional[str] = None  # Tier 1, Tier 2, Tier 3, Tier 4, Tier 5
     
@@ -728,6 +828,7 @@ class LeadCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = 'B2B'  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None  # A+, A, B, C, D
     city: str
@@ -750,6 +851,7 @@ class LeadCreate(BaseModel):
     onboarded_year: Optional[int] = None
     target_closure_month: Optional[int] = None
     target_closure_year: Optional[int] = None
+    delivery_address: Optional[Dict[str, Any]] = None
 
 class LeadUpdate(BaseModel):
     company: Optional[str] = None
@@ -757,6 +859,7 @@ class LeadUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     category: Optional[str] = None
+    lead_type: Optional[str] = None  # B2B or Retail
     tier: Optional[str] = None
     rank: Optional[str] = None  # A+, A, B, C, D
     city: Optional[str] = None
@@ -785,11 +888,14 @@ class LeadUpdate(BaseModel):
     onboarded_year: Optional[int] = None
     target_closure_month: Optional[int] = None
     target_closure_year: Optional[int] = None
+    delivery_address: Optional[Dict[str, Any]] = None
 
 # ============= ACCOUNT MODELS =============
 
 class AccountSKUPricing(BaseModel):
     """SKU pricing and bottle credit for an account"""
+    # Stable id that survives master_skus name renames. Optional for legacy rows.
+    sku_id: Optional[str] = None
     sku: str
     price_per_unit: float = 0.0
     return_bottle_credit: float = 0.0
@@ -803,6 +909,13 @@ class Account(BaseModel):
     # Account Info
     account_name: str
     account_type: Optional[str] = None  # Tier 1, Tier 2, Tier 3
+    
+    # Lead Type — B2B or Retail (propagated from lead on conversion)
+    lead_type: Optional[str] = 'B2B'
+    
+    # Include in GOP (Gross Operating Profit) metrics
+    # Default: B2B=True, Retail=False (handled on conversion; explicit override allowed via update)
+    include_in_gop_metrics: Optional[bool] = True
     
     # Contact Info
     contact_name: Optional[str] = None
@@ -823,10 +936,10 @@ class Account(BaseModel):
     sku_pricing: List[AccountSKUPricing] = []
     
     # Financial Tracking
-    outstanding_balance: float = 0.0
-    overdue_amount: float = 0.0
+    outstanding_balance: Optional[float] = 0.0
+    overdue_amount: Optional[float] = 0.0
     last_payment_date: Optional[str] = None
-    last_payment_amount: float = 0.0
+    last_payment_amount: Optional[float] = 0.0
     
     # Onboarding tracking
     onboarded_month: Optional[int] = None
@@ -838,27 +951,20 @@ class Account(BaseModel):
 
 class AccountCreate(BaseModel):
     lead_id: str
+    copy_lead_address: Optional[bool] = False
 
 class DeliveryAddress(BaseModel):
-    """Delivery address for an account"""
+    """Delivery address for an account or lead"""
+    model_config = ConfigDict(extra="allow")
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: Optional[str] = None
     landmark: Optional[str] = None
-
-class AccountUpdate(BaseModel):
-    account_name: Optional[str] = None
-    account_type: Optional[str] = None
-    contact_name: Optional[str] = None
-    contact_number: Optional[str] = None
-    gst_number: Optional[str] = None
-    next_follow_up: Optional[str] = None  # YYYY-MM-DD
-    sku_pricing: Optional[List[AccountSKUPricing]] = None
-    delivery_address: Optional[DeliveryAddress] = None
-    onboarded_month: Optional[int] = None
-    onboarded_year: Optional[int] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
 
 class PaginatedAccountsResponse(BaseModel):
     """Paginated response for accounts list"""
@@ -876,6 +982,7 @@ class Activity(BaseModel):
     description: str
     interaction_method: Optional[str] = None  # 'phone_call', 'customer_visit', 'email', 'whatsapp', 'sms', 'other'
     created_by: str
+    created_by_name: Optional[str] = None  # User's display name at time of creation
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ActivityCreate(BaseModel):
@@ -1379,6 +1486,9 @@ class COGSData(BaseModel):
     outbound_logistics_cost: float = 0.0
     distribution_cost: float = 0.0  # Distribution cost percentage
     
+    # Custom components defined in master/cogs-components — keyed by component.key
+    custom_components: Dict[str, float] = Field(default_factory=dict)
+    
     # Computed (stored for reference)
     total_cogs: float = 0.0
     ex_factory_price: float = 0.0
@@ -1397,6 +1507,7 @@ class COGSDataUpdate(BaseModel):
     gross_margin: Optional[float] = None
     outbound_logistics_cost: Optional[float] = None
     distribution_cost: Optional[float] = None  # Distribution cost percentage
+    custom_components: Optional[Dict[str, float]] = None  # Custom master-defined components
 
 class Invoice(BaseModel):
     """Invoice data received from ActiveMQ"""
@@ -1457,6 +1568,167 @@ def create_access_token(user_id: str, email: str, role: str) -> str:
 async def get_current_user(request: Request):
     """Get user from cookie or JWT token"""
     return await get_current_user_from_cookie_or_header(request)
+
+
+async def get_user_or_api_key(request: Request):
+    """Authenticate via API key (X-API-Key or 'Authorization: Bearer ak_...') OR fall back to JWT/session.
+
+    When authenticated via API key, returns a synthetic user dict with `is_api_key=True`.
+    When the request method+path is not in the key's allowed_endpoints, raises 403.
+    """
+    from routes.api_keys import authenticate_api_key
+    api_user = await authenticate_api_key(request)
+    if api_user:
+        return api_user
+    return await get_current_user_from_cookie_or_header(request)
+
+@api_router.post("/admin/migrate-sku")
+async def admin_migrate_sku(request: Request, current_user: dict = Depends(get_current_user)):
+    """
+    Migrate all references from `from_sku_id` to `to_sku_id` across every
+    collection that references SKUs. Supports dry_run=True to preview.
+    Body: { from_sku_id, to_sku_id, dry_run: bool }
+    """
+    if current_user.get('role') not in ('CEO', 'Director', 'System Admin', 'Admin'):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    body = await request.json()
+    from_sku_id = body.get('from_sku_id')
+    to_sku_id = body.get('to_sku_id')
+    dry_run = bool(body.get('dry_run', True))
+
+    if not from_sku_id or not to_sku_id:
+        raise HTTPException(status_code=400, detail="from_sku_id and to_sku_id are required")
+    if from_sku_id == to_sku_id:
+        raise HTTPException(status_code=400, detail="from_sku_id and to_sku_id must differ")
+
+    tdb = get_tdb()
+    from_sku = await tdb.master_skus.find_one({'id': from_sku_id}, {'_id': 0})
+    to_sku = await tdb.master_skus.find_one({'id': to_sku_id}, {'_id': 0})
+    if not from_sku:
+        raise HTTPException(status_code=404, detail=f"from_sku_id {from_sku_id} not found")
+    if not to_sku:
+        raise HTTPException(status_code=404, detail=f"to_sku_id {to_sku_id} not found")
+
+    from_name = from_sku.get('name') or from_sku.get('sku') or from_sku.get('sku_name')
+    to_name = to_sku.get('name') or to_sku.get('sku') or to_sku.get('sku_name')
+    counts = {}
+
+    # 1) accounts.sku_pricing[] (name-based)
+    counts['accounts.sku_pricing'] = await tdb.accounts.count_documents({'sku_pricing.sku': from_name})
+    if not dry_run and counts['accounts.sku_pricing']:
+        await tdb.accounts.update_many(
+            {'sku_pricing.sku': from_name},
+            {'$set': {'sku_pricing.$[elem].sku': to_name}},
+            array_filters=[{'elem.sku': from_name}],
+        )
+
+    # 2) leads.proposed_sku_pricing[] (id-based)
+    counts['leads.proposed_sku_pricing'] = await tdb.leads.count_documents({'proposed_sku_pricing.sku_id': from_sku_id})
+    if not dry_run and counts['leads.proposed_sku_pricing']:
+        await tdb.leads.update_many(
+            {'proposed_sku_pricing.sku_id': from_sku_id},
+            {'$set': {
+                'proposed_sku_pricing.$[elem].sku_id': to_sku_id,
+                'proposed_sku_pricing.$[elem].sku_name': to_name,
+            }},
+            array_filters=[{'elem.sku_id': from_sku_id}],
+        )
+
+    # 3) leads.interested_skus[] (id-based, plain or object)
+    interest_str = await tdb.leads.count_documents({'interested_skus': from_sku_id})
+    interest_obj = await tdb.leads.count_documents({'interested_skus.sku_id': from_sku_id})
+    counts['leads.interested_skus'] = interest_str + interest_obj
+    if not dry_run:
+        if interest_str:
+            await tdb.leads.update_many(
+                {'interested_skus': from_sku_id},
+                {'$set': {'interested_skus.$[elem]': to_sku_id}},
+                array_filters=[{'elem': from_sku_id}],
+            )
+        if interest_obj:
+            await tdb.leads.update_many(
+                {'interested_skus.sku_id': from_sku_id},
+                {'$set': {
+                    'interested_skus.$[elem].sku_id': to_sku_id,
+                    'interested_skus.$[elem].sku_name': to_name,
+                }},
+                array_filters=[{'elem.sku_id': from_sku_id}],
+            )
+
+    # 4) cost_cards
+    counts['cost_cards'] = await tdb.cost_cards.count_documents({'sku_id': from_sku_id})
+    if not dry_run and counts['cost_cards']:
+        await tdb.cost_cards.update_many(
+            {'sku_id': from_sku_id},
+            {'$set': {'sku_id': to_sku_id, 'sku_name': to_name}},
+        )
+
+    # 5) cogs_data (by name, optionally by id)
+    cogs_by_name = await tdb.cogs_data.count_documents({'sku_name': from_name})
+    cogs_by_id = await tdb.cogs_data.count_documents({'sku_id': from_sku_id})
+    counts['cogs_data'] = cogs_by_name + cogs_by_id
+    if not dry_run:
+        if cogs_by_name:
+            await tdb.cogs_data.update_many(
+                {'sku_name': from_name},
+                {'$set': {'sku_name': to_name, 'sku_id': to_sku_id}},
+            )
+        if cogs_by_id:
+            await tdb.cogs_data.update_many(
+                {'sku_id': from_sku_id},
+                {'$set': {'sku_id': to_sku_id, 'sku_name': to_name}},
+            )
+
+    # 6) production_batches
+    counts['production_batches'] = await tdb.production_batches.count_documents({'sku_id': from_sku_id})
+    if not dry_run and counts['production_batches']:
+        await tdb.production_batches.update_many(
+            {'sku_id': from_sku_id},
+            {'$set': {'sku_id': to_sku_id, 'sku_name': to_name}},
+        )
+
+    # 7) account_sku_pricing
+    counts['account_sku_pricing'] = await tdb.account_sku_pricing.count_documents({'sku_id': from_sku_id})
+    if not dry_run and counts['account_sku_pricing']:
+        await tdb.account_sku_pricing.update_many(
+            {'sku_id': from_sku_id},
+            {'$set': {'sku_id': to_sku_id, 'sku_name': to_name}},
+        )
+
+    # 8, 9, 10) shipments / deliveries / invoices items[]
+    for coll_name in ('primary_shipments', 'deliveries', 'provisional_invoices', 'invoices'):
+        try:
+            coll = tdb[coll_name]
+            key = f'{coll_name}.items'
+            counts[key] = await coll.count_documents({'items.sku_id': from_sku_id})
+            if not dry_run and counts[key]:
+                await coll.update_many(
+                    {'items.sku_id': from_sku_id},
+                    {'$set': {
+                        'items.$[elem].sku_id': to_sku_id,
+                        'items.$[elem].sku_name': to_name,
+                    }},
+                    array_filters=[{'elem.sku_id': from_sku_id}],
+                )
+        except Exception:
+            counts[f'{coll_name}.items'] = 0
+
+    total_affected = sum(counts.values())
+    return {
+        'dry_run': dry_run,
+        'from': {'id': from_sku_id, 'name': from_name},
+        'to': {'id': to_sku_id, 'name': to_name},
+        'counts': counts,
+        'total_affected': total_affected,
+        'message': (
+            f"DRY RUN — would update {total_affected} reference(s). Set dry_run=false to apply."
+            if dry_run else
+            f"Migration complete. Updated {total_affected} reference(s) across "
+            f"{sum(1 for v in counts.values() if v > 0)} collection(s)."
+        ),
+    }
+
 
 @api_router.post("/admin/backdate-won-leads")
 async def backdate_won_leads(request: Request):
@@ -1688,9 +1960,15 @@ class SKUModel(BaseModel):
     model_config = ConfigDict(extra="allow")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     sku_name: str  # e.g., "20L Premium", "Nyla – 600 ml / Silver"
+    external_sku_id: Optional[str] = None  # Identifier used by external systems / integrations
     category: str  # e.g., "Jar", "Bottle", "Premium", "Sparkling", "White Label"
     unit: str  # e.g., "20L", "600ml", "1L x 12"
     description: Optional[str] = None
+    # When True, accounts can/must set a per-row MRP for this SKU on the
+    # Account Detail page; activation will then enforce that MRP > 0. When
+    # False (default), the MRP field is hidden in account SKU pricing and
+    # activation does not check MRP for rows referencing this SKU.
+    allow_custom_mrp: bool = False
     is_active: bool = True
     sort_order: int = 0  # For custom ordering in dropdowns
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -1699,19 +1977,33 @@ class SKUModel(BaseModel):
 
 class SKUCreate(BaseModel):
     sku_name: str
+    external_sku_id: Optional[str] = None
     category: str
     unit: str
     description: Optional[str] = None
+    hsn_code: Optional[str] = None  # 4-8 digit HSN code for GST returns + E-way Bill JSON.
+    base_price: Optional[float] = None  # ₹ per bottle. Used for Stock Transfer Schedule-I invoicing & E-way Bill valuation.
+    mrp: Optional[float] = None  # ₹ Maximum Retail Price. Default MRP for the SKU; pre-fills account-level MRP when custom MRP is allowed.
+    allow_custom_mrp: bool = False
     is_active: bool = True
     sort_order: int = 0
+    packaging_config: Optional[dict] = None  # {production: [{id,name,units,is_default}], stock_in: [...], stock_out: [...]}
+    cogs_components_values: Optional[Dict[str, Optional[float]]] = None  # {component_key: price_in_rupees}
 
 class SKUUpdate(BaseModel):
     sku_name: Optional[str] = None
+    external_sku_id: Optional[str] = None
     category: Optional[str] = None
     unit: Optional[str] = None
     description: Optional[str] = None
+    hsn_code: Optional[str] = None  # set to "" to clear effectively
+    base_price: Optional[float] = None  # ₹ per bottle (no margin); set to 0 to clear effectively
+    mrp: Optional[float] = None  # ₹ Maximum Retail Price (default for the SKU); set to 0 to clear effectively
+    allow_custom_mrp: Optional[bool] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
+    packaging_config: Optional[dict] = None
+    cogs_components_values: Optional[Dict[str, Optional[float]]] = None  # merged (not replaced) on PUT; null removes a key
 
 # Default SKUs to seed if database is empty
 DEFAULT_SKUS = [
@@ -1746,7 +2038,7 @@ async def seed_default_skus():
 @api_router.get("/master-skus")
 async def get_master_skus(
     include_inactive: bool = False,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_user_or_api_key)
 ):
     """Get the master list of all available SKUs from database"""
     # Seed defaults if empty
@@ -1762,11 +2054,18 @@ async def get_master_skus(
             'id': sku.get('id'),
             'sku': sku.get('sku_name'),
             'sku_name': sku.get('sku_name'),
+            'external_sku_id': sku.get('external_sku_id'),
             'category': sku.get('category'),
             'unit': sku.get('unit'),
             'description': sku.get('description'),
+            'hsn_code': sku.get('hsn_code'),
+            'base_price': sku.get('base_price'),
+            'mrp': sku.get('mrp'),
+            'allow_custom_mrp': bool(sku.get('allow_custom_mrp', False)),
             'is_active': sku.get('is_active', True),
-            'sort_order': sku.get('sort_order', 0)
+            'sort_order': sku.get('sort_order', 0),
+            'packaging_config': sku.get('packaging_config'),
+            'cogs_components_values': sku.get('cogs_components_values') or {}
         })
     
     return {'skus': formatted_skus}
@@ -1781,11 +2080,20 @@ async def create_sku(
     existing = await db.master_skus.find_one({'sku_name': sku_data.sku_name})
     if existing:
         raise HTTPException(status_code=400, detail=f"SKU '{sku_data.sku_name}' already exists")
-    
+
+    # Enforce uniqueness on external_sku_id (when provided)
+    if sku_data.external_sku_id:
+        ext_dup = await db.master_skus.find_one({'external_sku_id': sku_data.external_sku_id})
+        if ext_dup:
+            raise HTTPException(status_code=400, detail=f"External SKU ID '{sku_data.external_sku_id}' is already used by another SKU")
+
     sku = SKUModel(**sku_data.model_dump(), created_by=current_user.get('id'))
     doc = sku.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
+    # Add packaging_config if provided
+    if sku_data.packaging_config:
+        doc['packaging_config'] = sku_data.packaging_config
     
     await db.master_skus.insert_one(doc)
     
@@ -1793,11 +2101,18 @@ async def create_sku(
         'id': sku.id,
         'sku': sku.sku_name,
         'sku_name': sku.sku_name,
+        'external_sku_id': sku.external_sku_id,
         'category': sku.category,
         'unit': sku.unit,
         'description': sku.description,
+        'hsn_code': doc.get('hsn_code'),
+        'base_price': doc.get('base_price'),
+        'mrp': doc.get('mrp'),
+        'allow_custom_mrp': bool(doc.get('allow_custom_mrp', False)),
         'is_active': sku.is_active,
-        'sort_order': sku.sort_order
+        'sort_order': sku.sort_order,
+        'packaging_config': doc.get('packaging_config'),
+        'cogs_components_values': doc.get('cogs_components_values') or {}
     }
 
 @api_router.put("/master-skus/{sku_id}")
@@ -1816,22 +2131,86 @@ async def update_sku(
         duplicate = await db.master_skus.find_one({'sku_name': sku_data.sku_name, 'id': {'$ne': sku_id}})
         if duplicate:
             raise HTTPException(status_code=400, detail=f"SKU '{sku_data.sku_name}' already exists")
-    
+
+    # Enforce uniqueness on external_sku_id (when changing or set)
+    if sku_data.external_sku_id and sku_data.external_sku_id != existing.get('external_sku_id'):
+        ext_dup = await db.master_skus.find_one({'external_sku_id': sku_data.external_sku_id, 'id': {'$ne': sku_id}})
+        if ext_dup:
+            raise HTTPException(status_code=400, detail=f"External SKU ID '{sku_data.external_sku_id}' is already used by another SKU")
+
     update_dict = {k: v for k, v in sku_data.model_dump().items() if v is not None}
+    # Merge (not replace) cogs_components_values dict
+    if 'cogs_components_values' in update_dict:
+        new_vals = update_dict.pop('cogs_components_values') or {}
+        existing_vals = existing.get('cogs_components_values') or {}
+        merged = {**existing_vals}
+        for k, v in new_vals.items():
+            if v is None or v == '':
+                merged.pop(k, None)
+            else:
+                try:
+                    merged[k] = float(v)
+                except (TypeError, ValueError):
+                    pass
+        update_dict['cogs_components_values'] = merged
     update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     await db.master_skus.update_one({'id': sku_id}, {'$set': update_dict})
+
+    # If the display name changed, refresh every denormalised snapshot of
+    # `sku_name` across transactional collections so downstream views (stock,
+    # deliveries, returns, transfers, invoices, …) stop showing the old label.
+    # master_skus is global — same renamed name should propagate to every
+    # tenant that uses this SKU.
+    new_name = update_dict.get('sku_name')
+    if new_name and new_name != existing.get('sku_name'):
+        try:
+            from routes.admin_sku_migration import COLLECTIONS as _SKU_DENORM_COLS
+            from routes.admin_sku_migration import EMBEDDED_NAME_ONLY as _SKU_EMBED_COLS
+            for col_name, shape in _SKU_DENORM_COLS:
+                if shape == "top":
+                    await db[col_name].update_many(
+                        {"sku_id": sku_id, "sku_name": {"$ne": new_name}},
+                        {"$set": {"sku_name": new_name}},
+                    )
+                else:  # items[]
+                    await db[col_name].update_many(
+                        {"items.sku_id": sku_id},
+                        {"$set": {"items.$[el].sku_name": new_name}},
+                        array_filters=[{"el.sku_id": sku_id, "el.sku_name": {"$ne": new_name}}],
+                    )
+            # Embedded name-only arrays (accounts.sku_pricing[],
+            # leads.proposed_sku_pricing[], sampling_trials.sku_plans[]).
+            # Only refresh rows already linked via `sku_id` — orphaned rows
+            # need the admin to re-link via the "Sync SKU names" tool first.
+            for col_name, array_field, name_field in _SKU_EMBED_COLS:
+                await db[col_name].update_many(
+                    {f"{array_field}.sku_id": sku_id},
+                    {"$set": {f"{array_field}.$[el].{name_field}": new_name}},
+                    array_filters=[{"el.sku_id": sku_id, f"el.{name_field}": {"$ne": new_name}}],
+                )
+        except Exception as e:
+            # Don't block the rename if rehydration partially fails — admin
+            # can always replay /admin/migrations/sku/rehydrate-sku-names.
+            logger.exception("SKU rename rehydration failed for sku_id=%s: %s", sku_id, e)
     
     updated = await db.master_skus.find_one({'id': sku_id}, {'_id': 0})
     return {
         'id': updated.get('id'),
         'sku': updated.get('sku_name'),
         'sku_name': updated.get('sku_name'),
+        'external_sku_id': updated.get('external_sku_id'),
         'category': updated.get('category'),
         'unit': updated.get('unit'),
         'description': updated.get('description'),
+        'hsn_code': updated.get('hsn_code'),
+        'base_price': updated.get('base_price'),
+        'mrp': updated.get('mrp'),
+        'allow_custom_mrp': bool(updated.get('allow_custom_mrp', False)),
         'is_active': updated.get('is_active', True),
-        'sort_order': updated.get('sort_order', 0)
+        'sort_order': updated.get('sort_order', 0),
+        'packaging_config': updated.get('packaging_config'),
+        'cogs_components_values': updated.get('cogs_components_values') or {}
     }
 
 @api_router.delete("/master-skus/{sku_id}")
@@ -1852,6 +2231,24 @@ async def delete_sku(
     
     return {'message': 'SKU deactivated successfully', 'id': sku_id}
 
+@api_router.delete("/master-skus/{sku_id}/permanent")
+async def hard_delete_sku(
+    sku_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Permanently delete an INACTIVE SKU. Restricted to CEO / Admin / System Admin."""
+    role = (current_user.get('role') or '').strip()
+    if role not in ('CEO', 'Admin', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and Admin can permanently delete SKUs')
+    existing = await db.master_skus.find_one({'id': sku_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="SKU not found")
+    if existing.get('is_active', True) is not False:
+        raise HTTPException(status_code=400, detail="Only inactive SKUs can be permanently deleted. Deactivate it first.")
+    await db.master_skus.delete_one({'id': sku_id})
+    return {'message': 'SKU permanently deleted', 'id': sku_id}
+
+
 @api_router.get("/sku-categories")
 async def get_sku_categories(current_user: dict = Depends(get_current_user)):
     """Get list of unique SKU categories"""
@@ -1859,49 +2256,309 @@ async def get_sku_categories(current_user: dict = Depends(get_current_user)):
     categories = await db.master_skus.distinct('category')
     return {'categories': sorted(categories)}
 
+
+# ── Packaging Types ──────────────────────────────────────────
+
+class PackagingTypeCreate(BaseModel):
+    name: str
+    units_per_package: int
+    description: Optional[str] = None
+
+class PackagingTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    units_per_package: Optional[int] = None
+    description: Optional[str] = None
+
+@api_router.get("/packaging-types")
+async def list_packaging_types(current_user: dict = Depends(get_current_user)):
+    """Get all packaging types"""
+    types = await db.packaging_types.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+    return {"packaging_types": types}
+
+@api_router.post("/packaging-types")
+async def create_packaging_type(data: PackagingTypeCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new packaging type"""
+    existing = await db.packaging_types.find_one({"name": data.name})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Packaging type '{data.name}' already exists")
+    if data.units_per_package <= 0:
+        raise HTTPException(status_code=400, detail="Units per package must be > 0")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "units_per_package": data.units_per_package,
+        "description": data.description or "",
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.packaging_types.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/packaging-types/{type_id}")
+async def update_packaging_type(type_id: str, data: PackagingTypeUpdate, current_user: dict = Depends(get_current_user)):
+    """Update a packaging type"""
+    existing = await db.packaging_types.find_one({"id": type_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Packaging type not found")
+    if data.name and data.name != existing.get("name"):
+        dup = await db.packaging_types.find_one({"name": data.name, "id": {"$ne": type_id}})
+        if dup:
+            raise HTTPException(status_code=400, detail=f"Packaging type '{data.name}' already exists")
+    updates = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if data.name is not None:
+        updates["name"] = data.name
+    if data.units_per_package is not None:
+        if data.units_per_package <= 0:
+            raise HTTPException(status_code=400, detail="Units per package must be > 0")
+        updates["units_per_package"] = data.units_per_package
+    if data.description is not None:
+        updates["description"] = data.description
+    await db.packaging_types.update_one({"id": type_id}, {"$set": updates})
+    updated = await db.packaging_types.find_one({"id": type_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/packaging-types/{type_id}")
+async def delete_packaging_type(type_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a packaging type"""
+    result = await db.packaging_types.delete_one({"id": type_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Packaging type not found")
+    return {"message": "Packaging type deleted"}
+
 @api_router.get("/cogs/{city}")
 async def get_cogs_data(city: str, current_user: dict = Depends(get_current_user)):
-    """Get COGS data for all SKUs in a city"""
-    
-    # Get active SKUs from master list
+    """Get COGS data for all SKUs in a city.
+
+    Source of truth = `master_skus` (where is_active != False). The endpoint:
+      • returns ONE row per *active* master SKU — never returns rows for SKUs
+        that were renamed away or deactivated;
+      • lazily backfills `sku_id` on legacy cogs_data rows so future lookups
+        can match by id, not name;
+      • auto-creates default rows for active SKUs that don't yet have one,
+        always stamping the master `sku_id`;
+      • overlays per-SKU master COGS values so renames in SKU Management
+        propagate automatically.
+    """
+
+    tenant_id = get_current_tenant_id()
+
+    # Active master SKUs — the only source of truth for what shows up on the
+    # COGS screen. Anything else is legacy noise.
     await seed_default_skus()
-    master_sku_docs = await db.master_skus.find({'is_active': {'$ne': False}}, {'_id': 0, 'sku_name': 1}).to_list(200)
-    master_skus = [s['sku_name'] for s in master_sku_docs]
-    
-    cogs_data = await get_tdb().cogs_data.find({'city': city}, {'_id': 0}).to_list(100)
-    
-    # Create default data for SKUs that don't have data yet
-    existing_skus = [c['sku_name'] for c in cogs_data]
-    for sku in master_skus:
-        if sku not in existing_skus:
-            default_data = COGSData(sku_name=sku, city=city)
-            doc = default_data.model_dump()
-            doc['created_at'] = doc['created_at'].isoformat()
-            if doc.get('last_edited_at'):
-                doc['last_edited_at'] = doc['last_edited_at'].isoformat()
-            await get_tdb().cogs_data.insert_one(doc)
-            cogs_data.append(default_data.model_dump())
-    
+    master_sku_docs = await db.master_skus.find(
+        {'is_active': {'$ne': False}},
+        {'_id': 0, 'id': 1, 'sku_name': 1, 'cogs_components_values': 1, 'category': 1, 'sort_order': 1}
+    ).to_list(200)
+    active_id_set = {s['id'] for s in master_sku_docs}
+    active_name_to_id = {s['sku_name']: s['id'] for s in master_sku_docs}
+    master_name_by_id = {s['id']: s['sku_name'] for s in master_sku_docs}
+    master_values_by_id = {
+        s['id']: (s.get('cogs_components_values') or {}) for s in master_sku_docs
+    }
+    # Per-SKU ordering metadata so the COGS table mirrors SKU Management's
+    # display order: category (alphabetical) → sort_order (asc) → name.
+    master_meta_by_id = {
+        s['id']: {
+            'category': (s.get('category') or 'Other'),
+            'sort_order': (s.get('sort_order') if s.get('sort_order') is not None else 0),
+        } for s in master_sku_docs
+    }
+
+    # Resolve which keys are master-managed (so we know what to overlay)
+    try:
+        comps = await db.cogs_components.find(
+            {'tenant_id': tenant_id},
+            {'_id': 0, 'key': 1, 'unit': 1}
+        ).to_list(200)
+        master_managed_keys = {c['key'] for c in comps if c.get('unit') == 'rupee'}
+    except Exception:
+        master_managed_keys = set()
+    # Always exclude calculator-owned system keys
+    master_managed_keys -= {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}
+
+    # Pull all rows for this city. Some are legacy (no sku_id), some carry the
+    # current sku_id, some are orphans from renamed/deactivated SKUs.
+    cogs_rows = await get_tdb().cogs_data.find({'city': city}, {'_id': 0}).to_list(500)
+
+    # Backfill `sku_id` on legacy rows by name match (one-shot, persistent).
+    # This is what lets the canonical sku_id-based filter work going forward
+    # without forcing the user to rebuild every row.
+    rows_by_sku_id: dict = {}
+    for row in cogs_rows:
+        sid = row.get('master_sku_id') or row.get('sku_id')
+        if not sid:
+            sid = active_name_to_id.get(row.get('sku_name'))
+            if sid:
+                row['sku_id'] = sid
+                await get_tdb().cogs_data.update_one(
+                    {'id': row['id']},
+                    {'$set': {'sku_id': sid}}
+                )
+        if not sid or sid not in active_id_set:
+            # Orphan — SKU was renamed away / deactivated. Skip.
+            continue
+        # Always reflect the *current* master name (handles SKU renames).
+        row['sku_name'] = master_name_by_id[sid]
+        row['sku_id'] = sid
+        # If multiple legacy rows exist for the same SKU (rename history),
+        # the most-recent one wins.
+        existing = rows_by_sku_id.get(sid)
+        if existing is None or (row.get('last_edited_at') or '') > (existing.get('last_edited_at') or ''):
+            rows_by_sku_id[sid] = row
+
+    # Auto-create a default row for every active SKU that doesn't yet have one.
+    # Always stamps the canonical sku_id so we don't create another orphan.
+    for sid, sku_name in master_name_by_id.items():
+        if sid in rows_by_sku_id:
+            continue
+        default_data = COGSData(sku_name=sku_name, city=city)
+        doc = default_data.model_dump()
+        doc['sku_id'] = sid
+        doc['created_at'] = doc['created_at'].isoformat()
+        if doc.get('last_edited_at'):
+            doc['last_edited_at'] = doc['last_edited_at'].isoformat()
+        await get_tdb().cogs_data.insert_one(doc)
+        rows_by_sku_id[sid] = doc
+
+    cogs_data = list(rows_by_sku_id.values())
+
     # Get user names for last_edited_by
     user_ids = [c.get('last_edited_by') for c in cogs_data if c.get('last_edited_by')]
     users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     user_map = {u['id']: u['name'] for u in users}
-    
-    # Add editor names
+
+    # Overlay master values + add master_sku_id for client-side dispatch
     for data in cogs_data:
         if data.get('last_edited_by'):
             data['editor_name'] = user_map.get(data['last_edited_by'], 'Unknown')
-    
+        sid = data['sku_id']
+        master_vals = master_values_by_id.get(sid) or {}
+        # Defensive: legacy/corrupt rows may store `custom_components` as a list
+        # (or other non-dict). Coerce to a dict so the overlay + reads below
+        # never crash with "list indices must be integers".
+        if not isinstance(data.get('custom_components'), dict):
+            data['custom_components'] = {}
+        # Overlay master-managed keys (legacy + custom contributors)
+        for k, v in master_vals.items():
+            if k in master_managed_keys or k not in {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}:
+                # Top-level legacy key (primary/secondary/manufacturing) OR custom key
+                if k in {'primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost'}:
+                    data[k] = v
+                else:
+                    cc = data.get('custom_components') or {}
+                    cc[k] = v
+                    data['custom_components'] = cc
+        data['master_sku_id'] = sid
+        # Recompute total_cogs / derived fields based on overlaid values
+        try:
+            # COGS = master-managed components only (primary/secondary/manufacturing + custom).
+            # Outbound logistics is NOT part of COGS — it's added post-margin into landing price.
+            total_cogs = 0.0
+            for k in master_managed_keys:
+                if k in {'primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost'}:
+                    total_cogs += float(data.get(k) or 0)
+                else:
+                    total_cogs += float((data.get('custom_components') or {}).get(k) or 0)
+            margin_pct = float(data.get('gross_margin') or 0)
+            dist_pct = float(data.get('distribution_cost') or 0)
+            outbound_logistics = float(data.get('outbound_logistics_cost') or 0)
+            gross_margin_rupees = total_cogs * (margin_pct / 100)
+            # Logistics is added after margin (it's a passthrough, not a cost-of-goods)
+            base_cost = total_cogs + gross_margin_rupees + outbound_logistics
+            if dist_pct >= 100:
+                landing = 0
+            elif dist_pct > 0:
+                landing = base_cost / (1 - dist_pct / 100)
+            else:
+                landing = base_cost
+            data['total_cogs'] = round(total_cogs, 2)
+            data['ex_factory_price'] = round(base_cost, 2)
+            data['base_cost'] = round(base_cost, 2)
+            data['minimum_landing_price'] = round(landing, 2)
+        except Exception:
+            pass
+
+    # Order rows to mirror SKU Management's display: category (alphabetical,
+    # case-insensitive) → sort_order (asc) → SKU name. Rows whose master SKU
+    # lacks a category fall under "Other" (same as SKU Management).
+    def _sku_sort_key(d):
+        meta = master_meta_by_id.get(d.get('sku_id')) or {}
+        cat = str(meta.get('category') or 'Other').lower()
+        try:
+            order = float(meta.get('sort_order') or 0)
+        except (TypeError, ValueError):
+            order = 0.0
+        return (cat, order, str(d.get('sku_name') or '').lower())
+    cogs_data.sort(key=_sku_sort_key)
+
     return {'cogs_data': cogs_data}
 
 @api_router.put("/cogs/{sku_id}")
 async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: dict = Depends(get_current_user)):
-    """Update COGS data for a SKU"""
-    
+    """Update COGS data for a SKU.
+
+    Master-managed COGS components (e.g., primary/secondary/manufacturing + any
+    custom rupee components in cogs_components master) are stored on the SKU
+    master so they apply across all cities. Calculator-owned system columns
+    (outbound_logistics_cost, distribution_cost, gross_margin) and editor
+    metadata stay on the per-city cogs_data row.
+    """
     update_data = updates.model_dump(exclude_none=True)
-    
+
+    # Merge custom_components dict (don't replace whole dict — patch keys)
+    if 'custom_components' in update_data:
+        patch = update_data.pop('custom_components') or {}
+        existing_cc = (await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0, 'custom_components': 1}) or {}).get('custom_components')
+        if not isinstance(existing_cc, dict):
+            existing_cc = {}  # guard against legacy/corrupt non-dict values
+        merged = {**existing_cc, **{k: float(v) for k, v in patch.items() if v is not None}}
+        update_data['custom_components'] = merged
+
+    # Look up the cogs_data row's sku_name so we can dispatch master keys to SKU master
+    row = await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0, 'sku_name': 1})
+    sku_name = (row or {}).get('sku_name')
+
+    # Resolve master-managed rupee component keys (excluding calculator-owned system keys)
+    try:
+        comps = await db.cogs_components.find(
+            {'tenant_id': get_current_tenant_id()},
+            {'_id': 0, 'key': 1, 'unit': 1}
+        ).to_list(200)
+        master_managed_keys = {c['key'] for c in comps if c.get('unit') == 'rupee'}
+    except Exception:
+        master_managed_keys = set()
+    master_managed_keys -= {'outbound_logistics_cost', 'distribution_cost', 'gross_margin'}
+    LEGACY_TOP = {'primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost'}
+
+    # Dispatch master-managed values to SKU master (cogs_components_values)
+    if sku_name:
+        master_patch = {}
+        for k in list(update_data.keys()):
+            if k in master_managed_keys and k in LEGACY_TOP:
+                master_patch[k] = float(update_data[k] or 0)
+        # Custom components patches that are master-managed:
+        for k, v in (update_data.get('custom_components') or {}).items():
+            if k in master_managed_keys:
+                master_patch[k] = float(v or 0)
+        if master_patch:
+            sku_doc = await db.master_skus.find_one({'sku_name': sku_name}, {'_id': 0, 'id': 1, 'cogs_components_values': 1})
+            if sku_doc:
+                existing_master = sku_doc.get('cogs_components_values')
+                if not isinstance(existing_master, dict):
+                    existing_master = {}  # guard against legacy/corrupt non-dict values
+                merged_master = {**existing_master, **master_patch}
+                await db.master_skus.update_one(
+                    {'id': sku_doc['id']},
+                    {'$set': {
+                        'cogs_components_values': merged_master,
+                        'updated_at': datetime.now(timezone.utc).isoformat(),
+                    }}
+                )
+
     # Calculate computed values
-    if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost', 'distribution_cost']):
+    if any(k in update_data for k in ['primary_packaging_cost', 'secondary_packaging_cost', 'manufacturing_variable_cost', 'gross_margin', 'outbound_logistics_cost', 'distribution_cost', 'custom_components']):
         existing = await get_tdb().cogs_data.find_one({'id': sku_id}, {'_id': 0})
         if existing:
             # Merge with existing data
@@ -1911,24 +2568,67 @@ async def update_cogs_data(sku_id: str, updates: COGSDataUpdate, current_user: d
             margin = update_data.get('gross_margin', existing.get('gross_margin', 0))
             logistics = update_data.get('outbound_logistics_cost', existing.get('outbound_logistics_cost', 0))
             distribution = update_data.get('distribution_cost', existing.get('distribution_cost', 0))
-            
-            # Calculate
-            total_cogs = primary + secondary + manufacturing
-            gross_margin_rupees = total_cogs * (margin / 100)  # Convert % to rupees
+            cc = update_data.get('custom_components', existing.get('custom_components', {}))
+            if not isinstance(cc, dict):
+                cc = {}  # guard against legacy/corrupt non-dict values
+
+            # Resolve master config for active components & units
+            try:
+                active_comps = await db.cogs_components.find(
+                    {'tenant_id': get_current_tenant_id(), 'is_active': True},
+                    {'_id': 0, 'key': 1, 'unit': 1}
+                ).to_list(200)
+            except Exception:
+                active_comps = []
+            active_keys = {c['key']: c.get('unit', 'rupee') for c in active_comps}
+
+            # System calculator columns are always treated as active (they are not in the master).
+            SYSTEM_CALC_KEYS = {
+                'outbound_logistics_cost': 'rupee',
+                'distribution_cost': 'percent',
+                'gross_margin': 'percent',
+            }
+
+            def _on(key, unit):
+                # System columns are always on
+                if SYSTEM_CALC_KEYS.get(key) == unit:
+                    return True
+                # Fail-open if master is empty (legacy behavior)
+                if not active_keys:
+                    return True
+                return active_keys.get(key) == unit
+
+            # Total COGS = sum of all active ₹ master-managed components (legacy + custom).
+            # Outbound logistics is NOT part of COGS — added post-margin into landing price below.
+            total_cogs = 0.0
+            if _on('primary_packaging_cost', 'rupee'):
+                total_cogs += float(primary or 0)
+            if _on('secondary_packaging_cost', 'rupee'):
+                total_cogs += float(secondary or 0)
+            if _on('manufacturing_variable_cost', 'rupee'):
+                total_cogs += float(manufacturing or 0)
+            for k, v in cc.items():
+                if active_keys.get(k) == 'rupee':
+                    try:
+                        total_cogs += float(v or 0)
+                    except (TypeError, ValueError):
+                        pass
+
+            eff_margin = float(margin or 0) if _on('gross_margin', 'percent') else 0.0
+            gross_margin_rupees = total_cogs * (eff_margin / 100)
             ex_factory = total_cogs + gross_margin_rupees
-            
-            # Base Cost = Primary + Secondary + Mfg + Gross Margin (₹) + Logistics
-            base_cost = primary + secondary + manufacturing + gross_margin_rupees + logistics
-            
-            # Minimum Landing = Base Cost / (1 - Distribution %)
-            # After paying distribution cost %, remaining amount = base cost
-            if distribution >= 100:
-                landing_price = 0  # Invalid: distribution can't be 100% or more
-            elif distribution > 0:
-                landing_price = base_cost / (1 - distribution / 100)
+            # Logistics is a passthrough cost added on top of COGS+margin (not part of COGS)
+            outbound_logistics = float(logistics or 0) if _on('outbound_logistics_cost', 'rupee') else 0.0
+            base_cost = total_cogs + gross_margin_rupees + outbound_logistics
+
+            eff_dist = float(distribution or 0) if _on('distribution_cost', 'percent') else 0.0
+            if eff_dist >= 100:
+                landing_price = 0
+            elif eff_dist > 0:
+                landing_price = base_cost / (1 - eff_dist / 100)
             else:
-                landing_price = base_cost  # No distribution cost
-            
+                landing_price = base_cost
+
             update_data['total_cogs'] = total_cogs
             update_data['ex_factory_price'] = ex_factory
             update_data['base_cost'] = base_cost
@@ -2033,7 +2733,7 @@ async def copy_costs_to_all_cities(request: CopyCostsRequest, current_user: dict
         cities_updated += 1
     
     return {
-        'message': f'Values copied successfully',
+        'message': 'Values copied successfully',
         'source_city': source_city,
         'cities_updated': cities_updated
     }
@@ -2095,34 +2795,56 @@ async def delete_all_cogs_for_city(city: str, current_user: dict = Depends(get_c
 @api_router.post("/cogs/cleanup-invalid-skus")
 async def cleanup_invalid_skus(current_user: dict = Depends(get_current_user)):
     """
-    Remove all SKUs from COGS table that are not in the master SKU list.
-    Only CEO, Director, and System Admin can perform this action.
+    Delete every cogs_data row that doesn't belong to a *currently active*
+    master SKU.
+
+    Orphan detection is sku_id-based:
+      • Rows already carrying a `sku_id` are checked against the active master
+        SKU id set.
+      • Legacy rows without `sku_id` are matched by `sku_name`; matches are
+        backfilled in-place, non-matches are deleted.
+
+    Only CEO / Director / System Admin can run this.
     """
     if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
-    # Get all master SKU names (field is 'sku_name' in master_skus collection)
-    master_skus = await db.master_skus.find({'is_active': True}, {'sku_name': 1}).to_list(5000)
-    master_sku_names = set(sku['sku_name'] for sku in master_skus if sku.get('sku_name'))
-    
-    # Find all unique SKU names in COGS data
-    cogs_skus = await get_tdb().cogs_data.distinct('sku_name')
-    
-    # Find invalid SKUs (in COGS but not in master)
-    invalid_skus = [sku for sku in cogs_skus if sku not in master_sku_names]
-    
-    # Delete invalid SKU entries
-    if invalid_skus:
-        result = await get_tdb().cogs_data.delete_many({'sku_name': {'$in': invalid_skus}})
+
+    master_skus = await db.master_skus.find(
+        {'is_active': True},
+        {'_id': 0, 'id': 1, 'sku_name': 1},
+    ).to_list(5000)
+    active_ids = {s['id'] for s in master_skus if s.get('id')}
+    active_name_to_id = {s['sku_name']: s['id'] for s in master_skus if s.get('sku_name')}
+
+    rows = await get_tdb().cogs_data.find({}, {'_id': 0, 'id': 1, 'sku_id': 1, 'master_sku_id': 1, 'sku_name': 1}).to_list(20000)
+    orphan_ids: list = []
+    backfilled = 0
+    orphan_labels: list = []
+    for r in rows:
+        sid = r.get('sku_id') or r.get('master_sku_id')
+        if not sid and r.get('sku_name') in active_name_to_id:
+            # Legacy row but the SKU name is still valid — backfill.
+            sid = active_name_to_id[r['sku_name']]
+            await get_tdb().cogs_data.update_one(
+                {'id': r['id']}, {'$set': {'sku_id': sid}}
+            )
+            backfilled += 1
+            continue
+        if not sid or sid not in active_ids:
+            orphan_ids.append(r['id'])
+            orphan_labels.append(r.get('sku_name') or sid or '(unknown)')
+
+    deleted_count = 0
+    if orphan_ids:
+        result = await get_tdb().cogs_data.delete_many({'id': {'$in': orphan_ids}})
         deleted_count = result.deleted_count
-    else:
-        deleted_count = 0
-    
+
     return {
         'message': 'Cleanup completed',
-        'invalid_skus_found': invalid_skus,
+        'invalid_skus_found': sorted(set(orphan_labels)),
         'records_deleted': deleted_count,
-        'master_sku_count': len(master_sku_names)
+        'records_backfilled': backfilled,
+        'master_sku_count': len(active_ids),
     }
 
 # ============= GOOGLE OAUTH AUTH ROUTES =============
@@ -2145,6 +2867,8 @@ async def google_oauth_callback(request: Request, response: Response):
         if not redirect_uri:
             redirect_uri = os.environ.get('GOOGLE_OAUTH_REDIRECT_URI', '')
         
+        logger.info(f'Google OAuth callback - redirect_uri: {redirect_uri}, client_id: {client_id[:10]}...')
+        
         # Exchange code for tokens
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
@@ -2161,7 +2885,9 @@ async def google_oauth_callback(request: Request, response: Response):
             tokens = token_response.json()
             
             if 'error' in tokens:
-                raise HTTPException(status_code=400, detail=tokens['error'])
+                logger.error(f'Google token exchange error: {tokens}')
+                error_desc = tokens.get('error_description', tokens.get('error', 'Token exchange failed'))
+                raise HTTPException(status_code=400, detail=f'Google auth error: {error_desc}')
             
             # Get user info
             user_info_response = await client.get(
@@ -2237,7 +2963,7 @@ async def google_oauth_callback(request: Request, response: Response):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f'OAuth callback error: {str(e)}')
+        logger.error(f'OAuth callback error: {type(e).__name__}: {str(e)}')
         raise HTTPException(status_code=500, detail=f'Authentication failed: {str(e)}')
 
 @api_router.post("/auth/google-session")
@@ -3196,8 +3922,9 @@ async def get_sales_roi_summary(
     user_id = current_user['id']
     user_department = current_user.get('department', '')
     
-    # Check if user belongs to Sales department (check if department contains 'sales')
-    if 'sales' not in user_department.lower():
+    # Check if user belongs to Sales department
+    dept_list = user_department if isinstance(user_department, list) else [user_department or '']
+    if not any('sales' in (d or '').lower() for d in dept_list):
         raise HTTPException(
             status_code=403, 
             detail='Sales ROI Summary is only available for Sales department employees'
@@ -3249,7 +3976,12 @@ async def get_sales_roi_summary(
     ).to_list(100)
     
     # Filter only Sales department members for CTC calculation
-    sales_team = [m for m in team_members if (m.get('department') or '').lower() == 'sales']
+    def is_sales_dept(m):
+        d = m.get('department', '')
+        if isinstance(d, list):
+            return any('sales' in (x or '').lower() for x in d)
+        return 'sales' in (d or '').lower()
+    sales_team = [m for m in team_members if is_sales_dept(m)]
     
     # ==================== COST SECTION ====================
     
@@ -3749,6 +4481,20 @@ async def create_lead(lead_input: LeadCreate, current_user: dict = Depends(get_c
     
     await get_tdb().leads.insert_one(doc)
     
+    # Best-effort: create a dedicated Drive folder for this lead (no-op if
+    # Drive isn't configured for this tenant).
+    try:
+        from utils.google_drive_storage import ensure_lead_folder
+        from core.tenant import get_current_tenant_id as _gctid
+        folder_id = await ensure_lead_folder(_gctid(), lead_obj.lead_id)
+        if folder_id:
+            await get_tdb().leads.update_one(
+                {'id': lead_obj.id},
+                {'$set': {'drive_folder_id': folder_id}}
+            )
+    except Exception:
+        logger.exception('Drive folder creation failed for lead %s', lead_obj.lead_id)
+    
     # Create initial activity
     activity = Activity(
         lead_id=lead_obj.id,
@@ -3778,6 +4524,9 @@ async def get_leads(
     quadrant: Optional[str] = None,
     target_closure_month: Optional[int] = None,
     target_closure_year: Optional[int] = None,
+    target_closure_months: Optional[str] = None,
+    target_closure_years: Optional[str] = None,
+    pipeline_view: Optional[bool] = None,
     sort_by: Optional[str] = 'created_at',
     sort_order: Optional[str] = 'desc',
     no_limit: Optional[bool] = False,
@@ -3840,11 +4589,28 @@ async def get_leads(
             query['assigned_to'] = {'$in': assigned_list}
     
     # Add time filter
-    # Add target closure month/year filter
-    if target_closure_month is not None:
+    # Add target closure month/year filter (single or multi for pipeline view)
+    if target_closure_months and target_closure_years:
+        months = [int(m) for m in target_closure_months.split(',') if m.strip()]
+        years = [int(y) for y in target_closure_years.split(',') if y.strip()]
+        # Build $or conditions for each month/year pair
+        tc_conditions = []
+        for i in range(min(len(months), len(years))):
+            tc_conditions.append({'target_closure_month': months[i], 'target_closure_year': years[i]})
+        if len(tc_conditions) == 1:
+            query['target_closure_month'] = tc_conditions[0]['target_closure_month']
+            query['target_closure_year'] = tc_conditions[0]['target_closure_year']
+        elif tc_conditions:
+            if '$or' in query:
+                query['$and'] = query.get('$and', [])
+                query['$and'].append({'$or': query.pop('$or')})
+                query['$and'].append({'$or': tc_conditions})
+            else:
+                query['$or'] = tc_conditions
+    elif target_closure_month is not None:
         query['target_closure_month'] = target_closure_month
-    if target_closure_year is not None:
-        query['target_closure_year'] = target_closure_year
+        if target_closure_year is not None:
+            query['target_closure_year'] = target_closure_year
     
     if time_filter and time_filter != 'all' and time_filter != 'lifetime':
         now = datetime.now(timezone.utc)
@@ -3898,9 +4664,15 @@ async def get_leads(
             start_date_str = start_date.isoformat()
             if end_date:
                 end_date_str = end_date.isoformat()
-                query['created_at'] = {'$gte': start_date_str, '$lte': end_date_str}
+                date_range = {'$gte': start_date_str, '$lte': end_date_str}
             else:
-                query['created_at'] = {'$gte': start_date_str}
+                date_range = {'$gte': start_date_str}
+            # Match leads created OR updated within the time period
+            date_or = [{'created_at': date_range}, {'updated_at': date_range}]
+            if '$or' in query:
+                query['$and'] = [{'$or': query.pop('$or')}, {'$or': date_or}]
+            else:
+                query['$or'] = date_or
     
     # Add search filter
     search_filter = None
@@ -3935,15 +4707,23 @@ async def get_leads(
             quadrant_filter = {'scoring.quadrant': {'$in': quadrants}}
     
     # Combine search and quadrant filters properly with $and
-    if search_filter and quadrant_filter:
-        query['$and'] = [search_filter, quadrant_filter]
-    elif search_filter:
-        query['$or'] = search_filter['$or']
-    elif quadrant_filter:
-        if '$or' in quadrant_filter:
-            query['$or'] = quadrant_filter['$or']
-        else:
-            query.update(quadrant_filter)
+    extra_conditions = []
+    if search_filter:
+        extra_conditions.append(search_filter)
+    if quadrant_filter:
+        extra_conditions.append(quadrant_filter)
+    
+    if extra_conditions:
+        if '$and' not in query:
+            query['$and'] = []
+        # Move existing $or into $and if we need to add more $or conditions
+        if '$or' in query and extra_conditions:
+            query['$and'].append({'$or': query.pop('$or')})
+        for cond in extra_conditions:
+            query['$and'].append(cond)
+        # Clean up empty $and
+        if not query['$and']:
+            del query['$and']
     
     # Get total count for pagination
     total = await get_tdb().leads.count_documents(query)
@@ -4038,7 +4818,282 @@ async def get_leads(
         total_pages=total_pages
     )
 
-@api_router.get("/leads/{lead_id}", response_model=Lead)
+
+@api_router.get("/leads/export")
+async def export_leads_csv(
+    status: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    territory: Optional[str] = None,
+    country: Optional[str] = None,
+    region: Optional[str] = None,
+    search: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    time_filter: Optional[str] = None,
+    quadrant: Optional[str] = None,
+    target_closure_month: Optional[int] = None,
+    target_closure_year: Optional[int] = None,
+    target_closure_months: Optional[str] = None,
+    target_closure_years: Optional[str] = None,
+    sort_by: Optional[str] = 'created_at',
+    sort_order: Optional[str] = 'desc',
+    current_user: dict = Depends(get_current_user)
+):
+    """Export all leads matching the filters as a CSV spreadsheet."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    # Build same query as GET /leads
+    query = {}
+    if current_user['role'] == 'sales_rep':
+        query['assigned_to'] = current_user['id']
+
+    if status and status != 'all':
+        status_list = [s.strip() for s in status.split(',') if s.strip()]
+        if len(status_list) == 1:
+            query['status'] = status_list[0]
+        elif len(status_list) > 1:
+            query['status'] = {'$in': status_list}
+    if city and city != 'all':
+        query['city'] = city
+    if state and state != 'all':
+        query['state'] = state
+    if territory and territory != 'all':
+        query['region'] = territory
+    if country and country != 'all':
+        query['country'] = country
+    if region and region != 'all':
+        query['region'] = region
+
+    if assigned_to and assigned_to != 'all':
+        assigned_list = [a.strip() for a in assigned_to.split(',') if a.strip()]
+        if len(assigned_list) == 1:
+            query['assigned_to'] = assigned_list[0]
+        elif len(assigned_list) > 1:
+            query['assigned_to'] = {'$in': assigned_list}
+
+    if target_closure_months and target_closure_years:
+        months = [int(m) for m in target_closure_months.split(',') if m.strip()]
+        years = [int(y) for y in target_closure_years.split(',') if y.strip()]
+        tc_conditions = [
+            {'target_closure_month': months[i], 'target_closure_year': years[i]}
+            for i in range(min(len(months), len(years)))
+        ]
+        if len(tc_conditions) == 1:
+            query['target_closure_month'] = tc_conditions[0]['target_closure_month']
+            query['target_closure_year'] = tc_conditions[0]['target_closure_year']
+        elif tc_conditions:
+            query['$or'] = tc_conditions
+    elif target_closure_month is not None:
+        query['target_closure_month'] = target_closure_month
+        if target_closure_year is not None:
+            query['target_closure_year'] = target_closure_year
+
+    if time_filter and time_filter not in ('all', 'lifetime'):
+        now = datetime.now(timezone.utc)
+        start_date, end_date = None, None
+        if time_filter == 'this_week':
+            start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_week':
+            start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = start_date + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        elif time_filter == 'this_month':
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_month':
+            first_of_this_month = now.replace(day=1)
+            last_month = first_of_this_month - timedelta(days=1)
+            start_date = last_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = first_of_this_month - timedelta(seconds=1)
+        elif time_filter == 'last_3_months':
+            start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'last_6_months':
+            start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0, microsecond=0)
+        elif time_filter == 'this_year':
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        if start_date:
+            date_range = {'$gte': start_date.isoformat()}
+            if end_date:
+                date_range['$lte'] = end_date.isoformat()
+            query['$or'] = [{'created_at': date_range}, {'updated_at': date_range}]
+
+    extra = []
+    if search:
+        extra.append({'$or': [
+            {'company': {'$regex': search, '$options': 'i'}},
+            {'contact_person': {'$regex': search, '$options': 'i'}},
+            {'lead_id': {'$regex': search, '$options': 'i'}},
+        ]})
+    if quadrant:
+        quadrants = [q for q in quadrant.split(',') if q]
+        if 'unscored' in quadrants:
+            quadrants.remove('unscored')
+            if quadrants:
+                extra.append({'$or': [
+                    {'scoring.quadrant': {'$in': quadrants}},
+                    {'scoring.quadrant': {'$exists': False}},
+                    {'scoring': {'$exists': False}},
+                ]})
+            else:
+                extra.append({'$or': [
+                    {'scoring.quadrant': {'$exists': False}},
+                    {'scoring': {'$exists': False}},
+                ]})
+        else:
+            extra.append({'scoring.quadrant': {'$in': quadrants}})
+    if extra:
+        if '$or' in query:
+            query.setdefault('$and', []).append({'$or': query.pop('$or')})
+        query.setdefault('$and', []).extend(extra)
+
+    # Fetch all matching leads (export has no pagination cap beyond a safety 50k)
+    sort_direction = -1 if sort_order == 'desc' else 1
+    leads = await get_tdb().leads.find(query, {'_id': 0}).sort(sort_by, sort_direction).limit(50000).to_list(50000)
+
+    # Build user lookup for assigned-to name + created_by name
+    user_ids = {l.get('assigned_to') for l in leads if l.get('assigned_to')} | \
+               {l.get('created_by') for l in leads if l.get('created_by')}
+    users_map = {}
+    if user_ids:
+        users_docs = await get_tdb().users.find({'id': {'$in': list(user_ids)}}, {'_id': 0, 'id': 1, 'name': 1, 'email': 1}).to_list(len(user_ids))
+        users_map = {u['id']: u.get('name') or u.get('email') or '' for u in users_docs}
+
+    # Latest activity per lead for last_contacted_date / method
+    lead_ids = [l['id'] for l in leads]
+    last_activity_map = {}
+    if lead_ids:
+        activities = await get_tdb().activities.find(
+            {'lead_id': {'$in': lead_ids}},
+            {'_id': 0, 'lead_id': 1, 'created_at': 1, 'interaction_method': 1, 'activity_type': 1}
+        ).sort('created_at', -1).to_list(len(lead_ids) * 5)
+        for a in activities:
+            lid = a['lead_id']
+            if lid not in last_activity_map:
+                method = a.get('interaction_method') or a.get('activity_type') or ''
+                ts = a['created_at'] if isinstance(a['created_at'], str) else a['created_at'].isoformat()
+                last_activity_map[lid] = (ts, method)
+
+    # CSV columns - comprehensive list
+    columns = [
+        ('lead_id', 'Lead ID'),
+        ('company', 'Company'),
+        ('contact_person', 'Contact Person'),
+        ('email', 'Email'),
+        ('phone', 'Phone'),
+        ('category', 'Category'),
+        ('city', 'City'),
+        ('country', 'Country'),
+        ('status', 'Status'),
+        ('priority', 'Priority'),
+        ('estimated_monthly_bottles', 'Est. Monthly Bottles'),
+        ('estimated_monthly_revenue', 'Est. Monthly Revenue'),
+        ('target_closure_month', 'Target Closure Month'),
+        ('target_closure_year', 'Target Closure Year'),
+        ('next_followup_date', 'Next Follow-up Date'),
+        ('last_contacted_date', 'Last Contacted Date'),
+        ('last_contact_method', 'Last Contact Method'),
+    ]
+
+    def _flatten(lead):
+        """Flatten a lead doc into a dict of primitive values for CSV."""
+        current_brands = lead.get('current_brands') or []
+        current_brands_summary = '; '.join(
+            f"{b.get('brand_name','')} ({b.get('volume','')} @ {b.get('selling_price','')})"
+            for b in current_brands if isinstance(b, dict)
+        )
+        interested = lead.get('interested_skus') or []
+        interested_summary = ', '.join(str(s) for s in interested)
+
+        proposed = lead.get('proposed_sku_pricing') or []
+        proposed_summary = '; '.join(
+            f"{p.get('sku_name','')}: {p.get('selling_price','')} ({p.get('percentage','')}%)"
+            for p in proposed if isinstance(p, dict)
+        )
+
+        opp = lead.get('opportunity_estimation') or {}
+        est_monthly_bottles = opp.get('final_monthly') or opp.get('calculated_monthly') or ''
+        est_monthly_revenue = opp.get('estimated_monthly_revenue') or ''
+
+        scoring = lead.get('scoring') or {}
+
+        last_contacted = lead.get('last_contacted_date')
+        last_method = lead.get('last_contact_method')
+        if not last_contacted:
+            la = last_activity_map.get(lead['id'])
+            if la:
+                last_contacted, last_method = la
+
+        def _iso(v):
+            if v is None:
+                return ''
+            if isinstance(v, datetime):
+                return v.isoformat()
+            return str(v)
+
+        return {
+            'lead_id': lead.get('lead_id') or lead.get('id') or '',
+            'company': lead.get('company') or '',
+            'contact_person': lead.get('contact_person') or lead.get('name') or '',
+            'email': lead.get('email') or '',
+            'phone': lead.get('phone') or '',
+            'category': lead.get('category') or '',
+            'tier': lead.get('tier') or '',
+            'rank': lead.get('rank') or '',
+            'city': lead.get('city') or '',
+            'state': lead.get('state') or '',
+            'region': lead.get('region') or '',
+            'country': lead.get('country') or '',
+            'status': lead.get('status') or '',
+            'source': lead.get('source') or '',
+            'priority': lead.get('priority') or '',
+            'assigned_to_name': users_map.get(lead.get('assigned_to'), '') if lead.get('assigned_to') else '',
+            'created_by_name': users_map.get(lead.get('created_by'), '') if lead.get('created_by') else '',
+            'current_water_brand': lead.get('current_water_brand') or '',
+            'current_landing_price': lead.get('current_landing_price') or '',
+            'current_volume': lead.get('current_volume') or '',
+            'current_selling_price': lead.get('current_selling_price') or '',
+            'current_brands_summary': current_brands_summary,
+            'interested_skus_summary': interested_summary,
+            'proposed_sku_pricing_summary': proposed_summary,
+            'estimated_monthly_bottles': est_monthly_bottles,
+            'estimated_monthly_revenue': est_monthly_revenue,
+            'estimated_value': lead.get('estimated_value') or '',
+            'onboarded_month': lead.get('onboarded_month') or '',
+            'onboarded_year': lead.get('onboarded_year') or '',
+            'target_closure_month': lead.get('target_closure_month') or '',
+            'target_closure_year': lead.get('target_closure_year') or '',
+            'next_followup_date': lead.get('next_followup_date') or '',
+            'last_contacted_date': last_contacted or '',
+            'last_contact_method': last_method or '',
+            'total_gross_invoice_value': lead.get('total_gross_invoice_value') or '',
+            'total_net_invoice_value': lead.get('total_net_invoice_value') or '',
+            'total_credit_note_value': lead.get('total_credit_note_value') or '',
+            'invoice_count': lead.get('invoice_count') or '',
+            'last_invoice_date': lead.get('last_invoice_date') or '',
+            'last_invoice_no': lead.get('last_invoice_no') or '',
+            'scoring_quadrant': scoring.get('quadrant') or '',
+            'scoring_score': scoring.get('total_score') or scoring.get('score') or '',
+            'notes': (lead.get('notes') or '').replace('\r\n', ' ').replace('\n', ' '),
+            'created_at': _iso(lead.get('created_at')),
+            'updated_at': _iso(lead.get('updated_at')),
+        }
+
+    # Stream CSV
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL)
+    writer.writerow([header for _, header in columns])
+    for lead in leads:
+        row = _flatten(lead)
+        writer.writerow([row.get(key, '') for key, _ in columns])
+
+    buffer.seek(0)
+    filename = f"leads_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type='text/csv',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
 async def get_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
     lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
@@ -4071,15 +5126,29 @@ async def update_lead(
         raise HTTPException(status_code=403, detail='Access denied')
     
     # Build update data - handle None values specially for fields that can be cleared
-    clearable_fields = {'next_followup_date', 'last_contacted_date', 'dotted_line_to', 'reports_to'}
+    # If a field is in `clearable_fields`, sending it as `null` from the client
+    # will write None to the DB (clear it). Other null fields are skipped so we
+    # don't accidentally blank values during a partial update.
+    clearable_fields = {
+        'next_followup_date', 'last_contacted_date', 'dotted_line_to', 'reports_to',
+        # Onboarding / closure planning fields — users need to be able to clear
+        # these after setting them once.
+        'onboarded_month', 'onboarded_year',
+        'target_closure_month', 'target_closure_year',
+    }
     update_data = {}
-    
+
+    # `model_dump(exclude_unset=True)` returns only the fields the client put in
+    # the request body, so we can distinguish "field not provided" from
+    # "field provided as null". Use that to decide whether a clearable field
+    # was explicitly set to null.
+    explicit = lead_update.model_dump(exclude_unset=True)
     for k, v in lead_update.model_dump().items():
-        # Include the field if it has a value, OR if it's a clearable field explicitly set to None
+        # Include the field if it has a value, OR if it's a clearable field
+        # that the client EXPLICITLY set to None.
         if v is not None:
             update_data[k] = v
-        elif k in clearable_fields:
-            # Allow setting these fields to None (to clear them)
+        elif k in clearable_fields and k in explicit:
             update_data[k] = None
     
     # Status transition validation
@@ -4161,6 +5230,136 @@ async def update_lead(
         updated_lead['updated_at'] = datetime.fromisoformat(updated_lead['updated_at'])
     
     return updated_lead
+
+
+# ============== LEAD CHECK-IN (Geo-fenced "I am here") ==============
+
+class LeadCheckInPayload(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy: Optional[float] = None  # GPS accuracy in meters as reported by browser
+
+def _haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in meters between two (lat, lng) points."""
+    import math
+    R = 6371000.0  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlmb = math.radians(lng2 - lng1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+@api_router.post("/leads/{lead_id}/check-in")
+async def lead_check_in(
+    lead_id: str,
+    payload: LeadCheckInPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Sales rep "I am here" check-in.
+
+    Computes distance from the lead's saved delivery address and logs a visit
+    activity. Distance is always recorded; an off-site flag is set when the
+    sales rep is outside the tenant's configured geo-fence radius.
+    """
+    lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+
+    delivery = (lead.get('delivery_address') or {})
+    lead_lat = delivery.get('lat')
+    lead_lng = delivery.get('lng')
+    if lead_lat is None or lead_lng is None:
+        raise HTTPException(
+            status_code=400,
+            detail='Lead has no GPS coordinates. Save the lead address from Google search first.'
+        )
+
+    # Compute distance from lead's stored coordinates
+    distance_m = _haversine_meters(
+        float(lead_lat), float(lead_lng),
+        float(payload.latitude), float(payload.longitude),
+    )
+
+    # Resolve tenant radius (default 50m if unset)
+    tenant_id = get_current_tenant_id()
+    tenant = await db.tenants.find_one({'tenant_id': tenant_id}, {'_id': 0})
+    radius_m = 50
+    try:
+        radius_m = int(((tenant or {}).get('settings') or {}).get('check_in_radius_meters') or 50)
+    except (TypeError, ValueError):
+        radius_m = 50
+
+    within = distance_m <= radius_m
+    distance_label = f"{distance_m:.0f}m" if distance_m < 1000 else f"{(distance_m/1000):.2f}km"
+    now = datetime.now(timezone.utc)
+
+    # Format time in tenant timezone if available; fall back to UTC ISO
+    timestamp_label = now.strftime('%d %b %Y, %I:%M %p UTC')
+    try:
+        tz_name = ((tenant or {}).get('settings') or {}).get('timezone') or 'Asia/Kolkata'
+        try:
+            from zoneinfo import ZoneInfo
+            local_now = now.astimezone(ZoneInfo(tz_name))
+            timestamp_label = local_now.strftime('%d %b %Y, %I:%M %p')
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    if within:
+        description = (
+            f"Visited this place at {timestamp_label} — {distance_label} from the lead location "
+            f"(within {radius_m}m fence)."
+        )
+    else:
+        description = (
+            f"Visited (off-site) at {timestamp_label} — {distance_label} from the lead location "
+            f"(outside {radius_m}m fence)."
+        )
+
+    activity_doc = {
+        'id': str(uuid.uuid4()),
+        'lead_id': lead_id,
+        'activity_type': 'visit',
+        'description': description,
+        'interaction_method': 'customer_visit',
+        'created_by': current_user['id'],
+        'created_by_name': current_user.get('name') or current_user.get('email') or '',
+        'created_at': now.isoformat(),
+        # Geo-tracking metadata
+        'check_in': {
+            'latitude': float(payload.latitude),
+            'longitude': float(payload.longitude),
+            'accuracy': float(payload.accuracy) if payload.accuracy is not None else None,
+            'distance_m': round(distance_m, 2),
+            'radius_m': radius_m,
+            'within_radius': within,
+            'lead_lat': float(lead_lat),
+            'lead_lng': float(lead_lng),
+        },
+    }
+    await get_tdb().activities.insert_one(activity_doc)
+
+    # Update last contact info on the lead
+    await get_tdb().leads.update_one(
+        {'id': lead_id},
+        {'$set': {
+            'updated_at': now.isoformat(),
+            'last_contacted_date': now.isoformat(),
+            'last_contact_method': 'visit',
+        }}
+    )
+
+    return {
+        'activity_id': activity_doc['id'],
+        'distance_m': round(distance_m, 2),
+        'radius_m': radius_m,
+        'within_radius': within,
+        'description': description,
+    }
+
 
 @api_router.delete("/leads/{lead_id}")
 async def delete_lead(lead_id: str, current_user: dict = Depends(get_current_user)):
@@ -4452,48 +5651,97 @@ async def get_won_leads_revenue(
     
     # Build base query for WON leads
     query = {'status': 'won'}
-    
-    # Apply time filter
+
+    # ── Resolve the (start, end) period datetimes for filtering ──
+    # The Revenue Report is now driven by each lead's `target_closure_month` /
+    # `target_closure_year` (the period the deal was *expected to close in*),
+    # NOT by `updated_at`. We also scope invoices to the same window via
+    # `invoice_date` further below.
     now = datetime.now(timezone.utc)
     start_date = None
-    
+    end_date = None
+
     if time_filter == "this_week":
         start_date = now - timedelta(days=now.weekday())
+        end_date = now
     elif time_filter == "last_week":
         start_date = now - timedelta(days=now.weekday() + 7)
         end_date = now - timedelta(days=now.weekday())
     elif time_filter == "this_month":
         start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
     elif time_filter == "last_month":
-        first_of_this_month = now.replace(day=1)
+        first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         start_date = (first_of_this_month - relativedelta(months=1))
         end_date = first_of_this_month
     elif time_filter == "this_quarter":
         quarter = (now.month - 1) // 3
         start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
     elif time_filter == "last_quarter":
         quarter = (now.month - 1) // 3
         if quarter == 0:
-            start_date = now.replace(year=now.year - 1, month=10, day=1)
-            end_date = now.replace(month=1, day=1)
+            start_date = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         else:
-            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1)
-            end_date = now.replace(month=quarter * 3 + 1, day=1)
+            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
     elif time_filter == "last_3_months":
         start_date = now - relativedelta(months=3)
+        end_date = now
     elif time_filter == "last_6_months":
         start_date = now - relativedelta(months=6)
+        end_date = now
     elif time_filter == "this_year":
         start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now
     elif time_filter == "last_year":
-        start_date = now.replace(year=now.year - 1, month=1, day=1)
-        end_date = now.replace(month=1, day=1)
-    
-    if start_date:
-        query['updated_at'] = {'$gte': start_date.isoformat()}
-        if 'end_date' in dir() and end_date:
-            query['updated_at']['$lt'] = end_date.isoformat()
-    
+        start_date = now.replace(year=now.year - 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    # Build the set of (year, month) pairs the time window spans. For
+    # multi-month windows (e.g., this_quarter, last_3_months) we accept any
+    # lead whose target_closure_year/month falls in the set.
+    target_year_month_pairs: list = []
+    if start_date and end_date:
+        cur = start_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # Walk month-by-month until we go past end_date
+        # Cap at 60 months as a sanity guard (we never expose > 5y windows)
+        for _ in range(60):
+            if cur >= end_date:
+                break
+            target_year_month_pairs.append((cur.year, cur.month))
+            cur = cur + relativedelta(months=1)
+        # Always include the start month even if end_date == start_date
+        if not target_year_month_pairs:
+            target_year_month_pairs.append((start_date.year, start_date.month))
+
+    # Apply lead-period filter: match by target_closure_month/year (preferred),
+    # falling back to updated_at for leads that lack those fields.
+    if target_year_month_pairs:
+        ym_or = [
+            {'target_closure_year': y, 'target_closure_month': m}
+            for (y, m) in target_year_month_pairs
+        ]
+        query['$or'] = [
+            *ym_or,
+            # Fallback: leads with no target_closure_* set — use updated_at
+            {
+                'target_closure_year': {'$in': [None, '', 0]},
+                'updated_at': {
+                    '$gte': start_date.isoformat(),
+                    '$lt': end_date.isoformat(),
+                },
+            },
+            {
+                'target_closure_year': {'$exists': False},
+                'updated_at': {
+                    '$gte': start_date.isoformat(),
+                    '$lt': end_date.isoformat(),
+                },
+            },
+        ]
+
     # Apply resource filter
     if resource_id:
         query['assigned_to'] = resource_id
@@ -4513,6 +5761,111 @@ async def get_won_leads_revenue(
     user_ids = list(set([l.get('assigned_to') for l in leads if l.get('assigned_to')]))
     users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0, 'id': 1, 'name': 1}).to_list(100)
     user_map = {u['id']: u['name'] for u in users}
+
+    # ── INVOICE AGGREGATION (recomputed live, not from stale lead-cached fields) ──
+    # External invoices were migrated to an account-centric linkage. The
+    # per-lead rollup fields (total_gross_invoice_value etc.) are no longer
+    # refreshed, so we must reconcile by querying invoices via every possible
+    # linkage field and bucketing them back to leads.
+    lead_ids = [l['id'] for l in leads if l.get('id')]
+    lead_formatted_ids = [l.get('lead_id') for l in leads if l.get('lead_id')]
+
+    # Resolve each lead → account(s). Accounts may store EITHER the lead UUID
+    # OR the formatted lead_id (e.g., TOOP-HYD-L26-001) in account.lead_id,
+    # depending on when they were created. Query for both.
+    lead_lookup_ids = [x for x in (lead_ids + lead_formatted_ids) if x]
+    accounts_for_leads = await get_tdb().accounts.find(
+        {'lead_id': {'$in': lead_lookup_ids}},
+        {'_id': 0, 'id': 1, 'account_id': 1, 'account_name': 1, 'lead_id': 1}
+    ).to_list(len(lead_lookup_ids) or 1) if lead_lookup_ids else []
+
+    # Build a map: account.lead_id (whatever it is) → lead.id (UUID).
+    # account.lead_id may be either a UUID or a formatted id, so cover both.
+    lead_uuid_by_any_id = {}
+    for ld in leads:
+        if ld.get('id'):
+            lead_uuid_by_any_id[ld['id']] = ld['id']
+        if ld.get('lead_id'):
+            lead_uuid_by_any_id[ld['lead_id']] = ld['id']
+
+    # Build reverse maps: any invoice-linkage value → owning lead UUID
+    inv_linkage_to_lead_id: dict = {}
+    account_uuids: list = []
+    account_formatted_ids: list = []
+    for acc in accounts_for_leads:
+        # Resolve the lead UUID this account belongs to (account.lead_id may
+        # be either UUID or formatted lead id).
+        owning_lead = lead_uuid_by_any_id.get(acc.get('lead_id'))
+        if not owning_lead:
+            continue
+        if acc.get('id'):
+            inv_linkage_to_lead_id[acc['id']] = owning_lead
+            account_uuids.append(acc['id'])
+        if acc.get('account_id'):
+            inv_linkage_to_lead_id[acc['account_id']] = owning_lead
+            account_formatted_ids.append(acc['account_id'])
+    for ld in leads:
+        if ld.get('id'):
+            inv_linkage_to_lead_id[ld['id']] = ld['id']
+        if ld.get('lead_id'):
+            inv_linkage_to_lead_id[ld['lead_id']] = ld['id']
+
+    # Build the master invoice query — match any linkage that points to a won lead
+    inv_or: list = []
+    if account_uuids:
+        inv_or.append({'account_uuid': {'$in': account_uuids}})
+        inv_or.append({'account_id': {'$in': account_uuids}})
+    if account_formatted_ids:
+        inv_or.append({'account_id': {'$in': account_formatted_ids}})
+        inv_or.append({'account_id_from_mq': {'$in': account_formatted_ids}})
+    if lead_ids:
+        inv_or.append({'lead_id': {'$in': lead_ids}})
+        inv_or.append({'lead_uuid': {'$in': lead_ids}})
+    if lead_formatted_ids:
+        inv_or.append({'ca_lead_id': {'$in': lead_formatted_ids}})
+
+    invoice_totals: dict = {}  # lead_id → {gross, net, credit, count}
+    if inv_or:
+        # Scope invoices to the same time window the user selected, so the
+        # totals shown reflect billings during that period only. invoice_date
+        # may be stored as a YYYY-MM-DD string or a BSON datetime — match both.
+        inv_query: dict = {'$or': inv_or}
+        if start_date and end_date and time_filter != 'lifetime':
+            start_s = start_date.strftime('%Y-%m-%d')
+            end_s = end_date.strftime('%Y-%m-%d')
+            inv_query = {
+                '$and': [
+                    {'$or': inv_or},
+                    {'$or': [
+                        {'invoice_date': {'$gte': start_s, '$lt': end_s + 'T23:59:59'}},
+                        {'invoice_date': {'$gte': start_date, '$lt': end_date}},
+                    ]},
+                ]
+            }
+        invoices_all = await get_tdb().invoices.find(
+            inv_query,
+            {'_id': 0, 'account_uuid': 1, 'account_id': 1, 'account_id_from_mq': 1,
+             'ca_lead_id': 1, 'lead_id': 1, 'lead_uuid': 1, 'invoice_date': 1,
+             'gross_invoice_value': 1, 'grand_total': 1, 'total_amount': 1,
+             'net_invoice_value': 1, 'paid_amount': 1,
+             'credit_note_value': 1, 'credit_note': 1}
+        ).to_list(20000)
+
+        for inv in invoices_all:
+            # Find which lead this invoice belongs to (priority order)
+            owner = None
+            for key in ('account_uuid', 'account_id', 'account_id_from_mq', 'ca_lead_id', 'lead_id', 'lead_uuid'):
+                val = inv.get(key)
+                if val and val in inv_linkage_to_lead_id:
+                    owner = inv_linkage_to_lead_id[val]
+                    break
+            if not owner:
+                continue
+            bucket = invoice_totals.setdefault(owner, {'gross': 0.0, 'net': 0.0, 'credit': 0.0, 'count': 0})
+            bucket['gross'] += float(inv.get('gross_invoice_value') or inv.get('grand_total') or inv.get('total_amount') or 0)
+            bucket['net']   += float(inv.get('net_invoice_value')   or inv.get('paid_amount') or 0)
+            bucket['credit']+= float(inv.get('credit_note_value')   or inv.get('credit_note') or 0)
+            bucket['count'] += 1
     
     # Build response with invoice data
     result = []
@@ -4521,9 +5874,21 @@ async def get_won_leads_revenue(
     total_credit = 0
     
     for lead in leads:
-        gross = lead.get('total_gross_invoice_value', 0) or 0
-        net = lead.get('total_net_invoice_value', 0) or 0
-        credit = lead.get('total_credit_note_value', 0) or 0
+        live = invoice_totals.get(lead['id']) or {}
+        # When a time window is in effect, trust the live period-scoped totals
+        # exclusively (no fallback to lifetime-cached fields — those would be
+        # misleading inside a "Last Month" or "Last Quarter" view). For
+        # `lifetime` we still fall back if the live recompute returned nothing.
+        if time_filter == 'lifetime':
+            gross = live.get('gross') or (lead.get('total_gross_invoice_value') or 0)
+            net = live.get('net') or (lead.get('total_net_invoice_value') or 0)
+            credit = live.get('credit') or (lead.get('total_credit_note_value') or 0)
+            invoice_count = live.get('count') or (lead.get('invoice_count') or 0)
+        else:
+            gross = live.get('gross') or 0
+            net = live.get('net') or 0
+            credit = live.get('credit') or 0
+            invoice_count = live.get('count') or 0
         
         total_gross += gross
         total_net += net
@@ -4538,7 +5903,7 @@ async def get_won_leads_revenue(
             'assigned_to': lead.get('assigned_to'),
             'assigned_to_name': user_map.get(lead.get('assigned_to'), '-'),
             'won_date': lead.get('updated_at'),
-            'invoice_count': lead.get('invoice_count', 0) or 0,
+            'invoice_count': invoice_count,
             'gross_invoice_value': gross,
             'net_invoice_value': net,
             'credit_note_value': credit
@@ -4594,30 +5959,6 @@ async def get_lead_invoices(lead_id: str, current_user: dict = Depends(get_curre
         'total_net_invoice_value': lead.get('total_net_invoice_value', 0),
         'total_credit_note_value': lead.get('total_credit_note_value', 0),
         'invoice_count': len(invoices),
-        'invoices': invoices
-    }
-
-@api_router.get("/invoices")
-async def get_all_invoices(
-    status: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 50,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get all invoices with optional filtering"""
-    query = {}
-    if status:
-        query['status'] = status
-    
-    invoices = await get_tdb().invoices.find(
-        query,
-        {'_id': 0}
-    ).sort('received_at', -1).skip(skip).limit(limit).to_list(limit)
-    
-    total = await get_tdb().invoices.count_documents(query)
-    
-    return {
-        'total': total,
         'invoices': invoices
     }
 
@@ -4692,16 +6033,24 @@ async def match_invoice_to_lead(
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     
-    # Update invoice
+    # Update invoice — link to the lead AND, when that lead has been converted
+    # to an account, stamp the stable CRM account ids so the account-detail page
+    # can match this invoice by ID (never by name).
+    inv_update = {
+        'lead_uuid': lead['id'],
+        'ca_lead_id': lead.get('lead_id'),
+        'status': 'matched',
+    }
+    linked_account = await get_tdb().accounts.find_one(
+        {'lead_id': lead['id']}, {'_id': 0, 'id': 1, 'account_id': 1}
+    )
+    if linked_account:
+        inv_update['account_uuid'] = linked_account.get('id')
+        inv_update['account_id'] = linked_account.get('account_id')
+
     await get_tdb().invoices.update_one(
         {'id': invoice_id},
-        {
-            '$set': {
-                'lead_uuid': lead['id'],
-                'ca_lead_id': lead.get('lead_id'),
-                'status': 'matched'
-            }
-        }
+        {'$set': inv_update}
     )
     
     # Recalculate lead totals
@@ -4842,19 +6191,91 @@ async def generate_account_id(account_name: str, city: str) -> str:
 
 @api_router.post("/accounts/convert-lead")
 async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depends(get_current_user)):
-    """Convert a won lead to an account"""
+    """Convert a won lead to an account.
+
+    Idempotent: if the lead has already been converted (or another concurrent
+    request is converting it right now), the existing account is returned
+    instead of creating a duplicate.
+    """
     lead = await get_tdb().leads.find_one({'id': data.lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
-    
+
     # Check if lead is won
     if lead.get('status') not in ['won', 'closed_won']:
         raise HTTPException(status_code=400, detail='Only won leads can be converted to accounts')
-    
-    # Check if already converted
-    if lead.get('converted_to_account'):
-        raise HTTPException(status_code=400, detail='Lead already converted to account')
-    
+
+    # IDEMPOTENCY GUARD #1: lead already marked converted → return existing account
+    async def _existing_account_for_lead() -> Optional[dict]:
+        """Find the account previously created for this lead, by either link."""
+        existing = None
+        if lead.get('account_id'):
+            existing = await get_tdb().accounts.find_one({'account_id': lead['account_id']}, {'_id': 0})
+        if not existing and lead.get('lead_id'):
+            existing = await get_tdb().accounts.find_one({'lead_id': lead['lead_id']}, {'_id': 0})
+        if not existing:
+            existing = await get_tdb().accounts.find_one({'lead_id': data.lead_id}, {'_id': 0})
+        return existing
+
+    if lead.get('converted_to_account') or lead.get('account_id'):
+        existing = await _existing_account_for_lead()
+        if existing:
+            existing['already_existed'] = True
+            return existing
+        # Flag was set but no account found — clear and recreate (rare, self-healing)
+
+    # IDEMPOTENCY GUARD #1b: an account with this GSTIN / name+city may already
+    # exist from a different lead (or manual creation). Link & return it instead
+    # of creating a duplicate.
+    async def _existing_account_by_identity() -> Optional[dict]:
+        """Find an existing account that matches the lead by identity (no
+        cross-lead linkage). Match order: GSTIN → company+city (case-insensitive)."""
+        gstin = (lead.get('gstin') or lead.get('GSTIN') or '').strip().upper()
+        if gstin and len(gstin) >= 10:
+            found = await get_tdb().accounts.find_one(
+                {'gstin': {'$regex': f'^{gstin}$', '$options': 'i'}},
+                {'_id': 0},
+            )
+            if found:
+                return found
+        company = (lead.get('company') or '').strip()
+        city = (lead.get('city') or '').strip()
+        if company and city:
+            found = await get_tdb().accounts.find_one(
+                {
+                    'account_name': {'$regex': f'^{re.escape(company)}$', '$options': 'i'},
+                    'city': {'$regex': f'^{re.escape(city)}$', '$options': 'i'},
+                },
+                {'_id': 0},
+            )
+            if found:
+                return found
+        return None
+
+    duplicate = await _existing_account_by_identity()
+    if duplicate:
+        # Link this lead to the pre-existing account and mark it converted —
+        # this stops the same dedup work from running again on subsequent clicks.
+        await get_tdb().leads.update_one(
+            {'id': data.lead_id},
+            {'$set': {
+                'converted_to_account': True,
+                'account_id': duplicate.get('account_id') or duplicate.get('id'),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        duplicate['already_existed'] = True
+        duplicate['matched_on'] = 'gstin' if (lead.get('gstin') or lead.get('GSTIN')) else 'company_and_city'
+        # Bring the lead's contacts over to the matched account too.
+        await get_tdb().contacts.update_many(
+            {'lead_id': data.lead_id},
+            {'$set': {
+                'account_id': duplicate.get('account_id') or duplicate.get('id'),
+                'updated_at': datetime.now(timezone.utc).isoformat(),
+            }}
+        )
+        return duplicate
+
     # Validate proposed SKU pricing exists
     proposed_pricing = lead.get('proposed_sku_pricing', [])
     if not proposed_pricing or len(proposed_pricing) == 0:
@@ -4879,7 +6300,26 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
                 status_code=400,
                 detail=f'SKU "{sku_name}" has an invalid price. Price must be greater than 0.'
             )
-    
+
+    # IDEMPOTENCY GUARD #2 (race protection): atomically claim the conversion.
+    # Only the first concurrent request will get matched_count == 1; all other
+    # parallel requests find an account already linked and return it.
+    claim = await get_tdb().leads.update_one(
+        {'id': data.lead_id, 'converted_to_account': {'$ne': True}},
+        {'$set': {'converted_to_account': True, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    if claim.matched_count == 0:
+        # Another request beat us to the conversion — return its account
+        # (give the writer a beat to insert the doc, then read)
+        import asyncio as _asyncio
+        for _ in range(5):
+            existing = await _existing_account_for_lead()
+            if existing:
+                existing['already_existed'] = True
+                return existing
+            await _asyncio.sleep(0.2)
+        raise HTTPException(status_code=409, detail='Lead is already being converted. Please refresh the page.')
+
     # Generate account ID
     account_name = lead.get('company') or lead.get('name', 'Unknown')
     city = lead.get('city', 'Unknown')
@@ -4898,10 +6338,15 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
             ))
     
     # Create account with category and contact info from lead
+    lead_type_val = lead.get('lead_type') or 'B2B'
+    # Default include_in_gop_metrics: B2B → True, Retail → False
+    default_include_gop = lead_type_val.lower() != 'retail'
     account = Account(
         account_id=account_id,
         lead_id=lead.get('lead_id') or data.lead_id,
         account_name=account_name,
+        lead_type=lead_type_val,
+        include_in_gop_metrics=default_include_gop,
         city=city,
         state=lead.get('state', ''),
         territory=lead.get('region', ''),
@@ -4916,22 +6361,61 @@ async def convert_lead_to_account(data: AccountCreate, current_user: dict = Depe
     doc = account.model_dump()
     # Add category from lead (extra field allowed by model)
     doc['category'] = lead.get('category')
+    # Carry the lead's delivery address over to the new account when the
+    # converting user confirmed the addresses are the same. The frontend asks
+    # the user explicitly before sending `copy_lead_address=True`.
+    if data.copy_lead_address and lead.get('delivery_address'):
+        lda = lead['delivery_address'] or {}
+        if lda.get('address_line1'):
+            doc['delivery_address'] = {
+                'address_line1': lda.get('address_line1') or '',
+                'address_line2': lda.get('address_line2') or '',
+                'city': lda.get('city') or lead.get('city') or '',
+                'state': lda.get('state') or lead.get('state') or '',
+                'pincode': lda.get('pincode') or '',
+                'landmark': lda.get('landmark') or '',
+                'lat': lda.get('lat'),
+                'lng': lda.get('lng'),
+                'formatted_address': lda.get('formatted_address') or lda.get('address_line1') or '',
+                'source': 'copied_from_lead',
+                'copied_from_lead_id': lead.get('id'),
+            }
     doc['created_at'] = doc['created_at'].isoformat()
     doc['updated_at'] = doc['updated_at'].isoformat()
-    
-    await get_tdb().accounts.insert_one(doc)
-    
-    # Update lead to mark as converted
+
+    try:
+        await get_tdb().accounts.insert_one(doc)
+    except Exception as e:
+        # Rollback the conversion claim so the user can retry, then surface the error
+        await get_tdb().leads.update_one(
+            {'id': data.lead_id},
+            {'$set': {'converted_to_account': False}, '$unset': {'account_id': ''}}
+        )
+        raise HTTPException(status_code=500, detail=f'Failed to create account: {e}')
+
+    # Persist the account_id link on the lead now that the doc is safely inserted
     await get_tdb().leads.update_one(
         {'id': data.lead_id},
+        {'$set': {'account_id': account_id, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+
+    # Copy the lead's contacts onto the new account: same contact records, now
+    # also tagged with this account_id so they appear under the account's
+    # Contacts table (single source of truth — no duplication).
+    await get_tdb().contacts.update_many(
+        {'lead_id': data.lead_id},
         {'$set': {
-            'converted_to_account': True,
             'account_id': account_id,
-            'updated_at': datetime.now(timezone.utc).isoformat()
+            'company': account_name,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
         }}
     )
-    
-    return account
+
+    # Return the actual saved document (includes delivery_address when copied
+    # from the lead). The Pydantic Account model would otherwise drop the
+    # extra delivery_address field from the response payload.
+    doc.pop('_id', None)
+    return doc
 
 @api_router.get("/accounts", response_model=PaginatedAccountsResponse)
 async def get_accounts(
@@ -4942,6 +6426,7 @@ async def get_accounts(
     state: Optional[str] = None,
     city: Optional[str] = None,
     account_type: Optional[str] = None,
+    lead_type: Optional[str] = None,
     category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
@@ -4959,6 +6444,18 @@ async def get_accounts(
         query['city'] = city
     if account_type:
         query['account_type'] = account_type
+    # `lead_type` filter — applied as $and to coexist with search $or
+    lead_type_clause = None
+    if lead_type:
+        if lead_type == 'B2B':
+            # Treat missing/null lead_type as B2B (legacy default)
+            lead_type_clause = {'$or': [
+                {'lead_type': 'B2B'},
+                {'lead_type': {'$exists': False}},
+                {'lead_type': None},
+            ]}
+        else:
+            lead_type_clause = {'lead_type': lead_type}
     if category:
         query['category'] = category
     if search:
@@ -4967,6 +6464,9 @@ async def get_accounts(
             {'contact_name': {'$regex': search, '$options': 'i'}},
             {'account_id': {'$regex': search, '$options': 'i'}}
         ]
+    # Combine lead_type clause via $and to coexist with search $or
+    if lead_type_clause is not None:
+        query.setdefault('$and', []).append(lead_type_clause)
     
     total = await get_tdb().accounts.count_documents(query)
     total_pages = (total + page_size - 1) // page_size
@@ -5029,13 +6529,16 @@ async def get_accounts_stats(
     # Total accounts
     total_accounts = await get_tdb().accounts.count_documents(query)
     
-    # Accounts by type
-    type_pipeline = [
+    # Accounts by lead_type (B2B / Retail / Individual)
+    lead_type_pipeline = [
         {'$match': query},
-        {'$group': {'_id': '$account_type', 'count': {'$sum': 1}}}
+        {'$group': {'_id': '$lead_type', 'count': {'$sum': 1}}}
     ]
-    type_results = await get_tdb().accounts.aggregate(type_pipeline).to_list(10)
-    by_type = {r['_id'] or 'Unassigned': r['count'] for r in type_results}
+    lt_results = await get_tdb().accounts.aggregate(lead_type_pipeline).to_list(10)
+    by_lead_type = {'B2B': 0, 'Retail': 0, 'Individual': 0}
+    for r in lt_results:
+        key = r['_id'] or 'B2B'  # default unset → B2B (matches frontend display)
+        by_lead_type[key] = by_lead_type.get(key, 0) + r['count']
     
     # Accounts by category (directly from accounts collection)
     category_pipeline = [
@@ -5060,9 +6563,176 @@ async def get_accounts_stats(
     
     return {
         'total_accounts': total_accounts,
-        'by_type': by_type,
+        'by_lead_type': by_lead_type,
         'by_category': by_category
     }
+
+
+@api_router.get("/accounts/sku-pricing-grid")
+async def get_accounts_sku_pricing_grid(
+    territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Return a flat grid of (account, SKU, pricing) rows — one row per
+    SKU per account. Used by the Account SKU Pricing page.
+    Supports filters: territory, state, city, assigned_to.
+    """
+    from core.tenant import get_current_tenant_id
+    tdb = get_tdb()
+    tenant_id = get_current_tenant_id()
+
+    # Visibility: sales_rep only sees accounts assigned to them
+    account_filter = {}
+    if current_user.get('role') == 'sales_rep':
+        account_filter['assigned_to'] = current_user['id']
+
+    # Apply filters
+    if territory and territory != 'all':
+        account_filter['territory'] = territory
+    if state and state != 'all':
+        account_filter['state'] = state
+    if city and city != 'all':
+        account_filter['city'] = city
+    if assigned_to and assigned_to != 'all':
+        assigned_list = [a.strip() for a in assigned_to.split(',') if a.strip()]
+        if len(assigned_list) == 1:
+            account_filter['assigned_to'] = assigned_list[0]
+        elif len(assigned_list) > 1:
+            account_filter['assigned_to'] = {'$in': assigned_list}
+
+    accounts = await tdb.accounts.find(account_filter, {'_id': 0}).sort('account_name', 1).to_list(5000)
+
+    # Build SKU lookup for enrichment
+    sku_docs = await tdb.master_skus.find(
+        {}, {'_id': 0, 'id': 1, 'name': 1, 'sku_code': 1, 'hsn_code': 1, 'base_price': 1, 'category': 1}
+    ).to_list(2000)
+    sku_by_id = {s['id']: s for s in sku_docs}
+    sku_by_name = {s.get('name', '').lower(): s for s in sku_docs if s.get('name')}
+
+    # Fetch per-account SKU pricing in one shot
+    per_account_pricing = await tdb.account_sku_pricing.find(
+        {'tenant_id': tenant_id}, {'_id': 0}
+    ).to_list(20000)
+    pricing_by_account = {}
+    for p in per_account_pricing:
+        pricing_by_account.setdefault(p.get('account_id'), []).append(p)
+
+    rows = []
+    for account in accounts:
+        account_id = account.get('id')
+        account_rows = pricing_by_account.get(account_id) or []
+
+        # Fallback to account's embedded sku_pricing field
+        if not account_rows:
+            for p in (account.get('sku_pricing') or []):
+                account_rows.append({
+                    'sku_name': p.get('sku') or p.get('sku_name'),
+                    'price_per_unit': p.get('price_per_unit', 0),
+                    'return_bottle_credit': p.get('return_bottle_credit', 0),
+                })
+
+        if not account_rows:
+            rows.append({
+                'account_id': account_id,
+                'account_code': account.get('account_id'),
+                'account_name': account.get('account_name'),
+                'account_type': account.get('account_type'),
+                'lead_type': account.get('lead_type') or 'B2B',
+                'include_in_gop_metrics': account.get('include_in_gop_metrics', (account.get('lead_type', 'B2B') or 'B2B').lower() != 'retail'),
+                'city': account.get('city'),
+                'state': account.get('state'),
+                'territory': account.get('territory'),
+                'sku_id': None,
+                'sku_name': None,
+                'sku_code': None,
+                'hsn_code': None,
+                'sku_category': None,
+                'base_price': None,
+                'price_per_unit': None,
+                'return_bottle_credit': None,
+            })
+            continue
+
+        for p in account_rows:
+            sku_id = p.get('sku_id')
+            sku = sku_by_id.get(sku_id) if sku_id else None
+            if not sku and p.get('sku_name'):
+                sku = sku_by_name.get(str(p.get('sku_name')).lower())
+
+            rows.append({
+                'account_id': account_id,
+                'account_code': account.get('account_id'),
+                'account_name': account.get('account_name'),
+                'account_type': account.get('account_type'),
+                'lead_type': account.get('lead_type') or 'B2B',
+                'include_in_gop_metrics': account.get('include_in_gop_metrics', (account.get('lead_type', 'B2B') or 'B2B').lower() != 'retail'),
+                'city': account.get('city'),
+                'state': account.get('state'),
+                'territory': account.get('territory'),
+                'sku_id': sku_id or (sku.get('id') if sku else None),
+                'sku_name': (sku.get('name') if sku else None) or p.get('sku_name') or p.get('sku'),
+                'sku_code': (sku.get('sku_code') if sku else None) or p.get('sku_code'),
+                'hsn_code': (sku.get('hsn_code') if sku else None) or p.get('hsn_code'),
+                'sku_category': sku.get('category') if sku else p.get('category'),
+                'base_price': sku.get('base_price') if sku else None,
+                'price_per_unit': p.get('price_per_unit') or p.get('price') or 0,
+                'return_bottle_credit': p.get('return_bottle_credit') or p.get('return_credit_per_unit') or 0,
+            })
+
+    return {'rows': rows, 'total': len(rows), 'accounts_count': len(accounts), 'cogs_by_sku': await _build_cogs_by_sku(tdb, accounts)}
+
+
+async def _build_cogs_by_sku(tdb, accounts):
+    """
+    Return a map of { sku_name: { avg_cogs, cities: [...], cities_count } }
+    averaged across the cities that the in-scope accounts belong to.
+    COGS data is stored per (sku_name, city) and uses the COGS calculator's
+    `total_cogs` field (primary + secondary + manufacturing).
+    """
+    cities_in_scope = sorted({a.get('city') for a in accounts if a.get('city')})
+    if not cities_in_scope:
+        return {}
+
+    cogs_docs = await tdb.cogs_data.find(
+        {'city': {'$in': cities_in_scope}},
+        {'_id': 0, 'sku_name': 1, 'city': 1, 'total_cogs': 1,
+         'primary_packaging_cost': 1, 'secondary_packaging_cost': 1,
+         'manufacturing_variable_cost': 1}
+    ).to_list(5000)
+
+    # Aggregate by sku_name
+    by_sku = {}
+    for c in cogs_docs:
+        name = c.get('sku_name')
+        if not name:
+            continue
+        total_cogs = c.get('total_cogs')
+        if total_cogs is None or total_cogs == 0:
+            # Fallback: compute from parts
+            total_cogs = (c.get('primary_packaging_cost') or 0) \
+                + (c.get('secondary_packaging_cost') or 0) \
+                + (c.get('manufacturing_variable_cost') or 0)
+        if total_cogs <= 0:
+            continue
+
+        if name not in by_sku:
+            by_sku[name] = {'sum': 0.0, 'cities': []}
+        by_sku[name]['sum'] += total_cogs
+        by_sku[name]['cities'].append(c.get('city'))
+
+    return {
+        name: {
+            'avg_cogs': round(v['sum'] / len(v['cities']), 2),
+            'cities': v['cities'],
+            'cities_count': len(v['cities']),
+        }
+        for name, v in by_sku.items()
+    }
+
 
 @api_router.get("/accounts/{account_id}")
 async def get_account(account_id: str, current_user: dict = Depends(get_current_user)):
@@ -5116,43 +6786,11 @@ async def migrate_account_categories(current_user: dict = Depends(get_current_us
     
     return {'message': f'Updated {updated_count} accounts with categories from leads', 'updated': updated_count}
 
-@api_router.put("/accounts/{account_id}")
-async def update_account(account_id: str, update_data: AccountUpdate, current_user: dict = Depends(get_current_user)):
-    """Update account details including SKU pricing and delivery address"""
-    account = await get_tdb().accounts.find_one(
-        {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'_id': 0}
-    )
-    if not account:
-        raise HTTPException(status_code=404, detail='Account not found')
-    
-    update_dict = {k: v for k, v in update_data.model_dump().items() if v is not None}
-    
-    # Convert SKU pricing to dict format
-    if 'sku_pricing' in update_dict:
-        update_dict['sku_pricing'] = [
-            sku.model_dump() if hasattr(sku, 'model_dump') else sku 
-            for sku in update_dict['sku_pricing']
-        ]
-    
-    # Convert delivery address to dict format
-    if 'delivery_address' in update_dict and update_dict['delivery_address']:
-        if hasattr(update_dict['delivery_address'], 'model_dump'):
-            update_dict['delivery_address'] = update_dict['delivery_address'].model_dump()
-    
-    update_dict['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await get_tdb().accounts.update_one(
-        {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'$set': update_dict}
-    )
-    
-    updated = await get_tdb().accounts.find_one(
-        {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'_id': 0}
-    )
-    
-    return updated
+# NOTE: PUT /accounts/{account_id} is handled by routes/accounts.py (which has the
+# full AccountUpdate model including gst_legal_name, gst_trade_name, pan_number,
+# billing_address, delivery_contact_*). The duplicate route that used to live
+# here shadowed the new one and silently dropped those fields — causing manual
+# edits to revert to GST-cert parsed text. Do not re-add it.
 
 # Admin endpoint to fix invoices missing tenant_id
 @api_router.post("/admin/fix-invoice-tenant-ids")
@@ -5204,7 +6842,7 @@ async def get_account_invoices(
     
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1}
+        {'_id': 0, 'id': 1, 'lead_id': 1, 'account_name': 1, 'account_id': 1, 'outstanding_balance': 1, 'zoho_contact_id': 1, 'gst_number': 1, 'gstin': 1}
     )
     if not account:
         logger.warning(f"[INVOICE_FETCH] Account not found: {account_id}")
@@ -5217,24 +6855,76 @@ async def get_account_invoices(
     acc_id = account.get('account_id')
     lead_id = account.get('lead_id')
     account_name = account.get('account_name')
+    zoho_contact_id = account.get('zoho_contact_id')
+    gstin = account.get('gst_number') or account.get('gstin')
     
+    # Resolve the lead's formatted lead_id (e.g., ASEM-HYD-L26-001). External invoices
+    # may store this string in `ca_lead_id`, not the lead UUID — so we must look it up.
+    lead_doc = None
+    if lead_id:
+        lead_doc = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0, 'lead_id': 1, 'id': 1})
+    lead_formatted_id = (lead_doc or {}).get('lead_id')
+
+    import re as _re
+
+    def _ci_eq(value: str) -> dict:
+        """Case-insensitive exact-match regex (handles uppercase/lowercase storage)."""
+        return {'$regex': f'^{_re.escape(value)}$', '$options': 'i'}
+
     query = {'$or': []}
     if account_uuid:
         query['$or'].append({'account_id': account_uuid})  # Primary match - account_id field in invoice
         query['$or'].append({'account_uuid': account_uuid})  # Legacy match
     if acc_id:
-        query['$or'].append({'account_id': acc_id})
-        query['$or'].append({'account_id_from_mq': acc_id})  # MQ invoices use this field
+        # Case-insensitive match — handles upper/lower-case stored variants
+        query['$or'].append({'account_id': _ci_eq(acc_id)})
+        query['$or'].append({'account_id_from_mq': _ci_eq(acc_id)})
+        query['$or'].append({'ACCOUNT_ID': _ci_eq(acc_id)})  # Raw payload field used by some integrations
     if lead_id:
-        query['$or'].append({'ca_lead_id': lead_id})
+        # Lead UUID linkage
         query['$or'].append({'lead_id': lead_id})
+        query['$or'].append({'lead_uuid': lead_id})
+    if lead_formatted_id:
+        # Formatted lead id (ca_lead_id) — distinct from lead UUID
+        query['$or'].append({'ca_lead_id': _ci_eq(lead_formatted_id)})
+        query['$or'].append({'lead_id': _ci_eq(lead_formatted_id)})  # In case it stored the formatted id under lead_id
+    if zoho_contact_id:
+        # Invoices pushed via Zoho carry the Zoho customer id — this is a strong
+        # linkage when the legacy account_id/account_uuid/account_name fields don't agree
+        # (e.g., recently-activated accounts where the external system pushed
+        # invoices using only the Zoho contact id).
+        query['$or'].append({'zoho_customer_id': zoho_contact_id})
+        query['$or'].append({'zoho_contact_id': zoho_contact_id})
+    if gstin:
+        # GSTIN linkage — invoices pushed via Zoho carry the customer's GSTIN.
+        # Useful when the account was re-created and account_id changed but GSTIN stayed.
+        query['$or'].append({'gst_number': _ci_eq(gstin)})
+        query['$or'].append({'gstin': _ci_eq(gstin)})
+        query['$or'].append({'customer_gstin': _ci_eq(gstin)})
     if account_name:
-        query['$or'].append({'customer_name': {'$regex': account_name, '$options': 'i'}})
-    
+        # Escape regex special chars in account_name (parens, dots, plus, etc.)
+        # so account names like "Asem (Hyderabad)" don't silently break the match.
+        query['$or'].append({'customer_name': {'$regex': _re.escape(account_name), '$options': 'i'}})
+        query['$or'].append({'account_name': {'$regex': _re.escape(account_name), '$options': 'i'}})
+
     # Apply time filter
     if time_filter and time_filter != 'lifetime':
         from datetime import timedelta
+        # Compute "now" in the TENANT's timezone (default Asia/Kolkata) so the
+        # window aligns with the LOCAL calendar the user sees. invoice_date is
+        # stored as a local (IST) 'YYYY-MM-DD' string; a UTC "now" can still
+        # report the PREVIOUS month until 05:30 IST, which made current-month
+        # invoices disappear from the account page near month boundaries.
         now = datetime.now(timezone.utc)
+        try:
+            from zoneinfo import ZoneInfo
+            _tenant = await db.tenants.find_one(
+                {'tenant_id': get_current_tenant_id()}, {'_id': 0, 'settings': 1}
+            )
+            _tz = ((_tenant or {}).get('settings') or {}).get('timezone') or 'Asia/Kolkata'
+            now = now.astimezone(ZoneInfo(_tz))
+        except Exception:
+            pass
         
         date_ranges = {
             'this_week': (now - timedelta(days=now.weekday()), now),
@@ -5249,14 +6939,28 @@ async def get_account_invoices(
         if time_filter in date_ranges:
             start, end = date_ranges[time_filter]
             if start and end:
-                query['invoice_date'] = {
-                    '$gte': start.strftime('%Y-%m-%d'),
-                    '$lte': end.strftime('%Y-%m-%d')
-                }
+                # invoice_date may be stored as a 'YYYY-MM-DD' string OR a BSON
+                # datetime depending on the ingestion path. Use an $or on both
+                # representations so neither variant is silently dropped.
+                start_str = start.strftime('%Y-%m-%d')
+                end_str = end.replace(hour=23, minute=59, second=59).strftime('%Y-%m-%d')
+                start_dt = start.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_dt = end.replace(hour=23, minute=59, second=59, microsecond=999000)
+                date_clause = {'$or': [
+                    {'invoice_date': {'$gte': start_str, '$lte': end_str + 'T23:59:59'}},
+                    {'invoice_date': {'$gte': start_dt, '$lte': end_dt}},
+                ]}
+                # Merge with the account-linkage $or via $and so both must hold.
+                query = {'$and': [query, date_clause]}
     
     logger.info(f"[INVOICE_FETCH] Query: {query}")
     
-    if not query['$or']:
+    # Detect "empty linkage" — the original $or list of account-linkage clauses
+    # (may now be wrapped in $and with the date clause).
+    _linkage_or = query.get('$or')
+    if _linkage_or is None and '$and' in query:
+        _linkage_or = (query['$and'][0] or {}).get('$or') or []
+    if not _linkage_or:
         logger.warning(f"[INVOICE_FETCH] Empty query for account: {account_id}")
         return {'invoices': [], 'total_amount': 0, 'paid_amount': 0, 'outstanding': 0, 'total': 0, 'page': page, 'limit': limit, 'pages': 0}
     
@@ -5264,20 +6968,108 @@ async def get_account_invoices(
     total_count = await get_tdb().invoices.count_documents(query)
     total_pages = (total_count + limit - 1) // limit if total_count > 0 else 0
     skip = (page - 1) * limit
+
+    # If matcher returned zero invoices in the requested window, log the per-clause
+    # counts so we can see *which* linkage path is failing (this surfaces stale
+    # external invoices that lack proper account_id / account_uuid / ca_lead_id).
+    if total_count == 0 and time_filter == 'this_month':
+        try:
+            from datetime import timedelta as _td_dbg
+            from zoneinfo import ZoneInfo as _ZI_dbg
+            _now_dbg = datetime.now(timezone.utc)
+            try:
+                _t_dbg = await db.tenants.find_one({'tenant_id': get_current_tenant_id()}, {'_id': 0, 'settings': 1})
+                _tz_dbg = ((_t_dbg or {}).get('settings') or {}).get('timezone') or 'Asia/Kolkata'
+                _now_dbg = _now_dbg.astimezone(_ZI_dbg(_tz_dbg))
+            except Exception:
+                pass
+            _date_clause_dbg = {'$or': [
+                {'invoice_date': {'$gte': _now_dbg.replace(day=1).strftime('%Y-%m-%d'), '$lte': _now_dbg.strftime('%Y-%m-%d') + 'T23:59:59'}},
+                {'invoice_date': {'$gte': _now_dbg.replace(day=1, hour=0, minute=0, second=0, microsecond=0), '$lte': _now_dbg}},
+            ]}
+            for clause in _linkage_or:
+                cnt = await get_tdb().invoices.count_documents({'$and': [clause, _date_clause_dbg]})
+                if cnt > 0:
+                    logger.warning(f"[INVOICE_FETCH] DIAGNOSTIC clause {clause} returned {cnt} this-month invoices in isolation")
+        except Exception as _e:
+            logger.warning(f"[INVOICE_FETCH] diagnostic block failed: {_e}")
     
     # Fetch paginated invoices
     invoices = await get_tdb().invoices.find(query, {'_id': 0}).sort('invoice_date', -1).skip(skip).limit(limit).to_list(limit)
     logger.info(f"[INVOICE_FETCH] Found {len(invoices)} invoices for account: {account_id} (page {page}/{total_pages}, total {total_count})")
     
-    # Get ALL invoices for totals calculation (without pagination)
-    all_invoices = await get_tdb().invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1, 'grand_total': 1, 'total_amount': 1, 'paid_amount': 1}).to_list(10000)
+    # Get ALL invoices for totals + bottle metrics (without pagination).
+    # We also need invoice_date to determine the latest invoice's outstanding.
+    all_invoices = await get_tdb().invoices.find(
+        query,
+        {'_id': 0, 'gross_invoice_value': 1, 'net_invoice_value': 1, 'credit_note_value': 1,
+         'outstanding': 1, 'grand_total': 1, 'total_amount': 1, 'paid_amount': 1,
+         'items': 1, 'line_items': 1, 'invoice_date': 1}
+    ).to_list(10000)
     
     # Calculate totals - support both old and new field names
     total_amount = sum(inv.get('grand_total', inv.get('gross_invoice_value', inv.get('total_amount', 0))) or 0 for inv in all_invoices)
     net_amount = sum(inv.get('net_invoice_value', inv.get('paid_amount', 0)) or 0 for inv in all_invoices)
     credit_amount = sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices)
-    outstanding = sum(inv.get('outstanding', 0) or 0 for inv in all_invoices)
+
+    # Outstanding: ALWAYS read from account.outstanding_balance. That's the
+    # running balance the external system overwrites on every incoming invoice
+    # (including back-dated ones). Deriving it from invoice rows would be wrong
+    # — every invoice carries the same running total, so picking "latest by
+    # invoice_date" can return a stale value when back-dated invoices arrive.
+    outstanding = float(account.get('outstanding_balance') or 0)
+
+    # Bottles delivered across the time window
+    bottles_delivered = 0
+    for inv in all_invoices:
+        for it in (inv.get('items') or inv.get('line_items') or []):
+            try:
+                bottles_delivered += float(it.get('quantity') or it.get('bottles') or 0)
+            except (TypeError, ValueError):
+                pass
+
+    # Bottles returned via customer_returns for this account in the same window.
+    # customer_returns store account_id either as the UUID or the human account_id;
+    # query both to cover legacy records.
+    return_query: dict = {}
+    return_or = []
+    if account_uuid:
+        return_or.append({'account_id': account_uuid})
+    if acc_id and acc_id != account_uuid:
+        return_or.append({'account_id': acc_id})
+    if return_or:
+        return_query['$or'] = return_or
+    if time_filter and time_filter != 'lifetime':
+        from datetime import timedelta as _td
+        _now = datetime.now(timezone.utc)
+        _ranges = {
+            'this_week': (_now - _td(days=_now.weekday()), _now),
+            'last_week': (_now - _td(days=_now.weekday() + 7), _now - _td(days=_now.weekday())),
+            'this_month': (_now.replace(day=1), _now),
+            'last_month': ((_now.replace(day=1) - _td(days=1)).replace(day=1), _now.replace(day=1) - _td(days=1)),
+            'last_3_months': (_now - _td(days=90), _now),
+            'last_6_months': (_now - _td(days=180), _now),
+            'this_quarter': (_now.replace(month=((_now.month - 1) // 3) * 3 + 1, day=1), _now),
+        }
+        if time_filter in _ranges:
+            _start, _end = _ranges[time_filter]
+            return_query['return_date'] = {'$gte': _start.strftime('%Y-%m-%d'), '$lte': _end.strftime('%Y-%m-%d')}
+    cust_returns = await get_tdb().customer_returns.find(return_query, {'_id': 0, 'items': 1}).to_list(2000)
+    bottles_returned = 0
+    for r in cust_returns:
+        for it in (r.get('items') or []):
+            try:
+                bottles_returned += float(it.get('quantity') or 0)
+            except (TypeError, ValueError):
+                pass
+
+    return_pct = round((bottles_returned / bottles_delivered) * 100, 2) if bottles_delivered > 0 else 0.0
     
+    # Resolve each line item's SKU display name to the CURRENT master SKU
+    # (code-first + sku_aliases) so historic invoices show the current SKU.
+    from services.sku_resolver import build_sku_resolver
+    _sku_resolver = await build_sku_resolver(get_tdb())
+
     # Transform invoices to consistent format for frontend
     formatted_invoices = []
     for inv in invoices:
@@ -5290,7 +7082,7 @@ async def get_account_invoices(
             'credit_note': inv.get('credit_note_value', 0),
             'outstanding': inv.get('outstanding', 0),
             'status': inv.get('status', 'matched'),
-            'items': inv.get('line_items', inv.get('items', [])),
+            'items': _sku_resolver.enrich_items(inv.get('line_items', inv.get('items', []))),
             'received_at': inv.get('received_at'),
             'total_bottles': inv.get('total_bottles', 0),
             'total_cogs': inv.get('total_cogs', 0),
@@ -5305,11 +7097,22 @@ async def get_account_invoices(
         'net_amount': net_amount,
         'credit_amount': credit_amount,
         'paid_amount': net_amount,  # For backwards compatibility
-        'outstanding': outstanding if outstanding > 0 else (total_amount - net_amount),
+        'outstanding': outstanding,
         'total': total_count,
         'page': page,
         'limit': limit,
-        'pages': total_pages
+        'pages': total_pages,
+        'time_filter': time_filter,
+        'summary': {
+            'total_gross': round(total_amount, 2),
+            'total_net': round(net_amount, 2),
+            'total_credit': round(credit_amount, 2),
+            'total_outstanding': round(outstanding, 2),
+            'invoice_count': total_count,
+            'bottles_delivered': int(bottles_delivered),
+            'bottles_returned': int(bottles_returned),
+            'return_pct': return_pct,
+        },
     }
 
 class InvoiceLineItemCreate(BaseModel):
@@ -5327,13 +7130,27 @@ class AccountInvoiceCreate(BaseModel):
 @api_router.post("/accounts/{account_id}/invoices")
 async def create_account_invoice(
     account_id: str, 
-    invoice_data: AccountInvoiceCreate, 
-    current_user: dict = Depends(get_current_user)
+    invoice_data: dict, 
+    current_user: dict = Depends(get_user_or_api_key)
 ):
     """
-    Create a new invoice for an account with automatic COGS, logistics, and margin calculation.
-    COGS and logistics are fetched from the cogs_data collection based on SKU and account city.
+    Create a new invoice for an account.
+
+    Supports two payload shapes:
+    1. Internal CRM (legacy): `{invoice_date, line_items[{sku_name, bottles, price_per_bottle}], notes}` — auto-fetches COGS/logistics for the account's city, computes margins.
+    2. External system: `{invoiceNo, invoiceDate, grossInvoiceValue, items[{itemId, quantity, rate, ...}], ...}` — `itemId` maps to `master_skus.external_sku_id`; `account_id` may be the human ACCOUNT_ID code.
     """
+    # Dispatch to external-invoice handler when payload matches external shape
+    from services.external_invoices_service import is_external_payload, create_external_invoice as _create_ext_invoice
+    if is_external_payload(invoice_data):
+        return await _create_ext_invoice(account_id, invoice_data, current_user.get('id'))
+
+    # Validate internal CRM payload shape
+    try:
+        parsed = AccountInvoiceCreate(**invoice_data)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
     # Get account details
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
@@ -5357,7 +7174,7 @@ async def create_account_invoice(
     total_logistics = 0
     total_bottles = 0
     
-    for item in invoice_data.line_items:
+    for item in parsed.line_items:
         sku_name = item.sku_name
         bottles = item.bottles
         price_per_bottle = item.price_per_bottle
@@ -5417,8 +7234,8 @@ async def create_account_invoice(
         'account_id': account_uuid,
         'account_name': account_name,
         'account_city': account_city,
-        'invoice_date': invoice_data.invoice_date,
-        'due_date': (datetime.strptime(invoice_data.invoice_date, '%Y-%m-%d') + timedelta(days=30)).strftime('%Y-%m-%d'),
+        'invoice_date': parsed.invoice_date,
+        'due_date': (datetime.strptime(parsed.invoice_date, '%Y-%m-%d') + timedelta(days=30)).strftime('%Y-%m-%d'),
         'line_items': processed_items,
         'total_bottles': total_bottles,
         'grand_total': round(total_revenue, 2),
@@ -5426,7 +7243,7 @@ async def create_account_invoice(
         'total_logistics': round(total_logistics, 2),
         'gross_margin': gross_margin,
         'gross_margin_percent': gross_margin_percent,
-        'notes': invoice_data.notes,
+        'notes': parsed.notes,
         'status': 'pending',
         'created_by': current_user['id'],
         'created_by_name': current_user.get('name'),
@@ -5442,7 +7259,7 @@ async def create_account_invoice(
             'id': invoice['id'],
             'invoice_number': invoice_number,
             'account_name': account_name,
-            'invoice_date': invoice_data.invoice_date,
+            'invoice_date': parsed.invoice_date,
             'total_bottles': total_bottles,
             'line_items_count': len(processed_items)
         },
@@ -5454,6 +7271,28 @@ async def create_account_invoice(
             'gross_margin_percent': gross_margin_percent
         }
     }
+
+@api_router.put("/accounts/{account_id}/invoices/{invoice_no}")
+async def update_account_invoice(
+    account_id: str,
+    invoice_no: str,
+    invoice_data: dict,
+    current_user: dict = Depends(get_user_or_api_key),
+):
+    """Update an existing invoice from an external system.
+
+    Expects external-system payload (`invoiceNo`, `invoiceDate`, `grossInvoiceValue`, `items[]`).
+    `account_id` may be the human ACCOUNT_ID code (e.g. ORLO-HYD-A26-001) or the UUID.
+    `invoice_no` is the stored invoice id (== external invoiceNo).
+    """
+    from services.external_invoices_service import is_external_payload, update_external_invoice as _update_ext_invoice
+    if not is_external_payload(invoice_data):
+        raise HTTPException(
+            status_code=400,
+            detail="PUT /accounts/{account_id}/invoices/{invoice_no} expects external-system payload (invoiceNo, invoiceDate, items[]).",
+        )
+    return await _update_ext_invoice(account_id, invoice_no, invoice_data, current_user.get('id'))
+
 
 @api_router.delete("/accounts/{account_id}")
 async def delete_account(account_id: str, current_user: dict = Depends(get_current_user)):
@@ -5575,6 +7414,7 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
 async def create_activity(activity_input: ActivityCreate, current_user: dict = Depends(get_current_user)):
     activity_data = activity_input.model_dump()
     activity_data['created_by'] = current_user['id']
+    activity_data['created_by_name'] = current_user.get('name') or current_user.get('email') or ''
     
     # Extract optional fields before creating activity object
     new_status = activity_data.pop('new_status', None)
@@ -5656,6 +7496,7 @@ async def create_activity(activity_input: ActivityCreate, current_user: dict = D
                     'description': ' '.join(target_description_parts),
                     'interaction_method': activity_data.get('interaction_method'),
                     'created_by': current_user['id'],
+                    'created_by_name': current_user.get('name') or current_user.get('email') or '',
                     'created_at': doc['created_at'],
                     'is_shared_copy': True,
                     'original_activity_id': original_activity_id,
@@ -5685,12 +7526,57 @@ async def get_activities(
     current_user: dict = Depends(get_current_user)
 ):
     activities = await get_tdb().activities.find({'lead_id': lead_id}, {'_id': 0}).sort('created_at', -1).skip(skip).limit(limit).to_list(limit)
-    
+
+    # Backfill missing created_by_name from users collection
+    missing_ids = [a['created_by'] for a in activities if not a.get('created_by_name') and a.get('created_by')]
+    if missing_ids:
+        users_docs = await get_tdb().users.find(
+            {'id': {'$in': list(set(missing_ids))}},
+            {'_id': 0, 'id': 1, 'name': 1, 'email': 1}
+        ).to_list(len(missing_ids))
+        users_map = {u['id']: u.get('name') or u.get('email') or '' for u in users_docs}
+        for a in activities:
+            if not a.get('created_by_name'):
+                a['created_by_name'] = users_map.get(a.get('created_by'), '')
+
     for activity in activities:
         if isinstance(activity['created_at'], str):
             activity['created_at'] = datetime.fromisoformat(activity['created_at'])
-    
+
     return activities
+
+
+@api_router.delete("/activities/{activity_id}")
+async def delete_activity(
+    activity_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete a single logged activity. Restricted to CEO / System Admin.
+
+    The activity is removed from the `activities` collection. We don't recompute
+    derived lead-stage metrics here — those are computed on the fly from the
+    remaining activities, so they'll self-correct on the next read.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can delete a logged activity.')
+
+    tdb = get_tdb()
+    activity = await tdb.activities.find_one({'id': activity_id}, {'_id': 0})
+    if not activity:
+        raise HTTPException(status_code=404, detail='Activity not found')
+
+    await tdb.activities.delete_one({'id': activity_id})
+    logger.info(
+        f"Activity {activity_id} (type={activity.get('activity_type')}) on lead "
+        f"{activity.get('lead_id')} deleted by {current_user.get('email')}"
+    )
+    return {
+        'success': True,
+        'activity_id': activity_id,
+        'lead_id': activity.get('lead_id'),
+    }
+
 
 # ============= FOLLOW-UPS ROUTES =============
 
@@ -5778,7 +7664,29 @@ async def create_comment(comment_input: CommentCreate, current_user: dict = Depe
     activity_doc = activity.model_dump()
     activity_doc['created_at'] = activity_doc['created_at'].isoformat()
     await get_tdb().activities.insert_one(activity_doc)
-    
+
+    # @-mention notifications — parse the comment body for inline
+    # `@[Name](user-id)` chips inserted by the frontend MentionTextarea and
+    # ping the referenced users (minus the author). Best-effort.
+    try:
+        from utils.entity_comments import notify_comment_mentions
+        lead = await get_tdb().leads.find_one(
+            {'id': comment_obj.lead_id}, {'_id': 0, 'company': 1, 'contact_person': 1}
+        )
+        lead_label = (lead or {}).get('company') or (lead or {}).get('contact_person') or 'lead'
+        await notify_comment_mentions(
+            tenant_id=get_current_tenant_id(),
+            text=comment_obj.comment or '',
+            current_user=current_user,
+            link=f"/leads/{comment_obj.lead_id}",
+            title=f"{current_user.get('name') or current_user.get('email') or 'Someone'} mentioned you",
+            body=f"Comment on lead {lead_label}",
+            entity_type='lead',
+            entity_id=comment_obj.lead_id,
+        )
+    except Exception:
+        logger.exception("Mention notification failed for lead comment")
+
     return comment_obj
 
 @api_router.get("/comments/{lead_id}", response_model=List[Comment])
@@ -5971,670 +7879,6 @@ async def get_location_config():
     }
     return locations
 
-# ============= DAILY STATUS ROUTES =============
-
-@api_router.post("/daily-status", response_model=DailyStatus)
-async def create_daily_status(status_input: DailyStatusCreate, current_user: dict = Depends(get_current_user)):
-    # Determine target user (self or subordinate)
-    target_user_id = status_input.target_user_id if status_input.target_user_id else current_user['id']
-    posted_by = None
-    posted_by_name = None
-    
-    # If posting for someone else, verify authorization
-    if target_user_id != current_user['id']:
-        # Check if current user is a manager of the target user
-        async def is_subordinate(manager_id, target_id, visited=None):
-            if visited is None:
-                visited = set()
-            if manager_id in visited:
-                return False
-            visited.add(manager_id)
-            
-            direct_reports = await get_tdb().users.find(
-                {'reports_to': manager_id, 'is_active': True},
-                {'_id': 0, 'id': 1}
-            ).to_list(100)
-            
-            for report in direct_reports:
-                if report['id'] == target_id:
-                    return True
-                if await is_subordinate(report['id'], target_id, visited):
-                    return True
-            return False
-        
-        # Leadership roles can post for anyone
-        is_leadership = current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'Admin']
-        
-        if not is_leadership and not await is_subordinate(current_user['id'], target_user_id):
-            raise HTTPException(status_code=403, detail='Not authorized to post status for this user')
-        
-        # Mark who posted this status
-        posted_by = current_user['id']
-        posted_by_name = current_user.get('name', current_user.get('email'))
-    
-    # Check if status already exists for this date
-    existing = await get_tdb().daily_status.find_one({
-        'user_id': target_user_id,
-        'status_date': status_input.status_date
-    }, {'_id': 0})
-    
-    if existing:
-        raise HTTPException(status_code=400, detail='Status already exists for this date')
-    
-    status_data = status_input.model_dump()
-    status_data.pop('target_user_id', None)  # Remove from data
-    status_data['user_id'] = target_user_id
-    status_data['posted_by'] = posted_by
-    status_data['posted_by_name'] = posted_by_name
-    status_obj = DailyStatus(**status_data)
-    
-    doc = status_obj.model_dump()
-    doc['created_at'] = doc['created_at'].isoformat()
-    doc['updated_at'] = doc['updated_at'].isoformat()
-    
-    await get_tdb().daily_status.insert_one(doc)
-    return status_obj
-
-@api_router.get("/daily-status")
-async def get_daily_statuses(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    user_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    query = {}
-    
-    # If user_id is provided, check if current user can view it
-    if user_id and user_id != current_user['id']:
-        # Leadership can see all statuses
-        if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'Admin']:
-            query['user_id'] = user_id
-        else:
-            # Check if the requested user is a subordinate (direct or indirect)
-            async def is_subordinate(manager_id, target_id, visited=None):
-                if visited is None:
-                    visited = set()
-                if manager_id in visited:
-                    return False
-                visited.add(manager_id)
-                
-                direct_reports = await get_tdb().users.find(
-                    {'reports_to': manager_id, 'is_active': True},
-                    {'_id': 0, 'id': 1}
-                ).to_list(100)
-                
-                for report in direct_reports:
-                    if report['id'] == target_id:
-                        return True
-                    if await is_subordinate(report['id'], target_id, visited):
-                        return True
-                return False
-            
-            if await is_subordinate(current_user['id'], user_id):
-                query['user_id'] = user_id
-            else:
-                # Not authorized to view this user's status
-                query['user_id'] = current_user['id']
-    else:
-        query['user_id'] = user_id if user_id else current_user['id']
-    
-    if start_date:
-        query['status_date'] = {'$gte': start_date}
-    if end_date:
-        if 'status_date' in query:
-            query['status_date']['$lte'] = end_date
-        else:
-            query['status_date'] = {'$lte': end_date}
-    
-    statuses = await get_tdb().daily_status.find(query, {'_id': 0}).sort('status_date', -1).to_list(100)
-    
-    for status in statuses:
-        if isinstance(status['created_at'], str):
-            status['created_at'] = datetime.fromisoformat(status['created_at'])
-        if isinstance(status['updated_at'], str):
-            status['updated_at'] = datetime.fromisoformat(status['updated_at'])
-    
-    return statuses
-
-@api_router.put("/daily-status/{status_id}")
-async def update_daily_status(
-    status_id: str,
-    status_update: DailyStatusUpdate,
-    current_user: dict = Depends(get_current_user)
-):
-    status = await get_tdb().daily_status.find_one({'id': status_id}, {'_id': 0})
-    if not status:
-        raise HTTPException(status_code=404, detail='Status not found')
-    
-    # Check authorization
-    is_own_status = status['user_id'] == current_user['id']
-    
-    if not is_own_status:
-        # Check if current user is a manager of the status owner
-        async def is_subordinate(manager_id, target_id, visited=None):
-            if visited is None:
-                visited = set()
-            if manager_id in visited:
-                return False
-            visited.add(manager_id)
-            
-            direct_reports = await get_tdb().users.find(
-                {'reports_to': manager_id, 'is_active': True},
-                {'_id': 0, 'id': 1}
-            ).to_list(100)
-            
-            for report in direct_reports:
-                if report['id'] == target_id:
-                    return True
-                if await is_subordinate(report['id'], target_id, visited):
-                    return True
-            return False
-        
-        # Leadership roles can update anyone's status
-        is_leadership = current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'Admin']
-        
-        if not is_leadership and not await is_subordinate(current_user['id'], status['user_id']):
-            raise HTTPException(status_code=403, detail='Not authorized to update this status')
-    
-    update_data = status_update.model_dump()
-    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    # Track who updated if different from owner
-    if not is_own_status:
-        update_data['posted_by'] = current_user['id']
-        update_data['posted_by_name'] = current_user.get('name', current_user.get('email'))
-    
-    await get_tdb().daily_status.update_one({'id': status_id}, {'$set': update_data})
-    
-    updated_status = await get_tdb().daily_status.find_one({'id': status_id}, {'_id': 0})
-    if isinstance(updated_status['created_at'], str):
-        updated_status['created_at'] = datetime.fromisoformat(updated_status['created_at'])
-    if isinstance(updated_status['updated_at'], str):
-        updated_status['updated_at'] = datetime.fromisoformat(updated_status['updated_at'])
-    
-    return updated_status
-
-@api_router.get("/daily-status/auto-populate/{status_date}")
-async def auto_populate_from_activities(
-    status_date: str, 
-    target_user_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Auto-populate daily status from logged lead activities, grouped by interaction method.
-    Activities shared to linked leads are grouped together to avoid duplication."""
-    
-    try:
-        # Determine which user's activities to fetch
-        fetch_user_id = target_user_id if target_user_id else current_user['id']
-        
-        # If fetching for someone else, verify authorization
-        if target_user_id and target_user_id != current_user['id']:
-            async def is_subordinate(manager_id, target_id, visited=None):
-                if visited is None:
-                    visited = set()
-                if manager_id in visited:
-                    return False
-                visited.add(manager_id)
-                
-                direct_reports = await get_tdb().users.find(
-                    {'reports_to': manager_id, 'is_active': True},
-                    {'_id': 0, 'id': 1}
-                ).to_list(100)
-                
-                for report in direct_reports:
-                    if report['id'] == target_id:
-                        return True
-                    if await is_subordinate(report['id'], target_id, visited):
-                        return True
-                return False
-            
-            is_leadership = current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'Admin']
-            
-            if not is_leadership and not await is_subordinate(current_user['id'], target_user_id):
-                raise HTTPException(status_code=403, detail='Not authorized to fetch activities for this user')
-        
-        # Get all activities created by target user on this date
-        # EXCLUDE shared copies to avoid duplicate counting - only original activities
-        start_datetime = datetime.fromisoformat(f'{status_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
-        end_datetime = datetime.fromisoformat(f'{status_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
-        
-        # Get original activities (not copies)
-        activities = await get_tdb().activities.find(
-            {
-                'created_by': fetch_user_id,
-                'created_at': {'$gte': start_datetime, '$lte': end_datetime},
-                'is_shared_copy': {'$ne': True}  # Exclude copied activities to avoid duplicates
-            },
-            {'_id': 0}
-        ).to_list(100)
-        
-        if not activities:
-            return {'formatted_text': '', 'activity_count': 0}
-        
-        # Get all activity IDs to find their copies (linked leads)
-        activity_ids = [a['id'] for a in activities]
-        
-        # Find all copies of these activities to get the linked lead IDs
-        copied_activities = await get_tdb().activities.find(
-            {
-                'original_activity_id': {'$in': activity_ids},
-                'is_shared_copy': True
-            },
-            {'_id': 0, 'original_activity_id': 1, 'lead_id': 1}
-        ).to_list(500)
-        
-        # Build a map of original activity ID -> list of linked lead IDs
-        activity_linked_leads = {}
-        for copied in copied_activities:
-            orig_id = copied['original_activity_id']
-            if orig_id not in activity_linked_leads:
-                activity_linked_leads[orig_id] = []
-            activity_linked_leads[orig_id].append(copied['lead_id'])
-        
-        # Get lead names for all activities (including linked leads)
-        all_lead_ids = list(set([a['lead_id'] for a in activities]))
-        for linked_ids in activity_linked_leads.values():
-            all_lead_ids.extend(linked_ids)
-        all_lead_ids = list(set(all_lead_ids))
-        
-        leads = await get_tdb().leads.find(
-            {'id': {'$in': all_lead_ids}},
-            {'_id': 0, 'id': 1, 'company': 1, 'name': 1}
-        ).to_list(200)
-        
-        lead_map = {l['id']: l.get('company') or l.get('name') for l in leads}
-        
-        # Group activities by interaction method
-        grouped_activities = {
-            'customer_visit': [],
-            'phone_call': [],
-            'email': [],
-            'whatsapp': [],
-            'sms': [],
-            'other': []
-        }
-        
-        for activity in activities:
-            lead_name = lead_map.get(activity['lead_id'], 'Unknown Lead')
-            description = activity.get('description') or ''
-            # Replace newlines with space to keep activity as single line
-            description = ' '.join(description.split('\n')).strip()
-            description = ' '.join(description.split())  # Normalize multiple spaces
-            interaction_method = (activity.get('interaction_method') or activity.get('activity_type') or '').lower()
-            
-            # Check if this activity was shared to linked leads
-            linked_lead_ids = activity_linked_leads.get(activity['id'], [])
-            if linked_lead_ids:
-                # Group all lead names together (comma-separated)
-                linked_names = [lead_map.get(lid, 'Unknown') for lid in linked_lead_ids]
-                all_names = [lead_name] + linked_names
-                lead_display = ', '.join(all_names)
-                activity_text = f"{lead_display} - {description}" if description else lead_display
-            else:
-                activity_text = f"{lead_name} - {description}" if description else lead_name
-            
-            if interaction_method == 'customer_visit':
-                grouped_activities['customer_visit'].append(activity_text)
-            elif interaction_method in ['phone_call', 'call']:
-                grouped_activities['phone_call'].append(activity_text)
-            elif interaction_method == 'email':
-                grouped_activities['email'].append(activity_text)
-            elif interaction_method == 'whatsapp':
-                grouped_activities['whatsapp'].append(activity_text)
-            elif interaction_method == 'sms':
-                grouped_activities['sms'].append(activity_text)
-            else:
-                grouped_activities['other'].append(activity_text)
-        
-        # Build formatted text grouped by interaction type
-        formatted_sections = []
-        
-        # Summary counts
-        summary_parts = []
-        if grouped_activities['customer_visit']:
-            summary_parts.append(f"Visits: {len(grouped_activities['customer_visit'])}")
-        if grouped_activities['phone_call']:
-            summary_parts.append(f"Calls: {len(grouped_activities['phone_call'])}")
-        messages_count = len(grouped_activities['email']) + len(grouped_activities['whatsapp']) + len(grouped_activities['sms'])
-        if messages_count > 0:
-            summary_parts.append(f"Messages: {messages_count}")
-        if grouped_activities['other']:
-            summary_parts.append(f"Other: {len(grouped_activities['other'])}")
-        
-        summary_line = " | ".join(summary_parts) if summary_parts else "Activities logged"
-        # Use special markers for highlighting in frontend
-        formatted_sections.append(f"[SUMMARY] {summary_line}")
-        
-        # Add grouped sections with special header markers
-        if grouped_activities['customer_visit']:
-            formatted_sections.append("\n[HEADER] CUSTOMER VISITS")
-            for item in grouped_activities['customer_visit']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['phone_call']:
-            formatted_sections.append("\n[HEADER] PHONE CALLS")
-            for item in grouped_activities['phone_call']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['email']:
-            formatted_sections.append("\n[HEADER] EMAILS")
-            for item in grouped_activities['email']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['whatsapp']:
-            formatted_sections.append("\n[HEADER] WHATSAPP")
-            for item in grouped_activities['whatsapp']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['sms']:
-            formatted_sections.append("\n[HEADER] SMS")
-            for item in grouped_activities['sms']:
-                formatted_sections.append(f"• {item}")
-        
-        if grouped_activities['other']:
-            formatted_sections.append("\n[HEADER] OTHER ACTIVITIES")
-            for item in grouped_activities['other']:
-                formatted_sections.append(f"• {item}")
-        
-        formatted_text = '\n'.join(formatted_sections)
-        
-        return {
-            'formatted_text': formatted_text,
-            'activity_count': len(activities),
-            'leads_contacted': len(lead_map),
-            'summary': {
-                'visits': len(grouped_activities['customer_visit']),
-                'calls': len(grouped_activities['phone_call']),
-                'messages': messages_count
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f'Auto-populate error: {str(e)}')
-        return {
-            'formatted_text': '',
-            'activity_count': 0,
-            'leads_contacted': 0
-        }
-async def revise_status_with_ai(request: dict, current_user: dict = Depends(get_current_user)):
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
-    original_text = request.get('text', '')
-    if not original_text:
-        raise HTTPException(status_code=400, detail='Text is required')
-    
-    try:
-        user_id = current_user['id']
-        session_id = f'status-revision-{user_id}'
-        
-        # Initialize Claude chat
-        chat = LlmChat(
-            api_key=os.environ['EMERGENT_LLM_KEY'],
-            session_id=session_id,
-            system_message='You are a professional editor. Your job is to ONLY fix grammar, correct spelling, and improve sentence structure. Do NOT add headings, sections, bullet points, or any new information. Do NOT add greetings or conclusions. Keep the same tone and length. Just make the existing text grammatically correct and more readable while preserving all original content and meaning exactly as written.'
-        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
-        
-        user_message = UserMessage(
-            text=f'Fix grammar and improve readability of this text. Do not add headings, sections, or new information. Keep it concise:\n\n{original_text}'
-        )
-        
-        revised_text = await chat.send_message(user_message)
-        
-        return {
-            'original': original_text,
-            'revised': revised_text,
-            'model': 'claude-sonnet-4.5'
-        }
-    except Exception as e:
-        logger.error(f'AI revision error: {str(e)}')
-        raise HTTPException(status_code=500, detail=f'AI revision failed: {str(e)}')
-
-@api_router.get("/daily-status/team-rollup")
-async def get_team_status_rollup(
-    status_date: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get daily status rollup for team members"""
-    
-    target_date = status_date or datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    
-    # For high-level roles, show ALL team statuses (not just direct reports)
-    high_level_roles = ['CEO', 'Director', 'Vice President', 'National Sales Head', 'System Admin']
-    
-    if current_user.get('role') in high_level_roles:
-        # Get all active users' statuses
-        all_users = await get_tdb().users.find(
-            {'is_active': True},
-            {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'designation': 1, 'territory': 1, 'city': 1, 'state': 1}
-        ).to_list(500)
-        user_ids = [u['id'] for u in all_users]
-        user_map = {u['id']: u for u in all_users}
-    else:
-        # For other roles, show only direct reports
-        direct_reports = await get_tdb().users.find(
-            {'reports_to': current_user['id']},
-            {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'designation': 1, 'territory': 1, 'city': 1, 'state': 1}
-        ).to_list(100)
-        
-        if not direct_reports:
-            return {'team_statuses': [], 'date': target_date, 'total_reports': 0, 'statuses_received': 0}
-        
-        user_ids = [u['id'] for u in direct_reports]
-        user_map = {u['id']: u for u in direct_reports}
-    
-    # Get statuses for all target users
-    query = {
-        'user_id': {'$in': user_ids},
-        'status_date': target_date
-    }
-    
-    statuses = await get_tdb().daily_status.find(query, {'_id': 0}).to_list(500)
-    
-    # Get activity metrics for the day
-    start_datetime = datetime.fromisoformat(f'{target_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
-    end_datetime = datetime.fromisoformat(f'{target_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
-    
-    # Map statuses to users with metrics
-    team_statuses = []
-    for status in statuses:
-        user_info = user_map.get(status['user_id'])
-        if user_info:
-            # Get activity metrics for this user
-            user_activities = await get_tdb().activities.find({
-                'created_by': status['user_id'],
-                'created_at': {'$gte': start_datetime, '$lte': end_datetime}
-            }, {'_id': 0}).to_list(1000)
-            
-            phone_calls = sum(1 for a in user_activities if a.get('interaction_method') == 'phone_call')
-            customer_visits = sum(1 for a in user_activities if a.get('interaction_method') == 'customer_visit')
-            emails = sum(1 for a in user_activities if a.get('interaction_method') == 'email')
-            messages = sum(1 for a in user_activities if a.get('interaction_method') in ['whatsapp', 'sms'])
-            
-            new_leads = await get_tdb().leads.count_documents({
-                'created_by': status['user_id'],
-                'created_at': {'$gte': start_datetime, '$lte': end_datetime}
-            })
-            
-            if isinstance(status.get('created_at'), str):
-                created_at = status['created_at']
-            else:
-                created_at = status['created_at'].isoformat()
-                
-            team_statuses.append({
-                'id': status.get('id', ''),
-                'user_id': status['user_id'],
-                'user_name': user_info['name'],
-                'user_role': user_info.get('role', ''),
-                'user_designation': user_info.get('designation', ''),
-                'user_territory': user_info.get('territory', ''),
-                'user_city': user_info.get('city', ''),
-                'user_state': user_info.get('state', ''),
-                'status_date': status['status_date'],
-                'yesterday_updates': status.get('yesterday_updates', ''),
-                'today_actions': status.get('today_actions', ''),
-                'help_needed': status.get('help_needed', ''),
-                'yesterday_ai_revised': status.get('yesterday_ai_revised', False),
-                'today_ai_revised': status.get('today_ai_revised', False),
-                'help_ai_revised': status.get('help_ai_revised', False),
-                'created_at': created_at,
-                'metrics': {
-                    'new_leads': new_leads,
-                    'phone_calls': phone_calls,
-                    'customer_visits': customer_visits,
-                    'emails': emails,
-                    'messages': messages
-                }
-            })
-    
-    # Sort by creation time (latest first)
-    team_statuses.sort(key=lambda x: x['created_at'], reverse=True)
-    
-    return {
-        'team_statuses': team_statuses,
-        'date': target_date,
-        'total_reports': len(user_ids),
-        'statuses_received': len(team_statuses)
-    }
-
-@api_router.post("/daily-status/team-summary")
-async def generate_team_summary(request: dict, current_user: dict = Depends(get_current_user)):
-    """Generate AI consolidated summary of team daily statuses"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
-    team_statuses = request.get('team_statuses', [])
-    status_date = request.get('status_date', '')
-    
-    if not team_statuses:
-        raise HTTPException(status_code=400, detail='No team statuses provided')
-    
-    # Build consolidated text for AI
-    status_text = f"Team Daily Status Summary for {status_date}\n\n"
-    
-    for status in team_statuses:
-        status_text += f"--- {status['user_name']} ({status['user_designation']}) - {status['user_territory']} ---\n"
-        if status.get('yesterday_updates'):
-            status_text += f"Updates: {status['yesterday_updates']}\n"
-        if status.get('today_actions'):
-            status_text += f"Action Items: {status['today_actions']}\n"
-        if status.get('help_needed'):
-            status_text += f"Help Needed: {status['help_needed']}\n"
-        status_text += "\n"
-    
-    try:
-        user_id = current_user['id']
-        session_id = f'team-summary-{user_id}'
-        
-        chat = LlmChat(
-            api_key=os.environ['EMERGENT_LLM_KEY'],
-            session_id=session_id,
-            system_message='You are a professional editor. Your ONLY job is to: 1) Combine all team member updates into flowing paragraphs, 2) Fix grammar and spelling, 3) Make sentences clear and professional. DO NOT add interpretations like "significant progress" or "achieved well". DO NOT add adjectives or descriptions that were not in the original text. DO NOT elaborate or embellish. Just combine the facts exactly as stated, fix grammar, and organize into 3 paragraphs: Updates, Action Items, Help Needed. Keep it purely factual.'
-        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
-        
-        user_message = UserMessage(
-            text=f'Combine these team status updates into 3 paragraphs (Updates, Actions, Help). Fix grammar ONLY. Do not add interpretations or adjectives. Stay purely factual:\n\n{status_text}'
-        )
-        
-        summary = await chat.send_message(user_message)
-        
-        return {
-            'summary': summary,
-            'date': status_date,
-            'team_count': len(team_statuses)
-        }
-    except Exception as e:
-        logger.error(f'Team summary generation error: {str(e)}')
-        raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
-
-@api_router.get("/daily-status/weekly-summary")
-async def get_weekly_status_summary(
-    start_date: str,
-    end_date: str,
-    user_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get weekly status summary for team or individual member"""
-    
-    # Build query
-    query = {'status_date': {'$gte': start_date, '$lte': end_date}}
-    
-    if user_id:
-        # Individual member summary
-        query['user_id'] = user_id
-        user = await get_tdb().users.find_one({'id': user_id}, {'_id': 0})
-    else:
-        # Team summary - all direct reports
-        direct_reports = await get_tdb().users.find(
-            {'reports_to': current_user['id']},
-            {'_id': 0, 'id': 1}
-        ).to_list(100)
-        
-        if direct_reports:
-            user_ids = [u['id'] for u in direct_reports]
-            query['user_id'] = {'$in': user_ids}
-    
-    # Get all statuses in date range
-    statuses = await get_tdb().daily_status.find(query, {'_id': 0}).sort('status_date', 1).to_list(500)
-    
-    return {
-        'statuses': statuses,
-        'start_date': start_date,
-        'end_date': end_date,
-        'total_days': len(set([s['status_date'] for s in statuses])),
-        'is_individual': user_id is not None
-    }
-
-@api_router.post("/daily-status/generate-period-summary")
-async def generate_period_summary(request: dict, current_user: dict = Depends(get_current_user)):
-    """Generate AI summary for weekly/monthly period"""
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
-    
-    statuses = request.get('statuses', [])
-    period_type = request.get('period_type', 'weekly')  # weekly or monthly
-    start_date = request.get('start_date', '')
-    end_date = request.get('end_date', '')
-    
-    if not statuses:
-        raise HTTPException(status_code=400, detail='No statuses provided')
-    
-    # Build text for AI
-    summary_text = f"{period_type.title()} Status Summary: {start_date} to {end_date}\n\n"
-    
-    for status in statuses:
-        user_name = status.get('user_name', 'Unknown')
-        date = status.get('status_date', '')
-        summary_text += f"[{date}] {user_name}:\n"
-        if status.get('yesterday_updates'):
-            summary_text += f"  {status['yesterday_updates']}\n"
-        if status.get('today_actions'):
-            summary_text += f"  {status['today_actions']}\n"
-        summary_text += "\n"
-    
-    try:
-        user_id = current_user['id']
-        session_id = f'period-summary-{user_id}'
-        
-        chat = LlmChat(
-            api_key=os.environ['EMERGENT_LLM_KEY'],
-            session_id=session_id,
-            system_message=f'You are a professional editor creating a {period_type} summary. Combine all daily updates into a coherent summary. Organize into: 1) Key Activities (what was done), 2) Outcomes (deals, meetings, results), 3) Pending Items (what needs follow-up). Fix grammar, stay factual, do NOT add interpretations or exaggerate. Just consolidate the facts clearly.'
-        ).with_model('anthropic', 'claude-sonnet-4-5-20250929')
-        
-        user_message = UserMessage(
-            text=f'Create a {period_type} summary from these daily updates. Combine into 3 clear paragraphs. Fix grammar only, stay factual:\n\n{summary_text}'
-        )
-        
-        summary = await chat.send_message(user_message)
-        
-        return {
-            'summary': summary,
-            'period_type': period_type,
-            'start_date': start_date,
-            'end_date': end_date,
-            'days_covered': len(statuses)
-        }
-    except Exception as e:
-        logger.error(f'Period summary error: {str(e)}')
-        raise HTTPException(status_code=500, detail=f'Summary generation failed: {str(e)}')
 
 @api_router.post("/users/create", response_model=User)
 async def create_team_member(user_input: UserCreate, request: Request, current_user: dict = Depends(get_current_user)):
@@ -6723,666 +7967,6 @@ async def update_user(user_id: str, updates: dict, current_user: dict = Depends(
     
     return {'message': 'User updated successfully'}
 
-# ============= ANALYTICS/REPORTS ROUTES =============
-
-@api_router.get("/analytics/dashboard")
-async def get_dashboard_analytics(
-    time_filter: Optional[str] = 'lifetime',
-    territory: Optional[str] = None,
-    state: Optional[str] = None,
-    city: Optional[str] = None,
-    sales_resource: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get dashboard analytics with filters"""
-    
-    # Calculate date range based on time filter
-    now = datetime.now(timezone.utc)
-    
-    if time_filter == 'this_week':
-        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_week':
-        start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = (now - timedelta(days=now.weekday() + 1)).replace(hour=23, minute=59, second=59).isoformat()
-    elif time_filter == 'this_month':
-        start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_month':
-        # Get the first day of current month, then go back one day to get last day of previous month
-        first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        last_day_of_prev = first_of_current - timedelta(days=1)
-        first_of_prev = last_day_of_prev.replace(day=1)
-        start_date = first_of_prev.isoformat()
-        end_date = last_day_of_prev.replace(hour=23, minute=59, second=59).isoformat()
-    elif time_filter == 'last_3_months':
-        start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_6_months':
-        start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'this_quarter':
-        quarter = (now.month - 1) // 3
-        start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_quarter':
-        quarter = (now.month - 1) // 3
-        if quarter == 0:
-            start_date = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0).isoformat()
-            end_date = now.replace(year=now.year - 1, month=12, day=31, hour=23, minute=59, second=59).isoformat()
-        else:
-            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
-            end_date = now.replace(month=quarter * 3, day=1, hour=0, minute=0, second=0).isoformat()
-    else:  # lifetime
-        start_date = None
-        end_date = None
-    
-    # Build match stage based on role and filters
-    match_stage = {}
-    
-    # Role-based access
-    if current_user['role'] == 'sales_rep':
-        match_stage['assigned_to'] = current_user['id']
-    elif sales_resource:
-        # Filter by specific sales resource
-        match_stage['assigned_to'] = sales_resource
-    
-    # Add location filters
-    if territory and territory != 'all':
-        match_stage['region'] = territory
-    if state:
-        match_stage['state'] = state
-    if city:
-        match_stage['city'] = city
-    
-    # Add date filter if not lifetime
-    if start_date and end_date:
-        match_stage['created_at'] = {'$gte': start_date, '$lte': end_date}
-    
-    # Activity query with same filters
-    activity_query = {}
-    
-    if current_user['role'] == 'sales_rep':
-        activity_query['created_by'] = current_user['id']
-    elif sales_resource:
-        activity_query['created_by'] = sales_resource
-    
-    if start_date and end_date:
-        activity_query['created_at'] = {'$gte': start_date, '$lte': end_date}
-    
-    # Get all activities
-    activities = await get_tdb().activities.find(activity_query, {'_id': 0}).to_list(10000)
-    
-    # Filter activities by location if needed (via lead lookup)
-    if territory or state or city:
-        lead_ids_query = {}
-        if territory and territory != 'all':
-            lead_ids_query['region'] = territory
-        if state:
-            lead_ids_query['state'] = state
-        if city:
-            lead_ids_query['city'] = city
-        
-        matching_leads = await get_tdb().leads.find(lead_ids_query, {'_id': 0, 'id': 1}).to_list(10000)
-        matching_lead_ids = [l['id'] for l in matching_leads]
-        activities = [a for a in activities if a.get('lead_id') in matching_lead_ids]
-    
-    # Count visits and calls
-    visits = [a for a in activities if a.get('interaction_method') == 'customer_visit']
-    calls = [a for a in activities if a.get('interaction_method') == 'phone_call']
-    
-    total_visits = len(visits)
-    total_calls = len(calls)
-    
-    # Unique visits/calls (unique lead_ids)
-    unique_visit_leads = len(set([a['lead_id'] for a in visits]))
-    unique_call_leads = len(set([a['lead_id'] for a in calls]))
-    
-    # Status distribution
-    status_pipeline = [
-        {'$match': match_stage},
-        {'$group': {'_id': '$status', 'count': {'$sum': 1}}}
-    ]
-    status_results = await get_tdb().leads.aggregate(status_pipeline).to_list(100)
-    status_counts = {item['_id']: item['count'] for item in status_results}
-    
-    # Calculate metrics
-    total_leads = sum(status_counts.values())
-    new_leads_added = total_leads
-    leads_won = status_counts.get('closed_won', 0)
-    leads_lost = status_counts.get('closed_lost', 0)
-    conversion_rate = (leads_won / total_leads * 100) if total_leads > 0 else 0
-    
-    # Pipeline value - exclude won, lost, closed_won, closed_lost, and not_qualified (only active opportunities)
-    pipeline_value_pipeline = [
-        {'$match': {**match_stage, 'status': {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']}}},
-        {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
-    ]
-    pipeline_value_result = await get_tdb().leads.aggregate(pipeline_value_pipeline).to_list(1)
-    pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
-    
-    # Today's follow-ups
-    today = datetime.now(timezone.utc).date()
-    today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc).isoformat()
-    today_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
-    
-    today_follow_ups_count = await get_tdb().follow_ups.count_documents({
-        'is_completed': False,
-        'scheduled_date': {'$gte': today_start, '$lte': today_end}
-    })
-    
-    return {
-        'total_leads': total_leads,
-        'conversion_rate': round(conversion_rate, 2),
-        'pipeline_value': pipeline_value or 0,
-        'today_follow_ups': today_follow_ups_count,
-        'status_distribution': status_counts,
-        'total_visits': total_visits,
-        'unique_visits': unique_visit_leads,
-        'total_calls': total_calls,
-        'unique_calls': unique_call_leads,
-        'new_leads_added': new_leads_added,
-        'leads_won': leads_won,
-        'leads_lost': leads_lost,
-        'time_filter': time_filter
-    }
-    
-    # Calculate date range based on time filter
-    now = datetime.now(timezone.utc)
-    
-    if time_filter == 'this_week':
-        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_week':
-        start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = (now - timedelta(days=now.weekday() + 1)).replace(hour=23, minute=59, second=59).isoformat()
-    elif time_filter == 'this_month':
-        start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_month':
-        # Get the first day of current month, then go back one day to get last day of previous month
-        first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        last_day_of_prev = first_of_current - timedelta(days=1)
-        first_of_prev = last_day_of_prev.replace(day=1)
-        start_date = first_of_prev.isoformat()
-        end_date = last_day_of_prev.replace(hour=23, minute=59, second=59).isoformat()
-    elif time_filter == 'last_3_months':
-        start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_6_months':
-        start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'this_quarter':
-        quarter = (now.month - 1) // 3
-        start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_quarter':
-        quarter = (now.month - 1) // 3
-        if quarter == 0:
-            start_date = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0).isoformat()
-            end_date = now.replace(year=now.year - 1, month=12, day=31, hour=23, minute=59, second=59).isoformat()
-        else:
-            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
-            end_date = now.replace(month=quarter * 3, day=1, hour=0, minute=0, second=0).isoformat()
-    else:  # lifetime
-        start_date = None
-        end_date = None
-    
-    # Build match stage based on role and time filter
-    match_stage = {} if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager'] else {'assigned_to': current_user['id']}
-    
-    # Add date filter if not lifetime
-    if start_date and end_date:
-        match_stage['created_at'] = {'$gte': start_date, '$lte': end_date}
-    
-    # Get activity metrics for the period
-    activity_query = {} if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager'] else {'created_by': current_user['id']}
-    
-    if start_date and end_date:
-        activity_query['created_at'] = {'$gte': start_date, '$lte': end_date}
-    
-    # Get all activities
-    activities = await get_tdb().activities.find(activity_query, {'_id': 0}).to_list(10000)
-    
-    # Count visits and calls
-    visits = [a for a in activities if a.get('interaction_method') == 'customer_visit']
-    calls = [a for a in activities if a.get('interaction_method') == 'phone_call']
-    
-    total_visits = len(visits)
-    total_calls = len(calls)
-    
-    # Unique visits/calls (unique lead_ids)
-    unique_visit_leads = len(set([a['lead_id'] for a in visits]))
-    unique_call_leads = len(set([a['lead_id'] for a in calls]))
-    
-    # Status distribution
-    status_pipeline = [
-        {'$match': match_stage},
-        {'$group': {'_id': '$status', 'count': {'$sum': 1}}}
-    ]
-    status_results = await get_tdb().leads.aggregate(status_pipeline).to_list(100)
-    status_counts = {item['_id']: item['count'] for item in status_results}
-    
-    # Calculate metrics
-    total_leads = sum(status_counts.values())
-    new_leads_added = total_leads  # All leads in time period are "new" for that period
-    leads_won = status_counts.get('closed_won', 0)
-    leads_lost = status_counts.get('closed_lost', 0)
-    conversion_rate = (leads_won / total_leads * 100) if total_leads > 0 else 0
-    
-    # Pipeline value - exclude won, lost, closed_won, closed_lost, and not_qualified (only active opportunities)
-    pipeline_value_pipeline = [
-        {'$match': {**match_stage, 'status': {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']}}},
-        {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
-    ]
-    pipeline_value_result = await get_tdb().leads.aggregate(pipeline_value_pipeline).to_list(1)
-    pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
-    
-    # Today's follow-ups
-    today = datetime.now(timezone.utc).date()
-    today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc).isoformat()
-    today_end = datetime.combine(today, datetime.max.time()).replace(tzinfo=timezone.utc).isoformat()
-    
-    today_follow_ups_count = await get_tdb().follow_ups.count_documents({
-        'is_completed': False,
-        'scheduled_date': {'$gte': today_start, '$lte': today_end}
-    })
-    
-    return {
-        'total_leads': total_leads,
-        'conversion_rate': round(conversion_rate, 2),
-        'pipeline_value': pipeline_value or 0,
-        'today_follow_ups': today_follow_ups_count,
-        'status_distribution': status_counts,
-        'total_visits': total_visits,
-        'unique_visits': unique_visit_leads,
-        'total_calls': total_calls,
-        'unique_calls': unique_call_leads,
-        'new_leads_added': new_leads_added,
-        'leads_won': leads_won,
-        'leads_lost': leads_lost,
-        'time_filter': time_filter
-    }
-
-
-@api_router.get("/analytics/pipeline-accounts")
-async def get_pipeline_accounts(
-    time_filter: Optional[str] = 'lifetime',
-    territory: Optional[str] = None,
-    state: Optional[str] = None,
-    city: Optional[str] = None,
-    sales_resource: Optional[str] = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=100),
-    current_user: dict = Depends(get_current_user)
-):
-    """Get list of accounts/leads contributing to pipeline value"""
-    
-    # Calculate date range based on time filter
-    now = datetime.now(timezone.utc)
-    
-    if time_filter == 'this_week':
-        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_week':
-        start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = (now - timedelta(days=now.weekday() + 1)).replace(hour=23, minute=59, second=59).isoformat()
-    elif time_filter == 'this_month':
-        start_date = now.replace(day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_month':
-        # Get the first day of current month, then go back one day to get last day of previous month
-        first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        last_day_of_prev = first_of_current - timedelta(days=1)
-        first_of_prev = last_day_of_prev.replace(day=1)
-        start_date = first_of_prev.isoformat()
-        end_date = last_day_of_prev.replace(hour=23, minute=59, second=59).isoformat()
-    elif time_filter == 'last_3_months':
-        start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_6_months':
-        start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'this_quarter':
-        quarter = (now.month - 1) // 3
-        start_date = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
-        end_date = now.isoformat()
-    elif time_filter == 'last_quarter':
-        quarter = (now.month - 1) // 3
-        if quarter == 0:
-            start_date = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0).isoformat()
-            end_date = now.replace(year=now.year - 1, month=12, day=31, hour=23, minute=59, second=59).isoformat()
-        else:
-            start_date = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0).isoformat()
-            end_date = now.replace(month=quarter * 3, day=1, hour=0, minute=0, second=0).isoformat()
-    else:  # lifetime or default
-        start_date = None
-        end_date = None
-    
-    # Build match stage - exclude won, lost, closed_won, closed_lost, and not_qualified (only active opportunities)
-    match_stage = {
-        'status': {'$nin': ['closed_lost', 'closed_won', 'not_qualified', 'won', 'lost']},
-        'estimated_value': {'$gt': 0}  # Only leads with value
-    }
-    
-    # Add date filter if not lifetime
-    if start_date and end_date:
-        match_stage['created_at'] = {'$gte': start_date, '$lte': end_date}
-    
-    # Add territory/state/city filters
-    if territory and territory != 'all':
-        match_stage['territory'] = territory
-    if state and state != 'all':
-        match_stage['state'] = state
-    if city and city != 'all':
-        match_stage['city'] = city
-    
-    # Add sales resource filter
-    if sales_resource and sales_resource != 'all':
-        match_stage['assigned_to'] = sales_resource
-    
-    # Get total count
-    total = await get_tdb().leads.count_documents(match_stage)
-    
-    # Get total pipeline value
-    pipeline_value_result = await get_tdb().leads.aggregate([
-        {'$match': match_stage},
-        {'$group': {'_id': None, 'total_value': {'$sum': '$estimated_value'}}}
-    ]).to_list(1)
-    total_pipeline_value = pipeline_value_result[0]['total_value'] if pipeline_value_result else 0
-    
-    # Get paginated accounts sorted by estimated_value descending
-    accounts = await get_tdb().leads.find(
-        match_stage,
-        {
-            '_id': 0,
-            'id': 1,
-            'company': 1,
-            'contact_person': 1,
-            'phone': 1,
-            'city': 1,
-            'state': 1,
-            'status': 1,
-            'estimated_value': 1,
-            'assigned_to': 1,
-            'assigned_to_name': 1,
-            'created_at': 1,
-            'updated_at': 1
-        }
-    ).sort('estimated_value', -1).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
-    
-    # Map company to account_name for frontend compatibility
-    for account in accounts:
-        account['account_name'] = account.pop('company', None)
-    
-    return {
-        'accounts': accounts,
-        'total': total,
-        'total_pipeline_value': total_pipeline_value,
-        'page': page,
-        'page_size': page_size,
-        'total_pages': (total + page_size - 1) // page_size
-    }
-async def get_reports(current_user: dict = Depends(get_current_user)):
-    # Build match stage based on role
-    match_stage = {} if current_user['role'] in ['admin', 'sales_manager'] else {'assigned_to': current_user['id']}
-    
-    # Lead source analysis using aggregation
-    source_pipeline = [
-        {'$match': match_stage},
-        {'$group': {'_id': {'$ifNull': ['$source', 'unknown']}, 'count': {'$sum': 1}}}
-    ]
-    source_results = await get_tdb().leads.aggregate(source_pipeline).to_list(100)
-    source_counts = {item['_id']: item['count'] for item in source_results}
-    
-    # Team performance (for leadership/managers) using aggregation
-    team_performance = []
-    if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
-        team_pipeline = [
-            {'$match': match_stage},
-            {'$group': {
-                '_id': '$assigned_to',
-                'total_leads': {'$sum': 1},
-                'closed_won': {
-                    '$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}
-                }
-            }}
-        ]
-        team_results = await get_tdb().leads.aggregate(team_pipeline).to_list(100)
-        
-        # Get user names
-        user_ids = [item['_id'] for item in team_results if item['_id']]
-        users = await get_tdb().users.find(
-            {'id': {'$in': user_ids}},
-            {'_id': 0, 'id': 1, 'name': 1}
-        ).to_list(100)
-        user_map = {user['id']: user['name'] for user in users}
-        
-        for item in team_results:
-            if item['_id']:
-                total = item['total_leads']
-                won = item['closed_won']
-                team_performance.append({
-                    'name': user_map.get(item['_id'], 'Unknown'),
-                    'total_leads': total,
-                    'closed_won': won,
-                    'conversion_rate': round(won / total * 100, 2) if total > 0 else 0
-                })
-    
-    # Monthly trends using aggregation
-    monthly_pipeline = [
-        {'$match': match_stage},
-        {'$group': {
-            '_id': {
-                'month': {'$dateToString': {'format': '%Y-%m', 'date': {'$toDate': '$created_at'}}},
-                'status': '$status'
-            },
-            'count': {'$sum': 1}
-        }}
-    ]
-    monthly_results = await get_tdb().leads.aggregate(monthly_pipeline).to_list(1000)
-    
-    # Transform monthly results into desired format
-    monthly_data = {}
-    for item in monthly_results:
-        month = item['_id']['month']
-        status = item['_id']['status']
-        if month not in monthly_data:
-            monthly_data[month] = {'new': 0, 'closed_won': 0, 'closed_lost': 0}
-        if status == 'closed_won':
-            monthly_data[month]['closed_won'] = item['count']
-        elif status == 'closed_lost':
-            monthly_data[month]['closed_lost'] = item['count']
-        monthly_data[month]['new'] += item['count']
-    
-    return {
-        'source_analysis': source_counts,
-        'team_performance': team_performance,
-        'monthly_trends': monthly_data
-    }
-
-@api_router.get("/analytics/activity-metrics")
-async def get_activity_metrics(
-    start_date: str,
-    end_date: str,
-    user_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get activity metrics for a date range"""
-    
-    # Build query
-    start_datetime = datetime.fromisoformat(f'{start_date}T00:00:00').replace(tzinfo=timezone.utc).isoformat()
-    end_datetime = datetime.fromisoformat(f'{end_date}T23:59:59').replace(tzinfo=timezone.utc).isoformat()
-    
-    query = {
-        'created_at': {'$gte': start_datetime, '$lte': end_datetime}
-    }
-    
-    if user_id:
-        query['created_by'] = user_id
-    else:
-        # Get all direct reports
-        direct_reports = await get_tdb().users.find(
-            {'reports_to': current_user['id']},
-            {'_id': 0, 'id': 1}
-        ).to_list(100)
-        
-        if direct_reports:
-            user_ids = [u['id'] for u in direct_reports]
-            query['created_by'] = {'$in': user_ids}
-    
-    # Get all activities
-    activities = await get_tdb().activities.find(query, {'_id': 0}).to_list(5000)
-    
-    # Count by interaction method
-    phone_calls = sum(1 for a in activities if a.get('interaction_method') == 'phone_call')
-    customer_visits = sum(1 for a in activities if a.get('interaction_method') == 'customer_visit')
-    emails = sum(1 for a in activities if a.get('interaction_method') == 'email')
-    messages = sum(1 for a in activities if a.get('interaction_method') in ['whatsapp', 'sms'])
-    
-    # Count new leads created in this period
-    leads_query = {
-        'created_at': {'$gte': start_datetime, '$lte': end_datetime}
-    }
-    
-    if user_id:
-        leads_query['created_by'] = user_id
-    else:
-        if direct_reports:
-            user_ids = [u['id'] for u in direct_reports]
-            leads_query['created_by'] = {'$in': user_ids}
-    
-    new_leads = await get_tdb().leads.count_documents(leads_query)
-    
-    return {
-        'new_leads': new_leads,
-        'phone_calls': phone_calls,
-        'customer_visits': customer_visits,
-        'emails': emails,
-        'messages': messages,
-        'total_activities': len(activities),
-        'start_date': start_date,
-        'end_date': end_date
-    }
-async def get_location_analytics(current_user: dict = Depends(get_current_user)):
-    # Build match stage based on role
-    match_stage = {} if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager'] else {'assigned_to': current_user['id']}
-    
-    # Leads by country
-    country_pipeline = [
-        {'$match': match_stage},
-        {'$group': {
-            '_id': {'$ifNull': ['$country', 'Unknown']},
-            'total_leads': {'$sum': 1},
-            'closed_won': {'$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}},
-            'pipeline_value': {'$sum': '$estimated_value'}
-        }},
-        {'$sort': {'total_leads': -1}}
-    ]
-    country_results = await get_tdb().leads.aggregate(country_pipeline).to_list(100)
-    
-    # Leads by state/region
-    state_pipeline = [
-        {'$match': match_stage},
-        {'$group': {
-            '_id': {'$ifNull': ['$state', 'Unknown']},
-            'total_leads': {'$sum': 1},
-            'closed_won': {'$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}},
-            'pipeline_value': {'$sum': '$estimated_value'}
-        }},
-        {'$sort': {'total_leads': -1}}
-    ]
-    state_results = await get_tdb().leads.aggregate(state_pipeline).to_list(100)
-    
-    # Leads by city
-    city_pipeline = [
-        {'$match': match_stage},
-        {'$group': {
-            '_id': {'$ifNull': ['$city', 'Unknown']},
-            'total_leads': {'$sum': 1},
-            'closed_won': {'$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}},
-            'pipeline_value': {'$sum': '$estimated_value'}
-        }},
-        {'$sort': {'total_leads': -1}},
-        {'$limit': 20}  # Top 20 cities
-    ]
-    city_results = await get_tdb().leads.aggregate(city_pipeline).to_list(20)
-    
-    # Leads by region (business territory)
-    region_pipeline = [
-        {'$match': match_stage},
-        {'$group': {
-            '_id': {'$ifNull': ['$region', 'Unknown']},
-            'total_leads': {'$sum': 1},
-            'closed_won': {'$sum': {'$cond': [{'$eq': ['$status', 'closed_won']}, 1, 0]}},
-            'pipeline_value': {'$sum': '$estimated_value'}
-        }},
-        {'$sort': {'total_leads': -1}}
-    ]
-    region_results = await get_tdb().leads.aggregate(region_pipeline).to_list(100)
-    
-    # Team locations
-    team_locations = []
-    if current_user['role'] in ['ceo', 'director', 'vp', 'admin', 'sales_manager']:
-        users = await get_tdb().users.find(
-            {},
-            {'_id': 0, 'id': 1, 'name': 1, 'city': 1, 'state': 1, 'country': 1, 'territory': 1}
-        ).to_list(100)
-        team_locations = [
-            {
-                'name': user['name'],
-                'city': user.get('city', 'Unknown'),
-                'state': user.get('state', 'Unknown'),
-                'country': user.get('country', 'Unknown'),
-                'territory': user.get('territory', 'Unknown')
-            }
-            for user in users
-        ]
-    
-    return {
-        'by_country': [
-            {
-                'country': item['_id'],
-                'total_leads': item['total_leads'],
-                'closed_won': item['closed_won'],
-                'pipeline_value': item['pipeline_value'] or 0,
-                'conversion_rate': round(item['closed_won'] / item['total_leads'] * 100, 2) if item['total_leads'] > 0 else 0
-            }
-            for item in country_results
-        ],
-        'by_state': [
-            {
-                'state': item['_id'],
-                'total_leads': item['total_leads'],
-                'closed_won': item['closed_won'],
-                'pipeline_value': item['pipeline_value'] or 0,
-                'conversion_rate': round(item['closed_won'] / item['total_leads'] * 100, 2) if item['total_leads'] > 0 else 0
-            }
-            for item in state_results
-        ],
-        'by_city': [
-            {
-                'city': item['_id'],
-                'total_leads': item['total_leads'],
-                'closed_won': item['closed_won'],
-                'pipeline_value': item['pipeline_value'] or 0,
-                'conversion_rate': round(item['closed_won'] / item['total_leads'] * 100, 2) if item['total_leads'] > 0 else 0
-            }
-            for item in city_results
-        ],
-        'by_region': [
-            {
-                'region': item['_id'],
-                'total_leads': item['total_leads'],
-                'closed_won': item['closed_won'],
-                'pipeline_value': item['pipeline_value'] or 0,
-                'conversion_rate': round(item['closed_won'] / item['total_leads'] * 100, 2) if item['total_leads'] > 0 else 0
-            }
-            for item in region_results
-        ],
-        'team_locations': team_locations
-    }
-
 @api_router.post("/lead-discovery/autocomplete")
 async def autocomplete_places(params: dict, current_user: dict = Depends(get_current_user)):
     """Autocomplete place names using Places API (New) Text Search"""
@@ -7461,7 +8045,7 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                 headers = {
                     'Content-Type': 'application/json',
                     'X-Goog-Api-Key': api_key,
-                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id'
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id,places.location,places.addressComponents'
                 }
                 
                 body = {
@@ -7482,7 +8066,18 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                         'PRICE_LEVEL_VERY_EXPENSIVE': 5
                     }
                     price_level = price_level_map.get(place.get('priceLevel', 'PRICE_LEVEL_MODERATE'), 3)
-                    
+
+                    # Structured address (postal code / city / state) — same
+                    # extraction as the nearby-search path so the created lead
+                    # carries proper geo + components.
+                    addr_comps = place.get('addressComponents', []) or []
+                    def _pick(types, _comps=addr_comps):
+                        for c in _comps:
+                            if any(t in (c.get('types') or []) for t in types):
+                                return c.get('longText') or c.get('shortText') or ''
+                        return ''
+                    place_loc = place.get('location', {}) or {}
+
                     outlet_data = {
                         'place_id': place.get('id', ''),
                         'name': place.get('displayName', {}).get('text', 'Unknown'),
@@ -7491,7 +8086,14 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                         'rating': place.get('rating', 0),
                         'user_ratings_total': place.get('userRatingCount', 0),
                         'price_level': '₹' * price_level,
-                        'types': place.get('types', [])
+                        'types': place.get('types', []),
+                        # Geo + structured address so the created lead's
+                        # delivery_address has lat/lng for field check-in.
+                        'lat': place_loc.get('latitude'),
+                        'lng': place_loc.get('longitude'),
+                        'pincode': _pick(['postal_code']),
+                        'city': _pick(['locality', 'administrative_area_level_2']),
+                        'state': _pick(['administrative_area_level_1']),
                     }
                     all_places.append(outlet_data)
                 
@@ -7503,7 +8105,7 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
         
         # Otherwise, geocode location and search nearby
         async with httpx.AsyncClient() as client:
-            geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json"
+            geocode_url = "https://maps.googleapis.com/maps/api/geocode/json"
             
             # Use location name or pincode
             search_query = location_name if location_name else f'{pincode}, India'
@@ -7553,7 +8155,7 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                 headers = {
                     'Content-Type': 'application/json',
                     'X-Goog-Api-Key': api_key,
-                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id'
+                    'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.internationalPhoneNumber,places.rating,places.userRatingCount,places.priceLevel,places.types,places.id,places.location,places.addressComponents'
                 }
                 
                 body = {
@@ -7603,6 +8205,14 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                         if price_range == 'premium' and price_level < 4:
                             continue
                         
+                        # Extract structured address components (postal code, locality, etc.)
+                        addr_comps = place.get('addressComponents', []) or []
+                        def _pick(types):
+                            for c in addr_comps:
+                                if any(t in (c.get('types') or []) for t in types):
+                                    return c.get('longText') or c.get('shortText') or ''
+                            return ''
+                        place_loc = place.get('location', {}) or {}
                         outlet_data = {
                             'place_id': place_id,
                             'name': place.get('displayName', {}).get('text', 'Unknown'),
@@ -7612,7 +8222,12 @@ async def search_places(search_params: dict, current_user: dict = Depends(get_cu
                             'user_ratings_total': place.get('userRatingCount', 0),
                             'price_level': '₹' * price_level,
                             'types': place.get('types', []),
-                            'search_type': search_type
+                            'search_type': search_type,
+                            'lat': place_loc.get('latitude'),
+                            'lng': place_loc.get('longitude'),
+                            'pincode': _pick(['postal_code']),
+                            'city': _pick(['locality', 'administrative_area_level_2']),
+                            'state': _pick(['administrative_area_level_1']),
                         }
                         
                         all_places.append(outlet_data)
@@ -8101,17 +8716,16 @@ async def create_travel_request(request: TravelRequestCreate, current_user: dict
     
     await get_tdb().travel_requests.insert_one(doc)
     
-    # Create approval tasks for CEO and Director if submitting for approval
+    # Create approval task for the requester's reporting manager (with fallbacks)
     if request.submit_for_approval:
-        # Find CEO and Director users
-        approvers = await get_tdb().users.find(
-            {'role': {'$in': ['CEO', 'Director']}, 'is_active': True},
-            {'_id': 0, 'id': 1, 'name': 1}
-        ).to_list(10)
-        
-        travel_details = f"{request.from_location} to {request.to_location} ({request.departure_date})"
-        
-        for approver in approvers:
+        approver = await resolve_request_approver(current_user['id'])
+
+        if approver:
+            await get_tdb().travel_requests.update_one(
+                {'id': travel_obj.id},
+                {'$set': {'approver_id': approver['id'], 'approver_name': approver.get('name')}}
+            )
+            travel_details = f"{request.from_location} to {request.to_location} ({request.departure_date})"
             await create_approval_task(
                 approval_type=ApprovalType.TRAVEL_REQUEST,
                 requester_id=current_user['id'],
@@ -8122,6 +8736,16 @@ async def create_travel_request(request: TravelRequestCreate, current_user: dict
                 reference_id=travel_obj.id,
                 reference_type='travel_request'
             )
+            await notify_approver(
+                approver,
+                title=f"Travel approval needed: {request.to_location}",
+                body=f"{current_user.get('name', 'A team member')} submitted a travel request ({travel_details}, ₹{request.tentative_budget:,.0f}). Your approval is required.",
+                link="/travel-requests",
+                entity_type='travel_request',
+                entity_id=travel_obj.id,
+            )
+        else:
+            logger.warning(f"No approver could be resolved for travel {travel_obj.id} raised by {current_user.get('name')}")
     
     return {k: v for k, v in doc.items() if k != '_id'}
 
@@ -8329,12 +8953,14 @@ async def approve_travel_request(
 ):
     """Approve or reject travel request (CEO/Director only)"""
     
-    if current_user['role'].lower() not in ['ceo', 'director']:
-        raise HTTPException(status_code=403, detail='Only CEO or Director can approve travel requests')
-    
     travel_req = await get_tdb().travel_requests.find_one({'id': request_id}, {'_id': 0})
     if not travel_req:
         raise HTTPException(status_code=404, detail='Travel request not found')
+    
+    # The designated approver (reporting manager) OR a senior approver can act.
+    _senior_roles = ['CEO', 'Director', 'Vice President', 'Admin', 'System Admin']
+    if current_user['id'] != travel_req.get('approver_id') and current_user['role'] not in _senior_roles:
+        raise HTTPException(status_code=403, detail='You are not authorized to approve this travel request')
     
     if travel_req['status'] != 'pending_approval':
         raise HTTPException(status_code=400, detail='Only pending requests can be approved/rejected')
@@ -8459,17 +9085,16 @@ async def create_budget_request(request: BudgetRequestCreate, current_user: dict
     
     await get_tdb().budget_requests.insert_one(doc)
     
-    # Create approval task for Director if submitting for approval
+    # Create approval task for the requester's reporting manager (with fallbacks)
     if request.submit_for_approval:
-        # Find Directors only
-        approvers = await get_tdb().users.find(
-            {'role': 'Director', 'is_active': True},
-            {'_id': 0, 'id': 1, 'name': 1}
-        ).to_list(10)
-        
-        budget_details = f"{request.title} - ₹{total_amount:,.0f}"
-        
-        for approver in approvers:
+        approver = await resolve_request_approver(current_user['id'])
+
+        if approver:
+            await get_tdb().budget_requests.update_one(
+                {'id': budget_obj.id},
+                {'$set': {'approver_id': approver['id'], 'approver_name': approver.get('name')}}
+            )
+            budget_details = f"{request.title} - ₹{total_amount:,.0f}"
             await create_approval_task(
                 approval_type=ApprovalType.BUDGET_REQUEST,
                 requester_id=current_user['id'],
@@ -8480,6 +9105,16 @@ async def create_budget_request(request: BudgetRequestCreate, current_user: dict
                 reference_id=budget_obj.id,
                 reference_type='budget_request'
             )
+            await notify_approver(
+                approver,
+                title=f"Budget approval needed: {request.title}",
+                body=f"{current_user.get('name', 'A team member')} submitted a budget request '{request.title}' of ₹{total_amount:,.0f}. Your approval is required.",
+                link="/budget-requests",
+                entity_type='budget_request',
+                entity_id=budget_obj.id,
+            )
+        else:
+            logger.warning(f"No approver could be resolved for budget {budget_obj.id} raised by {current_user.get('name')}")
     
     return {k: v for k, v in doc.items() if k != '_id'}
 
@@ -8652,12 +9287,14 @@ async def approve_budget_request(
 ):
     """Approve or reject budget request (Director only)"""
     
-    if current_user['role'].lower() != 'director':
-        raise HTTPException(status_code=403, detail='Only Director can approve budget requests')
-    
     budget_req = await get_tdb().budget_requests.find_one({'id': request_id}, {'_id': 0})
     if not budget_req:
         raise HTTPException(status_code=404, detail='Budget request not found')
+    
+    # The designated approver (reporting manager) OR a senior approver can act.
+    _senior_roles = ['CEO', 'Director', 'Vice President', 'Admin', 'System Admin']
+    if current_user['id'] != budget_req.get('approver_id') and current_user['role'] not in _senior_roles:
+        raise HTTPException(status_code=403, detail='You are not authorized to approve this budget request')
     
     if budget_req['status'] != 'pending_approval':
         raise HTTPException(status_code=400, detail='Only pending requests can be approved/rejected')
@@ -8777,8 +9414,11 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
             ))
             total_sku_cost += item_cost
     
-    # Calculate total amount
-    final_amount = total_sku_cost if request.expense_type == 'free_trial' else request.amount
+    # Calculate total amount — rounded to whole rupees end-to-end so the
+    # stored amount, the notification body, and the approval task description
+    # never carry confusing fractional paise from MLP × Qty products.
+    raw_amount = total_sku_cost if request.expense_type == 'free_trial' else request.amount
+    final_amount = round(float(raw_amount or 0))
     
     # Create expense request
     expense_obj = ExpenseRequest(
@@ -8812,24 +9452,40 @@ async def create_expense_request(request: ExpenseRequestCreate, current_user: di
     
     # Create approval task if submitted for approval
     if request.submit_for_approval:
-        # Find Director for approval
-        director = await get_tdb().users.find_one(
-            {'role': {'$in': ['Director', 'director']}},
-            {'_id': 0, 'id': 1, 'name': 1}
-        )
-        
-        if director:
+        # Route to the requester's reporting manager (with fallbacks)
+        approver = await resolve_request_approver(current_user['id'])
+
+        if approver:
+            # Persist the resolved approver on the request so the approve
+            # endpoint can authorize them (even if they aren't a Director).
+            await get_tdb().expense_requests.update_one(
+                {'id': expense_obj.id},
+                {'$set': {'approver_id': approver['id'], 'approver_name': approver.get('name')}}
+            )
             expense_label = expense_type_info['label']
             await create_approval_task(
                 approval_type=ApprovalType.EXPENSE,
                 requester_id=current_user['id'],
                 requester_name=current_user.get('name', 'Unknown'),
-                approver_id=director['id'],
+                approver_id=approver['id'],
                 details=f"{expense_label} - {entity_name} (₹{final_amount:,.0f})",
                 description=f"Expense request for {entity_name}:\n\nType: {expense_label}\nAmount: ₹{final_amount:,.0f}\n{('Free Trial Days: ' + str(request.free_trial_days)) if request.free_trial_days else ''}\n{request.description or ''}",
                 reference_id=expense_obj.id,
-                reference_type='expense_request'
+                reference_type='expense_request',
+                lead_id=request.entity_id if request.entity_type == 'lead' else None,
+                account_id=request.entity_id if request.entity_type == 'account' else None,
             )
+            _entity_link = f"/leads/{request.entity_id}" if request.entity_type == 'lead' else f"/accounts/{request.entity_id}"
+            await notify_approver(
+                approver,
+                title=f"Expense approval needed: {entity_name}",
+                body=f"{current_user.get('name', 'A team member')} submitted a {expense_label} of ₹{final_amount:,.0f} for {entity_name}. Your approval is required.",
+                link=_entity_link,
+                entity_type='expense_request',
+                entity_id=expense_obj.id,
+            )
+        else:
+            logger.warning(f"No approver could be resolved for expense {expense_obj.id} raised by {current_user.get('name')}")
     
     return {
         'id': expense_obj.id,
@@ -8998,13 +9654,14 @@ async def approve_expense_request(
 ):
     """Approve or reject an expense request"""
     
-    # Only Directors and CEO can approve
-    if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'ceo', 'director', 'vp']:
-        raise HTTPException(status_code=403, detail='Only Directors can approve expense requests')
-    
     expense_req = await get_tdb().expense_requests.find_one({'id': request_id}, {'_id': 0})
     if not expense_req:
         raise HTTPException(status_code=404, detail='Expense request not found')
+    
+    # The designated approver (reporting manager) OR a senior approver can act.
+    _senior_roles = ['CEO', 'Director', 'Vice President', 'Admin', 'System Admin', 'ceo', 'director', 'vp']
+    if current_user['id'] != expense_req.get('approver_id') and current_user['role'] not in _senior_roles:
+        raise HTTPException(status_code=403, detail='You are not authorized to approve this expense request')
     
     if expense_req['status'] != 'pending_approval':
         raise HTTPException(status_code=400, detail='Expense request is not pending approval')
@@ -9029,7 +9686,114 @@ async def approve_expense_request(
         status='completed' if approval.status == 'approved' else 'cancelled'
     )
     
+    # Notify the requester of the decision (best-effort)
+    try:
+        from utils.notify import notify_users
+        _ent = expense_req.get('entity_name') or 'your request'
+        _link = (f"/leads/{expense_req.get('entity_id')}" if expense_req.get('entity_type') == 'lead'
+                 else f"/accounts/{expense_req.get('entity_id')}")
+        _reason = f" Reason: {approval.rejection_reason}" if (approval.status == 'rejected' and approval.rejection_reason) else ''
+        await notify_users(
+            get_current_tenant_id(), [expense_req.get('user_id')],
+            title=f"Expense {approval.status}: {_ent}",
+            body=f"Your expense request for {_ent} was {approval.status} by {current_user.get('name')}.{_reason}",
+            link=_link, kind='approval_decision',
+            entity_type='expense_request', entity_id=request_id,
+        )
+    except Exception:
+        logger.exception('notify requester (expense decision) failed')
+    
     return {'message': f'Expense request {approval.status}'}
+
+@api_router.get("/approvals/my-pending")
+async def get_my_pending_approvals(current_user: dict = Depends(get_current_user)):
+    """Approval tasks assigned to the current user that still need action.
+
+    Powers the Home "Pending Approvals" card. Enriches each approval task with
+    its underlying request (status + amount + entity) and drops any that have
+    already been decided elsewhere.
+    """
+    tdb = get_tdb()
+    tasks = await tdb.tasks.find(
+        {
+            'is_approval_task': True,
+            'assigned_to': current_user['id'],
+            'status': {'$in': ['pending', 'open', 'in_progress']},
+        },
+        {'_id': 0}
+    ).sort('created_at', -1).to_list(200)
+
+    coll_for_ref = {
+        'expense_request': 'expense_requests',
+        'travel_request': 'travel_requests',
+        'budget_request': 'budget_requests',
+        'leave_request': 'leave_requests',
+    }
+    out = []
+    for t in tasks:
+        ref_type = t.get('approval_reference_type')
+        ref_id = t.get('approval_reference_id')
+        amount = None
+        entity_name = None
+        decided = False
+
+        if ref_type == 'proposal':
+            # Proposals live in lead_proposals keyed by lead_id
+            prop = await tdb.lead_proposals.find_one({'lead_id': ref_id}, {'_id': 0, 'status': 1})
+            if not prop or prop.get('status') not in ('pending_review', 'revised'):
+                decided = True
+            else:
+                lead = await tdb.leads.find_one({'id': ref_id}, {'_id': 0, 'company': 1, 'contact_person': 1})
+                entity_name = (lead or {}).get('company') or (lead or {}).get('contact_person')
+        elif ref_type == 'contract':
+            # Contracts live in account_contracts, one per account, keyed by account_id
+            contract = await tdb.account_contracts.find_one({'account_id': ref_id}, {'_id': 0, 'status': 1})
+            if not contract or contract.get('status') not in ('pending_review', 'revised'):
+                decided = True
+            else:
+                acct = await tdb.accounts.find_one(
+                    {'$or': [{'account_id': ref_id}, {'id': ref_id}]},
+                    {'_id': 0, 'company_name': 1, 'name': 1},
+                )
+                entity_name = (acct or {}).get('company_name') or (acct or {}).get('name')
+        else:
+            coll = coll_for_ref.get(ref_type)
+            if coll and ref_id:
+                req = await getattr(tdb, coll).find_one({'id': ref_id}, {'_id': 0})
+                if req:
+                    if req.get('status') not in ('pending_approval', 'pending'):
+                        decided = True
+                    else:
+                        amount = req.get('amount') or req.get('total_amount') or req.get('tentative_budget')
+                        entity_name = req.get('entity_name')
+
+        if decided:
+            # Self-heal: the underlying request was already approved/rejected, so
+            # close the lingering approval task instead of showing it forever.
+            await complete_approval_task(
+                approval_type=t.get('approval_type'),
+                reference_id=ref_id,
+                status='completed',
+            )
+            continue
+
+        out.append({
+            'task_id': t.get('id'),
+            'approval_type': t.get('approval_type'),
+            'title': t.get('title'),
+            'description': t.get('description'),
+            'requester_name': t.get('created_by_name') or t.get('assigned_by_name'),
+            'due_date': t.get('due_date'),
+            'created_at': t.get('created_at'),
+            'reference_type': ref_type,
+            'reference_id': ref_id,
+            'lead_id': t.get('lead_id'),
+            'account_id': t.get('account_id'),
+            'amount': amount,
+            'entity_name': entity_name,
+        })
+    return out
+
 
 @api_router.delete("/expense-requests/{request_id}")
 async def delete_expense_request(request_id: str, current_user: dict = Depends(get_current_user)):
@@ -9078,764 +9842,7 @@ async def get_sku_price_for_city(city: str, sku_name: str, current_user: dict = 
     return {**cogs_data, 'found': True}
 
 
-@api_router.get("/reports/target-resource-allocation")
-async def get_target_resource_allocation_report(current_user: dict = Depends(get_current_user)):
-    """Get Target Resource Allocation Report"""
-    
-    # Get all target plans
-    plans = await db.target_plans.find({}, {'_id': 0}).to_list(100)
-    
-    # Get all resource invoice summaries
-    resource_summaries = await db.resource_invoice_summary.find({}, {'_id': 0}).to_list(1000)
-    resource_invoice_map = {r['resource_id']: r.get('total_gross_invoice_value', 0) for r in resource_summaries}
-    
-    report_data = []
-    
-    for plan in plans:
-        # Get all resource targets for this plan
-        resource_targets = await get_tdb().resource_targets.find({'plan_id': plan['id']}, {'_id': 0}).to_list(1000)
-        
-        # Get city info
-        city_ids = list(set([r['city_id'] for r in resource_targets]))
-        cities = await db.city_targets.find({'id': {'$in': city_ids}}, {'_id': 0}).to_list(1000)
-        city_map = {c['id']: c for c in cities}
-        
-        # Get user info
-        user_ids = list(set([r['resource_id'] for r in resource_targets]))
-        users = await get_tdb().users.find({'id': {'$in': user_ids}}, {'_id': 0}).to_list(100)
-        user_map = {u['id']: u for u in users}
-        
-        for res_target in resource_targets:
-            city_info = city_map.get(res_target['city_id'], {})
-            user_info = user_map.get(res_target['resource_id'], {})
-            resource_id = res_target['resource_id']
-            
-            # Get actual achieved revenue from invoices
-            achieved_revenue = resource_invoice_map.get(resource_id, 0)
-            target_revenue = res_target['target_revenue']
-            tbd_revenue = target_revenue - achieved_revenue  # TBD = Target - Achieved
-            achievement_percentage = (achieved_revenue / target_revenue * 100) if target_revenue > 0 else 0
-            
-            report_data.append({
-                'target_name': plan['plan_name'],
-                'territory': city_info.get('territory', ''),
-                'start_date': plan['start_date'],
-                'end_date': plan['end_date'],
-                'city': city_info.get('city', ''),
-                'state': city_info.get('state', ''),
-                'resource_id': resource_id,
-                'resource_name': user_info.get('name', 'Unknown'),
-                'designation': user_info.get('designation', ''),
-                'resource_territory': user_info.get('territory', ''),
-                'target_revenue': target_revenue,
-                'achieved_revenue': achieved_revenue,
-                'tbd_revenue': tbd_revenue,
-                'achievement_percentage': round(achievement_percentage, 2)
-            })
-    
-    return {'report_data': report_data, 'total_records': len(report_data)}
 
-@api_router.get("/reports/target-sku-allocation")
-async def get_target_sku_allocation_report(current_user: dict = Depends(get_current_user)):
-    """Get Target SKU Allocation Report"""
-    
-    # Get all target plans
-    plans = await db.target_plans.find({}, {'_id': 0}).to_list(100)
-    
-    report_data = []
-    
-    for plan in plans:
-        # Get all SKU targets for this plan
-        sku_targets = await db.sku_targets.find({'plan_id': plan['id']}, {'_id': 0}).to_list(1000)
-        
-        # Get city info for each SKU target
-        city_ids = list(set([s['city_id'] for s in sku_targets]))
-        cities = await db.city_targets.find({'id': {'$in': city_ids}}, {'_id': 0}).to_list(1000)
-        city_map = {c['id']: c for c in cities}
-        
-        for sku_target in sku_targets:
-            city_info = city_map.get(sku_target['city_id'], {})
-            
-            report_data.append({
-                'target_name': plan['plan_name'],
-                'territory': city_info.get('territory', ''),
-                'start_date': plan['start_date'],
-                'end_date': plan['end_date'],
-                'city': city_info.get('city', ''),
-                'state': city_info.get('state', ''),
-                'sku': sku_target['sku_name'],
-                'target_revenue': sku_target['target_revenue'],
-                'achieved_revenue': 0,  # Placeholder - will be connected to actual sales
-                'tbd_revenue': sku_target['target_revenue']  # target - achieved
-            })
-    
-    return {'report_data': report_data, 'total_records': len(report_data)}
-
-# ============= BOTTLE PREVIEW ROUTES =============
-
-@api_router.get("/bottle-preview/proxy-image")
-async def proxy_bottle_image(url: str, current_user: dict = Depends(get_current_user)):
-    """Proxy external bottle images to avoid CORS issues"""
-    
-    # Validate URL - only allow specific domains
-    allowed_domains = ['customer-assets.emergentagent.com']
-    from urllib.parse import urlparse
-    parsed_url = urlparse(url)
-    
-    if parsed_url.netloc not in allowed_domains:
-        raise HTTPException(status_code=400, detail='URL domain not allowed')
-    
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            
-            # Determine content type
-            content_type = response.headers.get('content-type', 'image/jpeg')
-            
-            return Response(
-                content=response.content,
-                media_type=content_type,
-                headers={
-                    'Cache-Control': 'public, max-age=86400',  # Cache for 24 hours
-                    'Access-Control-Allow-Origin': '*'
-                }
-            )
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=500, detail=f'Failed to fetch image: {str(e)}')
-
-@api_router.post("/bottle-preview/upload-logo")
-async def upload_customer_logo(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
-    """Upload customer logo for bottle preview"""
-    
-    # Validate file type
-    allowed_types = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml']
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail='Only PNG, JPG, and SVG files are allowed')
-    
-    # Read file
-    contents = await file.read()
-    
-    # Convert to base64 for frontend
-    if file.content_type == 'image/svg+xml':
-        # SVG - return as is
-        logo_data = f'data:image/svg+xml;base64,{base64.b64encode(contents).decode()}'
-    else:
-        # PNG/JPG - process with PIL
-        try:
-            img = Image.open(io.BytesIO(contents))
-            
-            # Convert to RGB if needed
-            if img.mode in ('RGBA', 'LA', 'P'):
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                if img.mode == 'RGBA':
-                    background.paste(img, mask=img.split()[-1])
-                else:
-                    background.paste(img)
-                img = background
-            
-            # Resize if too large (max 1000px width)
-            max_width = 1000
-            if img.width > max_width:
-                ratio = max_width / img.width
-                new_height = int(img.height * ratio)
-                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Convert to base64
-            buffer = io.BytesIO()
-            img.save(buffer, format='PNG', optimize=True, quality=95)
-            img_str = base64.b64encode(buffer.getvalue()).decode()
-            logo_data = f'data:image/png;base64,{img_str}'
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f'Failed to process image: {str(e)}')
-    
-    return {
-        'logo_data': logo_data,
-        'file_name': file.filename,
-        'content_type': file.content_type
-    }
-
-@api_router.post("/bottle-preview/save")
-async def save_bottle_preview(preview_data: dict, current_user: dict = Depends(get_current_user)):
-    """Save bottle preview for later reference"""
-    
-    preview = {
-        'id': str(uuid.uuid4()),
-        'user_id': current_user['id'],
-        'customer_name': preview_data.get('customer_name', ''),
-        'bottle_size': preview_data.get('bottle_size', '660ml'),
-        'logo_data': preview_data.get('logo_data', ''),
-        'created_at': datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.bottle_previews.insert_one(preview)
-    
-    return {
-        'id': preview['id'],
-        'message': 'Preview saved successfully'
-    }
-
-@api_router.get("/bottle-preview/history")
-async def get_preview_history(current_user: dict = Depends(get_current_user)):
-    """Get saved bottle previews"""
-    
-    previews = await db.bottle_previews.find(
-        {'user_id': current_user['id']},
-        {'_id': 0}
-    ).sort('created_at', -1).limit(20).to_list(20)
-    
-    return {'previews': previews}
-
-# ============= PERFORMANCE REPORTS =============
-
-def get_time_filter_dates(time_filter: str):
-    """Calculate date range based on time filter"""
-    now = datetime.now(timezone.utc)
-    
-    if time_filter == 'this_week':
-        start = now - timedelta(days=now.weekday())
-        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif time_filter == 'last_week':
-        start = now - timedelta(days=now.weekday() + 7)
-        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = start + timedelta(days=6, hours=23, minutes=59, seconds=59)
-    elif time_filter == 'this_month':
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif time_filter == 'last_month':
-        first_of_month = now.replace(day=1)
-        last_month_end = first_of_month - timedelta(days=1)
-        start = last_month_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = last_month_end.replace(hour=23, minute=59, second=59)
-    elif time_filter == 'this_quarter':
-        quarter = (now.month - 1) // 3
-        start = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif time_filter == 'last_quarter':
-        quarter = (now.month - 1) // 3
-        if quarter == 0:
-            start = now.replace(year=now.year - 1, month=10, day=1, hour=0, minute=0, second=0, microsecond=0)
-            end = now.replace(year=now.year - 1, month=12, day=31, hour=23, minute=59, second=59)
-        else:
-            start = now.replace(month=(quarter - 1) * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            end_month = quarter * 3
-            if end_month == 3:
-                end = now.replace(month=3, day=31, hour=23, minute=59, second=59)
-            elif end_month == 6:
-                end = now.replace(month=6, day=30, hour=23, minute=59, second=59)
-            else:
-                end = now.replace(month=9, day=30, hour=23, minute=59, second=59)
-    elif time_filter == 'last_3_months':
-        start = now - timedelta(days=90)
-        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif time_filter == 'last_6_months':
-        start = now - timedelta(days=180)
-        start = start.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif time_filter == 'this_year':
-        start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif time_filter == 'last_year':
-        start = now.replace(year=now.year - 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now.replace(year=now.year - 1, month=12, day=31, hour=23, minute=59, second=59)
-    else:  # lifetime
-        start = datetime(2020, 1, 1, tzinfo=timezone.utc)
-        end = now
-    
-    return start, end
-
-@api_router.get("/reports/sku-performance")
-async def get_sku_performance(
-    time_filter: str = 'this_month',
-    territory: Optional[str] = None,
-    state: Optional[str] = None,
-    city: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    sku: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Get SKU performance report with targets vs achieved revenue.
-    Aggregates data from leads, activities, invoices, and targets.
-    """
-    start_date, end_date = get_time_filter_dates(time_filter)
-    
-    # Build lead query
-    lead_query = {}
-    if territory:
-        lead_query['region'] = territory
-    if state:
-        lead_query['state'] = state
-    if city:
-        lead_query['city'] = city
-    if resource_id:
-        lead_query['assigned_to'] = resource_id
-    
-    # Standard SKU list - updated to match actual data format
-    SKU_OPTIONS = [
-        '660 ml Silver',
-        '660 ml Gold',
-        '330 ml Silver',
-        '330 ml Gold',
-        '660 Sparkling',
-        '330 Sparkling',
-        '24 Brand'
-    ]
-    
-    # Get SKU targets for the time period
-    target_query = {}
-    if territory:
-        target_query['territory'] = territory
-    if city:
-        target_query['city'] = city
-    if resource_id:
-        target_query['resource_id'] = resource_id
-    
-    sku_targets = await db.sku_targets.find(target_query, {'_id': 0}).to_list(500)
-    
-    # Build SKU target map
-    sku_target_map = {}
-    for t in sku_targets:
-        sku_name = t.get('sku', '')
-        if sku_name not in sku_target_map:
-            sku_target_map[sku_name] = {'target_revenue': 0, 'target_units': 0}
-        sku_target_map[sku_name]['target_revenue'] += t.get('target_revenue', 0)
-        sku_target_map[sku_name]['target_units'] += t.get('target_units', 0)
-    
-    # Get leads with interested SKUs
-    leads_with_skus = await get_tdb().leads.find(
-        {**lead_query, 'interested_skus': {'$exists': True, '$ne': []}},
-        {'_id': 0, 'interested_skus': 1, 'invoice_value': 1, 'status': 1, 'id': 1}
-    ).to_list(1000)
-    
-    # Get invoices for revenue calculation
-    invoice_query = {}
-    if start_date:
-        invoice_query['created_at'] = {'$gte': start_date.isoformat(), '$lte': end_date.isoformat()}
-    if resource_id:
-        invoice_query['created_by'] = resource_id
-    
-    invoices = await get_tdb().invoices.find(invoice_query, {'_id': 0, 'total_amount': 1, 'items': 1}).to_list(500)
-    
-    # Calculate achieved revenue by SKU from invoices
-    sku_invoice_revenue = {}
-    for inv in invoices:
-        items = inv.get('items', [])
-        total = inv.get('total_amount', 0)
-        if items:
-            per_item = total / len(items) if len(items) > 0 else 0
-            for item in items:
-                sku_name = item.get('sku', item.get('name', 'Unknown'))
-                if sku_name not in sku_invoice_revenue:
-                    sku_invoice_revenue[sku_name] = 0
-                sku_invoice_revenue[sku_name] += per_item
-    
-    # Count leads per SKU
-    sku_leads_count = {}
-    sku_units = {}
-    for lead in leads_with_skus:
-        for sku_name in lead.get('interested_skus', []):
-            if sku_name not in sku_leads_count:
-                sku_leads_count[sku_name] = 0
-                sku_units[sku_name] = 0
-            sku_leads_count[sku_name] += 1
-            # Estimate units from invoice value if won
-            if lead.get('status') in ['closed_won', 'won'] and lead.get('invoice_value'):
-                sku_units[sku_name] += int(lead.get('invoice_value', 0) / 100)  # Rough estimate
-            elif lead.get('status') in ['closed_won', 'won']:
-                # Even if no invoice value, count as sold
-                sku_units[sku_name] += 10  # Default units per won deal
-    
-    # Build SKU performance data
-    skus_data = []
-    if sku and sku != 'all':
-        sku_list = [sku]
-    else:
-        sku_list = SKU_OPTIONS
-    
-    total_target = 0
-    total_achieved = 0
-    total_units = 0
-    
-    for sku_name in sku_list:
-        target_info = sku_target_map.get(sku_name, {})
-        target_revenue = target_info.get('target_revenue', 0)
-        
-        # If no target set, estimate based on overall
-        if target_revenue == 0:
-            target_revenue = 100000 + (hash(sku_name) % 400000)  # Random but consistent
-        
-        # Get achieved from invoices or estimate
-        achieved = sku_invoice_revenue.get(sku_name, 0)
-        if achieved == 0:
-            # Estimate from leads count
-            leads_count = sku_leads_count.get(sku_name, 0)
-            achieved = leads_count * 15000  # Avg revenue per lead
-        
-        units = sku_units.get(sku_name, 0)
-        if units == 0:
-            units = int(achieved / 150)  # Rough estimate
-        
-        achievement_pct = int((achieved / target_revenue * 100)) if target_revenue > 0 else 0
-        
-        skus_data.append({
-            'sku': sku_name,
-            'target_revenue': target_revenue,
-            'achieved_revenue': achieved,
-            'units_sold': units,
-            'leads_count': sku_leads_count.get(sku_name, 0),
-            'achievement_pct': min(achievement_pct, 200)  # Cap at 200%
-        })
-        
-        total_target += target_revenue
-        total_achieved += achieved
-        total_units += units
-    
-    avg_achievement = int(total_achieved / total_target * 100) if total_target > 0 else 0
-    
-    return {
-        'skus': skus_data,
-        'summary': {
-            'total_target': total_target,
-            'total_achieved': total_achieved,
-            'total_units': total_units,
-            'avg_achievement': avg_achievement
-        }
-    }
-
-@api_router.get("/reports/resource-performance")
-async def get_resource_performance(
-    time_filter: str = 'this_month',
-    territory: Optional[str] = None,
-    state: Optional[str] = None,
-    city: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Get Resource (sales team) performance report.
-    Aggregates data from leads, activities, and targets.
-    """
-    start_date, end_date = get_time_filter_dates(time_filter)
-    
-    # Get sales team members
-    user_query = {
-        'role': {'$in': ['Head of Business', 'Regional Sales Manager', 'National Sales Head', 'Partner - Sales', 'CEO', 'Director', 'Vice President']},
-        'is_active': True
-    }
-    if territory:
-        user_query['territory'] = territory
-    if resource_id:
-        user_query['id'] = resource_id
-    
-    users = await get_tdb().users.find(user_query, {'_id': 0, 'id': 1, 'name': 1, 'role': 1, 'territory': 1, 'email': 1}).to_list(100)
-    
-    # Get targets for each resource
-    resource_targets = await get_tdb().resource_targets.find({}, {'_id': 0}).to_list(500)
-    target_map = {}
-    for t in resource_targets:
-        rid = t.get('resource_id')
-        if rid not in target_map:
-            target_map[rid] = 0
-        target_map[rid] += t.get('target_revenue', 0)
-    
-    # Build activity date query
-    activity_date_query = {}
-    if time_filter != 'lifetime':
-        activity_date_query = {
-            'created_at': {
-                '$gte': start_date.isoformat(),
-                '$lte': end_date.isoformat()
-            }
-        }
-    
-    # Get activities per user
-    activities = await get_tdb().activities.find(
-        activity_date_query,
-        {'_id': 0, 'user_id': 1, 'interaction_method': 1}
-    ).to_list(5000)
-    
-    user_activities = {}
-    for act in activities:
-        uid = act.get('user_id')
-        if uid not in user_activities:
-            user_activities[uid] = {'calls': 0, 'visits': 0, 'total': 0}
-        user_activities[uid]['total'] += 1
-        method = (act.get('interaction_method') or '').lower()
-        if 'call' in method or 'phone' in method:
-            user_activities[uid]['calls'] += 1
-        elif 'visit' in method or 'meeting' in method:
-            user_activities[uid]['visits'] += 1
-    
-    # Get leads per user
-    lead_date_query = {}
-    if time_filter != 'lifetime':
-        lead_date_query = {
-            'created_at': {
-                '$gte': start_date.isoformat(),
-                '$lte': end_date.isoformat()
-            }
-        }
-    
-    leads = await get_tdb().leads.find(
-        lead_date_query,
-        {'_id': 0, 'assigned_to': 1, 'status': 1, 'invoice_value': 1, 'estimated_value': 1}
-    ).to_list(5000)
-    
-    user_leads = {}
-    for lead in leads:
-        uid = lead.get('assigned_to')
-        if uid not in user_leads:
-            user_leads[uid] = {'count': 0, 'won': 0, 'revenue': 0}
-        user_leads[uid]['count'] += 1
-        if lead.get('status') in ['closed_won', 'won']:
-            user_leads[uid]['won'] += 1
-            user_leads[uid]['revenue'] += lead.get('invoice_value') or lead.get('estimated_value') or 0
-    
-    # Build resource performance data
-    resources_data = []
-    total_target = 0
-    total_achieved = 0
-    total_leads = 0
-    total_won = 0
-    
-    for user in users:
-        uid = user.get('id')
-        
-        # Get target
-        target = target_map.get(uid, 0)
-        if target == 0:
-            # Estimate target based on role
-            role = user.get('role', '')
-            if role in ['CEO', 'Director']:
-                target = 5000000
-            elif role in ['Vice President', 'National Sales Head']:
-                target = 3000000
-            elif role in ['Regional Sales Manager', 'Head of Business', 'Partner - Sales']:
-                target = 1500000
-            else:
-                target = 800000
-        
-        # Get lead data
-        lead_data = user_leads.get(uid, {'count': 0, 'won': 0, 'revenue': 0})
-        
-        # Get activity data
-        activity_data = user_activities.get(uid, {'calls': 0, 'visits': 0, 'total': 0})
-        
-        # Calculate achieved revenue
-        achieved = lead_data['revenue']
-        if achieved == 0:
-            # Estimate from leads
-            achieved = lead_data['count'] * 25000  # Avg revenue per lead
-        
-        achievement_pct = int((achieved / target * 100)) if target > 0 else 0
-        
-        resources_data.append({
-            'id': uid,
-            'name': user.get('name', 'Unknown'),
-            'role': user.get('role', ''),
-            'territory': user.get('territory', ''),
-            'target_revenue': target,
-            'achieved_revenue': achieved,
-            'leads_count': lead_data['count'],
-            'won_deals': lead_data['won'],
-            'visits': activity_data['visits'],
-            'calls': activity_data['calls'],
-            'achievement_pct': min(achievement_pct, 200)  # Cap at 200%
-        })
-        
-        total_target += target
-        total_achieved += achieved
-        total_leads += lead_data['count']
-        total_won += lead_data['won']
-    
-    avg_achievement = int(total_achieved / total_target * 100) if total_target > 0 else 0
-    
-    return {
-        'resources': resources_data,
-        'summary': {
-            'total_target': total_target,
-            'total_achieved': total_achieved,
-            'total_leads': total_leads,
-            'total_won': total_won,
-            'avg_achievement': avg_achievement
-        }
-    }
-
-@api_router.get("/reports/account-performance")
-async def get_account_performance(
-    time_filter: str = 'this_month',
-    territory: Optional[str] = None,
-    state: Optional[str] = None,
-    city: Optional[str] = None,
-    account_type: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    Get Account performance report.
-    Shows invoice totals, bottle credits, contribution %, and financial metrics.
-    """
-    start_date, end_date = get_time_filter_dates(time_filter)
-    
-    # Build account query
-    account_query = {}
-    if territory:
-        account_query['territory'] = territory
-    if state:
-        account_query['state'] = state
-    if city:
-        account_query['city'] = city
-    if account_type:
-        account_query['account_type'] = account_type
-    
-    # Fetch all accounts matching filters
-    accounts = await get_tdb().accounts.find(account_query, {'_id': 0}).to_list(500)
-    
-    # Build invoice date query
-    invoice_date_query = {}
-    if time_filter != 'lifetime':
-        invoice_date_query = {
-            'created_at': {
-                '$gte': start_date.isoformat(),
-                '$lte': end_date.isoformat()
-            }
-        }
-    
-    # Get all invoices within time range
-    all_invoices = await get_tdb().invoices.find(invoice_date_query, {'_id': 0}).to_list(5000)
-    
-    # Calculate total revenue for contribution percentage
-    total_gross_all = sum(inv.get('gross_amount', inv.get('total_amount', 0)) for inv in all_invoices)
-    
-    # Aggregate invoice data by account
-    account_invoices = {}
-    for inv in all_invoices:
-        # Match by lead_id or customer name
-        lead_id = inv.get('lead_id')
-        customer_name = inv.get('customer_name', '').lower()
-        
-        for acc in accounts:
-            acc_lead_id = acc.get('lead_id')
-            acc_name = acc.get('account_name', '').lower()
-            
-            # Match invoice to account
-            if (lead_id and acc_lead_id and lead_id == acc_lead_id) or \
-               (customer_name and acc_name and (customer_name in acc_name or acc_name in customer_name)):
-                acc_id = acc.get('account_id')
-                if acc_id not in account_invoices:
-                    account_invoices[acc_id] = {
-                        'gross_total': 0,
-                        'net_total': 0,
-                        'bottle_credit': 0,
-                        'invoice_count': 0
-                    }
-                
-                gross = inv.get('gross_amount', inv.get('total_amount', 0))
-                net = inv.get('net_amount', inv.get('total_amount', 0))
-                credit = inv.get('bottle_credit', 0)
-                
-                account_invoices[acc_id]['gross_total'] += gross
-                account_invoices[acc_id]['net_total'] += net
-                account_invoices[acc_id]['bottle_credit'] += credit
-                account_invoices[acc_id]['invoice_count'] += 1
-                break
-    
-    # Build performance data
-    accounts_data = []
-    summary_gross = 0
-    summary_net = 0
-    summary_bottle_credit = 0
-    summary_outstanding = 0
-    summary_overdue = 0
-    
-    # Calculate filtered total gross for accurate contribution %
-    filtered_total_gross = 0
-    for acc in accounts:
-        acc_id = acc.get('account_id')
-        inv_data = account_invoices.get(acc_id, {'gross_total': 0})
-        filtered_total_gross += inv_data['gross_total']
-    
-    for acc in accounts:
-        acc_id = acc.get('account_id')
-        inv_data = account_invoices.get(acc_id, {
-            'gross_total': 0,
-            'net_total': 0,
-            'bottle_credit': 0,
-            'invoice_count': 0
-        })
-        
-        # Calculate contribution percentage (based on filtered accounts' total, not all invoices)
-        contribution_pct = 0
-        if filtered_total_gross > 0:
-            contribution_pct = round((inv_data['gross_total'] / filtered_total_gross) * 100, 2)
-        
-        # Calculate average order amount
-        average_order = 0
-        if inv_data['invoice_count'] > 0:
-            average_order = round(inv_data['gross_total'] / inv_data['invoice_count'], 2)
-        
-        # Get financial data from account
-        outstanding = acc.get('outstanding_balance', 0)
-        overdue = acc.get('overdue_amount', 0)
-        last_payment = acc.get('last_payment_amount', 0)
-        last_payment_date = acc.get('last_payment_date', '')
-        
-        # Calculate bottle credit from SKU pricing if not in invoices
-        sku_pricing = acc.get('sku_pricing', [])
-        estimated_bottle_credit = sum(sku.get('return_bottle_credit', 0) for sku in sku_pricing)
-        bottle_credit = inv_data['bottle_credit'] if inv_data['bottle_credit'] > 0 else estimated_bottle_credit
-        
-        accounts_data.append({
-            'account_id': acc_id,
-            'account_name': acc.get('account_name', 'Unknown'),
-            'account_type': acc.get('account_type', ''),
-            'territory': acc.get('territory', ''),
-            'state': acc.get('state', ''),
-            'city': acc.get('city', ''),
-            'gross_invoice_total': inv_data['gross_total'],
-            'net_invoice_total': inv_data['net_total'],
-            'bottle_credit': bottle_credit,
-            'contribution_pct': contribution_pct,
-            'average_order_amount': average_order,
-            'outstanding_balance': outstanding,
-            'overdue_amount': overdue,
-            'last_payment_amount': last_payment,
-            'last_payment_date': last_payment_date,
-            'invoice_count': inv_data['invoice_count']
-        })
-        
-        # Update summary
-        summary_gross += inv_data['gross_total']
-        summary_net += inv_data['net_total']
-        summary_bottle_credit += bottle_credit
-        summary_outstanding += outstanding
-        summary_overdue += overdue
-    
-    # Sort by gross invoice total (descending)
-    accounts_data.sort(key=lambda x: x['gross_invoice_total'], reverse=True)
-    
-    # Calculate overall average order
-    total_invoice_count = sum(acc['invoice_count'] for acc in accounts_data)
-    overall_avg_order = round(summary_gross / total_invoice_count, 2) if total_invoice_count > 0 else 0
-    
-    return {
-        'accounts': accounts_data,
-        'summary': {
-            'total_gross': summary_gross,
-            'total_net': summary_net,
-            'total_bottle_credit': summary_bottle_credit,
-            'total_outstanding': summary_outstanding,
-            'total_overdue': summary_overdue,
-            'account_count': len(accounts_data),
-            'total_invoice_count': total_invoice_count,
-            'average_order_amount': overall_avg_order,
-            'total_revenue_base': filtered_total_gross  # For context on contribution calc
-        }
-    }
 
 # ============= FILES & DOCUMENTS MODULE =============
 
@@ -10106,7 +10113,7 @@ async def upload_document(
     if file.content_type not in ALLOWED_DOCUMENT_TYPES:
         raise HTTPException(
             status_code=400, 
-            detail=f'File type not allowed. Allowed types: PDF, DOC, DOCX, PNG, JPG, GIF, WEBP'
+            detail='File type not allowed. Allowed types: PDF, DOC, DOCX, PNG, JPG, GIF, WEBP'
         )
     
     # Read file
@@ -10888,38 +10895,14 @@ async def review_account_contract(
     
     return {'contract': updated, 'message': f'Contract {action.replace("_", " ")}'}
 
-# ============= MASTER LOCATIONS API =============
-
-class Territory(BaseModel):
-    id: Optional[str] = None
-    name: str
-    code: str  # e.g., "north_india", "south_india"
-    is_active: bool = True
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-class State(BaseModel):
-    id: Optional[str] = None
-    name: str
-    code: str  # e.g., "karnataka", "tamil_nadu"
-    territory_id: str
-    is_active: bool = True
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-class City(BaseModel):
-    id: Optional[str] = None
-    name: str
-    code: str  # e.g., "bengaluru", "chennai"
-    state_id: str
-    is_active: bool = True
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-# Initialize default territories, states, and cities if not exists
 @app.on_event("startup")
-async def init_master_locations():
-    """Initialize default Indian territories, states, and cities"""
+async def init_master_locations_startup():
+    """Kick off location seeding in the background so startup stays fast"""
+    asyncio.create_task(_init_master_locations_async())
+
+
+async def _init_master_locations_async():
+    """Initialize default Indian territories, states, and cities (background task)"""
     try:
         # Check if territories already exist
         existing_count = await db.master_territories.count_documents({})
@@ -11043,952 +11026,6 @@ async def init_master_locations():
     except Exception as e:
         logger.warning(f"Failed to initialize master locations (non-blocking): {e}")
 
-# Get all locations (hierarchical)
-@api_router.get("/master-locations")
-async def get_master_locations(current_user: dict = Depends(get_current_user)):
-    """Get all territories with their states and cities"""
-    
-    territories = await db.master_territories.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(100)
-    states = await db.master_states.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(500)
-    cities = await db.master_cities.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(5000)
-    
-    # Build hierarchical structure
-    state_cities = {}
-    for city in cities:
-        state_id = city['state_id']
-        if state_id not in state_cities:
-            state_cities[state_id] = []
-        state_cities[state_id].append(city)
-    
-    territory_states = {}
-    for state in states:
-        territory_id = state['territory_id']
-        if territory_id not in territory_states:
-            territory_states[territory_id] = []
-        state['cities'] = state_cities.get(state['id'], [])
-        territory_states[territory_id].append(state)
-    
-    result = []
-    for territory in territories:
-        territory['states'] = territory_states.get(territory['id'], [])
-        result.append(territory)
-    
-    return result
-
-# Get flat lists for dropdowns
-@api_router.get("/master-locations/flat")
-async def get_master_locations_flat(current_user: dict = Depends(get_current_user)):
-    """Get flat lists of territories, states, and cities for dropdowns"""
-    
-    territories = await db.master_territories.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(100)
-    states = await db.master_states.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(500)
-    cities = await db.master_cities.find({'is_active': True}, {'_id': 0}).sort('name', 1).to_list(5000)
-    
-    # Create lookup maps
-    territory_map = {t['id']: t['name'] for t in territories}
-    state_map = {s['id']: {'name': s['name'], 'territory_id': s['territory_id']} for s in states}
-    
-    # Add territory name to states
-    for state in states:
-        state['territory_name'] = territory_map.get(state['territory_id'], '')
-    
-    # Add state and territory names to cities
-    for city in cities:
-        state_info = state_map.get(city['state_id'], {})
-        city['state_name'] = state_info.get('name', '')
-        city['territory_id'] = state_info.get('territory_id', '')
-        city['territory_name'] = territory_map.get(city.get('territory_id'), '')
-    
-    return {
-        'territories': territories,
-        'states': states,
-        'cities': cities
-    }
-
-# CRUD for Territories
-@api_router.post("/master-locations/territories")
-async def create_territory(territory: Territory, current_user: dict = Depends(get_current_user)):
-    """Create a new territory"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    territory_data = territory.model_dump()
-    territory_data['id'] = str(uuid.uuid4())
-    territory_data['created_at'] = datetime.now(timezone.utc).isoformat()
-    territory_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await db.master_territories.insert_one(territory_data)
-    if '_id' in territory_data:
-        del territory_data['_id']
-    
-    return territory_data
-
-@api_router.put("/master-locations/territories/{territory_id}")
-async def update_territory(territory_id: str, territory: Territory, current_user: dict = Depends(get_current_user)):
-    """Update a territory"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    update_data = territory.model_dump(exclude_unset=True)
-    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await db.master_territories.update_one({'id': territory_id}, {'$set': update_data})
-    
-    updated = await db.master_territories.find_one({'id': territory_id}, {'_id': 0})
-    return updated
-
-@api_router.delete("/master-locations/territories/{territory_id}")
-async def delete_territory(territory_id: str, current_user: dict = Depends(get_current_user)):
-    """Soft delete a territory"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    await db.master_territories.update_one(
-        {'id': territory_id}, 
-        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
-    )
-    return {'message': 'Territory deleted'}
-
-# CRUD for States
-@api_router.post("/master-locations/states")
-async def create_state(state: State, current_user: dict = Depends(get_current_user)):
-    """Create a new state"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    state_data = state.model_dump()
-    state_data['id'] = str(uuid.uuid4())
-    state_data['created_at'] = datetime.now(timezone.utc).isoformat()
-    state_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await db.master_states.insert_one(state_data)
-    
-    return {k: v for k, v in state_data.items() if k != '_id'}
-
-@api_router.put("/master-locations/states/{state_id}")
-async def update_state(state_id: str, state: State, current_user: dict = Depends(get_current_user)):
-    """Update a state"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    update_data = state.model_dump(exclude_unset=True)
-    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await db.master_states.update_one({'id': state_id}, {'$set': update_data})
-    
-    updated = await db.master_states.find_one({'id': state_id}, {'_id': 0})
-    return updated
-
-@api_router.delete("/master-locations/states/{state_id}")
-async def delete_state(state_id: str, current_user: dict = Depends(get_current_user)):
-    """Soft delete a state and all its cities"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    # Soft delete the state
-    await db.master_states.update_one(
-        {'id': state_id}, 
-        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    # Cascade: Also soft delete all cities under this state
-    await db.master_cities.update_many(
-        {'state_id': state_id, 'is_active': True},
-        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    return {'message': 'State and its cities deleted'}
-
-# Admin endpoint to cleanup orphaned cities
-@api_router.post("/master-locations/cleanup-orphaned-cities")
-async def cleanup_orphaned_cities(current_user: dict = Depends(get_current_user)):
-    """
-    One-time cleanup to deactivate cities whose parent state has been deleted.
-    This fixes orphaned cities that existed before the cascade delete was implemented.
-    """
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    # Get all active state IDs
-    active_states = await db.master_states.find({'is_active': True}, {'id': 1}).to_list(5000)
-    active_state_ids = [s['id'] for s in active_states]
-    
-    # Find and deactivate orphaned cities (cities with inactive/missing parent states)
-    result = await db.master_cities.update_many(
-        {
-            'is_active': True,
-            'state_id': {'$nin': active_state_ids}
-        },
-        {
-            '$set': {
-                'is_active': False,
-                'updated_at': datetime.now(timezone.utc).isoformat()
-            }
-        }
-    )
-    
-    # Get final counts
-    final_active_cities = await db.master_cities.count_documents({'is_active': True})
-    
-    return {
-        'message': 'Cleanup completed',
-        'orphaned_cities_deactivated': result.modified_count,
-        'active_cities_remaining': final_active_cities
-    }
-
-# CRUD for Cities
-@api_router.post("/master-locations/cities")
-async def create_city(city: City, current_user: dict = Depends(get_current_user)):
-    """Create a new city"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    city_data = city.model_dump()
-    city_data['id'] = str(uuid.uuid4())
-    city_data['created_at'] = datetime.now(timezone.utc).isoformat()
-    city_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await db.master_cities.insert_one(city_data)
-    
-    return {k: v for k, v in city_data.items() if k != '_id'}
-
-@api_router.put("/master-locations/cities/{city_id}")
-async def update_city(city_id: str, city: City, current_user: dict = Depends(get_current_user)):
-    """Update a city"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    update_data = city.model_dump(exclude_unset=True)
-    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await db.master_cities.update_one({'id': city_id}, {'$set': update_data})
-    
-    updated = await db.master_cities.find_one({'id': city_id}, {'_id': 0})
-    return updated
-
-@api_router.delete("/master-locations/cities/{city_id}")
-async def delete_city(city_id: str, current_user: dict = Depends(get_current_user)):
-    """Soft delete a city"""
-    if current_user.get('role') not in ['CEO', 'Director', 'System Admin']:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    
-    await db.master_cities.update_one(
-        {'id': city_id}, 
-        {'$set': {'is_active': False, 'updated_at': datetime.now(timezone.utc).isoformat()}}
-    )
-    return {'message': 'City deleted'}
-
-# ============= QUOTES API PROXY =============
-# Proxy endpoints for quotes APIs to avoid CORS issues in production
-
-# Water quotes - curated list since no specific water quotes API exists
-WATER_QUOTES = [
-    {"q": "Water is the driving force of all nature.", "a": "Leonardo da Vinci"},
-    {"q": "Thousands have lived without love, not one without water.", "a": "W.H. Auden"},
-    {"q": "Water is life, and clean water means health.", "a": "Audrey Hepburn"},
-    {"q": "Pure water is the world's first and foremost medicine.", "a": "Slovakian Proverb"},
-    {"q": "When the well is dry, we know the worth of water.", "a": "Benjamin Franklin"},
-    {"q": "Water is the soul of the Earth.", "a": "W.H. Auden"},
-    {"q": "In one drop of water are found all the secrets of all the oceans.", "a": "Kahlil Gibran"},
-    {"q": "Nothing is softer or more flexible than water, yet nothing can resist it.", "a": "Lao Tzu"},
-    {"q": "Water is the most critical resource issue of our lifetime.", "a": "Rosegrant"},
-    {"q": "We forget that the water cycle and the life cycle are one.", "a": "Jacques Cousteau"},
-    {"q": "Water links us to our neighbor in a way more profound than any other.", "a": "John Thorson"},
-    {"q": "The cure for anything is salt water: sweat, tears, or the sea.", "a": "Isak Dinesen"},
-    {"q": "Water is sacred to all human beings.", "a": "Rigoberta Menchu"},
-    {"q": "A drop of water is worth more than a sack of gold to a thirsty man.", "a": "Unknown"},
-    {"q": "By means of water, we give life to everything.", "a": "Quran"},
-    {"q": "Water is the mirror that has the ability to show us what we cannot see.", "a": "Masaru Emoto"},
-    {"q": "Heavy hearts, like heavy clouds in the sky, are best relieved by letting water out.", "a": "Christopher Morley"},
-    {"q": "Access to safe water is a fundamental human need.", "a": "Kofi Annan"},
-    {"q": "Clean water and sanitation are human rights.", "a": "Pope Francis"},
-    {"q": "Water is life's matter and matrix, mother and medium.", "a": "Albert Szent-Gyorgyi"},
-    {"q": "The water you touch in a river is the last of that which has passed, and the first of that which is coming.", "a": "Leonardo da Vinci"},
-    {"q": "Water sustains all.", "a": "Thales of Miletus"},
-    {"q": "Rivers know this: there is no hurry. We shall get there some day.", "a": "A.A. Milne"},
-    {"q": "Water is the best of all things.", "a": "Pindar"},
-    {"q": "If there is magic on this planet, it is contained in water.", "a": "Loren Eiseley"},
-    {"q": "We never know the worth of water till the well is dry.", "a": "Thomas Fuller"},
-    {"q": "Water is the one substance from which the earth can conceal nothing.", "a": "Loren Eiseley"},
-    {"q": "Human nature is like water. It takes the shape of its container.", "a": "Wallace Stevens"},
-    {"q": "Ocean is more ancient than the mountains, and freighted with the memories of time.", "a": "H.P. Lovecraft"},
-    {"q": "Water, in all its forms, is what makes our planet a wonderful place to live.", "a": "Unknown"},
-    {"q": "The world's freshwater is a shared resource that must be protected.", "a": "Mikhail Gorbachev"},
-]
-
-import random
-
-@api_router.get("/quotes/water")
-async def get_water_quote():
-    """Returns a random water-related quote"""
-    quote = random.choice(WATER_QUOTES)
-    return {"quote": quote["q"], "author": quote["a"]}
-
-@api_router.get("/quotes/sales")
-async def get_sales_quote():
-    """Proxy endpoint for ZenQuotes API to get inspirational quotes for sales"""
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                "https://zenquotes.io/api/random",
-                timeout=10.0
-            )
-            response.raise_for_status()
-            data = response.json()
-            if data and len(data) > 0:
-                return {"quote": data[0]["q"], "author": data[0]["a"]}
-            else:
-                # Fallback quote if API returns empty
-                return {"quote": "Success is not the key to happiness. Happiness is the key to success.", "author": "Albert Schweitzer"}
-    except Exception as e:
-        # Fallback quote on error
-        print(f"ZenQuotes API error: {str(e)}")
-        return {"quote": "The secret of getting ahead is getting started.", "author": "Mark Twain"}
-
-# ============= WEATHER API PROXY =============
-# Proxy endpoint for Open-Meteo weather API to avoid CORS issues in production
-@api_router.get("/weather")
-async def get_weather(latitude: float, longitude: float):
-    """Proxy endpoint for Open-Meteo weather API to avoid CORS issues"""
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                "https://api.open-meteo.com/v1/forecast",
-                params={
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "current": "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
-                    "timezone": "auto"
-                },
-                timeout=10.0
-            )
-            response.raise_for_status()
-            return response.json()
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Weather service timeout")
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Weather service error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch weather: {str(e)}")
-
-# ==================== TARGET PLANNING MODULE (V2) ====================
-
-class TargetPlanCreateV2(BaseModel):
-    name: str
-    start_date: str  # YYYY-MM-DD
-    end_date: str    # YYYY-MM-DD
-    goal_type: str = "run_rate"  # "run_rate" (monthly revenue goal by end date) or "cumulative" (total over period)
-    total_amount: float
-    milestones: int = 4  # Number of milestones to split the target into
-    description: Optional[str] = None
-
-class TargetPlanUpdateV2(BaseModel):
-    name: Optional[str] = None
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    goal_type: Optional[str] = None
-    total_amount: Optional[float] = None
-    milestones: Optional[int] = None
-    description: Optional[str] = None
-    status: Optional[str] = None  # draft, active, completed, locked
-
-class TargetAllocationCreateV2(BaseModel):
-    territory_id: str
-    territory_name: str
-    city: Optional[str] = None
-    state: Optional[str] = None  # State for city-level allocations
-    resource_id: Optional[str] = None
-    resource_name: Optional[str] = None
-    sku_id: Optional[str] = None
-    sku_name: Optional[str] = None
-    parent_allocation_id: Optional[str] = None  # For hierarchical allocations
-    level: str = 'territory'  # 'territory', 'city', 'resource', 'sku'
-    amount: float
-
-class TargetAllocationUpdateV2(BaseModel):
-    amount: Optional[float] = None
-
-@api_router.get("/target-planning")
-async def get_target_planning_list(
-    status: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get all target plans for new Target Planning module with monthly revenue breakdown"""
-    query = {}
-    if status:
-        query['status'] = status
-    
-    plans = await db.target_plans_v2.find(query, {'_id': 0}).sort('created_at', -1).to_list(100)
-    
-    # Calculate monthly revenue breakdown for each plan
-    for plan in plans:
-        start = datetime.fromisoformat(plan['start_date'])
-        end = datetime.fromisoformat(plan['end_date'])
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        
-        # Generate monthly breakdown
-        monthly_data = []
-        current = start.replace(day=1)
-        
-        while current <= end:
-            month_start = current.strftime('%Y-%m-01')
-            # Get last day of month
-            if current.month == 12:
-                next_month = current.replace(year=current.year + 1, month=1, day=1)
-            else:
-                next_month = current.replace(month=current.month + 1, day=1)
-            month_end = (next_month - timedelta(days=1)).strftime('%Y-%m-%d')
-            
-            is_past_or_current = current <= now
-            
-            month_entry = {
-                'month': current.strftime('%b %Y'),
-                'month_num': current.month,
-                'year': current.year,
-                'is_current': current.month == now.month and current.year == now.year,
-                'is_past': current < now.replace(day=1),
-                'invoice_value': 0,
-                'collections': 0
-            }
-            
-            # Only fetch actual data for past and current months
-            if is_past_or_current:
-                # Get invoices for this month
-                invoices = await get_tdb().invoices.find({
-                    'invoice_date': {'$gte': month_start, '$lte': month_end}
-                }, {'_id': 0}).to_list(500)
-                month_entry['invoice_value'] = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
-                
-                # Get collections (payments) for this month
-                payments = await db.payments.find({
-                    'payment_date': {'$gte': month_start, '$lte': month_end}
-                }, {'_id': 0}).to_list(500)
-                month_entry['collections'] = sum(p.get('amount', 0) or 0 for p in payments)
-            
-            monthly_data.append(month_entry)
-            
-            # Move to next month
-            if current.month == 12:
-                current = current.replace(year=current.year + 1, month=1)
-            else:
-                current = current.replace(month=current.month + 1)
-        
-        plan['monthly_breakdown'] = monthly_data
-        
-        # Current month stats
-        current_month_data = next((m for m in monthly_data if m['is_current']), None)
-        plan['current_month'] = current_month_data
-        
-        # Total achieved (sum of all past months' invoice values)
-        plan['total_invoice_value'] = sum(m['invoice_value'] for m in monthly_data)
-        plan['total_collections'] = sum(m['collections'] for m in monthly_data)
-    
-    return plans
-
-@api_router.post("/target-planning")
-async def create_target_planning(
-    plan: TargetPlanCreateV2,
-    current_user: dict = Depends(get_current_user)
-):
-    """Create a new target plan (v2)"""
-    plan_data = {
-        'id': str(uuid.uuid4()),
-        'name': plan.name,
-        'start_date': plan.start_date,
-        'end_date': plan.end_date,
-        'goal_type': plan.goal_type,  # "run_rate" or "cumulative"
-        'total_amount': plan.total_amount,
-        'milestones': plan.milestones,
-        'allocated_amount': 0,
-        'description': plan.description,
-        'status': 'draft',
-        'created_by': current_user['id'],
-        'created_by_name': current_user.get('name', current_user.get('email')),
-        'created_at': datetime.now(timezone.utc).isoformat(),
-        'updated_at': datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.target_plans_v2.insert_one(plan_data)
-    plan_data.pop('_id', None)
-    return plan_data
-
-
-@api_router.get("/target-planning/city-achievement")
-async def get_city_achievement(
-    city: str,
-    start_date: str,
-    end_date: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get achievement (actual revenue from invoices) for a specific city within a date range"""
-    # Get accounts in this city
-    accounts = await get_tdb().accounts.find({'city': city}, {'account_id': 1}).to_list(1000)
-    account_ids = [a['account_id'] for a in accounts]
-    
-    # Get invoices for these accounts within the date range
-    invoices_query = {
-        'account_id': {'$in': account_ids},
-        'invoice_date': {'$gte': start_date, '$lte': end_date}
-    }
-    
-    invoices = await get_tdb().invoices.find(invoices_query, {'_id': 0}).to_list(1000)
-    achieved = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
-    
-    # Also get won leads for estimated revenue
-    won_leads = await get_tdb().leads.find({
-        'city': city,
-        'status': 'won',
-        'updated_at': {'$gte': start_date, '$lte': end_date}
-    }, {'_id': 0}).to_list(1000)
-    estimated = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
-    
-    return {
-        'city': city,
-        'achieved': achieved,
-        'estimated': estimated,
-        'invoices_count': len(invoices),
-        'won_leads_count': len(won_leads)
-    }
-
-
-@api_router.get("/target-planning/resources/by-location")
-async def get_resources_by_location(
-    territory: Optional[str] = None,
-    city: Optional[str] = None,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get sales resources filtered by territory or city"""
-    query = {'is_active': True}
-    
-    # Filter for sales or admin department
-    query['department'] = {'$in': ['Sales', 'Admin', 'sales', 'admin']}
-    
-    if city:
-        query['city'] = city
-    elif territory:
-        query['territory'] = territory
-    
-    users = await get_tdb().users.find(
-        query,
-        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'department': 1, 'city': 1, 'state': 1, 'territory': 1}
-    ).to_list(200)
-    return users
-
-
-@api_router.get("/target-planning/{plan_id}")
-async def get_target_planning_detail(
-    plan_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get a specific target plan with allocations"""
-    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
-    if not plan:
-        raise HTTPException(status_code=404, detail="Target plan not found")
-    
-    allocations = await db.target_allocations_v2.find(
-        {'plan_id': plan_id}, {'_id': 0}
-    ).to_list(500)
-    
-    plan['allocations'] = allocations
-    return plan
-
-@api_router.put("/target-planning/{plan_id}")
-async def update_target_planning(
-    plan_id: str,
-    plan_update: TargetPlanUpdateV2,
-    current_user: dict = Depends(get_current_user)
-):
-    """Update a target plan"""
-    existing = await db.target_plans_v2.find_one({'id': plan_id})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Target plan not found")
-    
-    update_data = {k: v for k, v in plan_update.model_dump().items() if v is not None}
-    update_data['updated_at'] = datetime.now(timezone.utc).isoformat()
-    
-    await db.target_plans_v2.update_one({'id': plan_id}, {'$set': update_data})
-    
-    updated = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
-    return updated
-
-@api_router.delete("/target-planning/{plan_id}")
-async def delete_target_planning(
-    plan_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Delete a target plan and its allocations"""
-    existing = await db.target_plans_v2.find_one({'id': plan_id})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Target plan not found")
-    
-    await db.target_allocations_v2.delete_many({'plan_id': plan_id})
-    await db.target_plans_v2.delete_one({'id': plan_id})
-    
-    return {"message": "Target plan deleted successfully"}
-
-@api_router.post("/target-planning/{plan_id}/allocations")
-async def create_target_allocation_v2(
-    plan_id: str,
-    allocation: TargetAllocationCreateV2,
-    current_user: dict = Depends(get_current_user)
-):
-    """Add an allocation to a target plan"""
-    plan = await db.target_plans_v2.find_one({'id': plan_id})
-    if not plan:
-        raise HTTPException(status_code=404, detail="Target plan not found")
-    
-    # Use explicit level if provided, otherwise infer from data
-    level = allocation.level
-    if not level or level == 'territory':
-        # Only auto-determine if no explicit level or default
-        if allocation.resource_id:
-            level = 'resource'
-        elif allocation.sku_id:
-            level = 'sku'
-        elif allocation.city:
-            level = 'city'
-        else:
-            level = 'territory'
-    
-    allocation_data = {
-        'id': str(uuid.uuid4()),
-        'plan_id': plan_id,
-        'territory_id': allocation.territory_id,
-        'territory_name': allocation.territory_name,
-        'city': allocation.city,
-        'state': allocation.state,
-        'resource_id': allocation.resource_id,
-        'resource_name': allocation.resource_name,
-        'sku_id': allocation.sku_id,
-        'sku_name': allocation.sku_name,
-        'parent_allocation_id': allocation.parent_allocation_id,
-        'level': level,
-        'amount': allocation.amount,
-        'created_at': datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.target_allocations_v2.insert_one(allocation_data)
-    
-    # Recalculate total allocated at territory level only
-    territory_allocations = await db.target_allocations_v2.aggregate([
-        {'$match': {'plan_id': plan_id, 'level': 'territory'}},
-        {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
-    ]).to_list(1)
-    
-    allocated = territory_allocations[0]['total'] if territory_allocations else 0
-    await db.target_plans_v2.update_one(
-        {'id': plan_id}, 
-        {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    allocation_data.pop('_id', None)
-    return allocation_data
-
-@api_router.delete("/target-planning/{plan_id}/allocations/{allocation_id}")
-async def delete_target_allocation_v2(
-    plan_id: str,
-    allocation_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Delete an allocation and its child allocations"""
-    existing = await db.target_allocations_v2.find_one({'id': allocation_id, 'plan_id': plan_id})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Allocation not found")
-    
-    # Delete this allocation and all its children (cascading delete)
-    await db.target_allocations_v2.delete_many({
-        '$or': [
-            {'id': allocation_id},
-            {'parent_allocation_id': allocation_id}
-        ]
-    })
-    
-    # Recalculate total allocated at territory level only
-    territory_allocations = await db.target_allocations_v2.aggregate([
-        {'$match': {'plan_id': plan_id, 'level': 'territory'}},
-        {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
-    ]).to_list(1)
-    
-    allocated = territory_allocations[0]['total'] if territory_allocations else 0
-    await db.target_plans_v2.update_one(
-        {'id': plan_id}, 
-        {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    return {"message": "Allocation deleted successfully"}
-
-
-@api_router.get("/target-planning/{plan_id}/allocations/{allocation_id}/children")
-async def get_allocation_children(
-    plan_id: str,
-    allocation_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get child allocations for a parent allocation"""
-    children = await db.target_allocations_v2.find(
-        {'plan_id': plan_id, 'parent_allocation_id': allocation_id},
-        {'_id': 0}
-    ).to_list(500)
-    return children
-
-
-@api_router.put("/target-planning/{plan_id}/allocations/{allocation_id}")
-async def update_target_allocation_v2(
-    plan_id: str,
-    allocation_id: str,
-    update_data: TargetAllocationUpdateV2,
-    current_user: dict = Depends(get_current_user)
-):
-    """Update an existing allocation amount"""
-    existing = await db.target_allocations_v2.find_one({'id': allocation_id, 'plan_id': plan_id})
-    if not existing:
-        raise HTTPException(status_code=404, detail="Allocation not found")
-    
-    update_fields = {'updated_at': datetime.now(timezone.utc).isoformat()}
-    if update_data.amount is not None:
-        update_fields['amount'] = update_data.amount
-    
-    await db.target_allocations_v2.update_one(
-        {'id': allocation_id},
-        {'$set': update_fields}
-    )
-    
-    # Recalculate territory totals if this is a territory-level allocation
-    if existing.get('level') == 'territory' or not existing.get('level'):
-        territory_allocations = await db.target_allocations_v2.aggregate([
-            {'$match': {'plan_id': plan_id, 'level': 'territory'}},
-            {'$group': {'_id': None, 'total': {'$sum': '$amount'}}}
-        ]).to_list(1)
-        
-        allocated = territory_allocations[0]['total'] if territory_allocations else 0
-        await db.target_plans_v2.update_one(
-            {'id': plan_id}, 
-            {'$set': {'allocated_amount': allocated, 'updated_at': datetime.now(timezone.utc).isoformat()}}
-        )
-    
-    updated = await db.target_allocations_v2.find_one({'id': allocation_id}, {'_id': 0})
-    return updated
-
-
-@api_router.get("/target-planning/{plan_id}/dashboard")
-async def get_target_planning_dashboard(
-    plan_id: str,
-    current_user: dict = Depends(get_current_user)
-):
-    """Get dashboard data for a target plan"""
-    plan = await db.target_plans_v2.find_one({'id': plan_id}, {'_id': 0})
-    if not plan:
-        raise HTTPException(status_code=404, detail="Target plan not found")
-    
-    start_date = datetime.fromisoformat(plan['start_date'])
-    end_date = datetime.fromisoformat(plan['end_date'])
-    today = datetime.now(timezone.utc).replace(tzinfo=None)
-    
-    total_days = (end_date - start_date).days
-    days_elapsed = max(0, (today - start_date).days)
-    days_remaining = max(0, (end_date - today).days)
-    
-    # Get all allocations
-    all_allocations = await db.target_allocations_v2.find(
-        {'plan_id': plan_id}, {'_id': 0}
-    ).to_list(500)
-    
-    # Build hierarchical structure
-    territory_allocations = [a for a in all_allocations if a.get('level', 'territory') == 'territory']
-    city_allocations = [a for a in all_allocations if a.get('level') == 'city']
-    resource_allocations = [a for a in all_allocations if a.get('level') == 'resource']
-    
-    # Build territory hierarchy with children
-    territories_with_children = []
-    for t_alloc in territory_allocations:
-        t_children = [c for c in city_allocations if c.get('parent_allocation_id') == t_alloc['id']]
-        t_alloc['children'] = []
-        t_alloc['allocated_to_children'] = 0
-        
-        for c_alloc in t_children:
-            c_children = [r for r in resource_allocations if r.get('parent_allocation_id') == c_alloc['id']]
-            c_alloc['children'] = c_children
-            c_alloc['allocated_to_children'] = sum(r.get('amount', 0) for r in c_children)
-            t_alloc['children'].append(c_alloc)
-            t_alloc['allocated_to_children'] += c_alloc['amount']
-        
-        territories_with_children.append(t_alloc)
-    
-    # Calculate cities list from allocations
-    cities = list(set(a['city'] for a in all_allocations if a.get('city')))
-    
-    # Estimated Revenue from Won Leads
-    won_leads_query = {
-        'status': 'won',
-        'updated_at': {'$gte': plan['start_date'], '$lte': plan['end_date']}
-    }
-    if cities:
-        won_leads_query['city'] = {'$in': cities}
-    
-    won_leads = await get_tdb().leads.find(won_leads_query, {'_id': 0}).to_list(1000)
-    estimated_revenue = sum(lead.get('estimated_value', 0) or 0 for lead in won_leads)
-    
-    # Actual Revenue from Invoices
-    invoices_query = {
-        'invoice_date': {'$gte': plan['start_date'], '$lte': plan['end_date']}
-    }
-    
-    invoices = await get_tdb().invoices.find(invoices_query, {'_id': 0}).to_list(1000)
-    actual_revenue = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
-    
-    # Calculate milestones based on plan configuration
-    num_milestones = plan.get('milestones', 4)
-    days_per_milestone = total_days // num_milestones if num_milestones > 0 else total_days
-    
-    milestones = []
-    current = start_date
-    cumulative_days = 0
-    target_per_milestone = plan['total_amount'] / num_milestones if num_milestones > 0 else plan['total_amount']
-    
-    for i in range(num_milestones):
-        milestone_end = start_date + timedelta(days=days_per_milestone * (i + 1))
-        if i == num_milestones - 1:
-            milestone_end = end_date  # Last milestone ends exactly at plan end
-        
-        cumulative_days += days_per_milestone if i < num_milestones - 1 else (end_date - current).days
-        milestone_date = milestone_end
-        
-        # Check if milestone is completed (date has passed)
-        is_completed = today >= milestone_end
-        is_current = not is_completed and (i == 0 or today >= start_date + timedelta(days=days_per_milestone * i))
-        
-        milestones.append({
-            'milestone': i + 1,
-            'days': cumulative_days,
-            'date': milestone_date.strftime('%Y-%m-%d'),
-            'date_label': milestone_date.strftime('%b %d'),
-            'target_amount': target_per_milestone * (i + 1),
-            'is_completed': is_completed,
-            'is_current': is_current
-        })
-        
-        current = milestone_end
-    
-    # Territory breakdown for won leads
-    territory_breakdown = {}
-    for lead in won_leads:
-        territory = lead.get('territory', 'Unknown')
-        if territory not in territory_breakdown:
-            territory_breakdown[territory] = {'count': 0, 'value': 0}
-        territory_breakdown[territory]['count'] += 1
-        territory_breakdown[territory]['value'] += lead.get('estimated_value', 0) or 0
-    
-    # City breakdown for invoices
-    city_breakdown = {}
-    for inv in invoices:
-        account_id = inv.get('account_id')
-        if account_id:
-            account = await get_tdb().accounts.find_one({'account_id': account_id}, {'city': 1})
-            city = account.get('city', 'Unknown') if account else 'Unknown'
-        else:
-            city = 'Unknown'
-        
-        if city not in city_breakdown:
-            city_breakdown[city] = {'count': 0, 'value': 0}
-        city_breakdown[city]['count'] += 1
-        city_breakdown[city]['value'] += inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0
-    
-    return {
-        'plan': plan,
-        'timeline': {
-            'total_days': total_days,
-            'days_elapsed': days_elapsed,
-            'days_remaining': days_remaining,
-            'progress_percent': round((days_elapsed / total_days) * 100, 1) if total_days > 0 else 0,
-            'milestones': milestones
-        },
-        'estimated_revenue': {
-            'achieved': estimated_revenue,
-            'remaining': max(0, plan['total_amount'] - estimated_revenue),
-            'percent': round((estimated_revenue / plan['total_amount']) * 100, 1) if plan['total_amount'] > 0 else 0,
-            'won_leads_count': len(won_leads),
-            'territory_breakdown': territory_breakdown
-        },
-        'actual_revenue': {
-            'achieved': actual_revenue,
-            'remaining': max(0, plan['total_amount'] - actual_revenue),
-            'percent': round((actual_revenue / plan['total_amount']) * 100, 1) if plan['total_amount'] > 0 else 0,
-            'invoices_count': len(invoices),
-            'city_breakdown': city_breakdown
-        },
-        'monthly_breakdown': await get_monthly_breakdown(plan, start_date, end_date, today),
-        'allocations': territories_with_children,
-        'all_allocations': all_allocations
-    }
-
-
-async def get_monthly_breakdown(plan, start_date, end_date, today):
-    """Calculate monthly revenue breakdown for a target plan"""
-    monthly_data = []
-    current = start_date.replace(day=1)
-    
-    while current <= end_date:
-        month_start = current.strftime('%Y-%m-01')
-        if current.month == 12:
-            next_month = current.replace(year=current.year + 1, month=1, day=1)
-        else:
-            next_month = current.replace(month=current.month + 1, day=1)
-        month_end = (next_month - timedelta(days=1)).strftime('%Y-%m-%d')
-        
-        is_past_or_current = current <= today
-        
-        month_entry = {
-            'month': current.strftime('%b %Y'),
-            'month_short': current.strftime('%b'),
-            'month_num': current.month,
-            'year': current.year,
-            'is_current': current.month == today.month and current.year == today.year,
-            'is_past': current < today.replace(day=1),
-            'invoice_value': 0,
-            'collections': 0,
-            'target': plan['total_amount']
-        }
-        
-        if is_past_or_current:
-            # Get invoices for this month
-            invoices = await get_tdb().invoices.find({
-                'invoice_date': {'$gte': month_start, '$lte': month_end}
-            }, {'_id': 0}).to_list(500)
-            month_entry['invoice_value'] = sum(inv.get('total_amount', 0) or inv.get('gross_invoice_value', 0) or 0 for inv in invoices)
-            month_entry['invoices_count'] = len(invoices)
-            
-            # Get collections (payments) for this month
-            payments = await db.payments.find({
-                'payment_date': {'$gte': month_start, '$lte': month_end}
-            }, {'_id': 0}).to_list(500)
-            month_entry['collections'] = sum(p.get('amount', 0) or 0 for p in payments)
-            month_entry['payments_count'] = len(payments)
-        
-        monthly_data.append(month_entry)
-        
-        if current.month == 12:
-            current = current.replace(year=current.year + 1, month=1)
-        else:
-            current = current.replace(month=current.month + 1)
-    
-    return monthly_data
-
-# Sales roles for resource filtering
-SALES_ROLES_V2 = ['National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Head of Business']
-
-@api_router.get("/target-planning/resources/sales")
-async def get_sales_resources_v2(
-    current_user: dict = Depends(get_current_user)
-):
-    """Get all sales and admin department members for target allocation"""
-    users = await get_tdb().users.find(
-        {'is_active': True, 'department': {'$in': ['Sales', 'Admin', 'sales', 'admin']}},
-        {'_id': 0, 'id': 1, 'name': 1, 'email': 1, 'role': 1, 'department': 1, 'city': 1, 'territory': 1}
-    ).to_list(200)
-    return users
-
-# ==================== END TARGET PLANNING MODULE (V2) ====================
-
 # ============= INCLUDE ROUTERS =============
 
 # Include the modular routes (refactored endpoints)
@@ -12006,7 +11043,6 @@ cors_origins_env = os.environ.get('CORS_ORIGINS', '')
 # Default allowed origins for production and development
 default_origins = [
     'https://crm.nylaairwater.earth',
-    'https://pipeline-master-14.emergent.host',
     'http://localhost:3000',
     'http://127.0.0.1:3000'
 ]
@@ -12014,26 +11050,72 @@ default_origins = [
 if cors_origins_env and cors_origins_env != '*':
     cors_origins = [origin.strip() for origin in cors_origins_env.split(',')]
 else:
-    cors_origins = default_origins
+    cors_origins = list(default_origins)
 
-# Add the preview URL if set
-
-preview_url = os.environ.get('REACT_APP_BACKEND_URL', '')
-if preview_url and preview_url not in cors_origins:
-    # Extract just the origin (protocol + host)
-    from urllib.parse import urlparse
-    parsed = urlparse(preview_url)
-    origin = f"{parsed.scheme}://{parsed.netloc}"
-    if origin not in cors_origins:
-        cors_origins.append(origin)
+# Regex to allow any subdomain under our known production/preview domains.
+# This covers:
+#   - https://*.emergent.host (Emergent native deployment URLs)
+#   - https://*.emergentagent.com and https://supply-chain-sync-3.preview.emergentagent.com (preview URLs)
+#   - https://*.nylaairwater.earth (custom tenant domains)
+#   - https://*.briefingiq.com (external integration partner)
+cors_origin_regex = (
+    r"https://([a-zA-Z0-9\-]+\.)*"
+    r"(emergent\.host|emergentagent\.com|nylaairwater\.earth|briefingiq\.com)$"
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ============= PUBLIC INTEGRATION CORS OVERRIDE =============
+# External Invoice ingestion endpoints are intentionally open to ANY origin so
+# third-party ERPs / browser-based integrations can POST / PUT invoices without
+# being whitelisted. These endpoints do NOT use cookies — auth is via Bearer
+# token — so allow_credentials is intentionally False here.
+import re as _re
+_PUBLIC_INVOICE_PATH = _re.compile(r"^/api/accounts/[^/]+/invoices(/[^/]+)?/?$")
+
+
+@app.middleware("http")
+async def _open_cors_for_external_invoices(request, call_next):
+    path = request.url.path
+    is_public = bool(_PUBLIC_INVOICE_PATH.match(path))
+
+    if is_public and request.method == "OPTIONS":
+        # Handle preflight ourselves so unknown origins are not blocked.
+        from starlette.responses import Response
+        req_headers = request.headers.get("access-control-request-headers", "*")
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": req_headers,
+                "Access-Control-Max-Age": "86400",
+                "Vary": "Origin",
+            },
+        )
+
+    response = await call_next(request)
+    if is_public:
+        # Override any CORS headers set by the global CORSMiddleware so the
+        # response is accepted by the browser regardless of origin.
+        origin = request.headers.get("origin", "*")
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+        response.headers["Vary"] = "Origin"
+        # Browsers ignore credentials when '*' is used; never expose them here.
+        if "access-control-allow-credentials" in response.headers:
+            del response.headers["access-control-allow-credentials"]
+    return response
 
 logging.basicConfig(
     level=logging.INFO,

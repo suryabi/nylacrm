@@ -11,7 +11,8 @@ import base64
 import os
 
 from deps import get_current_user
-from database import get_tenant_db
+from database import get_tenant_db, db
+import secrets
 
 router = APIRouter(prefix="/contacts", tags=["Contacts"])
 
@@ -43,9 +44,14 @@ class ContactCreate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
+    address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
+    pincode: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
     notes: Optional[str] = None
     card_front_url: Optional[str] = None
     card_back_url: Optional[str] = None
@@ -58,9 +64,14 @@ class ContactUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
+    address_line2: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     country: Optional[str] = None
+    pincode: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
     notes: Optional[str] = None
     card_front_url: Optional[str] = None
     card_back_url: Optional[str] = None
@@ -346,7 +357,65 @@ async def delete_contact(
     await tdb.contacts.delete_one({'id': contact_id})
     return {"message": "Contact deleted"}
 
-# ============== VISITING CARD OCR ==============
+# ============== PUBLIC SHARE LINK ==============
+# Whitelisted fields exposed on the public (no-login) contact card.
+_PUBLIC_CONTACT_FIELDS = [
+    "id", "name", "company", "designation", "phone", "email",
+    "address", "address_line2", "city", "state", "pincode", "country",
+]
+
+
+@router.post("/{contact_id}/share")
+async def enable_contact_share(
+    contact_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Enable a public, revocable share link for this contact.
+    Re-enabling reuses the same token, so the link stays stable."""
+    tdb = get_tdb()
+    contact = await tdb.contacts.find_one({'id': contact_id}, {'_id': 0})
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    token = contact.get('share_token') or secrets.token_urlsafe(8)
+    await tdb.contacts.update_one(
+        {'id': contact_id},
+        {'$set': {
+            'share_token': token,
+            'share_enabled': True,
+            'shared_at': datetime.now(timezone.utc).isoformat(),
+            'shared_by': current_user.get('id'),
+        }},
+    )
+    return {"share_token": token, "share_enabled": True}
+
+
+@router.delete("/{contact_id}/share")
+async def revoke_contact_share(
+    contact_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Revoke (turn off) the public share link. The token is preserved so the
+    same link can be re-activated later, but it returns 404 while disabled."""
+    tdb = get_tdb()
+    contact = await tdb.contacts.find_one({'id': contact_id}, {'_id': 0})
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    await tdb.contacts.update_one({'id': contact_id}, {'$set': {'share_enabled': False}})
+    return {"share_enabled": False}
+
+
+@router.get("/public/{token}")
+async def get_public_contact(token: str):
+    """PUBLIC (no auth) — fetch a shared contact's limited details by token.
+    Returns 404 if the token is unknown or sharing has been revoked."""
+    contact = await db.contacts.find_one({'share_token': token, 'share_enabled': True}, {'_id': 0})
+    if not contact:
+        raise HTTPException(status_code=404, detail="This contact link is no longer available")
+    out = {k: contact.get(k) for k in _PUBLIC_CONTACT_FIELDS}
+    out['tenant_id'] = contact.get('tenant_id')
+    return out
+
+
 
 @router.post("/extract-card")
 async def extract_visiting_card(
@@ -356,69 +425,29 @@ async def extract_visiting_card(
     back_base64: str = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
-    """Extract contact information from visiting card images using Claude Vision"""
-    from emergentintegrations.llm.anthropic import AnthropicConfig, anthropic_text_response
-    
-    EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
-    if not EMERGENT_LLM_KEY:
-        raise HTTPException(status_code=500, detail="LLM API key not configured")
-    
-    # Prepare images
-    images_data = []
-    
-    # Handle front image
+    """Extract contact information from visiting card images using Gemini Vision"""
+    from utils.gemini_helpers import gemini_text_with_files
+
+    # Collect (bytes, mime) pairs from any combination of upload + base64 inputs.
+    files: list = []
+
     if front_image:
-        front_content = await front_image.read()
-        front_b64 = base64.b64encode(front_content).decode('utf-8')
-        images_data.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": front_image.content_type or "image/jpeg",
-                "data": front_b64
-            }
-        })
+        files.append((await front_image.read(), front_image.content_type or "image/jpeg"))
     elif front_base64:
-        # Remove data URL prefix if present
         if 'base64,' in front_base64:
             front_base64 = front_base64.split('base64,')[1]
-        images_data.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/jpeg",
-                "data": front_base64
-            }
-        })
-    
-    # Handle back image
+        files.append((base64.b64decode(front_base64), "image/jpeg"))
+
     if back_image:
-        back_content = await back_image.read()
-        back_b64 = base64.b64encode(back_content).decode('utf-8')
-        images_data.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": back_image.content_type or "image/jpeg",
-                "data": back_b64
-            }
-        })
+        files.append((await back_image.read(), back_image.content_type or "image/jpeg"))
     elif back_base64:
         if 'base64,' in back_base64:
             back_base64 = back_base64.split('base64,')[1]
-        images_data.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/jpeg",
-                "data": back_base64
-            }
-        })
-    
-    if not images_data:
+        files.append((base64.b64decode(back_base64), "image/jpeg"))
+
+    if not files:
         raise HTTPException(status_code=400, detail="At least one image is required")
-    
-    # Build the prompt
+
     prompt = """Analyze this visiting card image(s) and extract the contact information.
 Return the data in the following JSON format ONLY (no other text):
 {
@@ -441,46 +470,38 @@ Rules:
 - For address, combine all address parts into a single string
 - Return ONLY the JSON object, no explanations"""
 
+    response_text: str = ""
     try:
-        config = AnthropicConfig(
-            api_key=EMERGENT_LLM_KEY,
-            model="claude-sonnet-4-20250514"
+        response_text = await gemini_text_with_files(
+            prompt=prompt,
+            files=files,
         )
-        
-        # Build message content with images and text
-        content = images_data + [{"type": "text", "text": prompt}]
-        
-        response = await anthropic_text_response(
-            config=config,
-            messages=[{"role": "user", "content": content}]
-        )
-        
-        # Parse the JSON response
+
+        # Strip code fences if Gemini added them.
+        clean = response_text.strip()
+        if clean.startswith("```"):
+            clean = clean.strip("`")
+            if clean.lower().startswith("json\n"):
+                clean = clean[5:]
+
         import json
-        response_text = response.strip()
-        
-        # Try to extract JSON from the response
-        if response_text.startswith('{'):
-            extracted_data = json.loads(response_text)
+        if clean.startswith('{'):
+            extracted_data = json.loads(clean)
         else:
-            # Try to find JSON in the response
             import re
-            json_match = re.search(r'\{[^{}]*\}', response_text, re.DOTALL)
-            if json_match:
-                extracted_data = json.loads(json_match.group())
-            else:
+            json_match = re.search(r'\{.*\}', clean, re.DOTALL)
+            if not json_match:
                 raise ValueError("Could not parse JSON from response")
-        
-        return {
-            "success": True,
-            "data": extracted_data
-        }
-        
+            extracted_data = json.loads(json_match.group())
+
+        return {"success": True, "data": extracted_data}
     except json.JSONDecodeError as e:
         return {
             "success": False,
             "error": f"Failed to parse extracted data: {str(e)}",
-            "raw_response": response_text if 'response_text' in dir() else None
+            "raw_response": response_text,
         }
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR extraction failed: {str(e)}")

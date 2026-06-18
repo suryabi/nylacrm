@@ -1,0 +1,83 @@
+{
+  "summary": "Tested Distributor Billing Approach feature - all 8 backend API tests passed, frontend UI verified. billing_approach field is read/writable via API, defaults to 'margin_upfront' for new distributors. Profile tab shows billing approach display with data-testid='billing-approach-display', edit mode has dropdown with data-testid='edit-billing-approach-select'. Commercial tab shows banner with data-testid='billing-approach-banner' that changes color (emerald for margin_upfront, amber for cost_based).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_distributor_billing_approach.py",
+    "/app/test_reports/pytest/distributor_billing_approach_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_distributor_billing_approach.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water",
+    "distributor_id": "b8876367-df64-4c55-a382-d5eb3b4b2380",
+    "distributor_name": "Surya 1"
+  },
+  "seed_data_creation": "Used existing test distributor 'Surya 1'. billing_approach reverted to 'margin_upfront' after testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Distributor Billing Approach feature fully implemented and working. Backend: billing_approach field in DistributorCreate, DistributorUpdate, Distributor models (line 49, 73, 99 in /app/backend/models/distributor.py). Routes: create_distributor stores billing_approach (line 252), update includes it in field list (line 337 in /app/backend/routes/distributors.py). Frontend: OverviewTab.jsx shows billing approach display (data-testid='billing-approach-display') in Commercial Terms section and dropdown in edit mode (data-testid='edit-billing-approach-select'). MarginsTab.jsx shows billing approach banner at top (data-testid='billing-approach-banner') with emerald styling for margin_upfront and amber styling for cost_based. Valid values: 'margin_upfront' (default), 'cost_based'.",
+  "features_tested": {
+    "backend_api_tests": [
+      "GET /api/distributors/{id} returns billing_approach field - PASSED",
+      "PUT /api/distributors/{id} with billing_approach='cost_based' updates field - PASSED",
+      "Verify billing_approach persisted as 'cost_based' via GET - PASSED",
+      "PUT /api/distributors/{id} with billing_approach='margin_upfront' updates field - PASSED",
+      "Verify billing_approach persisted as 'margin_upfront' via GET - PASSED",
+      "GET /api/distributors (list) includes billing_approach in items - PASSED",
+      "POST /api/distributors defaults billing_approach to 'margin_upfront' - PASSED",
+      "Cleanup test distributor - PASSED"
+    ],
+    "frontend_ui_tests": [
+      "Profile tab shows 'Distributor Billing Approach' section under Commercial Terms - PASSED",
+      "Profile tab billing approach display has data-testid='billing-approach-display' - PASSED",
+      "Profile tab edit mode shows billing approach dropdown - PASSED",
+      "Edit dropdown has data-testid='edit-billing-approach-select' - PASSED",
+      "Commercial tab shows billing approach banner at top - PASSED",
+      "Banner has data-testid='billing-approach-banner' - PASSED",
+      "Banner shows emerald (green) styling for margin_upfront - PASSED",
+      "Banner shows amber (yellow) styling for cost_based - PASSED",
+      "Banner text changes based on billing_approach value - PASSED",
+      "Profile tab display text changes based on billing_approach value - PASSED"
+    ]
+  },
+  "api_endpoints_verified": {
+    "GET /api/distributors/{id}": "Returns billing_approach field (default: margin_upfront)",
+    "PUT /api/distributors/{id}": "Updates billing_approach field",
+    "POST /api/distributors": "Creates distributor with default billing_approach='margin_upfront'",
+    "GET /api/distributors": "List includes billing_approach in each distributor"
+  },
+  "billing_approach_values": {
+    "margin_upfront": {
+      "display_text": "Margin Applied Upfront with Reconciliation",
+      "description": "Transfer price = Cost card price minus distributor margin. Differences settled via reconciliation.",
+      "banner_styling": "emerald (green) - bg-emerald-50/60 border-emerald-200"
+    },
+    "cost_based": {
+      "display_text": "No Upfront Margin – Post-Sale Adjustment",
+      "description": "Billed at cost card price. Margin calculated post-sale based on actual selling price.",
+      "banner_styling": "amber (yellow) - bg-amber-50/60 border-amber-200"
+    }
+  },
+  "data_testids_verified": [
+    "billing-approach-display (Profile tab - read mode)",
+    "edit-billing-approach-select (Profile tab - edit mode)",
+    "billing-approach-banner (Commercial tab)"
+  ]
+}

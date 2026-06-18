@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["invoices"])
 
 # Import dependencies
-from database import get_tenant_db, get_db
+from database import get_tenant_db
 from deps import get_current_user
 
 def get_tdb():
@@ -195,7 +195,18 @@ async def list_invoices(
                 gross = inv.get('gross_invoice_value') or inv.get('grand_total') or 0
                 credit = inv.get('credit_note_value') or 0
                 inv['net_invoice_value'] = gross - credit
-        
+
+        # Resolve each line item's SKU display name to the CURRENT master SKU
+        # (code-first + sku_aliases) so historical lines with stale names /
+        # retired codes show the current SKU everywhere.
+        from services.sku_resolver import build_sku_resolver
+        _resolver = await build_sku_resolver(tdb)
+        for inv in invoices:
+            if inv.get('items'):
+                inv['items'] = _resolver.enrich_items(inv['items'])
+            if inv.get('line_items'):
+                inv['line_items'] = _resolver.enrich_items(inv['line_items'])
+
         # Calculate summary - handle both old and new field names
         all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'grand_total': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1})
         all_invoices_for_summary = await all_invoices_cursor.to_list(10000)
@@ -204,6 +215,7 @@ async def list_invoices(
             'total_gross': sum((inv.get('gross_invoice_value') or inv.get('grand_total') or 0) for inv in all_invoices_for_summary),
             'total_net': sum((inv.get('net_invoice_value') or (inv.get('gross_invoice_value') or inv.get('grand_total') or 0) - (inv.get('credit_note_value') or 0)) for inv in all_invoices_for_summary),
             'total_credit': sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices_for_summary),
+            'total_outstanding': sum(inv.get('outstanding', 0) or 0 for inv in all_invoices_for_summary),
         }
         
         logger.info(f"[INVOICES] Listed {len(invoices)} invoices (page {page}/{pages}, total {total})")
@@ -230,16 +242,16 @@ async def delete_invoice(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Delete an invoice. Only CEO and System Admin can delete invoices.
+    Delete an invoice. Only CEO and Admin can delete invoices.
     """
     # Check user role
     user_role = current_user.get('role', '').lower()
-    allowed_roles = ['ceo', 'system admin', 'admin', 'director']
+    allowed_roles = ['ceo', 'system admin', 'admin']
     
     if not any(role in user_role for role in allowed_roles):
         raise HTTPException(
             status_code=403, 
-            detail='Only CEO and System Admin can delete invoices'
+            detail='Only CEO and Admin can delete invoices'
         )
     
     tdb = get_tdb()
@@ -302,23 +314,22 @@ async def bulk_delete_invoices(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Bulk delete invoices. Only CEO and System Admin can delete invoices.
+    Bulk delete invoices. Only CEO and Admin can delete invoices.
     """
     # Check user role
     user_role = current_user.get('role', '').lower()
-    allowed_roles = ['ceo', 'system admin', 'admin', 'director']
+    allowed_roles = ['ceo', 'system admin', 'admin']
     
     if not any(role in user_role for role in allowed_roles):
         raise HTTPException(
             status_code=403, 
-            detail='Only CEO and System Admin can delete invoices'
+            detail='Only CEO and Admin can delete invoices'
         )
     
     if not invoice_ids:
         raise HTTPException(status_code=400, detail='No invoice IDs provided')
     
     tdb = get_tdb()
-    db = get_db()
     
     # Get all invoices to be deleted
     invoices = await tdb.invoices.find({
@@ -339,8 +350,8 @@ async def bulk_delete_invoices(
         if inv.get('account_id'):
             account_ids.add(inv['account_id'])
     
-    # Delete invoices
-    result = await db.invoices.delete_many({
+    # Delete invoices (tenant-scoped)
+    result = await tdb.invoices.delete_many({
         '$or': [
             {'id': {'$in': invoice_ids}},
             {'invoice_no': {'$in': invoice_ids}}
@@ -439,4 +450,130 @@ async def get_invoice_summary(
         'total_net': total_net,
         'total_credit': total_credit,
         'total_outstanding': total_outstanding
+    }
+
+
+
+@router.delete("/admin/nuke-all")
+async def nuke_all_invoices(
+    confirm: str = Query(..., description="Must be exactly 'YES-DELETE-ALL-INVOICES' to proceed"),
+    current_user: dict = Depends(get_current_user),
+):
+    """DANGER: Wipes the entire invoices collection for the current tenant.
+    Also resets invoice-derived financial rollups on every account.
+    CEO / System Admin only. Requires explicit confirm token to prevent accidents.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can nuke invoices.')
+
+    if confirm != 'YES-DELETE-ALL-INVOICES':
+        raise HTTPException(
+            status_code=400,
+            detail="Pass ?confirm=YES-DELETE-ALL-INVOICES to confirm this destructive action."
+        )
+
+    tdb = get_tdb()
+
+    # 1. Wipe every invoice in the tenant
+    pre_count = await tdb.invoices.count_documents({})
+    result = await tdb.invoices.delete_many({})
+    deleted_count = result.deleted_count
+
+    # 2. Wipe every Zoho invoice mapping for this tenant so future invoices push fresh
+    try:
+        await tdb.zoho_invoice_mappings.delete_many({'source_type': 'delivery'})
+    except Exception:  # collection may not exist on every tenant
+        pass
+
+    # 3. Reset financial rollups on every account
+    rollup_result = await tdb.accounts.update_many(
+        {},
+        {'$set': {
+            'outstanding_balance': 0.0,
+            'overdue_amount': 0.0,
+            'total_gross_invoice_value': 0.0,
+            'total_net_invoice_value': 0.0,
+            'total_credit_note_value': 0.0,
+            'total_outstanding': 0.0,
+            'invoice_count': 0,
+            'last_invoice_no': None,
+            'last_invoice_date': None,
+            'last_payment_amount': None,
+            'last_payment_date': None,
+            'updated_at': datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+
+    logger.warning(
+        f"[INVOICES] NUKE: {deleted_count} invoices deleted "
+        f"(was {pre_count}) by {current_user.get('email')}; "
+        f"rollups reset on {rollup_result.modified_count} accounts."
+    )
+
+    return {
+        'success': True,
+        'deleted_count': deleted_count,
+        'pre_count': pre_count,
+        'accounts_reset': rollup_result.modified_count,
+    }
+
+
+
+@router.post("/admin/backfill-match-status")
+async def backfill_invoice_match_status(
+    current_user: dict = Depends(get_current_user),
+):
+    """One-time backfill: stamp `status` on every invoice in the tenant.
+
+    - status='matched'   → invoice has account_uuid or account_id populated
+    - status='unmatched' → no account linkage at all (legacy MQ orphans)
+
+    Idempotent — safe to re-run. CEO / System Admin only.
+    """
+    user_role = (current_user.get('role') or '').strip()
+    if user_role not in ('CEO', 'System Admin'):
+        raise HTTPException(status_code=403, detail='Only CEO and System Admin can run this backfill.')
+
+    tdb = get_tdb()
+
+    # 1. Mark everything that has any account linkage as 'matched'
+    matched_result = await tdb.invoices.update_many(
+        {'$or': [
+            {'account_uuid': {'$exists': True, '$nin': [None, '']}},
+            {'account_id': {'$exists': True, '$nin': [None, '']}},
+        ]},
+        {'$set': {'status': 'matched'}}
+    )
+
+    # 2. Mark everything that has NO account linkage at all as 'unmatched'
+    unmatched_result = await tdb.invoices.update_many(
+        {
+            '$and': [
+                {'$or': [{'account_uuid': None}, {'account_uuid': {'$exists': False}}, {'account_uuid': ''}]},
+                {'$or': [{'account_id': None}, {'account_id': {'$exists': False}}, {'account_id': ''}]},
+            ]
+        },
+        {'$set': {'status': 'unmatched'}}
+    )
+
+    total = await tdb.invoices.count_documents({})
+    matched_count = await tdb.invoices.count_documents({'status': 'matched'})
+    unmatched_count = await tdb.invoices.count_documents({'status': 'unmatched'})
+
+    logger.info(
+        f"[INVOICES] backfill-match-status by {current_user.get('email')}: "
+        f"matched_modified={matched_result.modified_count} "
+        f"unmatched_modified={unmatched_result.modified_count}"
+    )
+
+    return {
+        'success': True,
+        'matched_updated': matched_result.modified_count,
+        'unmatched_updated': unmatched_result.modified_count,
+        'totals': {
+            'total': total,
+            'matched': matched_count,
+            'unmatched': unmatched_count,
+        },
     }

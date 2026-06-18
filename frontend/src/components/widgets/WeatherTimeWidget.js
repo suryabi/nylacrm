@@ -48,7 +48,7 @@ const formatSessionTime = (seconds) => {
 
 export function WeatherTimeWidget({ weather, weatherLoading, locationName, currentTime, activeTime }) {
   return (
-    <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 w-full lg:w-auto">
+    <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 w-full lg:w-auto overflow-hidden">
       {/* Mobile Layout */}
       <div className="p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-3 sm:gap-6">
         {/* Digital Clock - Primary */}
@@ -57,7 +57,7 @@ export function WeatherTimeWidget({ weather, weatherLoading, locationName, curre
             <span className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-800 dark:text-white font-mono">
               {format(currentTime, 'HH:mm')}
             </span>
-            <span className="text-lg sm:text-xl text-slate-400 dark:text-slate-500 font-mono">
+            <span className="text-base sm:text-xl text-slate-400 dark:text-slate-500 font-mono">
               {format(currentTime, ':ss')}
             </span>
           </div>
@@ -65,43 +65,43 @@ export function WeatherTimeWidget({ weather, weatherLoading, locationName, curre
             {format(currentTime, 'a')}
           </p>
         </div>
-        
-        {/* Weather & Location Row - Horizontal on mobile */}
-        <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-3 w-full sm:w-auto">
+
+        {/* Weather & Location Row — wraps on tight mobile widths */}
+        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 sm:gap-3 w-full sm:w-auto">
           {/* Weather */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {weatherLoading ? (
               <Loader2 className="h-6 w-6 sm:h-7 sm:w-7 animate-spin text-primary" />
             ) : weather ? (
               <>
-                <div className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/20">
+                <div className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/20 shrink-0">
                   {getWeatherIcon(weather.weather_code)}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-baseline gap-1">
                     <span className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
                       {Math.round(weather.temperature_2m)}°
                     </span>
                     <span className="text-xs sm:text-sm text-muted-foreground">C</span>
                   </div>
-                  <p className="text-xs text-muted-foreground hidden sm:block">{getWeatherDescription(weather.weather_code)}</p>
+                  <p className="text-xs text-muted-foreground hidden sm:block truncate">{getWeatherDescription(weather.weather_code)}</p>
                 </div>
               </>
             ) : (
               <div className="text-xs sm:text-sm text-muted-foreground">Weather unavailable</div>
             )}
           </div>
-          
-          {/* Location & Session - Compact on mobile */}
-          <div className="sm:pl-6 sm:border-l border-slate-200 dark:border-slate-700 space-y-0.5 sm:space-y-1.5">
+
+          {/* Location & Session */}
+          <div className="sm:pl-6 sm:border-l border-slate-200 dark:border-slate-700 space-y-0.5 sm:space-y-1.5 min-w-0">
             {locationName && (
               <div className="flex items-center gap-1 sm:gap-1.5 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                <span className="truncate max-w-[80px] sm:max-w-none">{locationName}</span>
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate max-w-[140px] sm:max-w-none">{locationName}</span>
               </div>
             )}
             <div className="flex items-center gap-1 sm:gap-1.5 text-xs">
-              <Timer className="h-3 w-3 text-emerald-500" />
+              <Timer className="h-3 w-3 text-emerald-500 shrink-0" />
               <span className="text-emerald-600 dark:text-emerald-400 font-medium font-mono">
                 {formatSessionTime(activeTime)}
               </span>

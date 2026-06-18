@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend-only test of Document Sharing Phase 1.5 (To/CC composer + per-document-type admin recipient policy). ALL 5 test cases passed end-to-end. Admin policy screen at /settings/share-recipients renders 3 cards (delivery_invoice, driver_bundle, stock_transfer_doc) with CC-manager toggle, default To/CC editors, save button — saving driver_bundle CC=accounts@nylaairwater.earth + cc_manager=ON produced toast 'Saved recipient rules for Driver Delivery Bundle'. Driver-bundle Share dialog at /distributor/delivery-schedules/e2ec4623-7f5e-4020-91a7-8b0ae9f3b9a1 (as distributor surya@gmail.com) renders Email-active + WhatsApp-(soon), prefilled subject 'Delivery Bundle — 2026-05-18', To chip 'Trs11 surya@gmail.com', Cc chip 'Accounts accounts@nylaairwater.earth' (rendered LOCKED — no X button — reflecting the saved policy), candidate-list dropdowns for both To and Cc. Invalid email -> toast 'Enter a valid email'; valid email creates chip and can be removed via X; empty-To send -> toast 'Add at least one recipient in To' and dialog stays open; To+Cc send -> dialog closes with success toast 'Delivery Bundle — 2026-05-18 sent to delivered@resend.dev (cc 2)'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Schedule Detail page (driver bundle host of Share button)", "issues": ["Pre-existing React hydration warning '<button> cannot be a descendant of <button>' on stop rows (stop-toggle/stop-up nested buttons in ScheduleProgress). Already noted in iteration_206; not introduced by Phase 1.5 sharing code."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional cleanup: fix the nested-button hydration warning in ScheduleProgress (stop-toggle wraps stop-up button).",
+    "Driver_bundle policy was saved during this run with cc_manager=ON and Always-CC=accounts@nylaairwater.earth (locked). Persistence is intentional per the request, but main agent may want to reset before the next run if a clean baseline is needed."
+  ],
+  "critical_code_review_comments": [
+    "ShareButton.jsx RecipientField: locked chips correctly suppress the X button via lockedSet check (line 90) — verified visually on accounts@nylaairwater.earth chip in CC.",
+    "ShareButton.jsx send(): validates to.length === 0 client-side before POST /api/share — verified. Server-side re-validation is still recommended (already noted before).",
+    "ShareRecipientSettings.js PolicyCard.save(): always sends locked = defaultCc.map(r => r.email), so every Always-CC entry becomes locked automatically — UX matches the 'Always CC (locked — users can't remove)' label, no separate locked-list toggle needed.",
+    "Email regex /^\\S+@\\S+\\.\\S+$/ in both files is intentionally lenient; consistent across dialog and admin screen.",
+    "Both files correctly read REACT_APP_BACKEND_URL from process.env and Bearer token from localStorage('token'); no hardcoded URLs.",
+    "Subject is prefilled from data.title (server-derived document label) — confirmed showing 'Delivery Bundle — 2026-05-18'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "5/5 Phase 1.5 acceptance items pass (dialog To/CC UX, send with To+CC, send validation, admin policy CRUD with toast, policy reflected in dialog as LOCKED CC chip)."},
+  "test_credentials": "Admin (CEO) for /settings/share-recipients: surya.yadavalli@nylaairwater.earth / test123. Distributor (owns schedule e2ec4623-...) for the Share dialog: surya@gmail.com / nyladist##. Email sink: delivered@resend.dev (real Resend send completed).",
+  "seed_data_creation": "Persisted driver_bundle share policy: cc_manager=true, default_cc=[{name:'Accounts',email:'accounts@nylaairwater.earth'}], locked=['accounts@nylaairwater.earth']. One real Resend email was sent to delivered@resend.dev (designated sink) during the send-success test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 1.5 fully validated. Two-account flow needed: (1) login as surya.yadavalli@nylaairwater.earth/test123 to edit /settings/share-recipients (admin only — distributor user gets 403 here); (2) login as surya@gmail.com/nyladist## to open Share dialog on /distributor/delivery-schedules/e2ec4623-7f5e-4020-91a7-8b0ae9f3b9a1 (admin gets 403 on the schedule API). Phase-1.5 testids on dialog: share-to-input, share-to-add, share-to-pick, share-to-candidate-N, share-to-chip-N, share-to-remove-N (and mirror set for cc-). Locked CC chips have NO inner button (no remove-N testid). Admin testids: share-recipient-settings, policy-card-<type>, policy-ccmanager-<type>, policy-to-<type>-(name|email|add|remove-N), policy-cc-<type>-(name|email|add|remove-N), policy-save-<type>. Toast strings verified: 'Enter a valid email', 'Add at least one recipient in To', 'Saved recipient rules for <label>', and '<title> sent to <to> (cc N)'.",
+  "rca of the issue": "n/a — no defects found in Phase 1.5 sharing flow."
+}

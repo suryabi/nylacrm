@@ -1,0 +1,86 @@
+{
+  "summary": "Rejection Report Filters - All features tested and verified. Backend: 15/15 tests passed (100%). Frontend: All UI elements verified - Dynamic batch dropdown filtering by SKU/Month/Year works correctly, Rejection Reason dropdown populated from master data, Apply and Clear buttons functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Rejection Report",
+        "issues": ["Console warning: 'Encountered two children with the same key' - duplicate React keys in rejection rows (minor, doesn't affect functionality)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rejection_report_filters.py",
+    "/app/test_reports/pytest/rejection_report_filters_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: Duplicate React keys warning in rejection report rows - consider using unique composite keys"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rejection_report_filters.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% - All UI elements and integrations verified"
+  },
+  "test_credentials": {
+    "email": "surya.yadavalli@nylaairwater.earth",
+    "password": "test123",
+    "tenant_id": "nyla-air-water"
+  },
+  "seed_data_creation": "None - used existing data. Found 49 rejection rows, 4 rejection reasons (Black Particles, Bottle scratches, Cap Issues, White Particles), multiple SKUs and batches.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Rejection Report Filters fully tested. Key features: 1) Dynamic Batch Dropdown - filteredBatches useMemo filters batches by filters.sku_id, filters.month, filters.year. When SKU selected, batch dropdown shows only batches for that SKU. When month/year changed, batch dropdown shows only batches with matching production_date. 2) Rejection Reason Filter - dropdown populated from GET /api/production/rejection-reasons master data. Filter value passed as query param to GET /api/production/rejection-report?rejection_reason=X. Backend filters rows case-insensitively. 3) Clear button resets all filters including rejection_reason. 4) data-testids: filter-month, filter-year, filter-sku, filter-batch, filter-stage-type, filter-resource, filter-rejection-reason, apply-filters-btn.",
+  "features_tested": {
+    "Backend_API_Tests": {
+      "test_list_batches_returns_200": "PASSED - GET /api/production/batches returns 200",
+      "test_batches_have_required_fields": "PASSED - Batches have id, batch_code, sku_id, sku_name, production_date",
+      "test_batches_production_date_format": "PASSED - production_date in YYYY-MM-DD format",
+      "test_list_rejection_reasons_returns_200": "PASSED - GET /api/production/rejection-reasons returns 200",
+      "test_rejection_reasons_have_required_fields": "PASSED - Reasons have id, name fields",
+      "test_expected_rejection_reasons_exist": "PASSED - Found: Black Particles, Bottle scratches, Cap Issues, White Particles",
+      "test_rejection_report_returns_200": "PASSED - GET /api/production/rejection-report returns 200",
+      "test_rejection_report_structure": "PASSED - Response has rows, total_rejected, by_resource, by_date",
+      "test_rejection_report_rows_have_rejection_reason": "PASSED - Rows include rejection_reason field",
+      "test_rejection_reason_filter_works": "PASSED - rejection_reason query param filters rows correctly",
+      "test_rejection_reason_filter_case_insensitive": "PASSED - Filter is case-insensitive",
+      "test_rejection_reason_filter_nonexistent_reason": "PASSED - Non-existent reason returns empty results",
+      "test_rejection_report_with_month_year_filter": "PASSED - Month/Year filters work",
+      "test_rejection_report_combined_filters": "PASSED - Multiple filters can be combined",
+      "test_empty_rejection_reason_returns_all": "PASSED - Empty filter returns all rows"
+    },
+    "Frontend_UI_Tests": {
+      "Rejection_Report_page_loads": "PASSED - data-testid='rejection-report-page' found",
+      "Month_filter": "PASSED - data-testid='filter-month' found",
+      "Year_filter": "PASSED - data-testid='filter-year' found",
+      "SKU_filter": "PASSED - data-testid='filter-sku' found",
+      "Batch_filter": "PASSED - data-testid='filter-batch' found",
+      "Rejection_Reason_filter": "PASSED - data-testid='filter-rejection-reason' found",
+      "Apply_button": "PASSED - data-testid='apply-filters-btn' found",
+      "Clear_button": "PASSED - Clear button found and functional",
+      "Rejection_Reason_dropdown_populated": "PASSED - Options: All Reasons, Black Particles, Bottle scratches, Cap Issues, White Particles",
+      "Rejection_Reason_filter_works": "PASSED - Selecting 'Black Particles' filtered to 1 row (30 bottles)",
+      "Clear_resets_all_filters": "PASSED - After clear, 49 rows displayed",
+      "Dynamic_batch_filtering_by_SKU": "PASSED - SKU 'Nyla - 660 ml / Sparkling' filtered batch dropdown to 3 options",
+      "Dynamic_batch_filtering_by_Month": "PASSED - Month filter affects batch dropdown"
+    }
+  },
+  "data_testids_verified": [
+    "rejection-report-page",
+    "filter-month",
+    "filter-year",
+    "filter-sku",
+    "filter-batch",
+    "filter-stage-type",
+    "filter-resource",
+    "filter-rejection-reason",
+    "apply-filters-btn"
+  ]
+}
