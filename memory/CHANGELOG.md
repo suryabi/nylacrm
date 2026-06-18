@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-18 — Lead Proposal migrated onto the Sharing Framework + BCC ✅
+- The Lead Proposal "Share via Email" now uses the framework `<ShareButton documentType="lead_proposal">` instead of the bespoke dialog → its recipients are now admin-configurable.
+- Backend: `lead_proposal` PDF resolver (decodes the stored approved proposal; enforces status=approved) + recipient resolver (To = lead contacts, candidates += account contacts, cc_manager default ON) returning the proposal's `default_subject` ("Nyla Air Water - Proposal for review") + signed `default_message` body. Framework-wide **BCC** added (send + `ShareRequest.bcc` + policy `default_bcc` + plan dedupe across To/Cc/Bcc).
+- Frontend: ShareDialog reads server `default_subject`/`default_message`, has a "+ Add Bcc" collapsible Bcc field; admin policy screen now shows a 4th card (Lead Proposal, cc_manager ON) and an "Always Bcc" editor per card.
+- Note: the old bespoke proposal dialog code in LeadDetail.js remains but is now unreachable (trigger replaced); can be deleted in a later cleanup.
+- Verified: curl (recipients with defaults, real Resend send with To+Bcc, public PDF stream) + testing agent iteration_208 — all 5 e2e cases passed (proposal-specific subject/message prefill, To from lead contacts, Bcc toggle, send, empty-To validation, admin lead_proposal card + Bcc reflected in dialog).
+
+
 ## 2026-06-18 — Document Sharing Phase 1.5: context-aware recipients (To/CC) + admin policy ✅
 - **Goal**: per-module recipient resolution — pre-fill To/CC from the *applicable* source, let users add/remove, apply configurable defaults (incl. manager-CC) PER document type. Design: `/app/memory/SHARE_FRAMEWORK_DESIGN.md` (Addendum).
 - **Backend**: `services/recipient_providers.py` (composable: lead_contacts, account_contacts, distributor_contacts, delivery_people, reporting_manager, self_recipient). `services/share_service.py` — recipient-resolver registry + doc-type metadata, `resolve_recipient_plan` (merges dynamic To/CC/candidates + tenant policy: default_to/default_cc, **cc_manager per doc type**, locked, dedupe), policy CRUD → `share_recipient_policies`, multi To+CC + content-type-aware email, links store content_type. Resolvers registered for delivery_invoice, stock_transfer_doc, driver_bundle. `routes/sharing.py` — `GET /recipients` returns full plan; `POST /share` takes `to[]`/`cc[]`; admin `GET/PUT /policies` (CEO/Director/Admin).
