@@ -22,7 +22,7 @@
   ],
   "updated_files": [],
   "success_rate": {"backend": "n/a (skipped per request)", "frontend": "Driver bundle path: 11/11 checks pass. Stock-transfer & delivery-invoice paths: page-load only, no records to exercise Share in preview."},
-  "test_credentials": "Distributor user that OWNS test schedule e2ec4623-7f5e-4020-91a7-8b0ae9f3b9a1: email=surya@gmail.com, password=nyladist##, tenant=nyla-air-water, distributor_id=b8876367-df64-4c55-a382-d5eb3b4b2380. Recipient sink: delivered@resend.dev.",
+  "test_credentials": "Distributor user that OWNS test schedule e2ec4623-7f5e-4020-91a7-8b0ae9f3b9a1: email=surya@gmail.com, password=nyladist##, tenant=nyla-air-water, distributor_id=multi-crm-test. Recipient sink: delivered@resend.dev.",
   "seed_data_creation": "None. One real share send was made via Resend to delivered@resend.dev (designated no-op sink).",
   "retest_needed": false,
   "main_agent_can_self_test": true,
