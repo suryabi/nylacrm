@@ -3969,6 +3969,7 @@ async def list_distributor_deliveries(
     distributor_id: str,
     status: Optional[str] = None,
     account_id: Optional[str] = None,
+    account_ids: Optional[str] = None,
     location_id: Optional[str] = None,
     time_filter: Optional[str] = 'this_month',
     page: int = Query(1, ge=1),
@@ -3983,8 +3984,16 @@ async def list_distributor_deliveries(
     if status and status != 'all':
         query["status"] = status
     
+    # Account filter — supports a single account_id (legacy) or a
+    # comma-separated account_ids list (multi-select). When both are present
+    # they are unioned.
+    selected_accounts = set()
     if account_id and account_id != 'all':
-        query["account_id"] = account_id
+        selected_accounts.add(account_id)
+    if account_ids:
+        selected_accounts.update(a for a in account_ids.split(',') if a and a != 'all')
+    if selected_accounts:
+        query["account_id"] = {"$in": list(selected_accounts)}
     
     if location_id and location_id != 'all':
         query["distributor_location_id"] = location_id

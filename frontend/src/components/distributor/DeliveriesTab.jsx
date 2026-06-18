@@ -6,10 +6,12 @@ import { Label } from '../ui/label';
 import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '../ui/command';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check } from 'lucide-react';
 import PromoDispatchSection from './PromoDispatchSection';
 
 const TIME_FILTERS = [
@@ -207,6 +209,23 @@ export default function DeliveriesTab({
   
   // Get distributor locations from distributor object
   const distributorLocations = distributor?.locations || [];
+
+  // Accounts sorted alphabetically by name (used by both the Record Delivery
+  // search and the Stock-Out account filter).
+  const sortedAccounts = useMemo(
+    () => [...(assignedAccounts || [])].sort((a, b) =>
+      (a.account_name || '').localeCompare(b.account_name || '', undefined, { sensitivity: 'base' })
+    ),
+    [assignedAccounts]
+  );
+  const selectedAccountIds = Array.isArray(deliveriesAccountFilter) ? deliveriesAccountFilter : [];
+  const toggleAccountFilter = (accountId) => {
+    setDeliveriesAccountFilter?.(prev => {
+      const arr = Array.isArray(prev) ? prev : [];
+      return arr.includes(accountId) ? arr.filter(x => x !== accountId) : [...arr, accountId];
+    });
+    setDeliveriesPage(1);
+  };
 
   // Auto-select the warehouse location when there's only one — applies to both the
   // delivery form and the factory-return form so the user doesn't have to pick.
@@ -1499,22 +1518,70 @@ export default function DeliveriesTab({
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">Account:</span>
             </div>
-            <Select
-              value={deliveriesAccountFilter || 'all'}
-              onValueChange={(v) => { setDeliveriesAccountFilter(v); setDeliveriesPage(1); }}
-            >
-              <SelectTrigger className="h-9 w-[240px]" data-testid="deliveries-account-filter">
-                <SelectValue placeholder="All Accounts" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[320px]">
-                <SelectItem value="all">All Accounts</SelectItem>
-                {assignedAccounts.map(account => (
-                  <SelectItem key={account.id} value={account.id} data-testid={`deliveries-account-option-${account.id}`}>
-                    {account.account_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  className="h-9 w-[240px] justify-between font-normal"
+                  data-testid="deliveries-account-filter"
+                >
+                  <span className="truncate text-left">
+                    {selectedAccountIds.length === 0
+                      ? 'All Accounts'
+                      : selectedAccountIds.length === 1
+                        ? (sortedAccounts.find(a => a.id === selectedAccountIds[0])?.account_name || '1 account')
+                        : `${selectedAccountIds.length} accounts`}
+                  </span>
+                  <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[300px] p-0" align="start">
+                <Command
+                  filter={(value, search) => (value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
+                >
+                  <CommandInput placeholder="Search accounts by name or city..." data-testid="deliveries-account-search" />
+                  <CommandList className="max-h-[320px]">
+                    <CommandEmpty>No accounts found.</CommandEmpty>
+                    <CommandGroup>
+                      {selectedAccountIds.length > 0 && (
+                        <CommandItem
+                          value="__clear__"
+                          onSelect={() => { setDeliveriesAccountFilter?.([]); setDeliveriesPage(1); }}
+                          className="text-muted-foreground"
+                          data-testid="deliveries-account-clear"
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          Clear selection (All Accounts)
+                        </CommandItem>
+                      )}
+                      {sortedAccounts.map(account => {
+                        const checked = selectedAccountIds.includes(account.id);
+                        return (
+                          <CommandItem
+                            key={account.id}
+                            value={`${account.account_name} ${account.city || ''} ${account.contact_name || ''}`}
+                            onSelect={() => toggleAccountFilter(account.id)}
+                            data-testid={`deliveries-account-option-${account.id}`}
+                            className="flex items-start gap-2"
+                          >
+                            <Check className={`mt-0.5 h-4 w-4 shrink-0 ${checked ? 'opacity-100 text-emerald-600' : 'opacity-0'}`} />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{account.account_name}</p>
+                              {(account.city || account.contact_name) && (
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {account.city || ''}{account.city && account.contact_name ? ' • ' : ''}{account.contact_name || ''}
+                                </p>
+                              )}
+                            </div>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
 
             <div className="flex items-center gap-2">
               <Factory className="h-4 w-4 text-muted-foreground" />

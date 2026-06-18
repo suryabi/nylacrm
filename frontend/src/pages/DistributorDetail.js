@@ -221,7 +221,7 @@ export default function DistributorDetail() {
   const [deliveriesPage, setDeliveriesPage] = useState(1);
   const [deliveriesPageSize, setDeliveriesPageSize] = useState(20);
   const [deliveriesTimeFilter, setDeliveriesTimeFilter] = useState('this_month');
-  const [deliveriesAccountFilter, setDeliveriesAccountFilter] = useState('all');
+  const [deliveriesAccountFilter, setDeliveriesAccountFilter] = useState([]);
   const [deliveriesLocationFilter, setDeliveriesLocationFilter] = useState('all');
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [assignedAccounts, setAssignedAccounts] = useState([]);
@@ -588,8 +588,8 @@ export default function DistributorDetail() {
         page_size: deliveriesPageSize,
         time_filter: deliveriesTimeFilter
       });
-      if (deliveriesAccountFilter && deliveriesAccountFilter !== 'all') {
-        params.append('account_id', deliveriesAccountFilter);
+      if (Array.isArray(deliveriesAccountFilter) && deliveriesAccountFilter.length > 0) {
+        params.append('account_ids', deliveriesAccountFilter.join(','));
       }
       if (deliveriesLocationFilter && deliveriesLocationFilter !== 'all') {
         params.append('location_id', deliveriesLocationFilter);
