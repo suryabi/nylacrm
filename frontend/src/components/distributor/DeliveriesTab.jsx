@@ -1479,59 +1479,59 @@ export default function DeliveriesTab({
               <Filter className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">Time Period:</span>
             </div>
-            <select
+            <Select
               value={deliveriesTimeFilter || 'this_month'}
-              onChange={(e) => {
-                setDeliveriesTimeFilter(e.target.value);
-                setDeliveriesPage(1);
-              }}
-              className="text-sm border rounded-md px-3 py-1.5 bg-background"
-              data-testid="deliveries-time-filter"
+              onValueChange={(v) => { setDeliveriesTimeFilter(v); setDeliveriesPage(1); }}
             >
-              {TIME_FILTERS.map(tf => (
-                <option key={tf.value} value={tf.value}>{tf.label}</option>
-              ))}
-            </select>
-            
+              <SelectTrigger className="h-9 w-[160px]" data-testid="deliveries-time-filter">
+                <SelectValue placeholder="Time period" />
+              </SelectTrigger>
+              <SelectContent>
+                {TIME_FILTERS.map(tf => (
+                  <SelectItem key={tf.value} value={tf.value}>{tf.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <div className="flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">Account:</span>
             </div>
-            <select
+            <Select
               value={deliveriesAccountFilter || 'all'}
-              onChange={(e) => {
-                setDeliveriesAccountFilter(e.target.value);
-                setDeliveriesPage(1);
-              }}
-              className="text-sm border rounded-md px-3 py-1.5 bg-background min-w-[200px]"
-              data-testid="deliveries-account-filter"
+              onValueChange={(v) => { setDeliveriesAccountFilter(v); setDeliveriesPage(1); }}
             >
-              <option value="all">All Accounts</option>
-              {assignedAccounts.map(account => (
-                <option key={account.id} value={account.account_id}>
-                  {account.account_name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger className="h-9 w-[240px]" data-testid="deliveries-account-filter">
+                <SelectValue placeholder="All Accounts" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[320px]">
+                <SelectItem value="all">All Accounts</SelectItem>
+                {assignedAccounts.map(account => (
+                  <SelectItem key={account.id} value={account.id} data-testid={`deliveries-account-option-${account.id}`}>
+                    {account.account_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Show:</span>
-              <select
-                value={deliveriesPageSize || 20}
-                onChange={(e) => {
-                  setDeliveriesPageSize(Number(e.target.value));
-                  setDeliveriesPage(1);
-                }}
-                className="text-sm border rounded-md px-2 py-1.5 bg-background"
-                data-testid="deliveries-page-size"
+              <Select
+                value={String(deliveriesPageSize || 20)}
+                onValueChange={(v) => { setDeliveriesPageSize(Number(v)); setDeliveriesPage(1); }}
               >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
+                <SelectTrigger className="h-9 w-[80px]" data-testid="deliveries-page-size">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
               <span className="text-sm text-muted-foreground">per page</span>
             </div>
             
@@ -1651,6 +1651,15 @@ export default function DeliveriesTab({
                       <td className="p-3">
                         <p className="font-medium text-slate-700">{delivery.account_name}</p>
                         <p className="text-xs text-slate-500">{delivery.account_city || ''}</p>
+                        {delivery.distributor_location_name && (
+                          <span
+                            className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+                            data-testid={`delivery-warehouse-${delivery.id}`}
+                          >
+                            <Factory className="h-3 w-3" />
+                            {delivery.distributor_location_name}
+                          </span>
+                        )}
                       </td>
                       
                       {/* Items Count */}
