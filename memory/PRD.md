@@ -15,6 +15,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-18 — ✨ Seed data script: clone-and-remap `demo-co` tenant (P0) ✅ DONE
+- **Request**: A seed data script for GitHub deployment so the app ships with pre-populated demo data.
+- **Approach (clone-and-remap engine)**: `scripts/seed_sample_data.py` clones the primary tenant (`nyla-air-water`) into a fresh, fully-decoupled `demo-co` tenant instead of hand-authoring 100+ schemas. Builds a global map of every primary UUID `id` (and all `users` ids regardless of format, since users are resolved by id without a tenant filter) → fresh `uuid4`, then recursively rewrites all references. Business-code ids (e.g. `invoice_no == id`) are left intact to avoid corrupting display fields. Globally-shared collections (master_skus, territories, lead_statuses, etc.) are NOT cloned (read across tenants); integration secrets/OAuth/API keys are excluded.
+- **Modes**: `generate` (clone src→demo-co in current DB + write portable `scripts/seed_data/demo_seed.json` fixture ~4.3 MB), `load` (wipe demo-co + rehydrate from fixture for a fresh deploy DB with no source), `wipe`. All idempotent.
+- **Users**: emails rewritten to `@demo-co.com` (deduped), password reset to `demo123`, `force_password_change=False`. Admin: surya.yadavalli@demo-co.com.
+- **Tested**: 1727 docs cloned across 102 collections; referential integrity verified (0 source-id leaks in demo docs, distributor→deliveries links correct: 11+7); e2e login as demo admin works and returns demo-scoped data (72 leads, 17 distributors, 12 accounts); fixture load roundtrip reproduces the same data. `tests/test_seed_sample_data.py` 5/5 PASS (remap, demoify-user dedupe/bcrypt, build-tenant, excludes). README at `scripts/seed_data/README.md`.
+- **Serving demo**: set `DEFAULT_TENANT_ID=demo-co` or serve on a host/subdomain mapping to `demo-co`.
+
+
+
 ### 2026-06-17 — 🐛 Fix: Promo Stock-Out Zoho challan rejected — "shipping_address has less than 100 characters" (code 15) ✅ DONE
 - **Reported (PRODUCTION)**: Confirming a Promotional Stock-Out (Delivery Challan) to a recipient with a long address (e.g. Radisson Blu Marina Hotel, DC-2606-0013) failed the Zoho push with `{"code":15,"message":"Please ensure that the \"shipping_address\" has less than 100 characters."}`. The address also rendered the outlet name **twice** + phone (~185 chars).
 - **Root cause**: Zoho rejects an inline `shipping_address` on `POST /deliverychallans` with code-15 even when sub-fields look bounded; long recipient addresses tripped it. The recipient name was also duplicated because `attention` (= recipient name) and `address` (= address_line1) both began with the outlet name.

@@ -1,15 +1,15 @@
-<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, and implementing an  system within comments for team collaboration. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, and reliable external accounting sync.
+<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, and implementing an  system within comments for team collaboration. Recently, a robust Document Sharing Framework was introduced to share documents (Invoices, Bundles, Proposals) via Email/WhatsApp using signed links. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, and scalable document sharing architectures.
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target Planning, QC, Production, Distribution, Marketing Requests, and Returns. Recently, the Promotional Stock-Out flow was deeply refactored to share the exact same  pipeline as regular stock-outs (sharing reserve-on-confirm, deduct-on-complete lifecycles, and delivery schedule assignability). The Zoho Books integration has been heavily patched to safely circumvent 100-character limits and correctly map warehouse & deliver-to addresses. 
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target Planning, QC, Production, Distribution, Marketing Requests, and Returns. Recently, a new  was built enabling admins to configure CC/BCC policies per document type and send signed short-link emails via Resend. Stock tracking was fixed to omit reserved stock from available counts, and a reverse action was added for stock transfers. 
 
 **Last working item**: 
-    - Last item agent was working: Redesigning the Record Account Delivery screen and the Delivery Details modal. The user complained about accidentally clicking Complete Delivery and Cancel Delivery due to poor placement, and the modal requiring too much scrolling. Action buttons were moved to a top-right Actions Dropdown Menu, leaving only a Close button in the footer.
-    - Status: USER VERIFICATION PENDING
-    - Agent Testing Done: Y
-    - Which testing method agent to use? screenshot tool
+    - Last item agent was working: Building a standalone seed data script () to generate sample data for the entire application, intended for GitHub deployment. The agent decided to use a clone-and-remap engine to duplicate data from the primary tenant to a fresh  tenant, bypassing the need to hand-author 100+ collection schemas.
+    - Status: IN PROGRESS
+    - Agent Testing Done: N
+    - Which testing method agent to use? backend testing agent / manual testing by python -c
     - User Testing Done: N
 
 **All Pending/In progress Issue list**: 
@@ -32,7 +32,14 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
      - Blocked on other issue: None
 
 **In progress Task List**: 
-  Task 1: Inventory Management Module - Phase 2+ (P2)
+  Task 1: Generate Sample Seed Data Script (P0)
+     - Where to resume: Agent was analyzing database schemas and auth hashing. Start building  to clone existing tenant data to a new  tenant and remap unique IDs appropriately. 
+     - What will be achieved with this? Allows user to deploy app externally with pre-populated demo data.
+     - Status: IN PROGRESS
+     - Should Test frontend/backend/both after fix? backend
+     - Blocked on something: None
+
+  Task 2: Inventory Management Module - Phase 2+ (P2)
      - Where to resume: Phase 1 (Item/Vendor Masters) is complete. Phase 2 (Stock Entries, Purchase Receipts, Adjustments) parked. 
      - What will be achieved with this? End-to-end supply chain visibility.
      - Status: BLOCKED
@@ -41,6 +48,8 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
+    - P1: Document Sharing Framework Phase 2 (WhatsApp Integration). Requires user to select provider (Meta Cloud API, Twilio, or Gupshup/AiSensy).
+    - P1: Document Sharing Framework Phase 3 (Extend to Files & Documents, settlements, returns + read receipts).
     - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
     - P1: MinIO integration for object storage (Build  settings page to replace base64 mongo storage).
     - P1: Happenstance integration (Agent asked user for API key & scope, pending user answer).
@@ -51,14 +60,13 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
     - P2: Website Wrapper around CRM.
 
 **Completed work in this session**
-- Zoho Delivery Challan  > 100 characters code-15 error fixed via a 2-step  then  method (DONE)
-- Zoho cleanup 401 code 57 fixed by adding  and  plus  to OAuth scopes (DONE)
-- Deliver-to address and Warehouse branch address printing correctly on Zoho PDFs (DONE)
-- UI: Promo recipient toggle buttons enlarged (DONE)
-- Reverse action implemented for regular deliveries (stock-outs) via  in Zoho and releasing reserved stock (DONE)
-- Driver Bundle PDF now includes the account's Delivery contact details (DONE)
-- Promotional Stock-Out completely migrated to use the regular  pipeline (), ensuring reserve-on-confirm, deduct-on-complete, and schedule assignability (DONE)
-- UI: Delivery Details modal redesigned to prevent accidental status clicks by using an Actions Dropdown Menu (DONE)
+- Promotional Stock-Out section now defaults to expanded () (DONE)
+- Stock-out / Promo batch picker now shows true available stock (on-hand minus reserved) via  (DONE)
+- Download All / Print All on delivery schedules now includes Delivery Challans (promo deliveries) (DONE)
+- Reverse action implemented for Stock Transfers (restores stock to both warehouses and voids/deletes Zoho invoice/challan) (DONE)
+- Zoho invoices/challans for inter-warehouse stock transfers now correctly bill to the Legal Entity Name () instead of trade name (DONE)
+- Document Sharing Framework (Phase 1 & Phase 1.5) built: Includes Signed public link generation, Resend email integration, To/CC/BCC composer, and Admin per-document-type policy settings page (DONE)
+- Migrated Lead Proposal share dialog onto the new Sharing Framework (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: Bloated  collection
@@ -69,87 +77,91 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
 
 **Known issue recurrence from previous fork**
   - Issue recurrence in previous fork: Production vs Preview testing confusion.
-  - Recurrence count: ~45
+  - Recurrence count: ~46
   - Status: IN PROGRESS
-  - Note: The user continuously deploys to production and shares screenshots from the production environment, expecting fixes instantly. Remind the user that they must redeploy the app to see preview changes in production. Ensure you do not expose preview URLs.
+  - Note: The user continuously deploys to production and shares feedback/bugs from the production environment, expecting fixes instantly. Remind the user that they must redeploy the app to see preview changes in production. Ensure you do not expose preview URLs.
 
 **Code Architecture**
 - : Main monolith (Needs refactoring due to size > 11k lines).
 - : Domain routers (, , ).
-- : Zoho Books integration service.
-- : Reusable UI.
-- : Main views ().
+- : Services (, , , ).
+- : Reusable UI ().
 
 **Key Technical Concepts**
-- **Promotional Dispatches Unification**: Promo stock-outs no longer write new records to the  collection. They are now natively treated as  with a flag . This unifies stock reservation and schedule assignment.
-- **Zoho Books Integration**: Strict 100-character limit on inline string fields. The codebase uses a resilient two-step POST (create document without shipping) then PUT (update shipping address) pattern to circumvent character limit crashes. 
+- **Document Sharing Framework:** Decoupled architecture. Resolvers return PDF bytes + candidate recipients.  generates expiring  and emails a public link () using Resend.
+- **Stock Calculations:** System now calculates available stock dynamically by subtracting reservations across all open deliveries/promos ( and ).
+- **Zoho Books Integration:** 100-character limit workarounds. Now mapping  to  to ensure correct invoice billing names for stock transfers.
 
 **key DB schema**
-  - : {id, tenant_id, items, status, is_promo}
-  - : {id, account_id (uses business code, not UUID), category (Delivery)}
+  - : {token, document_type, document_id, tenant_id, expires_at}
+  - : {document_type, document_id, channel, recipients, status}
+  - : {document_type, default_to, default_cc, default_bcc, cc_manager}
 
 **changes in tech stack**
-  - None
+  - Added Resend Email Integration as the primary mechanism for the Sharing Framework Phase 1.
 
 **All files of reference** 
-  -  (Massive refactor for challan addresses, 2-step sync, invoice voiding, and scopes)
-  -  (Refactored to map to )
-  -  (Added reverse endpoints)
-  -  (Added delivery contact parsing for PDF)
-  -  (Redesigned delivery details modal)
-  - 
-  - 
-  -  (Updated)
+  -  (Created: Core orchestrator for signed links/emails)
+  -  (Created: Maps document queries to PDFs and recipients)
+  -  (Created: Logic for fetching To/CC targets)
+  -  (Created: API routes for public link and sharing actions)
+  -  (Created: Reusable share component)
+  -  (Created: Admin UI for setting sharing rules)
+  -  (Created: High-level system architecture)
+  - , ,  (Created)
 
 **Areas that need refactoring**: 
   -  is extremely bloated (>11k lines).
   - Base64 storage approach for Documents should be refactored to Object Storage (MinIO).
 
 **key api endpoints**
-  - 
+  -  (Public PDF download via signed token)
+  -  (Triggers email share)
   - 
 
 **Critical Info for New Agent** 
-  - **Preview vs Production:** You only have access to the PREVIEW environment. The user frequently shares bugs from the PRODUCTION environment. You must fix the code in preview and kindly instruct the user to **redeploy** to see the changes.
-  - **Zoho Scopes Changed**: The agent updated the requested OAuth scopes in  to include , , and . *Crucially, these scopes only take effect when the user re-authorizes Zoho.* If Zoho APIs throw 401 code 57 errors, remind the user to re-connect Zoho from their Settings page.
-  - **Promo Refactor**: Legacy  DB rows are treated as view-only historical data. Any new promo dispatch acts as a  record.
+  - **Seed Data Cloning Strategy:** Do not manually build 100+ schemas for the seed data script. Continue the clone-and-remap strategy you just started: Read from the primary tenant, re-map IDs (using ), and insert into a new  tenant.
+  - **Preview vs Production:** You only have access to the PREVIEW environment. The user must manually redeploy to push features.
+  - **Zoho Resync Requirement:** Instruct user to re-authenticate Zoho in production to activate recently added OAuth scopes (deliverychallans.DELETE, invoice void).
 
 **documents and test reports created in this job** 
   - 
   - 
+  - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- 1. User reported Zoho Deliver To addresses were showing the warehouse address instead of the recipient.
- 2. Agent pinpointed issue to Zoho templates and updated the PDF mapping logic. User confirmed changes.
- 3. User noted UI buttons for promo recipient toggle were too small.
- 4. Agent enlarged the UI buttons.
- 5. User requested a reverse action for regular deliveries, similar to the existing promo dispatch reverse.
- 6. Agent implemented reverse flow () for regular invoiced-but-not-delivered records.
- 7. User asked to include the delivery contact in the schedule bundle PDF.
- 8. Agent wired account contacts () into the generated PDF.
- 9. User asked for promo stock outs to completely share the regular delivery workflow (draft, confirm, delivery assigned, complete, and shared stock reservation pool). 
- 10. Agent implemented the unification (Option A) and tested it.
- 11. User asked to redesign the record account delivery modal (bigger scroll area) and move Complete Delivery / Cancel Delivery buttons to a dropdown to avoid accidental clicks. Agent implemented this as the final action.
+ 1. User reported  was showing reserved stock; requested subtraction. (Agent fixed)
+ 2. User reported Download All on delivery schedules skipped challans. (Agent fixed)
+ 3. User requested a reverse action for Stock Transfers. (Agent implemented)
+ 4. User noted stock transfer invoices used distributor name instead of legal entity name. (Agent fixed)
+ 5. User asked for a Deploy button. (Agent provided instructions)
+ 6. User requested an architectural design for sharing documents via WhatsApp/Email. (Agent proposed 3-phase framework)
+ 7. User approved Phase 1 (Email). (Agent implemented)
+ 8. User requested context-aware recipients (manager CC, lead contacts) per module. (Agent built Phase 1.5 Admin policy settings)
+ 9. User asked to migrate the existing Lead Proposal sharing dialog to the new framework. (Agent migrated and verified)
+ 10. User requested a seed data script for GitHub deployment. (Agent proposed a clone-and-remap script and was analyzing schemas. Task pending).
 
 **Project Health Check:**
 Broken: None.
 Mocked: None.
 
 **3rd Party Integrations** 
- - Zoho Books (Requires User API Key — **Scopes were recently updated**)
+ - Zoho Books (Requires User API Key)
  - Google Maps API (Requires User API Key)
  - Slack API (Bot token webhook)
  - Emergent Object Storage
  - Gmail API (Internal GCP App OAuth)
+ - Resend (Configured via env vars for Sharing Framework Phase 1)
 
 **Testing status**
-  - Testing agent used after significant changes: NO (Self-tested via curl and screenshot_tool heavily).
+  - Testing agent used after significant changes: YES (Iterations 206, 207, 208 for UI verification of Sharing Framework)
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: 
+  - Test files created: , , 
   - Known regressions: None
 
 **Credentials to test flow:**
 Refer to 
 
 **What agent forgot to execute**
-Everything from the user's latest prompts was executed and thoroughly tested. The last action requires user validation.</analysis>
+Everything prior to the final prompt was completed. The agent was actively evaluating auth schemas and DB collections to start the  script implementation. Begin there.</analysis>
