@@ -1,5 +1,16 @@
 # Changelog
 
+
+## 2026-06-18 — Document Sharing Framework, Phase 1 (signed links + email) ✅
+- **Goal**: reusable, app-wide framework to SHARE documents (driver bundles, invoices, delivery challans, stock-transfer docs) to recipients via Email (WhatsApp = Phase 2). Adding sharing to a new screen = one resolver + one `<ShareButton>` drop. Design doc: `/app/memory/SHARE_FRAMEWORK_DESIGN.md`.
+- **Backend**:
+  - `services/share_service.py`: resolver registry (`register_resolver`/`resolve_document`), short-lived signed links (`share_links`: token, expires_at 7d, max_downloads, download_count, revoked), audit (`share_events`), Resend email channel with PDF attachment + signed link, `build_public_url`.
+  - `services/share_resolvers.py`: `delivery_invoice` (delivery's Zoho invoice / promo challan) + `stock_transfer_doc` (transfer's invoice/challan) resolvers.
+  - `routes/distributor_delivery_schedules.py`: extracted reusable `build_schedule_bundle_pdf()` (driver sheet + per-stop Zoho docs) and registered the `driver_bundle` resolver.
+  - `routes/sharing.py` (mounted `/api/share`): `GET /recipients`, `POST /` (send), `GET /history`, and PUBLIC `GET /d/{token}` (no auth — token is the credential; tenant taken from the link record).
+- **Frontend**: reusable `components/share/ShareButton.jsx` (+ ShareDialog) — channel toggle (Email active, WhatsApp disabled "soon"), suggested-recipient chips, name/email/subject/message, Attach-PDF toggle. Wired into Delivery Schedule Detail (driver bundle), Stock Transfers (synced rows), and the Delivery Details modal (delivery invoice).
+- **Verified**: backend via curl (recipients, real Resend send w/ provider_message_id, public link streamed a valid PDF with no auth, history). Frontend e2e by testing agent (iteration_206) — Share button + dialog, title/subject prefill, email validation (empty + invalid rejected), successful send, WhatsApp disabled. Stock-transfer/delivery-invoice share buttons gate on Zoho-synced docs (not present in preview; will show in production). No regressions.
+
 ## 2026-06-15 — Multi-GSTIN: stock-out invoices use the SOURCE warehouse's Zoho Branch GSTIN (P0 production bug) ✅
 - **Bug**: a stock-out from the Delhi warehouse generated a Zoho invoice with the **Hyderabad** GSTIN. Root cause: `create_invoice_for_delivery` never sent a `branch_id`, so Zoho booked every invoice under the org's **primary branch** (Hyderabad). Also, warehouses didn't store a GSTIN or a Zoho-branch link.
 - **Fix**:
