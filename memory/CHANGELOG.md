@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-18 — Document Sharing Phase 1.5: context-aware recipients (To/CC) + admin policy ✅
+- **Goal**: per-module recipient resolution — pre-fill To/CC from the *applicable* source, let users add/remove, apply configurable defaults (incl. manager-CC) PER document type. Design: `/app/memory/SHARE_FRAMEWORK_DESIGN.md` (Addendum).
+- **Backend**: `services/recipient_providers.py` (composable: lead_contacts, account_contacts, distributor_contacts, delivery_people, reporting_manager, self_recipient). `services/share_service.py` — recipient-resolver registry + doc-type metadata, `resolve_recipient_plan` (merges dynamic To/CC/candidates + tenant policy: default_to/default_cc, **cc_manager per doc type**, locked, dedupe), policy CRUD → `share_recipient_policies`, multi To+CC + content-type-aware email, links store content_type. Resolvers registered for delivery_invoice, stock_transfer_doc, driver_bundle. `routes/sharing.py` — `GET /recipients` returns full plan; `POST /share` takes `to[]`/`cc[]`; admin `GET/PUT /policies` (CEO/Director/Admin).
+- **Frontend**: `ShareButton.jsx` To/CC composer (chips removable unless locked, manual add, candidate "List" dropdown, validation). `pages/ShareRecipientSettings.js` (route `/settings/share-recipients`, nav "Sharing Recipients", admin-only) — per-doc-type cards: CC-manager toggle, default-To + locked default-CC editors, Save.
+- **Note**: Lead proposals already have a dedicated To/Cc/Bcc + auto-manager-CC dialog (the pattern this generalizes); left as-is to avoid regression, migratable later.
+- **Verified**: curl (plan merge, policy persist, manager/self + locked CC, multi To+CC real Resend send) + testing agent iteration_207 — all 5 e2e cases passed. Frontend compiles clean; preview policies reset after test.
+
+
 ## 2026-06-18 — Document Sharing Framework, Phase 1 (signed links + email) ✅
 - **Goal**: reusable, app-wide framework to SHARE documents (driver bundles, invoices, delivery challans, stock-transfer docs) to recipients via Email (WhatsApp = Phase 2). Adding sharing to a new screen = one resolver + one `<ShareButton>` drop. Design doc: `/app/memory/SHARE_FRAMEWORK_DESIGN.md`.
 - **Backend**:
