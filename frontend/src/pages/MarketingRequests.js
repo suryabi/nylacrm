@@ -311,7 +311,7 @@ export default function MarketingRequests() {
   const [deptId, setDeptId] = useState(sp.get('dept') || '');
   const [requestedBy, setRequestedBy] = useState(sp.get('by') || '');
   const [sort, setSort] = useState(sp.get('sort') || '-created_at');
-  const [view, setView] = useState(sp.get('view') === 'kanban' ? 'kanban' : 'list');
+  const [view, setView] = useState(sp.get('view') === 'list' ? 'list' : 'kanban');
   const [page, setPage] = useState(parseInt(sp.get('p') || '1'));
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
@@ -379,7 +379,7 @@ export default function MarketingRequests() {
     if (deptId) next.set('dept', deptId);
     if (requestedBy) next.set('by', requestedBy);
     if (sort && sort !== '-created_at') next.set('sort', sort);
-    if (view === 'kanban') next.set('view', 'kanban');
+    if (view === 'list') next.set('view', 'list');
     if (page > 1) next.set('p', String(page));
     setSp(next, { replace: true });
   }, [queue, stateKey, search, requestTypeId, deptId, requestedBy, page, sort, view]); // eslint-disable-line
