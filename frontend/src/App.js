@@ -63,7 +63,6 @@ import SKUPerformance from './pages/SKUPerformance';
 import ResourcePerformance from './pages/ResourcePerformance';
 import AccountsList from './pages/AccountsList';
 import AccountSKUPricing from './pages/AccountSKUPricing';
-import NeckTagDesigner from './pages/NeckTagDesigner';
 import MasterCOGSComponents from './pages/MasterCOGSComponents';
 import AdminSkuMigrate from './pages/AdminSkuMigrate';
 import VehiclesList from './pages/admin/VehiclesList';
@@ -322,7 +321,6 @@ function AppRouter() {
           <Route path="/settings/share-recipients" element={<ProtectedRoute><ShareRecipientSettings /></ProtectedRoute>} />
           <Route path="/accounts" element={<ProtectedRoute moduleKey="accounts"><AccountsList /></ProtectedRoute>} />
           <Route path="/accounts/sku-pricing" element={<ProtectedRoute moduleKey="accounts"><AccountSKUPricing /></ProtectedRoute>} />
-          <Route path="/sales/neck-tag-designer" element={<ProtectedRoute moduleKey="accounts"><NeckTagDesigner /></ProtectedRoute>} />
           <Route path="/master/cogs-components" element={<ProtectedRoute moduleKey="cogs_components"><MasterCOGSComponents /></ProtectedRoute>} />
           <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
           <Route path="/admin/vehicles" element={<ProtectedRoute><VehiclesList /></ProtectedRoute>} />

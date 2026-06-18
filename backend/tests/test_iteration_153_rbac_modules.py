@@ -15,24 +15,24 @@ EMAIL = "surya.yadavalli@nylaairwater.earth"
 PASSWORD = "test123"
 
 EXPECTED_COUNTS = {
-    "Core": 10,
-    "Reports": 5,
+    "Core": 9,
+    "Reports": 6,
     "Operations": 8,
     "Tools": 5,
     "Documents": 2,
     "Requests": 3,
-    "Marketing": 2,
-    "Organization": 8,
-    "Admin": 3,
+    "Marketing": 4,
+    "Organization": 9,
+    "Admin": 5,
     "Distribution": 10,
     "Production": 13,
+    "Inventory & Procurement": 2,
     "Task Management": 3,
 }
-TOTAL_EXPECTED_KEYS = 72
+TOTAL_EXPECTED_KEYS = 79
 
 NEWLY_ADDED_KEYS = [
     "account_gop_metrics",
-    "neck_tag_designer",
     "invoices",
     "performance_tracker",
     "investor_dashboard",
@@ -83,7 +83,7 @@ def roles_payload(auth_headers):
 class TestModuleStructure:
     def test_returns_12_categories(self, roles_payload):
         cats = roles_payload.get("module_categories", {})
-        assert len(cats) == 12, f"Expected 12 categories, got {len(cats)}: {list(cats.keys())}"
+        assert len(cats) == 13, f"Expected 13 categories, got {len(cats)}: {list(cats.keys())}"
 
     def test_category_counts_exact(self, roles_payload):
         cats = roles_payload["module_categories"]

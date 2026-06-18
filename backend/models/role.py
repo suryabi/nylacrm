@@ -17,7 +17,6 @@ DEFAULT_MODULE_PERMISSIONS = {
     "pipeline": {"view": True, "create": False, "edit": True, "delete": False},
     "accounts": {"view": True, "create": True, "edit": True, "delete": False},
     "account_gop_metrics": {"view": True, "create": False, "edit": False, "delete": False},
-    "neck_tag_designer": {"view": True, "create": True, "edit": True, "delete": False},
     "contacts": {"view": True, "create": True, "edit": True, "delete": False},
     "invoices": {"view": True, "create": True, "edit": True, "delete": False},
     "sales_portal": {"view": True, "create": False, "edit": False, "delete": False},
@@ -250,7 +249,7 @@ def get_default_roles(tenant_id: str) -> List[dict]:
 
 # Module categories for UI grouping
 MODULE_CATEGORIES = {
-    "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "account_gop_metrics", "neck_tag_designer", "contacts", "invoices", "sales_portal"],
+    "Core": ["home", "dashboard", "leads", "pipeline", "accounts", "account_gop_metrics", "contacts", "invoices", "sales_portal"],
     "Reports": ["report_sales_overview", "report_revenue", "report_revenue_analytics", "report_sku_performance", "report_resource_performance", "report_account_performance"],
     "Operations": ["lead_discovery", "target_planning", "performance_tracker", "investor_dashboard", "daily_status", "meeting_minutes", "personal_calendar", "status_summary"],
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model"],
@@ -272,7 +271,6 @@ MODULE_LABELS = {
     "pipeline": "Pipeline",
     "accounts": "Accounts",
     "account_gop_metrics": "Account GOP Metrics",
-    "neck_tag_designer": "Neck Tag Designer",
     "contacts": "Contacts",
     "invoices": "Invoices",
     "sales_portal": "Sales Portal",
