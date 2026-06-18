@@ -254,9 +254,14 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden" data-testid={`share-dialog-${testIdBase}`}>
+      <DialogContent
+        className="p-0 gap-0 overflow-hidden flex flex-col resize w-[700px] h-[720px] min-w-[460px] min-h-[540px] max-w-[96vw] max-h-[92vh] sm:max-w-none"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        data-testid={`share-dialog-${testIdBase}`}
+      >
         {/* Header */}
-        <DialogHeader className="px-6 pt-5 pb-4 border-b border-slate-100 bg-gradient-to-br from-teal-50/80 to-white">
+        <DialogHeader className="shrink-0 px-6 pt-5 pb-4 border-b border-slate-100 bg-gradient-to-br from-teal-50/80 to-white">
           <div className="flex items-start gap-3">
             <div className="h-10 w-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-sm shrink-0">
               <Mail className="h-5 w-5" />
@@ -272,11 +277,11 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
         </DialogHeader>
 
         {loading ? (
-          <div className="py-16 flex items-center justify-center text-slate-400">
+          <div className="flex-1 flex items-center justify-center text-slate-400">
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : (
-          <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="px-6 py-4 space-y-4 flex-1 overflow-y-auto">
             {/* Channel + Template row */}
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="flex gap-2 flex-1">
@@ -371,7 +376,7 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
         )}
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 sm:justify-between items-center">
+        <DialogFooter className="shrink-0 px-6 py-4 border-t border-slate-100 bg-slate-50/60 sm:justify-between items-center">
           <span className="hidden sm:block text-xs text-slate-400">
             {recipientCount} recipient{recipientCount === 1 ? '' : 's'}
           </span>
@@ -384,6 +389,16 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
             </Button>
           </div>
         </DialogFooter>
+
+        {/* Resize grip hint (window is resizable by dragging this corner) */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute bottom-1 right-1 h-3 w-3 opacity-50"
+          style={{
+            backgroundImage:
+              'linear-gradient(135deg, transparent 0 45%, #94a3b8 45% 55%, transparent 55% 70%, #94a3b8 70% 80%, transparent 80%)',
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
