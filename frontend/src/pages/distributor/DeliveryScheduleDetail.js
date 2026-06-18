@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { ShareButton } from '../../components/share/ShareButton';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Truck, User, Loader2, ChevronUp, ChevronDown, Plus, X,
@@ -593,6 +594,14 @@ export default function DeliveryScheduleDetail() {
                   ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Preparing…</>
                   : <><Printer className="h-4 w-4 mr-1.5" /> Print All</>}
               </Button>
+              <ShareButton
+                documentType="driver_bundle"
+                documentId={schedule.id}
+                label="Share"
+                variant="outline"
+                size="default"
+                testId={`schedule-${schedule.id}`}
+              />
             </>
           )}
           {schedule.status === 'draft' && (

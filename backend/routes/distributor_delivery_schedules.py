@@ -1383,23 +1383,13 @@ async def download_schedule_pdf(schedule_id: str, current_user: dict = Depends(g
     )
 
 
-@router.get("/{schedule_id}/bundle-pdf")
-async def download_schedule_bundle_pdf(
-    schedule_id: str,
-    inline: bool = True,
-    current_user: dict = Depends(get_current_user),
-):
-    """Combined PDF for a schedule: page 1 = the driver schedule sheet,
-    pages 2..N = one page per attached Zoho invoice. Useful when the
-    distributor wants to hand the driver a single printed bundle.
+async def build_schedule_bundle_pdf(tenant_id: str, distributor_id: str, schedule_id: str) -> tuple:
+    """Build the combined bundle PDF (driver sheet + per-stop Zoho docs) for a
+    schedule. Returns (pdf_bytes, filename, skipped_list, doc_pages).
 
-    Query params:
-        inline=true  → Content-Disposition: inline (default; opens in browser
-                        and is what the front-end uses for the Print action).
-        inline=false → attachment (forces download).
+    Shared by the bundle-download endpoint and the document-sharing framework
+    (services/share_service.py). Raises HTTPException on bad state.
     """
-    tenant_id = get_current_tenant_id()
-    distributor_id = _resolve_distributor_id(current_user)
     s = await db.distributor_delivery_schedules.find_one(
         {"id": schedule_id, "tenant_id": tenant_id, "distributor_id": distributor_id},
         {"_id": 0}
@@ -1423,9 +1413,7 @@ async def download_schedule_bundle_pdf(
 
     # 2) Per-delivery Zoho documents. Regular stock-outs attach a tax INVOICE
     #    (zoho_invoice_id); promotional stock-outs (is_promo) attach a Zoho
-    #    DELIVERY CHALLAN (zoho_doc_id). Both are appended to the bundle.
-    #    Best-effort: documents that fail to fetch (no id, fetch error,
-    #    distributor-billed account) are skipped and recorded in a warnings header.
+    #    DELIVERY CHALLAN (zoho_doc_id). Best-effort — failures are skipped.
     from services.zoho_service import fetch_invoice_pdf, fetch_delivery_challan_pdf, ZohoApiError
     invoice_pdfs: list[bytes] = []
     skipped: list[str] = []
@@ -1452,8 +1440,6 @@ async def download_schedule_bundle_pdf(
         # Regular stock-out → fetch the Zoho tax invoice PDF.
         zoho_id = delv.get("zoho_invoice_id")
         if not zoho_id:
-            # Either it's distributor-billed (no Zoho invoice expected) or
-            # the Zoho push failed/hasn't run yet.
             if (delv.get("account_billed_by") or "company") == "distributor":
                 skipped.append(f"{label} (distributor-billed)")
             else:
@@ -1483,17 +1469,36 @@ async def download_schedule_bundle_pdf(
     out = io.BytesIO()
     writer.write(out)
     out.seek(0)
-
     filename = f"delivery-bundle-{s.get('schedule_date')}.pdf"
+    return out.getvalue(), filename, skipped, len(invoice_pdfs)
+
+
+@router.get("/{schedule_id}/bundle-pdf")
+async def download_schedule_bundle_pdf(
+    schedule_id: str,
+    inline: bool = True,
+    current_user: dict = Depends(get_current_user),
+):
+    """Combined PDF for a schedule: page 1 = the driver schedule sheet,
+    pages 2..N = one page per attached Zoho invoice / challan.
+
+    Query params:
+        inline=true  → Content-Disposition: inline (default; Print action).
+        inline=false → attachment (forces download).
+    """
+    tenant_id = get_current_tenant_id()
+    distributor_id = _resolve_distributor_id(current_user)
+    pdf_bytes, filename, skipped, doc_pages = await build_schedule_bundle_pdf(
+        tenant_id, distributor_id, schedule_id
+    )
     disposition = "inline" if inline else "attachment"
     return StreamingResponse(
-        out,
+        io.BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'{disposition}; filename="{filename}"',
-            # Surface skipped stops so the UI (or future automation) can warn the user.
             "X-Bundle-Schedule-Pages": "1",
-            "X-Bundle-Invoice-Pages": str(len(invoice_pdfs)),
+            "X-Bundle-Invoice-Pages": str(doc_pages),
             "X-Bundle-Skipped": ("; ".join(skipped).encode("ascii", "replace").decode("ascii")) if skipped else "",
         },
     )
@@ -1987,3 +1992,57 @@ async def optimize_route(
         "warnings": warnings,
     }
 
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Document Sharing Framework — register the driver-bundle resolver.
+# ──────────────────────────────────────────────────────────────────────────
+async def _resolve_driver_bundle(tenant_id: str, document_id: str, context: dict) -> dict:
+    """document_id = schedule_id. Builds the driver bundle PDF (lazily) and
+    suggests the distributor's contacts as recipients."""
+    schedule = await db.distributor_delivery_schedules.find_one(
+        {"id": document_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    if not schedule:
+        raise HTTPException(404, "Schedule not found")
+    distributor_id = schedule.get("distributor_id")
+    dist = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0}
+    ) or {}
+
+    recipients = []
+    if dist.get("primary_contact_email") or dist.get("primary_contact_mobile"):
+        recipients.append({
+            "name": dist.get("primary_contact_name") or dist.get("distributor_name"),
+            "email": dist.get("primary_contact_email") or "",
+            "phone": dist.get("primary_contact_mobile") or "",
+            "role": "Distributor (primary)",
+        })
+    if dist.get("secondary_contact_email") or dist.get("secondary_contact_mobile"):
+        recipients.append({
+            "name": dist.get("secondary_contact_name") or "",
+            "email": dist.get("secondary_contact_email") or "",
+            "phone": dist.get("secondary_contact_mobile") or "",
+            "role": "Distributor (secondary)",
+        })
+
+    async def _fetch():
+        pdf_bytes, _filename, _skipped, _pages = await build_schedule_bundle_pdf(
+            tenant_id, distributor_id, document_id
+        )
+        return pdf_bytes
+
+    date = schedule.get("schedule_date")
+    return {
+        "title": f"Delivery Bundle — {date}",
+        "filename": f"delivery-bundle-{date}.pdf",
+        "fetch_pdf": _fetch,
+        "suggested_recipients": recipients,
+    }
+
+
+try:
+    from services import share_service as _share_service
+    _share_service.register_resolver("driver_bundle", _resolve_driver_bundle)
+except Exception:  # pragma: no cover
+    logger.exception("Failed to register driver_bundle share resolver")

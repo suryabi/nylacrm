@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only test of Document Sharing Framework Phase 1 (driver-bundle path) completed. All required UI behavior validated end-to-end on /distributor/delivery-schedules/e2ec4623-7f5e-4020-91a7-8b0ae9f3b9a1: Share button appears, dialog opens with correct title 'Delivery Bundle - 2026-05-18', subject prefilled, Email channel active + WhatsApp shown as disabled (soon), 0 recipient chips (distributor email empty as expected), Attach-PDF toggle ON by default. Email validation rejects both empty and invalid values with an error toast and keeps the dialog open. A real send to delivered@resend.dev closed the dialog (success path). Stock Transfers page loaded without errors and showed 0 Share buttons (no synced Zoho rows in preview - expected). Delivery-invoice share path was not testable in preview (no delivery with a Zoho invoice URL accessible to the test user).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Schedule Detail page (with Share button rendered)", "issues": ["React hydration warning in console: '<button> cannot contain a nested <button>'. Not blocking; appears while DashboardLayout/ProtectedRoute renders the schedule detail."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional cleanup: resolve the nested-button React hydration warning surfaced on the schedule detail page.",
+    "Update /app/memory/test_credentials.md: schedule e2ec4623-7f5e-4020-91a7-8b0ae9f3b9a1 belongs to distributor b8876367-df64-4c55-a382-d5eb3b4b2380. Correct test user is surya@gmail.com / nyladist## (role Distributor, name Trs11). The admin surya.yadavalli@nylaairwater.earth gets 403 from /api/distributor/delivery-schedules/* because _resolve_distributor_id requires distributor_id on the user. john.distributor@test.com (Brian) returns 404 (different distributor).",
+    "If full coverage of Phase 1 is desired, seed one synced stock-transfer (Zoho status=synced, zoho_invoice_id present) and one delivered delivery with zoho_invoice_url visible to a reachable test user. In the current preview, neither stock_transfer_doc nor delivery_invoice Share buttons could be exercised."
+  ],
+  "critical_code_review_comments": [
+    "ShareButton.jsx success path: dialog auto-closes on resolve and a sonner success toast is shown using data.message || 'Document shared'.",
+    "Email validation regex /^\\S+@\\S+\\.\\S+$/ is intentionally lenient client-side; backend should re-validate.",
+    "WhatsApp channel is rendered as a non-interactive div with cursor-not-allowed and a '(soon)' label - correctly deferred for Phase 2.",
+    "ShareDialog uses Bearer token from localStorage via HEAD() while the rest of the app relies on the global axios.defaults.withCredentials + interceptor; consistent and works."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "Driver bundle path: 11/11 checks pass. Stock-transfer & delivery-invoice paths: page-load only, no records to exercise Share in preview."},
+  "test_credentials": "Distributor user that OWNS test schedule e2ec4623-7f5e-4020-91a7-8b0ae9f3b9a1: email=surya@gmail.com, password=nyladist##, tenant=nyla-air-water, distributor_id=b8876367-df64-4c55-a382-d5eb3b4b2380. Recipient sink: delivered@resend.dev.",
+  "seed_data_creation": "None. One real share send was made via Resend to delivered@resend.dev (designated no-op sink).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login as surya@gmail.com / nyladist## to test schedule e2ec4623... Admin gets 403, Brian/john gets 404 - by design (_resolve_distributor_id). Key data-testids on ShareDialog: share-btn-schedule-<id>, share-dialog-schedule-<id>, share-channel-email, share-channel-whatsapp, share-recipient-chip-<i>, share-name-input, share-email-input, share-subject-input, share-message-input, share-attach-toggle, share-cancel-btn, share-send-btn. Validation toast text: 'Enter a valid email address'. Success is confirmed by the dialog detaching (use page.wait_for_selector(state='detached')).",
+  "rca of the issue": "n/a - no defects found in Phase 1 sharing flow."
+}

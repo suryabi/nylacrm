@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { ShareButton } from '../components/share/ShareButton';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import useMasterLocations from '../hooks/useMasterLocations';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -3749,6 +3750,14 @@ export default function DistributorDetail() {
                             </>
                           )}
                         </Button>
+                        <ShareButton
+                          documentType="delivery_invoice"
+                          documentId={selectedDelivery.id}
+                          label="Share"
+                          variant="outline"
+                          size="default"
+                          testId={`delivery-invoice-${selectedDelivery.id}`}
+                        />
                         <a
                           href={selectedDelivery.zoho_invoice_url}
                           target="_blank"

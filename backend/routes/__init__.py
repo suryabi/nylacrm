@@ -283,4 +283,9 @@ routes_router.include_router(promo_dispatch_router, tags=["Promotional Dispatch"
 # stock entries, purchase orders, GRN. See routes/inventory_management.py
 routes_router.include_router(inventory_management_router, prefix="/inventory", tags=["Inventory Management"])
 
+# Document Sharing Framework — share invoices / challans / driver bundles via
+# signed links + email (Phase 1). See routes/sharing.py + services/share_service.py
+from .sharing import router as sharing_router
+routes_router.include_router(sharing_router, prefix="/share", tags=["Document Sharing"])
+
 __all__ = ['routes_router']

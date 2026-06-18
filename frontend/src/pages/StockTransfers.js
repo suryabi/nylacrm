@@ -18,6 +18,7 @@ import {
   RefreshCw, FileText, Package, Building2, Download, Undo2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ShareButton } from '../components/share/ShareButton';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -824,6 +825,15 @@ export default function StockTransfers() {
                           >
                             <Download className="h-3 w-3 mr-1" /> E-way Bill
                           </Button>
+                        )}
+                        {t.zoho_status === 'synced' && t.zoho_invoice_id && (
+                          <ShareButton
+                            documentType="stock_transfer_doc"
+                            documentId={t.id}
+                            label="Share"
+                            className="h-7 px-2 text-[10px] text-teal-700 hover:text-teal-800 hover:bg-teal-50"
+                            testId={`transfer-${t.id}`}
+                          />
                         )}
                         {t.status === 'reversed' ? (
                           <>
