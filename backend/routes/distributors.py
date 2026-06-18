@@ -3969,6 +3969,7 @@ async def list_distributor_deliveries(
     distributor_id: str,
     status: Optional[str] = None,
     account_id: Optional[str] = None,
+    location_id: Optional[str] = None,
     time_filter: Optional[str] = 'this_month',
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -3984,6 +3985,9 @@ async def list_distributor_deliveries(
     
     if account_id and account_id != 'all':
         query["account_id"] = account_id
+    
+    if location_id and location_id != 'all':
+        query["distributor_location_id"] = location_id
     
     # Apply time filter
     now = datetime.now(timezone.utc)

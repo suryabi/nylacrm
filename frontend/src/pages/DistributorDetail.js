@@ -222,6 +222,7 @@ export default function DistributorDetail() {
   const [deliveriesPageSize, setDeliveriesPageSize] = useState(20);
   const [deliveriesTimeFilter, setDeliveriesTimeFilter] = useState('this_month');
   const [deliveriesAccountFilter, setDeliveriesAccountFilter] = useState('all');
+  const [deliveriesLocationFilter, setDeliveriesLocationFilter] = useState('all');
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [assignedAccounts, setAssignedAccounts] = useState([]);
   const [selectedDeliveryAccount, setSelectedDeliveryAccount] = useState(null);
@@ -590,6 +591,9 @@ export default function DistributorDetail() {
       if (deliveriesAccountFilter && deliveriesAccountFilter !== 'all') {
         params.append('account_id', deliveriesAccountFilter);
       }
+      if (deliveriesLocationFilter && deliveriesLocationFilter !== 'all') {
+        params.append('location_id', deliveriesLocationFilter);
+      }
       const response = await axios.get(`${API_URL}/api/distributors/${id}/deliveries?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
         withCredentials: true
@@ -601,7 +605,7 @@ export default function DistributorDetail() {
     } finally {
       setDeliveriesLoading(false);
     }
-  }, [id, token, deliveriesPage, deliveriesPageSize, deliveriesTimeFilter, deliveriesAccountFilter]);
+  }, [id, token, deliveriesPage, deliveriesPageSize, deliveriesTimeFilter, deliveriesAccountFilter, deliveriesLocationFilter]);
 
   // Fetch assigned accounts for delivery
   const fetchAssignedAccounts = useCallback(async () => {
@@ -622,7 +626,7 @@ export default function DistributorDetail() {
       fetchAssignedAccounts();
       if (skus.length === 0) fetchSkus();
     }
-  }, [activeTab, fetchDeliveries, fetchAssignedAccounts, fetchSkus, skus.length, deliveriesPage, deliveriesPageSize, deliveriesTimeFilter, deliveriesAccountFilter]);
+  }, [activeTab, fetchDeliveries, fetchAssignedAccounts, fetchSkus, skus.length, deliveriesPage, deliveriesPageSize, deliveriesTimeFilter, deliveriesAccountFilter, deliveriesLocationFilter]);
 
   // Fetch settlements
   const fetchSettlements = useCallback(async () => {
@@ -2804,6 +2808,8 @@ export default function DistributorDetail() {
             setDeliveriesTimeFilter={setDeliveriesTimeFilter}
             deliveriesAccountFilter={deliveriesAccountFilter}
             setDeliveriesAccountFilter={setDeliveriesAccountFilter}
+            deliveriesLocationFilter={deliveriesLocationFilter}
+            setDeliveriesLocationFilter={setDeliveriesLocationFilter}
             fetchDeliveries={fetchDeliveries}
             skus={skus}
             assignedAccounts={assignedAccounts}

@@ -38,6 +38,8 @@ export default function DeliveriesTab({
   setDeliveriesTimeFilter,
   deliveriesAccountFilter,
   setDeliveriesAccountFilter,
+  deliveriesLocationFilter,
+  setDeliveriesLocationFilter,
   fetchDeliveries,
   skus,
   assignedAccounts,
@@ -1509,6 +1511,27 @@ export default function DeliveriesTab({
                 {assignedAccounts.map(account => (
                   <SelectItem key={account.id} value={account.id} data-testid={`deliveries-account-option-${account.id}`}>
                     {account.account_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center gap-2">
+              <Factory className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Warehouse:</span>
+            </div>
+            <Select
+              value={deliveriesLocationFilter || 'all'}
+              onValueChange={(v) => { setDeliveriesLocationFilter?.(v); setDeliveriesPage(1); }}
+            >
+              <SelectTrigger className="h-9 w-[200px]" data-testid="deliveries-warehouse-filter">
+                <SelectValue placeholder="All Warehouses" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[320px]">
+                <SelectItem value="all">All Warehouses</SelectItem>
+                {(distributor?.locations || []).map(loc => (
+                  <SelectItem key={loc.id} value={loc.id} data-testid={`deliveries-warehouse-option-${loc.id}`}>
+                    {loc.location_name}{loc.city ? ` (${loc.city})` : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
