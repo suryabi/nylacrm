@@ -53,6 +53,7 @@ class ShareRequest(BaseModel):
     bcc: List[Recipient] = []
     subject: Optional[str] = None
     message: Optional[str] = None
+    message_is_html: bool = False
     attach_pdf: bool = True
     base_url: Optional[str] = None
 
@@ -141,6 +142,7 @@ async def share_document(req: ShareRequest, current_user: dict = Depends(get_cur
         subject=subject,
         title=title,
         message=req.message or "",
+        message_is_html=req.message_is_html,
         link=public_url,
         pdf_bytes=pdf_bytes,
         filename=filename,

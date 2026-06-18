@@ -308,12 +308,24 @@ def _send_email_sync(to_list, subject, html, attachments=None, cc=None, bcc=None
     return resend.Emails.send(params)
 
 
-def _email_html(*, title: str, message: str, link: str, sender_name: str) -> str:
-    msg_html = (message or "").replace("\n", "<br>")
+def _email_html(*, title: str, message: str, link: str, sender_name: str, message_is_html: bool = False) -> str:
+    if message_is_html:
+        # Rich-text body from the composer (already HTML). Render as-is inside a
+        # styled wrapper so author formatting (bold, lists, links) is preserved.
+        msg_block = (
+            f'<div style="margin:0 0 16px;color:#334155;font-size:14px;line-height:1.6;">{message}</div>'
+            if (message or "").strip() else ''
+        )
+    else:
+        msg_html = (message or "").replace("\n", "<br>")
+        msg_block = (
+            f'<p style="margin:0 0 16px;color:#334155;font-size:14px;line-height:1.6;">{msg_html}</p>'
+            if msg_html else ''
+        )
     return f"""
     <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;max-width:560px;">
       <h2 style="margin:0 0 12px;font-size:18px;">{title}</h2>
-      {f'<p style="margin:0 0 16px;color:#334155;font-size:14px;line-height:1.6;">{msg_html}</p>' if msg_html else ''}
+      {msg_block}
       <a href="{link}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600;">Download document</a>
       <p style="margin:18px 0 0;color:#64748b;font-size:12px;line-height:1.5;">The document is also attached to this email. This download link expires in 7 days.</p>
       <p style="margin:14px 0 0;color:#94a3b8;font-size:12px;">Shared by {sender_name} · Nyla Air &amp; Water</p>
@@ -325,6 +337,7 @@ async def send_via_email(
     *, to_emails: list, cc_emails: list | None, bcc_emails: list | None = None,
     subject: str, title: str, message: str, link: str,
     pdf_bytes: bytes | None, filename: str, sender_name: str, content_type: str = "application/pdf",
+    message_is_html: bool = False,
 ) -> tuple[bool, str | None, str | None]:
     """Send the document via email (link + optional attachment) to multiple To +
     CC + BCC recipients. Returns (ok, provider_message_id, error)."""
@@ -343,7 +356,7 @@ async def send_via_email(
             "content": base64.b64encode(pdf_bytes).decode("ascii"),
             "content_type": content_type or "application/pdf",
         }]
-    html = _email_html(title=title, message=message, link=link, sender_name=sender_name)
+    html = _email_html(title=title, message=message, link=link, sender_name=sender_name, message_is_html=message_is_html)
     try:
         res = await asyncio.to_thread(
             _send_email_sync, to_emails, subject, html, attachments, cc_emails or None, bcc_emails or None)
