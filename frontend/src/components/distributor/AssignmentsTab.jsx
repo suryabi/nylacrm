@@ -8,7 +8,7 @@ import { Textarea } from '../ui/textarea';
 import { Checkbox } from '../ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Truck, RefreshCw, X, ChevronDown, ChevronRight, Receipt, Copy, ExternalLink, Phone } from 'lucide-react';
+import { MapPin, Plus, Trash2, Truck, RefreshCw, X, ChevronDown, ChevronRight, Receipt, Copy, ExternalLink, Phone, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { MARGIN_TYPES, formatMarginValue, STATUS_OPTIONS } from './constants';
 import TaxBillingCard from '../TaxBillingCard';
@@ -45,6 +45,17 @@ export default function AssignmentsTab({
 }) {
   const [expandedId, setExpandedId] = useState(null);
   const toggleExpand = (id) => setExpandedId(prev => prev === id ? null : id);
+
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? assignments.filter(a =>
+        (a.account_name || '').toLowerCase().includes(q) ||
+        (a.servicing_city || '').toLowerCase().includes(q) ||
+        (a.servicing_state || '').toLowerCase().includes(q) ||
+        (a.distributor_location_name || '').toLowerCase().includes(q) ||
+        (a.account_id || '').toLowerCase().includes(q))
+    : assignments;
 
   return (
     <Card>
@@ -325,28 +336,60 @@ export default function AssignmentsTab({
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full" data-testid="assignments-table">
+          <div className="space-y-3">
+            {/* Search / autocomplete filter */}
+            <div className="relative max-w-sm">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search accounts, city, location…"
+                className="h-9 pl-8 pr-8"
+                data-testid="assignments-search-input"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  data-testid="assignments-search-clear"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground" data-testid="assignments-count">
+              Showing {filtered.length} of {assignments.length} accounts
+            </p>
+
+            {filtered.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No accounts match "{query}"</p>
+              </div>
+            ) : (
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="assignments-table">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="w-8 p-3"></th>
-                  <th className="text-left p-3 font-medium">Account</th>
-                  <th className="text-left p-3 font-medium">Servicing City</th>
-                  <th className="text-left p-3 font-medium">Location</th>
-                  <th className="text-center p-3 font-medium">Type</th>
-                  <th className="text-center p-3 font-medium">Override</th>
-                  <th className="text-center p-3 font-medium">Status</th>
-                  <th className="text-right p-3 font-medium">Actions</th>
+                  <th className="w-8 p-2"></th>
+                  <th className="text-left p-2 font-medium text-xs uppercase tracking-wider text-muted-foreground">Account</th>
+                  <th className="text-left p-2 font-medium text-xs uppercase tracking-wider text-muted-foreground">Servicing City</th>
+                  <th className="text-left p-2 font-medium text-xs uppercase tracking-wider text-muted-foreground">Location</th>
+                  <th className="text-center p-2 font-medium text-xs uppercase tracking-wider text-muted-foreground">Type</th>
+                  <th className="text-center p-2 font-medium text-xs uppercase tracking-wider text-muted-foreground">Override</th>
+                  <th className="text-center p-2 font-medium text-xs uppercase tracking-wider text-muted-foreground">Status</th>
+                  <th className="text-right p-2 font-medium text-xs uppercase tracking-wider text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {assignments.map((assignment) => {
+                {filtered.map((assignment) => {
                   const isExpanded = expandedId === assignment.id;
                   const hasTaxInfo = !!(assignment.gst_number || assignment.pan_number || (assignment.billing_address && (assignment.billing_address.address_line1 || assignment.billing_address.city)));
                   return (
                   <React.Fragment key={assignment.id}>
                   <tr className="border-b hover:bg-muted/30" data-testid={`assignment-row-${assignment.id}`}>
-                    <td className="p-3">
+                    <td className="p-2">
                       <button
                         type="button"
                         onClick={() => toggleExpand(assignment.id)}
@@ -357,9 +400,9 @@ export default function AssignmentsTab({
                         {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </button>
                     </td>
-                    <td className="p-3">
+                    <td className="p-2">
                       <div>
-                        <p className="font-medium flex items-center gap-2">
+                        <p className="font-medium flex items-center gap-2 leading-tight">
                           {assignment.account_name}
                           {hasTaxInfo && (
                             <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 px-1.5 py-0">
@@ -367,21 +410,21 @@ export default function AssignmentsTab({
                             </Badge>
                           )}
                         </p>
-                        <p className="text-sm text-muted-foreground">{assignment.servicing_state}</p>
+                        <p className="text-xs text-muted-foreground leading-tight">{assignment.servicing_state}</p>
                       </div>
                     </td>
-                    <td className="p-3">
+                    <td className="p-2">
                       <div className="flex items-center gap-1">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                         {assignment.servicing_city}
                       </div>
                     </td>
-                    <td className="p-3">
+                    <td className="p-2">
                       {assignment.distributor_location_name || (
                         <span className="text-muted-foreground">-</span>
                       )}
                     </td>
-                    <td className="p-3 text-center">
+                    <td className="p-2 text-center">
                       {assignment.is_primary && (
                         <Badge className="bg-blue-100 text-blue-800">Primary</Badge>
                       )}
@@ -392,7 +435,7 @@ export default function AssignmentsTab({
                         <Badge variant="outline">Standard</Badge>
                       )}
                     </td>
-                    <td className="p-3 text-center">
+                    <td className="p-2 text-center">
                       {assignment.has_special_override ? (
                         <Badge className="bg-purple-100 text-purple-800">
                           {formatMarginValue(assignment.override_type, assignment.override_value)}
@@ -401,15 +444,15 @@ export default function AssignmentsTab({
                         <span className="text-muted-foreground">-</span>
                       )}
                     </td>
-                    <td className="p-3 text-center">
+                    <td className="p-2 text-center">
                       {getStatusBadge(assignment.status)}
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="p-2 text-right">
                       {canManage && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-destructive"
+                          className="text-destructive h-8 w-8 p-0"
                           onClick={() => setDeleteTarget({
                             type: 'assignment',
                             id: assignment.id,
@@ -479,6 +522,8 @@ export default function AssignmentsTab({
                 })}
               </tbody>
             </table>
+            </div>
+            )}
           </div>
         )}
       </CardContent>

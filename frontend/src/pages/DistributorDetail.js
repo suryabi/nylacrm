@@ -22,7 +22,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2, MoreVertical
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2, MoreVertical, ChevronDown, ChevronRight
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -223,6 +223,7 @@ export default function DistributorDetail() {
   const [deliveriesTimeFilter, setDeliveriesTimeFilter] = useState('this_month');
   const [deliveriesAccountFilter, setDeliveriesAccountFilter] = useState([]);
   const [deliveriesLocationFilter, setDeliveriesLocationFilter] = useState('all');
+  const [marginMatrixOpen, setMarginMatrixOpen] = useState(false);
   const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
   const [assignedAccounts, setAssignedAccounts] = useState([]);
   const [selectedDeliveryAccount, setSelectedDeliveryAccount] = useState(null);
@@ -2690,11 +2691,23 @@ export default function DistributorDetail() {
         <TabsContent value="commercial" className="space-y-8">
           {/* Margin Matrix Section */}
           <div>
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMarginMatrixOpen(o => !o)}
+              className="w-full flex items-center gap-2 mb-4 text-left group"
+              data-testid="margin-matrix-toggle"
+            >
+              {marginMatrixOpen
+                ? <ChevronDown className="h-5 w-5 text-muted-foreground transition-transform" />
+                : <ChevronRight className="h-5 w-5 text-muted-foreground transition-transform" />}
               <Percent className="h-5 w-5 text-muted-foreground" />
-              Margin Matrix
-              <Badge variant="secondary" className="ml-2">{margins.length} entries</Badge>
-            </h3>
+              <h3 className="text-lg font-semibold">Margin Matrix</h3>
+              <Badge variant="secondary" className="ml-1">{margins.length} entries</Badge>
+              {!marginMatrixOpen && (
+                <span className="text-xs text-muted-foreground ml-auto group-hover:text-foreground">Click to expand</span>
+              )}
+            </button>
+            {marginMatrixOpen && (
             <MarginsTab
               distributor={distributor}
               canManage={canManage}
@@ -2726,6 +2739,7 @@ export default function DistributorDetail() {
               handleUpdateMarginEntry={handleUpdateMarginEntry}
               setDeleteTarget={setDeleteTarget}
             />
+            )}
           </div>
           
           {/* Account Assignments Section */}
