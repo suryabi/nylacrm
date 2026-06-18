@@ -18,7 +18,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -90,6 +90,7 @@ const salesNavigationGroups = [
       { name: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen, moduleKey: 'knowledge_base', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
       { name: 'Email Templates', href: '/email-templates', icon: Mail, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive'] },
       { name: 'Notifications', href: '/notification-settings', icon: Bell, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator', 'Production Manager', 'Production Executive', 'Distribution Manager', 'Distribution Executive'] },
+      { name: 'Sharing Recipients', href: '/settings/share-recipients', icon: Share2, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
     ]
   },
   {

@@ -130,5 +130,34 @@ async def _resolve_stock_transfer_doc(tenant_id: str, document_id: str, context:
     }
 
 
+from services import recipient_providers as rp
+
+
+# ── Recipient resolvers (To / CC / candidate pool) ─────────────────────────
+async def _rcpt_delivery_invoice(tenant_id, document_id, context, current_user):
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": document_id, "tenant_id": tenant_id}, {"_id": 0, "account_id": 1})
+    to = await rp.account_contacts(tenant_id, (delivery or {}).get("account_id")) if delivery else []
+    return {"to": to, "cc": [], "candidates": to}
+
+
+async def _rcpt_stock_transfer_doc(tenant_id, document_id, context, current_user):
+    transfer = await db.distributor_stock_transfers.find_one(
+        {"id": document_id, "tenant_id": tenant_id}, {"_id": 0, "dest_distributor_id": 1})
+    to = await rp.distributor_contacts(tenant_id, (transfer or {}).get("dest_distributor_id")) if transfer else []
+    return {"to": to, "cc": [], "candidates": to}
+
+
 share_service.register_resolver("delivery_invoice", _resolve_delivery_invoice)
 share_service.register_resolver("stock_transfer_doc", _resolve_stock_transfer_doc)
+
+share_service.register_recipient_resolver(
+    "delivery_invoice", _rcpt_delivery_invoice,
+    label="Delivery Invoice", description="Tax invoice / challan for a distributor delivery.",
+    sources=["Account contacts", "Delivery contact"], default_cc_manager=False,
+)
+share_service.register_recipient_resolver(
+    "stock_transfer_doc", _rcpt_stock_transfer_doc,
+    label="Stock Transfer Document", description="Invoice / challan for an inter-warehouse transfer.",
+    sources=["Destination distributor contacts"], default_cc_manager=False,
+)

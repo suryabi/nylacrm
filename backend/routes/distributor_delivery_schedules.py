@@ -2041,8 +2041,25 @@ async def _resolve_driver_bundle(tenant_id: str, document_id: str, context: dict
     }
 
 
+async def _rcpt_driver_bundle(tenant_id: str, document_id: str, context: dict, current_user: dict) -> dict:
+    """To = distributor contacts + the route's delivery people."""
+    from services import recipient_providers as rp
+    sch = await db.distributor_delivery_schedules.find_one(
+        {"id": document_id, "tenant_id": tenant_id}, {"_id": 0, "distributor_id": 1})
+    dist_id = (sch or {}).get("distributor_id")
+    dist = await rp.distributor_contacts(tenant_id, dist_id)
+    people = await rp.delivery_people(tenant_id, document_id)
+    return {"to": dist, "cc": [], "candidates": dist + people}
+
+
 try:
     from services import share_service as _share_service
     _share_service.register_resolver("driver_bundle", _resolve_driver_bundle)
+    _share_service.register_recipient_resolver(
+        "driver_bundle", _rcpt_driver_bundle,
+        label="Driver Delivery Bundle",
+        description="Driver schedule sheet + all stop invoices/challans in one PDF.",
+        sources=["Distributor contacts", "Delivery people"], default_cc_manager=False,
+    )
 except Exception:  # pragma: no cover
     logger.exception("Failed to register driver_bundle share resolver")
