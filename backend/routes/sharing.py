@@ -50,6 +50,7 @@ class ShareRequest(BaseModel):
     channel: str = "email"
     to: List[Recipient] = []
     cc: List[Recipient] = []
+    bcc: List[Recipient] = []
     subject: Optional[str] = None
     message: Optional[str] = None
     attach_pdf: bool = True
@@ -59,6 +60,7 @@ class ShareRequest(BaseModel):
 class PolicyUpdate(BaseModel):
     default_to: List[Recipient] = []
     default_cc: List[Recipient] = []
+    default_bcc: List[Recipient] = []
     cc_manager: bool = False
     locked: List[str] = []
 
@@ -91,6 +93,7 @@ async def share_document(req: ShareRequest, current_user: dict = Depends(get_cur
 
     to_emails = [r.email.strip() for r in req.to if r.email and r.email.strip()]
     cc_emails = [r.email.strip() for r in req.cc if r.email and r.email.strip()]
+    bcc_emails = [r.email.strip() for r in req.bcc if r.email and r.email.strip()]
     if not to_emails:
         raise HTTPException(400, "At least one recipient (To) email address is required.")
 
@@ -134,6 +137,7 @@ async def share_document(req: ShareRequest, current_user: dict = Depends(get_cur
     ok, provider_id, error = await share_service.send_via_email(
         to_emails=to_emails,
         cc_emails=cc_emails,
+        bcc_emails=bcc_emails,
         subject=subject,
         title=title,
         message=req.message or "",
@@ -149,7 +153,7 @@ async def share_document(req: ShareRequest, current_user: dict = Depends(get_cur
         document_type=req.document_type,
         document_id=req.document_id,
         channel="email",
-        recipient={"to": to_emails, "cc": cc_emails},
+        recipient={"to": to_emails, "cc": cc_emails, "bcc": bcc_emails},
         status="sent" if ok else "failed",
         link_id=link["id"],
         provider_message_id=provider_id,
@@ -207,6 +211,7 @@ async def update_policy(
             {
                 "default_to": [r.dict() for r in body.default_to],
                 "default_cc": [r.dict() for r in body.default_cc],
+                "default_bcc": [r.dict() for r in body.default_bcc],
                 "cc_manager": body.cc_manager,
                 "locked": body.locked,
             },

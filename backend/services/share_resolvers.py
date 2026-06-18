@@ -130,7 +130,35 @@ async def _resolve_stock_transfer_doc(tenant_id: str, document_id: str, context:
     }
 
 
+import base64
 from services import recipient_providers as rp
+
+
+async def _resolve_lead_proposal(tenant_id: str, document_id: str, context: dict) -> dict:
+    """document_id = lead_id. Shares the lead's APPROVED proposal document."""
+    proposal = await db.lead_proposals.find_one(
+        {"lead_id": document_id, "tenant_id": tenant_id}, {"_id": 0}
+    ) or await db.lead_proposals.find_one({"lead_id": document_id}, {"_id": 0})
+    if not proposal:
+        raise HTTPException(404, "No proposal found for this lead.")
+    if proposal.get("status") and proposal.get("status") != "approved":
+        raise HTTPException(400, "Only an approved proposal can be shared.")
+    file_data = proposal.get("file_data")
+    if not file_data:
+        raise HTTPException(400, "Proposal file is empty.")
+    filename = proposal.get("file_name") or "proposal.pdf"
+    content_type = proposal.get("content_type") or "application/pdf"
+
+    async def _fetch():
+        return base64.b64decode(file_data)
+
+    return {
+        "title": f"Proposal — {filename}",
+        "filename": filename,
+        "content_type": content_type,
+        "fetch_pdf": _fetch,
+        "suggested_recipients": [],
+    }
 
 
 # ── Recipient resolvers (To / CC / candidate pool) ─────────────────────────
@@ -148,8 +176,34 @@ async def _rcpt_stock_transfer_doc(tenant_id, document_id, context, current_user
     return {"to": to, "cc": [], "candidates": to}
 
 
+async def _rcpt_lead_proposal(tenant_id, document_id, context, current_user):
+    """To = the lead's contacts; CC = manager (via cc_manager policy). Preserves
+    the old proposal email's default subject + signed message body."""
+    lead = await db.leads.find_one({"id": document_id, "tenant_id": tenant_id}, {"_id": 0})
+    to = await rp.lead_contacts(tenant_id, document_id)
+    extra = []
+    if lead and lead.get("converted_to_account"):
+        extra = await rp.account_contacts(tenant_id, lead["converted_to_account"])
+
+    u = current_user or {}
+    company = (lead or {}).get("company") or "your company"
+    default_message = (
+        f"Dear Sir/Madam,\n\n"
+        f"Please find attached the proposal for {company}. We look forward to your "
+        f"feedback and the opportunity to serve you.\n\n"
+        f"If you have any questions or need further information, please feel free to reach out.\n\n"
+        f"Best Regards,\n{u.get('name') or ''}\n{u.get('phone') or u.get('mobile') or ''}\n{u.get('email') or ''}"
+    )
+    return {
+        "to": to, "cc": [], "candidates": to + extra,
+        "default_subject": "Nyla Air Water - Proposal for review",
+        "default_message": default_message,
+    }
+
+
 share_service.register_resolver("delivery_invoice", _resolve_delivery_invoice)
 share_service.register_resolver("stock_transfer_doc", _resolve_stock_transfer_doc)
+share_service.register_resolver("lead_proposal", _resolve_lead_proposal)
 
 share_service.register_recipient_resolver(
     "delivery_invoice", _rcpt_delivery_invoice,
@@ -160,4 +214,9 @@ share_service.register_recipient_resolver(
     "stock_transfer_doc", _rcpt_stock_transfer_doc,
     label="Stock Transfer Document", description="Invoice / challan for an inter-warehouse transfer.",
     sources=["Destination distributor contacts"], default_cc_manager=False,
+)
+share_service.register_recipient_resolver(
+    "lead_proposal", _rcpt_lead_proposal,
+    label="Lead Proposal", description="Proposal document shared with a lead/customer.",
+    sources=["Lead contacts", "Account contacts"], default_cc_manager=True,
 )

@@ -202,6 +202,7 @@ async def get_policy(tenant_id: str, document_type: str) -> dict:
         "document_type": document_type,
         "default_to": saved.get("default_to", []),
         "default_cc": saved.get("default_cc", []),
+        "default_bcc": saved.get("default_bcc", []),
         "cc_manager": bool(cc_manager),
         "locked": saved.get("locked", []),
     }
@@ -215,6 +216,7 @@ async def upsert_policy(tenant_id: str, document_type: str, data: dict, user: di
         "document_type": document_type,
         "default_to": data.get("default_to", []),
         "default_cc": data.get("default_cc", []),
+        "default_bcc": data.get("default_bcc", []),
         "cc_manager": bool(data.get("cc_manager", False)),
         "locked": [str(x).strip().lower() for x in (data.get("locked") or []) if str(x).strip()],
         "updated_at": _now().isoformat(),
@@ -247,6 +249,7 @@ async def resolve_recipient_plan(
 
     to = list(base.get("to") or [])
     cc = list(base.get("cc") or [])
+    bcc = list(base.get("bcc") or [])
     candidates = list(base.get("candidates") or []) + to + cc
 
     # Configured tenant defaults.
@@ -254,6 +257,8 @@ async def resolve_recipient_plan(
         to.append({**r, "source": "configured", "role": r.get("role") or "Configured"})
     for r in policy["default_cc"]:
         cc.append({**r, "source": "configured", "role": r.get("role") or "Configured"})
+    for r in policy["default_bcc"]:
+        bcc.append({**r, "source": "configured", "role": r.get("role") or "Configured"})
 
     # Manager CC (per-document-type, configurable).
     if policy["cc_manager"]:
@@ -262,14 +267,20 @@ async def resolve_recipient_plan(
 
     to = _dedupe_by_email(to)
     cc = _dedupe_by_email(cc)
+    bcc = _dedupe_by_email(bcc)
     to_emails = {(r.get("email") or "").strip().lower() for r in to if r.get("email")}
     cc = [r for r in cc if (r.get("email") or "").strip().lower() not in to_emails]
+    cc_emails = to_emails | {(r.get("email") or "").strip().lower() for r in cc if r.get("email")}
+    bcc = [r for r in bcc if (r.get("email") or "").strip().lower() not in cc_emails]
     candidates = _dedupe_by_email(candidates + cc)
 
     return {
         "to": to,
         "cc": cc,
+        "bcc": bcc,
         "candidates": candidates,
+        "default_subject": base.get("default_subject"),
+        "default_message": base.get("default_message"),
         "policy": {
             "allow_manual_add": True,
             "allow_remove": True,
@@ -283,7 +294,7 @@ async def resolve_recipient_plan(
 # ──────────────────────────────────────────────────────────────────────────
 # Email channel (Resend — already configured; supports attachments)
 # ──────────────────────────────────────────────────────────────────────────
-def _send_email_sync(to_list, subject, html, attachments=None, cc=None):
+def _send_email_sync(to_list, subject, html, attachments=None, cc=None, bcc=None):
     import resend
     resend.api_key = os.environ["RESEND_API_KEY"]
     sender = os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev"
@@ -292,6 +303,8 @@ def _send_email_sync(to_list, subject, html, attachments=None, cc=None):
         params["attachments"] = attachments
     if cc:
         params["cc"] = cc
+    if bcc:
+        params["bcc"] = bcc
     return resend.Emails.send(params)
 
 
@@ -309,15 +322,18 @@ def _email_html(*, title: str, message: str, link: str, sender_name: str) -> str
 
 
 async def send_via_email(
-    *, to_emails: list, cc_emails: list | None, subject: str, title: str, message: str, link: str,
+    *, to_emails: list, cc_emails: list | None, bcc_emails: list | None = None,
+    subject: str, title: str, message: str, link: str,
     pdf_bytes: bytes | None, filename: str, sender_name: str, content_type: str = "application/pdf",
 ) -> tuple[bool, str | None, str | None]:
     """Send the document via email (link + optional attachment) to multiple To +
-    CC recipients. Returns (ok, provider_message_id, error)."""
+    CC + BCC recipients. Returns (ok, provider_message_id, error)."""
     if not os.environ.get("RESEND_API_KEY"):
         return False, None, "Email service not configured (RESEND_API_KEY missing)."
     to_emails = [e for e in (to_emails or []) if e]
     cc_emails = [e for e in (cc_emails or []) if e and e not in to_emails]
+    _seen = set(to_emails) | set(cc_emails)
+    bcc_emails = [e for e in (bcc_emails or []) if e and e not in _seen]
     if not to_emails:
         return False, None, "At least one recipient email is required."
     attachments = None
@@ -329,7 +345,8 @@ async def send_via_email(
         }]
     html = _email_html(title=title, message=message, link=link, sender_name=sender_name)
     try:
-        res = await asyncio.to_thread(_send_email_sync, to_emails, subject, html, attachments, cc_emails or None)
+        res = await asyncio.to_thread(
+            _send_email_sync, to_emails, subject, html, attachments, cc_emails or None, bcc_emails or None)
         return True, (res or {}).get("id"), None
     except Exception as e:
         logger.exception("share_service: email send failed to %s", to_emails)

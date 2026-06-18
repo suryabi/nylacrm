@@ -140,6 +140,8 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
   const [title, setTitle] = useState('');
   const [to, setTo] = useState([]);
   const [cc, setCc] = useState([]);
+  const [bcc, setBcc] = useState([]);
+  const [showBcc, setShowBcc] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const [locked, setLocked] = useState([]);
   const [subject, setSubject] = useState('');
@@ -155,9 +157,13 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
         });
         if (!active) return;
         setTitle(data.title || 'Document');
-        setSubject(data.title || 'Document');
+        setSubject(data.default_subject || data.title || 'Document');
+        setMessage(data.default_message || '');
         setTo((data.to || []).filter((r) => r.email));
         setCc((data.cc || []).filter((r) => r.email));
+        const bccList = (data.bcc || []).filter((r) => r.email);
+        setBcc(bccList);
+        if (bccList.length) setShowBcc(true);
         setCandidates(data.candidates || []);
         setLocked((data.policy && data.policy.locked) || []);
       } catch (e) {
@@ -175,7 +181,7 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
     try {
       const { data } = await axios.post(`${API}/share`, {
         document_type: documentType, document_id: documentId, channel: 'email',
-        to, cc, subject, message, attach_pdf: attachPdf,
+        to, cc, bcc, subject, message, attach_pdf: attachPdf,
         base_url: process.env.REACT_APP_BACKEND_URL,
       }, { headers: HEAD() });
       toast.success(data.message || 'Document shared');
@@ -219,6 +225,14 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
 
             <RecipientField which="To" list={to} setList={setTo} candidates={candidates} locked={locked} testIdBase={testIdBase} />
             <RecipientField which="Cc" list={cc} setList={setCc} candidates={candidates} locked={locked} testIdBase={testIdBase} />
+            {showBcc ? (
+              <RecipientField which="Bcc" list={bcc} setList={setBcc} candidates={candidates} locked={locked} testIdBase={testIdBase} />
+            ) : (
+              <button type="button" onClick={() => setShowBcc(true)}
+                className="text-xs text-teal-700 hover:underline" data-testid="share-add-bcc">
+                + Add Bcc
+              </button>
+            )}
 
             <div className="space-y-1">
               <Label className="text-xs text-slate-500 uppercase tracking-wide">Subject</Label>

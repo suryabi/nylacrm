@@ -55,6 +55,7 @@ const EmailList = ({ list, setList, placeholder, testId }) => {
 const PolicyCard = ({ dt, onSaved }) => {
   const [defaultTo, setDefaultTo] = useState(dt.policy.default_to || []);
   const [defaultCc, setDefaultCc] = useState(dt.policy.default_cc || []);
+  const [defaultBcc, setDefaultBcc] = useState(dt.policy.default_bcc || []);
   const [ccManager, setCcManager] = useState(!!dt.policy.cc_manager);
   const [saving, setSaving] = useState(false);
 
@@ -67,6 +68,7 @@ const PolicyCard = ({ dt, onSaved }) => {
       await axios.put(`${API}/share/policies/${dt.document_type}`, {
         default_to: defaultTo,
         default_cc: defaultCc,
+        default_bcc: defaultBcc,
         cc_manager: ccManager,
         // Lock all configured CC entries so users can't remove mandatory CCs.
         locked: defaultCc.map((r) => r.email),
@@ -111,6 +113,11 @@ const PolicyCard = ({ dt, onSaved }) => {
             Always CC <Lock className="h-3 w-3 text-slate-400" /> <span className="normal-case text-slate-400 text-[11px]">(locked — users can't remove)</span>
           </Label>
           <EmailList list={defaultCc} setList={setDefaultCc} placeholder="accounts@example.com" testId={`policy-cc-${dt.document_type}`} />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs text-slate-500 uppercase tracking-wide">Always Bcc</Label>
+          <EmailList list={defaultBcc} setList={setDefaultBcc} placeholder="archive@example.com" testId={`policy-bcc-${dt.document_type}`} />
         </div>
 
         <div className="flex justify-end">

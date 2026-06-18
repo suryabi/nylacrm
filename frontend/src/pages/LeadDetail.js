@@ -4,6 +4,7 @@ import { leadsAPI, activitiesAPI, commentsAPI, usersAPI, accountsAPI, skusAPI } 
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
+import { ShareButton } from '../components/share/ShareButton';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
@@ -1971,15 +1972,15 @@ ${userEmail}`;
                       <Download className="h-4 w-4 mr-1" /> Download
                     </Button>
                     {proposal.status === 'approved' && (
-                      <Button
+                      <ShareButton
+                        documentType="lead_proposal"
+                        documentId={lead?.id}
+                        label="Share via Email"
                         variant="outline"
                         size="sm"
-                        onClick={openShareDialog}
                         className="text-primary"
-                        data-testid="proposal-share-email-btn"
-                      >
-                        <Share2 className="h-4 w-4 mr-1" /> Share via Email
-                      </Button>
+                        testId={`lead-proposal-${lead?.id}`}
+                      />
                     )}
                     {canDeleteProposal && (
                       <Button
