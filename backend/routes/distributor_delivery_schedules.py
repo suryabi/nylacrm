@@ -1504,6 +1504,48 @@ async def download_schedule_bundle_pdf(
     )
 
 
+def _maps_qr_flowable(lat, lng, size_mm: float = 22):
+    """Return a ReportLab Image of a QR code linking to Google Maps turn-by-turn
+    directions for the given coordinates, or None when coordinates are absent
+    or invalid (the caller then renders address text only)."""
+    try:
+        flat = float(lat)
+        flng = float(lng)
+    except (TypeError, ValueError):
+        return None
+    if flat == 0 and flng == 0:
+        return None
+    import qrcode
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Image as RLImage
+
+    url = f"https://www.google.com/maps/dir/?api=1&destination={flat},{flng}"
+    qr = qrcode.QRCode(version=None, box_size=10, border=1,
+                       error_correction=qrcode.constants.ERROR_CORRECT_M)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    bio = io.BytesIO()
+    img.save(bio, format="PNG")
+    bio.seek(0)
+    return RLImage(bio, width=size_mm * mm, height=size_mm * mm)
+
+
+def _address_cell(addr: dict, addr_str: str, body_style, small_style):
+    """Address table cell: address text + (when GPS coordinates exist) a QR code
+    that opens turn-by-turn Google Maps directions to the stop."""
+    from reportlab.platypus import Paragraph, Spacer
+    from reportlab.lib.units import mm
+
+    flowables = [Paragraph(addr_str, body_style)]
+    qr = _maps_qr_flowable((addr or {}).get("lat"), (addr or {}).get("lng"))
+    if qr is not None:
+        flowables.append(Spacer(1, 2 * mm))
+        flowables.append(qr)
+        flowables.append(Paragraph("Scan for directions", small_style))
+    return flowables
+
+
 def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
     """Build the delivery sheet using ReportLab. Minimal, driver-friendly layout."""
     from reportlab.lib import colors
@@ -1618,7 +1660,7 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
         rows.append([
             Paragraph(str(idx), body),
             Paragraph("<br/>".join(contact_lines), body),
-            Paragraph(addr_str, body),
+            _address_cell(addr, addr_str, body, small),
             Paragraph(items_str, body),
         ])
     stops = Table(rows, colWidths=[10 * mm, 55 * mm, 65 * mm, None], repeatRows=1)

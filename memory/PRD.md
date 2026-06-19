@@ -15,6 +15,21 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-19 — ✨ Customer Complaints module (NEW) ✅ DONE
+- **Purpose**: Track customer complaints linked to a Lead / Account / Distributor, against one or more SKUs, with details, photo attachments and a threaded update/comment log.
+- **Backend** (`routes/customer_complaints.py`, mounted at `/api/complaints`): full CRUD + `/meta/options`, `/meta/entity-search` (lead/account/distributor autocomplete), comments, photo upload/download/delete. Complaint numbers `CMP-YYYY-####`. Statuses: open → in_progress → awaiting_customer → resolved → closed (auto resolved_at/closed_at). Priority low/med/high/urgent; categories quality/packaging/delivery/billing/other; assignable to a user.
+- **Photos** via Emergent Object Storage (`services/object_storage.py`) — tenant-isolated paths, multi-upload, 15 MB/image cap, image-type validation, blob-fetch rendering in UI (no base64 in DB).
+- **Frontend**: `pages/CustomerComplaints.js` (list + filters + create dialog with entity autocomplete & SKU multi-select) and `pages/CustomerComplaintDetail.js` (details, photo grid upload/preview, comments, status/priority/assignment).
+- **RBAC**: new module key `customer_complaints` (default no access; CEO/Admin/System Admin auto-granted — added `CEO` to admin-like backfill in `routes/roles.py`). Appears in Role → Module settings (Operations category). Sidebar entry in **both Sales and Production** menus, gated to CEO/Admin by default.
+- **Tested**: backend CRUD/comments/status/photos via curl (object-storage round-trip OK); UI verified (list, detail, photo thumbnail, comment); RBAC test updated → 10/10 pass (80 keys / 13 categories).
+
+### 2026-06-19 — ✨ Delivery-schedule QR codes (turn-by-turn) ✅ DONE
+- Added a Google Maps **directions QR** (`maps/dir/?api=1&destination=<lat>,<lng>`) next to each stop's address in the delivery-schedule PDF. Renders only when the account has GPS `lat`/`lng`; omitted silently otherwise.
+- Implemented in `_build_schedule_pdf` (`routes/distributor_delivery_schedules.py`), so **both** the driver schedule PDF and the combined bundle PDF (schedule + invoices) get the QR. Added `qrcode[pil]` dependency.
+- **Tested**: `tests/test_delivery_schedule_qr.py` 4/4 pass (QR present with coords, omitted without, PDF always valid).
+
+
+
 ### 2026-06-18 — ✨ Seed data script: clone-and-remap `demo-co` tenant (P0) ✅ DONE
 - **Request**: A seed data script for GitHub deployment so the app ships with pre-populated demo data.
 - **Approach (clone-and-remap engine)**: `scripts/seed_sample_data.py` clones the primary tenant (`nyla-air-water`) into a fresh, fully-decoupled `demo-co` tenant instead of hand-authoring 100+ schemas. Builds a global map of every primary UUID `id` (and all `users` ids regardless of format, since users are resolved by id without a tenant filter) → fresh `uuid4`, then recursively rewrites all references. Business-code ids (e.g. `invoice_no == id`) are left intact to avoid corrupting display fields. Globally-shared collections (master_skus, territories, lead_statuses, etc.) are NOT cloned (read across tenants); integration secrets/OAuth/API keys are excluded.
