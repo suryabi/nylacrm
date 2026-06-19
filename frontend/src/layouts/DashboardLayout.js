@@ -81,6 +81,7 @@ const salesNavigationGroups = [
     items: [
       { name: 'Bottle Preview', href: '/bottle-preview', icon: Droplets, moduleKey: 'bottle_preview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Presentation Generator', href: '/gamma-generator', icon: Sparkles, moduleKey: 'gamma_generator', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Proposal Template', href: '/proposal-template', icon: FileText, roles: ['CEO', 'Admin', 'System Admin'] },
     ]
   },
   {

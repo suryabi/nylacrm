@@ -1,0 +1,40 @@
+{
+  "summary": "Tested branded Lead Proposal PDF feature end-to-end (backend pytest + UI smoke). 6/7 backend pytest pass; 1 fails due to a real API serialization bug on /api/master-skus where standard_price and return_bottle_credit are NOT returned by GET or PUT (data may persist in DB but is hidden from clients — UI cannot read-back saved values). Proposal template GET/PUT works and persists; POST /leads/{id}/proposal/generate produces a valid 2-page PDF containing the lead company name, pricing rows (Standard 120, Landing = Offer - Credit) and boilerplate sections; download endpoint returns base64 PDF; review flow (request_changes) + regenerate transitions to 'revised'. UI: /proposal-template loads all sections, edit→Save persists across reload; Lead Detail shows Regenerate Proposal button, clicking it produces v17 PDF with View PDF / Download / Approve / Request Changes / Reject all rendered.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /api/master-skus and PUT /api/master-skus/{id}",
+        "issue": "Responses omit `standard_price` and `return_bottle_credit` from the formatted SKU dicts (server.py lines 2057-2073 and 2202-2218). PUT returns 200 and the value IS persisted (proposal PDF correctly shows Standard ₹120 / Landing ₹80), but the GET/PUT response payload does not echo these fields back, so the SKU Management UI cannot display the saved Standard Price / Return Bottle Credit on reload. User will perceive the save as failing.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_209_proposal_pdf.py",
+    "/app/test_reports/pytest/iteration_209.xml"
+  ],
+  "action_items": [
+    "Add `standard_price` and `return_bottle_credit` to the formatted output of GET /api/master-skus (server.py ~L2057) and PUT /api/master-skus/{id} (server.py ~L2202) so the SKU Management UI can read saved values back. The DB persistence is already correct."
+  ],
+  "critical_code_review_comments": [
+    "server.py: GET/PUT master-skus formatters are field-by-field allowlists that silently drop new SKU fields. Prefer returning the raw doc (minus `_id`) or extending the allowlist whenever SKUUpdate/SKUCreate gain fields, otherwise every future SKU field will hit the same bug.",
+    "proposal_pdf.build_pricing_rows reads master_skus directly via db.master_skus.find — bypasses the GET formatter and therefore worked despite the bug above. Good for resilience, but the divergence is exactly what hides the bug from the API surface.",
+    "server.py is 11k+ lines; this feature added another route block at line 10373. Splitting proposals + master-skus into dedicated routers would prevent the formatter drift seen here."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_209_proposal_pdf.py (new)"
+  ],
+  "success_rate": {"backend": "86% (6/7)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO). Auth returns `session_token`; pass via both Authorization: Bearer + cookies for safety.",
+  "seed_data_creation": "Set master SKU 20d525e8-c4af-4f40-965a-549dcd50c0a9 (Nyla – 600 ml / Silver) standard_price=120, return_bottle_credit=20 (persisted in DB). Lead bc026d67… now has proposal v17 in 'revised' status (was 'pending_review' before review test ran).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The Master SKU bug is purely a response-shape issue: PUT /master-skus accepts standard_price/return_bottle_credit and persists them (verified — proposal PDF shows ₹120 Standard / ₹80 Landing), but the API formatter at server.py L2057 (GET) and L2202 (PUT) doesn't include these two fields. After main agent fixes both response dicts, re-run /app/backend/tests/test_iteration_209_proposal_pdf.py::TestMasterSKUPricing to verify. All other proposal flows (template editor, generate, download 2-page PDF, regenerate, review changes_requested→revised) verified working.",
+  "rca of the issue": "Root cause: master-skus GET (server.py:2055-2073) and PUT (server.py:2202-2218) handlers construct their JSON response from a hand-maintained allowlist of keys. When SKUUpdate/SKUCreate gained `standard_price` and `return_bottle_credit` (lines 1987-1988, 2004-2005), the formatters were not updated. Mongo accepts the writes via $set, but the API hides the values on read. Mitigation: add the two fields to both formatter dicts, or change formatters to dump the whole document (minus `_id`)."
+}

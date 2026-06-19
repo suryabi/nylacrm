@@ -110,6 +110,7 @@ import CompanyDocuments from './pages/CompanyDocuments';
 import MasterContactCategories from './pages/MasterContactCategories';
 import ContactsList from './pages/ContactsList';
 import TenantSettings from './pages/TenantSettings';
+import ProposalTemplateSettings from './pages/ProposalTemplateSettings';
 import ApiKeysPage from './pages/ApiKeysPage';
 import ZohoIntegration from './pages/ZohoIntegration';
 import SlackSettings from './pages/SlackSettings';
@@ -353,6 +354,7 @@ function AppRouter() {
           <Route path="/master-contact-categories" element={<ProtectedRoute moduleKey="contact_categories"><MasterContactCategories /></ProtectedRoute>} />
           <Route path="/contacts" element={<ProtectedRoute moduleKey="contacts"><ContactsList /></ProtectedRoute>} />
           <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
+          <Route path="/proposal-template" element={<ProtectedRoute><ProposalTemplateSettings /></ProtectedRoute>} />
           <Route path="/admin/slack" element={<ProtectedRoute><SlackSettings /></ProtectedRoute>} />
           <Route path="/admin/google-drive" element={<ProtectedRoute><GoogleDriveSettings /></ProtectedRoute>} />
           <Route path="/admin/state-machines" element={<ProtectedRoute><StateMachines /></ProtectedRoute>} />

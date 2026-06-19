@@ -33,6 +33,7 @@ import {
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { MapPin } from 'lucide-react';
 import { Globe, Linkedin, Instagram, Facebook, Twitter, Youtube, Link as LinkIcon } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import ActivityTimeline from '../components/ActivityTimeline';
 import ActionItemsSection from '../components/ActionItemsSection';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
@@ -215,6 +216,21 @@ export default function LeadDetail() {
       console.log('Could not load proposal');
     } finally {
       setProposalLoading(false);
+    }
+  };
+
+  const [generatingProposal, setGeneratingProposal] = useState(false);
+  const handleGenerateProposal = async () => {
+    if (proposal && !window.confirm('This will generate a new branded proposal from the lead details and replace the current one. Continue?')) return;
+    setGeneratingProposal(true);
+    try {
+      const res = await axios.post(`${API_URL}/leads/${id}/proposal/generate`, {}, { withCredentials: true });
+      toast.success(res.data.message || 'Proposal generated');
+      fetchProposal();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to generate proposal');
+    } finally {
+      setGeneratingProposal(false);
     }
   };
 
@@ -2002,27 +2018,36 @@ ${userEmail}`;
             ) : !proposal ? (
               <div className="text-center py-8">
                 <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground mb-4">No proposal uploaded yet</p>
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".pdf,.doc,.docx"
-                    onChange={handleProposalUpload}
-                    disabled={uploadingProposal}
-                    data-testid="proposal-upload-input"
-                  />
-                  <Button asChild disabled={uploadingProposal}>
-                    <span>
-                      {uploadingProposal ? (
-                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
-                      ) : (
-                        <><Upload className="mr-2 h-4 w-4" /> Upload Proposal</>
-                      )}
-                    </span>
+                <p className="text-muted-foreground mb-4">No proposal yet — generate a branded one from the lead, or upload your own</p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                  <Button onClick={handleGenerateProposal} disabled={generatingProposal} data-testid="generate-proposal-btn">
+                    {generatingProposal ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+                    ) : (
+                      <><Sparkles className="mr-2 h-4 w-4" /> Generate Proposal</>
+                    )}
                   </Button>
-                </label>
-                <p className="text-xs text-muted-foreground mt-2">PDF or DOC/DOCX (Max 5 MB)</p>
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleProposalUpload}
+                      disabled={uploadingProposal}
+                      data-testid="proposal-upload-input"
+                    />
+                    <Button asChild variant="outline" disabled={uploadingProposal}>
+                      <span>
+                        {uploadingProposal ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
+                        ) : (
+                          <><Upload className="mr-2 h-4 w-4" /> Upload Proposal</>
+                        )}
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Branded PDF from your template, or upload PDF/DOC/DOCX (Max 5 MB)</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -2185,7 +2210,14 @@ ${userEmail}`;
 
                 {/* Upload New/Revised Proposal */}
                 {canUploadNewProposal && (
-                  <div className="border-t pt-4">
+                  <div className="border-t pt-4 flex flex-wrap items-center gap-2">
+                    <Button variant="outline" onClick={handleGenerateProposal} disabled={generatingProposal} data-testid="regenerate-proposal-btn">
+                      {generatingProposal ? (
+                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+                      ) : (
+                        <><Sparkles className="mr-2 h-4 w-4" /> Regenerate Proposal</>
+                      )}
+                    </Button>
                     <label className="cursor-pointer">
                       <input
                         type="file"
@@ -2202,7 +2234,7 @@ ${userEmail}`;
                           ) : (
                             <><Upload className="mr-2 h-4 w-4" /> 
                               {proposal.status === 'changes_requested' ? 'Upload Revised Proposal' : 
-                               proposal.status === 'approved' ? 'Upload New Proposal (will require re-approval)' : 
+                               proposal.status === 'approved' ? 'Upload New Proposal' : 
                                'Replace Proposal'}
                             </>
                           )}
@@ -2210,8 +2242,8 @@ ${userEmail}`;
                       </Button>
                     </label>
                     {proposal.status === 'approved' && (
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Uploading a new proposal will reset the approval status and require a new review cycle.
+                      <p className="text-xs text-muted-foreground mt-2 w-full">
+                        Generating/uploading a new proposal will reset the approval status and require a new review cycle.
                       </p>
                     )}
                   </div>

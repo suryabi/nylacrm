@@ -68,6 +68,8 @@ export default function SKUManagement() {
     hsn_code: '',
     base_price: '',
     mrp: '',
+    standard_price: '',
+    return_bottle_credit: '',
     allow_custom_mrp: false,
     is_active: true,
     sort_order: 0,
@@ -149,6 +151,8 @@ export default function SKUManagement() {
       hsn_code: '',
       base_price: '',
       mrp: '',
+      standard_price: '',
+      return_bottle_credit: '',
       allow_custom_mrp: false,
       is_active: true, sort_order: skus.length + 1,
       packaging_config: { production: [], stock_in: [], stock_out: [] },
@@ -168,6 +172,8 @@ export default function SKUManagement() {
       hsn_code: sku.hsn_code || '',
       base_price: sku.base_price != null ? String(sku.base_price) : '',
       mrp: sku.mrp != null ? String(sku.mrp) : '',
+      standard_price: sku.standard_price != null ? String(sku.standard_price) : '',
+      return_bottle_credit: sku.return_bottle_credit != null ? String(sku.return_bottle_credit) : '',
       allow_custom_mrp: !!sku.allow_custom_mrp,
       is_active: sku.is_active !== false,
       sort_order: sku.sort_order || 0,
@@ -220,6 +226,15 @@ export default function SKUManagement() {
         const m = parseFloat(payload.mrp);
         payload.mrp = isNaN(m) ? null : m;
       }
+      // Coerce standard_price & return_bottle_credit → number (or null)
+      ['standard_price', 'return_bottle_credit'].forEach((k) => {
+        if (payload[k] === '' || payload[k] === null || payload[k] === undefined) {
+          payload[k] = null;
+        } else {
+          const n = parseFloat(payload[k]);
+          payload[k] = isNaN(n) ? null : n;
+        }
+      });
 
       if (editingSku) {
         await skusAPI.update(editingSku.id, payload);
@@ -674,6 +689,41 @@ export default function SKUManagement() {
                 placeholder="e.g. 40.00"
                 data-testid="sku-mrp-input"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="standard_price" className="flex items-center gap-2">
+                  Standard Price (₹)
+                  <span className="text-[10px] text-slate-400 font-normal">List price shown (struck-through) in lead proposals</span>
+                </Label>
+                <Input
+                  id="standard_price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.standard_price}
+                  onChange={(e) => setFormData({ ...formData, standard_price: e.target.value })}
+                  placeholder="e.g. 98.00"
+                  data-testid="sku-standard-price-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="return_bottle_credit" className="flex items-center gap-2">
+                  Return Bottle Credit (₹)
+                  <span className="text-[10px] text-slate-400 font-normal">Default credit per returned bottle</span>
+                </Label>
+                <Input
+                  id="return_bottle_credit"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.return_bottle_credit}
+                  onChange={(e) => setFormData({ ...formData, return_bottle_credit: e.target.value })}
+                  placeholder="e.g. 30.00"
+                  data-testid="sku-return-credit-input"
+                />
+              </div>
             </div>
 
             {/* Packaging Configuration — 3 contexts */}
