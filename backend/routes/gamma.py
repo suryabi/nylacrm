@@ -91,22 +91,40 @@ def _line(label: str, value) -> str:
 
 def _build_lead_draft(lead: dict) -> tuple[str, str]:
     company = lead.get("company") or "Prospect"
-    title = f"Sales Proposal — {company}"
+    title = f"Proposal — {company}"
     parts = [
-        f"# Sales Proposal for {company}",
+        f"# Proposal for {company}",
         "",
-        "## About the Prospect",
-        _line("Company", company),
-        _line("Primary Contact", lead.get("name") or lead.get("contact_person")),
-        _line("Location", ", ".join([x for x in [lead.get("city"), lead.get("state"), lead.get("country")] if x])),
-        _line("Region", lead.get("region")),
-        _line("Lead source", lead.get("source")),
-        _line("Priority", lead.get("priority")),
-        _line("Estimated value", lead.get("estimated_value")),
-        "",
-        "## Requirements & Notes",
-        lead.get("notes") or "Capture the prospect's key requirements, pain points and goals here.",
-        "",
+    ]
+
+    # Proposed SKUs & pricing
+    pricing = lead.get("proposed_sku_pricing") or []
+    rows = []
+    for item in pricing:
+        name = item.get("sku") or item.get("sku_name")
+        if not name:
+            continue
+        price = item.get("price_per_unit") or item.get("proposed_price")
+        line = f"- {name} — ₹{price} per unit" if price else f"- {name}"
+        rbc = item.get("return_bottle_credit")
+        if rbc:
+            line += f" (Return bottle credit: ₹{rbc})"
+        rows.append(line)
+
+    parts.append("## Proposed Products & Pricing")
+    parts.extend(rows if rows else ["Add the proposed SKUs and pricing for this prospect."])
+    parts.append("")
+
+    # Social links
+    links = lead.get("social_links") or []
+    link_rows = [f"- {l.get('platform') or 'Link'}: {l.get('url')}" for l in links if l.get("url")]
+    if link_rows:
+        parts.append("## Online Presence")
+        parts.extend(link_rows)
+        parts.append("")
+
+    # Value proposition + next steps
+    parts += [
         "## Why Nyla Air & Water",
         "- Premium, reliable beverage & water supply tailored to your needs",
         "- Strong distribution and on-time delivery",

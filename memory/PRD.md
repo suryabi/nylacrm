@@ -14,6 +14,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — 🎤 Lead deck input refined + themes dropdown removed ✅ DONE
+- **Lead "Generate Deck"** draft now built from exactly: **lead name**, **Proposed SKUs & pricing** (SKU — ₹price/unit + return bottle credit), and **social links** (Online Presence section). Dropped the generic contact/source/priority/notes fields. (`routes/gamma.py::_build_lead_draft`)
+- **Removed the predefined Themes dropdown** from the deck composer (`GammaComposer.jsx`) — only Template + Slides remain; generation sends `theme_id=null`.
+- Verified: `/gamma/draft` returns the new structured text; dialog confirms theme select is gone.
+
+
 ### 2026-06-19 — 🔗 Lead Social Links section ✅ DONE
 - Added a **Social Links** section at the **bottom of the Lead detail page** — users can add **multiple** links (platform dropdown: Website/LinkedIn/Instagram/Facebook/Twitter-X/YouTube/Other + URL), with per-row open/remove and a Save button.
 - **Backend** (`routes/leads.py`): new `PUT /api/leads/{lead_id}/social-links` (model `SocialLinksUpdate`); normalizes URLs (prefixes `https://`), stores `social_links` array on the lead. `social_links` added to Lead/LeadUpdate models.

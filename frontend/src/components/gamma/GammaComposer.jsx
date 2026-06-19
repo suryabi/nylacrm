@@ -29,8 +29,7 @@ export default function GammaComposer({
   const [title, setTitle] = useState(initialTitle);
   const [text, setText] = useState(initialText);
   const [numCards, setNumCards] = useState(10);
-  const [themeId, setThemeId] = useState('default');
-  const [themes, setThemes] = useState([]);
+  const [themeId] = useState('default');
   const [templates, setTemplates] = useState([]);
   const [templateId, setTemplateId] = useState('none');
   const [generating, setGenerating] = useState(false);
@@ -41,8 +40,6 @@ export default function GammaComposer({
   useEffect(() => { setText(initialText); }, [initialText]);
 
   useEffect(() => {
-    axios.get(`${API}/gamma/themes`, { headers: HEAD() })
-      .then((r) => setThemes(r.data.themes || [])).catch(() => {});
     axios.get(`${API}/gamma/templates`, { headers: HEAD() })
       .then((r) => setTemplates(r.data.templates || [])).catch(() => {});
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -169,16 +166,6 @@ export default function GammaComposer({
             </Select>
           </div>
         )}
-        <div className="space-y-1.5">
-          <Label>Theme {templateId !== 'none' && <span className="text-xs text-muted-foreground">(optional override)</span>}</Label>
-          <Select value={themeId} onValueChange={setThemeId}>
-            <SelectTrigger data-testid="gamma-theme-select"><SelectValue /></SelectTrigger>
-            <SelectContent className="max-h-[260px]">
-              <SelectItem value="default">{templateId !== 'none' ? "Template's theme" : 'Gamma default'}</SelectItem>
-              {themes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
       <Button onClick={generate} disabled={loadingDraft || !text.trim()} className="w-full bg-indigo-600 hover:bg-indigo-700" data-testid="gamma-generate-btn">
         <Sparkles className="h-4 w-4 mr-2" /> Generate deck
