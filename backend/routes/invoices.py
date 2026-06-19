@@ -18,6 +18,118 @@ def get_tdb():
     return get_tenant_db()
 
 
+async def _build_invoice_query(
+    tdb,
+    *,
+    search=None,
+    territory=None,
+    state=None,
+    city=None,
+    account_name=None,
+    account_names=None,
+    status=None,
+    date_from=None,
+    date_to=None,
+    time_filter=None,
+):
+    """Build the MongoDB query dict for invoice list/export from filters.
+
+    Returns (query, is_empty). When is_empty is True, the caller should return
+    an empty result set (territory/state/city matched zero accounts).
+    """
+    conditions = []
+
+    if search:
+        conditions.append({
+            '$or': [
+                {'invoice_no': {'$regex': search, '$options': 'i'}},
+                {'account_name': {'$regex': search, '$options': 'i'}},
+            ]
+        })
+
+    # Multi-select exact account names (from the autocomplete filter)
+    if account_names:
+        names = [n for n in account_names if n]
+        if names:
+            conditions.append({'account_name': {'$in': names}})
+    # Single free-text account name (legacy)
+    elif account_name:
+        conditions.append({'account_name': {'$regex': account_name, '$options': 'i'}})
+
+    if status and status != 'all':
+        conditions.append({'status': status})
+
+    if date_from:
+        conditions.append({'invoice_date': {'$gte': date_from}})
+
+    if date_to:
+        conditions.append({'invoice_date': {'$lte': date_to}})
+
+    if time_filter and time_filter != 'lifetime':
+        from datetime import timedelta
+        now = datetime.now(timezone.utc)
+        date_ranges = {
+            'this_week': (now - timedelta(days=now.weekday()), now),
+            'last_week': (now - timedelta(days=now.weekday() + 7), now - timedelta(days=now.weekday())),
+            'this_month': (now.replace(day=1), now),
+            'last_month': ((now.replace(day=1) - timedelta(days=1)).replace(day=1), now.replace(day=1) - timedelta(days=1)),
+            'last_3_months': (now - timedelta(days=90), now),
+            'last_6_months': (now - timedelta(days=180), now),
+            'this_quarter': (now.replace(month=((now.month - 1) // 3) * 3 + 1, day=1), now),
+        }
+        if time_filter in date_ranges:
+            start, end = date_ranges[time_filter]
+            if start:
+                conditions.append({'invoice_date': {'$gte': start.strftime('%Y-%m-%d')}})
+            if end:
+                conditions.append({'invoice_date': {'$lte': end.strftime('%Y-%m-%d')}})
+
+    if territory or state or city:
+        account_query = {}
+        if territory:
+            account_query['territory'] = territory
+        if state:
+            account_query['state'] = state
+        if city:
+            account_query['city'] = city
+
+        accounts = await tdb.accounts.find(account_query, {'_id': 0, 'id': 1, 'account_id': 1}).to_list(10000)
+
+        if accounts:
+            account_ids_list = [a.get('account_id') for a in accounts if a.get('account_id')]
+            account_uuids_list = [a.get('id') for a in accounts if a.get('id')]
+            account_filter = {'$or': []}
+            if account_ids_list:
+                account_filter['$or'].append({'account_id': {'$in': account_ids_list}})
+                account_filter['$or'].append({'account_id_from_mq': {'$in': account_ids_list}})
+            if account_uuids_list:
+                account_filter['$or'].append({'account_uuid': {'$in': account_uuids_list}})
+            if account_filter['$or']:
+                conditions.append(account_filter)
+        else:
+            return ({}, True)
+
+    query = {'$and': conditions} if conditions else {}
+    return (query, False)
+
+
+@router.get("/account-options")
+async def list_invoice_account_options(
+    current_user: dict = Depends(get_current_user),
+):
+    """Return distinct account names present on invoices, sorted alphabetically.
+
+    Used to populate the autocomplete account filter on the Invoices page.
+    """
+    tdb = get_tdb()
+    names = await tdb.invoices.distinct('account_name')
+    options = sorted(
+        [n for n in names if n and isinstance(n, str)],
+        key=lambda s: s.lower()
+    )
+    return {'accounts': options}
+
+
 @router.get("")
 async def list_invoices(
     request: Request,
@@ -28,6 +140,7 @@ async def list_invoices(
     city: Optional[str] = Query(None),
     account_id: Optional[str] = Query(None),
     account_name: Optional[str] = Query(None),
+    account_names: Optional[List[str]] = Query(None, description="Filter by exact account names (multi-select)"),
     status: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
@@ -44,99 +157,19 @@ async def list_invoices(
     try:
         tdb = get_tdb()
         
-        logger.info(f"[INVOICES] Listing invoices with filters: search={search}, territory={territory}, state={state}, city={city}, status={status}, time_filter={time_filter}")
+        logger.info(f"[INVOICES] Listing invoices with filters: search={search}, territory={territory}, state={state}, city={city}, status={status}, time_filter={time_filter}, account_names={account_names}")
         
-        # Build query conditions
-        conditions = []
-        
-        # Search filter
-        if search:
-            conditions.append({
-                '$or': [
-                    {'invoice_no': {'$regex': search, '$options': 'i'}},
-                    {'account_name': {'$regex': search, '$options': 'i'}},
-                ]
-            })
-        
-        # Account name filter
-        if account_name:
-            conditions.append({'account_name': {'$regex': account_name, '$options': 'i'}})
-        
-        # Status filter
-        if status and status != 'all':
-            conditions.append({'status': status})
-        
-        # Date range filters
-        if date_from:
-            conditions.append({'invoice_date': {'$gte': date_from}})
-        
-        if date_to:
-            conditions.append({'invoice_date': {'$lte': date_to}})
-        
-        # Time filter (predefined ranges)
-        if time_filter and time_filter != 'lifetime':
-            from datetime import timedelta
-            now = datetime.now(timezone.utc)
-            
-            date_ranges = {
-                'this_week': (now - timedelta(days=now.weekday()), now),
-                'last_week': (now - timedelta(days=now.weekday() + 7), now - timedelta(days=now.weekday())),
-                'this_month': (now.replace(day=1), now),
-                'last_month': ((now.replace(day=1) - timedelta(days=1)).replace(day=1), now.replace(day=1) - timedelta(days=1)),
-                'last_3_months': (now - timedelta(days=90), now),
-                'last_6_months': (now - timedelta(days=180), now),
-                'this_quarter': (now.replace(month=((now.month - 1) // 3) * 3 + 1, day=1), now),
+        query, is_empty = await _build_invoice_query(
+            tdb, search=search, territory=territory, state=state, city=city,
+            account_name=account_name, account_names=account_names, status=status,
+            date_from=date_from, date_to=date_to, time_filter=time_filter,
+        )
+        if is_empty:
+            return {
+                'invoices': [], 'total': 0, 'page': page, 'limit': limit, 'pages': 0,
+                'summary': {'total_gross': 0, 'total_net': 0, 'total_credit': 0}
             }
-            
-            if time_filter in date_ranges:
-                start, end = date_ranges[time_filter]
-                if start:
-                    conditions.append({'invoice_date': {'$gte': start.strftime('%Y-%m-%d')}})
-                if end:
-                    conditions.append({'invoice_date': {'$lte': end.strftime('%Y-%m-%d')}})
-        
-        # Get account IDs filtered by territory/state/city
-        if territory or state or city:
-            account_query = {}
-            if territory:
-                account_query['territory'] = territory
-            if state:
-                account_query['state'] = state
-            if city:
-                account_query['city'] = city
-            
-            logger.info(f"[INVOICES] Filtering accounts by: {account_query}")
-            accounts = await tdb.accounts.find(account_query, {'_id': 0, 'id': 1, 'account_id': 1}).to_list(10000)
-            logger.info(f"[INVOICES] Found {len(accounts)} matching accounts")
-            
-            if accounts:
-                account_ids_list = [a.get('account_id') for a in accounts if a.get('account_id')]
-                account_uuids_list = [a.get('id') for a in accounts if a.get('id')]
-                
-                account_filter = {'$or': []}
-                if account_ids_list:
-                    account_filter['$or'].append({'account_id': {'$in': account_ids_list}})
-                    account_filter['$or'].append({'account_id_from_mq': {'$in': account_ids_list}})
-                if account_uuids_list:
-                    account_filter['$or'].append({'account_uuid': {'$in': account_uuids_list}})
-                
-                if account_filter['$or']:
-                    conditions.append(account_filter)
-            else:
-                # No accounts match the filter, return empty
-                logger.info(f"[INVOICES] No accounts match territory/state/city filter, returning empty")
-                return {
-                    'invoices': [],
-                    'total': 0,
-                    'page': page,
-                    'limit': limit,
-                    'pages': 0,
-                    'summary': {'total_gross': 0, 'total_net': 0, 'total_credit': 0}
-                }
-        
-        # Build final query
-        query = {'$and': conditions} if conditions else {}
-        
+
         logger.info(f"[INVOICES] Final query: {query}")
         
         # Sort configuration
@@ -234,6 +267,126 @@ async def list_invoices(
         import traceback
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/export")
+async def export_invoices(
+    current_user: dict = Depends(get_current_user),
+    search: Optional[str] = Query(None),
+    territory: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    city: Optional[str] = Query(None),
+    account_name: Optional[str] = Query(None),
+    account_names: Optional[List[str]] = Query(None),
+    status: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    time_filter: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query("invoice_date"),
+    sort_order: Optional[str] = Query("desc"),
+):
+    """Export the filtered invoices list to an Excel (.xlsx) file."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from fastapi.responses import StreamingResponse
+
+    tdb = get_tdb()
+
+    query, is_empty = await _build_invoice_query(
+        tdb, search=search, territory=territory, state=state, city=city,
+        account_name=account_name, account_names=account_names, status=status,
+        date_from=date_from, date_to=date_to, time_filter=time_filter,
+    )
+
+    invoices = []
+    if not is_empty:
+        sort_direction = -1 if sort_order == 'desc' else 1
+        sort_field = sort_by if sort_by else 'invoice_date'
+        invoices = await tdb.invoices.find(query, {'_id': 0}).sort(sort_field, sort_direction).to_list(100000)
+
+        # Enrich with account location info
+        account_ids = list(set([inv.get('account_id') or inv.get('account_uuid') for inv in invoices if inv.get('account_id') or inv.get('account_uuid')]))
+        if account_ids:
+            accounts = await tdb.accounts.find(
+                {'$or': [{'id': {'$in': account_ids}}, {'account_id': {'$in': account_ids}}]},
+                {'_id': 0, 'id': 1, 'account_id': 1, 'account_name': 1, 'city': 1, 'state': 1, 'territory': 1}
+            ).to_list(len(account_ids))
+            account_map = {}
+            for acc in accounts:
+                if acc.get('id'):
+                    account_map[acc['id']] = acc
+                if acc.get('account_id'):
+                    account_map[acc['account_id']] = acc
+            for inv in invoices:
+                acc_id = inv.get('account_id') or inv.get('account_uuid')
+                if acc_id and acc_id in account_map:
+                    acc = account_map[acc_id]
+                    inv['account_name'] = inv.get('account_name') or acc.get('account_name')
+                    inv['account_city'] = acc.get('city')
+                    inv['account_state'] = acc.get('state')
+
+        for inv in invoices:
+            if not inv.get('invoice_no') and inv.get('invoice_number'):
+                inv['invoice_no'] = inv.get('invoice_number')
+            if not inv.get('gross_invoice_value') and inv.get('grand_total'):
+                inv['gross_invoice_value'] = inv.get('grand_total')
+            if not inv.get('net_invoice_value'):
+                gross = inv.get('gross_invoice_value') or inv.get('grand_total') or 0
+                credit = inv.get('credit_note_value') or 0
+                inv['net_invoice_value'] = gross - credit
+
+    # Build workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Invoices"
+
+    headers = ['Invoice #', 'Date', 'Account', 'Gross Value', 'Credit Note',
+               'Net Value', 'Outstanding', 'Status', 'City', 'State']
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
+    thin = Side(style="thin", color="d0d5dd")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for c_idx, name in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=c_idx, value=name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = border
+
+    widths = [18, 14, 36, 16, 14, 16, 16, 12, 18, 18]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    for r_idx, inv in enumerate(invoices, 2):
+        row = [
+            inv.get('invoice_no') or inv.get('invoice_number') or '-',
+            inv.get('invoice_date') or '-',
+            inv.get('account_name') or inv.get('account_id') or '-',
+            round(inv.get('gross_invoice_value') or 0, 2),
+            round(inv.get('credit_note_value') or 0, 2),
+            round(inv.get('net_invoice_value') or 0, 2),
+            round(inv.get('outstanding') or 0, 2),
+            inv.get('status') or '-',
+            inv.get('account_city') or '-',
+            inv.get('account_state') or '-',
+        ]
+        for c_idx, val in enumerate(row, 1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=val)
+            cell.border = border
+            if c_idx in (4, 5, 6, 7):
+                cell.number_format = '#,##0.00'
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"invoices_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/{invoice_id}")

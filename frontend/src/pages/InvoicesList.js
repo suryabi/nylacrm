@@ -13,10 +13,12 @@ import {
 import { Badge } from '../components/ui/badge';
 import { Card } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '../components/ui/command';
 import { 
   Search, Trash2, ChevronLeft, ChevronRight, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Package,
   LayoutGrid, List, Filter, Loader2, RotateCcw, FileText, DollarSign, 
-  Building2, Calendar, CheckCircle, XCircle
+  Building2, Calendar, CheckCircle, XCircle, Check, X, Download
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -44,6 +46,68 @@ import { useNavigation } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
+
+// Stable standalone account autocomplete multiselect (defined outside the page
+// component so it doesn't remount on every parent re-render).
+function AccountMultiSelect({ testid, accountOptions, selectedAccounts, onToggle, onClear }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          className="h-9 w-full justify-between font-normal"
+          data-testid={testid}
+        >
+          <span className="truncate text-left">
+            {selectedAccounts.length === 0
+              ? 'All Accounts'
+              : selectedAccounts.length === 1
+                ? selectedAccounts[0]
+                : `${selectedAccounts.length} accounts`}
+          </span>
+          <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[300px] p-0" align="start">
+        <Command filter={(value, search) => (value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}>
+          <CommandInput placeholder="Search accounts..." data-testid="invoices-account-search" />
+          <CommandList className="max-h-[320px]">
+            <CommandEmpty>No accounts found.</CommandEmpty>
+            <CommandGroup>
+              {selectedAccounts.length > 0 && (
+                <CommandItem
+                  value="__clear__"
+                  onSelect={onClear}
+                  className="text-muted-foreground"
+                  data-testid="invoices-account-clear"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Clear selection (All Accounts)
+                </CommandItem>
+              )}
+              {accountOptions.map(name => {
+                const checked = selectedAccounts.includes(name);
+                return (
+                  <CommandItem
+                    key={name}
+                    value={name}
+                    onSelect={() => onToggle(name)}
+                    data-testid={`invoices-account-option-${name}`}
+                    className="flex items-center gap-2"
+                  >
+                    <Check className={`h-4 w-4 shrink-0 ${checked ? 'opacity-100 text-emerald-600' : 'opacity-0'}`} />
+                    <span className="text-sm truncate">{name}</span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -102,6 +166,12 @@ export default function InvoicesList() {
   const [state, setState] = useState('all');
   const [city, setCity] = useState('all');
   const [accountName, setAccountName] = useState(initialQS.get('account_name') || '');
+  // Multi-select account filter (autocomplete) — preselect deep-linked account
+  const [selectedAccounts, setSelectedAccounts] = useState(
+    initialQS.get('account_name') ? [initialQS.get('account_name')] : []
+  );
+  const [accountOptions, setAccountOptions] = useState([]);
+  const [exporting, setExporting] = useState(false);
   const [status, setStatus] = useState('all');
   const [timeFilter, setTimeFilter] = useState(initialQS.get('time_filter') || 'lifetime');
   const [sortBy, setSortBy] = useState('invoice_date');
@@ -148,7 +218,7 @@ export default function InvoicesList() {
       if (territory && territory !== 'all') params.append('territory', territory);
       if (state && state !== 'all') params.append('state', state);
       if (city && city !== 'all') params.append('city', city);
-      if (accountName) params.append('account_name', accountName);
+      if (selectedAccounts.length > 0) selectedAccounts.forEach(n => params.append('account_names', n));
       if (status && status !== 'all') params.append('status', status);
       if (timeFilter && timeFilter !== 'lifetime') params.append('time_filter', timeFilter);
       params.append('sort_by', sortBy);
@@ -172,11 +242,68 @@ export default function InvoicesList() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, territory, state, city, accountName, status, timeFilter, sortBy, sortOrder, currentPage, pageSize]);
+  }, [searchQuery, territory, state, city, selectedAccounts, status, timeFilter, sortBy, sortOrder, currentPage, pageSize]);
 
   useEffect(() => {
     fetchInvoices();
   }, [fetchInvoices]);
+
+  // Fetch distinct account names for the autocomplete filter (once)
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/invoices/account-options`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        });
+        setAccountOptions(res.data.accounts || []);
+      } catch (e) {
+        console.error('Error fetching account options:', e);
+      }
+    })();
+  }, []);
+
+  const toggleAccount = (name) => {
+    setSelectedAccounts(prev =>
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    );
+    setCurrentPage(1);
+  };
+
+  // Export filtered invoices to Excel
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery) params.append('search', searchQuery);
+      if (territory && territory !== 'all') params.append('territory', territory);
+      if (state && state !== 'all') params.append('state', state);
+      if (city && city !== 'all') params.append('city', city);
+      if (selectedAccounts.length > 0) selectedAccounts.forEach(n => params.append('account_names', n));
+      if (status && status !== 'all') params.append('status', status);
+      if (timeFilter && timeFilter !== 'lifetime') params.append('time_filter', timeFilter);
+      params.append('sort_by', sortBy);
+      params.append('sort_order', sortOrder);
+
+      const response = await axios.get(`${API_URL}/api/invoices/export?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoices_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Invoices exported');
+    } catch (error) {
+      console.error('Error exporting invoices:', error);
+      toast.error('Failed to export invoices');
+    } finally {
+      setExporting(false);
+    }
+  };
   
   // Filter handlers
   const handleTerritoryChange = (val) => {
@@ -252,6 +379,7 @@ export default function InvoicesList() {
     setState('all');
     setCity('all');
     setAccountName('');
+    setSelectedAccounts([]);
     setStatus('all');
     setTimeFilter('lifetime');
     setCurrentPage(1);
@@ -274,7 +402,7 @@ export default function InvoicesList() {
       : <ArrowDown className="h-4 w-4 ml-1 text-primary" />;
   };
 
-  const hasActiveFilters = searchQuery || territory !== 'all' || state !== 'all' || city !== 'all' || accountName || status !== 'all' || timeFilter !== 'lifetime';
+  const hasActiveFilters = searchQuery || territory !== 'all' || state !== 'all' || city !== 'all' || selectedAccounts.length > 0 || status !== 'all' || timeFilter !== 'lifetime';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950" data-testid="invoices-list-page">
@@ -300,6 +428,20 @@ export default function InvoicesList() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Export button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting}
+                data-testid="export-invoices-btn"
+                className="text-xs sm:text-sm h-8 sm:h-9"
+              >
+                {exporting
+                  ? <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1 animate-spin" />
+                  : <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1" />}
+                Download
+              </Button>
               {/* Delete button */}
               {canDelete && selectedInvoices.length > 0 && (
                 <Button
@@ -472,11 +614,12 @@ export default function InvoicesList() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Account Name</label>
-                <Input
-                  placeholder="Filter by account..."
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
-                  className="h-9 text-sm"
+                <AccountMultiSelect
+                  testid="account-name-filter-mobile"
+                  accountOptions={accountOptions}
+                  selectedAccounts={selectedAccounts}
+                  onToggle={toggleAccount}
+                  onClear={() => { setSelectedAccounts([]); setCurrentPage(1); }}
                 />
               </div>
               <div className="flex gap-2 pt-2">
@@ -551,13 +694,13 @@ export default function InvoicesList() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="mt-3">
-              <Input
-                placeholder="Filter by account name..."
-                value={accountName}
-                onChange={(e) => setAccountName(e.target.value)}
-                className="h-9 max-w-xs"
-                data-testid="account-name-filter"
+            <div className="mt-3 max-w-xs">
+              <AccountMultiSelect
+                testid="account-name-filter"
+                accountOptions={accountOptions}
+                selectedAccounts={selectedAccounts}
+                onToggle={toggleAccount}
+                onClear={() => { setSelectedAccounts([]); setCurrentPage(1); }}
               />
             </div>
           </Card>

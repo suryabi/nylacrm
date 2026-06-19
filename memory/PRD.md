@@ -15,6 +15,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-19 — 🧾 Invoices page: account autocomplete + Excel export ✅ DONE
+- **Frontend** (`pages/InvoicesList.js`): Replaced free-text Account Name filter with a searchable multi-select autocomplete (Popover + cmdk `Command`), alphabetically sorted. Standalone `AccountMultiSelect` component (used on desktop + mobile). Added a header "Download" button that exports the currently-filtered list to `.xlsx` (blob download). Deep-linked `account_name` query param preselects the account.
+- **Backend** (`routes/invoices.py`): Extracted shared `_build_invoice_query()` helper. List endpoint now accepts repeated `account_names` (exact `$in` match). New `GET /api/invoices/account-options` returns distinct invoice account names sorted alphabetically. New `GET /api/invoices/export` streams an openpyxl `.xlsx` honoring all active filters (Invoice #, Date, Account, Gross, Credit Note, Net, Outstanding, Status, City, State).
+- **Tested**: curl (account-options, filtered list, export xlsx well-formed) + UI screenshot (multiselect filters to 1 invoice, summary updates).
+
+
 ### 2026-06-19 — ✨ Gamma deck generation integration (NEW) ✅ DONE
 - **Integration**: Gamma Generate API v1.0 (`services/gamma_service.py`, `X-API-KEY`, key in `backend/.env` as `GAMMA_API_KEY`). Async generate → poll for `gammaUrl` + PDF `exportUrl`.
 - **Backend** (`routes/gamma.py`, `/api/gamma`): `/themes`, `/draft` (auto-builds editable deck content from a Lead or Account), `/generations` (start), `/generations` (history), `/generations/{id}` (poll; maps Gamma status, holds 'finalizing' until PDF export URL ready). Jobs tracked in `gamma_generations` (tenant-scoped) with credits + source link.
