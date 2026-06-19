@@ -1562,6 +1562,80 @@ ${userEmail}`;
             />
           )}
 
+          {/* Social Links */}
+          <Card className="p-4 sm:p-6" data-testid="lead-social-links-card">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                Social Links
+              </h2>
+              <Button variant="outline" size="sm" onClick={addSocialLink} data-testid="add-social-link-btn">
+                <Plus className="h-4 w-4 mr-1" /> Add Link
+              </Button>
+            </div>
+
+            {socialLinks.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">No social links yet. Click "Add Link" to add the lead's website or social profiles.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {socialLinks.map((link, idx) => {
+                  const Icon = getSocialIcon(link.platform);
+                  return (
+                    <div key={idx} className="flex flex-col sm:flex-row gap-2 sm:items-center" data-testid={`social-link-row-${idx}`}>
+                      <div className="w-full sm:w-44 shrink-0">
+                        <Select value={link.platform || 'Website'} onValueChange={(v) => updateSocialLink(idx, 'platform', v)}>
+                          <SelectTrigger className="h-9" data-testid={`social-link-platform-${idx}`}>
+                            <div className="flex items-center gap-2">
+                              <Icon className="h-4 w-4 text-muted-foreground" />
+                              <SelectValue />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SOCIAL_PLATFORMS.map(p => (
+                              <SelectItem key={p} value={p}>{p}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Input
+                        type="url"
+                        placeholder="https://..."
+                        value={link.url || ''}
+                        onChange={(e) => updateSocialLink(idx, 'url', e.target.value)}
+                        className="h-9 flex-1"
+                        data-testid={`social-link-url-${idx}`}
+                      />
+                      {link.url && /^https?:\/\//i.test(link.url) && (
+                        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" asChild>
+                          <a href={link.url} target="_blank" rel="noopener noreferrer" title="Open link" data-testid={`social-link-open-${idx}`}>
+                            <Eye className="h-4 w-4" />
+                          </a>
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0 text-destructive hover:text-destructive"
+                        onClick={() => removeSocialLink(idx)}
+                        data-testid={`remove-social-link-${idx}`}
+                        title="Remove"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <Button onClick={saveSocialLinks} disabled={savingSocial} data-testid="save-social-links-btn">
+                {savingSocial ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Save Links
+              </Button>
+            </div>
+          </Card>
+
           {/* Comments */}
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -2177,80 +2251,6 @@ ${userEmail}`;
           </Card>
         </div>
       </div>
-
-      {/* Social Links - bottom of page, full width */}
-      <Card className="p-4 sm:p-6" data-testid="lead-social-links-card">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-            <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-            Social Links
-          </h2>
-          <Button variant="outline" size="sm" onClick={addSocialLink} data-testid="add-social-link-btn">
-            <Plus className="h-4 w-4 mr-1" /> Add Link
-          </Button>
-        </div>
-
-        {socialLinks.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-2">No social links yet. Click "Add Link" to add the lead's website or social profiles.</p>
-        ) : (
-          <div className="space-y-2.5">
-            {socialLinks.map((link, idx) => {
-              const Icon = getSocialIcon(link.platform);
-              return (
-                <div key={idx} className="flex flex-col sm:flex-row gap-2 sm:items-center" data-testid={`social-link-row-${idx}`}>
-                  <div className="w-full sm:w-44 shrink-0">
-                    <Select value={link.platform || 'Website'} onValueChange={(v) => updateSocialLink(idx, 'platform', v)}>
-                      <SelectTrigger className="h-9" data-testid={`social-link-platform-${idx}`}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4 text-muted-foreground" />
-                          <SelectValue />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SOCIAL_PLATFORMS.map(p => (
-                          <SelectItem key={p} value={p}>{p}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Input
-                    type="url"
-                    placeholder="https://..."
-                    value={link.url || ''}
-                    onChange={(e) => updateSocialLink(idx, 'url', e.target.value)}
-                    className="h-9 flex-1"
-                    data-testid={`social-link-url-${idx}`}
-                  />
-                  {link.url && /^https?:\/\//i.test(link.url) && (
-                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" asChild>
-                      <a href={link.url} target="_blank" rel="noopener noreferrer" title="Open link" data-testid={`social-link-open-${idx}`}>
-                        <Eye className="h-4 w-4" />
-                      </a>
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 shrink-0 text-destructive hover:text-destructive"
-                    onClick={() => removeSocialLink(idx)}
-                    data-testid={`remove-social-link-${idx}`}
-                    title="Remove"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        <div className="mt-4 flex justify-end">
-          <Button onClick={saveSocialLinks} disabled={savingSocial} data-testid="save-social-links-btn">
-            {savingSocial ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-            Save Links
-          </Button>
-        </div>
-      </Card>
 
       {/* Share Proposal via Email Dialog - Email Client Style */}
       <Dialog open={showShareDialog} onOpenChange={(open) => { setShowShareDialog(open); if (!open) setIsEmailComposerExpanded(false); }}>

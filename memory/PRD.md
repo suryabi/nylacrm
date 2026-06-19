@@ -14,6 +14,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — ↕️ Moved Social Links above Comments (Lead detail) ✅ DONE
+- Relocated the Social Links card from the page bottom to **directly above the Comments section** in the lead's main column. Verified via screenshot; functionality unchanged.
+
+
 ### 2026-06-19 — 🙈 Removed "Gamma" from all user-facing text ✅ DONE
 - Replaced every visible "Gamma" mention with neutral wording: dialog title → **"Generate Presentation"**; result button → **"Open Presentation"**; composer tip reworded; template manager → **"My Presentation Templates"** + "Template link or ID" (placeholder/help no longer reference gamma.app); generator page heading + nav menu → **"Presentation Generator"**.
 - Internal code/identifiers/routes/testids/API paths unchanged (integration intact). Verified: dialog contains no "Gamma" text; all files compile.
