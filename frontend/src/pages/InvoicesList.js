@@ -47,6 +47,97 @@ import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+// Credit Notes panel — customer/account-level credit notes (separate from invoices)
+function CreditNotesPanel({ loading, creditNotes, summary, formatCurrency, navigateTo }) {
+  const statusStyle = (s) => {
+    if (s === 'fully_applied') return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400';
+    if (s === 'partially_applied') return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
+    if (s === 'cancelled') return 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+    return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+  };
+  return (
+    <div data-testid="credit-notes-panel">
+      {/* Summary */}
+      <Card className="mb-4 sm:mb-6 p-3 sm:p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg">
+        <div className="flex items-center gap-2 mb-3">
+          <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
+          <span className="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-200">Credit Notes Summary</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800">
+            <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">Total Notes</span>
+            <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{summary.count}</p>
+          </div>
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800">
+            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Issued</span>
+            <p className="text-xl font-bold text-amber-700 dark:text-amber-300">{formatCurrency(summary.total_issued)}</p>
+          </div>
+          <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/30 border border-green-100 dark:border-green-800">
+            <span className="text-xs text-green-600 dark:text-green-400 font-medium">Applied</span>
+            <p className="text-xl font-bold text-green-700 dark:text-green-300">{formatCurrency(summary.total_applied)}</p>
+          </div>
+          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/30 border border-rose-100 dark:border-rose-800">
+            <span className="text-xs text-rose-600 dark:text-rose-400 font-medium">Balance</span>
+            <p className="text-xl font-bold text-rose-700 dark:text-rose-300">{formatCurrency(summary.total_balance)}</p>
+          </div>
+        </div>
+      </Card>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-amber-600" /></div>
+      ) : creditNotes.length === 0 ? (
+        <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg">
+          <div className="text-center py-20">
+            <FileText className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-slate-600">No credit notes found</h3>
+            <p className="text-slate-500">Credit notes are generated from approved customer returns</p>
+          </div>
+        </Card>
+      ) : (
+        <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 dark:bg-slate-800/50">
+                  <TableHead className="font-semibold">Credit Note #</TableHead>
+                  <TableHead className="font-semibold">Date</TableHead>
+                  <TableHead className="font-semibold min-w-[200px]">Customer</TableHead>
+                  <TableHead className="font-semibold">Return #</TableHead>
+                  <TableHead className="text-right font-semibold">Issued</TableHead>
+                  <TableHead className="text-right font-semibold">Applied</TableHead>
+                  <TableHead className="text-right font-semibold">Balance</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {creditNotes.map((cn) => (
+                  <TableRow
+                    key={cn.credit_note_number}
+                    className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                    onClick={() => { if (cn.account_id) navigateTo(`/accounts/${cn.account_id}`, { label: cn.account_name || 'Account' }); }}
+                    data-testid={`credit-note-row-${cn.credit_note_number}`}
+                  >
+                    <TableCell className="font-medium text-amber-600 dark:text-amber-400">{cn.credit_note_number}</TableCell>
+                    <TableCell className="text-slate-600 dark:text-slate-400">{cn.credit_note_date ? format(new Date(cn.credit_note_date), 'dd MMM yyyy') : '-'}</TableCell>
+                    <TableCell className="font-medium text-slate-800 dark:text-slate-200">{cn.account_name || '-'}</TableCell>
+                    <TableCell className="text-slate-500 dark:text-slate-400">{cn.return_number || '-'}</TableCell>
+                    <TableCell className="text-right font-semibold text-amber-700 dark:text-amber-300">{formatCurrency(cn.original_amount)}</TableCell>
+                    <TableCell className="text-right text-green-700 dark:text-green-300">{formatCurrency(cn.applied_amount)}</TableCell>
+                    <TableCell className="text-right font-semibold text-rose-700 dark:text-rose-300">{formatCurrency(cn.balance_amount)}</TableCell>
+                    <TableCell>
+                      <Badge className={statusStyle(cn.status)}>{(cn.status || '').replace(/_/g, ' ')}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 // Stable standalone account autocomplete multiselect (defined outside the page
 // component so it doesn't remount on every parent re-render).
 function AccountMultiSelect({ testid, accountOptions, selectedAccounts, onToggle, onClear }) {
@@ -183,6 +274,11 @@ export default function InvoicesList() {
   );
   const [accountOptions, setAccountOptions] = useState([]);
   const [exporting, setExporting] = useState(false);
+  // Main tab: invoices | credit_notes
+  const [mainTab, setMainTab] = useState('invoices');
+  const [creditNotes, setCreditNotes] = useState([]);
+  const [cnSummary, setCnSummary] = useState({ total_issued: 0, total_applied: 0, total_balance: 0, count: 0 });
+  const [cnLoading, setCnLoading] = useState(false);
   const [status, setStatus] = useState('all');
   const [timeFilter, setTimeFilter] = useState(initialQS.get('time_filter') || 'lifetime');
   const [sortBy, setSortBy] = useState('invoice_date');
@@ -272,6 +368,26 @@ export default function InvoicesList() {
       }
     })();
   }, []);
+
+  // Fetch credit notes when switching to the Credit Notes tab
+  useEffect(() => {
+    if (mainTab !== 'credit_notes') return;
+    (async () => {
+      setCnLoading(true);
+      try {
+        const res = await axios.get(`${API_URL}/api/invoices/credit-notes`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        });
+        setCreditNotes(res.data.credit_notes || []);
+        setCnSummary(res.data.summary || { total_issued: 0, total_applied: 0, total_balance: 0, count: 0 });
+      } catch (e) {
+        console.error('Error fetching credit notes:', e);
+        toast.error('Failed to load credit notes');
+      } finally {
+        setCnLoading(false);
+      }
+    })();
+  }, [mainTab]);
 
   const toggleAccount = (name) => {
     setSelectedAccounts(prev =>
@@ -470,13 +586,33 @@ export default function InvoicesList() {
           </div>
         </header>
 
+        {/* Main Tabs: Invoices | Credit Notes */}
+        <div className="mb-4 sm:mb-6 inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60" data-testid="invoices-main-tabs">
+          <button
+            onClick={() => setMainTab('invoices')}
+            data-testid="tab-invoices"
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${mainTab === 'invoices' ? 'bg-white dark:bg-slate-900 text-green-700 dark:text-green-400 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'}`}
+          >
+            <FileText className="h-4 w-4 mr-1.5 inline-block" /> Invoices
+          </button>
+          <button
+            onClick={() => setMainTab('credit_notes')}
+            data-testid="tab-credit-notes"
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${mainTab === 'credit_notes' ? 'bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-400 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'}`}
+          >
+            <RotateCcw className="h-4 w-4 mr-1.5 inline-block" /> Credit Notes
+          </button>
+        </div>
+
+        {mainTab === 'invoices' && (
+        <>
         {/* Summary Cards */}
         <Card className="mb-4 sm:mb-6 p-3 sm:p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
           <div className="flex items-center gap-2 mb-3">
             <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
             <span className="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-200">Invoice Summary</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="p-3 sm:p-4 rounded-xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800">
               <div className="flex items-center gap-2 mb-1">
                 <FileText className="h-4 w-4 text-blue-500" />
@@ -511,6 +647,16 @@ export default function InvoicesList() {
                 <span className="text-xs text-rose-600 dark:text-rose-400 font-medium">Outstanding</span>
               </div>
               <p className="text-xl sm:text-2xl font-bold text-rose-700 dark:text-rose-300">{formatCurrency(summary.total_outstanding || 0)}</p>
+            </div>
+            <div className="p-3 sm:p-4 rounded-xl bg-orange-50 dark:bg-orange-900/30 border border-orange-100 dark:border-orange-800" data-testid="customer-credits-card">
+              <div className="flex items-center gap-2 mb-1">
+                <RotateCcw className="h-4 w-4 text-orange-500" />
+                <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">Customer Credits</span>
+              </div>
+              <p className="text-xl sm:text-2xl font-bold text-orange-700 dark:text-orange-300">{formatCurrency(summary.cn_total_balance || 0)}</p>
+              <p className="text-[10px] text-orange-600/80 dark:text-orange-400/80 mt-0.5">
+                Issued {formatCurrency(summary.cn_total_issued || 0)} • Applied {formatCurrency(summary.cn_total_applied || 0)}
+              </p>
             </div>
           </div>
         </Card>
@@ -784,6 +930,9 @@ export default function InvoicesList() {
                         Outstanding {getSortIcon('outstanding')}
                       </div>
                     </TableHead>
+                    <TableHead className="text-right">
+                      <div className="flex items-center justify-end font-semibold">Customer Credits</div>
+                    </TableHead>
                     <TableHead>
                       <div className="font-semibold">Status</div>
                     </TableHead>
@@ -804,7 +953,7 @@ export default function InvoicesList() {
                     const totalCratesExp = hasLineItems
                       ? items.reduce((s, it) => s + Number(it.crates ?? it.crateCount ?? 0), 0)
                       : 0;
-                    const colSpan = canDelete ? 10 : 9;
+                    const colSpan = canDelete ? 11 : 10;
                     return (
                       <React.Fragment key={rowKey}>
                     <TableRow 
@@ -861,6 +1010,18 @@ export default function InvoicesList() {
                       </TableCell>
                       <TableCell className={`text-right font-semibold ${(invoice.outstanding || 0) > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400'}`}>
                         {formatCurrency(invoice.outstanding || 0)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {(invoice.cn_issued || 0) > 0 ? (
+                          <div>
+                            <p className="font-semibold text-orange-700 dark:text-orange-300">{formatCurrency(invoice.cn_balance || 0)}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              Iss {formatCurrency(invoice.cn_issued || 0)} • App {formatCurrency(invoice.cn_applied || 0)}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge 
@@ -1096,6 +1257,18 @@ export default function InvoicesList() {
               </div>
             </div>
           </>
+        )}
+        </>
+        )}
+
+        {mainTab === 'credit_notes' && (
+          <CreditNotesPanel
+            loading={cnLoading}
+            creditNotes={creditNotes}
+            summary={cnSummary}
+            formatCurrency={formatCurrency}
+            navigateTo={navigateTo}
+          />
         )}
       </div>
 

@@ -113,6 +113,92 @@ async def _build_invoice_query(
     return (query, False)
 
 
+async def _build_credit_note_account_map(tdb):
+    """Aggregate non-cancelled credit notes by account → {issued, applied, balance}.
+
+    Credit notes are customer/account-level (generated from returns), not tied
+    to individual invoices. Returns (by_id, by_name) lookup maps.
+    """
+    by_id = {}
+    by_name = {}
+    cns = await tdb.credit_notes.find(
+        {'status': {'$ne': 'cancelled'}},
+        {'_id': 0, 'account_id': 1, 'account_name': 1,
+         'original_amount': 1, 'applied_amount': 1, 'balance_amount': 1}
+    ).to_list(100000)
+    for cn in cns:
+        issued = cn.get('original_amount') or 0
+        applied = cn.get('applied_amount') or 0
+        balance = cn.get('balance_amount')
+        if balance is None:
+            balance = issued - applied
+        aid = cn.get('account_id')
+        aname = (cn.get('account_name') or '').strip().lower()
+        if aid:
+            agg = by_id.setdefault(aid, {'issued': 0, 'applied': 0, 'balance': 0})
+            agg['issued'] += issued; agg['applied'] += applied; agg['balance'] += balance
+        if aname:
+            agg = by_name.setdefault(aname, {'issued': 0, 'applied': 0, 'balance': 0})
+            agg['issued'] += issued; agg['applied'] += applied; agg['balance'] += balance
+    return by_id, by_name
+
+
+def _cn_for_invoice(inv, by_id, by_name):
+    """Look up an invoice's account-level credit note totals."""
+    aid = inv.get('account_id') or inv.get('account_uuid')
+    if aid and aid in by_id:
+        return by_id[aid]
+    nm = (inv.get('account_name') or '').strip().lower()
+    if nm and nm in by_name:
+        return by_name[nm]
+    return {'issued': 0, 'applied': 0, 'balance': 0}
+
+
+@router.get("/credit-notes")
+async def list_invoice_credit_notes(
+    current_user: dict = Depends(get_current_user),
+):
+    """List all customer/account-level credit notes (for the Invoices page
+    'Credit Notes' tab), with issued / applied / balance totals."""
+    tdb = get_tdb()
+    cns = await tdb.credit_notes.find({}, {'_id': 0}).to_list(100000)
+    cns.sort(key=lambda c: c.get('credit_note_date') or '', reverse=True)
+
+    out = []
+    t_issued = t_applied = t_balance = 0
+    for cn in cns:
+        issued = cn.get('original_amount') or 0
+        applied = cn.get('applied_amount') or 0
+        balance = cn.get('balance_amount')
+        if balance is None:
+            balance = issued - applied
+        if cn.get('status') != 'cancelled':
+            t_issued += issued
+            t_applied += applied
+            t_balance += balance
+        out.append({
+            'credit_note_number': cn.get('credit_note_number'),
+            'account_id': cn.get('account_id'),
+            'account_name': cn.get('account_name'),
+            'original_amount': issued,
+            'applied_amount': applied,
+            'balance_amount': balance,
+            'status': cn.get('status'),
+            'credit_note_date': cn.get('credit_note_date'),
+            'return_number': cn.get('return_number'),
+            'notes': cn.get('notes'),
+        })
+    return {
+        'credit_notes': out,
+        'summary': {
+            'total_issued': t_issued,
+            'total_applied': t_applied,
+            'total_balance': t_balance,
+            'count': len(out),
+        },
+    }
+
+
 @router.get("/account-options")
 async def list_invoice_account_options(
     current_user: dict = Depends(get_current_user),
@@ -270,15 +356,43 @@ async def list_invoices(
             if inv.get('line_items'):
                 inv['line_items'] = _resolver.enrich_items(inv['line_items'])
 
+        # Enrich each row with account-level credit notes (issued/applied/balance).
+        # Display-only — does NOT alter net_invoice_value.
+        cn_by_id, cn_by_name = await _build_credit_note_account_map(tdb)
+        for inv in invoices:
+            cn = _cn_for_invoice(inv, cn_by_id, cn_by_name)
+            inv['cn_issued'] = cn['issued']
+            inv['cn_applied'] = cn['applied']
+            inv['cn_balance'] = cn['balance']
+
         # Calculate summary - handle both old and new field names
-        all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'grand_total': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1})
+        all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'grand_total': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1, 'account_id': 1, 'account_uuid': 1, 'account_name': 1})
         all_invoices_for_summary = await all_invoices_cursor.to_list(10000)
         
+        # Account-level credit note totals across the DISTINCT accounts in the
+        # filtered set (count each account once to avoid duplication).
+        cn_seen = set()
+        cn_total_issued = cn_total_applied = cn_total_balance = 0
+        for inv in all_invoices_for_summary:
+            aid = inv.get('account_id') or inv.get('account_uuid')
+            nm = (inv.get('account_name') or '').strip().lower()
+            key = aid or nm
+            if not key or key in cn_seen:
+                continue
+            cn_seen.add(key)
+            cn = _cn_for_invoice(inv, cn_by_id, cn_by_name)
+            cn_total_issued += cn['issued']
+            cn_total_applied += cn['applied']
+            cn_total_balance += cn['balance']
+
         summary = {
             'total_gross': sum((inv.get('gross_invoice_value') or inv.get('grand_total') or 0) for inv in all_invoices_for_summary),
             'total_net': sum((inv.get('net_invoice_value') or (inv.get('gross_invoice_value') or inv.get('grand_total') or 0) - (inv.get('credit_note_value') or 0)) for inv in all_invoices_for_summary),
             'total_credit': sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices_for_summary),
             'total_outstanding': sum(inv.get('outstanding', 0) or 0 for inv in all_invoices_for_summary),
+            'cn_total_issued': cn_total_issued,
+            'cn_total_applied': cn_total_applied,
+            'cn_total_balance': cn_total_balance,
         }
         
         logger.info(f"[INVOICES] Listed {len(invoices)} invoices (page {page}/{pages}, total {total})")
@@ -366,13 +480,22 @@ async def export_invoices(
                 credit = inv.get('credit_note_value') or 0
                 inv['net_invoice_value'] = gross - credit
 
+        # Account-level credit notes (issued/applied/balance) for export
+        cn_by_id, cn_by_name = await _build_credit_note_account_map(tdb)
+        for inv in invoices:
+            cn = _cn_for_invoice(inv, cn_by_id, cn_by_name)
+            inv['cn_issued'] = cn['issued']
+            inv['cn_applied'] = cn['applied']
+            inv['cn_balance'] = cn['balance']
+
     # Build workbook
     wb = Workbook()
     ws = wb.active
     ws.title = "Invoices"
 
     headers = ['Invoice #', 'Date', 'Account', 'Bottles', 'Gross Value', 'Credit Note',
-               'Net Value', 'Outstanding', 'Status', 'City', 'State']
+               'Net Value', 'Outstanding', 'CN Issued', 'CN Applied', 'CN Balance',
+               'Status', 'City', 'State']
     header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
     thin = Side(style="thin", color="d0d5dd")
@@ -385,7 +508,7 @@ async def export_invoices(
         cell.alignment = Alignment(horizontal="center")
         cell.border = border
 
-    widths = [18, 14, 36, 12, 16, 14, 16, 16, 12, 18, 18]
+    widths = [18, 14, 36, 12, 16, 14, 16, 16, 14, 14, 14, 12, 18, 18]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[chr(64 + i)].width = w
 
@@ -405,6 +528,9 @@ async def export_invoices(
             round(inv.get('credit_note_value') or 0, 2),
             round(inv.get('net_invoice_value') or 0, 2),
             round(inv.get('outstanding') or 0, 2),
+            round(inv.get('cn_issued') or 0, 2),
+            round(inv.get('cn_applied') or 0, 2),
+            round(inv.get('cn_balance') or 0, 2),
             inv.get('status') or '-',
             inv.get('account_city') or '-',
             inv.get('account_state') or '-',
@@ -414,7 +540,7 @@ async def export_invoices(
             cell.border = border
             if c_idx == 4:
                 cell.number_format = '#,##0'
-            elif c_idx in (5, 6, 7, 8):
+            elif c_idx in (5, 6, 7, 8, 9, 10, 11):
                 cell.number_format = '#,##0.00'
 
     buf = io.BytesIO()

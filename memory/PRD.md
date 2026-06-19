@@ -14,6 +14,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — 🧾 Invoices: bottles in export + customer credit notes ✅ DONE
+- **Export**: Added **Bottles** column (total bottles per invoice from line items) plus **CN Issued / CN Applied / CN Balance** columns to the `.xlsx` download.
+- **Credit notes visibility**: Credit notes live in the `credit_notes` collection at the customer/account level (generated from returns) and were never shown on invoices. Now surfaced three ways (display-only — does NOT change Net): (1) per-row **"Customer Credits"** column (balance + issued/applied subtext) keyed by account_id/account_name; (2) **Customer Credits summary card** (distinct-account totals); (3) a separate **"Credit Notes" tab** on the Invoices page listing all credit notes with issued/applied/balance + summary.
+- **Backend** (`routes/invoices.py`): `_build_credit_note_account_map()` + `_cn_for_invoice()` helpers; list endpoint enriches rows with `cn_issued/applied/balance` and summary with `cn_total_*`; new `GET /api/invoices/credit-notes` endpoint.
+- **Tested**: curl (credit-notes endpoint, enriched list summary, xlsx columns) + UI screenshots (both tabs render; Toopa shows ₹10 credit).
+
+
 
 ### 2026-06-19 — 🧾 Invoices page: account autocomplete + Excel export ✅ DONE
 - **Frontend** (`pages/InvoicesList.js`): Replaced free-text Account Name filter with a searchable multi-select autocomplete (Popover + cmdk `Command`), alphabetically sorted. Standalone `AccountMultiSelect` component (used on desktop + mobile). Added a header "Download" button that exports the currently-filtered list to `.xlsx` (blob download). Deep-linked `account_name` query param preselects the account.
