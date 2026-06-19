@@ -371,7 +371,7 @@ async def export_invoices(
     ws = wb.active
     ws.title = "Invoices"
 
-    headers = ['Invoice #', 'Date', 'Account', 'Gross Value', 'Credit Note',
+    headers = ['Invoice #', 'Date', 'Account', 'Bottles', 'Gross Value', 'Credit Note',
                'Net Value', 'Outstanding', 'Status', 'City', 'State']
     header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
@@ -385,15 +385,22 @@ async def export_invoices(
         cell.alignment = Alignment(horizontal="center")
         cell.border = border
 
-    widths = [18, 14, 36, 16, 14, 16, 16, 12, 18, 18]
+    widths = [18, 14, 36, 12, 16, 14, 16, 16, 12, 18, 18]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[chr(64 + i)].width = w
+
+    def _total_bottles(inv):
+        items = inv.get('items') or inv.get('line_items') or []
+        if not isinstance(items, list):
+            return 0
+        return int(sum(float(it.get('bottles') or it.get('quantity') or 0) for it in items))
 
     for r_idx, inv in enumerate(invoices, 2):
         row = [
             inv.get('invoice_no') or inv.get('invoice_number') or '-',
             inv.get('invoice_date') or '-',
             inv.get('account_name') or inv.get('account_id') or '-',
+            _total_bottles(inv),
             round(inv.get('gross_invoice_value') or 0, 2),
             round(inv.get('credit_note_value') or 0, 2),
             round(inv.get('net_invoice_value') or 0, 2),
@@ -405,7 +412,9 @@ async def export_invoices(
         for c_idx, val in enumerate(row, 1):
             cell = ws.cell(row=r_idx, column=c_idx, value=val)
             cell.border = border
-            if c_idx in (4, 5, 6, 7):
+            if c_idx == 4:
+                cell.number_format = '#,##0'
+            elif c_idx in (5, 6, 7, 8):
                 cell.number_format = '#,##0.00'
 
     buf = io.BytesIO()
