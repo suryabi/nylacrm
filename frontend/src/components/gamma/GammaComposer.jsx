@@ -31,6 +31,8 @@ export default function GammaComposer({
   const [numCards, setNumCards] = useState(10);
   const [themeId, setThemeId] = useState('default');
   const [themes, setThemes] = useState([]);
+  const [templates, setTemplates] = useState([]);
+  const [templateId, setTemplateId] = useState('none');
   const [generating, setGenerating] = useState(false);
   const [job, setJob] = useState(null);
   const pollRef = useRef(null);
@@ -41,6 +43,8 @@ export default function GammaComposer({
   useEffect(() => {
     axios.get(`${API}/gamma/themes`, { headers: HEAD() })
       .then((r) => setThemes(r.data.themes || [])).catch(() => {});
+    axios.get(`${API}/gamma/templates`, { headers: HEAD() })
+      .then((r) => setTemplates(r.data.templates || [])).catch(() => {});
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
@@ -67,6 +71,7 @@ export default function GammaComposer({
       const r = await axios.post(`${API}/gamma/generations`, {
         title, input_text: text, num_cards: numCards,
         theme_id: themeId === 'default' ? null : themeId,
+        template_id: templateId === 'none' ? null : templateId,
         source_type: sourceType, source_id: sourceId, source_label: sourceLabel,
       }, { headers: HEAD() });
       setJob(r.data);
@@ -139,20 +144,37 @@ export default function GammaComposer({
           className="font-mono text-sm" data-testid="gamma-content-input" />
         <p className="text-xs text-muted-foreground">Tip: Gamma turns your outline into a polished presentation. Edit freely before generating.</p>
       </div>
+      <div className="space-y-1.5">
+        <Label>Template</Label>
+        <Select value={templateId} onValueChange={setTemplateId}>
+          <SelectTrigger data-testid="gamma-template-select"><SelectValue /></SelectTrigger>
+          <SelectContent className="max-h-[260px]">
+            <SelectItem value="none">No template — generate from scratch</SelectItem>
+            {templates.map((t) => (
+              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {templateId !== 'none' && (
+          <p className="text-xs text-muted-foreground">Your content becomes the prompt; the deck's structure & branding follow your Gamma template.</p>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-3">
+        {templateId === 'none' && (
+          <div className="space-y-1.5">
+            <Label>Slides</Label>
+            <Select value={String(numCards)} onValueChange={(v) => setNumCards(Number(v))}>
+              <SelectTrigger data-testid="gamma-cards-select"><SelectValue /></SelectTrigger>
+              <SelectContent>{[5, 8, 10, 12, 15, 20].map((n) => <SelectItem key={n} value={String(n)}>{n} slides</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-1.5">
-          <Label>Slides</Label>
-          <Select value={String(numCards)} onValueChange={(v) => setNumCards(Number(v))}>
-            <SelectTrigger data-testid="gamma-cards-select"><SelectValue /></SelectTrigger>
-            <SelectContent>{[5, 8, 10, 12, 15, 20].map((n) => <SelectItem key={n} value={String(n)}>{n} slides</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Theme</Label>
+          <Label>Theme {templateId !== 'none' && <span className="text-xs text-muted-foreground">(optional override)</span>}</Label>
           <Select value={themeId} onValueChange={setThemeId}>
             <SelectTrigger data-testid="gamma-theme-select"><SelectValue /></SelectTrigger>
             <SelectContent className="max-h-[260px]">
-              <SelectItem value="default">Gamma default</SelectItem>
+              <SelectItem value="default">{templateId !== 'none' ? "Template's theme" : 'Gamma default'}</SelectItem>
               {themes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
             </SelectContent>
           </Select>

@@ -7,6 +7,7 @@ import {
   Sparkles, ExternalLink, Download, Clock, CheckCircle2, AlertCircle, Loader2,
 } from 'lucide-react';
 import GammaComposer from '../components/gamma/GammaComposer';
+import GammaTemplateManager from '../components/gamma/GammaTemplateManager';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -30,14 +31,17 @@ export default function GammaGenerator() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="h-11 w-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
-          <Sparkles className="h-6 w-6" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">Gamma Generator</h1>
+            <p className="text-sm text-slate-500">Turn any outline into a polished presentation</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">Gamma Generator</h1>
-          <p className="text-sm text-slate-500">Turn any outline into a polished presentation</p>
-        </div>
+        <GammaTemplateManager />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

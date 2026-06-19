@@ -23,6 +23,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - **RBAC**: module key `gamma_generator` (Tools category; default no access; CEO/Admin/System Admin auto). Sidebar entry under Sales → Product & SKU, gated CEO/Admin. Lead/Account buttons hidden unless the role has `gamma_generator` view.
 - **Tested**: full flow via curl (themes, draft, generate → completed with PDF export, 13 credits), UI verified (standalone page + history, Lead button auto-fills draft). RBAC test → 10/10 (81 keys / 13 categories).
 
+### 2026-06-19 — ✨ Gamma templates (use your own Gamma templates) ✅ DONE
+- **API reality**: Gamma has no "list templates" endpoint. Supported path is **Create-from-Template** (`POST /v1.0/generations/from-template` with `gammaId` + `prompt` + optional `themeId`); template deck must be single-page.
+- **CRM template registry** (`gamma_templates` collection, tenant-scoped): admin-only CRUD in `routes/gamma.py` (`/gamma/templates` GET/POST/PUT/DELETE). Accepts a Gamma link OR raw ID; `_extract_gamma_id` parses `g_xxx`/slug/URL. Non-admins can read (to pick) but not manage.
+- **Generation**: `GenerateRequest.template_id` → when set, routes to `gamma_service.create_from_template` (content becomes the prompt; structure/branding follow the template). Job stores `template_id`/`template_name`.
+- **Frontend**: `GammaComposer` gains a **Template dropdown** ("No template" = from scratch; hides Slides + offers optional theme override when a template is chosen) — appears in standalone page + Lead/Account dialogs. `GammaTemplateManager.jsx` (admin-only) on the Gamma Generator page: add (paste link/ID) / list / delete.
+- **Tested**: curl from-template end-to-end (completed, PDF export, 42 credits) using a real template `g_7qlootrwqz194oh`; URL→ID extraction verified; UI verified (dropdown lists registered template, manager add/list/delete). RBAC test 10/10.
+
 
 ### 2026-06-19 — ✨ Customer Complaints module (NEW) ✅ DONE
 - **Purpose**: Track customer complaints linked to a Lead / Account / Distributor, against one or more SKUs, with details, photo attachments and a threaded update/comment log.

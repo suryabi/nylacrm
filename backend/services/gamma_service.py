@@ -27,6 +27,12 @@ def _create_sync(payload: dict) -> dict:
     return resp.json()
 
 
+def _create_from_template_sync(payload: dict) -> dict:
+    resp = requests.post(f"{GAMMA_BASE_URL}/generations/from-template", headers=_headers(), json=payload, timeout=60)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def _status_sync(generation_id: str) -> dict:
     resp = requests.get(f"{GAMMA_BASE_URL}/generations/{generation_id}", headers=_headers(), timeout=60)
     resp.raise_for_status()
@@ -41,6 +47,10 @@ def _themes_sync() -> list:
 
 async def create_generation(payload: dict) -> dict:
     return await asyncio.to_thread(_create_sync, payload)
+
+
+async def create_from_template(payload: dict) -> dict:
+    return await asyncio.to_thread(_create_from_template_sync, payload)
 
 
 async def get_generation_status(generation_id: str) -> dict:

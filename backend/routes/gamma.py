@@ -13,6 +13,7 @@ Routes (mounted under /api/gamma)
   GET    /generations/{id}           → poll status (proxies Gamma, updates job)
 """
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -30,9 +31,27 @@ router = APIRouter(prefix="/gamma", tags=["Gamma Generator"])
 _client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 _db = _client[os.environ["DB_NAME"]]
 
+ADMIN_ROLES = {"ceo", "admin", "system admin"}
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _is_admin(user: dict) -> bool:
+    return (user.get("role") or "").strip().lower() in ADMIN_ROLES
+
+
+def _extract_gamma_id(value: str) -> str:
+    """Accept a raw Gamma ID or a full deck URL and return the Gamma ID."""
+    s = (value or "").strip()
+    m = re.search(r"g_[A-Za-z0-9]+", s)
+    if m:
+        return m.group(0)
+    if s.startswith("http"):
+        seg = s.rstrip("/").split("/")[-1].split("?")[0]
+        return seg.split("-")[-1] if "-" in seg else seg
+    return s
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────
@@ -47,9 +66,22 @@ class GenerateRequest(BaseModel):
     num_cards: int = Field(10, ge=1, le=60)
     text_mode: str = "generate"          # generate | condense | preserve
     theme_id: Optional[str] = None
+    template_id: Optional[str] = None    # CRM gamma_templates.id → use from-template
     source_type: Optional[str] = None
     source_id: Optional[str] = None
     source_label: Optional[str] = None
+
+
+class TemplateCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    gamma_id_or_url: str = Field(..., min_length=1)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class TemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    gamma_id_or_url: Optional[str] = None
+    description: Optional[str] = None
 
 
 # ── Draft builders ────────────────────────────────────────────────────────
@@ -134,6 +166,71 @@ async def get_themes(current_user: dict = Depends(get_current_user)):
     return {"themes": [{"id": t.get("id"), "name": t.get("name")} for t in themes]}
 
 
+# ── Template registry (admin-managed) ──────────────────────────────────────
+@router.get("/templates")
+async def list_templates(current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    rows = await _db.gamma_templates.find({"tenant_id": tenant_id}, {"_id": 0}).sort("name", 1).to_list(200)
+    return {"templates": rows, "can_manage": _is_admin(current_user)}
+
+
+@router.post("/templates")
+async def create_template(body: TemplateCreate, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only admins can manage Gamma templates")
+    tenant_id = get_current_tenant_id()
+    gamma_id = _extract_gamma_id(body.gamma_id_or_url)
+    if not gamma_id:
+        raise HTTPException(status_code=400, detail="Could not read a Gamma ID from that value")
+    now = _now()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": body.name.strip(),
+        "gamma_id": gamma_id,
+        "description": (body.description or "").strip() or None,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await _db.gamma_templates.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@router.put("/templates/{template_id}")
+async def update_template(template_id: str, body: TemplateUpdate, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only admins can manage Gamma templates")
+    tenant_id = get_current_tenant_id()
+    updates = {"updated_at": _now()}
+    if body.name is not None:
+        updates["name"] = body.name.strip()
+    if body.gamma_id_or_url is not None:
+        updates["gamma_id"] = _extract_gamma_id(body.gamma_id_or_url)
+    if body.description is not None:
+        updates["description"] = body.description.strip() or None
+    res = await _db.gamma_templates.update_one(
+        {"id": template_id, "tenant_id": tenant_id}, {"$set": updates}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    doc = await _db.gamma_templates.find_one({"id": template_id, "tenant_id": tenant_id}, {"_id": 0})
+    return doc
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template(template_id: str, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only admins can manage Gamma templates")
+    tenant_id = get_current_tenant_id()
+    res = await _db.gamma_templates.delete_one({"id": template_id, "tenant_id": tenant_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"message": "Template deleted"}
+
+
 @router.post("/draft")
 async def build_draft(body: DraftRequest, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
@@ -155,20 +252,39 @@ async def build_draft(body: DraftRequest, current_user: dict = Depends(get_curre
 @router.post("/generations")
 async def start_generation(body: GenerateRequest, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
-    payload = {
-        "inputText": body.input_text,
-        "format": "presentation",
-        "textMode": body.text_mode,
-        "numCards": body.num_cards,
-        "exportAs": "pdf",
-    }
-    if body.title:
-        payload["title"] = body.title
-    if body.theme_id:
-        payload["themeId"] = body.theme_id
+
+    template_doc = None
+    if body.template_id:
+        template_doc = await _db.gamma_templates.find_one(
+            {"id": body.template_id, "tenant_id": tenant_id}, {"_id": 0}
+        )
+        if not template_doc:
+            raise HTTPException(status_code=404, detail="Template not found")
 
     try:
-        result = await gamma_service.create_generation(payload)
+        if template_doc:
+            # Create-from-template: remix the chosen Gamma using our content as the prompt.
+            payload = {
+                "gammaId": template_doc["gamma_id"],
+                "prompt": body.input_text,
+                "exportAs": "pdf",
+            }
+            if body.theme_id:
+                payload["themeId"] = body.theme_id
+            result = await gamma_service.create_from_template(payload)
+        else:
+            payload = {
+                "inputText": body.input_text,
+                "format": "presentation",
+                "textMode": body.text_mode,
+                "numCards": body.num_cards,
+                "exportAs": "pdf",
+            }
+            if body.title:
+                payload["title"] = body.title
+            if body.theme_id:
+                payload["themeId"] = body.theme_id
+            result = await gamma_service.create_generation(payload)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Gamma generation error: {exc}")
 
@@ -181,12 +297,14 @@ async def start_generation(body: GenerateRequest, current_user: dict = Depends(g
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
         "gamma_generation_id": generation_id,
-        "title": body.title or "Untitled deck",
+        "title": body.title or (f"From template: {template_doc['name']}" if template_doc else "Untitled deck"),
         "status": "pending",
         "gamma_url": None,
         "export_url": None,
         "num_cards": body.num_cards,
         "theme_id": body.theme_id,
+        "template_id": body.template_id,
+        "template_name": template_doc["name"] if template_doc else None,
         "source_type": body.source_type,
         "source_id": body.source_id,
         "source_label": body.source_label,
