@@ -32,6 +32,7 @@ import {
 } from '../components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { MapPin } from 'lucide-react';
+import { Globe, Linkedin, Instagram, Facebook, Twitter, Youtube, Link as LinkIcon } from 'lucide-react';
 import ActivityTimeline from '../components/ActivityTimeline';
 import ActionItemsSection from '../components/ActionItemsSection';
 import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
@@ -96,6 +97,8 @@ export default function LeadDetail() {
   });
 
   const [lead, setLead] = useState(null);
+  const [socialLinks, setSocialLinks] = useState([]);
+  const [savingSocial, setSavingSocial] = useState(false);
   const [activities, setActivities] = useState([]);
   const [comments, setComments] = useState([]);
   const [users, setUsers] = useState([]);
@@ -515,6 +518,7 @@ ${userEmail}`;
     try {
       const leadRes = await leadsAPI.getById(id);
       setLead(leadRes.data);
+      setSocialLinks(leadRes.data.social_links || []);
       setProposedSkuPricing(leadRes.data.proposed_sku_pricing || []);
       
       // Update breadcrumb with lead name
@@ -917,6 +921,38 @@ ${userEmail}`;
   const canConvert = isWonLead && !lead.converted_to_account;
 
   const assignedUser = users.find(u => u.id === lead.assigned_to);
+
+  // ===== Social Links =====
+  const SOCIAL_PLATFORMS = ['Website', 'LinkedIn', 'Instagram', 'Facebook', 'Twitter/X', 'YouTube', 'Other'];
+  const getSocialIcon = (platform) => {
+    const p = (platform || '').toLowerCase();
+    if (p.includes('linkedin')) return Linkedin;
+    if (p.includes('instagram')) return Instagram;
+    if (p.includes('facebook')) return Facebook;
+    if (p.includes('twitter') || p === 'x') return Twitter;
+    if (p.includes('youtube')) return Youtube;
+    if (p.includes('web') || p.includes('site')) return Globe;
+    return LinkIcon;
+  };
+  const addSocialLink = () => setSocialLinks(prev => [...prev, { platform: 'Website', url: '' }]);
+  const updateSocialLink = (idx, field, value) =>
+    setSocialLinks(prev => prev.map((l, i) => (i === idx ? { ...l, [field]: value } : l)));
+  const removeSocialLink = (idx) => setSocialLinks(prev => prev.filter((_, i) => i !== idx));
+  const saveSocialLinks = async () => {
+    setSavingSocial(true);
+    try {
+      const payload = socialLinks.filter(l => (l.url || '').trim());
+      const res = await axios.put(`${API_URL}/leads/${id}/social-links`, { social_links: payload }, { withCredentials: true });
+      setSocialLinks(res.data.social_links || []);
+      setLead(prev => ({ ...prev, social_links: res.data.social_links || [] }));
+      toast.success('Social links saved');
+    } catch (e) {
+      console.error('Error saving social links:', e);
+      toast.error('Failed to save social links');
+    } finally {
+      setSavingSocial(false);
+    }
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-0 pb-24 sm:pb-0" data-testid="lead-detail-page">
@@ -2141,6 +2177,80 @@ ${userEmail}`;
           </Card>
         </div>
       </div>
+
+      {/* Social Links - bottom of page, full width */}
+      <Card className="p-4 sm:p-6" data-testid="lead-social-links-card">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+            <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            Social Links
+          </h2>
+          <Button variant="outline" size="sm" onClick={addSocialLink} data-testid="add-social-link-btn">
+            <Plus className="h-4 w-4 mr-1" /> Add Link
+          </Button>
+        </div>
+
+        {socialLinks.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2">No social links yet. Click "Add Link" to add the lead's website or social profiles.</p>
+        ) : (
+          <div className="space-y-2.5">
+            {socialLinks.map((link, idx) => {
+              const Icon = getSocialIcon(link.platform);
+              return (
+                <div key={idx} className="flex flex-col sm:flex-row gap-2 sm:items-center" data-testid={`social-link-row-${idx}`}>
+                  <div className="w-full sm:w-44 shrink-0">
+                    <Select value={link.platform || 'Website'} onValueChange={(v) => updateSocialLink(idx, 'platform', v)}>
+                      <SelectTrigger className="h-9" data-testid={`social-link-platform-${idx}`}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-4 w-4 text-muted-foreground" />
+                          <SelectValue />
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SOCIAL_PLATFORMS.map(p => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Input
+                    type="url"
+                    placeholder="https://..."
+                    value={link.url || ''}
+                    onChange={(e) => updateSocialLink(idx, 'url', e.target.value)}
+                    className="h-9 flex-1"
+                    data-testid={`social-link-url-${idx}`}
+                  />
+                  {link.url && /^https?:\/\//i.test(link.url) && (
+                    <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" asChild>
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" title="Open link" data-testid={`social-link-open-${idx}`}>
+                        <Eye className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-destructive hover:text-destructive"
+                    onClick={() => removeSocialLink(idx)}
+                    data-testid={`remove-social-link-${idx}`}
+                    title="Remove"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-4 flex justify-end">
+          <Button onClick={saveSocialLinks} disabled={savingSocial} data-testid="save-social-links-btn">
+            {savingSocial ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Save Links
+          </Button>
+        </div>
+      </Card>
 
       {/* Share Proposal via Email Dialog - Email Client Style */}
       <Dialog open={showShareDialog} onOpenChange={(open) => { setShowShareDialog(open); if (!open) setIsEmailComposerExpanded(false); }}>

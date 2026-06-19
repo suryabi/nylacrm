@@ -76,6 +76,9 @@ class Lead(BaseModel):
     last_invoice_date: Optional[str] = None
     last_invoice_no: Optional[str] = None
 
+    # Social / web links (list of {platform, url})
+    social_links: Optional[List[dict]] = []
+
 class LeadCreate(BaseModel):
     company: str
     contact_person: Optional[str] = None
@@ -125,6 +128,11 @@ class LeadUpdate(BaseModel):
     next_followup_date: Optional[str] = None
     converted_to_account: Optional[bool] = False
     account_id: Optional[str] = None
+    social_links: Optional[List[dict]] = None
+
+
+class SocialLinksUpdate(BaseModel):
+    social_links: List[dict] = []
 
 class PaginatedLeadsResponse(BaseModel):
     """Paginated response for leads list"""

@@ -133,6 +133,10 @@ class LeadUpdate(BaseModel):
     next_followup_date: Optional[str] = None
     converted_to_account: Optional[bool] = False
     account_id: Optional[str] = None
+
+
+class SocialLinksUpdate(BaseModel):
+    social_links: List[dict] = []
     updated_at: Optional[str] = None  # Admin can set custom date for status changes
     onboarded_month: Optional[int] = None
     onboarded_year: Optional[int] = None
@@ -484,6 +488,33 @@ async def update_lead(lead_id: str, lead_update: LeadUpdate, current_user: dict 
         updated['updated_at'] = datetime.fromisoformat(updated['updated_at'].replace('Z', '+00:00'))
     
     return Lead(**updated)
+
+
+@router.put("/{lead_id}/social-links")
+async def update_lead_social_links(lead_id: str, payload: SocialLinksUpdate, current_user: dict = Depends(get_current_user)):
+    """Update the list of social/web links for a lead."""
+    tdb = get_tdb()
+    existing = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail='Lead not found')
+
+    clean = []
+    for link in (payload.social_links or []):
+        url = (link.get('url') or '').strip()
+        if not url:
+            continue
+        if not re.match(r'^https?://', url, re.I):
+            url = 'https://' + url
+        clean.append({
+            'platform': (link.get('platform') or 'Website').strip(),
+            'url': url,
+        })
+
+    await tdb.leads.update_one(
+        {'id': lead_id},
+        {'$set': {'social_links': clean, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    return {'social_links': clean}
 
 
 @router.delete("/{lead_id}")

@@ -14,6 +14,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — 🔗 Lead Social Links section ✅ DONE
+- Added a **Social Links** section at the **bottom of the Lead detail page** — users can add **multiple** links (platform dropdown: Website/LinkedIn/Instagram/Facebook/Twitter-X/YouTube/Other + URL), with per-row open/remove and a Save button.
+- **Backend** (`routes/leads.py`): new `PUT /api/leads/{lead_id}/social-links` (model `SocialLinksUpdate`); normalizes URLs (prefixes `https://`), stores `social_links` array on the lead. `social_links` added to Lead/LeadUpdate models.
+- **Frontend** (`LeadDetail.js`): platform icons via lucide; loads from `lead.social_links`; `data-testid`s on all controls.
+- Verified: curl PUT/GET persists + normalizes; UI renders section with 2 links and Save works.
+
+
 ### 2026-06-19 — ⬇️ Per-invoice PDF download icon ✅ DONE
 - Added a small **Download icon on each invoice row** (next to Location) that downloads that single invoice as a **PDF**.
 - **Backend** (`routes/invoices.py`): new `GET /api/invoices/{invoice_id}/pdf` — ReportLab document with INVOICE header, bill-to (account name/address/contact/GSTIN), line items (SKU/crates/bottles/line total), totals (Gross/Credit Note/Net/Outstanding), and any applied credit notes. Looks up by `id` or `invoice_no`.
