@@ -930,9 +930,6 @@ export default function InvoicesList() {
                         Outstanding {getSortIcon('outstanding')}
                       </div>
                     </TableHead>
-                    <TableHead className="text-right">
-                      <div className="flex items-center justify-end font-semibold">Customer Credits</div>
-                    </TableHead>
                     <TableHead>
                       <div className="font-semibold">Status</div>
                     </TableHead>
@@ -953,7 +950,7 @@ export default function InvoicesList() {
                     const totalCratesExp = hasLineItems
                       ? items.reduce((s, it) => s + Number(it.crates ?? it.crateCount ?? 0), 0)
                       : 0;
-                    const colSpan = canDelete ? 11 : 10;
+                    const colSpan = canDelete ? 10 : 9;
                     return (
                       <React.Fragment key={rowKey}>
                     <TableRow 
@@ -1015,18 +1012,6 @@ export default function InvoicesList() {
                       </TableCell>
                       <TableCell className={`text-right font-semibold ${(invoice.outstanding || 0) > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400'}`}>
                         {formatCurrency(invoice.outstanding || 0)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {(invoice.cn_issued || 0) > 0 ? (
-                          <div>
-                            <p className="font-semibold text-orange-700 dark:text-orange-300">{formatCurrency(invoice.cn_balance || 0)}</p>
-                            <p className="text-[10px] text-muted-foreground">
-                              Iss {formatCurrency(invoice.cn_issued || 0)} • App {formatCurrency(invoice.cn_applied || 0)}
-                            </p>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
                       </TableCell>
                       <TableCell>
                         <Badge 
