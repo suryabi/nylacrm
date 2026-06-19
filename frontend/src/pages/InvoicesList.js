@@ -396,6 +396,32 @@ export default function InvoicesList() {
     setCurrentPage(1);
   };
 
+  // Download a single invoice as PDF
+  const [downloadingId, setDownloadingId] = useState(null);
+  const handleDownloadInvoice = async (invoice) => {
+    const idOrNo = invoice.id || invoice.invoice_no || invoice.invoice_number;
+    setDownloadingId(idOrNo);
+    try {
+      const response = await axios.get(`${API_URL}/api/invoices/${encodeURIComponent(idOrNo)}/pdf`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice_${(invoice.invoice_no || invoice.invoice_number || idOrNo)}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      toast.error('Failed to download invoice');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   // Export filtered invoices to Excel
   const handleExport = async () => {
     setExporting(true);
@@ -1028,7 +1054,22 @@ export default function InvoicesList() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-slate-500 dark:text-slate-400">
-                        {[invoice.account_city, invoice.account_state].filter(Boolean).join(', ') || '-'}
+                        <div className="flex items-center justify-between gap-2">
+                          <span>{[invoice.account_city, invoice.account_state].filter(Boolean).join(', ') || '-'}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 shrink-0 text-slate-400 hover:text-green-600"
+                            onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(invoice); }}
+                            data-testid={`download-invoice-${invoice.id || invoice.invoice_no}`}
+                            title="Download invoice (PDF)"
+                            disabled={downloadingId === (invoice.id || invoice.invoice_no || invoice.invoice_number)}
+                          >
+                            {downloadingId === (invoice.id || invoice.invoice_no || invoice.invoice_number)
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Download className="h-4 w-4" />}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                     {isExpanded && hasLineItems && (

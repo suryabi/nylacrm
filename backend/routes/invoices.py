@@ -654,6 +654,168 @@ async def export_invoices(
     )
 
 
+@router.get("/{invoice_id}/pdf")
+async def download_invoice_pdf(
+    invoice_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate a single-invoice PDF document for download."""
+    import io
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from fastapi.responses import StreamingResponse
+
+    tdb = get_tdb()
+    inv = await tdb.invoices.find_one(
+        {'$or': [{'id': invoice_id}, {'invoice_no': invoice_id}, {'invoice_number': invoice_id}]},
+        {'_id': 0}
+    )
+    if not inv:
+        raise HTTPException(status_code=404, detail='Invoice not found')
+
+    # Normalize
+    inv_no = inv.get('invoice_no') or inv.get('invoice_number') or '-'
+    gross = inv.get('gross_invoice_value') or inv.get('grand_total') or 0
+
+    # Account info
+    acc = None
+    acc_id = inv.get('account_uuid') or inv.get('account_id')
+    if acc_id:
+        acc = await tdb.accounts.find_one(
+            {'$or': [{'id': acc_id}, {'account_id': acc_id}]},
+            {'_id': 0, 'account_name': 1, 'city': 1, 'state': 1, 'address': 1, 'contact_name': 1, 'phone': 1, 'gstin': 1}
+        )
+    acc = acc or {}
+    account_name = inv.get('account_name') or acc.get('account_name') or '-'
+
+    # Applied credit (from originating stock-out delivery)
+    applied_map = await _build_invoice_applied_credit_map(tdb, [inv_no])
+    ap = applied_map.get(inv_no)
+    credit = (ap['credit'] if ap and ap['credit'] > 0 else (inv.get('credit_note_value') or 0))
+    net = gross - credit
+
+    # Line items via SKU resolver
+    from services.sku_resolver import build_sku_resolver
+    _resolver = await build_sku_resolver(tdb)
+    items = inv.get('items') or inv.get('line_items') or []
+    if items:
+        items = _resolver.enrich_items(items)
+
+    def _money(v):
+        try:
+            return f"Rs. {float(v or 0):,.2f}"
+        except Exception:
+            return "Rs. 0.00"
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=16 * mm, rightMargin=16 * mm, topMargin=16 * mm, bottomMargin=16 * mm,
+        title=f"Invoice {inv_no}"
+    )
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=20, spaceAfter=2, textColor=colors.HexColor("#166534"))
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=11, textColor=colors.grey, spaceAfter=10)
+    body = ParagraphStyle("body", parent=styles["BodyText"], fontSize=10, leading=13)
+    small = ParagraphStyle("small", parent=styles["BodyText"], fontSize=9, leading=11, textColor=colors.grey)
+    right = ParagraphStyle("right", parent=body, alignment=2)
+
+    story = []
+    story.append(Paragraph("INVOICE", h1))
+    story.append(Paragraph(f"{inv_no} &nbsp;·&nbsp; {inv.get('invoice_date') or '-'}", h2))
+
+    bill_to = [account_name]
+    addr_line = ", ".join([p for p in [acc.get('address'), acc.get('city'), acc.get('state')] if p])
+    if addr_line:
+        bill_to.append(addr_line)
+    if acc.get('contact_name'):
+        bill_to.append(f"Contact: {acc.get('contact_name')}")
+    if acc.get('phone'):
+        bill_to.append(f"Phone: {acc.get('phone')}")
+    if acc.get('gstin'):
+        bill_to.append(f"GSTIN: {acc.get('gstin')}")
+
+    story.append(Paragraph("<b>Bill To</b>", body))
+    story.append(Paragraph("<br/>".join(bill_to), body))
+    story.append(Spacer(1, 8 * mm))
+
+    # Line items table
+    data = [["SKU", "Crates", "Bottles", "Line Total"]]
+    for it in items:
+        sku = it.get('sku_name') or it.get('sku') or 'N/A'
+        crates = it.get('crates') if it.get('crates') is not None else (it.get('crateCount') if it.get('crateCount') is not None else '-')
+        bottles = it.get('bottles') or it.get('quantity') or 0
+        lt = it.get('lineTotal') or it.get('line_total') or it.get('net_amount') or it.get('total') or 0
+        data.append([
+            Paragraph(str(sku), body),
+            str(crates),
+            f"{int(bottles):,}",
+            _money(lt),
+        ])
+    if len(data) == 1:
+        data.append([Paragraph("No line items", small), "", "", ""])
+
+    tbl = Table(data, colWidths=[None, 22 * mm, 24 * mm, 32 * mm])
+    tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#166534")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#f1f5f9")]),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d5dd")),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 6 * mm))
+
+    # Totals
+    totals = [
+        ["Gross", _money(gross)],
+        ["Credit Note", _money(credit)],
+        ["Net", _money(net)],
+        ["Outstanding", _money(inv.get('outstanding') or 0)],
+    ]
+    tot = Table(totals, colWidths=[None, 40 * mm], hAlign='RIGHT')
+    tot.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LINEABOVE', (0, 2), (-1, 2), 0.5, colors.HexColor("#94a3b8")),
+        ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
+        ('TEXTCOLOR', (0, 2), (-1, 2), colors.HexColor("#6d28d9")),
+    ]))
+    story.append(tot)
+
+    if ap and ap.get('applications'):
+        cns = ", ".join(
+            f"{a.get('credit_note_number') or ''} ({_money(a.get('amount_applied'))})"
+            for a in ap['applications']
+        )
+        story.append(Spacer(1, 5 * mm))
+        story.append(Paragraph(f"<b>Credit notes applied:</b> {cns}", small))
+
+    story.append(Spacer(1, 10 * mm))
+    story.append(Paragraph(
+        f"Generated on {datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')}", small
+    ))
+
+    doc.build(story)
+    buf.seek(0)
+    safe_no = str(inv_no).replace('/', '-').replace(' ', '_')
+    return StreamingResponse(
+        buf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="invoice_{safe_no}.pdf"'},
+    )
+
+
 @router.delete("/{invoice_id}")
 async def delete_invoice(
     invoice_id: str,

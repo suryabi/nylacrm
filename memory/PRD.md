@@ -14,6 +14,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — ⬇️ Per-invoice PDF download icon ✅ DONE
+- Added a small **Download icon on each invoice row** (next to Location) that downloads that single invoice as a **PDF**.
+- **Backend** (`routes/invoices.py`): new `GET /api/invoices/{invoice_id}/pdf` — ReportLab document with INVOICE header, bill-to (account name/address/contact/GSTIN), line items (SKU/crates/bottles/line total), totals (Gross/Credit Note/Net/Outstanding), and any applied credit notes. Looks up by `id` or `invoice_no`.
+- **Frontend**: `handleDownloadInvoice` with per-row spinner; `data-testid="download-invoice-{id}"`.
+- Verified: PDF generates correctly (curl + pypdf text extract); 4 icons render on the list.
+
+
 ### 2026-06-19 — 🐛 Fix invoice Matched/Unmatched status + remove Customer Credits column ✅ DONE
 - **Bug**: invoices linked to an account (showing on the account detail page) wrongly showed "Unmatched" in the listing — the stored `status` field was stale/`None` while the invoice actually had `account_id`/`account_uuid` linkage.
 - **Fix** (`routes/invoices.py`): status is now **derived at read time** from real account linkage (`account_uuid`/`account_id`/`ca_lead_id`) via `_derive_invoice_status()` — self-healing, no backfill needed. The status filter also queries by linkage (`$or`/`$nor`) instead of the stale field. Applied to list + export.
