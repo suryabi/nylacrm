@@ -14,6 +14,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — 🔗 Per-invoice applied credit notes (stock-out → invoice) ✅ DONE
+- Fixed the invoice "Credit Note" column always showing ₹0. Credit notes applied during **Stock Out** are stored on the `distributor_deliveries` doc (`total_credit_applied`, `applied_credit_notes`). Now linked to the invoice via `invoice.invoice_no == zoho_invoice_mappings.zoho_invoice_number` (synced, `source_type=distributor_delivery`) → `source_id` = delivery.
+- **Backend** (`routes/invoices.py`): new `_build_invoice_applied_credit_map()`. List + export now populate per-invoice `credit_note_value` from the originating delivery's applied credit and recompute **Net = Gross − Credit**; summary `total_credit`/`total_net` reflect it. `applied_credit_notes` (CN numbers) returned for the row tooltip.
+- **Frontend**: "Credit Note" cell shows applied CN numbers as subtext/tooltip; Net updates automatically.
+- **Verified**: temporarily applied ₹150 credit to synced delivery DEL-2026-0009 → INV-001774 showed Credit ₹150 / Net ₹1638 in both list API and Excel export; reverted. NOTE: in current demo data no synced delivery has applied credit, so it shows ₹0 there — it populates on production where credits are applied to synced stock-out deliveries.
+
+
 ### 2026-06-19 — 🧾 Invoices: bottles in export + customer credit notes ✅ DONE
 - **Export**: Added **Bottles** column (total bottles per invoice from line items) plus **CN Issued / CN Applied / CN Balance** columns to the `.xlsx` download.
 - **Credit notes visibility**: Credit notes live in the `credit_notes` collection at the customer/account level (generated from returns) and were never shown on invoices. Now surfaced three ways (display-only — does NOT change Net): (1) per-row **"Customer Credits"** column (balance + issued/applied subtext) keyed by account_id/account_name; (2) **Customer Credits summary card** (distinct-account totals); (3) a separate **"Credit Notes" tab** on the Invoices page listing all credit notes with issued/applied/balance + summary.

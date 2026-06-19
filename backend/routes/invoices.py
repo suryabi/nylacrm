@@ -154,6 +154,47 @@ def _cn_for_invoice(inv, by_id, by_name):
     return {'issued': 0, 'applied': 0, 'balance': 0}
 
 
+async def _build_invoice_applied_credit_map(tdb, invoice_nos):
+    """Map invoice_no -> {credit, applications} for credit notes applied to the
+    originating stock-out delivery.
+
+    Linkage: invoice.invoice_no == zoho_invoice_mappings.zoho_invoice_number
+    (source_type='distributor_delivery', status='synced') → mapping.source_id is
+    the distributor_deliveries.id holding total_credit_applied + applied_credit_notes.
+    """
+    invoice_nos = [n for n in (invoice_nos or []) if n]
+    if not invoice_nos:
+        return {}
+    mappings = await tdb.zoho_invoice_mappings.find(
+        {'source_type': 'distributor_delivery', 'status': 'synced',
+         'zoho_invoice_number': {'$in': invoice_nos}},
+        {'_id': 0, 'zoho_invoice_number': 1, 'source_id': 1}
+    ).to_list(100000)
+    if not mappings:
+        return {}
+    delivery_to_invoice = {}
+    for m in mappings:
+        did = m.get('source_id')
+        inv_no = m.get('zoho_invoice_number')
+        if did and inv_no:
+            delivery_to_invoice[did] = inv_no
+    if not delivery_to_invoice:
+        return {}
+    deliveries = await tdb.distributor_deliveries.find(
+        {'id': {'$in': list(delivery_to_invoice.keys())}, 'total_credit_applied': {'$gt': 0}},
+        {'_id': 0, 'id': 1, 'total_credit_applied': 1, 'applied_credit_notes': 1}
+    ).to_list(100000)
+    out = {}
+    for d in deliveries:
+        inv_no = delivery_to_invoice.get(d.get('id'))
+        if inv_no:
+            out[inv_no] = {
+                'credit': d.get('total_credit_applied') or 0,
+                'applications': d.get('applied_credit_notes') or [],
+            }
+    return out
+
+
 @router.get("/credit-notes")
 async def list_invoice_credit_notes(
     current_user: dict = Depends(get_current_user),
@@ -366,9 +407,32 @@ async def list_invoices(
             inv['cn_balance'] = cn['balance']
 
         # Calculate summary - handle both old and new field names
-        all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'grand_total': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1, 'account_id': 1, 'account_uuid': 1, 'account_name': 1})
+        all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'grand_total': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1, 'account_id': 1, 'account_uuid': 1, 'account_name': 1, 'invoice_no': 1, 'invoice_number': 1})
         all_invoices_for_summary = await all_invoices_cursor.to_list(10000)
-        
+
+        # Credit notes applied to specific invoices via their originating
+        # stock-out delivery. Populates the per-invoice "Credit Note" value and
+        # reduces Net (Net = Gross - applied credit).
+        inv_nos_all = [
+            (inv.get('invoice_no') or inv.get('invoice_number'))
+            for inv in all_invoices_for_summary
+        ]
+        applied_credit_map = await _build_invoice_applied_credit_map(tdb, inv_nos_all)
+        if applied_credit_map:
+            for inv in all_invoices_for_summary:
+                no = inv.get('invoice_no') or inv.get('invoice_number')
+                ap = applied_credit_map.get(no)
+                if ap and ap['credit'] > 0:
+                    inv['credit_note_value'] = ap['credit']
+            for inv in invoices:
+                no = inv.get('invoice_no') or inv.get('invoice_number')
+                ap = applied_credit_map.get(no)
+                if ap and ap['credit'] > 0:
+                    inv['credit_note_value'] = ap['credit']
+                    inv['applied_credit_notes'] = ap['applications']
+                    gross = inv.get('gross_invoice_value') or inv.get('grand_total') or 0
+                    inv['net_invoice_value'] = gross - ap['credit']
+
         # Account-level credit note totals across the DISTINCT accounts in the
         # filtered set (count each account once to avoid duplication).
         cn_seen = set()
@@ -385,10 +449,12 @@ async def list_invoices(
             cn_total_applied += cn['applied']
             cn_total_balance += cn['balance']
 
+        total_gross = sum((inv.get('gross_invoice_value') or inv.get('grand_total') or 0) for inv in all_invoices_for_summary)
+        total_credit = sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices_for_summary)
         summary = {
-            'total_gross': sum((inv.get('gross_invoice_value') or inv.get('grand_total') or 0) for inv in all_invoices_for_summary),
-            'total_net': sum((inv.get('net_invoice_value') or (inv.get('gross_invoice_value') or inv.get('grand_total') or 0) - (inv.get('credit_note_value') or 0)) for inv in all_invoices_for_summary),
-            'total_credit': sum(inv.get('credit_note_value', 0) or 0 for inv in all_invoices_for_summary),
+            'total_gross': total_gross,
+            'total_net': total_gross - total_credit,
+            'total_credit': total_credit,
             'total_outstanding': sum(inv.get('outstanding', 0) or 0 for inv in all_invoices_for_summary),
             'cn_total_issued': cn_total_issued,
             'cn_total_applied': cn_total_applied,
@@ -487,6 +553,19 @@ async def export_invoices(
             inv['cn_issued'] = cn['issued']
             inv['cn_applied'] = cn['applied']
             inv['cn_balance'] = cn['balance']
+
+        # Per-invoice applied credit (from originating stock-out delivery)
+        applied_credit_map = await _build_invoice_applied_credit_map(
+            tdb, [(inv.get('invoice_no') or inv.get('invoice_number')) for inv in invoices]
+        )
+        if applied_credit_map:
+            for inv in invoices:
+                no = inv.get('invoice_no') or inv.get('invoice_number')
+                ap = applied_credit_map.get(no)
+                if ap and ap['credit'] > 0:
+                    inv['credit_note_value'] = ap['credit']
+                    gross = inv.get('gross_invoice_value') or inv.get('grand_total') or 0
+                    inv['net_invoice_value'] = gross - ap['credit']
 
     # Build workbook
     wb = Workbook()

@@ -1004,6 +1004,11 @@ export default function InvoicesList() {
                       </TableCell>
                       <TableCell className="text-right text-amber-600 dark:text-amber-400">
                         {formatCurrency(invoice.credit_note_value || 0)}
+                        {Array.isArray(invoice.applied_credit_notes) && invoice.applied_credit_notes.length > 0 && (
+                          <p className="text-[10px] text-muted-foreground truncate" title={invoice.applied_credit_notes.map(a => `${a.credit_note_number || ''} ₹${a.amount_applied || 0}`).join(', ')}>
+                            {invoice.applied_credit_notes.map(a => a.credit_note_number).filter(Boolean).join(', ')}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-semibold text-purple-700 dark:text-purple-300">
                         {formatCurrency(invoice.net_invoice_value)}
