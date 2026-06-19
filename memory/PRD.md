@@ -14,6 +14,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — 📌 Single deck template auto-selected & locked ✅ DONE
+- In the deck composer (`GammaComposer.jsx`): when **only one template exists**, it's set as the **default** choice and shown as a **non-editable** field (no dropdown). With 2+ templates the normal selectable dropdown (incl. "generate from scratch") remains.
+- Verified: tenant has 1 template ("Proposal Template") → renders fixed/read-only; editable select absent.
+
+
 ### 2026-06-19 — 🎤 Lead deck input refined + themes dropdown removed ✅ DONE
 - **Lead "Generate Deck"** draft now built from exactly: **lead name**, **Proposed SKUs & pricing** (SKU — ₹price/unit + return bottle credit), and **social links** (Online Presence section). Dropped the generic contact/source/priority/notes fields. (`routes/gamma.py::_build_lead_draft`)
 - **Removed the predefined Themes dropdown** from the deck composer (`GammaComposer.jsx`) — only Template + Slides remain; generation sends `theme_id=null`.

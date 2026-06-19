@@ -41,7 +41,12 @@ export default function GammaComposer({
 
   useEffect(() => {
     axios.get(`${API}/gamma/templates`, { headers: HEAD() })
-      .then((r) => setTemplates(r.data.templates || [])).catch(() => {});
+      .then((r) => {
+        const list = r.data.templates || [];
+        setTemplates(list);
+        // If exactly one template exists, make it the default & non-editable choice.
+        if (list.length === 1) setTemplateId(list[0].id);
+      }).catch(() => {});
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
@@ -143,17 +148,26 @@ export default function GammaComposer({
       </div>
       <div className="space-y-1.5">
         <Label>Template</Label>
-        <Select value={templateId} onValueChange={setTemplateId}>
-          <SelectTrigger data-testid="gamma-template-select"><SelectValue /></SelectTrigger>
-          <SelectContent className="max-h-[260px]">
-            <SelectItem value="none">No template — generate from scratch</SelectItem>
-            {templates.map((t) => (
-              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {templates.length === 1 ? (
+          <div
+            className="flex h-10 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground"
+            data-testid="gamma-template-fixed"
+          >
+            {templates[0].name}
+          </div>
+        ) : (
+          <Select value={templateId} onValueChange={setTemplateId}>
+            <SelectTrigger data-testid="gamma-template-select"><SelectValue /></SelectTrigger>
+            <SelectContent className="max-h-[260px]">
+              <SelectItem value="none">No template — generate from scratch</SelectItem>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {templateId !== 'none' && (
-          <p className="text-xs text-muted-foreground">Your content becomes the prompt; the deck's structure & branding follow your Gamma template.</p>
+          <p className="text-xs text-muted-foreground">Your content becomes the prompt; the deck's structure & branding follow your saved template.</p>
         )}
       </div>
       <div className="grid grid-cols-2 gap-3">
