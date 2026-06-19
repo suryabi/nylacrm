@@ -117,16 +117,46 @@ async def _build_invoice_query(
 async def list_invoice_account_options(
     current_user: dict = Depends(get_current_user),
 ):
-    """Return distinct account names present on invoices, sorted alphabetically.
+    """Return distinct account names present on invoices (enriched with city /
+    contact from the accounts collection), sorted alphabetically.
 
-    Used to populate the autocomplete account filter on the Invoices page.
+    Used to populate the autocomplete account filter on the Invoices page —
+    mirrors the Stock-Out account selector (two-line name + city/contact).
     """
     tdb = get_tdb()
     names = await tdb.invoices.distinct('account_name')
-    options = sorted(
+    clean_names = sorted(
         [n for n in names if n and isinstance(n, str)],
         key=lambda s: s.lower()
     )
+
+    # Enrich with city / state / contact from accounts collection (best-effort)
+    detail_map = {}
+    if clean_names:
+        accounts = await tdb.accounts.find(
+            {'account_name': {'$in': clean_names}},
+            {'_id': 0, 'account_name': 1, 'city': 1, 'state': 1, 'contact_name': 1, 'territory': 1}
+        ).to_list(len(clean_names) * 2)
+        for acc in accounts:
+            nm = acc.get('account_name')
+            if nm and nm not in detail_map:
+                detail_map[nm] = {
+                    'city': acc.get('city') or '',
+                    'state': acc.get('state') or '',
+                    'contact_name': acc.get('contact_name') or '',
+                    'territory': acc.get('territory') or '',
+                }
+
+    options = [
+        {
+            'name': nm,
+            'city': detail_map.get(nm, {}).get('city', ''),
+            'state': detail_map.get(nm, {}).get('state', ''),
+            'contact_name': detail_map.get(nm, {}).get('contact_name', ''),
+            'territory': detail_map.get(nm, {}).get('territory', ''),
+        }
+        for nm in clean_names
+    ]
     return {'accounts': options}
 
 

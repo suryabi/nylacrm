@@ -69,9 +69,9 @@ function AccountMultiSelect({ testid, accountOptions, selectedAccounts, onToggle
           <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent className="w-[320px] p-0" align="start">
         <Command filter={(value, search) => (value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}>
-          <CommandInput placeholder="Search accounts..." data-testid="invoices-account-search" />
+          <CommandInput placeholder="Search accounts by name or city..." data-testid="invoices-account-search" />
           <CommandList className="max-h-[320px]">
             <CommandEmpty>No accounts found.</CommandEmpty>
             <CommandGroup>
@@ -86,18 +86,29 @@ function AccountMultiSelect({ testid, accountOptions, selectedAccounts, onToggle
                   Clear selection (All Accounts)
                 </CommandItem>
               )}
-              {accountOptions.map(name => {
-                const checked = selectedAccounts.includes(name);
+              {accountOptions.map(acc => {
+                const checked = selectedAccounts.includes(acc.name);
+                const subtitle = [acc.city, acc.state].filter(Boolean).join(', ');
                 return (
                   <CommandItem
-                    key={name}
-                    value={name}
-                    onSelect={() => onToggle(name)}
-                    data-testid={`invoices-account-option-${name}`}
-                    className="flex items-center gap-2"
+                    key={acc.name}
+                    value={`${acc.name} ${acc.city || ''} ${acc.contact_name || ''} ${acc.territory || ''}`}
+                    onSelect={() => onToggle(acc.name)}
+                    data-testid={`invoices-account-option-${acc.name}`}
+                    className="flex items-start gap-2"
                   >
-                    <Check className={`h-4 w-4 shrink-0 ${checked ? 'opacity-100 text-emerald-600' : 'opacity-0'}`} />
-                    <span className="text-sm truncate">{name}</span>
+                    <Check className={`mt-0.5 h-4 w-4 shrink-0 ${checked ? 'opacity-100 text-emerald-600' : 'opacity-0'}`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{acc.name}</p>
+                      {(subtitle || acc.contact_name || acc.territory) && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {subtitle}
+                          {subtitle && acc.territory ? ' • ' : ''}
+                          {acc.territory || ''}
+                          {acc.contact_name ? `${(subtitle || acc.territory) ? ' • ' : ''}${acc.contact_name}` : ''}
+                        </p>
+                      )}
+                    </div>
                   </CommandItem>
                 );
               })}
