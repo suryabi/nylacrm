@@ -14,6 +14,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — 📄 Branded Lead Proposal generator ✅ DONE
+- **One-click "Generate Proposal"** on a lead builds a branded 2-page PDF mirroring the Nyla template: header (logo/address/CIN + accent bar), customer-name title, intro, **pricing table** (Format · Standard [struck] · Offer · Return Credit · Landing = Offer−Credit), disclaimer, Reverse Logistics, Commercial Terms, Category Placement, page-2 Listing Format + Brand Onboarding + product image. Uses bundled DejaVuSans for the ₹ glyph.
+- **Saved as the lead's proposal** → existing Preview / Download / Share-via-email / Review (approve/request-changes/reject) all work automatically. Covers all 4 requested outputs.
+- **Admin-editable template** (`/proposal-template` page + `GET/PUT /api/proposals/template`, `proposal_templates` collection seeded with defaults).
+- **Master SKU pricing**: added **Standard Price / Return Bottle Credit** (+ existing MRP) to SKU Management; persisted via `PUT /api/master-skus/{id}` and pulled into the proposal pricing table. Fixed GET-list/PUT formatters that were dropping the new fields.
+- Backend: `services/proposal_pdf.py`, `routes/proposals.py`, `POST /api/leads/{id}/proposal/generate`. Logo + product image extracted from the sample PDF into `backend/assets/proposal/`.
+- Tested: testing_agent (6/7 backend pass; the 1 fail — master-sku response omitting fields — now fixed & re-verified). UI: template editor + lead generate/regenerate confirmed.
+
+
 ### 2026-06-19 — ↕️ Moved Social Links above Comments (Lead detail) ✅ DONE
 - Relocated the Social Links card from the page bottom to **directly above the Comments section** in the lead's main column. Verified via screenshot; functionality unchanged.
 
