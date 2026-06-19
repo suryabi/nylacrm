@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { ShareButton } from '../components/share/ShareButton';
+import GammaGenerateButton from '../components/gamma/GammaGenerateButton';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
@@ -1098,6 +1099,7 @@ ${userEmail}`;
         
         {/* Action Buttons - Stack on mobile */}
         <div className="flex items-center gap-2 shrink-0">
+          <GammaGenerateButton sourceType="lead" sourceId={id} label="Deck" className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 border-indigo-300 text-indigo-700 hover:bg-indigo-50" />
           {canConvert && (
             <Button
               onClick={handleConvertToAccount}

@@ -15,6 +15,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## What's implemented (changelog)
 
 
+### 2026-06-19 — ✨ Gamma deck generation integration (NEW) ✅ DONE
+- **Integration**: Gamma Generate API v1.0 (`services/gamma_service.py`, `X-API-KEY`, key in `backend/.env` as `GAMMA_API_KEY`). Async generate → poll for `gammaUrl` + PDF `exportUrl`.
+- **Backend** (`routes/gamma.py`, `/api/gamma`): `/themes`, `/draft` (auto-builds editable deck content from a Lead or Account), `/generations` (start), `/generations` (history), `/generations/{id}` (poll; maps Gamma status, holds 'finalizing' until PDF export URL ready). Jobs tracked in `gamma_generations` (tenant-scoped) with credits + source link.
+- **Frontend**: reusable `components/gamma/GammaComposer.jsx` (edit content, slides, theme, generate, live poll, result with Open-in-Gamma + Download-PDF) and `GammaGenerateButton.jsx` (button+dialog, auto-loads CRM draft). Surfaces: **(1)** standalone `pages/GammaGenerator.js` (compose + recent-decks history), **(2)** "Deck" button on Lead detail (sales proposal), **(3)** "QBR Deck" button on Account detail (business review).
+- **Content**: auto-built from CRM (lead: company/contact/location/requirements/next-steps; account: overview/commercial performance/opportunities), shown in an **editable preview** before sending.
+- **RBAC**: module key `gamma_generator` (Tools category; default no access; CEO/Admin/System Admin auto). Sidebar entry under Sales → Product & SKU, gated CEO/Admin. Lead/Account buttons hidden unless the role has `gamma_generator` view.
+- **Tested**: full flow via curl (themes, draft, generate → completed with PDF export, 13 credits), UI verified (standalone page + history, Lead button auto-fills draft). RBAC test → 10/10 (81 keys / 13 categories).
+
+
 ### 2026-06-19 — ✨ Customer Complaints module (NEW) ✅ DONE
 - **Purpose**: Track customer complaints linked to a Lead / Account / Distributor, against one or more SKUs, with details, photo attachments and a threaded update/comment log.
 - **Backend** (`routes/customer_complaints.py`, mounted at `/api/complaints`): full CRUD + `/meta/options`, `/meta/entity-search` (lead/account/distributor autocomplete), comments, photo upload/download/delete. Complaint numbers `CMP-YYYY-####`. Statuses: open → in_progress → awaiting_customer → resolved → closed (auto resolved_at/closed_at). Priority low/med/high/urgent; categories quality/packaging/delivery/billing/other; assignable to a user.

@@ -112,6 +112,7 @@ export const MODULE_ROUTE_MAP = {
   daily_status: ['/daily-status'],
   status_summary: ['/status-summary'],
   customer_complaints: ['/complaints'],
+  gamma_generator: ['/gamma-generator'],
   
   // Pricing & Logistics
   cogs_calculator: ['/cogs-calculator'],

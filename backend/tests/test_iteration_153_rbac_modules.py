@@ -18,7 +18,7 @@ EXPECTED_COUNTS = {
     "Core": 9,
     "Reports": 6,
     "Operations": 9,
-    "Tools": 5,
+    "Tools": 6,
     "Documents": 2,
     "Requests": 3,
     "Marketing": 4,
@@ -29,7 +29,7 @@ EXPECTED_COUNTS = {
     "Inventory & Procurement": 2,
     "Task Management": 3,
 }
-TOTAL_EXPECTED_KEYS = 80
+TOTAL_EXPECTED_KEYS = 81
 
 NEWLY_ADDED_KEYS = [
     "account_gop_metrics",

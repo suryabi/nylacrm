@@ -59,6 +59,7 @@ from .zoho_books import router as zoho_books_router
 from .distributor_chat import router as distributor_chat_router
 from .inventory_management import router as inventory_management_router
 from .customer_complaints import router as customer_complaints_router
+from .gamma import router as gamma_router
 
 # Include routers with their prefixes
 # Note: These are included WITHOUT prefix because the main server.py adds /api prefix
@@ -284,6 +285,7 @@ routes_router.include_router(promo_dispatch_router, tags=["Promotional Dispatch"
 # stock entries, purchase orders, GRN. See routes/inventory_management.py
 routes_router.include_router(inventory_management_router, prefix="/inventory", tags=["Inventory Management"])
 routes_router.include_router(customer_complaints_router, tags=["Customer Complaints"])
+routes_router.include_router(gamma_router, tags=["Gamma Generator"])
 
 # Document Sharing Framework — share invoices / challans / driver bundles via
 # signed links + email (Phase 1). See routes/sharing.py + services/share_service.py
