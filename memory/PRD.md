@@ -14,6 +14,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — 🙈 Removed "Gamma" from all user-facing text ✅ DONE
+- Replaced every visible "Gamma" mention with neutral wording: dialog title → **"Generate Presentation"**; result button → **"Open Presentation"**; composer tip reworded; template manager → **"My Presentation Templates"** + "Template link or ID" (placeholder/help no longer reference gamma.app); generator page heading + nav menu → **"Presentation Generator"**.
+- Internal code/identifiers/routes/testids/API paths unchanged (integration intact). Verified: dialog contains no "Gamma" text; all files compile.
+
+
 ### 2026-06-19 — 📌 Single deck template auto-selected & locked ✅ DONE
 - In the deck composer (`GammaComposer.jsx`): when **only one template exists**, it's set as the **default** choice and shown as a **non-editable** field (no dropdown). With 2+ templates the normal selectable dropdown (incl. "generate from scratch") remains.
 - Verified: tenant has 1 template ("Proposal Template") → renders fixed/read-only; editable select absent.

@@ -54,7 +54,7 @@ export default function GammaGenerateButton({
         <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto" data-testid="gamma-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-indigo-600" /> Generate presentation with Gamma
+              <Sparkles className="h-5 w-5 text-indigo-600" /> Generate Presentation
             </DialogTitle>
           </DialogHeader>
           <GammaComposer

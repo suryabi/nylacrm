@@ -37,7 +37,7 @@ export default function GammaGenerator() {
             <Sparkles className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">Gamma Generator</h1>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">Presentation Generator</h1>
             <p className="text-sm text-slate-500">Turn any outline into a polished presentation</p>
           </div>
         </div>

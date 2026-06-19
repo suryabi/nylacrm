@@ -43,7 +43,7 @@ export default function GammaTemplateManager({ onChanged }) {
   if (!canManage) return null;
 
   const add = async () => {
-    if (!name.trim() || !idOrUrl.trim()) { toast.error('Name and Gamma link/ID are required'); return; }
+    if (!name.trim() || !idOrUrl.trim()) { toast.error('Name and template link/ID are required'); return; }
     setSaving(true);
     try {
       await axios.post(`${API}/gamma/templates`, { name, gamma_id_or_url: idOrUrl, description: desc }, { headers: HEAD() });
@@ -76,7 +76,7 @@ export default function GammaTemplateManager({ onChanged }) {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="gamma-templates-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><LayoutTemplate className="h-5 w-5 text-indigo-600" /> My Gamma Templates</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><LayoutTemplate className="h-5 w-5 text-indigo-600" /> My Presentation Templates</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -87,9 +87,9 @@ export default function GammaTemplateManager({ onChanged }) {
                 <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Branded Sales Proposal" data-testid="template-name-input" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Gamma link or ID</Label>
-                <Input value={idOrUrl} onChange={(e) => setIdOrUrl(e.target.value)} placeholder="https://gamma.app/docs/… or g_xxxxxxxx" data-testid="template-id-input" />
-                <p className="text-[11px] text-muted-foreground">Paste the link of a <strong>single-page</strong> Gamma from your workspace.</p>
+                <Label className="text-xs">Template link or ID</Label>
+                <Input value={idOrUrl} onChange={(e) => setIdOrUrl(e.target.value)} placeholder="Paste template link or ID" data-testid="template-id-input" />
+                <p className="text-[11px] text-muted-foreground">Paste the link of a <strong>single-page</strong> template from your workspace.</p>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Description (optional)</Label>

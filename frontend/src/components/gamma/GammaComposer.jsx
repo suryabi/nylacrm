@@ -99,7 +99,7 @@ export default function GammaComposer({
         </div>
         <div className="flex flex-wrap gap-2 justify-center">
           <Button asChild className="bg-indigo-600 hover:bg-indigo-700" data-testid="gamma-open-btn">
-            <a href={job.gamma_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 mr-1.5" /> Open in Gamma</a>
+            <a href={job.gamma_url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 mr-1.5" /> Open Presentation</a>
           </Button>
           {job.export_url && (
             <Button asChild variant="outline" data-testid="gamma-download-btn">
@@ -144,7 +144,7 @@ export default function GammaComposer({
         <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={12}
           placeholder="Write or paste the content for your deck. Use # headings to structure slides."
           className="font-mono text-sm" data-testid="gamma-content-input" />
-        <p className="text-xs text-muted-foreground">Tip: Gamma turns your outline into a polished presentation. Edit freely before generating.</p>
+        <p className="text-xs text-muted-foreground">Tip: Your outline is turned into a polished presentation. Edit freely before generating.</p>
       </div>
       <div className="space-y-1.5">
         <Label>Template</Label>
