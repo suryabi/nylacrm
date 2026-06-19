@@ -17,7 +17,7 @@ PASSWORD = "test123"
 EXPECTED_COUNTS = {
     "Core": 9,
     "Reports": 6,
-    "Operations": 8,
+    "Operations": 9,
     "Tools": 5,
     "Documents": 2,
     "Requests": 3,
@@ -29,7 +29,7 @@ EXPECTED_COUNTS = {
     "Inventory & Procurement": 2,
     "Task Management": 3,
 }
-TOTAL_EXPECTED_KEYS = 79
+TOTAL_EXPECTED_KEYS = 80
 
 NEWLY_ADDED_KEYS = [
     "account_gop_metrics",

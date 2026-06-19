@@ -111,6 +111,7 @@ export const MODULE_ROUTE_MAP = {
   investor_dashboard: ['/investor-dashboard'],
   daily_status: ['/daily-status'],
   status_summary: ['/status-summary'],
+  customer_complaints: ['/complaints'],
   
   // Pricing & Logistics
   cogs_calculator: ['/cogs-calculator'],

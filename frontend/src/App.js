@@ -63,6 +63,8 @@ import SKUPerformance from './pages/SKUPerformance';
 import ResourcePerformance from './pages/ResourcePerformance';
 import AccountsList from './pages/AccountsList';
 import AccountSKUPricing from './pages/AccountSKUPricing';
+import CustomerComplaints from './pages/CustomerComplaints';
+import CustomerComplaintDetail from './pages/CustomerComplaintDetail';
 import MasterCOGSComponents from './pages/MasterCOGSComponents';
 import AdminSkuMigrate from './pages/AdminSkuMigrate';
 import VehiclesList from './pages/admin/VehiclesList';
@@ -321,6 +323,8 @@ function AppRouter() {
           <Route path="/settings/share-recipients" element={<ProtectedRoute><ShareRecipientSettings /></ProtectedRoute>} />
           <Route path="/accounts" element={<ProtectedRoute moduleKey="accounts"><AccountsList /></ProtectedRoute>} />
           <Route path="/accounts/sku-pricing" element={<ProtectedRoute moduleKey="accounts"><AccountSKUPricing /></ProtectedRoute>} />
+          <Route path="/complaints" element={<ProtectedRoute moduleKey="customer_complaints"><CustomerComplaints /></ProtectedRoute>} />
+          <Route path="/complaints/:id" element={<ProtectedRoute moduleKey="customer_complaints"><CustomerComplaintDetail /></ProtectedRoute>} />
           <Route path="/master/cogs-components" element={<ProtectedRoute moduleKey="cogs_components"><MasterCOGSComponents /></ProtectedRoute>} />
           <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
           <Route path="/admin/vehicles" element={<ProtectedRoute><VehiclesList /></ProtectedRoute>} />
