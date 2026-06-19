@@ -18,7 +18,7 @@ import pytest
 import requests
 
 
-BASE_URL = os.environ.get("PUBLIC_BACKEND_URL", "https://multi-crm-test.preview.emergentagent.com")
+BASE_URL = os.environ.get("PUBLIC_BACKEND_URL", "https://invoice-export-11.preview.emergentagent.com")
 ADMIN_EMAIL = "surya.yadavalli@nylaairwater.earth"
 ADMIN_PASSWORD = "test123"
 
