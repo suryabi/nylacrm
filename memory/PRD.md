@@ -14,6 +14,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-06-19 — 🐛 Fix invoice Matched/Unmatched status + remove Customer Credits column ✅ DONE
+- **Bug**: invoices linked to an account (showing on the account detail page) wrongly showed "Unmatched" in the listing — the stored `status` field was stale/`None` while the invoice actually had `account_id`/`account_uuid` linkage.
+- **Fix** (`routes/invoices.py`): status is now **derived at read time** from real account linkage (`account_uuid`/`account_id`/`ca_lead_id`) via `_derive_invoice_status()` — self-healing, no backfill needed. The status filter also queries by linkage (`$or`/`$nor`) instead of the stale field. Applied to list + export.
+- **UI**: removed the "Customer Credits" column from the invoice table (summary card retained). Verified: all linked invoices now show Matched; status filter matched=4/unmatched=0.
+
+
 ### 2026-06-19 — 🔗 Per-invoice applied credit notes (stock-out → invoice) ✅ DONE
 - Fixed the invoice "Credit Note" column always showing ₹0. Credit notes applied during **Stock Out** are stored on the `distributor_deliveries` doc (`total_credit_applied`, `applied_credit_notes`). Now linked to the invoice via `invoice.invoice_no == zoho_invoice_mappings.zoho_invoice_number` (synced, `source_type=distributor_delivery`) → `source_id` = delivery.
 - **Backend** (`routes/invoices.py`): new `_build_invoice_applied_credit_map()`. List + export now populate per-invoice `credit_note_value` from the originating delivery's applied credit and recompute **Net = Gross − Credit**; summary `total_credit`/`total_net` reflect it. `applied_credit_notes` (CN numbers) returned for the row tooltip.

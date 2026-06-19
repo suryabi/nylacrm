@@ -56,8 +56,18 @@ async def _build_invoice_query(
     elif account_name:
         conditions.append({'account_name': {'$regex': account_name, '$options': 'i'}})
 
-    if status and status != 'all':
-        conditions.append({'status': status})
+    # Status is derived from real account linkage (account_uuid / account_id /
+    # ca_lead_id), NOT the stale stored `status` field. An invoice that resolves
+    # to an account (and shows on the account detail page) is "matched".
+    _linked_or = [
+        {'account_uuid': {'$nin': [None, '']}},
+        {'account_id': {'$nin': [None, '']}},
+        {'ca_lead_id': {'$nin': [None, '']}},
+    ]
+    if status == 'matched':
+        conditions.append({'$or': _linked_or})
+    elif status == 'unmatched':
+        conditions.append({'$nor': _linked_or})
 
     if date_from:
         conditions.append({'invoice_date': {'$gte': date_from}})
@@ -152,6 +162,14 @@ def _cn_for_invoice(inv, by_id, by_name):
     if nm and nm in by_name:
         return by_name[nm]
     return {'issued': 0, 'applied': 0, 'balance': 0}
+
+
+def _derive_invoice_status(inv):
+    """An invoice is 'matched' if it has real account linkage (same criteria
+    that makes it appear on the account detail page)."""
+    if inv.get('account_uuid') or inv.get('account_id') or inv.get('ca_lead_id'):
+        return 'matched'
+    return 'unmatched'
 
 
 async def _build_invoice_applied_credit_map(tdb, invoice_nos):
@@ -405,6 +423,8 @@ async def list_invoices(
             inv['cn_issued'] = cn['issued']
             inv['cn_applied'] = cn['applied']
             inv['cn_balance'] = cn['balance']
+            # Derive status from real account linkage (self-healing for stale field)
+            inv['status'] = _derive_invoice_status(inv)
 
         # Calculate summary - handle both old and new field names
         all_invoices_cursor = tdb.invoices.find(query, {'_id': 0, 'gross_invoice_value': 1, 'grand_total': 1, 'net_invoice_value': 1, 'credit_note_value': 1, 'outstanding': 1, 'account_id': 1, 'account_uuid': 1, 'account_name': 1, 'invoice_no': 1, 'invoice_number': 1})
@@ -553,6 +573,7 @@ async def export_invoices(
             inv['cn_issued'] = cn['issued']
             inv['cn_applied'] = cn['applied']
             inv['cn_balance'] = cn['balance']
+            inv['status'] = _derive_invoice_status(inv)
 
         # Per-invoice applied credit (from originating stock-out delivery)
         applied_credit_map = await _build_invoice_applied_credit_map(
