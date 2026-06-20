@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://invoice-export-11.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://proposal-builder-107.preview.emergentagent.com')
 
 class TestDeliveryColumnCalculations:
     """Test delivery item amount calculations with new columns"""

@@ -1,18 +1,18 @@
-<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, and implementing an  system within comments for team collaboration. Recently, a robust Document Sharing Framework was introduced to share documents (Invoices, Bundles, Proposals) via Email/WhatsApp using signed links. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, and scalable document sharing architectures.
+<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, and implementing an  system within comments for team collaboration. Recently, a robust Document Sharing Framework and dynamic PDF generation requirements were introduced. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, scalable document sharing architectures, and highly customizable PDF proposal generation.
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
-**what currently exists?** 
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target Planning, QC, Production, Distribution, Marketing Requests, and Returns. Recently, a new  was built enabling admins to configure CC/BCC policies per document type and send signed short-link emails via Resend. Stock tracking was fixed to omit reserved stock from available counts, and a reverse action was added for stock transfers. 
+**what currently exists?**
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Recently, significant improvements were made to the Invoices page (Account multi-select autocomplete, enhanced Excel exports, per-invoice PDF generation, and fixing Matched/Unmatched statuses). Lead management has been upgraded with Social Links and a robust Presentation (formerly Gamma) generator utilizing lead-specific dynamic data. A new ReportLab-based Proposal Generator was just introduced to create branded PDF proposals for leads based on a customizable admin template.
 
-**Last working item**: 
-    - Last item agent was working: Building a standalone seed data script () to generate sample data for the entire application, intended for GitHub deployment. The agent decided to use a clone-and-remap engine to duplicate data from the primary tenant to a fresh  tenant, bypassing the need to hand-author 100+ collection schemas.
-    - Status: IN PROGRESS
-    - Agent Testing Done: N
-    - Which testing method agent to use? backend testing agent / manual testing by python -c
-    - User Testing Done: N
+**Last working item**:
+- Last item agent was working: Building a fully dynamic section-based template system for the Proposal Generator. The user requested the ability to upload a company logo, add/edit/remove sections dynamically, and customize the font and size for each section (including headers).
+- Status: IN PROGRESS
+- Agent Testing Done: N
+- Which testing method agent to use? both (Frontend for dynamic UI testing, backend/Testing Agent for PDF generation logic)
+- User Testing Done: N
 
-**All Pending/In progress Issue list**: 
+**All Pending/In progress Issue list**:
   Issue 1: Gemini API Key returns 403 PERMISSION DENIED (P2)
      - Attempted fixes: Key provided by user resulted in GCP denial.
      - Next debug checklist: Await user providing a valid key from a brand new Google Cloud project.
@@ -23,7 +23,7 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
      - Blocked on other issue: User action required
 
   Issue 2: Slack Integration failing for Marketing Requests (P2)
-     - Attempted fixes: Verified bot configuration; works in preview.
+     - Attempted fixes: Verified bot configuration.
      - Next debug checklist: User needs to confirm production environment configurations.
      - Why fix this issue and what will be achieved with the fix? Ensures notifications flow correctly.
      - Status: USER VERIFICATION PENDING
@@ -31,42 +31,38 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
      - Should Test frontend/backend/both after fix? backend
      - Blocked on other issue: None
 
-**In progress Task List**: 
-  Task 1: Generate Sample Seed Data Script (P0)
-     - Where to resume: Agent was analyzing database schemas and auth hashing. Start building  to clone existing tenant data to a new  tenant and remap unique IDs appropriately. 
-     - What will be achieved with this? Allows user to deploy app externally with pre-populated demo data.
+**In progress Task List**:
+  Task 1: Dynamic Proposal Template & Logo Upload (P0)
+     - Where to resume: The agent just overwrote  to support dynamic sections and added a logo upload endpoint in . You need to finish the backend rendering logic for dynamic sections/fonts/sizes. Then, update the frontend  to replace static textareas with a dynamic section builder (add/remove sections, select font/size) and add a logo file uploader. 
+     - What will be achieved with this? Admins can fully customize their branded PDF proposals dynamically without code changes.
      - Status: IN PROGRESS
-     - Should Test frontend/backend/both after fix? backend
-     - Blocked on something: None
-
-  Task 2: Inventory Management Module - Phase 2+ (P2)
-     - Where to resume: Phase 1 (Item/Vendor Masters) is complete. Phase 2 (Stock Entries, Purchase Receipts, Adjustments) parked. 
-     - What will be achieved with this? End-to-end supply chain visibility.
-     - Status: BLOCKED
      - Should Test frontend/backend/both after fix? both
-     - Blocked on something: User prioritization
+     - Blocked on something: None
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
     - P1: Document Sharing Framework Phase 2 (WhatsApp Integration). Requires user to select provider (Meta Cloud API, Twilio, or Gupshup/AiSensy).
-    - P1: Document Sharing Framework Phase 3 (Extend to Files & Documents, settlements, returns + read receipts).
     - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
     - P1: MinIO integration for object storage (Build  settings page to replace base64 mongo storage).
     - P1: Happenstance integration (Agent asked user for API key & scope, pending user answer).
+    - P2: Auto-attach generated Presentations to the Lead/Account and Document Sharing framework.
     
     Future Tasks:
     - P2: Auto-suggest Vehicle on distributor deliveries based on customer city.
     - P2: KB Phase 2: Per-document permissions, embedding-based retrieval, Google Drive auto-sync.
     - P2: Website Wrapper around CRM.
+    - P2: Inventory Management Module - Phase 2+ (Stock Entries, Purchase Receipts, Adjustments).
 
 **Completed work in this session**
-- Promotional Stock-Out section now defaults to expanded () (DONE)
-- Stock-out / Promo batch picker now shows true available stock (on-hand minus reserved) via  (DONE)
-- Download All / Print All on delivery schedules now includes Delivery Challans (promo deliveries) (DONE)
-- Reverse action implemented for Stock Transfers (restores stock to both warehouses and voids/deletes Zoho invoice/challan) (DONE)
-- Zoho invoices/challans for inter-warehouse stock transfers now correctly bill to the Legal Entity Name () instead of trade name (DONE)
-- Document Sharing Framework (Phase 1 & Phase 1.5) built: Includes Signed public link generation, Resend email integration, To/CC/BCC composer, and Admin per-document-type policy settings page (DONE)
-- Migrated Lead Proposal share dialog onto the new Sharing Framework (DONE)
+- Invoices Page: Implemented a searchable multiselect (Popover + cmdk) for the Account filter (DONE)
+- Invoices Page: Added Excel export feature including item bottles and applied credit note mapping (DONE)
+- Invoices Page: Fixed 'status' bug where linked invoices showed Unmatched. Status is now dynamically derived from actual account linkage (DONE)
+- Invoices Page: Added a per-invoice PDF download icon using ReportLab (DONE)
+- UI Cleanup: Completely replaced the term Gamma with Presentation across all user-facing components, nav links, and dialogs (DONE)
+- Lead Detail: Added a Social Links section (moved right above the Comments section) (DONE)
+- Presentation Deck (Gamma): Modified deck input to strictly use Lead Name, Proposed SKUs (with standard/MRP/credit pricing), and Social Links. Removed themes dropdown and auto-locked to the single available template (DONE)
+- Master SKUs: Added , , , and  to the master SKU catalog schema and UI (DONE)
+- Proposals: Created a Branded Lead Proposal generator (v1) using ReportLab that merges Lead info with a centralized Proposal Template (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: Bloated  collection
@@ -77,73 +73,72 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB) managing Sales, Target
 
 **Known issue recurrence from previous fork**
   - Issue recurrence in previous fork: Production vs Preview testing confusion.
-  - Recurrence count: ~46
+  - Recurrence count: ~47
   - Status: IN PROGRESS
   - Note: The user continuously deploys to production and shares feedback/bugs from the production environment, expecting fixes instantly. Remind the user that they must redeploy the app to see preview changes in production. Ensure you do not expose preview URLs.
 
 **Code Architecture**
-- : Main monolith (Needs refactoring due to size > 11k lines).
-- : Domain routers (, , ).
-- : Services (, , , ).
-- : Reusable UI ().
+- : Main monolith router entry point.
+- : Domain routers (, , , ).
+- : Services (, , ).
+- : Main views (, , ).
 
 **Key Technical Concepts**
-- **Document Sharing Framework:** Decoupled architecture. Resolvers return PDF bytes + candidate recipients.  generates expiring  and emails a public link () using Resend.
-- **Stock Calculations:** System now calculates available stock dynamically by subtracting reservations across all open deliveries/promos ( and ).
-- **Zoho Books Integration:** 100-character limit workarounds. Now mapping  to  to ensure correct invoice billing names for stock transfers.
+- **ReportLab PDF Gen**: Heavily utilized for both Invoices () and the new Proposal generator (). Uses standard fonts () to support the ₹ (Rupee) symbol.
+- **Dynamic Presentations**: Connects to Gamma API but hides branding. Uses  proposed pricing and social links to build dynamic presentation drafts.
+- **Invoices Mapping**: Invoices are synced with Zoho Books. The system derives application of credit notes from  and invoice linkage via .
 
 **key DB schema**
-  - : {token, document_type, document_id, tenant_id, expires_at}
-  - : {document_type, document_id, channel, recipients, status}
-  - : {document_type, default_to, default_cc, default_bcc, cc_manager}
+  - : {sku_name, category, unit, base_price, mrp, standard_price, return_bottle_credit}
+  - : {..., social_links: [{platform, url}], proposed_sku_pricing: [...]}
+  - : Proposal templates stored centrally in MongoDB.
 
 **changes in tech stack**
-  - Added Resend Email Integration as the primary mechanism for the Sharing Framework Phase 1.
+  - No new external libraries, but heavier reliance on  for dynamic PDF construction.
 
 **All files of reference** 
-  -  (Created: Core orchestrator for signed links/emails)
-  -  (Created: Maps document queries to PDFs and recipients)
-  -  (Created: Logic for fetching To/CC targets)
-  -  (Created: API routes for public link and sharing actions)
-  -  (Created: Reusable share component)
-  -  (Created: Admin UI for setting sharing rules)
-  -  (Created: High-level system architecture)
-  - , ,  (Created)
+  -  (Currently modifying)
+  -  (Currently modifying)
+  -  (Currently modifying)
+  -  
+  - 
+  - 
+  - 
 
 **Areas that need refactoring**: 
-  -  is extremely bloated (>11k lines).
-  - Base64 storage approach for Documents should be refactored to Object Storage (MinIO).
+  -  is extremely bloated (>11k lines). Continual extraction into domain routers is needed.
+  - Base64 storage approach for legacy Documents should be refactored to Object Storage (MinIO).
 
 **key api endpoints**
-  -  (Public PDF download via signed token)
-  -  (Triggers email share)
+  -  (Proposal Template settings)
+  -  (Logo upload)
+  -  (PDF generation)
+  -  (Pricing updates)
   - 
 
 **Critical Info for New Agent** 
-  - **Seed Data Cloning Strategy:** Do not manually build 100+ schemas for the seed data script. Continue the clone-and-remap strategy you just started: Read from the primary tenant, re-map IDs (using ), and insert into a new  tenant.
-  - **Preview vs Production:** You only have access to the PREVIEW environment. The user must manually redeploy to push features.
-  - **Zoho Resync Requirement:** Instruct user to re-authenticate Zoho in production to activate recently added OAuth scopes (deliverychallans.DELETE, invoice void).
+  - **Dynamic Proposal Task**: The user wants the proposal template editor to support an array of *dynamic sections*. Each section needs to specify a title, body, font style, and font size. Furthermore, a logo upload feature is required. The agent just wiped  to start building this logic.
+  - **Preview vs Production**: You only have access to the PREVIEW environment. When the user mentions production, inform them that changes must be manually redeployed.
+  - **Data Structure**: , , and  were just mapped into .
 
 **documents and test reports created in this job** 
-  - 
-  - 
-  - 
+  -  (Updated)
   - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- 1. User reported  was showing reserved stock; requested subtraction. (Agent fixed)
- 2. User reported Download All on delivery schedules skipped challans. (Agent fixed)
- 3. User requested a reverse action for Stock Transfers. (Agent implemented)
- 4. User noted stock transfer invoices used distributor name instead of legal entity name. (Agent fixed)
- 5. User asked for a Deploy button. (Agent provided instructions)
- 6. User requested an architectural design for sharing documents via WhatsApp/Email. (Agent proposed 3-phase framework)
- 7. User approved Phase 1 (Email). (Agent implemented)
- 8. User requested context-aware recipients (manager CC, lead contacts) per module. (Agent built Phase 1.5 Admin policy settings)
- 9. User asked to migrate the existing Lead Proposal sharing dialog to the new framework. (Agent migrated and verified)
- 10. User requested a seed data script for GitHub deployment. (Agent proposed a clone-and-remap script and was analyzing schemas. Task pending).
+ 1. User: In the proposal template, provide an option to upload the company logo... choose the size and font for each section... add new sections. (Agent started working on this backend logic)
+ 2. User: I have a sample document or PDF proposal... use as template. (Agent built a v1 static-section template generator)
+ 3. User: move socal links section above comments in lead details page (Agent completed)
+ 4. User: i still see the word Gamma in Generate presentation... (Agent removed)
+ 5. User: If there is only 1 gamma template, make it default choice and non-editable. (Agent completed)
+ 6. User: Upon clicking Gamma button, input should be lead name, Proposed SKUs... remove predefined themes. (Agent completed)
+ 7. User: add social links section in the lead... at bottom of screen. (Agent completed)
+ 8. User: give a small icon to download the invoice... (Agent completed via ReportLab)
+ 9. User: The matching logic is incorrect. Citadel invoice shows unmatched... (Agent fixed Matched/Unmatched derivation)
+ 10. User: what is the difrence between credit note and customer credits ? remove customer credits column... (Agent clarified and removed column)
 
 **Project Health Check:**
-Broken: None.
+Broken: None (But  logic is currently midway through a rewrite).
 Mocked: None.
 
 **3rd Party Integrations** 
@@ -152,16 +147,17 @@ Mocked: None.
  - Slack API (Bot token webhook)
  - Emergent Object Storage
  - Gmail API (Internal GCP App OAuth)
- - Resend (Configured via env vars for Sharing Framework Phase 1)
+ - Resend (Configured via env vars)
+ - Gamma API (Requires User API Key - integration renamed to Presentations)
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iterations 206, 207, 208 for UI verification of Sharing Framework)
+  - Testing agent used after significant changes: YES (iteration 209)
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: , , 
+  - Test files created: None
   - Known regressions: None
 
 **Credentials to test flow:**
 Refer to 
 
 **What agent forgot to execute**
-Everything prior to the final prompt was completed. The agent was actively evaluating auth schemas and DB collections to start the  script implementation. Begin there.</analysis>
+The agent just began updating the backend ( and ) to handle dynamic template sections and logo uploads, but completely missed updating the frontend () to support an array of sections (with font/size selectors) and a file uploader before the context window ended. You must pick up exactly from here.</analysis>
