@@ -51,6 +51,7 @@ import LeadGroupCard from '../components/LeadGroupCard';
 import LeadDeliveryAddressCard from '../components/LeadDeliveryAddressCard';
 import ContactEmails from '../components/gmail/ContactEmails';
 import EntityContactsSection from '../components/EntityContactsSection';
+import ProposalCustomizeDialog from '../components/ProposalCustomizeDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -220,6 +221,7 @@ export default function LeadDetail() {
   };
 
   const [generatingProposal, setGeneratingProposal] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
   const handleGenerateProposal = async () => {
     if (proposal && !window.confirm('This will generate a new branded proposal from the lead details and replace the current one. Continue?')) return;
     setGeneratingProposal(true);
@@ -2020,12 +2022,8 @@ ${userEmail}`;
                 <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
                 <p className="text-muted-foreground mb-4">No proposal yet — generate a branded one from the lead, or upload your own</p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-                  <Button onClick={handleGenerateProposal} disabled={generatingProposal} data-testid="generate-proposal-btn">
-                    {generatingProposal ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
-                    ) : (
-                      <><Sparkles className="mr-2 h-4 w-4" /> Generate Proposal</>
-                    )}
+                  <Button onClick={() => setCustomizeOpen(true)} data-testid="generate-proposal-btn">
+                    <Sparkles className="mr-2 h-4 w-4" /> Generate Proposal
                   </Button>
                   <label className="cursor-pointer">
                     <input
@@ -2211,12 +2209,8 @@ ${userEmail}`;
                 {/* Upload New/Revised Proposal */}
                 {canUploadNewProposal && (
                   <div className="border-t pt-4 flex flex-wrap items-center gap-2">
-                    <Button variant="outline" onClick={handleGenerateProposal} disabled={generatingProposal} data-testid="regenerate-proposal-btn">
-                      {generatingProposal ? (
-                        <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
-                      ) : (
-                        <><Sparkles className="mr-2 h-4 w-4" /> Regenerate Proposal</>
-                      )}
+                    <Button variant="outline" onClick={() => setCustomizeOpen(true)} data-testid="regenerate-proposal-btn">
+                      <Sparkles className="mr-2 h-4 w-4" /> Customize &amp; Regenerate
                     </Button>
                     <label className="cursor-pointer">
                       <input
@@ -2283,6 +2277,15 @@ ${userEmail}`;
           </Card>
         </div>
       </div>
+
+      {/* Proposal Customize + Live Preview Dialog */}
+      <ProposalCustomizeDialog
+        leadId={id}
+        open={customizeOpen}
+        onOpenChange={setCustomizeOpen}
+        hasExistingProposal={!!proposal}
+        onGenerated={fetchProposal}
+      />
 
       {/* Share Proposal via Email Dialog - Email Client Style */}
       <Dialog open={showShareDialog} onOpenChange={(open) => { setShowShareDialog(open); if (!open) setIsEmailComposerExpanded(false); }}>

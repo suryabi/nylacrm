@@ -1,0 +1,30 @@
+{
+  "summary": "Per-lead Proposal Customization (iteration 210) tested end-to-end. Backend: 10/10 pytest pass — GET returns template+override+has_override+company_name; PUT saves override and subsequent GET reflects it; POST /preview returns raw application/pdf bytes starting with %PDF- for inline override, empty JSON body, and request with no body (all fall back correctly); POST /generate consumes the saved override (response contains proposal object with lead_id, file_name, file_size > 1KB and the regenerated preview embeds the override title); DELETE clears the override; the global /api/proposals/template is NOT mutated by per-lead PUT (title and section count unchanged). 404s returned for unknown lead IDs on GET and DELETE. Frontend: Lead Detail (Drive Folder Test Lead) shows 'Customize & Regenerate' (regenerate-proposal-btn) because a proposal already exists; clicking opens proposal-customize-dialog with customize-editor, customize-title and 8 customize-section-* cards. Editing the title triggers debounced POST /preview (status 200) and the customize-preview-frame iframe is mounted. Add Paragraph/Add List increase section count (8→9→10), remove and move-up work, Save fires PUT and Reset fires DELETE (and reverts the editor + clears the override on the server). Override was cleaned up at the end (has_override=false).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Customize Proposal dialog (right pane)", "issues": ["Live PDF preview iframe renders blank in headless Chromium screenshots (real-browser Chrome works). Validated via POST /preview returning 200 + %PDF- as instructed in agent-to-agent note."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_210_proposal_customization.py",
+    "/app/test_reports/pytest/iteration_210.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py preview_lead_proposal correctly tolerates empty request body (try/except on request.json), so the dialog's first render before any edits still gets a preview — good.",
+    "save_lead_proposal_customization stores `override` even when it is None (effectively unsetting). This is fine for the UI's reset path but DELETE is the canonical clear; consider $unset when override is falsy to keep the document shape clean.",
+    "merge_override copies full section dicts from the override (UI sends fonts/sizes harvested from the template). This works but means future template-level font changes do NOT propagate to leads with a saved override. Document this or, for fields the UI never edits, prefer template values at merge time.",
+    "server.py is 11k+ lines; the per-lead proposal endpoints (lines 10379-10470) further bloat the file. Recommend moving proposal routes into a dedicated APIRouter module."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_210_proposal_customization.py (new)"],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (all 10 listed flows verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water). Auth returns `session_token` used as Bearer token.",
+  "seed_data_creation": "None persisted. Test fixture removes any saved override before and after the test run; explicit final curl confirmed lead 08c93122-99fc-4587-b31c-559649f29c17 has_override=false. The TestGenerateUsesOverride backend test bumped the lead's proposal version (since /generate replaces the existing proposal), but UI tests did not click Generate Proposal so no further version bump from UI.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All per-lead proposal customization flows are green. Override is cleaned up on the test lead. Pytest file is /app/backend/tests/test_iteration_210_proposal_customization.py (10 tests, ~2s). Frontend dialog data-testids (proposal-customize-dialog, customize-editor, customize-title, customize-section-{i}, customize-up/down/remove-{i}, customize-add-paragraph, customize-add-list, customize-save-btn, customize-generate-btn, customize-reset-btn, customize-preview-frame) all present and wired. Note: headless Chromium shows the blob-PDF iframe blank — verify the live preview by asserting POST /preview returns 200, as the agent-to-agent note prescribed.",
+  "rca of the issue": "No bugs found."
+}

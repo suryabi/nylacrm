@@ -194,6 +194,27 @@ def _normalize(tpl: dict) -> dict:
     return tpl
 
 
+def merge_override(template: dict, override: dict | None) -> dict:
+    """Merge a per-lead override onto the global template. Company/logo/fonts
+    always come from the global template; per-lead overrides only change text
+    content and the set/order of sections. `override` carries full section dicts
+    (fonts/sizes copied from the template at customize time)."""
+    merged = _normalize({**(template or {})})
+    if not override:
+        return merged
+    ov_title = (override.get("title") or {}).get("text_template")
+    if ov_title:
+        merged["title"] = {**merged["title"], "text_template": ov_title}
+    if override.get("sections"):
+        secs = []
+        for s in override["sections"]:
+            base = _sec(s.get("id") or "sec", s.get("type") or "paragraph")
+            base.update(s)
+            secs.append(base)
+        merged["sections"] = secs
+    return merged
+
+
 async def get_or_seed_template(tdb) -> dict:
     existing = await tdb.proposal_templates.find_one({}, {"_id": 0})
     if existing:
