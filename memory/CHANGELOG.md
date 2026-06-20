@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 2026-06-20 — Proposal Template: section spacing + brand colors + MS-Word-style header/footer ✅
+- **Colors**: 9 admin-editable PDF colors (accent/side-bar, section headers, title text, body text, header & footer text, offer price, table grid/borders, table header text, alternate row bg) via color pickers (swatch + hex) on `/proposal-template`. Previously hardcoded in `proposal_pdf.py`; now stored in `template.colors` and applied throughout the PDF.
+- **Section spacing**: each section now has `space_before` (pt), `space_after` (pt) and `line_spacing` (× multiplier) controls; honored during PDF build (spacers between sections + leading = size × line_spacing).
+- **Header & Footer** (MS-Word style): each has an enable toggle and three zones (left/center/right). Each zone picks a type — none, logo, company name, full company details, address, email, website, CIN, phone, date, page number, or custom text. Page/custom text supports placeholders `{n}`, `{total}`, `{company}`, `{date}`. When `{total}` is used the PDF is built in two passes to compute total pages. Top/bottom margins auto-shrink when header/footer disabled.
+- Backend: `services/proposal_pdf.py` — `DEFAULT_COLORS/DEFAULT_HEADER/DEFAULT_FOOTER`, `_norm_hf`, `_draw_zone`/`_zone_lines`/`_draw_logo`, `_needs_total`, rewritten `build_proposal_pdf` (closure `make_story` + `make_doc`, two-pass). Frontend: `ProposalTemplateSettings.js` — `ColorField`, `NumField`, `ZoneEditor`, `HFCard` + the Colors/Header/Footer cards and per-section spacing row.
+- Verified: testing agent iteration_210 (per-lead customization 10/10) + iteration_211 (header/footer + spacing backend 7/7, frontend 9/9), plus local PDF builds (two-pass `{total}`, disabled header/footer). Global template restored to defaults after tests.
+- Tech-debt (review): proposal endpoints (~10.3k–10.6k in server.py) should move to a dedicated router; `_norm_hf` silently coerces unknown zone types to `none`; PUT /template does a wholesale `$set` (FE always sends the full template, so safe today).
+
+
 ## 2026-06-20 — Per-lead Proposal customization + manual-refresh PDF preview ✅
 - Need: edit proposal wording for a *specific* lead before generating (company template stays the source of truth for logo/fonts).
 - Backend (`server.py`): new endpoints `GET/PUT/DELETE /api/leads/{id}/proposal/customization` (stores `proposal_override` on the lead) and `POST /api/leads/{id}/proposal/preview` (returns raw `application/pdf`, accepts an unsaved override or falls back to saved/global). `generate` now merges the saved override. `services/proposal_pdf.py` got `merge_override(template, override)` — only title text + section set/order/text come from the override; company/logo/fonts always from the global template.
