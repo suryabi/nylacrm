@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-20 — Dynamic Proposal Template editor + logo upload (P0) ✅
+- Backend (already in place, verified): `services/proposal_pdf.py` v2 model — `company` (incl. base64 `logo_data`), `title` {text_template, font, size}, and an ordered `sections[]` array. Each section: `type` (paragraph|list|category|pricing_table|image), `heading`, per-element font+size (heading_font/size, body_font/size), `page_break_before`, plus type-specific fields. Legacy v1 flat templates auto-migrate via `_migrate_legacy`/`_normalize`. Routes: `GET/PUT /api/proposals/template`, `POST/DELETE /api/proposals/template/logo`.
+- Frontend: rewrote `pages/ProposalTemplateSettings.js` to the v2 model — logo uploader (upload/preview/remove), title font+size pickers, and a full dynamic Sections builder (add/remove/reorder ▲▼, per-section type select, heading+body font/size selectors, type-specific editors, page-break toggle, per-image upload). Reusable `FontSize` picker (fonts: dejavu/helvetica/times/courier; sizes 8–28pt).
+- Verified: curl e2e — template GET returns v2 (8 default sections), PUT persists custom section with times/courier fonts + size 12 and title helvetica/22, lead proposal `generate` → valid `%PDF-` (845KB) rendered from the custom template; defaults restored after. Frontend smoke screenshot: editor renders, Add section works.
+
+
+
 ## 2026-06-18 — Lead Proposal migrated onto the Sharing Framework + BCC ✅
 - The Lead Proposal "Share via Email" now uses the framework `<ShareButton documentType="lead_proposal">` instead of the bespoke dialog → its recipients are now admin-configurable.
 - Backend: `lead_proposal` PDF resolver (decodes the stored approved proposal; enforces status=approved) + recipient resolver (To = lead contacts, candidates += account contacts, cc_manager default ON) returning the proposal's `default_subject` ("Nyla Air Water - Proposal for review") + signed `default_message` body. Framework-wide **BCC** added (send + `ShareRequest.bcc` + policy `default_bcc` + plan dedupe across To/Cc/Bcc).
