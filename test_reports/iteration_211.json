@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 211 (Global Proposal Template — Header/Footer + section spacing) verified end-to-end. Backend: 7/7 pytest pass — (1) GET /api/proposals/template returns `header` and `footer` (each with `enabled` + `left/center/right` zones {type,text}) and every section exposes `space_before`, `space_after`, `line_spacing`. (2) PUT custom header (left=logo, center=company_name, right=date), custom footer (left=custom 'Confidential — {company}', right=page 'Page {n} of {total}') and custom section spacing (20/24/1.8 on section 0) are persisted and round-trip via a subsequent GET. (3) With footer using {total}, POST /api/leads/{lead}/proposal/preview returns 200 application/pdf with bytes starting %PDF- (two-pass total path OK) and POST /generate returns proposal with file_size>1KB. (4) With header.enabled=false AND footer.enabled=false, preview and generate still return valid PDF (no crash). (5) Colors PUT alongside header/footer round-trips correctly (no regression). Frontend: /proposal-template page renders Header (tpl-header-card) and Footer (tpl-footer-card) with Show header/footer switches (header-enabled / footer-enabled) and all six zone selects (header-left-type / header-center-type / header-right-type / footer-left-type / footer-center-type / footer-right-type). Selecting 'Page number' or 'Custom text' reveals the zone text input (footer-right-text, footer-left-text); selecting 'Logo' hides it. Section card shows section-space-before-0 / section-space-after-0 / section-line-spacing-0. Editing values + clicking save-template-btn persists via PUT — reload preserves 20/24/1.8 and the custom footer text with {total} and {company}. Toggling 'Show footer' off hides all three footer zone selectors, Save persists enabled=false (still hidden after reload). Cleanup: global template restored to the 'defaults' object returned by GET (header/footer/spacing/colors all match defaults again, footer.enabled=true). Per-lead override on test lead cleared (DELETE 200).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_211_proposal_header_footer.py",
+    "/app/test_reports/pytest/iteration_211.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "proposal_pdf.py _norm_hf coerces unknown zone types to 'none' silently — fine for forward-compat but consider logging a warning so admins notice typos in API payloads.",
+    "_needs_total scans header/footer zone `text` for '{total}'. If an admin types literal text containing '{total}' as part of a custom string (e.g. 'cost {total}') the PDF will still go through the (more expensive) two-pass build — acceptable but worth a doc note.",
+    "ProposalTemplateSettings.js HFCard hides zone selectors when enabled=false but keeps the underlying state — saving still posts the existing zones. That's correct (re-enabling restores the prior config) but the UI gives no visual hint that hidden state will be preserved.",
+    "server.py is now 11k+ lines; proposal endpoints (lines ~10281-10646) keep growing — recommend extracting into routes/proposals_leads.py.",
+    "routes/proposals.py PUT /template uses {'$set': payload}: nested keys (e.g. header.left) are replaced wholesale because the helper builds full objects, but if a client sends a partial header without center/right those zones would be lost (no merge). Current FE always sends the full template so this is safe today; consider deep-merge or strict Pydantic validation to make the contract explicit."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_211_proposal_header_footer.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all 9 listed UI flows verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water). Auth returns `session_token` used as Bearer token.",
+  "seed_data_creation": "None persisted. Global template was restored to defaults via PUT {template: <defaults>} after the run (verified header==defaults.header, footer==defaults.footer, section[0] spacing back to 6/8/1.4, footer.enabled=true). Per-lead override on lead 08c93122-99fc-4587-b31c-559649f29c17 cleared (DELETE 200, has_override=false).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 211 fully green. Backend tests live at /app/backend/tests/test_iteration_211_proposal_header_footer.py (7 tests, ~3.6s). UI testids on /proposal-template: tpl-header-card, tpl-footer-card, header-enabled, footer-enabled, {header|footer}-{left|center|right}-type, {header|footer}-{left|center|right}-text (only visible for type ∈ {page, custom}), section-space-before-{idx}, section-space-after-{idx}, section-line-spacing-{idx}, save-template-btn. Note for Playwright: Radix Select options for the long HF type list (12 entries) virtualize/scroll — using `locator('[role=option]').filter(has_text=...).first.click(force=True)` works when the option is scrolled into view; otherwise keyboard fallback (focus trigger → Enter → End/ArrowUp → Enter) is reliable. Global template restored to defaults at end of run; lead override on 08c93122-99fc-4587-b31c-559649f29c17 is cleared.",
+  "rca of the issue": "No bugs found."
+}

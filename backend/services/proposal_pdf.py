@@ -101,9 +101,30 @@ def _sec(id, type, heading="", **kw):
         "heading_font": "dejavu", "heading_size": 13,
         "body_font": "dejavu", "body_size": 10,
         "page_break_before": False,
+        "space_before": 6, "space_after": 8, "line_spacing": 1.4,
     }
     base.update(kw)
     return base
+
+
+# Header / footer: 3 zones (left / center / right), MS-Word style. Each zone has
+# a `type` (what to show) and optional `text` (for page-number format / custom).
+HF_ELEMENT_TYPES = [
+    "none", "logo", "company_name", "company_block", "address",
+    "email", "website", "cin", "phone", "date", "page", "custom",
+]
+DEFAULT_HEADER = {
+    "enabled": True,
+    "left": {"type": "logo", "text": ""},
+    "center": {"type": "none", "text": ""},
+    "right": {"type": "company_block", "text": ""},
+}
+DEFAULT_FOOTER = {
+    "enabled": True,
+    "left": {"type": "none", "text": ""},
+    "center": {"type": "none", "text": ""},
+    "right": {"type": "page", "text": "Page {n}"},
+}
 
 
 DEFAULT_TEMPLATE = {
@@ -124,6 +145,8 @@ DEFAULT_TEMPLATE = {
         "font": "dejavu", "size": 19,
     },
     "colors": DEFAULT_COLORS,
+    "header": DEFAULT_HEADER,
+    "footer": DEFAULT_FOOTER,
     "sections": [
         _sec("intro", "paragraph", "",
              content=("Nyla gently transforms pure air into exceptionally smooth, beautifully balanced "
@@ -204,12 +227,26 @@ def _migrate_legacy(tpl: dict) -> dict:
     return out
 
 
+def _norm_hf(cfg, default):
+    cfg = {**default, **(cfg or {})}
+    out = {"enabled": bool(cfg.get("enabled", True))}
+    for z in ("left", "center", "right"):
+        zone = cfg.get(z) or {}
+        zt = zone.get("type", "none")
+        if zt not in HF_ELEMENT_TYPES:
+            zt = "none"
+        out[z] = {"type": zt, "text": zone.get("text", "")}
+    return out
+
+
 def _normalize(tpl: dict) -> dict:
     if not tpl.get("sections"):
         tpl = _migrate_legacy(tpl)
     tpl["company"] = {**DEFAULT_TEMPLATE["company"], **(tpl.get("company") or {})}
     tpl["title"] = {**DEFAULT_TEMPLATE["title"], **(tpl.get("title") or {})}
     tpl["colors"] = {**DEFAULT_COLORS, **(tpl.get("colors") or {})}
+    tpl["header"] = _norm_hf(tpl.get("header"), DEFAULT_HEADER)
+    tpl["footer"] = _norm_hf(tpl.get("footer"), DEFAULT_FOOTER)
     norm = []
     for sec in tpl.get("sections", []):
         base = _sec(sec.get("id") or "sec", sec.get("type") or "paragraph")
@@ -278,47 +315,135 @@ async def build_pricing_rows(tdb, lead: dict) -> list:
 
 
 # ── Header / footer ──────────────────────────────────────────────────────────
-def _draw_page(canvas, doc):
-    canvas.saveState()
-    w, h = A4
-    pal = doc._tpl.get("colors", {})
-    c_accent = _color(pal.get("accent"), ACCENT)
-    c_header_text = _color(pal.get("header_text"), GREY)
-    canvas.setFillColor(c_accent)
-    canvas.rect(w - 5 * mm, 0, 5 * mm, h, stroke=0, fill=1)
+def _fmt_hf(s, ctx, n, total):
+    return (str(s or "")
+            .replace("{n}", str(n))
+            .replace("{total}", str(total) if total else "?")
+            .replace("{company}", ctx.get("company_name", ""))
+            .replace("{date}", ctx.get("date", "")))
 
-    company = doc._tpl.get("company", {})
-    drawn = False
+
+def _zone_lines(zone, company, ctx, n, total):
+    """Return the list of text lines for a non-logo zone."""
+    zt = zone.get("type", "none")
+    txt = zone.get("text", "")
+    if zt == "company_name":
+        return [ctx.get("company_name", "")]
+    if zt == "company_block":
+        return list(company.get("address_lines", [])) + [company.get("email", ""), company.get("website", ""), company.get("cin", "")]
+    if zt == "address":
+        return list(company.get("address_lines", []))
+    if zt == "email":
+        return [company.get("email", "")]
+    if zt == "website":
+        return [company.get("website", "")]
+    if zt == "cin":
+        return [company.get("cin", "")]
+    if zt == "phone":
+        return [company.get("phone", "")]
+    if zt == "date":
+        return [ctx.get("date", "")]
+    if zt == "page":
+        return [_fmt_hf(txt or "Page {n}", ctx, n, total)]
+    if zt == "custom":
+        return [_fmt_hf(txt, ctx, n, total)] if txt else []
+    return []
+
+
+def _draw_logo(canvas, company, x, top_y, align):
+    width, height = 38 * mm, 16 * mm
+    lx = x if align == "left" else (x - width if align == "right" else x - width / 2)
+    ly = top_y - height
     logo_b64 = company.get("logo_data")
     if logo_b64:
         try:
             img = ImageReader(io.BytesIO(base64.b64decode(logo_b64)))
-            canvas.drawImage(img, 16 * mm, h - 28 * mm, width=38 * mm, height=18 * mm,
+            canvas.drawImage(img, lx, ly, width=width, height=height,
                              preserveAspectRatio=True, mask="auto", anchor="sw")
-            drawn = True
+            return
         except Exception:
-            drawn = False
-    if not drawn:
-        logo = os.path.join(ASSETS, "logo.png")
-        if os.path.exists(logo):
-            try:
-                canvas.drawImage(logo, 16 * mm, h - 26 * mm, width=34 * mm, height=16 * mm,
-                                 preserveAspectRatio=True, mask="auto", anchor="sw")
-            except Exception:
-                pass
+            pass
+    logo = os.path.join(ASSETS, "logo.png")
+    if os.path.exists(logo):
+        try:
+            canvas.drawImage(logo, lx, ly, width=34 * mm, height=height,
+                             preserveAspectRatio=True, mask="auto", anchor="sw")
+        except Exception:
+            pass
 
-    canvas.setFillColor(c_header_text)
-    canvas.setFont(_MONEY_FONT, 8)
-    y = h - 14 * mm
-    right_x = w - 12 * mm
-    lines = list(company.get("address_lines", [])) + [company.get("email", ""), company.get("website", ""), company.get("cin", "")]
-    for ln in [l for l in lines if l]:
-        canvas.drawRightString(right_x, y, ln)
-        y -= 4.2 * mm
 
+def _draw_aligned(canvas, text, x, y, align):
+    if align == "center":
+        canvas.drawCentredString(x, y, text)
+    elif align == "right":
+        canvas.drawRightString(x, y, text)
+    else:
+        canvas.drawString(x, y, text)
+
+
+def _draw_zone(canvas, zone, x, align, top_y, line_h, company, ctx, n, total, color, is_footer):
+    zt = zone.get("type", "none")
+    if zt == "none":
+        return
+    if zt == "logo":
+        _draw_logo(canvas, company, x, top_y, align)
+        return
+    lines = [l for l in _zone_lines(zone, company, ctx, n, total) if l]
+    if not lines:
+        return
+    canvas.setFillColor(color)
     canvas.setFont(_MONEY_FONT, 8)
-    canvas.drawRightString(w - 12 * mm, 10 * mm, f"Page {canvas.getPageNumber()}")
+    if is_footer:
+        for i, ln in enumerate(reversed(lines)):
+            _draw_aligned(canvas, ln, x, top_y + i * line_h, align)
+    else:
+        yy = top_y
+        for ln in lines:
+            _draw_aligned(canvas, ln, x, yy, align)
+            yy -= line_h
+
+
+def _draw_page(canvas, doc):
+    canvas.saveState()
+    w, h = A4
+    tpl = doc._tpl
+    ctx = getattr(doc, "_ctx", {})
+    total = getattr(doc, "_total", None)
+    n = canvas.getPageNumber()
+    pal = tpl.get("colors", {})
+    c_accent = _color(pal.get("accent"), ACCENT)
+    c_header_text = _color(pal.get("header_text"), GREY)
+    company = tpl.get("company", {})
+
+    # side accent bar
+    canvas.setFillColor(c_accent)
+    canvas.rect(w - 5 * mm, 0, 5 * mm, h, stroke=0, fill=1)
+
+    xs = {"left": 16 * mm, "center": w / 2, "right": w - 12 * mm}
+
+    header = tpl.get("header", {})
+    if header.get("enabled", True):
+        for z, align in (("left", "left"), ("center", "center"), ("right", "right")):
+            _draw_zone(canvas, header.get(z, {}), xs[align], align, h - 13 * mm, 4.2 * mm,
+                       company, ctx, n, total, c_header_text, is_footer=False)
+
+    footer = tpl.get("footer", {})
+    if footer.get("enabled", True):
+        for z, align in (("left", "left"), ("center", "center"), ("right", "right")):
+            _draw_zone(canvas, footer.get(z, {}), xs[align], align, 10 * mm, 4.2 * mm,
+                       company, ctx, n, total, c_header_text, is_footer=True)
+
     canvas.restoreState()
+
+
+def _needs_total(tpl) -> bool:
+    for hf in (tpl.get("header", {}), tpl.get("footer", {})):
+        for z in ("left", "center", "right"):
+            zone = hf.get(z, {})
+            if zone.get("type") in ("page", "custom") and "{total}" in (zone.get("text") or ""):
+                return True
+    return False
+
 
 
 def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
@@ -331,23 +456,29 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
     c_header_text = _color(pal.get("header_text"), GREY)
     c_border = _color(pal.get("border"), BORDER)
     c_row_alt = _color(pal.get("row_alt"), ROW_ALT)
-    c_table_head_text = _color(pal.get("table_header_text"), colors.white)
+    c_table_head_text = _color(pal.get("table_head_text", pal.get("table_header_text")), colors.white)
     offer_hex = pal.get("offer") or "#EA2C1F"
-    buf = io.BytesIO()
     styles = getSampleStyleSheet()
 
+    def _ls(sec):
+        try:
+            return max(1.0, float(sec.get("line_spacing", 1.4) or 1.4))
+        except Exception:
+            return 1.4
+
     def body_style(sec):
+        sz = sec.get("body_size", 10)
         return ParagraphStyle(f"b_{sec['id']}", parent=styles["BodyText"],
                               fontName=_font(sec.get("body_font"), False),
-                              fontSize=sec.get("body_size", 10),
-                              leading=sec.get("body_size", 10) + 4, textColor=c_body, spaceAfter=4)
+                              fontSize=sz, leading=round(sz * _ls(sec)),
+                              textColor=c_body, spaceAfter=2)
 
     def heading_style(sec):
+        sz = sec.get("heading_size", 13)
         return ParagraphStyle(f"h_{sec['id']}", parent=styles["Heading2"],
                               fontName=_font(sec.get("heading_font"), True),
-                              fontSize=sec.get("heading_size", 13),
-                              leading=sec.get("heading_size", 13) + 4,
-                              textColor=c_heading, spaceBefore=10, spaceAfter=5)
+                              fontSize=sz, leading=round(sz * _ls(sec)),
+                              textColor=c_heading, spaceBefore=0, spaceAfter=4)
 
     small = ParagraphStyle("small", parent=styles["BodyText"], fontName=_MONEY_FONT, fontSize=8.5,
                            textColor=c_header_text, leading=11)
@@ -361,91 +492,124 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
                              leading=title_cfg.get("size", 19) + 4, textColor=c_title, spaceAfter=8)
     title = (title_cfg.get("text_template") or "Proposal For {company}").format(company=company_name)
 
-    story = [Paragraph(datetime.now(timezone.utc).strftime("%d-%b-%Y").upper(), date_s),
-             Spacer(1, 2 * mm), Paragraph(title, title_s), Spacer(1, 1 * mm)]
+    ctx = {"company_name": company_name,
+           "date": datetime.now(timezone.utc).strftime("%d-%b-%Y").upper()}
 
     def bullets(items, bstyle):
         bs = ParagraphStyle(f"bl_{id(items)}", parent=bstyle, leftIndent=4, spaceAfter=2)
         return ListFlowable([ListItem(Paragraph(str(i), bs), value="•", leftIndent=14) for i in items],
                             bulletType="bullet", start="•", leftIndent=10)
 
-    for sec in template["sections"]:
-        if sec.get("page_break_before"):
-            story.append(PageBreak())
-        bstyle = body_style(sec)
-        if sec.get("heading"):
-            story.append(Paragraph(sec["heading"], heading_style(sec)))
+    def _num(v, fallback):
+        try:
+            return max(0.0, float(v))
+        except Exception:
+            return fallback
 
-        t = sec.get("type")
-        if t == "paragraph":
-            if sec.get("content"):
-                story.append(Paragraph(sec["content"], bstyle))
-        elif t == "list":
-            if sec.get("intro"):
-                story.append(Paragraph(sec["intro"], bstyle))
-            story.append(bullets(sec.get("items", []), bstyle))
-        elif t == "category":
-            if sec.get("intro"):
-                story.append(Paragraph(sec["intro"], bstyle))
-            if sec.get("allowed"):
-                story.append(Paragraph(" | ".join(sec["allowed"]),
-                                       ParagraphStyle("ok", parent=bstyle, textColor=colors.HexColor("#166534"))))
-            if sec.get("not_allowed"):
-                story.append(Paragraph("It must NOT be listed under: " + " | ".join(sec["not_allowed"]),
-                                       ParagraphStyle("no", parent=bstyle, textColor=_color(offer_hex, OFFER_RED))))
-        elif t == "pricing_table":
-            head = ["Format", "Standard Pricing", "Offer Price", "Return Bottle Credit", "Landing Price after Credit"]
-            cell = ParagraphStyle("pcell", parent=bstyle, fontName=_MONEY_FONT, fontSize=sec.get("body_size", 9), leading=11)
-            data = [[Paragraph(f"<b>{c}</b>", ParagraphStyle("th", parent=cell, textColor=c_table_head_text)) for c in head]]
-            if pricing_rows:
-                for r in pricing_rows:
-                    offer_html = f'<font color="{offer_hex}"><b>{_rs(r["offer"])}</b></font>' if r["offer"] is not None else "-"
-                    std_html = f'<strike>{_rs(r["standard"])}</strike>' if r["standard"] else "-"
-                    data.append([
-                        Paragraph(str(r["format"]), cell),
-                        Paragraph(std_html, cell),
-                        Paragraph(offer_html, cell),
-                        Paragraph(_rs(r["credit"]) if r["credit"] else "-", cell),
-                        Paragraph(_rs(r["landing"]) if r["landing"] is not None else "-", cell),
-                    ])
-            else:
-                data.append([Paragraph("Add the proposed SKUs & pricing on the lead to populate this table.", cell), "", "", "", ""])
-            tbl = Table(data, colWidths=[58 * mm, 27 * mm, 25 * mm, 28 * mm, 30 * mm], repeatRows=1)
-            tbl.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), c_accent),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, c_row_alt]),
-                ("GRID", (0, 0), (-1, -1), 0.4, c_border),
-                ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ]))
-            story.append(tbl)
-            if sec.get("disclaimer"):
-                story.append(Spacer(1, 2 * mm))
-                story.append(Paragraph(sec["disclaimer"], small))
-        elif t == "image":
-            src = None
-            if sec.get("image_data"):
-                try:
-                    src = ImageReader(io.BytesIO(base64.b64decode(sec["image_data"])))
-                except Exception:
-                    src = None
-            if src is None:
-                prod = os.path.join(ASSETS, "products.png")
-                src = prod if os.path.exists(prod) else None
-            if src is not None:
-                story.append(Spacer(1, 6 * mm))
-                try:
-                    story.append(Image(src, width=120 * mm, height=102 * mm, kind="proportional", hAlign="CENTER"))
-                except Exception:
-                    pass
+    def make_story():
+        story = [Paragraph(ctx["date"], date_s), Spacer(1, 2 * mm),
+                 Paragraph(title, title_s), Spacer(1, 1 * mm)]
+        for sec in template["sections"]:
+            if sec.get("page_break_before"):
+                story.append(PageBreak())
+            sb = _num(sec.get("space_before", 6), 6)
+            if sb:
+                story.append(Spacer(1, sb))
+            bstyle = body_style(sec)
+            if sec.get("heading"):
+                story.append(Paragraph(sec["heading"], heading_style(sec)))
 
-    doc = BaseDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
-                          topMargin=30 * mm, bottomMargin=16 * mm, title=f"Proposal — {company_name}")
-    doc._tpl = template
-    frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width - 3 * mm, doc.height, id="main")
-    doc.addPageTemplates([PageTemplate(id="branded", frames=[frame], onPage=_draw_page)])
-    doc.build(story)
+            t = sec.get("type")
+            if t == "paragraph":
+                if sec.get("content"):
+                    story.append(Paragraph(sec["content"], bstyle))
+            elif t == "list":
+                if sec.get("intro"):
+                    story.append(Paragraph(sec["intro"], bstyle))
+                story.append(bullets(sec.get("items", []), bstyle))
+            elif t == "category":
+                if sec.get("intro"):
+                    story.append(Paragraph(sec["intro"], bstyle))
+                if sec.get("allowed"):
+                    story.append(Paragraph(" | ".join(sec["allowed"]),
+                                           ParagraphStyle("ok", parent=bstyle, textColor=colors.HexColor("#166534"))))
+                if sec.get("not_allowed"):
+                    story.append(Paragraph("It must NOT be listed under: " + " | ".join(sec["not_allowed"]),
+                                           ParagraphStyle("no", parent=bstyle, textColor=_color(offer_hex, OFFER_RED))))
+            elif t == "pricing_table":
+                head = ["Format", "Standard Pricing", "Offer Price", "Return Bottle Credit", "Landing Price after Credit"]
+                cell = ParagraphStyle("pcell", parent=bstyle, fontName=_MONEY_FONT, fontSize=sec.get("body_size", 9), leading=11)
+                data = [[Paragraph(f"<b>{c}</b>", ParagraphStyle("th", parent=cell, textColor=c_table_head_text)) for c in head]]
+                if pricing_rows:
+                    for r in pricing_rows:
+                        offer_html = f'<font color="{offer_hex}"><b>{_rs(r["offer"])}</b></font>' if r["offer"] is not None else "-"
+                        std_html = f'<strike>{_rs(r["standard"])}</strike>' if r["standard"] else "-"
+                        data.append([
+                            Paragraph(str(r["format"]), cell),
+                            Paragraph(std_html, cell),
+                            Paragraph(offer_html, cell),
+                            Paragraph(_rs(r["credit"]) if r["credit"] else "-", cell),
+                            Paragraph(_rs(r["landing"]) if r["landing"] is not None else "-", cell),
+                        ])
+                else:
+                    data.append([Paragraph("Add the proposed SKUs & pricing on the lead to populate this table.", cell), "", "", "", ""])
+                tbl = Table(data, colWidths=[58 * mm, 27 * mm, 25 * mm, 28 * mm, 30 * mm], repeatRows=1)
+                tbl.setStyle(TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, 0), c_accent),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, c_row_alt]),
+                    ("GRID", (0, 0), (-1, -1), 0.4, c_border),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ]))
+                story.append(tbl)
+                if sec.get("disclaimer"):
+                    story.append(Spacer(1, 2 * mm))
+                    story.append(Paragraph(sec["disclaimer"], small))
+            elif t == "image":
+                src = None
+                if sec.get("image_data"):
+                    try:
+                        src = ImageReader(io.BytesIO(base64.b64decode(sec["image_data"])))
+                    except Exception:
+                        src = None
+                if src is None:
+                    prod = os.path.join(ASSETS, "products.png")
+                    src = prod if os.path.exists(prod) else None
+                if src is not None:
+                    try:
+                        story.append(Image(src, width=120 * mm, height=102 * mm, kind="proportional", hAlign="CENTER"))
+                    except Exception:
+                        pass
+
+            sa = _num(sec.get("space_after", 8), 8)
+            if sa:
+                story.append(Spacer(1, sa))
+        return story
+
+    top_m = 32 * mm if template.get("header", {}).get("enabled", True) else 18 * mm
+    bottom_m = 18 * mm if template.get("footer", {}).get("enabled", True) else 14 * mm
+
+    def make_doc(buf, total):
+        doc = BaseDocTemplate(buf, pagesize=A4, leftMargin=16 * mm, rightMargin=16 * mm,
+                              topMargin=top_m, bottomMargin=bottom_m, title=f"Proposal — {company_name}")
+        doc._tpl = template
+        doc._ctx = ctx
+        doc._total = total
+        frame = Frame(doc.leftMargin, doc.bottomMargin, doc.width - 3 * mm, doc.height, id="main")
+        doc.addPageTemplates([PageTemplate(id="branded", frames=[frame], onPage=_draw_page)])
+        return doc
+
+    total = None
+    if _needs_total(template):
+        b1 = io.BytesIO()
+        d1 = make_doc(b1, None)
+        d1.build(make_story())
+        total = d1.page
+
+    buf = io.BytesIO()
+    doc = make_doc(buf, total)
+    doc.build(make_story())
     buf.seek(0)
     return buf.read()

@@ -53,6 +53,79 @@ function ColorField({ label, value, onChange, testId }) {
   );
 }
 
+const HF_TYPES = [
+  { value: 'none', label: 'None' },
+  { value: 'logo', label: 'Logo' },
+  { value: 'company_name', label: 'Company name' },
+  { value: 'company_block', label: 'Company details (full)' },
+  { value: 'address', label: 'Address' },
+  { value: 'email', label: 'Email' },
+  { value: 'website', label: 'Website' },
+  { value: 'cin', label: 'CIN / Reg' },
+  { value: 'phone', label: 'Phone' },
+  { value: 'date', label: 'Date' },
+  { value: 'page', label: 'Page number' },
+  { value: 'custom', label: 'Custom text' },
+];
+
+// ── Number field (spacing) ─────────────────────────────────────────────────
+function NumField({ label, value, onChange, step = 1, testId }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input type="number" step={step} className="h-9" data-testid={testId}
+        value={value ?? ''} onChange={(e) => onChange(e.target.value === '' ? undefined : Number(e.target.value))} />
+    </div>
+  );
+}
+
+// ── Header / footer zone editor ────────────────────────────────────────────
+function ZoneEditor({ which, name, zone, onType, onText }) {
+  const z = zone || { type: 'none', text: '' };
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <Label className="text-sm font-medium capitalize">{name}</Label>
+      <Select value={z.type || 'none'} onValueChange={onType}>
+        <SelectTrigger className="h-9" data-testid={`${which}-${name}-type`}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {HF_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {(z.type === 'page' || z.type === 'custom') && (
+        <Input className="h-9 text-sm" data-testid={`${which}-${name}-text`}
+          placeholder={z.type === 'page' ? 'Page {n} of {total}' : 'Custom text…'}
+          value={z.text || ''} onChange={(e) => onText(e.target.value)} />
+      )}
+    </div>
+  );
+}
+
+function HFCard({ which, label, cfg, onEnabled, onZone }) {
+  const enabled = cfg.enabled !== false;
+  return (
+    <Card className="p-5 space-y-4" data-testid={`tpl-${which}-card`}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-semibold text-lg">{label}</h2>
+          <p className="text-sm text-muted-foreground">Pick what shows on the left, center &amp; right. In text use {'{n}'}, {'{total}'}, {'{company}'}, {'{date}'}.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch checked={enabled} onCheckedChange={onEnabled} data-testid={`${which}-enabled`} />
+          <Label className="text-sm font-normal">Show {label.toLowerCase()}</Label>
+        </div>
+      </div>
+      {enabled && (
+        <div className="grid sm:grid-cols-3 gap-3">
+          {['left', 'center', 'right'].map((zn) => (
+            <ZoneEditor key={zn} which={which} name={zn} zone={cfg[zn]}
+              onType={(v) => onZone(zn, { type: v })} onText={(v) => onZone(zn, { text: v })} />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Small reusable font + size picker ──────────────────────────────────────
 function FontSize({ font, size, onFont, onSize, label }) {
   return (
@@ -105,6 +178,10 @@ export default function ProposalTemplateSettings() {
   const setCompany = (k, v) => setTpl((p) => ({ ...p, company: { ...(p.company || {}), [k]: v } }));
   const setTitle = (k, v) => setTpl((p) => ({ ...p, title: { ...(p.title || {}), [k]: v } }));
   const setColor = (k, v) => setTpl((p) => ({ ...p, colors: { ...(p.colors || {}), [k]: v } }));
+  const setHFEnabled = (which, v) => setTpl((p) => ({ ...p, [which]: { ...(p[which] || {}), enabled: v } }));
+  const setHFZone = (which, zone, patch) => setTpl((p) => ({
+    ...p, [which]: { ...(p[which] || {}), [zone]: { ...((p[which] || {})[zone] || {}), ...patch } },
+  }));
 
   const setSection = (idx, patch) =>
     setTpl((p) => {
@@ -133,7 +210,7 @@ export default function ProposalTemplateSettings() {
         {
           id: uid(), type: 'paragraph', heading: 'New Section',
           heading_font: 'dejavu', heading_size: 13, body_font: 'dejavu', body_size: 10,
-          page_break_before: false, content: '',
+          page_break_before: false, space_before: 6, space_after: 8, line_spacing: 1.4, content: '',
         },
       ],
     }));
@@ -215,6 +292,8 @@ export default function ProposalTemplateSettings() {
   const company = tpl.company || {};
   const title = tpl.title || {};
   const cols = tpl.colors || {};
+  const header = tpl.header || {};
+  const footer = tpl.footer || {};
   const sections = tpl.sections || [];
   const logoSrc = company.logo_data ? `data:${company.logo_content_type || 'image/png'};base64,${company.logo_data}` : null;
 
@@ -304,6 +383,12 @@ export default function ProposalTemplateSettings() {
           <ColorField label="Alternate row background" value={cols.row_alt} onChange={(v) => setColor('row_alt', v)} testId="color-row-alt" />
         </div>
       </Card>
+
+      {/* Header & Footer */}
+      <HFCard which="header" label="Header" cfg={header}
+        onEnabled={(v) => setHFEnabled('header', v)} onZone={(zn, patch) => setHFZone('header', zn, patch)} />
+      <HFCard which="footer" label="Footer" cfg={footer}
+        onEnabled={(v) => setHFEnabled('footer', v)} onZone={(zn, patch) => setHFZone('footer', zn, patch)} />
 
       {/* Dynamic sections */}
       <div className="flex items-center justify-between">
@@ -400,6 +485,12 @@ export default function ProposalTemplateSettings() {
             <FontSize label="Body" font={sec.body_font} size={sec.body_size}
               onFont={(v) => setSection(idx, { body_font: v })} onSize={(v) => setSection(idx, { body_size: v })} />
           )}
+
+          <div className="grid grid-cols-3 gap-3 pt-1">
+            <NumField label="Space before (pt)" value={sec.space_before} onChange={(v) => setSection(idx, { space_before: v })} testId={`section-space-before-${idx}`} />
+            <NumField label="Space after (pt)" value={sec.space_after} onChange={(v) => setSection(idx, { space_after: v })} testId={`section-space-after-${idx}`} />
+            <NumField label="Line spacing (×)" step={0.1} value={sec.line_spacing} onChange={(v) => setSection(idx, { line_spacing: v })} testId={`section-line-spacing-${idx}`} />
+          </div>
 
           <div className="flex items-center gap-2 pt-1">
             <Switch checked={!!sec.page_break_before} onCheckedChange={(v) => setSection(idx, { page_break_before: v })} data-testid={`section-pagebreak-${idx}`} />
