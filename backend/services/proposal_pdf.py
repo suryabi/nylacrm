@@ -60,6 +60,29 @@ ACCENT = colors.HexColor("#00AEEF")
 OFFER_RED = colors.HexColor("#EA2C1F")
 DARK = colors.HexColor("#0f172a")
 GREY = colors.HexColor("#64748b")
+BORDER = colors.HexColor("#d0d5dd")
+ROW_ALT = colors.HexColor("#f1f5f9")
+
+# Default, fully admin-editable palette (hex strings).
+DEFAULT_COLORS = {
+    "accent": "#00AEEF",            # side bar + table header background
+    "title": "#0f172a",            # main title text
+    "body": "#0f172a",             # paragraph / body text
+    "heading": "#00AEEF",          # section header text
+    "header_text": "#64748b",      # company header lines + footer + disclaimer
+    "offer": "#EA2C1F",            # offer / discounted price
+    "border": "#d0d5dd",           # table grid / borders
+    "table_header_text": "#FFFFFF",  # pricing table header text
+    "row_alt": "#F1F5F9",          # alternating pricing row background
+}
+
+
+def _color(c, fallback):
+    try:
+        return colors.HexColor(c)
+    except Exception:
+        return fallback
+
 
 
 def _rs(v):
@@ -100,6 +123,7 @@ DEFAULT_TEMPLATE = {
         "text_template": "Nyla Air Water Proposal For {company}",
         "font": "dejavu", "size": 19,
     },
+    "colors": DEFAULT_COLORS,
     "sections": [
         _sec("intro", "paragraph", "",
              content=("Nyla gently transforms pure air into exceptionally smooth, beautifully balanced "
@@ -185,6 +209,7 @@ def _normalize(tpl: dict) -> dict:
         tpl = _migrate_legacy(tpl)
     tpl["company"] = {**DEFAULT_TEMPLATE["company"], **(tpl.get("company") or {})}
     tpl["title"] = {**DEFAULT_TEMPLATE["title"], **(tpl.get("title") or {})}
+    tpl["colors"] = {**DEFAULT_COLORS, **(tpl.get("colors") or {})}
     norm = []
     for sec in tpl.get("sections", []):
         base = _sec(sec.get("id") or "sec", sec.get("type") or "paragraph")
@@ -256,7 +281,10 @@ async def build_pricing_rows(tdb, lead: dict) -> list:
 def _draw_page(canvas, doc):
     canvas.saveState()
     w, h = A4
-    canvas.setFillColor(ACCENT)
+    pal = doc._tpl.get("colors", {})
+    c_accent = _color(pal.get("accent"), ACCENT)
+    c_header_text = _color(pal.get("header_text"), GREY)
+    canvas.setFillColor(c_accent)
     canvas.rect(w - 5 * mm, 0, 5 * mm, h, stroke=0, fill=1)
 
     company = doc._tpl.get("company", {})
@@ -279,7 +307,7 @@ def _draw_page(canvas, doc):
             except Exception:
                 pass
 
-    canvas.setFillColor(GREY)
+    canvas.setFillColor(c_header_text)
     canvas.setFont(_MONEY_FONT, 8)
     y = h - 14 * mm
     right_x = w - 12 * mm
@@ -295,6 +323,16 @@ def _draw_page(canvas, doc):
 
 def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
     template = _normalize(template)
+    pal = template.get("colors", {})
+    c_accent = _color(pal.get("accent"), ACCENT)
+    c_title = _color(pal.get("title"), DARK)
+    c_body = _color(pal.get("body"), DARK)
+    c_heading = _color(pal.get("heading"), c_accent)
+    c_header_text = _color(pal.get("header_text"), GREY)
+    c_border = _color(pal.get("border"), BORDER)
+    c_row_alt = _color(pal.get("row_alt"), ROW_ALT)
+    c_table_head_text = _color(pal.get("table_header_text"), colors.white)
+    offer_hex = pal.get("offer") or "#EA2C1F"
     buf = io.BytesIO()
     styles = getSampleStyleSheet()
 
@@ -302,25 +340,25 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
         return ParagraphStyle(f"b_{sec['id']}", parent=styles["BodyText"],
                               fontName=_font(sec.get("body_font"), False),
                               fontSize=sec.get("body_size", 10),
-                              leading=sec.get("body_size", 10) + 4, textColor=DARK, spaceAfter=4)
+                              leading=sec.get("body_size", 10) + 4, textColor=c_body, spaceAfter=4)
 
     def heading_style(sec):
         return ParagraphStyle(f"h_{sec['id']}", parent=styles["Heading2"],
                               fontName=_font(sec.get("heading_font"), True),
                               fontSize=sec.get("heading_size", 13),
                               leading=sec.get("heading_size", 13) + 4,
-                              textColor=ACCENT, spaceBefore=10, spaceAfter=5)
+                              textColor=c_heading, spaceBefore=10, spaceAfter=5)
 
     small = ParagraphStyle("small", parent=styles["BodyText"], fontName=_MONEY_FONT, fontSize=8.5,
-                           textColor=GREY, leading=11)
-    date_s = ParagraphStyle("date", parent=styles["BodyText"], fontName=_MONEY_FONT, fontSize=10, textColor=GREY)
+                           textColor=c_header_text, leading=11)
+    date_s = ParagraphStyle("date", parent=styles["BodyText"], fontName=_MONEY_FONT, fontSize=10, textColor=c_header_text)
 
     company_name = lead.get("company") or "Prospect"
     title_cfg = template.get("title", {})
     title_s = ParagraphStyle("title", parent=styles["Heading1"],
                              fontName=_font(title_cfg.get("font"), True),
                              fontSize=title_cfg.get("size", 19),
-                             leading=title_cfg.get("size", 19) + 4, textColor=DARK, spaceAfter=8)
+                             leading=title_cfg.get("size", 19) + 4, textColor=c_title, spaceAfter=8)
     title = (title_cfg.get("text_template") or "Proposal For {company}").format(company=company_name)
 
     story = [Paragraph(datetime.now(timezone.utc).strftime("%d-%b-%Y").upper(), date_s),
@@ -354,14 +392,14 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
                                        ParagraphStyle("ok", parent=bstyle, textColor=colors.HexColor("#166534"))))
             if sec.get("not_allowed"):
                 story.append(Paragraph("It must NOT be listed under: " + " | ".join(sec["not_allowed"]),
-                                       ParagraphStyle("no", parent=bstyle, textColor=OFFER_RED)))
+                                       ParagraphStyle("no", parent=bstyle, textColor=_color(offer_hex, OFFER_RED))))
         elif t == "pricing_table":
             head = ["Format", "Standard Pricing", "Offer Price", "Return Bottle Credit", "Landing Price after Credit"]
             cell = ParagraphStyle("pcell", parent=bstyle, fontName=_MONEY_FONT, fontSize=sec.get("body_size", 9), leading=11)
-            data = [[Paragraph(f"<b>{c}</b>", ParagraphStyle("th", parent=cell, textColor=colors.white)) for c in head]]
+            data = [[Paragraph(f"<b>{c}</b>", ParagraphStyle("th", parent=cell, textColor=c_table_head_text)) for c in head]]
             if pricing_rows:
                 for r in pricing_rows:
-                    offer_html = f'<font color="#EA2C1F"><b>{_rs(r["offer"])}</b></font>' if r["offer"] is not None else "-"
+                    offer_html = f'<font color="{offer_hex}"><b>{_rs(r["offer"])}</b></font>' if r["offer"] is not None else "-"
                     std_html = f'<strike>{_rs(r["standard"])}</strike>' if r["standard"] else "-"
                     data.append([
                         Paragraph(str(r["format"]), cell),
@@ -374,11 +412,11 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
                 data.append([Paragraph("Add the proposed SKUs & pricing on the lead to populate this table.", cell), "", "", "", ""])
             tbl = Table(data, colWidths=[58 * mm, 27 * mm, 25 * mm, 28 * mm, 30 * mm], repeatRows=1)
             tbl.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), ACCENT),
+                ("BACKGROUND", (0, 0), (-1, 0), c_accent),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f1f5f9")]),
-                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#d0d5dd")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, c_row_alt]),
+                ("GRID", (0, 0), (-1, -1), 0.4, c_border),
                 ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
                 ("LEFTPADDING", (0, 0), (-1, -1), 6),
             ]))

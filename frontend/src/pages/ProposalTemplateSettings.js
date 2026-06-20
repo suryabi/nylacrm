@@ -37,6 +37,22 @@ const toText = (arr) => (Array.isArray(arr) ? arr.join('\n') : '');
 const toList = (txt) => (txt || '').split('\n').map((s) => s.trim()).filter(Boolean);
 const uid = () => `sec_${Math.random().toString(36).slice(2, 9)}`;
 
+// ── Color picker field ─────────────────────────────────────────────────────
+function ColorField({ label, value, onChange, testId }) {
+  const v = value || '#000000';
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm">{label}</Label>
+      <div className="flex items-center gap-2">
+        <input type="color" value={v} onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-11 rounded-md border cursor-pointer p-0.5 bg-background" data-testid={`${testId}-swatch`} />
+        <Input value={value || ''} onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-28 font-mono text-sm uppercase" data-testid={testId} />
+      </div>
+    </div>
+  );
+}
+
 // ── Small reusable font + size picker ──────────────────────────────────────
 function FontSize({ font, size, onFont, onSize, label }) {
   return (
@@ -88,6 +104,7 @@ export default function ProposalTemplateSettings() {
 
   const setCompany = (k, v) => setTpl((p) => ({ ...p, company: { ...(p.company || {}), [k]: v } }));
   const setTitle = (k, v) => setTpl((p) => ({ ...p, title: { ...(p.title || {}), [k]: v } }));
+  const setColor = (k, v) => setTpl((p) => ({ ...p, colors: { ...(p.colors || {}), [k]: v } }));
 
   const setSection = (idx, patch) =>
     setTpl((p) => {
@@ -197,6 +214,7 @@ export default function ProposalTemplateSettings() {
 
   const company = tpl.company || {};
   const title = tpl.title || {};
+  const cols = tpl.colors || {};
   const sections = tpl.sections || [];
   const logoSrc = company.logo_data ? `data:${company.logo_content_type || 'image/png'};base64,${company.logo_data}` : null;
 
@@ -266,6 +284,25 @@ export default function ProposalTemplateSettings() {
         </div>
         <FontSize label="Title" font={title.font} size={title.size}
           onFont={(v) => setTitle('font', v)} onSize={(v) => setTitle('size', v)} />
+      </Card>
+
+      {/* Colors */}
+      <Card className="p-5 space-y-4" data-testid="tpl-colors-card">
+        <div>
+          <h2 className="font-semibold text-lg">Colors</h2>
+          <p className="text-sm text-muted-foreground">Match these to your brand — they apply to the generated PDF.</p>
+        </div>
+        <div className="grid sm:grid-cols-3 gap-x-4 gap-y-3">
+          <ColorField label="Accent / side bar" value={cols.accent} onChange={(v) => setColor('accent', v)} testId="color-accent" />
+          <ColorField label="Section headers" value={cols.heading} onChange={(v) => setColor('heading', v)} testId="color-heading" />
+          <ColorField label="Title text" value={cols.title} onChange={(v) => setColor('title', v)} testId="color-title" />
+          <ColorField label="Body text" value={cols.body} onChange={(v) => setColor('body', v)} testId="color-body" />
+          <ColorField label="Header & footer text" value={cols.header_text} onChange={(v) => setColor('header_text', v)} testId="color-header-text" />
+          <ColorField label="Offer price" value={cols.offer} onChange={(v) => setColor('offer', v)} testId="color-offer" />
+          <ColorField label="Table grid / borders" value={cols.border} onChange={(v) => setColor('border', v)} testId="color-border" />
+          <ColorField label="Table header text" value={cols.table_header_text} onChange={(v) => setColor('table_header_text', v)} testId="color-table-header-text" />
+          <ColorField label="Alternate row background" value={cols.row_alt} onChange={(v) => setColor('row_alt', v)} testId="color-row-alt" />
+        </div>
       </Card>
 
       {/* Dynamic sections */}
