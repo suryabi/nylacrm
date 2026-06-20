@@ -1,11 +1,12 @@
 # Changelog
 
 
-## 2026-06-20 — Per-lead Proposal customization + live PDF preview ✅
+## 2026-06-20 — Per-lead Proposal customization + manual-refresh PDF preview ✅
 - Need: edit proposal wording for a *specific* lead before generating (company template stays the source of truth for logo/fonts).
 - Backend (`server.py`): new endpoints `GET/PUT/DELETE /api/leads/{id}/proposal/customization` (stores `proposal_override` on the lead) and `POST /api/leads/{id}/proposal/preview` (returns raw `application/pdf`, accepts an unsaved override or falls back to saved/global). `generate` now merges the saved override. `services/proposal_pdf.py` got `merge_override(template, override)` — only title text + section set/order/text come from the override; company/logo/fonts always from the global template.
-- Frontend: new `components/ProposalCustomizeDialog.js` — two-pane dialog (left text editor for headings/paragraphs/list items/category/disclaimer + add/remove/reorder sections; right debounced live PDF preview iframe). Wired into `LeadDetail.js`: "Generate Proposal" and "Customize & Regenerate" now open this dialog; Save persists the per-lead override, Generate saves+generates, Reset reverts to the company template.
-- Verified: testing agent iteration_210 — backend 10/10 pytest, frontend 10/10 flows, no bugs. Override cleaned up on the test lead. (Headless screenshots show the blob-PDF iframe blank; renders fine in real Chrome — validated via POST /preview 200 + %PDF-.)
+- Frontend: new `components/ProposalCustomizeDialog.js` — two-pane dialog (left text editor for headings/paragraphs/list items/category/disclaimer + add/remove/reorder sections; right PDF preview iframe). Wired into `LeadDetail.js`: "Generate Proposal" and "Customize & Regenerate" open this dialog; Save persists the per-lead override, Generate saves+generates, Reset reverts to the company template.
+- UX refinement (per user feedback): preview is **no longer real-time** — editing marks "Unapplied changes" and the user clicks **Update preview** to refresh. Editor inputs/textareas enlarged to `text-base` for readability.
+- Verified: testing agent iteration_210 (backend 10/10, frontend 10/10) + self screenshot of the manual-refresh flow. (Headless screenshots show the blob-PDF iframe blank; renders in real Chrome — validated via POST /preview 200 + %PDF-.)
 - Tech-debt noted by review: per-lead overrides snapshot fonts, so later template font changes won't propagate to leads with a saved override; proposal routes should move out of the 11k-line server.py into a dedicated router.
 
 
