@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 2026-06-21 — Feature: unified Documents area (Proposal + Deck) with Deck approval flow ✅
+- Moved the **Proposal** card out of the right column to sit **directly under the Interested/Proposed SKUs** card, side-by-side (horizontal on desktop, stacked on mobile) with a new **Deck** card.
+- Removed the standalone "Deck" button next to *Edit Lead*. Deck generation now lives inside the Documents area.
+- New `DeckSection.jsx`: generates a Gamma deck for the lead, shows a live "Generating…" state with polling, then auto-populates. One active deck per lead (regenerate replaces & resets approval).
+- **Deck approval flow** mirrors proposals: on completion it enters *Pending Review* and an approval task is routed to the generator's reporting manager. Approvers (CEO/Director/VP/National Sales Head) can Approve / Request Changes / Reject with comments + review history. View (Gamma web link) and Download (PDF export) available.
+- Backend (`routes/gamma.py`): added review fields to `gamma_generations`, one-active-deck supersede on generate, approval-task creation on completion (poll), and `PUT /api/gamma/generations/{id}/review`. Added `ApprovalType.DECK` in server.py.
+- Tested: deck list/poll, role-gated review (403 for non-approvers, 404 for missing), full approve flow (status→approved, comment recorded). Layout verified via screenshot. NOTE: live Gamma generation requires the tenant's Gamma API key.
+
+
 ## 2026-06-21 — Fix: proposal pricing table rendered in a different font ✅
 - User report: with the whole template set to Helvetica, the pricing table still showed a different typeface.
 - Two causes: (1) the ₹ (U+20B9) symbol doesn't exist in standard PDF fonts, forcing every price to fall back to DejaVu; (2) section fonts default to the legacy `"dejavu"` key, so a pricing section left on its default rendered in DejaVu even when the title/prose were Helvetica.

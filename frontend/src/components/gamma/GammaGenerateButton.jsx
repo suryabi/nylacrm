@@ -18,7 +18,7 @@ const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` }
  */
 export default function GammaGenerateButton({
   sourceType, sourceId, label = 'Generate Deck',
-  variant = 'outline', size = 'sm', className = '',
+  variant = 'outline', size = 'sm', className = '', onClose = null,
 }) {
   const { hasActionPermission } = useTenantConfig();
   const canUse = hasActionPermission ? hasActionPermission('gamma_generator', 'view') : true;
@@ -28,6 +28,11 @@ export default function GammaGenerateButton({
   const [loadingDraft, setLoadingDraft] = useState(false);
 
   if (!canUse) return null;
+
+  const handleOpenChange = (next) => {
+    setOpen(next);
+    if (!next && onClose) onClose();
+  };
 
   const openDialog = async () => {
     setOpen(true);
@@ -50,7 +55,7 @@ export default function GammaGenerateButton({
       <Button variant={variant} size={size} className={className} onClick={openDialog} data-testid="gamma-generate-deck-btn">
         <Sparkles className="h-4 w-4 mr-1.5" /> {label}
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto" data-testid="gamma-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">

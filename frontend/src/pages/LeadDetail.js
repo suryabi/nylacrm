@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
 import { ShareButton } from '../components/share/ShareButton';
-import GammaGenerateButton from '../components/gamma/GammaGenerateButton';
+import DeckSection from '../components/DeckSection';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
@@ -1153,7 +1153,6 @@ ${userEmail}`;
         
         {/* Action Buttons - Stack on mobile */}
         <div className="flex items-center gap-2 shrink-0">
-          <GammaGenerateButton sourceType="lead" sourceId={id} label="Deck" className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 border-indigo-300 text-indigo-700 hover:bg-indigo-50" />
           {canConvert && (
             <Button
               onClick={handleConvertToAccount}
@@ -1435,6 +1434,254 @@ ${userEmail}`;
               </div>
             )}
           </Card>
+          {/* Documents — Proposal + Deck (side by side) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start" data-testid="lead-documents-section">
+          {/* Proposal Section */}
+          <Card className="p-6" data-testid="proposal-section">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Proposal</h2>
+              {proposal && (
+                <Badge className={proposalStatusConfig[proposal.status]?.color || 'bg-gray-100'}>
+                  {proposalStatusConfig[proposal.status]?.label || proposal.status}
+                </Badge>
+              )}
+            </div>
+
+            {proposalLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !proposal ? (
+              <div className="text-center py-8">
+                <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-muted-foreground mb-4">No proposal yet — generate a branded one from the lead, or upload your own</p>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                  <Button onClick={() => setCustomizeOpen(true)} data-testid="generate-proposal-btn">
+                    <Sparkles className="mr-2 h-4 w-4" /> Generate Proposal
+                  </Button>
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleProposalUpload}
+                      disabled={uploadingProposal}
+                      data-testid="proposal-upload-input"
+                    />
+                    <Button asChild variant="outline" disabled={uploadingProposal}>
+                      <span>
+                        {uploadingProposal ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
+                        ) : (
+                          <><Upload className="mr-2 h-4 w-4" /> Upload Proposal</>
+                        )}
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Branded PDF from your template, or upload PDF/DOC/DOCX (Max 5 MB)</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Proposal File Info */}
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <div className="flex items-start gap-4">
+                    {/* File Type Thumbnail */}
+                    {getProposalFileType(proposal.file_name) === 'pdf' ? (
+                      <div className="h-12 w-12 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                        <FileText className="h-6 w-6 text-red-600 dark:text-red-400" />
+                      </div>
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                        <FileIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{proposal.file_name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className={`text-xs ${getProposalFileType(proposal.file_name) === 'pdf' ? 'border-red-300 text-red-600' : 'border-blue-300 text-blue-600'}`}>
+                          {getProposalFileType(proposal.file_name) === 'pdf' ? 'PDF' : 'Word Document'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {(proposal.file_size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Version {proposal.version} • Uploaded by {proposal.uploaded_by_name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(new Date(proposal.uploaded_at), 'MMM d, yyyy h:mm a')}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Action Buttons - Separate Row */}
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
+                    {/* View PDF Button - Only for PDFs */}
+                    {getProposalFileType(proposal.file_name) === 'pdf' && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleOpenPdfViewer}
+                        disabled={loadingPdfViewer}
+                        data-testid="proposal-view-btn"
+                      >
+                        {loadingPdfViewer ? (
+                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Loading...</>
+                        ) : (
+                          <><Eye className="h-4 w-4 mr-1" /> View PDF</>
+                        )}
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleProposalDownload}
+                      data-testid="proposal-download-btn"
+                    >
+                      <Download className="h-4 w-4 mr-1" /> Download
+                    </Button>
+                    {proposal.status === 'approved' && (
+                      <ShareButton
+                        documentType="lead_proposal"
+                        documentId={lead?.id}
+                        label="Share via Email"
+                        variant="outline"
+                        size="sm"
+                        className="text-primary"
+                        testId={`lead-proposal-${lead?.id}`}
+                      />
+                    )}
+                    {canDeleteProposal && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={handleProposalDelete}
+                        data-testid="proposal-delete-btn"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Review Comments History */}
+                {proposal.review_comments && proposal.review_comments.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-muted-foreground">Review History</p>
+                    {proposal.review_comments.map((comment, idx) => {
+                      const StatusIcon = proposalStatusConfig[comment.action]?.icon || MessageSquare;
+                      return (
+                        <div key={comment.id || idx} className="flex gap-3 p-3 border rounded-lg">
+                          <StatusIcon className={`h-5 w-5 flex-shrink-0 ${
+                            comment.action === 'approved' ? 'text-green-600' :
+                            comment.action === 'rejected' ? 'text-red-600' :
+                            comment.action === 'changes_requested' ? 'text-orange-600' : 'text-muted-foreground'
+                          }`} />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{comment.reviewer_name}</span>
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {comment.action.replace('_', ' ')}
+                              </Badge>
+                            </div>
+                            {comment.comment && (
+                              <p className="text-sm text-muted-foreground mt-1">{comment.comment}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Review Actions (for approvers) */}
+                {canApproveProposal && ['pending_review', 'revised'].includes(proposal.status) && (
+                  <div className="border-t pt-4 space-y-3">
+                    <p className="text-sm font-medium">Review Proposal</p>
+                    <Textarea
+                      placeholder="Add comments or suggested changes..."
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      rows={3}
+                      data-testid="review-comment-input"
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleProposalReview('approved')}
+                        disabled={reviewingProposal}
+                        className="bg-green-600 hover:bg-green-700"
+                        data-testid="proposal-approve-btn"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" /> Approve
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleProposalReview('changes_requested')}
+                        disabled={reviewingProposal || !reviewComment.trim()}
+                        className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                        data-testid="proposal-changes-btn"
+                      >
+                        <AlertCircle className="h-4 w-4 mr-1" /> Request Changes
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => handleProposalReview('rejected')}
+                        disabled={reviewingProposal || !reviewComment.trim()}
+                        className="text-red-600 border-red-300 hover:bg-red-50"
+                        data-testid="proposal-reject-btn"
+                      >
+                        <XCircle className="h-4 w-4 mr-1" /> Reject
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload New/Revised Proposal */}
+                {canUploadNewProposal && (
+                  <div className="border-t pt-4 flex flex-wrap items-center gap-2">
+                    <Button variant="outline" onClick={() => setCustomizeOpen(true)} data-testid="regenerate-proposal-btn">
+                      <Sparkles className="mr-2 h-4 w-4" /> Customize &amp; Regenerate
+                    </Button>
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept=".pdf,.doc,.docx"
+                        onChange={handleProposalUpload}
+                        disabled={uploadingProposal}
+                        data-testid="proposal-reupload-input"
+                      />
+                      <Button variant="outline" asChild disabled={uploadingProposal}>
+                        <span>
+                          {uploadingProposal ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
+                          ) : (
+                            <><Upload className="mr-2 h-4 w-4" /> 
+                              {proposal.status === 'changes_requested' ? 'Upload Revised Proposal' : 
+                               proposal.status === 'approved' ? 'Upload New Proposal' : 
+                               'Replace Proposal'}
+                            </>
+                          )}
+                        </span>
+                      </Button>
+                    </label>
+                    {proposal.status === 'approved' && (
+                      <p className="text-xs text-muted-foreground mt-2 w-full">
+                        Generating/uploading a new proposal will reset the approval status and require a new review cycle.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+            <DeckSection leadId={id} sourceLabel={lead.company} canReview={canApproveProposal} />
+          </div>
+
 
           {/* Contact Information */}
           <Card className="p-6">
@@ -2003,249 +2250,6 @@ ${userEmail}`;
             )}
           </Card>
 
-          {/* Proposal Section */}
-          <Card className="p-6" data-testid="proposal-section">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Proposal</h2>
-              {proposal && (
-                <Badge className={proposalStatusConfig[proposal.status]?.color || 'bg-gray-100'}>
-                  {proposalStatusConfig[proposal.status]?.label || proposal.status}
-                </Badge>
-              )}
-            </div>
-
-            {proposalLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : !proposal ? (
-              <div className="text-center py-8">
-                <FileText className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-muted-foreground mb-4">No proposal yet — generate a branded one from the lead, or upload your own</p>
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
-                  <Button onClick={() => setCustomizeOpen(true)} data-testid="generate-proposal-btn">
-                    <Sparkles className="mr-2 h-4 w-4" /> Generate Proposal
-                  </Button>
-                  <label className="cursor-pointer">
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.doc,.docx"
-                      onChange={handleProposalUpload}
-                      disabled={uploadingProposal}
-                      data-testid="proposal-upload-input"
-                    />
-                    <Button asChild variant="outline" disabled={uploadingProposal}>
-                      <span>
-                        {uploadingProposal ? (
-                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
-                        ) : (
-                          <><Upload className="mr-2 h-4 w-4" /> Upload Proposal</>
-                        )}
-                      </span>
-                    </Button>
-                  </label>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">Branded PDF from your template, or upload PDF/DOC/DOCX (Max 5 MB)</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Proposal File Info */}
-                <div className="p-4 bg-muted/50 rounded-lg">
-                  <div className="flex items-start gap-4">
-                    {/* File Type Thumbnail */}
-                    {getProposalFileType(proposal.file_name) === 'pdf' ? (
-                      <div className="h-12 w-12 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
-                        <FileText className="h-6 w-6 text-red-600 dark:text-red-400" />
-                      </div>
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                        <FileIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{proposal.file_name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="outline" className={`text-xs ${getProposalFileType(proposal.file_name) === 'pdf' ? 'border-red-300 text-red-600' : 'border-blue-300 text-blue-600'}`}>
-                          {getProposalFileType(proposal.file_name) === 'pdf' ? 'PDF' : 'Word Document'}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {(proposal.file_size / 1024).toFixed(1)} KB
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Version {proposal.version} • Uploaded by {proposal.uploaded_by_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(proposal.uploaded_at), 'MMM d, yyyy h:mm a')}
-                      </p>
-                    </div>
-                  </div>
-                  {/* Action Buttons - Separate Row */}
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t flex-wrap">
-                    {/* View PDF Button - Only for PDFs */}
-                    {getProposalFileType(proposal.file_name) === 'pdf' && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={handleOpenPdfViewer}
-                        disabled={loadingPdfViewer}
-                        data-testid="proposal-view-btn"
-                      >
-                        {loadingPdfViewer ? (
-                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Loading...</>
-                        ) : (
-                          <><Eye className="h-4 w-4 mr-1" /> View PDF</>
-                        )}
-                      </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleProposalDownload}
-                      data-testid="proposal-download-btn"
-                    >
-                      <Download className="h-4 w-4 mr-1" /> Download
-                    </Button>
-                    {proposal.status === 'approved' && (
-                      <ShareButton
-                        documentType="lead_proposal"
-                        documentId={lead?.id}
-                        label="Share via Email"
-                        variant="outline"
-                        size="sm"
-                        className="text-primary"
-                        testId={`lead-proposal-${lead?.id}`}
-                      />
-                    )}
-                    {canDeleteProposal && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={handleProposalDelete}
-                        data-testid="proposal-delete-btn"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Review Comments History */}
-                {proposal.review_comments && proposal.review_comments.length > 0 && (
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium text-muted-foreground">Review History</p>
-                    {proposal.review_comments.map((comment, idx) => {
-                      const StatusIcon = proposalStatusConfig[comment.action]?.icon || MessageSquare;
-                      return (
-                        <div key={comment.id || idx} className="flex gap-3 p-3 border rounded-lg">
-                          <StatusIcon className={`h-5 w-5 flex-shrink-0 ${
-                            comment.action === 'approved' ? 'text-green-600' :
-                            comment.action === 'rejected' ? 'text-red-600' :
-                            comment.action === 'changes_requested' ? 'text-orange-600' : 'text-muted-foreground'
-                          }`} />
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{comment.reviewer_name}</span>
-                              <Badge variant="outline" className="text-xs capitalize">
-                                {comment.action.replace('_', ' ')}
-                              </Badge>
-                            </div>
-                            {comment.comment && (
-                              <p className="text-sm text-muted-foreground mt-1">{comment.comment}</p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {format(new Date(comment.created_at), 'MMM d, yyyy h:mm a')}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Review Actions (for approvers) */}
-                {canApproveProposal && ['pending_review', 'revised'].includes(proposal.status) && (
-                  <div className="border-t pt-4 space-y-3">
-                    <p className="text-sm font-medium">Review Proposal</p>
-                    <Textarea
-                      placeholder="Add comments or suggested changes..."
-                      value={reviewComment}
-                      onChange={(e) => setReviewComment(e.target.value)}
-                      rows={3}
-                      data-testid="review-comment-input"
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() => handleProposalReview('approved')}
-                        disabled={reviewingProposal}
-                        className="bg-green-600 hover:bg-green-700"
-                        data-testid="proposal-approve-btn"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" /> Approve
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleProposalReview('changes_requested')}
-                        disabled={reviewingProposal || !reviewComment.trim()}
-                        className="text-orange-600 border-orange-300 hover:bg-orange-50"
-                        data-testid="proposal-changes-btn"
-                      >
-                        <AlertCircle className="h-4 w-4 mr-1" /> Request Changes
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleProposalReview('rejected')}
-                        disabled={reviewingProposal || !reviewComment.trim()}
-                        className="text-red-600 border-red-300 hover:bg-red-50"
-                        data-testid="proposal-reject-btn"
-                      >
-                        <XCircle className="h-4 w-4 mr-1" /> Reject
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Upload New/Revised Proposal */}
-                {canUploadNewProposal && (
-                  <div className="border-t pt-4 flex flex-wrap items-center gap-2">
-                    <Button variant="outline" onClick={() => setCustomizeOpen(true)} data-testid="regenerate-proposal-btn">
-                      <Sparkles className="mr-2 h-4 w-4" /> Customize &amp; Regenerate
-                    </Button>
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept=".pdf,.doc,.docx"
-                        onChange={handleProposalUpload}
-                        disabled={uploadingProposal}
-                        data-testid="proposal-reupload-input"
-                      />
-                      <Button variant="outline" asChild disabled={uploadingProposal}>
-                        <span>
-                          {uploadingProposal ? (
-                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Uploading...</>
-                          ) : (
-                            <><Upload className="mr-2 h-4 w-4" /> 
-                              {proposal.status === 'changes_requested' ? 'Upload Revised Proposal' : 
-                               proposal.status === 'approved' ? 'Upload New Proposal' : 
-                               'Replace Proposal'}
-                            </>
-                          )}
-                        </span>
-                      </Button>
-                    </label>
-                    {proposal.status === 'approved' && (
-                      <p className="text-xs text-muted-foreground mt-2 w-full">
-                        Generating/uploading a new proposal will reset the approval status and require a new review cycle.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
 
           <Card className="p-4 sm:p-6">
             <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">Activity Timeline</h2>

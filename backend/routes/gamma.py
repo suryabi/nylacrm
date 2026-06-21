@@ -311,6 +311,12 @@ async def start_generation(body: GenerateRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=502, detail="Gamma did not return a generationId")
 
     now = _now()
+    # One active deck per lead: supersede previous decks for the same lead source.
+    if body.source_type == "lead" and body.source_id:
+        await _db.gamma_generations.delete_many({
+            "tenant_id": tenant_id, "source_type": "lead", "source_id": body.source_id,
+        })
+
     job = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -328,6 +334,13 @@ async def start_generation(body: GenerateRequest, current_user: dict = Depends(g
         "source_label": body.source_label,
         "credits_deducted": None,
         "error_message": None,
+        # Approval flow (mirrors lead proposals) — only meaningful for lead decks.
+        "review_status": "pending_review",
+        "reviewed_by": None,
+        "reviewed_by_name": None,
+        "reviewed_at": None,
+        "review_comments": [],
+        "approval_task_created": False,
         "created_by": current_user.get("id"),
         "created_by_name": current_user.get("name"),
         "created_at": now,
@@ -399,4 +412,88 @@ async def poll_generation(job_id: str, current_user: dict = Depends(get_current_
     await _db.gamma_generations.update_one(
         {"id": job_id, "tenant_id": tenant_id}, {"$set": updates}
     )
+
+    # When a lead deck first reaches 'completed', route it for approval (mirrors proposals).
+    if (updates.get("status") == "completed" and job.get("source_type") == "lead"
+            and not job.get("approval_task_created")):
+        try:
+            from server import create_approval_task, ApprovalType
+            from database import get_tenant_db
+            creator = await get_tenant_db().users.find_one(
+                {"id": job.get("created_by")}, {"_id": 0, "reports_to": 1, "name": 1})
+            reports_to = (creator or {}).get("reports_to")
+            if reports_to:
+                label = job.get("source_label") or job.get("title") or "Deck"
+                await create_approval_task(
+                    approval_type=ApprovalType.DECK,
+                    requester_id=job.get("created_by"),
+                    requester_name=job.get("created_by_name") or "Unknown",
+                    approver_id=reports_to,
+                    details=f"{label} - {job.get('title')}",
+                    description=f"Presentation deck generated for review.\n\nLead: {label}\nDeck: {job.get('title')}",
+                    reference_id=job.get("source_id"),
+                    reference_type="deck",
+                    lead_id=job.get("source_id"),
+                )
+            await _db.gamma_generations.update_one(
+                {"id": job_id, "tenant_id": tenant_id}, {"$set": {"approval_task_created": True}})
+            updates["approval_task_created"] = True
+        except Exception as exc:
+            pass
+
     return {**job, **updates}
+
+
+# ── Deck approval flow (mirrors lead proposals) ──────────────────────────────
+DECK_APPROVER_ROLES = {"ceo", "director", "vice president", "national sales head"}
+
+
+class DeckReviewRequest(BaseModel):
+    action: str  # 'approved' | 'rejected' | 'changes_requested'
+    comment: Optional[str] = ""
+
+
+@router.put("/generations/{job_id}/review")
+async def review_generation(job_id: str, body: DeckReviewRequest, current_user: dict = Depends(get_current_user)):
+    """Approve / reject / request changes on a generated deck."""
+    tenant_id = get_current_tenant_id()
+    if (current_user.get("role") or "").strip().lower() not in DECK_APPROVER_ROLES:
+        raise HTTPException(status_code=403, detail="Only CEO, Director, VP, or National Sales Head can review decks")
+
+    job = await _db.gamma_generations.find_one({"id": job_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Deck not found")
+
+    action = body.action
+    if action not in ("approved", "rejected", "changes_requested"):
+        raise HTTPException(status_code=400, detail="Invalid review action")
+
+    review_comment = {
+        "id": str(uuid.uuid4()),
+        "reviewer_id": current_user.get("id"),
+        "reviewer_name": current_user.get("name"),
+        "action": action,
+        "comment": body.comment or "",
+        "created_at": _now(),
+    }
+    await _db.gamma_generations.update_one(
+        {"id": job_id, "tenant_id": tenant_id},
+        {"$set": {"review_status": action, "reviewed_by": current_user.get("id"),
+                  "reviewed_by_name": current_user.get("name"), "reviewed_at": _now(),
+                  "updated_at": _now()},
+         "$push": {"review_comments": review_comment}},
+    )
+
+    # Close/cancel the linked approval task.
+    try:
+        from server import complete_approval_task, ApprovalType
+        await complete_approval_task(
+            approval_type=ApprovalType.DECK,
+            reference_id=job.get("source_id"),
+            status="completed" if action in ("approved", "rejected") else "cancelled",
+        )
+    except Exception:
+        pass
+
+    updated = await _db.gamma_generations.find_one({"id": job_id, "tenant_id": tenant_id}, {"_id": 0})
+    return {"generation": updated, "message": f"Deck {action.replace('_', ' ')}"}

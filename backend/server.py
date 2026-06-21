@@ -389,6 +389,7 @@ class ApprovalType:
     BUDGET_REQUEST = 'budget_request'
     PROPOSAL = 'proposal'
     CONTRACT = 'contract'
+    DECK = 'deck'
     EXPENSE = 'expense'
     PURCHASE_ORDER = 'purchase_order'
 
@@ -419,6 +420,12 @@ APPROVAL_CONFIG = {
     },
     ApprovalType.CONTRACT: {
         'title_template': 'Contract Approval: {details}',
+        'task_type': 'general',
+        'priority': 'high',
+        'due_days': 2,
+    },
+    ApprovalType.DECK: {
+        'title_template': 'Deck Approval: {details}',
         'task_type': 'general',
         'priority': 'high',
         'due_days': 2,
