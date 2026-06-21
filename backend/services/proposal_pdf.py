@@ -271,16 +271,14 @@ def _color(c, fallback):
 
 
 def _rs(v, font_key=None):
-    """Format a rupee amount. Uses the ₹ symbol only when the chosen font can
-    render it; otherwise falls back to 'Rs.' so the whole document stays in a
-    single typeface (e.g. an all-Helvetica template won't mix in DejaVu)."""
+    """Format a rupee amount as plain ASCII ("INR 1,200") so it renders in the
+    chosen font for EVERY typeface — no ₹ glyph means no font fallback, ever."""
     try:
         f = float(v)
         n = int(f) if f == int(f) else round(f, 2)
     except Exception:
         return "-"
-    use_symbol = (font_key or "dejavu") in _RUPEE_FONT_KEYS
-    return f"₹{n:,}" if use_symbol else f"Rs. {n:,}"
+    return f"INR {n:,}"
 
 
 # ── Default template (v2) ────────────────────────────────────────────────────
@@ -699,7 +697,9 @@ def _draw_page(canvas, doc):
     c_accent = _color(pal.get("accent"), ACCENT)
     c_header_text = _color(pal.get("header_text"), GREY)
     company = tpl.get("company", {})
-    base_font = (tpl.get("title", {}) or {}).get("font", "dejavu")
+    base_font = (tpl.get("title", {}) or {}).get("font") or "helvetica"
+    if base_font == "dejavu":
+        base_font = "helvetica"
 
     # side accent bar
     canvas.setFillColor(c_accent)
@@ -755,26 +755,34 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
     def body_style(sec):
         sz = sec.get("body_size", 10)
         return ParagraphStyle(f"b_{sec['id']}", parent=styles["BodyText"],
-                              fontName=_font(sec.get("body_font"), False),
+                              fontName=_font(_secfont(sec.get("body_font")), False),
                               fontSize=sz, leading=round(sz * _ls(sec)),
                               textColor=c_body, spaceAfter=2)
 
     def heading_style(sec):
         sz = sec.get("heading_size", 13)
         return ParagraphStyle(f"h_{sec['id']}", parent=styles["Heading2"],
-                              fontName=_font(sec.get("heading_font"), True),
+                              fontName=_font(_secfont(sec.get("heading_font")), True),
                               fontSize=sz, leading=round(sz * _ls(sec)),
                               textColor=c_heading, spaceBefore=0, spaceAfter=4)
 
     company_name = lead.get("company") or "Prospect"
     title_cfg = template.get("title", {})
-    base_font_key = title_cfg.get("font", "dejavu")
+    base_font_key = title_cfg.get("font") or "helvetica"
+    if base_font_key == "dejavu":
+        base_font_key = "helvetica"
+
+    def _secfont(f):
+        """Resolve a section's font: legacy 'dejavu' default (or unset) now inherits
+        the document's title font so the whole proposal stays in ONE typeface."""
+        return base_font_key if (not f or f == "dejavu") else f
+
     small = ParagraphStyle("small", parent=styles["BodyText"], fontName=_font(base_font_key), fontSize=8.5,
                            textColor=c_header_text, leading=11)
     date_s = ParagraphStyle("date", parent=styles["BodyText"], fontName=_font(base_font_key), fontSize=10, textColor=c_header_text)
 
     title_s = ParagraphStyle("title", parent=styles["Heading1"],
-                             fontName=_font(title_cfg.get("font"), True),
+                             fontName=_font(base_font_key, True),
                              fontSize=title_cfg.get("size", 19),
                              leading=title_cfg.get("size", 19) + 4, textColor=c_title, spaceAfter=8)
     title = (title_cfg.get("text_template") or "Proposal For {company}").format(company=company_name)
@@ -825,7 +833,7 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
                                            ParagraphStyle("no", parent=bstyle, textColor=_color(offer_hex, OFFER_RED))))
             elif t == "pricing_table":
                 head = ["Format", "Standard Pricing", "Offer Price", "Return Bottle Credit", "Landing Price after Credit"]
-                bf = sec.get("body_font")
+                bf = _secfont(sec.get("body_font"))
                 csz = sec.get("body_size", 9)
 
                 def pcell(text, color_hint="", bold=False):

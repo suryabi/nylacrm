@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-21 — Fix: proposal pricing table rendered in a different font ✅
+- User report: with the whole template set to Helvetica, the pricing table still showed a different typeface.
+- Two causes: (1) the ₹ (U+20B9) symbol doesn't exist in standard PDF fonts, forcing every price to fall back to DejaVu; (2) section fonts default to the legacy `"dejavu"` key, so a pricing section left on its default rendered in DejaVu even when the title/prose were Helvetica.
+- Fix (`services/proposal_pdf.py`): (a) prices are now formatted as plain ASCII **"INR 1,200"** instead of ₹, so they render in the chosen font for every typeface — no glyph fallback ever. (b) Added `_secfont()`: any section whose font is unset or on the legacy `"dejavu"` default now **inherits the document's title font**, so the whole proposal stays in ONE typeface. Title/header/footer base font also defaults to Helvetica instead of DejaVu. Explicit per-section font choices (e.g. Poppins) are still honored.
+- Verified with pdfplumber: a Helvetica template with a dejavu/unset pricing section now renders 100% Helvetica with "INR" prices; a Poppins template renders 100% Poppins. Live generate + preview return 200.
+
+
 ## 2026-06-21 — Fix: proposal PDF still showed 2 fonts (₹ prices fell back to DejaVu) ✅
 - Root cause: an all-Helvetica template still rendered price amounts in a *different* font because the ₹ (U+20B9) glyph doesn't exist in the standard PDF base fonts (Helvetica/Times/Courier), so every price in the pricing table fell back to DejaVu → two visibly different typefaces.
 - Fix (`services/proposal_pdf.py`): made `_rs()` and `_smart_font()` font-aware. Fonts whose embedded TTF actually contains ₹ (DejaVu, Poppins, Montserrat, Lato — detected at load via fontTools) now render ₹ in that same font. Standard base fonts and Roboto Slab (no ₹ glyph) now show "Rs." instead, keeping the whole proposal in ONE typeface. Also registered font *families* (`registerFontFamily`) so `<b>`/`<i>` inside rich text map to the correct bold/italic TTF instead of leaking Helvetica-Bold.

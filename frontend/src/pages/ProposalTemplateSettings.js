@@ -21,7 +21,7 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
 
 const FONTS = [
-  { value: 'dejavu', label: 'DejaVu Sans (₹ support)' },
+  { value: 'dejavu', label: 'DejaVu Sans' },
   { value: 'helvetica', label: 'Helvetica' },
   { value: 'times', label: 'Times' },
   { value: 'courier', label: 'Courier' },
