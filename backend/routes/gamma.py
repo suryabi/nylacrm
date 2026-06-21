@@ -311,8 +311,16 @@ async def start_generation(body: GenerateRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=502, detail="Gamma did not return a generationId")
 
     now = _now()
-    # One active deck per lead: supersede previous decks for the same lead source.
+    # One active deck per lead: supersede previous decks for the same lead source
+    # and carry forward an incrementing version number (mirrors lead proposals).
+    deck_version = 1
     if body.source_type == "lead" and body.source_id:
+        prev = await _db.gamma_generations.find_one(
+            {"tenant_id": tenant_id, "source_type": "lead", "source_id": body.source_id},
+            sort=[("version", -1)],
+        )
+        if prev:
+            deck_version = (prev.get("version") or 1) + 1
         await _db.gamma_generations.delete_many({
             "tenant_id": tenant_id, "source_type": "lead", "source_id": body.source_id,
         })
@@ -335,6 +343,7 @@ async def start_generation(body: GenerateRequest, current_user: dict = Depends(g
         "credits_deducted": None,
         "error_message": None,
         # Approval flow (mirrors lead proposals) — only meaningful for lead decks.
+        "version": deck_version,
         "review_status": "pending_review",
         "reviewed_by": None,
         "reviewed_by_name": None,
