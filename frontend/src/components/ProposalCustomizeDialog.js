@@ -9,6 +9,9 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from './ui/select';
+import {
   Loader2, Sparkles, RotateCcw, Trash2, ChevronUp, ChevronDown, Plus, FileText, Save, RefreshCw,
 } from 'lucide-react';
 
@@ -29,6 +32,8 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
   const [titleText, setTitleText] = useState('');
   const [sections, setSections] = useState([]);
   const [companyName, setCompanyName] = useState('');
+  const [templates, setTemplates] = useState([]);
+  const [templateId, setTemplateId] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -48,6 +53,8 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
       const res = await axios.get(`${API_URL}/leads/${leadId}/proposal/customization`, { withCredentials: true });
       templateRef.current = res.data.template;
       setCompanyName(res.data.company_name || '');
+      setTemplates(res.data.templates || []);
+      setTemplateId(res.data.template_id || null);
       const ov = res.data.override;
       const tpl = res.data.template;
       seedFrom(ov?.title?.text_template || tpl?.title?.text_template, ov?.sections || tpl?.sections);
@@ -68,12 +75,27 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
     [titleText, sections]
   );
 
+  const changeTemplate = async (id) => {
+    if (!id || id === templateId) return;
+    setTemplateId(id);
+    setDirty(true);
+    try {
+      const res = await axios.get(`${API_URL}/proposals/templates/${id}`, { withCredentials: true });
+      const t = res.data.template;
+      templateRef.current = t;
+      seedFrom(t.title?.text_template, t.sections);
+      toast.message('Switched template — edits reset to this layout. Click Update preview.');
+    } catch {
+      toast.error('Could not load that template');
+    }
+  };
+
   const refreshPreview = useCallback(async () => {
     setPreviewLoading(true);
     try {
       const res = await axios.post(
         `${API_URL}/leads/${leadId}/proposal/preview`,
-        { override: buildOverride() },
+        { template_id: templateId, override: buildOverride() },
         { withCredentials: true, responseType: 'blob' }
       );
       const url = URL.createObjectURL(res.data);
@@ -86,7 +108,7 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
     } finally {
       setPreviewLoading(false);
     }
-  }, [leadId, buildOverride]);
+  }, [leadId, buildOverride, templateId]);
 
   // initial preview once the dialog finishes loading (no real-time refresh after)
   useEffect(() => {
@@ -117,7 +139,7 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
     if (hasExistingProposal && !window.confirm('This will replace the current proposal with your customized version. Continue?')) return;
     setGenerating(true);
     try {
-      await axios.put(`${API_URL}/leads/${leadId}/proposal/customization`, { override: buildOverride() }, { withCredentials: true });
+      await axios.put(`${API_URL}/leads/${leadId}/proposal/customization`, { template_id: templateId, override: buildOverride() }, { withCredentials: true });
       const res = await axios.post(`${API_URL}/leads/${leadId}/proposal/generate`, {}, { withCredentials: true });
       toast.success(res.data.message || 'Proposal generated');
       onGenerated?.();
@@ -132,7 +154,7 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API_URL}/leads/${leadId}/proposal/customization`, { override: buildOverride() }, { withCredentials: true });
+      await axios.put(`${API_URL}/leads/${leadId}/proposal/customization`, { template_id: templateId, override: buildOverride() }, { withCredentials: true });
       toast.success('Customizations saved for this lead');
     } catch (e) {
       toast.error('Failed to save');
@@ -170,6 +192,20 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 min-h-0">
             {/* Editor */}
             <div className="overflow-y-auto p-5 space-y-4 border-r" data-testid="customize-editor">
+              {templates.length > 1 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Template</Label>
+                  <Select value={templateId || ''} onValueChange={changeTemplate}>
+                    <SelectTrigger className="h-11" data-testid="customize-template-select"><SelectValue placeholder="Choose a layout" /></SelectTrigger>
+                    <SelectContent>
+                      {templates.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}{t.is_default ? '  ·  default' : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Pick a branded layout for this lead, then tweak the wording below.</p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label className="text-sm font-semibold">Title</Label>
                 <Input className="text-base h-11" value={titleText} onChange={(e) => changeTitle(e.target.value)} data-testid="customize-title" />

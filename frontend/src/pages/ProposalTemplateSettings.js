@@ -13,6 +13,7 @@ import {
 } from '../components/ui/select';
 import {
   Loader2, Save, FileText, RotateCcw, Upload, Trash2, Plus, ChevronUp, ChevronDown, ImageIcon, X,
+  Layers, Copy, Pencil, Star,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -155,25 +156,94 @@ function FontSize({ font, size, onFont, onSize, label }) {
 export default function ProposalTemplateSettings() {
   const [tpl, setTpl] = useState(null);
   const [defaults, setDefaults] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [activeId, setActiveId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInput = useRef(null);
   const imgInputs = useRef({});
 
-  const load = async () => {
+  const loadTemplate = async (id) => {
+    const res = await axios.get(`${API_URL}/api/proposals/templates/${id}`, { headers: HEAD() });
+    setTpl(res.data.template);
+    setDefaults(res.data.defaults);
+    setActiveId(id);
+  };
+
+  const load = async (preferId) => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/api/proposals/template`, { headers: HEAD() });
-      setTpl(res.data.template);
-      setDefaults(res.data.defaults);
+      const lst = await axios.get(`${API_URL}/api/proposals/templates`, { headers: HEAD() });
+      const list = lst.data.templates || [];
+      setTemplates(list);
+      const pick = (preferId && list.find((t) => t.id === preferId)?.id)
+        || list.find((t) => t.is_default)?.id || list[0]?.id;
+      if (pick) await loadTemplate(pick);
     } catch (e) {
-      toast.error('Failed to load proposal template');
+      toast.error('Failed to load proposal templates');
     } finally {
       setLoading(false);
     }
   };
   useEffect(() => { load(); }, []);
+
+  const activeMeta = templates.find((t) => t.id === activeId) || {};
+  const isDefault = !!activeMeta.is_default;
+
+  const switchTemplate = async (id) => {
+    if (id === activeId) return;
+    setLoading(true);
+    try { await loadTemplate(id); } catch { toast.error('Failed to load template'); }
+    finally { setLoading(false); }
+  };
+
+  const createTemplate = async () => {
+    const name = window.prompt('New template name:', 'New Template');
+    if (!name) return;
+    try {
+      const res = await axios.post(`${API_URL}/api/proposals/templates`, { name }, { headers: HEAD() });
+      toast.success('Template created');
+      await load(res.data.template.id);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Could not create template'); }
+  };
+
+  const duplicateTemplate = async () => {
+    try {
+      const res = await axios.post(`${API_URL}/api/proposals/templates/${activeId}/duplicate`, {}, { headers: HEAD() });
+      toast.success('Template duplicated');
+      await load(res.data.template.id);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Could not duplicate'); }
+  };
+
+  const renameTemplate = async () => {
+    const name = window.prompt('Rename template:', activeMeta.name || '');
+    if (!name || name === activeMeta.name) return;
+    try {
+      await axios.put(`${API_URL}/api/proposals/templates/${activeId}`, { template: { name } }, { headers: HEAD() });
+      setTpl((p) => ({ ...p, name }));
+      setTemplates((l) => l.map((t) => (t.id === activeId ? { ...t, name } : t)));
+      toast.success('Renamed');
+    } catch (e) { toast.error('Could not rename'); }
+  };
+
+  const setAsDefault = async () => {
+    try {
+      await axios.post(`${API_URL}/api/proposals/templates/${activeId}/default`, {}, { headers: HEAD() });
+      setTemplates((l) => l.map((t) => ({ ...t, is_default: t.id === activeId })));
+      toast.success('Set as default template');
+    } catch (e) { toast.error('Could not set default'); }
+  };
+
+  const deleteTemplate = async () => {
+    if (templates.length <= 1) { toast.error('Keep at least one template'); return; }
+    if (!window.confirm(`Delete template "${activeMeta.name}"? This cannot be undone.`)) return;
+    try {
+      await axios.delete(`${API_URL}/api/proposals/templates/${activeId}`, { headers: HEAD() });
+      toast.success('Template deleted');
+      await load();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Could not delete'); }
+  };
 
   const setCompany = (k, v) => setTpl((p) => ({ ...p, company: { ...(p.company || {}), [k]: v } }));
   const setTitle = (k, v) => setTpl((p) => ({ ...p, title: { ...(p.title || {}), [k]: v } }));
@@ -218,7 +288,7 @@ export default function ProposalTemplateSettings() {
   const save = async () => {
     setSaving(true);
     try {
-      const res = await axios.put(`${API_URL}/api/proposals/template`, { template: tpl }, { headers: HEAD() });
+      const res = await axios.put(`${API_URL}/api/proposals/templates/${activeId}`, { template: tpl }, { headers: HEAD() });
       setTpl(res.data.template);
       toast.success('Proposal template saved');
     } catch (e) {
@@ -229,8 +299,8 @@ export default function ProposalTemplateSettings() {
   };
 
   const resetDefaults = () => {
-    if (defaults && window.confirm('Reset all fields to the built-in defaults? (You still need to Save.)')) {
-      setTpl(JSON.parse(JSON.stringify(defaults)));
+    if (defaults && window.confirm('Reset this template\u2019s content to the built-in defaults? (You still need to Save.)')) {
+      setTpl((p) => ({ ...JSON.parse(JSON.stringify(defaults)), id: p.id, name: p.name }));
     }
   };
 
@@ -241,7 +311,7 @@ export default function ProposalTemplateSettings() {
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await axios.post(`${API_URL}/api/proposals/template/logo`, fd, { headers: HEAD() });
+      const res = await axios.post(`${API_URL}/api/proposals/templates/${activeId}/logo`, fd, { headers: HEAD() });
       const dataUrl = res.data.logo_data_url || '';
       const b64 = dataUrl.split(',')[1] || null;
       setCompany('logo_data', b64);
@@ -256,7 +326,7 @@ export default function ProposalTemplateSettings() {
 
   const removeLogo = async () => {
     try {
-      await axios.delete(`${API_URL}/api/proposals/template/logo`, { headers: HEAD() });
+      await axios.delete(`${API_URL}/api/proposals/templates/${activeId}/logo`, { headers: HEAD() });
       setCompany('logo_data', null);
       toast.success('Logo removed');
     } catch {
@@ -316,7 +386,30 @@ export default function ProposalTemplateSettings() {
         </div>
       </div>
 
-      {/* Header / company + logo */}
+      {/* Template switcher toolbar */}
+      <Card className="p-4 flex flex-col lg:flex-row lg:items-center gap-3 flex-wrap" data-testid="template-switcher">
+        <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+          <Layers className="h-4 w-4 text-muted-foreground shrink-0" />
+          <Select value={activeId || ''} onValueChange={switchTemplate}>
+            <SelectTrigger className="h-10 max-w-xs" data-testid="template-select"><SelectValue placeholder="Select template" /></SelectTrigger>
+            <SelectContent>
+              {templates.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}{t.is_default ? '  ·  default' : ''}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {isDefault && <span className="text-xs font-medium text-primary bg-primary/10 rounded-full px-2.5 py-1">Default</span>}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button size="sm" variant="outline" onClick={createTemplate} data-testid="template-new-btn"><Plus className="h-4 w-4 mr-1.5" /> New</Button>
+          <Button size="sm" variant="outline" onClick={duplicateTemplate} data-testid="template-duplicate-btn"><Copy className="h-4 w-4 mr-1.5" /> Duplicate</Button>
+          <Button size="sm" variant="outline" onClick={renameTemplate} data-testid="template-rename-btn"><Pencil className="h-4 w-4 mr-1.5" /> Rename</Button>
+          {!isDefault && <Button size="sm" variant="outline" onClick={setAsDefault} data-testid="template-default-btn"><Star className="h-4 w-4 mr-1.5" /> Set default</Button>}
+          <Button size="sm" variant="ghost" className="text-destructive" disabled={templates.length <= 1} onClick={deleteTemplate} data-testid="template-delete-btn"><Trash2 className="h-4 w-4 mr-1.5" /> Delete</Button>
+        </div>
+      </Card>
+
+
       <Card className="p-5 space-y-4" data-testid="tpl-company-card">
         <h2 className="font-semibold text-lg">Header, Logo &amp; Company Details</h2>
         <div className="flex flex-col sm:flex-row gap-5">

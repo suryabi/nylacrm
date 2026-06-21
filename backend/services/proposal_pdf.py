@@ -277,14 +277,109 @@ def merge_override(template: dict, override: dict | None) -> dict:
     return merged
 
 
+import copy as _copy
+import uuid as _uuid
+
+CONTENT_KEYS = ["company", "title", "colors", "header", "footer", "sections"]
+PRESET_NAMES = ["Hotels", "Retail", "Events"]
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _content(tpl: dict) -> dict:
+    """Deep-copy just the editable content of a template (no id/name/meta)."""
+    src = _normalize(_copy.deepcopy(tpl))
+    return {k: _copy.deepcopy(src[k]) for k in CONTENT_KEYS if k in src}
+
+
+def _make_template_doc(name: str, base: dict = None, is_default: bool = False) -> dict:
+    doc = _content(base or DEFAULT_TEMPLATE)
+    doc["id"] = str(_uuid.uuid4())
+    doc["name"] = name
+    doc["is_default"] = is_default
+    doc["created_at"] = _now_iso()
+    doc["updated_at"] = _now_iso()
+    return doc
+
+
+async def _ensure_templates(tdb):
+    """Migrate the legacy single-template tenants to the multi-template model and
+    seed the starter presets once. Idempotent; never re-creates deleted presets."""
+    docs = await tdb.proposal_templates.find({}).to_list(200)
+    seed_presets = False
+
+    if not docs:
+        await tdb.proposal_templates.insert_one(_make_template_doc("Default", DEFAULT_TEMPLATE, is_default=True))
+        seed_presets = True
+    else:
+        legacy = [d for d in docs if not d.get("id")]
+        for d in legacy:
+            await tdb.proposal_templates.update_one(
+                {"_id": d["_id"]},
+                {"$set": {"id": str(_uuid.uuid4()), "name": "Default", "is_default": True,
+                          "updated_at": _now_iso()}},
+            )
+            seed_presets = True  # first migration → seed presets once
+
+    if seed_presets:
+        existing_names = {d.get("name") for d in await tdb.proposal_templates.find({}, {"name": 1}).to_list(200)}
+        base = await tdb.proposal_templates.find_one({"is_default": True}, {"_id": 0})
+        base = _normalize(base) if base else DEFAULT_TEMPLATE
+        for nm in PRESET_NAMES:
+            if nm not in existing_names:
+                await tdb.proposal_templates.insert_one(_make_template_doc(nm, base, is_default=False))
+
+    # guarantee exactly one default
+    defaults = await tdb.proposal_templates.find({"is_default": True}, {"_id": 0, "id": 1}).to_list(200)
+    if not defaults:
+        any_doc = await tdb.proposal_templates.find_one({}, {"_id": 0, "id": 1})
+        if any_doc:
+            await tdb.proposal_templates.update_one({"id": any_doc["id"]}, {"$set": {"is_default": True}})
+    elif len(defaults) > 1:
+        keep = defaults[0]["id"]
+        await tdb.proposal_templates.update_many({"is_default": True, "id": {"$ne": keep}},
+                                                 {"$set": {"is_default": False}})
+
+
+async def list_templates(tdb) -> list:
+    await _ensure_templates(tdb)
+    docs = await tdb.proposal_templates.find({}, {"_id": 0}).to_list(200)
+    docs.sort(key=lambda d: (not d.get("is_default"), (d.get("name") or "").lower()))
+    return [_normalize(d) for d in docs]
+
+
+async def get_default_template(tdb) -> dict:
+    docs = await list_templates(tdb)
+    for d in docs:
+        if d.get("is_default"):
+            return d
+    return docs[0] if docs else _normalize(_copy.deepcopy(DEFAULT_TEMPLATE))
+
+
+async def get_template_by_id(tdb, template_id) -> dict:
+    if not template_id:
+        return None
+    docs = await list_templates(tdb)
+    for d in docs:
+        if d.get("id") == template_id:
+            return d
+    return None
+
+
+async def resolve_template(tdb, template_id=None) -> dict:
+    """Return the requested template, falling back to the tenant default."""
+    if template_id:
+        t = await get_template_by_id(tdb, template_id)
+        if t:
+            return t
+    return await get_default_template(tdb)
+
+
 async def get_or_seed_template(tdb) -> dict:
-    existing = await tdb.proposal_templates.find_one({}, {"_id": 0})
-    if existing:
-        return _normalize(existing)
-    doc = {k: v for k, v in DEFAULT_TEMPLATE.items()}
-    doc["created_at"] = datetime.now(timezone.utc).isoformat()
-    await tdb.proposal_templates.insert_one({**doc})
-    return _normalize(doc)
+    """Backward-compatible: returns the tenant's default template."""
+    return await get_default_template(tdb)
 
 
 async def build_pricing_rows(tdb, lead: dict) -> list:

@@ -10378,35 +10378,45 @@ async def upload_lead_proposal(
 
 @api_router.get("/leads/{lead_id}/proposal/customization")
 async def get_lead_proposal_customization(lead_id: str, current_user: dict = Depends(get_current_user)):
-    """Return the global proposal template plus any per-lead override so the
-    customize dialog can pre-fill editable content for this specific lead."""
-    from services.proposal_pdf import get_or_seed_template
+    """Return the chosen/default proposal template, the list of available templates,
+    and any per-lead override so the customize dialog can pre-fill content."""
+    from services.proposal_pdf import list_templates, resolve_template
 
     lead = await get_tdb().leads.find_one({'id': lead_id})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
-    template = await get_or_seed_template(get_tdb())
+    tpls = await list_templates(get_tdb())
+    template_id = lead.get('proposal_template_id')
+    template = await resolve_template(get_tdb(), template_id)
+    # if the saved id no longer exists, fall back to the resolved (default) one
+    if not template_id or not any(t.get('id') == template_id for t in tpls):
+        template_id = template.get('id')
     override = lead.get('proposal_override')
-    return {'template': template, 'override': override, 'has_override': bool(override),
+    return {'template': template, 'template_id': template_id,
+            'templates': [{'id': t.get('id'), 'name': t.get('name'), 'is_default': bool(t.get('is_default'))} for t in tpls],
+            'override': override, 'has_override': bool(override),
             'company_name': lead.get('company')}
 
 
 @api_router.put("/leads/{lead_id}/proposal/customization")
 async def save_lead_proposal_customization(lead_id: str, request: Request, current_user: dict = Depends(get_current_user)):
-    """Save a per-lead proposal override (text content + section set/order)."""
+    """Save the per-lead template choice + override (text content + section set/order)."""
     lead = await get_tdb().leads.find_one({'id': lead_id})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     body = await request.json()
-    override = body.get('override')
-    await get_tdb().leads.update_one({'id': lead_id}, {'$set': {'proposal_override': override}})
-    return {'ok': True, 'has_override': bool(override)}
+    update = {'proposal_override': body.get('override')}
+    if 'template_id' in body:
+        update['proposal_template_id'] = body.get('template_id')
+    await get_tdb().leads.update_one({'id': lead_id}, {'$set': update})
+    return {'ok': True, 'has_override': bool(body.get('override'))}
 
 
 @api_router.delete("/leads/{lead_id}/proposal/customization")
 async def reset_lead_proposal_customization(lead_id: str, current_user: dict = Depends(get_current_user)):
-    """Remove the per-lead override so the lead falls back to the company template."""
-    res = await get_tdb().leads.update_one({'id': lead_id}, {'$unset': {'proposal_override': ''}})
+    """Remove the per-lead override + template choice so the lead falls back to the default template."""
+    res = await get_tdb().leads.update_one(
+        {'id': lead_id}, {'$unset': {'proposal_override': '', 'proposal_template_id': ''}})
     if not res.matched_count:
         raise HTTPException(status_code=404, detail='Lead not found')
     return {'ok': True}
@@ -10414,10 +10424,10 @@ async def reset_lead_proposal_customization(lead_id: str, current_user: dict = D
 
 @api_router.post("/leads/{lead_id}/proposal/preview")
 async def preview_lead_proposal(lead_id: str, request: Request, current_user: dict = Depends(get_current_user)):
-    """Build a live PDF preview for the lead using the supplied (unsaved) override
-    if provided, else the saved override / global template. Returns raw PDF bytes."""
+    """Build a live PDF preview for the lead using the supplied (unsaved) template_id +
+    override if provided, else the saved values / default template. Returns raw PDF bytes."""
     from fastapi.responses import Response
-    from services.proposal_pdf import get_or_seed_template, build_pricing_rows, build_proposal_pdf, merge_override
+    from services.proposal_pdf import resolve_template, build_pricing_rows, build_proposal_pdf, merge_override
 
     lead = await get_tdb().leads.find_one({'id': lead_id})
     if not lead:
@@ -10428,7 +10438,8 @@ async def preview_lead_proposal(lead_id: str, request: Request, current_user: di
     except Exception:
         body = {}
     override = body.get('override', lead.get('proposal_override'))
-    template = await get_or_seed_template(get_tdb())
+    template_id = body.get('template_id', lead.get('proposal_template_id'))
+    template = await resolve_template(get_tdb(), template_id)
     template = merge_override(template, override)
     pricing_rows = await build_pricing_rows(get_tdb(), lead)
     pdf_bytes = build_proposal_pdf(lead, template, pricing_rows)
@@ -10439,15 +10450,15 @@ async def preview_lead_proposal(lead_id: str, request: Request, current_user: di
 @api_router.post("/leads/{lead_id}/proposal/generate")
 async def generate_lead_proposal(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Auto-generate a branded proposal PDF from the lead (company name + proposed
-    SKUs/pricing) using the editable proposal template, and store it as the lead's
-    proposal (so existing preview / download / share / review all work)."""
-    from services.proposal_pdf import get_or_seed_template, build_pricing_rows, build_proposal_pdf, merge_override
+    SKUs/pricing) using the lead's chosen (or default) proposal template + override."""
+    from services.proposal_pdf import resolve_template, build_pricing_rows, build_proposal_pdf, merge_override
 
     lead = await get_tdb().leads.find_one({'id': lead_id})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
 
-    template = await get_or_seed_template(get_tdb())
+    template = await resolve_template(get_tdb(), lead.get('proposal_template_id'))
+    template_name = template.get('name')
     template = merge_override(template, lead.get('proposal_override'))
     pricing_rows = await build_pricing_rows(get_tdb(), lead)
     pdf_bytes = build_proposal_pdf(lead, template, pricing_rows)
@@ -10477,6 +10488,7 @@ async def generate_lead_proposal(lead_id: str, current_user: dict = Depends(get_
     doc = proposal.model_dump()
     doc['uploaded_at'] = doc['uploaded_at'].isoformat()
     doc['generated'] = True
+    doc['template_name'] = template_name
     await get_tdb().lead_proposals.insert_one(doc)
 
     reports_to = current_user.get('reports_to')

@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 212 — Multiple named Proposal Template presets. Backend: 15/15 pytest pass (4.3s). Validated: (1) list returns Default + Hotels/Retail/Events with exactly 1 default; deleting Hotels then listing twice did NOT re-seed it. (2) CRUD: create blank, duplicate (auto 'X copy'), get-by-id returns full normalized doc (company/title/colors/header/footer/sections/id/name/is_default), set-default makes it the only default, delete reassigns default when default was removed, delete returns 4xx for unknown id. (3) CRITICAL regression GREEN: a partial PUT {template:{colors:{accent:'#0EA5E9'}}} did NOT wipe sections/company/header/footer/title — section count, company, header, footer, title.text_template all unchanged after a colors-only PUT. (4) Per-lead 'Both' resolution: GET /customization returns templates[], template_id (selected/default), full selected template. PUT saves both template_id + override; subsequent GET round-trips. POST /preview with {template_id} returns 200 application/pdf starting %PDF- (>1KB). POST /preview with empty body falls back to DEFAULT template. POST /generate stores template_name on the lead_proposal doc ('Events' verified). DELETE /customization clears both override and template (template_id falls back to default). Frontend: /proposal-template renders template-switcher with template-select listing all four templates; switching to Hotels loads its content; all switcher action buttons (template-new-btn, template-duplicate-btn, template-rename-btn, template-default-btn for non-default, template-delete-btn) present and save-template-btn persists. Per-lead Customize Proposal dialog opens via 'Customize' button; customize-template-select shows the template list; switching to Retail enables customize-apply-btn (dirty=true) and renders the iframe preview. Cleanup verified post-run: Default+Hotels+Retail+Events with Default as is_default; lead override cleared (has_override=false).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_212_proposal_templates.py",
+    "/app/test_reports/pytest/iteration_212.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/proposals.py PUT /templates/{id} uses a positional $set with each top-level CONTENT_KEY ({company, title, colors, header, footer, sections}). This correctly preserves keys NOT in the request body (the iteration-212 partial PUT regression). However nested replacement of whole objects means a request like {template:{header:{left:{type:'logo'}}}} would replace the entire header object with only the left zone — current FE always sends the full header so this is safe but the contract is implicit. Consider deep-merge or Pydantic models for strict per-key validation.",
+    "_ensure_templates seeds presets exactly once on first migration (sets seed_presets=True when no docs exist OR when migrating legacy single-template docs). The 'never re-seed after delete' invariant holds because subsequent runs find docs and don't flip the flag — verified by test_deleted_preset_is_not_reseeded.",
+    "GET /api/proposals/templates returns only metadata (id/name/is_default) — that's correct for the switcher; full content is only on GET /templates/{id}. Good.",
+    "DELETE /templates/{id} returns 400 only when len(tpls)<=1. Edge case: if a client deletes the LAST template before the seed flag had a chance to set up presets, the API would block correctly. Test test_delete_blocks_when_only_one_remains only verifies the 404 path (couldn't safely reduce tenant to 1 template), but the 400 branch is straightforward.",
+    "server.py /api/leads/{id}/proposal/customization correctly uses resolve_template (id→template, fall back to default) and returns the resolved template_id even when no id is saved on the lead — supports the FE 'show default selected' behavior.",
+    "generate_lead_proposal captures template.name BEFORE merge_override (which wouldn't touch name anyway) — correct ordering. template_name 'Events' was found on the stored proposal."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_212_proposal_templates.py (new — 15 tests, 4.3s)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% (all listed switcher + dialog flows verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water, role CEO). Auth returns session_token used as Bearer.",
+  "seed_data_creation": "None persisted. Templates restored to {Default(default), Hotels, Retail, Events} via cleanup fixture (Hotels was deleted+recreated mid-run by test_deleted_preset_is_not_reseeded; verified live state at end). Per-lead override on lead 08c93122-99fc-4587-b31c-559649f29c17 cleared (has_override=false).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 212 fully green. Backend tests at /app/backend/tests/test_iteration_212_proposal_templates.py (15 tests, ~4.3s). Frontend testids: /proposal-template uses template-switcher, template-select, template-new-btn, template-duplicate-btn, template-rename-btn, template-default-btn (only when non-default selected), template-delete-btn, save-template-btn. ProposalCustomizeDialog uses proposal-customize-dialog, customize-template-select, customize-apply-btn, customize-preview-frame, customize-save-btn, customize-generate-btn, customize-reset-btn. CRITICAL: the regression test (partial PUT colors-only must NOT wipe sections) lives in TestPartialPut::test_colors_only_put_preserves_sections — keep that green when refactoring routes/proposals.py PUT. Recreated Hotels after test_deleted_preset_is_not_reseeded is a clean copy of Default (seed Hotels was also originally a Default clone, so equivalent content).",
+  "rca of the issue": "No bugs found."
+}
