@@ -175,11 +175,14 @@ def _font(key, bold=False):
 
 
 def _needs_unicode(text) -> bool:
-    """True if text has glyphs the standard PDF fonts can't render (e.g. ₹)."""
+    """True only for glyphs the standard PDF base fonts can't encode. ReportLab's
+    built-in fonts use WinAnsi (cp1252), which covers Latin-1 plus en/em dashes,
+    curly quotes, bullet, euro, ellipsis, etc. So only ₹ and other non-cp1252
+    characters force the DejaVu fallback."""
     if not text:
         return False
     try:
-        str(text).encode("latin-1")
+        str(text).encode("cp1252")
         return False
     except (UnicodeEncodeError, Exception):
         return True

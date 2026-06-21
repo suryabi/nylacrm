@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-21 — Fix: proposal PDF used mixed fonts despite a single chosen font ✅
+- Bug (reported from production): generated proposals showed mixed fonts even when the template was set to Helvetica everywhere.
+- Root cause: the date line, pricing-table cells, pricing disclaimer, and header/footer text were **hardcoded to DejaVu Sans** regardless of the chosen font. Secondary cause: the unicode-fallback check was too aggressive — it flagged en/em dashes & curly quotes (which standard PDF fonts *can* render), so any line/SKU name with a dash fell back to DejaVu too.
+- Fix (`services/proposal_pdf.py`): new `_smart_font(key, text, bold)` returns the chosen font and falls back to DejaVu **only** when text contains glyphs the standard fonts can't encode. `_needs_unicode` now checks **cp1252 (WinAnsi)** — so dashes, curly quotes, bullet, euro, ellipsis stay in the chosen font; only ₹ (and similar) force DejaVu. Applied to date/disclaimer styles (base = title.font), per-cell pricing-table fonts, and header/footer drawing.
+- Frontend (`ProposalTemplateSettings.js`): added **"Use this font for the whole proposal"** button (`apply-font-all-btn`) that sets title + every section's heading & body font in one click.
+- Verified: testing agent iteration_214 (backend 5/5, frontend apply-all confirmed across all 8 sections) + targeted checks — all-Helvetica template with dashed content/SKU names embeds only Helvetica; ₹ still renders via DejaVu. Default template restored to factory defaults.
+- NOTE: user saw this on **production** — must redeploy to apply the fix there.
+
 ## 2026-06-21 — Rich-text editors in the proposal template builder ✅
 - Replaced the prose text areas with **rich-text (Quill) editors** — bold, italic, underline, strike, color, ordered/bullet lists, links — for the paragraph Text, list Intro, category Intro, and pricing Disclaimer fields. Applies to both the global `/proposal-template` editor and the per-lead Customize Proposal dialog. Structured line-based fields (list Items, Allowed/Not allowed) stay plain.
 - Backend: `services/proposal_pdf.py` `rich_to_flowables()` + `_inline_html()`/`_esc()`/`_css_color()` convert Quill HTML → ReportLab flowables (Paragraphs + ListFlowable), honoring inline formatting, colors, paragraphs and lists. Plain-text content (incl. `&`/`<`/`>`) is escaped and stays backward-compatible.
