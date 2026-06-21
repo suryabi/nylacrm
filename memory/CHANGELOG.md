@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 2026-06-21 — Multiple named Proposal Templates (presets) + per-lead template picker ✅
+- The single shared template is now **multiple named templates** per tenant. On first access the existing template is migrated to **"Default"** and three starter presets — **Hotels, Retail, Events** (clones of Default) — are seeded once (deleting a preset never re-seeds it).
+- Settings (`/proposal-template`): a **template switcher** (select + **New / Duplicate / Rename / Set default / Delete**) with a Default badge; load/save and logo upload are now per-template.
+- Per-lead **Customize Proposal** dialog: a **Template** dropdown lets reps pick a branded layout for that lead; switching reseeds the editor. Resolution = lead's chosen template if set, else tenant Default ("Both"). The generated proposal stores `template_name`.
+- Backend: `services/proposal_pdf.py` — `_ensure_templates` (migrate + one-time seed), `list_templates`/`get_default_template`/`get_template_by_id`/`resolve_template`, `_make_template_doc`/`_content`. `routes/proposals.py` — full CRUD (`GET/POST /templates`, `GET/PUT/DELETE /templates/{id}`, `/duplicate`, `/default`, per-template `/logo`); back-compat `GET /template` returns the default. Lead customization GET/PUT/preview/generate carry `template_id`; DELETE clears override + template choice.
+- Fixed a regression: a partial PUT (e.g. colors-only) no longer wipes a template's sections/company/header/footer (route persists only the provided content keys).
+- Verified: testing agent iteration_212 — backend 15/15 (incl. the partial-PUT regression test), frontend switcher + dialog flows 100%, no bugs. Templates restored to Default/Hotels/Retail/Events; test lead cleared.
+- Tech-debt: PUT replaces whole nested objects (FE always sends full template, so safe); consider Pydantic models for strict per-key validation.
+
+
 ## 2026-06-20 — Proposal Template: section spacing + brand colors + MS-Word-style header/footer ✅
 - **Colors**: 9 admin-editable PDF colors (accent/side-bar, section headers, title text, body text, header & footer text, offer price, table grid/borders, table header text, alternate row bg) via color pickers (swatch + hex) on `/proposal-template`. Previously hardcoded in `proposal_pdf.py`; now stored in `template.colors` and applied throughout the PDF.
 - **Section spacing**: each section now has `space_before` (pt), `space_after` (pt) and `line_spacing` (× multiplier) controls; honored during PDF build (spacers between sections + leading = size × line_spacing).
