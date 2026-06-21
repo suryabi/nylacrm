@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 2026-06-21 — Share: template attachments now show in compose (keep/uncheck) ✅
+- When an email template is applied in the lead "Share via Email" compose dialog, the template's own CRM document attachments now appear in the Attachments list as removable chips (tagged "Template"), so the user can keep or remove them before sending. The render endpoint already returned these; the composer now surfaces them.
+- Verified: applying a template with an attachment adds the chip; it sends via the existing multi-attach endpoint and can be removed with the X.
+
+
 ## 2026-06-21 — Share via Email: restored rich compose dialog + multi-attach ✅
 - Reverted the standalone custom share dialog. The lead "Share via Email" now uses the original rich **Compose email** experience (recipient chips for To/Cc/Bcc with suggestions, email templates, RichEmailEditor, channel selector).
 - Extended that dialog (gated by a new `leadId` prop on `ShareButton`) with an **Attachments** section: toggle the **approved Proposal** and/or **approved Deck** (either or both) and **Attach from Files & Documents** (reuses `CrmDocumentPicker`). When attachments are chosen it sends via `POST /api/leads/{id}/share-documents`; non-lead shares keep the original `/api/share` behavior unchanged.

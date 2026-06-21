@@ -250,6 +250,16 @@ const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onClose }) 
       if (data.subject) setSubject(data.subject);
       setMessage(data.body_html || '');
       setAppliedTemplate(tpl.name);
+      // Surface the template's own attachments as removable chips.
+      if (leadId && Array.isArray(data.attachments) && data.attachments.length) {
+        setFiles((prev) => {
+          const ids = new Set(prev.map((f) => f.id));
+          const add = data.attachments
+            .filter((d) => d.id && !ids.has(d.id))
+            .map((d) => ({ id: d.id, name: d.name, file_name: d.name, from_template: true }));
+          return [...prev, ...add];
+        });
+      }
       toast.success(`Applied "${tpl.name}"`);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to apply template');
@@ -440,7 +450,12 @@ const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onClose }) 
                   <div key={f.id} className="flex items-center gap-3 rounded-xl border bg-slate-50/60 px-4 py-3" data-testid={`share-file-${f.id}`}>
                     <Paperclip className="h-4 w-4 text-slate-500 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-slate-700 truncate">{f.name || f.file_name}</p>
+                      <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-1.5">
+                        <span className="truncate">{f.name || f.file_name}</span>
+                        {f.from_template && (
+                          <span className="text-[10px] bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded-full shrink-0">Template</span>
+                        )}
+                      </p>
                       {f.file_name && f.name !== f.file_name && <p className="text-xs text-slate-400 truncate">{f.file_name}</p>}
                     </div>
                     <button type="button" onClick={() => setFiles((p) => p.filter((x) => x.id !== f.id))}
