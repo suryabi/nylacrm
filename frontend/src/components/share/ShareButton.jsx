@@ -318,7 +318,7 @@ const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onClose }) 
     <>
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent
-        className="p-0 gap-0 overflow-hidden flex flex-col resize w-[700px] h-[720px] min-w-[460px] min-h-[540px] max-w-[96vw] max-h-[92vh] sm:max-w-none"
+        className="p-0 gap-0 overflow-hidden flex flex-col resize w-[880px] h-[86vh] min-w-[520px] min-h-[560px] max-w-[95vw] max-h-[94vh] sm:max-w-none"
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
         data-testid={`share-dialog-${testIdBase}`}
@@ -421,7 +421,7 @@ const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onClose }) 
             {/* Rich message */}
             <div className="space-y-1.5">
               <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Message</Label>
-              <RichEmailEditor value={message} onChange={setMessage} placeholder="Write your message… use the toolbar to format." />
+              <RichEmailEditor value={message} onChange={setMessage} autoGrow placeholder="Write your message… use the toolbar to format." />
             </div>
 
             {/* Attachments */}

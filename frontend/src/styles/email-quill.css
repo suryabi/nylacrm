@@ -17,3 +17,15 @@
   font-style: normal;
   color: #94a3b8;
 }
+/* Auto-grow variant: editor expands with content; the dialog body handles scroll. */
+.email-quill--grow .ql-editor {
+  min-height: 260px;
+  max-height: none;
+  overflow-y: visible;
+}
+/* Keep the formatting toolbar pinned while the dialog body scrolls. */
+.email-quill--grow .ql-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}

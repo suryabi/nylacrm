@@ -13,9 +13,9 @@ const MODULES = {
 };
 const FORMATS = ['bold', 'italic', 'underline', 'strike', 'list', 'link', 'image'];
 
-export default function RichEmailEditor({ value, onChange, placeholder = 'Write your message...' }) {
+export default function RichEmailEditor({ value, onChange, placeholder = 'Write your message...', autoGrow = false }) {
   return (
-    <div className="email-quill" data-testid="rich-email-editor">
+    <div className={`email-quill ${autoGrow ? 'email-quill--grow' : ''}`} data-testid="rich-email-editor">
       <ReactQuill
         theme="snow"
         value={value || ''}
