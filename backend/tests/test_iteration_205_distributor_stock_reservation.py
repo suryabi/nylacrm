@@ -20,7 +20,7 @@ import datetime as _dt
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://proposal-builder-107.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://supply-chain-hub-219.preview.emergentagent.com").rstrip("/")
 DISTRIBUTOR_ID = "b8876367-df64-4c55-a382-d5eb3b4b2380"  # Surya 1
 LOGIN_EMAIL = "surya.yadavalli@nylaairwater.earth"
 LOGIN_PASSWORD = "test123"

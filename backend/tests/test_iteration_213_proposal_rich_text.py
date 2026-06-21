@@ -21,7 +21,7 @@ import pytest
 import requests
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL',
-                          'https://proposal-builder-107.preview.emergentagent.com').rstrip('/')
+                          'https://supply-chain-hub-219.preview.emergentagent.com').rstrip('/')
 ADMIN_EMAIL = 'surya.yadavalli@nylaairwater.earth'
 ADMIN_PASSWORD = 'test123'
 TEST_LEAD_ID = '08c93122-99fc-4587-b31c-559649f29c17'
