@@ -29,6 +29,7 @@ from .email_templates import router as email_templates_router
 from .notification_settings import router as notification_settings_router
 from .invoices import router as invoices_router
 from .proposals import router as proposals_router
+from .lead_proposals import router as lead_proposals_router
 from .distributors import router as distributors_router
 from .task_management import router as task_management_router
 from .return_reasons import router as return_reasons_router
@@ -93,6 +94,7 @@ routes_router.include_router(notification_settings_router, tags=["Notification S
 # Invoices Management
 routes_router.include_router(invoices_router, prefix="/invoices", tags=["Invoices"])
 routes_router.include_router(proposals_router, prefix="/proposals", tags=["Proposals"])
+routes_router.include_router(lead_proposals_router, tags=["Lead Proposals"])
 
 # Distributor Management
 routes_router.include_router(distributors_router, prefix="/distributors", tags=["Distributors"])

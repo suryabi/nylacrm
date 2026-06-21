@@ -44,6 +44,14 @@ try:
 except Exception:
     pass
 
+# Modern brand fonts (TTF). key -> (regular_file, bold_file, registered_regular, registered_bold)
+_BRAND_FONTS = {
+    "poppins": ("Poppins-Regular.ttf", "Poppins-Bold.ttf", "Poppins", "Poppins-Bold"),
+    "montserrat": ("Montserrat-Regular.ttf", "Montserrat-Bold.ttf", "Montserrat", "Montserrat-Bold"),
+    "lato": ("Lato-Regular.ttf", "Lato-Bold.ttf", "Lato", "Lato-Bold"),
+    "robotoslab": ("RobotoSlab-Regular.ttf", "RobotoSlab-Bold.ttf", "RobotoSlab", "RobotoSlab-Bold"),
+}
+
 # Font key -> (regular, bold). 'dejavu' supports the ₹ glyph.
 FONTS = {
     "helvetica": ("Helvetica", "Helvetica-Bold"),
@@ -51,6 +59,14 @@ FONTS = {
     "courier": ("Courier", "Courier-Bold"),
     "dejavu": ("DejaVu", "DejaVu-Bold") if _DEJAVU_OK else ("Helvetica", "Helvetica-Bold"),
 }
+
+for _key, (_reg_f, _bold_f, _reg_n, _bold_n) in _BRAND_FONTS.items():
+    try:
+        pdfmetrics.registerFont(TTFont(_reg_n, os.path.join(ASSETS, _reg_f)))
+        pdfmetrics.registerFont(TTFont(_bold_n, os.path.join(ASSETS, _bold_f)))
+        FONTS[_key] = (_reg_n, _bold_n)
+    except Exception:
+        pass
 _MONEY_FONT = "DejaVu" if _DEJAVU_OK else "Helvetica"
 
 

@@ -25,6 +25,10 @@ const FONTS = [
   { value: 'helvetica', label: 'Helvetica' },
   { value: 'times', label: 'Times' },
   { value: 'courier', label: 'Courier' },
+  { value: 'poppins', label: 'Poppins (modern)' },
+  { value: 'montserrat', label: 'Montserrat (modern)' },
+  { value: 'lato', label: 'Lato (modern)' },
+  { value: 'robotoslab', label: 'Roboto Slab (serif)' },
 ];
 const SIZES = [8, 9, 10, 11, 12, 13, 14, 16, 18, 19, 20, 22, 24, 28];
 const SECTION_TYPES = [
