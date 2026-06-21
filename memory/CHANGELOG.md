@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-21 — Fix: proposal PDF still showed 2 fonts (₹ prices fell back to DejaVu) ✅
+- Root cause: an all-Helvetica template still rendered price amounts in a *different* font because the ₹ (U+20B9) glyph doesn't exist in the standard PDF base fonts (Helvetica/Times/Courier), so every price in the pricing table fell back to DejaVu → two visibly different typefaces.
+- Fix (`services/proposal_pdf.py`): made `_rs()` and `_smart_font()` font-aware. Fonts whose embedded TTF actually contains ₹ (DejaVu, Poppins, Montserrat, Lato — detected at load via fontTools) now render ₹ in that same font. Standard base fonts and Roboto Slab (no ₹ glyph) now show "Rs." instead, keeping the whole proposal in ONE typeface. Also registered font *families* (`registerFontFamily`) so `<b>`/`<i>` inside rich text map to the correct bold/italic TTF instead of leaking Helvetica-Bold.
+- Verified per-template via pdfplumber: visible text now uses a single consistent font family (helvetica→Helvetica only; poppins→Poppins only; times→Times only). Live generate + preview return 200.
+
+
 ## 2026-06-21 — Refactor: extracted per-lead proposal endpoints + added modern brand fonts ✅
 - Moved all 11 `/api/leads/{lead_id}/proposal*` endpoints (get/upload/generate/preview/customization GET-PUT-DELETE/download/delete/review/share-email) out of the 11k-line `server.py` into a dedicated router `routes/lead_proposals.py`. Wired via `routes/__init__.py` with no prefix; paths unchanged. server.py shrank from 11,304 → 10,762 lines. Shared `ALLOWED_PROPOSAL_TYPES` / `MAX_PROPOSAL_SIZE` kept in server.py (reused by Account Contract endpoints). Server-side helpers (`create_approval_task`, `complete_approval_task`, `ApprovalType`, `stamp_pdf_with_signature`) imported lazily inside handlers to avoid circular imports.
 - Added 4 modern brand fonts to the proposal PDF generator (Poppins, Montserrat, Lato, Roboto Slab): downloaded static TTFs to `backend/assets/proposal/`, registered in `services/proposal_pdf.py` `FONTS` dict, and exposed in the Proposal Template Settings font dropdown.

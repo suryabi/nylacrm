@@ -40,6 +40,8 @@ _DEJAVU_OK = False
 try:
     pdfmetrics.registerFont(TTFont("DejaVu", os.path.join(ASSETS, "DejaVuSans.ttf")))
     pdfmetrics.registerFont(TTFont("DejaVu-Bold", os.path.join(ASSETS, "DejaVuSans-Bold.ttf")))
+    pdfmetrics.registerFontFamily("DejaVu", normal="DejaVu", bold="DejaVu-Bold",
+                                  italic="DejaVu", boldItalic="DejaVu-Bold")
     _DEJAVU_OK = True
 except Exception:
     pass
@@ -60,14 +62,34 @@ FONTS = {
     "dejavu": ("DejaVu", "DejaVu-Bold") if _DEJAVU_OK else ("Helvetica", "Helvetica-Bold"),
 }
 
+def _font_has_rupee(path):
+    """True if the TTF at `path` can render the Indian Rupee sign (U+20B9)."""
+    try:
+        from fontTools.ttLib import TTFont as _FT
+        return 0x20B9 in _FT(path).getBestCmap()
+    except Exception:
+        return False
+
+
+# Font keys whose embedded TTF can natively render the ₹ glyph. Standard PDF
+# base-14 fonts (helvetica/times/courier) use WinAnsi and CANNOT, so for those
+# we show "Rs." instead of ₹ to keep the whole proposal in a single font.
+_RUPEE_FONT_KEYS = set()
+if _DEJAVU_OK:
+    _RUPEE_FONT_KEYS.add("dejavu")
+
 for _key, (_reg_f, _bold_f, _reg_n, _bold_n) in _BRAND_FONTS.items():
     try:
-        pdfmetrics.registerFont(TTFont(_reg_n, os.path.join(ASSETS, _reg_f)))
+        _reg_path = os.path.join(ASSETS, _reg_f)
+        pdfmetrics.registerFont(TTFont(_reg_n, _reg_path))
         pdfmetrics.registerFont(TTFont(_bold_n, os.path.join(ASSETS, _bold_f)))
+        pdfmetrics.registerFontFamily(_reg_n, normal=_reg_n, bold=_bold_n,
+                                      italic=_reg_n, boldItalic=_bold_n)
         FONTS[_key] = (_reg_n, _bold_n)
+        if _font_has_rupee(_reg_path):
+            _RUPEE_FONT_KEYS.add(_key)
     except Exception:
         pass
-_MONEY_FONT = "DejaVu" if _DEJAVU_OK else "Helvetica"
 
 
 # ── Rich text (Quill HTML) -> ReportLab flowables ────────────────────────────
@@ -205,9 +227,16 @@ def _needs_unicode(text) -> bool:
 
 
 def _smart_font(key, text, bold=False):
-    """Use the chosen font, but fall back to DejaVu when the text needs unicode
-    glyphs (so the ₹ symbol still renders even on Helvetica/Times/Courier)."""
-    if _needs_unicode(text) and _DEJAVU_OK:
+    """Use the chosen font, but fall back to DejaVu when the text needs a glyph
+    (e.g. ₹) that the chosen font cannot render. Fonts that natively support the
+    glyph keep the chosen font so the proposal stays in ONE typeface."""
+    if not _needs_unicode(text):
+        return _font(key, bold)
+    # text needs a non-cp1252 glyph; keep the chosen font if it supports it
+    if (key or "dejavu") in _RUPEE_FONT_KEYS:
+        return _font(key, bold)
+    # chosen font (helvetica/times/courier/robotoslab) can't render it → DejaVu
+    if _DEJAVU_OK:
         return "DejaVu-Bold" if bold else "DejaVu"
     return _font(key, bold)
 
@@ -241,13 +270,17 @@ def _color(c, fallback):
 
 
 
-def _rs(v):
+def _rs(v, font_key=None):
+    """Format a rupee amount. Uses the ₹ symbol only when the chosen font can
+    render it; otherwise falls back to 'Rs.' so the whole document stays in a
+    single typeface (e.g. an all-Helvetica template won't mix in DejaVu)."""
     try:
         f = float(v)
         n = int(f) if f == int(f) else round(f, 2)
-        return f"₹{n:,}" if _DEJAVU_OK else f"Rs. {n:,}"
     except Exception:
         return "-"
+    use_symbol = (font_key or "dejavu") in _RUPEE_FONT_KEYS
+    return f"₹{n:,}" if use_symbol else f"Rs. {n:,}"
 
 
 # ── Default template (v2) ────────────────────────────────────────────────────
@@ -807,14 +840,14 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
                 data = [[Paragraph(f"<b>{c}</b>", head_style(c)) for c in head]]
                 if pricing_rows:
                     for r in pricing_rows:
-                        offer_html = f'<font color="{offer_hex}"><b>{_rs(r["offer"])}</b></font>' if r["offer"] is not None else "-"
-                        std_html = f'<strike>{_rs(r["standard"])}</strike>' if r["standard"] else "-"
+                        offer_html = f'<font color="{offer_hex}"><b>{_rs(r["offer"], bf)}</b></font>' if r["offer"] is not None else "-"
+                        std_html = f'<strike>{_rs(r["standard"], bf)}</strike>' if r["standard"] else "-"
                         data.append([
                             pcell(r["format"]),
                             pcell(std_html),
                             pcell(offer_html),
-                            pcell(_rs(r["credit"]) if r["credit"] else "-"),
-                            pcell(_rs(r["landing"]) if r["landing"] is not None else "-"),
+                            pcell(_rs(r["credit"], bf) if r["credit"] else "-"),
+                            pcell(_rs(r["landing"], bf) if r["landing"] is not None else "-"),
                         ])
                 else:
                     data.append([pcell("Add the proposed SKUs & pricing on the lead to populate this table."), "", "", "", ""])
