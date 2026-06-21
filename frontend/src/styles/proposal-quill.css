@@ -1,0 +1,23 @@
+/* Rich text editor styling for the proposal builder */
+.proposal-rich .ql-toolbar.ql-snow {
+  border: 1px solid hsl(var(--border));
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  background: hsl(var(--muted) / 0.4);
+}
+.proposal-rich .ql-container.ql-snow {
+  border: 1px solid hsl(var(--border));
+  border-top: none;
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.proposal-rich .ql-editor {
+  min-height: var(--rt-min, 110px);
+  line-height: 1.55;
+}
+.proposal-rich .ql-editor.ql-blank::before {
+  font-style: normal;
+  color: hsl(var(--muted-foreground));
+}

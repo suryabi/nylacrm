@@ -697,7 +697,7 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
 
     def bullets(items, bstyle):
         bs = ParagraphStyle(f"bl_{id(items)}", parent=bstyle, leftIndent=4, spaceAfter=2)
-        return ListFlowable([ListItem(Paragraph(str(i), bs), value="•", leftIndent=14) for i in items],
+        return ListFlowable([ListItem(Paragraph(_esc(str(i)), bs), value="•", leftIndent=14) for i in items],
                             bulletType="bullet", start="•", leftIndent=10)
 
     def _num(v, fallback):
@@ -722,19 +722,19 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
             t = sec.get("type")
             if t == "paragraph":
                 if sec.get("content"):
-                    story.append(Paragraph(sec["content"], bstyle))
+                    story.extend(rich_to_flowables(sec["content"], bstyle))
             elif t == "list":
                 if sec.get("intro"):
-                    story.append(Paragraph(sec["intro"], bstyle))
+                    story.extend(rich_to_flowables(sec["intro"], bstyle))
                 story.append(bullets(sec.get("items", []), bstyle))
             elif t == "category":
                 if sec.get("intro"):
-                    story.append(Paragraph(sec["intro"], bstyle))
+                    story.extend(rich_to_flowables(sec["intro"], bstyle))
                 if sec.get("allowed"):
-                    story.append(Paragraph(" | ".join(sec["allowed"]),
+                    story.append(Paragraph(_esc(" | ".join(sec["allowed"])),
                                            ParagraphStyle("ok", parent=bstyle, textColor=colors.HexColor("#166534"))))
                 if sec.get("not_allowed"):
-                    story.append(Paragraph("It must NOT be listed under: " + " | ".join(sec["not_allowed"]),
+                    story.append(Paragraph(_esc("It must NOT be listed under: " + " | ".join(sec["not_allowed"])),
                                            ParagraphStyle("no", parent=bstyle, textColor=_color(offer_hex, OFFER_RED))))
             elif t == "pricing_table":
                 head = ["Format", "Standard Pricing", "Offer Price", "Return Bottle Credit", "Landing Price after Credit"]
@@ -766,7 +766,7 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
                 story.append(tbl)
                 if sec.get("disclaimer"):
                     story.append(Spacer(1, 2 * mm))
-                    story.append(Paragraph(sec["disclaimer"], small))
+                    story.extend(rich_to_flowables(sec["disclaimer"], small))
             elif t == "image":
                 src = None
                 if sec.get("image_data"):

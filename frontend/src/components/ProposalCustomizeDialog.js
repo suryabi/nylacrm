@@ -14,6 +14,7 @@ import {
 import {
   Loader2, Sparkles, RotateCcw, Trash2, ChevronUp, ChevronDown, Plus, FileText, Save, RefreshCw,
 } from 'lucide-react';
+import RichTextField from './RichTextField';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -233,7 +234,7 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
                   {sec.type === 'paragraph' && (
                     <div className="space-y-1.5">
                       <Label className="text-sm font-medium">Text</Label>
-                      <Textarea className="text-base leading-relaxed" rows={5} value={sec.content || ''} onChange={(e) => patch(idx, { content: e.target.value })} data-testid={`customize-content-${idx}`} />
+                      <RichTextField value={sec.content || ''} onChange={(v) => patch(idx, { content: v })} testId={`customize-content-${idx}`} />
                     </div>
                   )}
 
@@ -241,7 +242,7 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
                     <>
                       <div className="space-y-1.5">
                         <Label className="text-sm font-medium">Intro (optional)</Label>
-                        <Textarea className="text-base leading-relaxed" rows={2} value={sec.intro || ''} onChange={(e) => patch(idx, { intro: e.target.value })} />
+                        <RichTextField value={sec.intro || ''} onChange={(v) => patch(idx, { intro: v })} minHeight={70} testId={`customize-list-intro-${idx}`} />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-sm font-medium">Items <span className="font-normal text-muted-foreground">(one per line)</span></Label>
@@ -252,7 +253,9 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
 
                   {sec.type === 'category' && (
                     <>
-                      <div className="space-y-1.5"><Label className="text-sm font-medium">Intro</Label><Input className="text-base h-11" value={sec.intro || ''} onChange={(e) => patch(idx, { intro: e.target.value })} /></div>
+                      <div className="space-y-1.5"><Label className="text-sm font-medium">Intro</Label>
+                        <RichTextField value={sec.intro || ''} onChange={(v) => patch(idx, { intro: v })} minHeight={70} testId={`customize-cat-intro-${idx}`} />
+                      </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1.5"><Label className="text-sm font-medium">Allowed</Label><Textarea className="text-base leading-relaxed" rows={3} value={toText(sec.allowed)} onChange={(e) => patch(idx, { allowed: toList(e.target.value) })} /></div>
                         <div className="space-y-1.5"><Label className="text-sm font-medium">Not allowed</Label><Textarea className="text-base leading-relaxed" rows={3} value={toText(sec.not_allowed)} onChange={(e) => patch(idx, { not_allowed: toList(e.target.value) })} /></div>
@@ -262,7 +265,9 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
 
                   {sec.type === 'pricing_table' && (
                     <>
-                      <div className="space-y-1.5"><Label className="text-sm font-medium">Disclaimer</Label><Textarea className="text-base leading-relaxed" rows={2} value={sec.disclaimer || ''} onChange={(e) => patch(idx, { disclaimer: e.target.value })} data-testid={`customize-disclaimer-${idx}`} /></div>
+                      <div className="space-y-1.5"><Label className="text-sm font-medium">Disclaimer</Label>
+                        <RichTextField value={sec.disclaimer || ''} onChange={(v) => patch(idx, { disclaimer: v })} minHeight={70} testId={`customize-disclaimer-${idx}`} />
+                      </div>
                       <p className="text-xs text-muted-foreground">Rows are filled from this lead's Proposed SKUs &amp; pricing.</p>
                     </>
                   )}

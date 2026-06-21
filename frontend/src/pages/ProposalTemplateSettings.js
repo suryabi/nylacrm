@@ -15,6 +15,7 @@ import {
   Loader2, Save, FileText, RotateCcw, Upload, Trash2, Plus, ChevronUp, ChevronDown, ImageIcon, X,
   Layers, Copy, Pencil, Star,
 } from 'lucide-react';
+import RichTextField from '../components/RichTextField';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` });
@@ -521,7 +522,7 @@ export default function ProposalTemplateSettings() {
           {sec.type === 'paragraph' && (
             <div className="space-y-2">
               <Label>Paragraph text</Label>
-              <Textarea rows={4} value={sec.content || ''} onChange={(e) => setSection(idx, { content: e.target.value })} data-testid={`section-content-${idx}`} />
+              <RichTextField value={sec.content || ''} onChange={(v) => setSection(idx, { content: v })} testId={`section-content-${idx}`} />
             </div>
           )}
 
@@ -529,7 +530,7 @@ export default function ProposalTemplateSettings() {
             <>
               <div className="space-y-2">
                 <Label>Intro <span className="text-xs text-muted-foreground">(optional)</span></Label>
-                <Textarea rows={2} value={sec.intro || ''} onChange={(e) => setSection(idx, { intro: e.target.value })} />
+                <RichTextField value={sec.intro || ''} onChange={(v) => setSection(idx, { intro: v })} minHeight={70} testId={`section-list-intro-${idx}`} />
               </div>
               <div className="space-y-2">
                 <Label>Items (one per line)</Label>
@@ -540,7 +541,9 @@ export default function ProposalTemplateSettings() {
 
           {sec.type === 'category' && (
             <>
-              <div className="space-y-2"><Label>Intro</Label><Input value={sec.intro || ''} onChange={(e) => setSection(idx, { intro: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Intro</Label>
+                <RichTextField value={sec.intro || ''} onChange={(v) => setSection(idx, { intro: v })} minHeight={70} testId={`section-cat-intro-${idx}`} />
+              </div>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className="space-y-2"><Label>Allowed (one per line)</Label><Textarea rows={4} value={toText(sec.allowed)} onChange={(e) => setSection(idx, { allowed: toList(e.target.value) })} /></div>
                 <div className="space-y-2"><Label>Not allowed (one per line)</Label><Textarea rows={4} value={toText(sec.not_allowed)} onChange={(e) => setSection(idx, { not_allowed: toList(e.target.value) })} /></div>
@@ -550,7 +553,9 @@ export default function ProposalTemplateSettings() {
 
           {sec.type === 'pricing_table' && (
             <>
-              <div className="space-y-2"><Label>Disclaimer</Label><Textarea rows={2} value={sec.disclaimer || ''} onChange={(e) => setSection(idx, { disclaimer: e.target.value })} data-testid={`section-disclaimer-${idx}`} /></div>
+              <div className="space-y-2"><Label>Disclaimer</Label>
+                <RichTextField value={sec.disclaimer || ''} onChange={(v) => setSection(idx, { disclaimer: v })} minHeight={70} testId={`section-disclaimer-${idx}`} />
+              </div>
               <p className="text-xs text-muted-foreground">The table rows fill in automatically from each lead's Proposed SKUs &amp; pricing.</p>
             </>
           )}

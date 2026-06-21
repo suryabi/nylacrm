@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 213 — Rich-text (Quill) editors for proposal template + Customize dialog. Backend: 6/6 pytest pass (2.7s). Validated: (1) PUT template with rich HTML for paragraph 'content', list 'intro', category 'intro', pricing 'disclaimer' round-trips on GET (HTML tags <strong>/<em>/<ul>/<li> preserved). (2) /preview returns 200 application/pdf %PDF- (>2KB) when sections contain rich HTML (bold/italic/bullets/color span). (3) /generate also returns 200. (4) BACKWARD COMPAT: plain text containing '&', '<', '>' (e.g. 'Soda & Tonic', 'GST 5% & logistics extra') across all four prose fields still generates 200 + %PDF-; backend _esc escapes correctly. (5) Empty Quill value '<p><br></p>' on all rich fields still generates 200 + %PDF- (rich_to_flowables returns []). (6) Per-lead override carrying full rich-HTML sections on /preview returns 200 + %PDF-. Frontend: /proposal-template renders 7 Quill toolbars + 7 .ql-editors (one per prose field), testids section-content-0 + save-template-btn present. Applying Bold + Italic + bullet-list via .ql-bold/.ql-italic/.ql-list[value=bullet], clicking save-template-btn shows toast 'Proposal template saved', and after reload the editor HTML still contains the typed text + <strong>/<em> wrappers. Customize Proposal dialog opens from the lead (proposal-customize-dialog), exposes 7 rich editors with customize-content-0 + customize-apply-btn testids — matches the spec.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Bullet list rendering in generated PDF",
+        "issue": "react-quill-new (Quill v2) emits BOTH bullet and ordered lists as <ol><li data-list=\"bullet\"> / <li data-list=\"ordered\"> — a single <ol> element with a data-list attribute differentiating bullet vs numbered. Live frontend confirmed (after clicking .ql-list[value=bullet] + reload, editor HTML stored is: <ol><li data-list=\"bullet\"><span class=\"ql-ui\"...>...</li></ol>). However backend rich_to_flowables in /app/backend/services/proposal_pdf.py treats any <ol> as a NUMBERED list (bulletType='1') and only <ul> as bullets. Result: admins who click the BULLET button in the rich-text editor will see a NUMBERED list (1., 2., …) in the generated PDF, not bullets. PDF still returns 200 + %PDF- (no crash) — so my hand-crafted <ul> backend tests pass — but UI bullets do NOT render as bullets in PDF output. Backend tests using literal <ul> HTML do not catch this because Quill never produces <ul>.",
+        "affected_selectors": [".ql-list[value=bullet]", "section-content-{idx}", "customize-content-{idx}"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_213_proposal_rich_text.py",
+    "/app/test_reports/pytest/iteration_213.xml"
+  ],
+  "action_items": [
+    "Fix bullet-list PDF rendering: in /app/backend/services/proposal_pdf.py rich_to_flowables, when encountering <ol>/<ul>, inspect each <li>'s data-list attribute (Quill v2 convention) — treat li[data-list='bullet'] as bullets and li[data-list='ordered'] (or no attribute on a true <ol>) as numbered. Recommended: detect bulletType per-item, or use bulletType='bullet' if ANY li has data-list='bullet'. Also strip the <span class='ql-ui' contenteditable='false'> noise inside li (currently unwrapped to empty string — harmless, but explicit skip would be cleaner).",
+    "Consider adding a backend unit test that feeds Quill-v2-style HTML ('<ol><li data-list=\"bullet\">x</li></ol>') and asserts the produced flowable is a bullet ListFlowable, not numbered."
+  ],
+  "critical_code_review_comments": [
+    "proposal_pdf.py rich_to_flowables hardcodes bulletType from tag name (<ul>=bullet, <ol>=numbered). This is correct for hand-written HTML but does not match react-quill-new's output schema, where bullet/ordered are both <ol> + data-list attribute. The mismatch silently degrades bullets→numbers in the PDF for admins using the Bullet List toolbar button — please prioritize this fix.",
+    "_inline_html unwraps unknown tags (e.g. <span class='ql-ui'>) by recursing into children — fine, but the empty Quill UI spans inject zero-width content. Consider skip-list for known Quill chrome (.ql-ui).",
+    "RichTextField correctly normalizes '<p><br></p>' → '' before onChange — good. rich_to_flowables also treats '<p><br></p>' / '<p><br/></p>' as empty. The two layers are belt-and-braces (good defense in depth).",
+    "_esc handles '&', '<', '>' for plain-text path (no '<' in input). Verified live with 'Soda & Tonic' input — PDF generates without crash.",
+    "rich_to_flowables: when the soup contains only NavigableString or unknown tags (no <p>/<div>/<ul>/<ol>), pending is flushed at end. Good — covers Quill's first-line plain text case."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_213_proposal_rich_text.py (new — 6 tests, 2.7s, all pass)"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (Quill editors render, formatting applied, save+reload preserves HTML, customize dialog opens with rich editors)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water, role CEO). Auth returns session_token (Bearer).",
+  "seed_data_creation": "Default template was mutated mid-run by the persistence tests; cleanup fixture restores the original Default content captured via GET at module setup. Per-lead override on lead 08c93122-99fc-4587-b31c-559649f29c17 cleared via DELETE. NOTE: The live frontend run also typed 'RICHTEST123' + formatting into section-content-0 of the Default template and saved it (toast confirmed). The backend cleanup fixture in the pytest module ran AFTER that save and restored Default to the original snapshot taken at the start of the pytest module — but if the frontend run executed AFTER pytest, the literal 'RICHTEST123' remains in the live Default template. Recommend the main agent re-issues PUT /api/proposals/templates/{default_id} with the original sections (or call POST /defaults if available) to fully restore.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 213 backend 6/6 green at /app/backend/tests/test_iteration_213_proposal_rich_text.py. Frontend: 7 Quill editors render per template (4 paragraph + list intros + cat intro + disclaimer) on /proposal-template AND inside the Customize dialog (proposal-customize-dialog). Use selectors .ql-toolbar / .ql-editor / .ql-bold / .ql-italic / .ql-list[value=bullet] to drive Quill. KEY BUG TO RETEST AFTER FIX: bullet-list-in-PDF — react-quill-new emits <ol><li data-list='bullet'> for bullets; current proposal_pdf.py treats all <ol> as numbered. After main agent fixes rich_to_flowables, re-run a /preview using a stored Quill-bullet HTML and inspect the PDF bytes (or open visually) to confirm bullets render. Also worth restoring Default template to factory defaults — admin UI may show stray 'RICHTEST123' from this run.",
+  "rca of the issue": "Bullet list bug RCA: react-quill-new (Quill 2.x) unifies bullet/ordered into one HTML element using <ol> + a per-<li> data-list='bullet'|'ordered' attribute. The backend rich_to_flowables (proposal_pdf.py L132-142) infers list type from the WRAPPER tag name only (ul→bullet, ol→numbered) and ignores data-list. Repro: in /proposal-template click section-content-0 → click bullet list toolbar button → type items → save. Storage round-trips with <ol><li data-list='bullet'>. POST /preview → PDF renders as numbered (1., 2., …) instead of bullets. Mitigation: detect bulletType per-item by reading li.get('data-list'); when any li has data-list='bullet' use bulletType='bullet', else if data-list='ordered' or wrapper is <ol> with no data-list use bulletType='1'. Also strip <span class='ql-ui'> Quill chrome from li inner HTML."
+}
