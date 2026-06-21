@@ -1577,6 +1577,7 @@ ${userEmail}`;
               entityId={lead.id}
               entityName={lead.company}
               entityCity={lead.city}
+              currentUser={user}
             />
           )}
 

@@ -13,8 +13,11 @@ Only the customer name + pricing table merge per lead. Stored in the
 """
 import os
 import io
+import re
 import base64
 from datetime import datetime, timezone
+
+from bs4 import BeautifulSoup, NavigableString
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -49,6 +52,108 @@ FONTS = {
     "dejavu": ("DejaVu", "DejaVu-Bold") if _DEJAVU_OK else ("Helvetica", "Helvetica-Bold"),
 }
 _MONEY_FONT = "DejaVu" if _DEJAVU_OK else "Helvetica"
+
+
+# ── Rich text (Quill HTML) -> ReportLab flowables ────────────────────────────
+_INLINE_MAP = {"strong": "b", "b": "b", "em": "i", "i": "i", "u": "u",
+               "s": "strike", "strike": "strike", "del": "strike"}
+
+
+def _esc(t: str) -> str:
+    return (t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _css_color(val: str) -> str:
+    val = (val or "").strip()
+    m = re.match(r"rgba?\(([^)]+)\)", val, re.I)
+    if m:
+        nums = [n.strip() for n in m.group(1).split(",")[:3]]
+        try:
+            return "#%02X%02X%02X" % tuple(int(float(n)) for n in nums)
+        except Exception:
+            return "#000000"
+    return val or "#000000"
+
+
+def _inline_html(node) -> str:
+    """Convert an element's inline children to ReportLab mini-HTML markup."""
+    out = []
+    for child in getattr(node, "children", []):
+        if isinstance(child, NavigableString):
+            out.append(_esc(str(child)))
+            continue
+        name = (child.name or "").lower()
+        if name == "br":
+            out.append("<br/>")
+        elif name in _INLINE_MAP:
+            out.append(f"<{_INLINE_MAP[name]}>{_inline_html(child)}</{_INLINE_MAP[name]}>")
+        elif name == "a":
+            href = _esc(child.get("href", ""))
+            out.append(f'<a href="{href}" color="blue">{_inline_html(child)}</a>')
+        elif name == "span":
+            style = child.get("style", "") or ""
+            m = re.search(r"color:\s*([^;]+)", style, re.I)
+            inner = _inline_html(child)
+            out.append(f'<font color="{_css_color(m.group(1))}">{inner}</font>' if m else inner)
+        else:
+            out.append(_inline_html(child))  # unwrap unknown inline tags
+    return "".join(out)
+
+
+def rich_to_flowables(html, style, gap=2):
+    """Render Quill HTML (or plain text) into a list of ReportLab flowables,
+    honoring bold/italic/underline/strike/color/links, paragraphs and lists."""
+    if html is None:
+        return []
+    text = str(html).strip()
+    if not text or text in ("<p><br></p>", "<p><br/></p>"):
+        return []
+    if "<" not in text:
+        return [Paragraph(_esc(text), style)]
+
+    soup = BeautifulSoup(text, "html.parser")
+    flow = []
+    pending = []
+
+    def flush():
+        if pending:
+            inner = "".join(pending).strip()
+            if inner:
+                flow.append(Paragraph(inner, style))
+            pending.clear()
+
+    for el in soup.children:
+        if isinstance(el, NavigableString):
+            s = _esc(str(el))
+            if s.strip():
+                pending.append(s)
+            continue
+        name = (el.name or "").lower()
+        if name in ("ul", "ol"):
+            flush()
+            items = []
+            for li in el.find_all("li", recursive=False):
+                inner = _inline_html(li).strip()
+                if inner:
+                    items.append(ListItem(Paragraph(inner, style), leftIndent=14,
+                                          value="•" if name == "ul" else None))
+            if items:
+                flow.append(ListFlowable(items, bulletType="bullet" if name == "ul" else "1",
+                                         leftIndent=10, spaceAfter=gap))
+        elif name in ("p", "div", "h1", "h2", "h3", "h4"):
+            flush()
+            inner = _inline_html(el).strip()
+            if inner:
+                flow.append(Paragraph(inner, style))
+        else:
+            pending.append(_inline_html(el))
+    flush()
+    if not flow:
+        txt = _esc(soup.get_text()).strip()
+        if txt:
+            flow.append(Paragraph(txt, style))
+    return flow
+
 
 
 def _font(key, bold=False):

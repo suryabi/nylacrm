@@ -9523,9 +9523,12 @@ async def get_expense_requests(
     if status:
         query['status'] = status
     
-    # Non-directors can only see their own requests
+    # Non-directors can only see their own requests OR ones they must approve
     if current_user['role'] not in ['CEO', 'Director', 'Vice President', 'ceo', 'director', 'vp']:
-        query['user_id'] = current_user['id']
+        query['$or'] = [
+            {'user_id': current_user['id']},
+            {'approver_id': current_user['id']},
+        ]
     
     expenses = await get_tdb().expense_requests.find(query, {'_id': 0}).sort('created_at', -1).to_list(500)
     

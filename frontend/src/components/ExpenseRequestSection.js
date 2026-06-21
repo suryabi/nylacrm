@@ -56,7 +56,12 @@ const statusConfig = {
   cancelled: { label: 'Cancelled', color: 'bg-gray-100 text-gray-500', icon: AlertCircle },
 };
 
-export default function ExpenseRequestSection({ entityType, entityId, entityName, entityCity }) {
+const SENIOR_APPROVER_ROLES = ['CEO', 'Director', 'Vice President', 'Admin', 'System Admin'];
+const canUserApprove = (expense, user) =>
+  expense?.status === 'pending_approval' && !!user &&
+  (user.id === expense.approver_id || SENIOR_APPROVER_ROLES.includes(user.role));
+
+export default function ExpenseRequestSection({ entityType, entityId, entityName, entityCity, currentUser }) {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -201,6 +206,23 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
       toast.error(error.response?.data?.detail || 'Failed to cancel expense request');
     }
   };
+
+  // Approver decision (approve / reject) — usable from the lead page directly.
+  const handleDecision = async (expenseId, status, rejectionReason) => {
+    try {
+      await axios.put(
+        `${API_URL}/expense-requests/${expenseId}/approve`,
+        { status, rejection_reason: rejectionReason || null },
+        { withCredentials: true }
+      );
+      toast.success(`Expense request ${status}`);
+      fetchExpenses();
+      return true;
+    } catch (error) {
+      toast.error(error.response?.data?.detail || `Failed to ${status === 'approved' ? 'approve' : 'reject'} request`);
+      return false;
+    }
+  };
   
   const resetForm = () => {
     setExpenseType('');
@@ -314,17 +336,45 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
                       {format(new Date(expense.created_at), 'MMM d, yyyy')}
                     </td>
                     <td className="px-3 py-3">
-                      {['draft', 'pending_approval'].includes(expense.status) && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={(e) => { e.stopPropagation(); handleDelete(expense.id); }}
-                          className="h-8 w-8 text-red-500 hover:text-red-700"
-                          data-testid={`delete-expense-${expense.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {canUserApprove(expense, currentUser) && (
+                          <>
+                            <Button
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm('Approve this expense request?')) handleDecision(expense.id, 'approved');
+                              }}
+                              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-2"
+                              data-testid={`row-approve-expense-${expense.id}`}
+                            >
+                              <CheckCircle className="h-4 w-4 sm:mr-1" />
+                              <span className="hidden sm:inline">Approve</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={(e) => { e.stopPropagation(); setDetailsExpense(expense); }}
+                              className="h-8 border-red-300 text-red-600 hover:bg-red-50 px-2"
+                              data-testid={`row-reject-expense-${expense.id}`}
+                            >
+                              <XCircle className="h-4 w-4 sm:mr-1" />
+                              <span className="hidden sm:inline">Reject</span>
+                            </Button>
+                          </>
+                        )}
+                        {['draft', 'pending_approval'].includes(expense.status) && expense.user_id === currentUser?.id && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={(e) => { e.stopPropagation(); handleDelete(expense.id); }}
+                            className="h-8 w-8 text-red-500 hover:text-red-700"
+                            data-testid={`delete-expense-${expense.id}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -548,6 +598,8 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
       {/* Details Dialog — read-only view of an expense request */}
       <ExpenseDetailsDialog
         expense={detailsExpense}
+        currentUser={currentUser}
+        onDecision={handleDecision}
         onClose={() => setDetailsExpense(null)}
       />
     </Card>
@@ -558,12 +610,30 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
 // Opened by clicking any expense row in the history table. Shows everything
 // the requester entered (type, description, amount/free-trial, SKUs, MLP
 // breakdown, approval state, who-approved-when).
-function ExpenseDetailsDialog({ expense, onClose }) {
+function ExpenseDetailsDialog({ expense, onClose, currentUser, onDecision }) {
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { setRejecting(false); setReason(''); }, [expense?.id]);
+
   if (!expense) return null;
   const status = statusConfig[expense.status] || statusConfig.draft;
   const StatusIcon = status.icon;
   const isFreeTrial = expense.expense_type === 'free_trial';
   const fmtAmt = (v) => `₹${Math.round(Number(v || 0)).toLocaleString('en-IN')}`;
+  const showActions = canUserApprove(expense, currentUser) && typeof onDecision === 'function';
+
+  const decide = async (decision) => {
+    if (decision === 'rejected' && !reason.trim()) {
+      toast.error('Please provide a reason for rejection');
+      return;
+    }
+    setSubmitting(true);
+    const ok = await onDecision(expense.id, decision, decision === 'rejected' ? reason.trim() : null);
+    setSubmitting(false);
+    if (ok) onClose();
+  };
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="expense-details-dialog">
@@ -679,6 +749,61 @@ function ExpenseDetailsDialog({ expense, onClose }) {
             </div>
           </div>
         </div>
+
+        {showActions && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-3" data-testid="expense-approver-actions">
+            <p className="text-sm font-medium text-amber-800">You are the approver for this request.</p>
+            {rejecting && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Reason for rejection *</Label>
+                <Textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Explain why this request is being rejected..."
+                  rows={3}
+                  data-testid="expense-reject-reason"
+                />
+              </div>
+            )}
+            <div className="flex flex-wrap justify-end gap-2">
+              {!rejecting ? (
+                <>
+                  <Button
+                    variant="outline"
+                    className="border-red-300 text-red-600 hover:bg-red-50"
+                    onClick={() => setRejecting(true)}
+                    disabled={submitting}
+                    data-testid="expense-reject-btn"
+                  >
+                    <XCircle className="h-4 w-4 mr-1.5" /> Reject
+                  </Button>
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => decide('approved')}
+                    disabled={submitting}
+                    data-testid="expense-approve-btn"
+                  >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <CheckCircle className="h-4 w-4 mr-1.5" />} Approve
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="ghost" onClick={() => { setRejecting(false); setReason(''); }} disabled={submitting}>
+                    Cancel
+                  </Button>
+                  <Button
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => decide('rejected')}
+                    disabled={submitting}
+                    data-testid="expense-confirm-reject-btn"
+                  >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <XCircle className="h-4 w-4 mr-1.5" />} Confirm Rejection
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="details-close-btn">Close</Button>

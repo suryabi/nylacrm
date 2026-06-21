@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-21 — Approve/Reject expense requests from the Lead Details page ✅
+- Problem: when an Expense Request went to Pending Approval, the designated approver could only act from the Home "Pending Approvals" card — not from the lead itself. Worse, a non-senior approver couldn't even *see* the request on the lead.
+- Backend: `GET /api/expense-requests` now returns requests where the user is the **approver** (`approver_id`), not just their own — non-Director approvers can see what they must action (`server.py`).
+- Frontend (`ExpenseRequestSection.js`): receives `currentUser`; shows inline **Approve / Reject** buttons in the expense table row for the approver (or senior roles), and a full "You are the approver" panel with Approve / Reject (+ rejection-reason capture) inside the details dialog. Reuses the existing `PUT /api/expense-requests/{id}/approve` endpoint (auth already allows the routed approver or senior roles). `LeadDetail.js` passes the logged-in `user`.
+- Verified: non-senior approver visibility proven via DB-backed query simulation (old own-only filter hid it; new filter shows it); UI screenshot confirms inline + dialog Approve/Reject render for a pending request; approve persists (status→approved, approved_by set). Test artifacts cleaned up.
+
 ## 2026-06-21 — Multiple named Proposal Templates (presets) + per-lead template picker ✅
 - The single shared template is now **multiple named templates** per tenant. On first access the existing template is migrated to **"Default"** and three starter presets — **Hotels, Retail, Events** (clones of Default) — are seeded once (deleting a preset never re-seeds it).
 - Settings (`/proposal-template`): a **template switcher** (select + **New / Duplicate / Rename / Set default / Delete**) with a Default badge; load/save and logo upload are now per-template.
