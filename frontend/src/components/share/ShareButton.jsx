@@ -3,12 +3,13 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   Share2, Mail, Loader2, MessageCircle, X, Plus, ChevronDown,
-  FileText, Paperclip, Sparkles, Check,
+  FileText, Paperclip, Sparkles, Check, Presentation,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Switch } from '../ui/switch';
+import { Checkbox } from '../ui/checkbox';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../ui/dialog';
@@ -17,6 +18,7 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator,
 } from '../ui/dropdown-menu';
 import RichEmailEditor from '../gmail/RichEmailEditor';
+import CrmDocumentPicker from '../gmail/CrmDocumentPicker';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -48,7 +50,7 @@ const entityForDoc = (documentType, documentId) => {
  */
 export const ShareButton = ({
   documentType, documentId, label = 'Share', variant = 'ghost',
-  size = 'sm', className = '', iconOnly = false, testId,
+  size = 'sm', className = '', iconOnly = false, testId, leadId = null,
 }) => {
   const [open, setOpen] = useState(false);
   const base = testId || `${documentType}-${documentId}`;
@@ -64,7 +66,7 @@ export const ShareButton = ({
       </Button>
       {open && (
         <ShareDialog
-          documentType={documentType} documentId={documentId}
+          documentType={documentType} documentId={documentId} leadId={leadId}
           testIdBase={base} onClose={() => setOpen(false)}
         />
       )}
@@ -165,7 +167,7 @@ const RecipientField = ({ which, list, setList, candidates, locked }) => {
   );
 };
 
-const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
+const ShareDialog = ({ documentType, documentId, leadId, testIdBase, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [title, setTitle] = useState('');
@@ -182,20 +184,35 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
   const [templates, setTemplates] = useState([]);
   const [appliedTemplate, setAppliedTemplate] = useState(null);
 
+  // Lead documents multi-attach (only when leadId is provided)
+  const [proposal, setProposal] = useState(null);
+  const [deck, setDeck] = useState(null);
+  const [includeProposal, setIncludeProposal] = useState(false);
+  const [includeDeck, setIncludeDeck] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   React.useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [recRes, tplRes] = await Promise.allSettled([
+        const reqs = [
           axios.get(`${API}/share/recipients`, {
             headers: HEAD(), params: { document_type: documentType, document_id: documentId },
           }),
           axios.get(`${API}/email-templates`, { headers: HEAD() }),
-        ]);
+        ];
+        if (leadId) {
+          reqs.push(axios.get(`${API}/leads/${leadId}/proposal`, { headers: HEAD() }));
+          reqs.push(axios.get(`${API}/gamma/generations`, {
+            headers: HEAD(), params: { source_type: 'lead', source_id: leadId, limit: 1 },
+          }));
+        }
+        const [recRes, tplRes, propRes, deckRes] = await Promise.allSettled(reqs);
         if (!active) return;
         if (recRes.status === 'fulfilled') {
           const data = recRes.value.data;
-          setTitle(data.title || 'Document');
+          setTitle(data.title || (leadId ? 'Lead documents' : 'Document'));
           setSubject(data.default_subject || data.title || 'Document');
           setMessage(textToHtml(data.default_message || ''));
           setTo((data.to || []).filter((r) => r.email));
@@ -208,15 +225,23 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
           setCandidates(data.candidates || []);
           setLocked((data.policy && data.policy.locked) || []);
         } else {
-          setTitle('Document'); setSubject('Document');
+          setTitle(leadId ? 'Lead documents' : 'Document'); setSubject('Document');
         }
-        if (tplRes.status === 'fulfilled') setTemplates(tplRes.value.data || []);
+        if (tplRes && tplRes.status === 'fulfilled') setTemplates(tplRes.value.data || []);
+        if (leadId) {
+          const p = propRes && propRes.status === 'fulfilled' ? propRes.value.data.proposal : null;
+          const d = deckRes && deckRes.status === 'fulfilled' ? (deckRes.value.data.generations || [])[0] : null;
+          setProposal(p);
+          setDeck(d);
+          setIncludeProposal(!!(p && p.status === 'approved'));
+          setIncludeDeck(!!(d && d.review_status === 'approved' && d.status === 'completed'));
+        }
       } finally {
         if (active) setLoading(false);
       }
     })();
     return () => { active = false; };
-  }, [documentType, documentId]);
+  }, [documentType, documentId, leadId]);
 
   const applyTemplate = async (tpl) => {
     try {
@@ -233,9 +258,36 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
 
   const send = async () => {
     if (to.length === 0) { toast.error('Add at least one recipient in To'); return; }
+    const body = htmlIsEmpty(message) ? '' : message;
+
+    // Lead documents multi-attach path
+    if (leadId) {
+      if (!includeProposal && !includeDeck && files.length === 0) {
+        toast.error('Select at least one document to attach'); return;
+      }
+      setSending(true);
+      try {
+        const { data } = await axios.post(`${API}/leads/${leadId}/share-documents`, {
+          to_emails: to.map((r) => r.email),
+          cc_emails: cc.map((r) => r.email),
+          bcc_emails: bcc.map((r) => r.email),
+          subject, message: body,
+          include_proposal: includeProposal,
+          include_deck: includeDeck,
+          document_ids: files.map((f) => f.id),
+        }, { headers: HEAD() });
+        toast.success(data.message || 'Documents shared');
+        onClose();
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'Failed to share documents');
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     setSending(true);
     try {
-      const body = htmlIsEmpty(message) ? '' : message;
       const { data } = await axios.post(`${API}/share`, {
         document_type: documentType, document_id: documentId, channel: 'email',
         to, cc, bcc, subject, message: body, message_is_html: true, attach_pdf: attachPdf,
@@ -253,6 +305,7 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
   const recipientCount = to.length + cc.length + bcc.length;
 
   return (
+    <>
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent
         className="p-0 gap-0 overflow-hidden flex flex-col resize w-[700px] h-[720px] min-w-[460px] min-h-[540px] max-w-[96vw] max-h-[92vh] sm:max-w-none"
@@ -361,17 +414,58 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
               <RichEmailEditor value={message} onChange={setMessage} placeholder="Write your message… use the toolbar to format." />
             </div>
 
-            {/* Attachment toggle */}
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
-              <div className="flex items-center gap-2.5">
-                <Paperclip className="h-4 w-4 text-slate-500" />
-                <div>
-                  <p className="text-sm font-medium text-slate-700">Attach document to email</p>
-                  <p className="text-xs text-slate-400">A secure download link is always included.</p>
-                </div>
+            {/* Attachments */}
+            {leadId ? (
+              <div className="space-y-2">
+                <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Attachments</Label>
+                <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${proposal && proposal.status === 'approved' ? 'cursor-pointer hover:bg-slate-50' : 'opacity-50'}`}>
+                  <Checkbox checked={includeProposal} disabled={!(proposal && proposal.status === 'approved')}
+                    onCheckedChange={(v) => setIncludeProposal(!!v)} data-testid="share-include-proposal" />
+                  <FileText className="h-4 w-4 text-red-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-700 truncate">{proposal?.file_name || 'Proposal'}</p>
+                    <p className="text-xs text-slate-400">{proposal && proposal.status === 'approved' ? 'Approved proposal PDF' : 'No approved proposal available'}</p>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${deck && deck.review_status === 'approved' && deck.status === 'completed' ? 'cursor-pointer hover:bg-slate-50' : 'opacity-50'}`}>
+                  <Checkbox checked={includeDeck} disabled={!(deck && deck.review_status === 'approved' && deck.status === 'completed')}
+                    onCheckedChange={(v) => setIncludeDeck(!!v)} data-testid="share-include-deck" />
+                  <Presentation className="h-4 w-4 text-indigo-600 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-slate-700 truncate">{deck?.title || 'Deck'}</p>
+                    <p className="text-xs text-slate-400">{deck && deck.review_status === 'approved' && deck.status === 'completed' ? 'Approved presentation (PDF)' : 'No approved deck available'}</p>
+                  </div>
+                </label>
+                {files.map((f) => (
+                  <div key={f.id} className="flex items-center gap-3 rounded-xl border bg-slate-50/60 px-4 py-3" data-testid={`share-file-${f.id}`}>
+                    <Paperclip className="h-4 w-4 text-slate-500 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-slate-700 truncate">{f.name || f.file_name}</p>
+                      {f.file_name && f.name !== f.file_name && <p className="text-xs text-slate-400 truncate">{f.file_name}</p>}
+                    </div>
+                    <button type="button" onClick={() => setFiles((p) => p.filter((x) => x.id !== f.id))}
+                      className="rounded-full hover:bg-rose-100 hover:text-rose-600 p-1 transition-colors" data-testid={`share-file-remove-${f.id}`}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)}
+                  className="border-dashed border-teal-300 text-teal-700 hover:bg-teal-50" data-testid="share-attach-files-btn">
+                  <Paperclip className="h-4 w-4 mr-1.5" /> Attach from Files &amp; Documents
+                </Button>
               </div>
-              <Switch checked={attachPdf} onCheckedChange={setAttachPdf} data-testid="share-attach-toggle" />
-            </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                <div className="flex items-center gap-2.5">
+                  <Paperclip className="h-4 w-4 text-slate-500" />
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Attach document to email</p>
+                    <p className="text-xs text-slate-400">A secure download link is always included.</p>
+                  </div>
+                </div>
+                <Switch checked={attachPdf} onCheckedChange={setAttachPdf} data-testid="share-attach-toggle" />
+              </div>
+            )}
           </div>
         )}
 
@@ -401,6 +495,18 @@ const ShareDialog = ({ documentType, documentId, testIdBase, onClose }) => {
         />
       </DialogContent>
     </Dialog>
+    {leadId && (
+      <CrmDocumentPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onSelect={(docs) => setFiles((prev) => {
+          const ids = new Set(prev.map((f) => f.id));
+          return [...prev, ...docs.filter((d) => !ids.has(d.id))];
+        })}
+        alreadySelectedIds={files.map((f) => f.id)}
+      />
+    )}
+    </>
   );
 };
 

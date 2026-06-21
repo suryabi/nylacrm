@@ -4,8 +4,8 @@ import { leadsAPI, activitiesAPI, commentsAPI, usersAPI, accountsAPI, skusAPI } 
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
+import { ShareButton } from '../components/share/ShareButton';
 import DeckSection from '../components/DeckSection';
-import ShareDocumentsDialog from '../components/ShareDocumentsDialog';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
@@ -147,7 +147,6 @@ export default function LeadDetail() {
   
   // Proposal state
   const [proposal, setProposal] = useState(null);
-  const [shareDocsOpen, setShareDocsOpen] = useState(false);
   const [proposalLoading, setProposalLoading] = useState(false);
   const [uploadingProposal, setUploadingProposal] = useState(false);
   const [reviewComment, setReviewComment] = useState('');
@@ -1440,9 +1439,11 @@ ${userEmail}`;
             <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
               <FileText className="h-4 w-4 sm:h-5 sm:w-5" /> Documents
             </h2>
-            <Button variant="outline" size="sm" onClick={() => setShareDocsOpen(true)} data-testid="share-documents-btn">
-              <Mail className="h-4 w-4 mr-1.5" /> Share via Email
-            </Button>
+            <ShareButton
+              documentType="lead_proposal" documentId={id} leadId={id}
+              label="Share via Email" variant="outline" size="sm"
+              testId={`lead-docs-${id}`}
+            />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start" data-testid="lead-documents-section">
           {/* Proposal Section */}
@@ -2288,15 +2289,6 @@ ${userEmail}`;
         onOpenChange={setCustomizeOpen}
         hasExistingProposal={!!proposal}
         onGenerated={fetchProposal}
-      />
-
-      {/* Unified Share Documents (Proposal + Deck + Files) Dialog */}
-      <ShareDocumentsDialog
-        open={shareDocsOpen}
-        onOpenChange={setShareDocsOpen}
-        leadId={id}
-        companyName={lead?.company}
-        defaultTo={lead?.email || ''}
       />
 
       {/* Share Proposal via Email Dialog - Email Client Style */}

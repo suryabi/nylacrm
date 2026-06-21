@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-21 — Share via Email: restored rich compose dialog + multi-attach ✅
+- Reverted the standalone custom share dialog. The lead "Share via Email" now uses the original rich **Compose email** experience (recipient chips for To/Cc/Bcc with suggestions, email templates, RichEmailEditor, channel selector).
+- Extended that dialog (gated by a new `leadId` prop on `ShareButton`) with an **Attachments** section: toggle the **approved Proposal** and/or **approved Deck** (either or both) and **Attach from Files & Documents** (reuses `CrmDocumentPicker`). When attachments are chosen it sends via `POST /api/leads/{id}/share-documents`; non-lead shares keep the original `/api/share` behavior unchanged.
+- Verified: dialog renders the rich compose UI with the attachments panel (screenshot); multi-attach send works (proposal + file → "Sent 2 document(s)").
+
+
 ## 2026-06-21 — Global "Share via Email" (multi-attach) + Deck review-history parity ✅
 - **Deck Review History** now matches the Proposal's (added the review timestamp under each entry).
 - **Global Share via Email:** added a single "Share via Email" action in the lead Documents header (removed the per-proposal share button). The dialog lets the user attach any combination of: the **approved Proposal**, the **approved Deck** (PDF), and any files from the **Files & Documents** store (reuses `CrmDocumentPicker`). Recipients/subject/message are prefilled.
