@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-21 — Refactor: extracted per-lead proposal endpoints + added modern brand fonts ✅
+- Moved all 11 `/api/leads/{lead_id}/proposal*` endpoints (get/upload/generate/preview/customization GET-PUT-DELETE/download/delete/review/share-email) out of the 11k-line `server.py` into a dedicated router `routes/lead_proposals.py`. Wired via `routes/__init__.py` with no prefix; paths unchanged. server.py shrank from 11,304 → 10,762 lines. Shared `ALLOWED_PROPOSAL_TYPES` / `MAX_PROPOSAL_SIZE` kept in server.py (reused by Account Contract endpoints). Server-side helpers (`create_approval_task`, `complete_approval_task`, `ApprovalType`, `stamp_pdf_with_signature`) imported lazily inside handlers to avoid circular imports.
+- Added 4 modern brand fonts to the proposal PDF generator (Poppins, Montserrat, Lato, Roboto Slab): downloaded static TTFs to `backend/assets/proposal/`, registered in `services/proposal_pdf.py` `FONTS` dict, and exposed in the Proposal Template Settings font dropdown.
+- Tested (iteration_215): backend 10/10 pytest pass; all proposal endpoints 200; Poppins/Montserrat/Lato/RobotoSlab confirmed embedding in generated PDFs; frontend dropdown shows all 8 fonts and persists selection. 0 issues.
+
+
 ## 2026-06-21 — Fix: proposal PDF used mixed fonts despite a single chosen font ✅
 - Bug (reported from production): generated proposals showed mixed fonts even when the template was set to Helvetica everywhere.
 - Root cause: the date line, pricing-table cells, pricing disclaimer, and header/footer text were **hardcoded to DejaVu Sans** regardless of the chosen font. Secondary cause: the unicode-fallback check was too aggressive — it flagged en/em dashes & curly quotes (which standard PDF fonts *can* render), so any line/SKU name with a dash fell back to DejaVu too.
