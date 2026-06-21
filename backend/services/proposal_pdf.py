@@ -91,6 +91,9 @@ def _inline_html(node) -> str:
             href = _esc(child.get("href", ""))
             out.append(f'<a href="{href}" color="blue">{_inline_html(child)}</a>')
         elif name == "span":
+            classes = child.get("class") or []
+            if "ql-ui" in classes:
+                continue  # Quill editor chrome, not content
             style = child.get("style", "") or ""
             m = re.search(r"color:\s*([^;]+)", style, re.I)
             inner = _inline_html(child)
@@ -131,14 +134,24 @@ def rich_to_flowables(html, style, gap=2):
         name = (el.name or "").lower()
         if name in ("ul", "ol"):
             flush()
+            lis = el.find_all("li", recursive=False)
+            # Quill v2 emits <ol><li data-list="bullet|ordered">; honor that, else
+            # fall back to the wrapper tag (<ul>=bullet, <ol>=numbered).
+            first_dl = lis[0].get("data-list") if lis else None
+            if first_dl in ("bullet", "ordered"):
+                is_bullet = first_dl == "bullet"
+            else:
+                is_bullet = name == "ul"
             items = []
-            for li in el.find_all("li", recursive=False):
+            for li in lis:
+                dl = li.get("data-list")
+                item_bullet = is_bullet if dl not in ("bullet", "ordered") else (dl == "bullet")
                 inner = _inline_html(li).strip()
                 if inner:
                     items.append(ListItem(Paragraph(inner, style), leftIndent=14,
-                                          value="•" if name == "ul" else None))
+                                          value="•" if item_bullet else None))
             if items:
-                flow.append(ListFlowable(items, bulletType="bullet" if name == "ul" else "1",
+                flow.append(ListFlowable(items, bulletType="bullet" if is_bullet else "1",
                                          leftIndent=10, spaceAfter=gap))
         elif name in ("p", "div", "h1", "h2", "h3", "h4"):
             flush()

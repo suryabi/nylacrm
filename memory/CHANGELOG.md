@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-21 — Rich-text editors in the proposal template builder ✅
+- Replaced the prose text areas with **rich-text (Quill) editors** — bold, italic, underline, strike, color, ordered/bullet lists, links — for the paragraph Text, list Intro, category Intro, and pricing Disclaimer fields. Applies to both the global `/proposal-template` editor and the per-lead Customize Proposal dialog. Structured line-based fields (list Items, Allowed/Not allowed) stay plain.
+- Backend: `services/proposal_pdf.py` `rich_to_flowables()` + `_inline_html()`/`_esc()`/`_css_color()` convert Quill HTML → ReportLab flowables (Paragraphs + ListFlowable), honoring inline formatting, colors, paragraphs and lists. Plain-text content (incl. `&`/`<`/`>`) is escaped and stays backward-compatible.
+- Frontend: new reusable `components/RichTextField.jsx` (react-quill-new) + `styles/proposal-quill.css`; treats Quill's empty `<p><br></p>` as ''.
+- Fixed (from testing iteration_213): react-quill-new (Quill v2) emits bullets as `<ol><li data-list="bullet">`, so the converter now reads each `<li>`'s `data-list` to pick bullets vs numbers, and strips Quill's `<span class="ql-ui">` chrome.
+- Verified: testing agent iteration_213 — backend 6/6 (round-trip persistence, rich + plain + empty content all generate valid PDFs, per-lead override), frontend 7 Quill editors render/save/reload in both UIs; plus a follow-up live check confirming Quill-bullet HTML generates correctly. Default template restored to factory defaults.
+
 ## 2026-06-21 — Approve/Reject expense requests from the Lead Details page ✅
 - Problem: when an Expense Request went to Pending Approval, the designated approver could only act from the Home "Pending Approvals" card — not from the lead itself. Worse, a non-senior approver couldn't even *see* the request on the lead.
 - Backend: `GET /api/expense-requests` now returns requests where the user is the **approver** (`approver_id`), not just their own — non-Director approvers can see what they must action (`server.py`).
