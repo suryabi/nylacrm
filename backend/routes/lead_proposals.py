@@ -535,3 +535,143 @@ async def share_proposal_via_email(
             status_code=500,
             detail=f'Failed to send email: {str(e)}'
         )
+
+
+# ============= UNIFIED DOCUMENT SHARING (Proposal + Deck + Files) =============
+
+class ShareDocumentsRequest(BaseModel):
+    """Share any combination of a lead's documents in one email."""
+    to_emails: List[EmailStr]
+    cc_emails: Optional[List[EmailStr]] = []
+    bcc_emails: Optional[List[EmailStr]] = []
+    subject: str = "Documents from Nyla Air & Water"
+    message: Optional[str] = ""
+    include_proposal: bool = False
+    include_deck: bool = False
+    document_ids: Optional[List[str]] = []
+
+
+@router.post("/leads/{lead_id}/share-documents")
+async def share_lead_documents(
+    lead_id: str,
+    payload: ShareDocumentsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Email a chosen set of the lead's documents (proposal, deck PDF, and/or
+    files from the Files & Documents store) together as attachments."""
+    if not os.environ.get('RESEND_API_KEY'):
+        raise HTTPException(status_code=500, detail='Email service not configured. Please contact administrator.')
+
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+
+    attachments = []
+    attached_names = []
+
+    # 1) Proposal (approved) — base64 already stored
+    if payload.include_proposal:
+        proposal = await tdb.lead_proposals.find_one({'lead_id': lead_id})
+        if not proposal:
+            raise HTTPException(status_code=400, detail='No proposal found for this lead')
+        if proposal.get('status') != 'approved':
+            raise HTTPException(status_code=400, detail='Only an approved proposal can be shared')
+        attachments.append({
+            'filename': proposal['file_name'],
+            'content': proposal['file_data'],
+            'content_type': proposal['content_type'],
+        })
+        attached_names.append(proposal['file_name'])
+
+    # 2) Deck — download the Gamma PDF export and attach
+    if payload.include_deck:
+        deck = await tdb.gamma_generations.find_one(
+            {'source_type': 'lead', 'source_id': lead_id}, sort=[('created_at', -1)])
+        if not deck:
+            raise HTTPException(status_code=400, detail='No deck found for this lead')
+        if deck.get('review_status') != 'approved':
+            raise HTTPException(status_code=400, detail='Only an approved deck can be shared')
+        export_url = deck.get('export_url')
+        if not export_url:
+            raise HTTPException(status_code=400, detail='Deck PDF is not ready yet')
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+                r = await client.get(export_url)
+                r.raise_for_status()
+                deck_bytes = r.content
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f'Could not fetch deck PDF: {str(e)[:200]}')
+        deck_name = f"{(deck.get('title') or 'Deck').strip().replace('/', '-')}.pdf"
+        attachments.append({
+            'filename': deck_name,
+            'content': base64.b64encode(deck_bytes).decode('utf-8'),
+            'content_type': 'application/pdf',
+        })
+        attached_names.append(deck_name)
+
+    # 3) Files & Documents store
+    for doc_id in (payload.document_ids or []):
+        doc = await tdb.documents.find_one({'id': doc_id})
+        if not doc or not doc.get('file_data'):
+            continue
+        fname = doc.get('file_name') or doc.get('name') or 'document'
+        attachments.append({
+            'filename': fname,
+            'content': doc['file_data'],
+            'content_type': doc.get('content_type', 'application/octet-stream'),
+        })
+        attached_names.append(fname)
+
+    if not attachments:
+        raise HTTPException(status_code=400, detail='Select at least one document to attach')
+
+    sender_name = current_user.get('name', 'Nyla Air & Water Team')
+    message_html = payload.message or ''
+    if message_html and '<' not in message_html:
+        message_html = message_html.replace('\n', '<br>')
+    html_content = f"""
+    <div style="font-family: Helvetica, Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.6;">
+        {message_html}
+    </div>
+    """
+
+    sender_from_email = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+    email_params = {
+        'from': f"{sender_name} <{sender_from_email}>",
+        'to': payload.to_emails,
+        'subject': payload.subject,
+        'html': html_content,
+        'attachments': attachments,
+    }
+
+    cc_list = list(payload.cc_emails) if payload.cc_emails else []
+    user_email = current_user.get('email')
+    if user_email and user_email not in cc_list and user_email not in payload.to_emails:
+        cc_list.append(user_email)
+    if cc_list:
+        email_params['cc'] = cc_list
+    if payload.bcc_emails:
+        email_params['bcc'] = payload.bcc_emails
+
+    try:
+        email_result = await asyncio.to_thread(resend.Emails.send, email_params)
+        await tdb.lead_activities.insert_one({
+            'id': str(uuid.uuid4()),
+            'lead_id': lead_id,
+            'activity_type': 'email',
+            'interaction_method': 'email',
+            'description': f'Documents shared via email to {", ".join(payload.to_emails)}: {", ".join(attached_names)}',
+            'created_by': current_user['id'],
+            'created_by_name': current_user.get('name'),
+            'created_at': datetime.now(timezone.utc).isoformat(),
+        })
+        return {
+            'status': 'success',
+            'message': f'Sent {len(attachments)} document(s) to {", ".join(payload.to_emails)}',
+            'email_id': (email_result or {}).get('id'),
+        }
+    except Exception as e:
+        logging.error(f"Failed to send documents email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f'Failed to send email: {str(e)}')

@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-21 — Global "Share via Email" (multi-attach) + Deck review-history parity ✅
+- **Deck Review History** now matches the Proposal's (added the review timestamp under each entry).
+- **Global Share via Email:** added a single "Share via Email" action in the lead Documents header (removed the per-proposal share button). The dialog lets the user attach any combination of: the **approved Proposal**, the **approved Deck** (PDF), and any files from the **Files & Documents** store (reuses `CrmDocumentPicker`). Recipients/subject/message are prefilled.
+- Backend: `POST /api/leads/{lead_id}/share-documents` gathers the selected attachments (proposal base64, deck PDF downloaded from Gamma `export_url` via httpx, documents base64) and sends one Resend email; logs a lead activity. Proposal/Deck must be approved to attach.
+- Tested: validation (no attachments → 400), real multi-attach send (proposal attached, email_id returned), `/documents` list available; dialog + Documents header verified via screenshot.
+
+
 ## 2026-06-21 — Feature: unified Documents area (Proposal + Deck) with Deck approval flow ✅
 - Moved the **Proposal** card out of the right column to sit **directly under the Interested/Proposed SKUs** card, side-by-side (horizontal on desktop, stacked on mobile) with a new **Deck** card.
 - Removed the standalone "Deck" button next to *Edit Lead*. Deck generation now lives inside the Documents area.

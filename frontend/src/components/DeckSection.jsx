@@ -9,6 +9,7 @@ import {
   Loader2, Presentation, ExternalLink, Download, Sparkles,
   CheckCircle, AlertCircle, XCircle, Clock, MessageSquare,
 } from 'lucide-react';
+import { format } from 'date-fns';
 import GammaGenerateButton from './gamma/GammaGenerateButton';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -192,6 +193,11 @@ export const DeckSection = ({ leadId, sourceLabel, canReview = false }) => {
                         <Badge variant="outline" className="text-xs capitalize">{c.action.replace('_', ' ')}</Badge>
                       </div>
                       {c.comment && <p className="text-sm text-muted-foreground mt-1">{c.comment}</p>}
+                      {c.created_at && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {format(new Date(c.created_at), 'MMM d, yyyy h:mm a')}
+                        </p>
+                      )}
                     </div>
                   </div>
                 );
