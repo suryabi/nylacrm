@@ -13,7 +13,7 @@ import {
 } from '../components/ui/select';
 import {
   Loader2, Save, FileText, RotateCcw, Upload, Trash2, Plus, ChevronUp, ChevronDown, ImageIcon, X,
-  Layers, Copy, Pencil, Star,
+  Layers, Copy, Pencil, Star, Type,
 } from 'lucide-react';
 import RichTextField from '../components/RichTextField';
 
@@ -249,6 +249,14 @@ export default function ProposalTemplateSettings() {
   const setCompany = (k, v) => setTpl((p) => ({ ...p, company: { ...(p.company || {}), [k]: v } }));
   const setTitle = (k, v) => setTpl((p) => ({ ...p, title: { ...(p.title || {}), [k]: v } }));
   const setColor = (k, v) => setTpl((p) => ({ ...p, colors: { ...(p.colors || {}), [k]: v } }));
+  const applyFontToAll = (font) => {
+    setTpl((p) => ({
+      ...p,
+      title: { ...(p.title || {}), font },
+      sections: (p.sections || []).map((s) => ({ ...s, heading_font: font, body_font: font })),
+    }));
+    toast.success('Font applied to all sections — remember to Save');
+  };
   const setHFEnabled = (which, v) => setTpl((p) => ({ ...p, [which]: { ...(p[which] || {}), enabled: v } }));
   const setHFZone = (which, zone, patch) => setTpl((p) => ({
     ...p, [which]: { ...(p[which] || {}), [zone]: { ...((p[which] || {})[zone] || {}), ...patch } },
@@ -457,6 +465,12 @@ export default function ProposalTemplateSettings() {
         </div>
         <FontSize label="Title" font={title.font} size={title.size}
           onFont={(v) => setTitle('font', v)} onSize={(v) => setTitle('size', v)} />
+        <div className="flex items-center gap-2 pt-1 border-t mt-1">
+          <Button size="sm" variant="outline" onClick={() => applyFontToAll(title.font)} data-testid="apply-font-all-btn">
+            <Type className="h-4 w-4 mr-1.5" /> Use this font for the whole proposal
+          </Button>
+          <span className="text-xs text-muted-foreground">Sets every section's heading &amp; body to this font.</span>
+        </div>
       </Card>
 
       {/* Colors */}

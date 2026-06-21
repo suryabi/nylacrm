@@ -174,6 +174,25 @@ def _font(key, bold=False):
     return pair[1] if bold else pair[0]
 
 
+def _needs_unicode(text) -> bool:
+    """True if text has glyphs the standard PDF fonts can't render (e.g. ₹)."""
+    if not text:
+        return False
+    try:
+        str(text).encode("latin-1")
+        return False
+    except (UnicodeEncodeError, Exception):
+        return True
+
+
+def _smart_font(key, text, bold=False):
+    """Use the chosen font, but fall back to DejaVu when the text needs unicode
+    glyphs (so the ₹ symbol still renders even on Helvetica/Times/Courier)."""
+    if _needs_unicode(text) and _DEJAVU_OK:
+        return "DejaVu-Bold" if bold else "DejaVu"
+    return _font(key, bold)
+
+
 ACCENT = colors.HexColor("#00AEEF")
 OFFER_RED = colors.HexColor("#EA2C1F")
 DARK = colors.HexColor("#0f172a")
@@ -594,7 +613,7 @@ def _draw_aligned(canvas, text, x, y, align):
         canvas.drawString(x, y, text)
 
 
-def _draw_zone(canvas, zone, x, align, top_y, line_h, company, ctx, n, total, color, is_footer):
+def _draw_zone(canvas, zone, x, align, top_y, line_h, company, ctx, n, total, color, is_footer, base_font="dejavu"):
     zt = zone.get("type", "none")
     if zt == "none":
         return
@@ -605,13 +624,14 @@ def _draw_zone(canvas, zone, x, align, top_y, line_h, company, ctx, n, total, co
     if not lines:
         return
     canvas.setFillColor(color)
-    canvas.setFont(_MONEY_FONT, 8)
     if is_footer:
         for i, ln in enumerate(reversed(lines)):
+            canvas.setFont(_smart_font(base_font, ln), 8)
             _draw_aligned(canvas, ln, x, top_y + i * line_h, align)
     else:
         yy = top_y
         for ln in lines:
+            canvas.setFont(_smart_font(base_font, ln), 8)
             _draw_aligned(canvas, ln, x, yy, align)
             yy -= line_h
 
@@ -627,6 +647,7 @@ def _draw_page(canvas, doc):
     c_accent = _color(pal.get("accent"), ACCENT)
     c_header_text = _color(pal.get("header_text"), GREY)
     company = tpl.get("company", {})
+    base_font = (tpl.get("title", {}) or {}).get("font", "dejavu")
 
     # side accent bar
     canvas.setFillColor(c_accent)
@@ -638,13 +659,13 @@ def _draw_page(canvas, doc):
     if header.get("enabled", True):
         for z, align in (("left", "left"), ("center", "center"), ("right", "right")):
             _draw_zone(canvas, header.get(z, {}), xs[align], align, h - 13 * mm, 4.2 * mm,
-                       company, ctx, n, total, c_header_text, is_footer=False)
+                       company, ctx, n, total, c_header_text, is_footer=False, base_font=base_font)
 
     footer = tpl.get("footer", {})
     if footer.get("enabled", True):
         for z, align in (("left", "left"), ("center", "center"), ("right", "right")):
             _draw_zone(canvas, footer.get(z, {}), xs[align], align, 10 * mm, 4.2 * mm,
-                       company, ctx, n, total, c_header_text, is_footer=True)
+                       company, ctx, n, total, c_header_text, is_footer=True, base_font=base_font)
 
     canvas.restoreState()
 
@@ -693,12 +714,13 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
                               fontSize=sz, leading=round(sz * _ls(sec)),
                               textColor=c_heading, spaceBefore=0, spaceAfter=4)
 
-    small = ParagraphStyle("small", parent=styles["BodyText"], fontName=_MONEY_FONT, fontSize=8.5,
-                           textColor=c_header_text, leading=11)
-    date_s = ParagraphStyle("date", parent=styles["BodyText"], fontName=_MONEY_FONT, fontSize=10, textColor=c_header_text)
-
     company_name = lead.get("company") or "Prospect"
     title_cfg = template.get("title", {})
+    base_font_key = title_cfg.get("font", "dejavu")
+    small = ParagraphStyle("small", parent=styles["BodyText"], fontName=_font(base_font_key), fontSize=8.5,
+                           textColor=c_header_text, leading=11)
+    date_s = ParagraphStyle("date", parent=styles["BodyText"], fontName=_font(base_font_key), fontSize=10, textColor=c_header_text)
+
     title_s = ParagraphStyle("title", parent=styles["Heading1"],
                              fontName=_font(title_cfg.get("font"), True),
                              fontSize=title_cfg.get("size", 19),
@@ -751,21 +773,32 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
                                            ParagraphStyle("no", parent=bstyle, textColor=_color(offer_hex, OFFER_RED))))
             elif t == "pricing_table":
                 head = ["Format", "Standard Pricing", "Offer Price", "Return Bottle Credit", "Landing Price after Credit"]
-                cell = ParagraphStyle("pcell", parent=bstyle, fontName=_MONEY_FONT, fontSize=sec.get("body_size", 9), leading=11)
-                data = [[Paragraph(f"<b>{c}</b>", ParagraphStyle("th", parent=cell, textColor=c_table_head_text)) for c in head]]
+                bf = sec.get("body_font")
+                csz = sec.get("body_size", 9)
+
+                def pcell(text, color_hint="", bold=False):
+                    fn = _smart_font(bf, str(text), bold)
+                    st = ParagraphStyle("pcell", parent=bstyle, fontName=fn, fontSize=csz, leading=11)
+                    if color_hint:
+                        st.textColor = color_hint
+                    return Paragraph(str(text), st)
+
+                head_style = lambda txt: ParagraphStyle("th", parent=bstyle, fontName=_smart_font(bf, txt, True),
+                                                        fontSize=csz, leading=11, textColor=c_table_head_text)
+                data = [[Paragraph(f"<b>{c}</b>", head_style(c)) for c in head]]
                 if pricing_rows:
                     for r in pricing_rows:
                         offer_html = f'<font color="{offer_hex}"><b>{_rs(r["offer"])}</b></font>' if r["offer"] is not None else "-"
                         std_html = f'<strike>{_rs(r["standard"])}</strike>' if r["standard"] else "-"
                         data.append([
-                            Paragraph(str(r["format"]), cell),
-                            Paragraph(std_html, cell),
-                            Paragraph(offer_html, cell),
-                            Paragraph(_rs(r["credit"]) if r["credit"] else "-", cell),
-                            Paragraph(_rs(r["landing"]) if r["landing"] is not None else "-", cell),
+                            pcell(r["format"]),
+                            pcell(std_html),
+                            pcell(offer_html),
+                            pcell(_rs(r["credit"]) if r["credit"] else "-"),
+                            pcell(_rs(r["landing"]) if r["landing"] is not None else "-"),
                         ])
                 else:
-                    data.append([Paragraph("Add the proposed SKUs & pricing on the lead to populate this table.", cell), "", "", "", ""])
+                    data.append([pcell("Add the proposed SKUs & pricing on the lead to populate this table."), "", "", "", ""])
                 tbl = Table(data, colWidths=[58 * mm, 27 * mm, 25 * mm, 28 * mm, 30 * mm], repeatRows=1)
                 tbl.setStyle(TableStyle([
                     ("BACKGROUND", (0, 0), (-1, 0), c_accent),
