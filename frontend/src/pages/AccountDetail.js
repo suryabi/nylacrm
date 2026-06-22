@@ -573,6 +573,10 @@ export default function AccountDetail() {
       toast.error('Both delivery contact name and phone are required.');
       return;
     }
+    if (!/^\d{10}$/.test(deliveryContactPhone)) {
+      toast.error('Delivery contact phone must be exactly 10 digits.');
+      return;
+    }
     setSavingContact(true);
     try {
       await axios.patch(
@@ -2859,17 +2863,22 @@ ${googleMapsLink}`;
                   <Label className="text-xs text-muted-foreground">Contact Phone *</Label>
                   <Input
                     value={deliveryContactPhone}
-                    onChange={(e) => setDeliveryContactPhone(e.target.value)}
-                    placeholder="+91-9876543210"
+                    onChange={(e) => setDeliveryContactPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="10-digit mobile e.g. 9876543210"
+                    inputMode="numeric"
+                    maxLength={10}
                     data-testid="delivery-contact-phone-input"
                   />
+                  {deliveryContactPhone && deliveryContactPhone.length !== 10 && (
+                    <p className="text-xs text-red-500 mt-1">Enter exactly 10 digits</p>
+                  )}
                 </div>
               </div>
               <div className="mt-3">
                 <Button
                   size="sm"
                   onClick={handleSaveDeliveryContact}
-                  disabled={savingContact || !deliveryContactName.trim() || !deliveryContactPhone.trim()}
+                  disabled={savingContact || !deliveryContactName.trim() || deliveryContactPhone.length !== 10}
                   data-testid="save-delivery-contact-btn"
                 >
                   {savingContact ? (
@@ -3500,7 +3509,7 @@ ${googleMapsLink}`;
           <div className="space-y-3 py-2">
             {[
               { key: 'gst_updated', label: 'GST is updated', helper: 'GSTIN must be present on the account (auto-validated).' },
-              { key: 'delivery_address_updated', label: 'Delivery address is updated', helper: 'Line 1, city, state and PIN required (auto-validated).' },
+              { key: 'delivery_address_updated', label: 'Delivery address is updated', helper: 'Line 1, city, state, PIN AND map coordinates required. Select the address from the Google suggestions so lat/lng is captured for the delivery team (auto-validated).' },
               { key: 'sku_prices_correct', label: 'SKU Pricing and MRP pricing is correct', helper: 'At least one row in SKU Pricing AND MRP is set on rows whose SKU has "Allow custom MRP" turned on in SKU Management (auto-validated).' },
               { key: 'delivery_contact_updated', label: 'Delivery contact details are updated', helper: 'Contact name AND phone required (auto-validated).' },
               { key: 'payment_terms_set', label: 'Payment terms are set', helper: 'Pick Net 0 / 7 / 30 / 45 under Customer\u2019s Delivery & Accounting (auto-validated).' },

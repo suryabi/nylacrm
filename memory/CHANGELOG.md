@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-22 — Account activation: require delivery coordinates + 10-digit delivery phone ✅
+- An account can no longer be activated unless its **delivery address has map coordinates (lat/lng)** — captured by selecting the address from Google suggestions — so the delivery team gets accurate directions. Enforced in `activation-status` (the "Delivery address is updated" check now also needs lat/lng) and in the `activate` endpoint (clear failure message). Updated the checklist helper text in the UI.
+- **Delivery contact phone** now accepts exactly **10 digits**: the input strips non-digits and caps at 10, shows an inline "Enter exactly 10 digits" hint, disables Save until valid, and the backend `delivery-info` endpoint rejects anything that isn't 10 digits.
+- Verified: 9-digit/12-digit phones rejected (400), 10-digit saved; address without coords → activation check False; input strips junk to 10 digits (screenshot).
+
+
 ## 2026-06-21 — Compose email dialog redesign (wider, taller, single-scroll) ✅
 - Enlarged the Share/Compose dialog default size (880px × 86vh, responsive caps) for a roomier writing experience.
 - Fixed the double-scroll: the message editor now **auto-grows with content** (removed the editor's 320px inner scroll); only the dialog body scrolls. Added a sticky formatting toolbar so it stays visible while scrolling long emails.

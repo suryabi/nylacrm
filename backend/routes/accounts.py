@@ -1417,6 +1417,7 @@ async def get_activation_status(
             'gst_updated': bool((account.get('gst_number') or '').strip()),
             'delivery_address_updated': bool(
                 da.get('address_line1') and da.get('city') and da.get('state') and da.get('pincode')
+                and da.get('lat') is not None and da.get('lng') is not None
             ),
             # True only when there's at least one row AND every row has its
             # own MRP. Renamed in the UI to "SKU Pricing and MRP pricing is
@@ -1482,6 +1483,8 @@ async def activate_account(
     da = account.get('delivery_address') or {}
     if not (da.get('address_line1') and da.get('city') and da.get('state') and da.get('pincode')):
         failures.append('Delivery address is incomplete (line 1, city, state and PIN are required).')
+    elif da.get('lat') is None or da.get('lng') is None:
+        failures.append('Delivery address has no map coordinates. Re-select it from the Google address suggestions so the delivery team gets accurate directions.')
     if not (account.get('delivery_contact_name') and account.get('delivery_contact_phone')):
         failures.append('Delivery contact name and phone are required.')
     sku_pricing = account.get('sku_pricing') or []
@@ -1990,6 +1993,14 @@ async def update_delivery_info(
 
     update_doc: dict = {'updated_at': datetime.now(timezone.utc).isoformat()}
     data = payload.model_dump(exclude_unset=True)
+
+    # Delivery contact phone must be exactly 10 digits when provided.
+    if data.get('delivery_contact_phone') is not None:
+        digits = re.sub(r'\D', '', str(data['delivery_contact_phone']))
+        if len(digits) != 10:
+            raise HTTPException(status_code=400, detail='Delivery contact phone must be exactly 10 digits.')
+        data['delivery_contact_phone'] = digits
+
     for k in ('delivery_address', 'delivery_contact_name', 'delivery_contact_phone'):
         if k in data and data[k] is not None:
             update_doc[k] = data[k]
