@@ -157,6 +157,36 @@ async def _can_edit_request(tenant_id: str, user: dict, request_doc: dict) -> bo
     return bool((perms.get("marketing_requests") or {}).get("edit"))
 
 
+async def _enrich_requestor_city(rows, tenant_id: str):
+    """Attach the requestor's city, a 3-letter code and the city's ribbon colour
+    (configured in Locations Master) to each request row."""
+    if not rows:
+        return rows
+    ids = list({r.get("created_by") for r in rows if r.get("created_by")})
+    if not ids:
+        return rows
+    city_by_id = {}
+    async for u in db.users.find(
+        {"id": {"$in": ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "city": 1}
+    ):
+        city_by_id[u["id"]] = u.get("city")
+    # Build a name -> {color, code} map from the cities master (case-insensitive).
+    # master_cities is a global master collection (not tenant-scoped).
+    color_by_city = {}
+    async for c in db.master_cities.find(
+        {}, {"_id": 0, "name": 1, "color": 1, "code": 1}
+    ):
+        nm = (c.get("name") or "").strip().lower()
+        if nm:
+            color_by_city[nm] = {"color": c.get("color"), "code": c.get("code")}
+    for r in rows:
+        city = city_by_id.get(r.get("created_by"))
+        r["created_by_city"] = city
+        meta = color_by_city.get((city or "").strip().lower(), {})
+        r["created_by_city_color"] = meta.get("color")
+    return rows
+
+
 # ──────────────────────────────────────────────────────────────
 # File upload (re-usable across logo, references, version files)
 # ──────────────────────────────────────────────────────────────
@@ -647,28 +677,15 @@ async def list_requests(
     sort_field = sort.lstrip("-+")
     sort_dir = -1 if sort.startswith("-") else 1
 
-    async def _attach_requestor_city(rows):
-        ids = list({r.get("created_by") for r in rows if r.get("created_by")})
-        if not ids:
-            return rows
-        city_by_id = {}
-        async for u in db.users.find(
-            {"id": {"$in": ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "city": 1}
-        ):
-            city_by_id[u["id"]] = u.get("city")
-        for r in rows:
-            r["created_by_city"] = city_by_id.get(r.get("created_by"))
-        return rows
-
     # Board/Kanban needs every matching request (no pagination cap).
     if no_limit:
         rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).to_list(2000)
-        await _attach_requestor_city(rows)
+        await _enrich_requestor_city(rows, tenant_id)
         return {"items": rows, "total": total, "page": 1, "limit": total, "pages": 1}
 
     limit = max(min(limit, 100), 1)
     rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).skip((page - 1) * limit).limit(limit).to_list(limit)
-    await _attach_requestor_city(rows)
+    await _enrich_requestor_city(rows, tenant_id)
     return {
         "items": rows, "total": total, "page": page, "limit": limit,
         "pages": (total + limit - 1) // limit if total else 0,
@@ -817,6 +834,7 @@ async def get_request(request_id: str, current_user: dict = Depends(get_current_
             "by_user_name": doc.get("created_by_name"),
             "backfilled": True,
         }]
+    await _enrich_requestor_city([doc], tenant_id)
     return doc
 
 

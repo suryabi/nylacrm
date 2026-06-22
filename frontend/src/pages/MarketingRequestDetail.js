@@ -625,6 +625,22 @@ export default function MarketingRequestDetail() {
 
       {/* Hero header — light, contemporary surface with emerald accents */}
       <div className="relative overflow-hidden rounded-3xl bg-white border border-slate-200/70 p-6 md:p-8 shadow-[0_10px_40px_-15px_rgba(6,78,59,0.18)]" data-testid="mr-hero">
+        {req.created_by_city && (
+          <div
+            className="absolute top-0 left-0 w-28 h-28 overflow-hidden pointer-events-none z-20"
+            title={`Requestor city: ${req.created_by_city}`}
+            data-testid="mr-city-ribbon"
+          >
+            <div
+              className="absolute top-[22px] -left-[34px] w-[150px] -rotate-45 text-white text-[11px] font-bold uppercase tracking-widest text-center py-1 shadow-md"
+              style={req.created_by_city_color
+                ? { backgroundColor: req.created_by_city_color }
+                : { backgroundImage: 'linear-gradient(to right, #0d9488, #059669)' }}
+            >
+              {req.created_by_city.slice(0, 3).toUpperCase()}
+            </div>
+          </div>
+        )}
         <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-emerald-100/40 blur-3xl pointer-events-none" />
         <div className="absolute left-0 top-0 h-full w-1.5 bg-gradient-to-b from-emerald-400 to-emerald-600" />
         <div className="relative flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5">

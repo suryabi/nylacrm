@@ -1,20 +1,29 @@
-<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, and implementing an  system within comments for team collaboration. Recently, a robust Document Sharing Framework and dynamic PDF generation requirements were introduced. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, scalable document sharing architectures, and highly customizable PDF proposal generation.
+<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, implementing an  system within comments, a robust Document Sharing Framework, and dynamic PDF Proposal/Deck generation. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, scalable document sharing architectures, and highly customizable PDF proposal generation.
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
-**what currently exists?**
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Recently, significant improvements were made to the Invoices page (Account multi-select autocomplete, enhanced Excel exports, per-invoice PDF generation, and fixing Matched/Unmatched statuses). Lead management has been upgraded with Social Links and a robust Presentation (formerly Gamma) generator utilizing lead-specific dynamic data. A new ReportLab-based Proposal Generator was just introduced to create branded PDF proposals for leads based on a customizable admin template.
+**what currently exists?** 
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lead management, Master SKU pricing, Invoice exports, Document sharing, and a highly customizable Proposal PDF Generator (ReportLab/ReactQuill) + Deck Generator (Gamma API). Recently, the Proposal & Deck UI sections were unified, and robust drag-and-drop template editing, font embedding, and comprehensive global email sharing features have been integrated. 
 
-**Last working item**:
-- Last item agent was working: Building a fully dynamic section-based template system for the Proposal Generator. The user requested the ability to upload a company logo, add/edit/remove sections dynamically, and customize the font and size for each section (including headers).
-- Status: IN PROGRESS
-- Agent Testing Done: N
-- Which testing method agent to use? both (Frontend for dynamic UI testing, backend/Testing Agent for PDF generation logic)
-- User Testing Done: N
+**Last working item**: 
+    - Last item agent was working: Displaying a color-coded 3-letter city code ribbon on Marketing Request (Design Request) tiles and their detail pages. The user requested admins to assign colors to cities in the Master Locations, and for those colors and a 3-letter code (e.g., HYD) to show up on the request ribbon.
+    - Status: IN PROGRESS
+    - Agent Testing Done: Y
+    - Which testing method agent to use? screenshot tool
+    - User Testing Done: N
 
-**All Pending/In progress Issue list**:
-  Issue 1: Gemini API Key returns 403 PERMISSION DENIED (P2)
-     - Attempted fixes: Key provided by user resulted in GCP denial.
+**All Pending/In progress Issue list**:  
+  Issue 1: City ribbon missing on Marketing Request Detail page (P0)
+     - Attempted fixes: The agent added the ribbon to , but the final screenshot test reported . 
+     - Next debug checklist: Check  to ensure the corner ribbon is properly rendering inside the hero header and that  and  are properly available in the component.
+     - Why fix this issue and what will be achieved with the fix? Fulfills the user's specific request to have the colored 3-letter city ribbon on the detail page, not just the kanban board.
+     - Status: IN PROGRESS
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? frontend
+     - Blocked on other issue: None
+
+  Issue 2: Gemini API Key returns 403 PERMISSION DENIED (P2)
+     - Attempted fixes: Key provided by user resulted in GCP denial in previous forks.
      - Next debug checklist: Await user providing a valid key from a brand new Google Cloud project.
      - Why fix this issue and what will be achieved with the fix? Required for KB/Embeddings.
      - Status: BLOCKED
@@ -22,8 +31,8 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Recently, significant
      - Should Test frontend/backend/both after fix? backend
      - Blocked on other issue: User action required
 
-  Issue 2: Slack Integration failing for Marketing Requests (P2)
-     - Attempted fixes: Verified bot configuration.
+  Issue 3: Slack Integration failing for Marketing Requests (P2)
+     - Attempted fixes: Verified bot configuration previously.
      - Next debug checklist: User needs to confirm production environment configurations.
      - Why fix this issue and what will be achieved with the fix? Ensures notifications flow correctly.
      - Status: USER VERIFICATION PENDING
@@ -31,20 +40,28 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Recently, significant
      - Should Test frontend/backend/both after fix? backend
      - Blocked on other issue: None
 
+  Issue 4: ActiveMQ subscriber logging warnings (P2)
+     - Attempted fixes: None yet.
+     - Next debug checklist: Check  spamming the backend logs.
+     - Why fix this issue and what will be achieved with the fix? It pollutes logs. Needs AWS network reachability fix or a toggle to turn it off.
+     - Status: NOT STARTED
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? backend
+     - Blocked on other issue: None
+
 **In progress Task List**:
-  Task 1: Dynamic Proposal Template & Logo Upload (P0)
-     - Where to resume: The agent just overwrote  to support dynamic sections and added a logo upload endpoint in . You need to finish the backend rendering logic for dynamic sections/fonts/sizes. Then, update the frontend  to replace static textareas with a dynamic section builder (add/remove sections, select font/size) and add a logo file uploader. 
-     - What will be achieved with this? Admins can fully customize their branded PDF proposals dynamically without code changes.
-     - Status: IN PROGRESS
+  Task 1: Document Sharing Framework Phase 2 (WhatsApp Integration) (P1)
+     - Where to resume: User selected Meta Cloud API. The agent provided the integration playbook and steps. Awaiting the user to provide 6 required credentials (WABA ID, Phone Number ID, Permanent Token, App Secret, Template Name, Graph API version).
+     - What will be achieved with this? Allows reps to share proposals/decks directly to WhatsApp.
+     - Status: BLOCKED
      - Should Test frontend/backend/both after fix? both
-     - Blocked on something: None
+     - Blocked on something: Waiting for user to provide Meta API credentials.
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - P1: Document Sharing Framework Phase 2 (WhatsApp Integration). Requires user to select provider (Meta Cloud API, Twilio, or Gupshup/AiSensy).
+    - P1: Bloated  collection & MinIO integration: Build  settings page to replace base64 mongo storage.
     - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
-    - P1: MinIO integration for object storage (Build  settings page to replace base64 mongo storage).
-    - P1: Happenstance integration (Agent asked user for API key & scope, pending user answer).
+    - P1: Happenstance integration (Agent asked user for API key & scope previously, pending user answer).
     - P2: Auto-attach generated Presentations to the Lead/Account and Document Sharing framework.
     
     Future Tasks:
@@ -54,110 +71,130 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Recently, significant
     - P2: Inventory Management Module - Phase 2+ (Stock Entries, Purchase Receipts, Adjustments).
 
 **Completed work in this session**
-- Invoices Page: Implemented a searchable multiselect (Popover + cmdk) for the Account filter (DONE)
-- Invoices Page: Added Excel export feature including item bottles and applied credit note mapping (DONE)
-- Invoices Page: Fixed 'status' bug where linked invoices showed Unmatched. Status is now dynamically derived from actual account linkage (DONE)
-- Invoices Page: Added a per-invoice PDF download icon using ReportLab (DONE)
-- UI Cleanup: Completely replaced the term Gamma with Presentation across all user-facing components, nav links, and dialogs (DONE)
-- Lead Detail: Added a Social Links section (moved right above the Comments section) (DONE)
-- Presentation Deck (Gamma): Modified deck input to strictly use Lead Name, Proposed SKUs (with standard/MRP/credit pricing), and Social Links. Removed themes dropdown and auto-locked to the single available template (DONE)
-- Master SKUs: Added , , , and  to the master SKU catalog schema and UI (DONE)
-- Proposals: Created a Branded Lead Proposal generator (v1) using ReportLab that merges Lead info with a centralized Proposal Template (DONE)
+- Extracted all per-lead proposal endpoints from  to  (DONE)
+- Added modern brand fonts (Poppins, Montserrat, Lato, RobotoSlab) to Proposal Templates (DONE)
+- Fixed Proposal PDF Mixed Font Bug: Replaced ₹ symbol with INR (so prices don't default back to DejaVu font) and unified font inheritance (DONE)
+- Unified Lead Documents UI: Moved Proposal card under SKUs side-by-side with Gamma Deck card (DONE)
+- Deck Approval & Versioning: Implemented full approval flow for Decks (like proposals), incrementing versions and matching review history timestamps (DONE)
+- Global Share via Email UI Redesign: Restored rich email compose dialog, widened it, made it auto-grow, and added multi-attachment support (Proposals, Decks, Files & Documents) (DONE)
+- Email Templates Attachments: Attached template files now show up as removable chips in the email compose window (DONE)
+- Promo Stock-Out Bug Fix: Resolved false insufficient stock calculation for single-location (non-self-managed) distributors by doing distributor-wide derivation (DONE)
+- Account Activation Rules: Added strict validation requiring delivery address coordinates (lat/lng) and exactly 10-digit phone numbers before account activation (DONE)
+- Proposal Template drag-and-drop: Added native drag-and-drop handles for rearranging sections with clear visual UI feedback (DONE)
+- Master Locations City Colors: Added color pickers for Cities in Master Locations admin module (DONE)
+- Marketing Kanban 3-Letter City Ribbon: Kanban board requests now show a color-coded diagonal top-left ribbon with the 3-letter requestor city code (e.g., HYD) (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-   - Issue 1: Bloated  collection
-     - Debug checklist: Review  (base64). Needs MinIO integration.
-     - Why to solve this issue and what will be achieved with this? Base64 native storage rapidly bloats DB size and degrades performance.
-     - Should Test frontend/backend/both after fix: both
-     - Is recurring issue? N
+   - Issue 1: usage: pdfplumber [-h] [--structure | --structure-text]
+                  [--format {csv,json,text}] [--types TYPES [TYPES ...]]
+                  [--include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]]
+                  [--exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]]
+                  [--laparams LAPARAMS] [--precision PRECISION]
+                  [--pages PAGES [PAGES ...]] [--indent INDENT]
+                  [infile]
 
+positional arguments:
+  infile
+
+options:
+  -h, --help            show this help message and exit
+  --structure           Write the structure tree as JSON. All other arguments
+                        except --pages, --laparams, and --indent will be
+                        ignored
+  --structure-text      Write the structure tree as JSON including text
+                        contents. All other arguments except --pages,
+                        --laparams, and --indent will be ignored
+  --format {csv,json,text}
+  --types TYPES [TYPES ...]
+  --include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]
+                        Include *only* these object attributes in output.
+  --exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]
+                        Exclude these object attributes from output.
+  --laparams LAPARAMS
+  --precision PRECISION
+  --pages PAGES [PAGES ...]
+  --indent INDENT       Indent level for JSON pretty-printing. import error in testing scripts (minor environment script error, doesn't break app but affects some backend file checks).
+   
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Production vs Preview testing confusion.
-  - Recurrence count: ~47
+  - Issue recurrence in previous fork (Check 1st <LLM message history> array entry): Production vs Preview testing confusion.
+  - Recurrence count: 48
   - Status: IN PROGRESS
-  - Note: The user continuously deploys to production and shares feedback/bugs from the production environment, expecting fixes instantly. Remind the user that they must redeploy the app to see preview changes in production. Ensure you do not expose preview URLs.
+  - Note: User deploys to production manually but requests fixes based on it. Ensure the user is reminded that changes only apply to Preview until they redeploy.
 
 **Code Architecture**
-- : Main monolith router entry point.
+- : Core FastAPI router (refactored slightly, proposals moved).
 - : Domain routers (, , , ).
-- : Services (, , ).
-- : Main views (, , ).
+- : Shared logic ( uses ReportLab,  handles links).
+- : Reusable React components (, , , ).
 
 **Key Technical Concepts**
-- **ReportLab PDF Gen**: Heavily utilized for both Invoices () and the new Proposal generator (). Uses standard fonts () to support the ₹ (Rupee) symbol.
-- **Dynamic Presentations**: Connects to Gamma API but hides branding. Uses  proposed pricing and social links to build dynamic presentation drafts.
-- **Invoices Mapping**: Invoices are synced with Zoho Books. The system derives application of credit notes from  and invoice linkage via .
+- ReportLab: Used heavily in  for PDF generation, handles font mapping.
+- ReactQuill: Rich text editor used for proposals and email composition ().
+- Gamma API: Used for generating presentation decks ().
 
 **key DB schema**
-  - : {sku_name, category, unit, base_price, mrp, standard_price, return_bottle_credit}
-  - : {..., social_links: [{platform, url}], proposed_sku_pricing: [...]}
-  - : Proposal templates stored centrally in MongoDB.
+  - , , : Documents generation tracking.
+  - : Added  field.
+  - : Tracks design tasks.
+  -  & : Tracks inventory (used for stock-out calculations).
 
 **changes in tech stack**
-  - No new external libraries, but heavier reliance on  for dynamic PDF construction.
+  - No new stack additions, though  and  are actively utilized.
 
 **All files of reference** 
-  -  (Currently modifying)
-  -  (Currently modifying)
-  -  (Currently modifying)
-  -  
-  - 
-  - 
-  - 
+  -  (Failing the detail ribbon test).
+  -  (Kanban ribbon added).
+  -  (City color backend).
+  -  (City color frontend).
+  -  (New extracted router).
+  -  (Global share component).
 
 **Areas that need refactoring**: 
-  -  is extremely bloated (>11k lines). Continual extraction into domain routers is needed.
   - Base64 storage approach for legacy Documents should be refactored to Object Storage (MinIO).
 
 **key api endpoints**
-  -  (Proposal Template settings)
-  -  (Logo upload)
-  -  (PDF generation)
-  -  (Pricing updates)
+  - 
+  - 
   - 
 
 **Critical Info for New Agent** 
-  - **Dynamic Proposal Task**: The user wants the proposal template editor to support an array of *dynamic sections*. Each section needs to specify a title, body, font style, and font size. Furthermore, a logo upload feature is required. The agent just wiped  to start building this logic.
-  - **Preview vs Production**: You only have access to the PREVIEW environment. When the user mentions production, inform them that changes must be manually redeployed.
-  - **Data Structure**: , , and  were just mapped into .
+  - The final action taken was taking a screenshot of the Marketing Requests board vs detail page. The Kanban ribbon rendered fine, but the Detail page ribbon failed the check (). Your immediate task should be fixing the missing ribbon rendering on .
+  - The user has approved Meta WhatsApp API integration but is supposed to provide credentials. 
+  - Never replace  files entirely or reset  when doing bash commands.
+  - When fixing UI layout, utilize Shadcn UI components available in the  directory.
 
 **documents and test reports created in this job** 
-  -  (Updated)
+  - 
+  - 
   - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- 1. User: In the proposal template, provide an option to upload the company logo... choose the size and font for each section... add new sections. (Agent started working on this backend logic)
- 2. User: I have a sample document or PDF proposal... use as template. (Agent built a v1 static-section template generator)
- 3. User: move socal links section above comments in lead details page (Agent completed)
- 4. User: i still see the word Gamma in Generate presentation... (Agent removed)
- 5. User: If there is only 1 gamma template, make it default choice and non-editable. (Agent completed)
- 6. User: Upon clicking Gamma button, input should be lead name, Proposed SKUs... remove predefined themes. (Agent completed)
- 7. User: add social links section in the lead... at bottom of screen. (Agent completed)
- 8. User: give a small icon to download the invoice... (Agent completed via ReportLab)
- 9. User: The matching logic is incorrect. Citadel invoice shows unmatched... (Agent fixed Matched/Unmatched derivation)
- 10. User: what is the difrence between credit note and customer credits ? remove customer credits column... (Agent clarified and removed column)
+ - User: Meta Cloud API. Messages, PDFs etc. include guidance (Agent provided playbook).
+ - User: Bug report: Promotional stock out saying insufficient stock for Goa. (Agent fixed single-location distributor logic).
+ - User: for the design request tiles, please add this stripe on the left top corner, with the city... (Agent added city ribbon).
+ - User: Now in admin under locations master, add an option to the user choose or pick a color code for each city. Use that color code to display the corner ribbon on design requests. Also, in the design request detail, add that corner ribbon. Secondly, display only 3 letter city code... (Agent added color picker, 3-letter code, and attempted to add it to the detail view but the detail view ribbon check failed).
+ *PENDING HUMAN MESSAGES*: None technically pending, but the detail page ribbon needs to be fixed based on the final failed check. Also, the user owes credentials for the Meta API.
 
 **Project Health Check:**
-Broken: None (But  logic is currently midway through a rewrite).
+Broken: Marketing Request Detail Ribbon missing.
 Mocked: None.
 
 **3rd Party Integrations** 
  - Zoho Books (Requires User API Key)
  - Google Maps API (Requires User API Key)
  - Slack API (Bot token webhook)
- - Emergent Object Storage
- - Gmail API (Internal GCP App OAuth)
  - Resend (Configured via env vars)
- - Gamma API (Requires User API Key - integration renamed to Presentations)
+ - Gamma API (Requires User API Key)
+ - Meta WhatsApp Cloud API (Pending integration, requires User API Keys)
 
 **Testing status**
-  - Testing agent used after significant changes: YES (iteration 209)
+  - Testing agent used after significant changes: YES
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: None
-  - Known regressions: None
+  - Test files created: 
+  - Known regressions: Marketing Request Detail ribbon not rendering.
 
 **Credentials to test flow:**
-Refer to 
+Refer to  (CEO: surya.yadavalli@nylaairwater.earth / test123)
 
 **What agent forgot to execute**
-The agent just began updating the backend ( and ) to handle dynamic template sections and logo uploads, but completely missed updating the frontend () to support an array of sections (with font/size selectors) and a file uploader before the context window ended. You must pick up exactly from here.</analysis>
+The agent finished the job directly after the screenshot tool returned  for the  page. The detail page ribbon was missed or improperly implemented and needs to be resolved.</analysis>

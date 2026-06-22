@@ -38,6 +38,7 @@ class City(BaseModel):
     name: str
     code: str
     state_id: str
+    color: Optional[str] = None
     is_active: bool = True
     created_at: Optional[str] = None
     updated_at: Optional[str] = None

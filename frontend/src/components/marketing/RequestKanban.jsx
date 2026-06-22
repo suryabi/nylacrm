@@ -54,8 +54,13 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
           title={`Requestor city: ${req.created_by_city}`}
           data-testid={`kanban-city-ribbon-${req.id}`}
         >
-          <div className="absolute top-[13px] -left-[24px] w-[104px] -rotate-45 bg-gradient-to-r from-teal-600 to-emerald-600 text-white text-[8px] font-bold uppercase tracking-wider text-center py-[2px] shadow-md">
-            {req.created_by_city}
+          <div
+            className="absolute top-[13px] -left-[24px] w-[104px] -rotate-45 text-white text-[9px] font-bold uppercase tracking-wider text-center py-[2px] shadow-md"
+            style={req.created_by_city_color
+              ? { backgroundColor: req.created_by_city_color }
+              : { backgroundImage: 'linear-gradient(to right, #0d9488, #059669)' }}
+          >
+            {req.created_by_city.slice(0, 3).toUpperCase()}
           </div>
         </div>
       )}

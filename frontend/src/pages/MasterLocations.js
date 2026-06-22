@@ -44,6 +44,7 @@ export default function MasterLocations() {
   const [formCode, setFormCode] = useState('');
   const [formTerritoryId, setFormTerritoryId] = useState('');
   const [formStateId, setFormStateId] = useState('');
+  const [formColor, setFormColor] = useState('#0d9488');
 
   useEffect(() => {
     fetchLocations();
@@ -91,6 +92,7 @@ export default function MasterLocations() {
     setFormCode('');
     setFormTerritoryId(parentId || '');
     setFormStateId(parentId || '');
+    setFormColor('#0d9488');
     setDialogOpen(true);
   };
 
@@ -102,6 +104,7 @@ export default function MasterLocations() {
     setFormCode(item.code);
     setFormTerritoryId(item.territory_id || '');
     setFormStateId(item.state_id || '');
+    setFormColor(item.color || '#0d9488');
     setDialogOpen(true);
   };
 
@@ -145,7 +148,7 @@ export default function MasterLocations() {
           return;
         }
         endpoint = '/master-locations/cities';
-        data = { name: formName, code: formCode || generateCode(formName), state_id: formStateId };
+        data = { name: formName, code: formCode || generateCode(formName), state_id: formStateId, color: formColor };
       }
       
       if (dialogMode === 'edit' && editItem) {
@@ -407,6 +410,15 @@ export default function MasterLocations() {
                           <div className="flex items-center gap-2">
                             <Home className="h-3 w-3 text-purple-600" />
                             <span className="text-sm">{city.name}</span>
+                            {city.color && (
+                              <span
+                                className="text-[9px] font-bold uppercase tracking-wider text-white px-1.5 py-0.5 rounded"
+                                style={{ backgroundColor: city.color }}
+                                title={`Ribbon: ${city.color}`}
+                              >
+                                {city.name.slice(0, 3).toUpperCase()}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-1">
                             <Button 
@@ -491,6 +503,35 @@ export default function MasterLocations() {
               </div>
             )}
             
+            {dialogType === 'city' && (
+              <div>
+                <label className="text-sm font-medium">Ribbon color</label>
+                <p className="text-xs text-muted-foreground mb-1.5">Used for the city ribbon on design request tiles.</p>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={formColor}
+                    onChange={(e) => setFormColor(e.target.value)}
+                    className="h-10 w-14 rounded cursor-pointer border border-slate-200 p-0.5"
+                    data-testid="city-color-picker"
+                  />
+                  <Input
+                    value={formColor}
+                    onChange={(e) => setFormColor(e.target.value)}
+                    placeholder="#0d9488"
+                    className="font-mono text-sm w-32"
+                    data-testid="city-color-hex"
+                  />
+                  <span
+                    className="ml-auto text-[10px] font-bold uppercase tracking-wider text-white px-3 py-1 rounded shadow-sm"
+                    style={{ backgroundColor: formColor }}
+                  >
+                    {(formName || 'CITY').slice(0, 3).toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {dialogType === 'city' && (
               <div>
                 <label className="text-sm font-medium">State *</label>

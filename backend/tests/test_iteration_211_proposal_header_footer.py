@@ -16,7 +16,7 @@ import requests
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL",
-    "https://supply-chain-hub-219.preview.emergentagent.com",
+    "https://crm-suite-preview.preview.emergentagent.com",
 ).rstrip("/")
 LEAD_ID = "08c93122-99fc-4587-b31c-559649f29c17"
 EMAIL = "surya.yadavalli@nylaairwater.earth"
