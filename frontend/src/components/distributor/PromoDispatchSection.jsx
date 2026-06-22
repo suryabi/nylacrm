@@ -94,7 +94,7 @@ export default function PromoDispatchSection({
     if (!distributor?.id) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries`, { headers: authHeaders });
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries`, { headers: authHeaders, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setDispatches(data.dispatches || []);
@@ -110,7 +110,7 @@ export default function PromoDispatchSection({
 
   const fetchReasons = useCallback(async (includeInactive = false) => {
     try {
-      const res = await fetch(`${API_URL}/api/admin/promo-reasons${includeInactive ? '?include_inactive=true' : ''}`, { headers: authHeaders });
+      const res = await fetch(`${API_URL}/api/admin/promo-reasons${includeInactive ? '?include_inactive=true' : ''}`, { headers: authHeaders, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setReasons(data.reasons || []);
@@ -123,7 +123,7 @@ export default function PromoDispatchSection({
   const fetchContacts = useCallback(async (search = '') => {
     try {
       const qs = `page=1&page_size=50${search ? `&search=${encodeURIComponent(search)}` : ''}`;
-      const res = await fetch(`${API_URL}/api/contacts?${qs}`, { headers: authHeaders });
+      const res = await fetch(`${API_URL}/api/contacts?${qs}`, { headers: authHeaders, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setContacts(data.contacts || []);
@@ -136,7 +136,7 @@ export default function PromoDispatchSection({
   const fetchLeads = useCallback(async (search = '') => {
     try {
       const qs = `page=1&page_size=50${search ? `&search=${encodeURIComponent(search)}` : ''}`;
-      const res = await fetch(`${API_URL}/api/leads?${qs}`, { headers: authHeaders });
+      const res = await fetch(`${API_URL}/api/leads?${qs}`, { headers: authHeaders, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setLeads(data.data || data.leads || []);
@@ -150,7 +150,7 @@ export default function PromoDispatchSection({
   // roles. /api/users has no search param, so we fetch once and filter locally.
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/users?is_active=true`, { headers: authHeaders });
+      const res = await fetch(`${API_URL}/api/users?is_active=true`, { headers: authHeaders, credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data) ? data : (data.users || []);
@@ -213,7 +213,7 @@ export default function PromoDispatchSection({
       try {
         const res = await fetch(
           `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${form.distributor_location_id}&sku_id=${sid}`,
-          { headers: authHeaders },
+          { headers: authHeaders, credentials: 'include' },
         );
         if (res.ok) {
           const d = await res.json();
@@ -337,6 +337,7 @@ export default function PromoDispatchSection({
       };
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries`, {
         method: 'POST',
+        credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -365,7 +366,7 @@ export default function PromoDispatchSection({
     setActingId(dispatch.id);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/confirm`,
-        { method: 'POST', headers: authHeaders });
+        { method: 'POST', headers: authHeaders, credentials: 'include' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(body.detail || 'Failed to confirm'); }
       else { toast.success(body.message || 'Confirmed'); fetchDispatches(); }
@@ -378,7 +379,7 @@ export default function PromoDispatchSection({
     setActingId(dispatch.id);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/complete`,
-        { method: 'POST', headers: authHeaders });
+        { method: 'POST', headers: authHeaders, credentials: 'include' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(body.detail || 'Failed to complete'); }
       else { toast.success(body.message || 'Completed'); fetchDispatches(); }
@@ -393,7 +394,7 @@ export default function PromoDispatchSection({
     setActingId(dispatch.id);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/reverse`,
-        { method: 'POST', headers: authHeaders });
+        { method: 'POST', headers: authHeaders, credentials: 'include' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(body.detail || 'Failed to reverse'); }
       else { (body.zoho_cleanup_pending ? toast.warning : toast.success)(body.message || 'Reversed'); fetchDispatches(); }
@@ -405,7 +406,7 @@ export default function PromoDispatchSection({
     setActingId(dispatch.id);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/reverse-zoho-cleanup`,
-        { method: 'POST', headers: authHeaders });
+        { method: 'POST', headers: authHeaders, credentials: 'include' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(body.detail || 'Zoho cleanup failed'); }
       else { toast.success(body.message || 'Zoho challan deleted'); fetchDispatches(); }
@@ -419,7 +420,7 @@ export default function PromoDispatchSection({
     setActingId(dispatch.id);
     try {
       const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}`,
-        { method: 'DELETE', headers: authHeaders });
+        { method: 'DELETE', headers: authHeaders, credentials: 'include' });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) { toast.error(body.detail || 'Failed to delete'); }
       else { toast.success('Deleted'); fetchDispatches(); }
@@ -432,7 +433,7 @@ export default function PromoDispatchSection({
     try {
       const res = await fetch(
         `${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/challan-pdf`,
-        { headers: authHeaders },
+        { headers: authHeaders, credentials: 'include' },
       );
       if (!res.ok) {
         toast.error('Failed to download challan');
@@ -455,7 +456,7 @@ export default function PromoDispatchSection({
     try {
       const res = await fetch(
         `${API_URL}/api/distributors/${distributor.id}/promo-deliveries/${dispatch.id}/retry-zoho`,
-        { method: 'POST', headers: authHeaders },
+        { method: 'POST', headers: authHeaders, credentials: 'include' },
       );
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -479,6 +480,7 @@ export default function PromoDispatchSection({
     try {
       const res = await fetch(`${API_URL}/api/admin/promo-reasons`, {
         method: 'POST',
+        credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
@@ -498,10 +500,11 @@ export default function PromoDispatchSection({
   const toggleReason = async (reason) => {
     try {
       if (reason.is_active) {
-        await fetch(`${API_URL}/api/admin/promo-reasons/${reason.id}`, { method: 'DELETE', headers: authHeaders });
+        await fetch(`${API_URL}/api/admin/promo-reasons/${reason.id}`, { method: 'DELETE', headers: authHeaders, credentials: 'include' });
       } else {
         await fetch(`${API_URL}/api/admin/promo-reasons/${reason.id}`, {
           method: 'PUT',
+          credentials: 'include',
           headers: { ...authHeaders, 'Content-Type': 'application/json' },
           body: JSON.stringify({ is_active: true }),
         });
