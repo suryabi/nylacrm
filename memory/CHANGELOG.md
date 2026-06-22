@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-22 — Design Request detail: city ribbon + per-city color (VERIFIED) ✅
+- Confirmed the color-coded 3-letter city ribbon renders on the Design Request **detail** hero (not just Kanban). `MarketingRequestDetail.js` shows the diagonal corner ribbon using `created_by_city` + `created_by_city_color`.
+- Backend `_enrich_requestor_city` populates city/color on BOTH list and detail (`GET /{request_id}`) endpoints from the user's city + `master_cities.color`.
+- Verified via screenshot on MR-2026-0021: ribbon shows "HYD" in the city's assigned color (#7c3aed). The prior fork's "detail ribbon present: False" was a false negative (test request had no city) — no code change required.
+
+
+
 ## 2026-06-22 — Design Request tiles: requestor-city corner ribbon ✅
 - Added a diagonal corner ribbon to the top-left of each Design Request (marketing request) Kanban tile showing the **city of the requestor**. Cards get extra top padding so content clears the ribbon.
 - Backend: the requests list now returns `created_by_city` (batch user lookup), so existing requests get it too without a migration.
