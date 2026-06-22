@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-22 — Revenue Analytics theme aligned with app (light) ✅
+- Reworked `pages/RevenueAnalytics.js` from a dark/neon glass theme (cyan/magenta glows, `bg-[#080B1F]`, white-on-dark) to the app's light design system: white cards with `border-slate-200`/soft shadows, slate text, emerald/teal accents, dotted `from-slate-50 via-white to-emerald-50/30` page background, emerald active tabs.
+- Updated chart palette (`CHART`/`DONUT`) and gradients to emerald/teal/sky/violet, light grid lines, slate axes/tooltips; removed neon glow filters and text-shadows. KPI tiles now use gradient emerald/teal icon tiles. All logic, data-testids, and structure unchanged.
+- Verified via screenshots (Breakdown + Compare Months tabs) — consistent with the rest of the CRM. ⚠️ Redeploy to apply on production.
+
+
+
 ## 2026-06-22 — FIX (P0, production): Promo Stock-Out false "Insufficient stock" for single-location distributors ✅
 - **Reported (PRODUCTION, Goa "Pickval" distributor):** Promotional Stock-Out blocked "Insufficient stock for Nyla 660ml Silver: need 1, available -720 (-720 on-hand)" while the Stock-by-SKU dashboard showed 2,748 available.
 - **Root cause:** The promo guard (`routes/promo_dispatch.py`) computed on-hand by summing `distributor_stock` rows scoped to the location. For legacy single-location distributors those rows are missing/negative (e.g. -720), whereas the dashboard derives on-hand distributor-wide from received−delivered. The earlier fix was applied only to the regular `create_delivery` path, NOT the promo create/confirm paths.

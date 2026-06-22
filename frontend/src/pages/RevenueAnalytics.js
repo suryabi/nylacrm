@@ -18,16 +18,16 @@ import {
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
-// ───────────────────────── Neon palette ─────────────────────────
-const NEON = { cyan: '#00F0FF', aqua: '#00D2FF', purple: '#B026FF', magenta: '#FF00FF', blue: '#38BDF8' };
-const DONUT = ['#00F0FF', '#B026FF', '#FF00FF', '#00D2FF', '#38BDF8', '#A855F7',
-  '#22D3EE', '#E879F9', '#0EA5E9', '#7C3AED', '#2DD4BF', '#F472B6'];
-const GRID = 'rgba(255,255,255,0.06)';
+// ───────────────────────── Chart palette (app theme) ─────────────────────────
+const CHART = { cyan: '#059669', aqua: '#0d9488', purple: '#0284c7', magenta: '#7c3aed', blue: '#0ea5e9' };
+const DONUT = ['#059669', '#0d9488', '#0284c7', '#7c3aed', '#d97706', '#dc2626',
+  '#0891b2', '#9333ea', '#2563eb', '#16a34a', '#ca8a04', '#db2777'];
+const GRID = 'rgba(15,23,42,0.07)';
 const AXIS = '#64748B';
-const POS = '#34d399';   // neon emerald
-const NEG = '#fb7185';   // neon rose
+const POS = '#059669';   // emerald
+const NEG = '#e11d48';   // rose
 
-const GLASS = 'bg-[#101427]/60 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.12),0_8px_32px_rgba(0,0,0,0.5)]';
+const GLASS = 'bg-white border border-slate-200 rounded-2xl shadow-sm';
 
 const GROUP_BY_OPTIONS = [
   { value: 'city', label: 'City' },
@@ -80,22 +80,22 @@ const compactAxis = (v) =>
 
 const authHeaders = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
 
-// Shared shadcn overrides for the dark glass surface
-const SELECT_TRIGGER = 'border-white/10 bg-white/5 text-white backdrop-blur-md focus:ring-2 focus:ring-[#00F0FF]/40 data-[placeholder]:text-slate-400';
-const SELECT_CONTENT = 'border-white/10 bg-[#0c1024]/95 text-slate-100 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.7)]';
-const SELECT_ITEM = 'text-slate-200 focus:bg-white/10 focus:text-white';
-const INPUT_DARK = 'border-white/10 bg-white/5 text-white placeholder:text-slate-500 backdrop-blur-md focus-visible:ring-2 focus-visible:ring-[#00F0FF]/40';
+// Shared shadcn overrides for the light surface
+const SELECT_TRIGGER = 'border-slate-200 bg-white text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 data-[placeholder]:text-slate-400';
+const SELECT_CONTENT = 'border-slate-200 bg-white text-slate-700 shadow-lg';
+const SELECT_ITEM = 'text-slate-700 focus:bg-emerald-50 focus:text-emerald-700';
+const INPUT_LIGHT = 'border-slate-200 bg-white text-slate-700 placeholder:text-slate-400 focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus-visible:border-emerald-500';
 
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
   return (
-    <div className="rounded-xl border border-white/10 bg-[#0c1024]/85 px-3.5 py-2.5 text-xs shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-xl">
-      <p className="mb-1.5 font-medium text-white">{label}</p>
+    <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs shadow-lg">
+      <p className="mb-1.5 font-medium text-slate-800">{label}</p>
       {payload.map((p) => (
-        <p key={p.dataKey} className="flex items-center gap-2 text-slate-300">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color || p.fill, boxShadow: `0 0 8px ${p.color || p.fill}` }} />
+        <p key={p.dataKey} className="flex items-center gap-2 text-slate-600">
+          <span className="inline-block h-2 w-2 rounded-full" style={{ background: p.color || p.fill }} />
           {p.name}
-          <span className="ml-auto pl-4 font-mono font-semibold tabular-nums text-white">{fullINR(p.value)}</span>
+          <span className="ml-auto pl-4 font-mono font-semibold tabular-nums text-slate-900">{fullINR(p.value)}</span>
         </p>
       ))}
     </div>
@@ -104,85 +104,80 @@ const ChartTooltip = ({ active, payload, label }) => {
 
 // ───────────────────────── KPI tile ─────────────────────────
 function StatCard({ label, value, sub, icon: Icon, gradient = 'cyan', testid }) {
-  const grads = {
-    cyan: 'from-[#00F0FF]/20 to-[#00D2FF]/[0.04]',
-    purple: 'from-[#B026FF]/20 to-[#FF00FF]/[0.04]',
-    teal: 'from-[#00F0FF]/18 to-[#38BDF8]/[0.04]',
-    magenta: 'from-[#FF00FF]/20 to-[#B026FF]/[0.04]',
+  const accents = {
+    cyan: { tile: 'from-emerald-100 to-teal-100', icon: 'text-emerald-600', ring: 'hover:border-emerald-200' },
+    purple: { tile: 'from-sky-100 to-blue-100', icon: 'text-sky-600', ring: 'hover:border-sky-200' },
+    teal: { tile: 'from-teal-100 to-emerald-100', icon: 'text-teal-600', ring: 'hover:border-teal-200' },
+    magenta: { tile: 'from-violet-100 to-purple-100', icon: 'text-violet-600', ring: 'hover:border-violet-200' },
   };
-  const glow = { cyan: NEON.cyan, purple: NEON.purple, teal: NEON.aqua, magenta: NEON.magenta }[gradient];
+  const a = accents[gradient] || accents.cyan;
   return (
     <div
       data-testid={testid}
-      className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br ${grads[gradient]} p-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.12),0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1`}
+      className={`group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md ${a.ring}`}
     >
-      <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-30 blur-2xl transition-opacity duration-300 group-hover:opacity-50" style={{ background: glow }} />
       <div className="relative flex items-start justify-between">
-        <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-slate-400">{label}</span>
+        <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500">{label}</span>
         {Icon && (
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5" style={{ color: glow }}>
-            <Icon className="h-[18px] w-[18px]" style={{ filter: `drop-shadow(0 0 8px ${glow})` }} />
+          <span className={`flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br ${a.tile}`}>
+            <Icon className={`h-[18px] w-[18px] ${a.icon}`} />
           </span>
         )}
       </div>
-      <p className="relative mt-4 font-mono text-3xl font-semibold tracking-tighter tabular-nums text-white md:text-[2.15rem]" style={{ textShadow: `0 0 20px ${glow}55` }}>{value}</p>
-      {sub && <p className="relative mt-1.5 text-xs text-slate-400">{sub}</p>}
+      <p className="relative mt-4 font-mono text-3xl font-semibold tracking-tight tabular-nums text-slate-900 md:text-[2.15rem]">{value}</p>
+      {sub && <p className="relative mt-1.5 text-xs text-slate-500">{sub}</p>}
     </div>
   );
 }
 
 const Spinner = () => (
   <div className="flex justify-center py-28">
-    <Loader2 className="h-7 w-7 animate-spin text-[#00F0FF]" style={{ filter: 'drop-shadow(0 0 8px #00F0FF)' }} />
+    <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
   </div>
 );
 
 const Empty = ({ children, testid }) => (
   <div className={`${GLASS} p-16 text-center`} data-testid={testid}>
-    <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/5">
-      <BarChart3 className="h-6 w-6 text-slate-500" />
+    <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+      <BarChart3 className="h-6 w-6 text-slate-400" />
     </span>
-    <p className="text-sm text-slate-400">{children}</p>
+    <p className="text-sm text-slate-500">{children}</p>
   </div>
 );
 
 const FieldLabel = ({ children }) => (
-  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">{children}</label>
+  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.08em] text-slate-500">{children}</label>
 );
 
 const SectionTitle = ({ children }) => (
-  <h3 className="font-heading text-base font-medium tracking-tight text-white">{children}</h3>
+  <h3 className="text-base font-semibold tracking-tight text-slate-800">{children}</h3>
 );
 
 const ChartDefs = () => (
   <defs>
     <linearGradient id="raBarH" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stopColor={NEON.cyan} />
-      <stop offset="100%" stopColor={NEON.purple} />
+      <stop offset="0%" stopColor={CHART.cyan} />
+      <stop offset="100%" stopColor={CHART.aqua} />
     </linearGradient>
     <linearGradient id="raCmpA" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stopColor={NEON.cyan} stopOpacity={1} />
-      <stop offset="100%" stopColor={NEON.aqua} stopOpacity={0.25} />
+      <stop offset="0%" stopColor={CHART.cyan} stopOpacity={1} />
+      <stop offset="100%" stopColor={CHART.aqua} stopOpacity={0.35} />
     </linearGradient>
     <linearGradient id="raCmpB" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stopColor={NEON.purple} stopOpacity={1} />
-      <stop offset="100%" stopColor={NEON.magenta} stopOpacity={0.25} />
+      <stop offset="0%" stopColor={CHART.purple} stopOpacity={1} />
+      <stop offset="100%" stopColor={CHART.blue} stopOpacity={0.35} />
     </linearGradient>
-    <filter id="raNeonGlow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="2.4" result="b" />
-      <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-    </filter>
   </defs>
 );
 
 // ─────────── Revenue Reconciliation (Gross → SKU Performance bridge) ───────────
 const RecRow = ({ label, hint, value, accent }) => (
-  <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 transition-colors hover:bg-white/[0.03]">
+  <div className="flex items-center justify-between gap-4 rounded-lg px-3 py-2 transition-colors hover:bg-slate-50">
     <div className="min-w-0">
-      <p className={`text-sm font-medium ${accent || 'text-slate-200'}`}>{label}</p>
-      {hint && <p className="text-xs text-slate-500">{hint}</p>}
+      <p className={`text-sm font-medium ${accent || 'text-slate-700'}`}>{label}</p>
+      {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
-    <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-slate-100">{fullINR(value)}</span>
+    <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-slate-800">{fullINR(value)}</span>
   </div>
 );
 
@@ -212,28 +207,28 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
     <div className={`${GLASS} overflow-hidden`} data-testid="ra-reconciliation">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-white/[0.03]"
+        className="flex w-full items-center justify-between px-5 py-4 text-left transition-colors hover:bg-slate-50"
         data-testid="ra-reconciliation-toggle"
       >
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5">
-            <Scale className="h-[18px] w-[18px] text-[#00F0FF]" style={{ filter: 'drop-shadow(0 0 8px #00F0FF)' }} />
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-100 to-teal-100">
+            <Scale className="h-[18px] w-[18px] text-emerald-600" />
           </span>
           <div>
             <SectionTitle>Revenue Reconciliation</SectionTitle>
-            <p className="text-xs text-slate-400">How Gross ties out to SKU Performance — every rupee accounted for</p>
+            <p className="text-xs text-slate-500">How Gross ties out to SKU Performance — every rupee accounted for</p>
           </div>
         </div>
         <ChevronDown className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="border-t border-white/10 px-5 py-5">
+        <div className="border-t border-slate-200 px-5 py-5">
           {loading || !rec ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-[#00F0FF]" /></div>
+            <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-emerald-600" /></div>
           ) : (
             <div className="space-y-4">
               <div className="space-y-1">
-                <RecRow label="Product line revenue" accent="text-[#00F0FF]"
+                <RecRow label="Product line revenue" accent="text-emerald-700"
                   hint='Sum of SKU line items — matches the SKU Performance "Achieved" total'
                   value={rec.product_line_revenue} />
                 <RecRow label="+ Tax & other charges"
@@ -248,21 +243,21 @@ function ReconciliationPanel({ timeFilter, fromDate, toDate }) {
                     value={rec.unidentified_line_revenue} />
                 )}
               </div>
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-[#00F0FF]/30 bg-[#00F0FF]/[0.06] px-4 py-3">
-                <p className="text-sm font-semibold text-white">= Gross Revenue (Revenue Analytics)</p>
-                <span className="shrink-0 font-mono text-base font-bold tabular-nums text-white"
-                  style={{ textShadow: '0 0 14px rgba(0,240,255,0.5)' }} data-testid="ra-rec-gross">{fullINR(rec.gross)}</span>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p className="text-sm font-semibold text-slate-800">= Gross Revenue (Revenue Analytics)</p>
+                <span className="shrink-0 font-mono text-base font-bold tabular-nums text-emerald-700"
+                  data-testid="ra-rec-gross">{fullINR(rec.gross)}</span>
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3 text-sm">
-                <span className="text-slate-400">Less Credit Notes&nbsp;
-                  <span className="font-mono text-slate-300">{fullINR(rec.credit_notes)}</span>
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-3 text-sm">
+                <span className="text-slate-500">Less Credit Notes&nbsp;
+                  <span className="font-mono text-slate-600">{fullINR(rec.credit_notes)}</span>
                 </span>
-                <span className="text-slate-300">Net Revenue&nbsp;
-                  <span className="ml-1 font-mono text-base font-semibold text-white">{fullINR(rec.net)}</span>
+                <span className="text-slate-600">Net Revenue&nbsp;
+                  <span className="ml-1 font-mono text-base font-semibold text-slate-900">{fullINR(rec.net)}</span>
                 </span>
               </div>
               {rec.unmapped_line_revenue >= 1 && (
-                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/[0.06] px-3 py-2.5 text-xs text-amber-200" data-testid="ra-rec-unmapped">
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800" data-testid="ra-rec-unmapped">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span>{fullINR(rec.unmapped_line_revenue)} of product revenue ({rec.unmapped_identifier_count} old/unmapped SKU{rec.unmapped_identifier_count === 1 ? '' : 's'}) is shown under retired names. Map them in <span className="font-semibold">Tenant Settings → SKU Aliases</span> for clean per-SKU reporting (this does not change the totals above).</span>
                 </div>
@@ -342,11 +337,11 @@ function BreakdownView() {
           <>
             <div className="min-w-[150px] flex-1">
               <FieldLabel>From</FieldLabel>
-              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={INPUT_DARK} data-testid="ra-from-date" />
+              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className={INPUT_LIGHT} data-testid="ra-from-date" />
             </div>
             <div className="min-w-[150px] flex-1">
               <FieldLabel>To</FieldLabel>
-              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={INPUT_DARK} data-testid="ra-to-date" />
+              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className={INPUT_LIGHT} data-testid="ra-to-date" />
             </div>
           </>
         )}
@@ -371,7 +366,7 @@ function BreakdownView() {
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/[0.03] text-[11px] uppercase tracking-wider text-slate-400">
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
                         <th className="px-5 py-3.5 text-left font-semibold">#</th>
                         <th className="px-5 py-3.5 text-left font-semibold">{dimLabel}</th>
                         <th className="px-5 py-3.5 text-right font-semibold">Gross Revenue</th>
@@ -384,21 +379,21 @@ function BreakdownView() {
                       {groups.map((g, i) => {
                         const share = totalGross ? (g.gross / totalGross) * 100 : 0;
                         return (
-                          <tr key={g.label} className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.04]">
-                            <td className="px-5 py-4 font-mono tabular-nums text-slate-500">{i + 1}</td>
-                            <td className="px-5 py-4 font-medium text-slate-100">
-                              <span className="mr-2.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: DONUT[i % DONUT.length], boxShadow: `0 0 7px ${DONUT[i % DONUT.length]}` }} />
+                          <tr key={g.label} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50">
+                            <td className="px-5 py-4 font-mono tabular-nums text-slate-400">{i + 1}</td>
+                            <td className="px-5 py-4 font-medium text-slate-800">
+                              <span className="mr-2.5 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: DONUT[i % DONUT.length] }} />
                               {g.label}
                             </td>
-                            <td className="px-5 py-4 text-right font-mono font-semibold tabular-nums text-white">{formatCurrency(g.gross)}</td>
-                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-400">{formatCurrency(g.revenue)}</td>
-                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-400">{g.count}</td>
+                            <td className="px-5 py-4 text-right font-mono font-semibold tabular-nums text-slate-900">{formatCurrency(g.gross)}</td>
+                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-500">{formatCurrency(g.revenue)}</td>
+                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-500">{g.count}</td>
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-2.5">
-                                <div className="h-1.5 w-full max-w-[90px] overflow-hidden rounded-full bg-white/10">
-                                  <div className="h-full rounded-full bg-gradient-to-r from-[#00F0FF] to-[#B026FF] shadow-[0_0_8px_rgba(0,240,255,0.5)]" style={{ width: `${Math.max(share, 2)}%` }} />
+                                <div className="h-1.5 w-full max-w-[90px] overflow-hidden rounded-full bg-slate-100">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${Math.max(share, 2)}%` }} />
                                 </div>
-                                <span className="w-10 text-right font-mono text-xs tabular-nums text-slate-400">{share.toFixed(1)}%</span>
+                                <span className="w-10 text-right font-mono text-xs tabular-nums text-slate-500">{share.toFixed(1)}%</span>
                               </div>
                             </td>
                           </tr>
@@ -413,18 +408,18 @@ function BreakdownView() {
                 <div className={`${GLASS} p-6 xl:col-span-7`} data-testid="ra-bar-chart">
                   <div className="mb-5 flex items-baseline justify-between">
                     <SectionTitle>Revenue by {dimLabel}</SectionTitle>
-                    <span className="text-xs text-slate-500">Gross</span>
+                    <span className="text-xs text-slate-400">Gross</span>
                   </div>
                   <ResponsiveContainer width="100%" height={400}>
                     <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 70 }} barCategoryGap="30%">
                       <ChartDefs />
                       <CartesianGrid stroke={GRID} strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 12 }} dy={6} />
-                      <YAxis type="category" dataKey="name" width={140} axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 12 }} interval={0} />
-                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                      <Bar dataKey="gross" name="Gross Revenue" fill="url(#raBarH)" filter="url(#raNeonGlow)" radius={[0, 5, 5, 0]} maxBarSize={28}>
+                      <YAxis type="category" dataKey="name" width={140} axisLine={false} tickLine={false} tick={{ fill: '#475569', fontSize: 12 }} interval={0} />
+                      <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
+                      <Bar dataKey="gross" name="Gross Revenue" fill="url(#raBarH)" radius={[0, 5, 5, 0]} maxBarSize={28}>
                         <LabelList dataKey="gross" position="right" formatter={formatCurrency}
-                          style={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 600 }} />
+                          style={{ fill: '#475569', fontSize: 11, fontWeight: 600 }} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -442,14 +437,14 @@ function BreakdownView() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-[11px] uppercase tracking-[0.1em] text-slate-400">Gross Total</span>
-                      <span className="mt-1 font-mono text-2xl font-semibold tracking-tighter text-white" style={{ textShadow: '0 0 18px rgba(0,240,255,0.45)' }}>{formatCurrency(totalGross)}</span>
+                      <span className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Gross Total</span>
+                      <span className="mt-1 font-mono text-2xl font-semibold tracking-tight text-slate-900">{formatCurrency(totalGross)}</span>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5">
                     {chartData.slice(0, 6).map((e, i) => (
-                      <span key={e.name} className="flex items-center gap-1.5 text-xs text-slate-400">
-                        <span className="h-2 w-2 rounded-full" style={{ background: DONUT[i % DONUT.length], boxShadow: `0 0 7px ${DONUT[i % DONUT.length]}` }} />
+                      <span key={e.name} className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <span className="h-2 w-2 rounded-full" style={{ background: DONUT[i % DONUT.length] }} />
                         <span className="max-w-[120px] truncate">{e.name}</span>
                       </span>
                     ))}
@@ -548,18 +543,17 @@ function CompareView() {
           <div className="grid grid-cols-1 gap-4 duration-500 animate-in fade-in-50 slide-in-from-bottom-2 sm:grid-cols-3 md:gap-6">
             <StatCard label={`${aLabel} · Baseline`} value={formatCurrency(data?.period_a?.total)} sub="Baseline period" icon={IndianRupee} gradient="teal" testid="ra-cmp-a-total" />
             <StatCard label={`${bLabel} · Current`} value={formatCurrency(data?.period_b?.total)} sub="Comparison period" icon={IndianRupee} gradient="purple" testid="ra-cmp-b-total" />
-            <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-[#101427]/70 p-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.12),0_8px_32px_rgba(0,0,0,0.5)] backdrop-blur-2xl transition-all duration-300 hover:-translate-y-1" data-testid="ra-cmp-delta">
-              <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-30 blur-2xl" style={{ background: up ? POS : NEG }} />
+            <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md" data-testid="ra-cmp-delta">
               <div className="relative flex items-start justify-between">
-                <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-slate-400">Change (MoM)</span>
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5" style={{ color: up ? POS : NEG }}>
-                  {up ? <TrendingUp className="h-[18px] w-[18px]" style={{ filter: `drop-shadow(0 0 8px ${POS})` }} /> : <TrendingDown className="h-[18px] w-[18px]" style={{ filter: `drop-shadow(0 0 8px ${NEG})` }} />}
+                <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500">Change (MoM)</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ color: up ? POS : NEG, background: `${up ? POS : NEG}14` }}>
+                  {up ? <TrendingUp className="h-[18px] w-[18px]" /> : <TrendingDown className="h-[18px] w-[18px]" />}
                 </span>
               </div>
-              <p className="relative mt-4 font-mono text-3xl font-semibold tracking-tighter tabular-nums md:text-[2.15rem]" style={{ color: up ? POS : NEG, textShadow: `0 0 20px ${up ? POS : NEG}66` }} data-testid="ra-cmp-delta-pct">
+              <p className="relative mt-4 font-mono text-3xl font-semibold tracking-tight tabular-nums md:text-[2.15rem]" style={{ color: up ? POS : NEG }} data-testid="ra-cmp-delta-pct">
                 {up ? '+' : ''}{data?.delta_pct ?? 0}%
               </p>
-              <span className="relative mt-2 inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium" style={{ color: up ? POS : NEG, borderColor: `${up ? POS : NEG}55`, background: `${up ? POS : NEG}1a` }} data-testid="ra-cmp-delta-amount">
+              <span className="relative mt-2 inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium" style={{ color: up ? POS : NEG, borderColor: `${up ? POS : NEG}40`, background: `${up ? POS : NEG}12` }} data-testid="ra-cmp-delta-amount">
                 {up ? '+' : ''}{formatCurrency(delta)} vs {aLabel}
               </span>
             </div>
@@ -573,7 +567,7 @@ function CompareView() {
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-sm">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/[0.03] text-[11px] uppercase tracking-wider text-slate-400">
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
                         <th className="px-5 py-3.5 text-left font-semibold">{dimLabel}</th>
                         <th className="px-5 py-3.5 text-right font-semibold">{aLabel}</th>
                         <th className="px-5 py-3.5 text-right font-semibold">{bLabel}</th>
@@ -585,10 +579,10 @@ function CompareView() {
                       {rows.map((r) => {
                         const rUp = r.delta >= 0;
                         return (
-                          <tr key={r.label} className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.04]">
-                            <td className="px-5 py-4 font-medium text-slate-100">{r.label}</td>
-                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-400">{formatCurrency(r.a_revenue)}</td>
-                            <td className="px-5 py-4 text-right font-mono font-semibold tabular-nums text-white">{formatCurrency(r.b_revenue)}</td>
+                          <tr key={r.label} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50">
+                            <td className="px-5 py-4 font-medium text-slate-800">{r.label}</td>
+                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-500">{formatCurrency(r.a_revenue)}</td>
+                            <td className="px-5 py-4 text-right font-mono font-semibold tabular-nums text-slate-900">{formatCurrency(r.b_revenue)}</td>
                             <td className="px-5 py-4 text-right font-mono font-medium tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{formatCurrency(r.delta)}</td>
                             <td className="px-5 py-4 text-right font-mono tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{r.delta_pct}%</td>
                           </tr>
@@ -602,20 +596,20 @@ function CompareView() {
               <div className={`${GLASS} p-6`} data-testid="ra-cmp-chart">
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
                   <SectionTitle>{aLabel} vs {bLabel} — by {dimLabel}</SectionTitle>
-                  <div className="flex items-center gap-4 text-xs text-slate-400">
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: NEON.cyan, boxShadow: `0 0 7px ${NEON.cyan}` }} />{aLabel}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: NEON.purple, boxShadow: `0 0 7px ${NEON.purple}` }} />{bLabel}</span>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART.cyan }} />{aLabel}</span>
+                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART.purple }} />{bLabel}</span>
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={400}>
                   <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={6} barCategoryGap="26%">
                     <ChartDefs />
                     <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} angle={-22} textAnchor="end" interval={0} height={60} tick={{ fill: '#94A3B8', fontSize: 11 }} dy={6} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} angle={-22} textAnchor="end" interval={0} height={60} tick={{ fill: '#475569', fontSize: 11 }} dy={6} />
                     <YAxis tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} dx={-6} />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                    <Bar dataKey="A" name={aLabel} fill="url(#raCmpA)" filter="url(#raNeonGlow)" radius={[5, 5, 0, 0]} maxBarSize={26} />
-                    <Bar dataKey="B" name={bLabel} fill="url(#raCmpB)" filter="url(#raNeonGlow)" radius={[5, 5, 0, 0]} maxBarSize={26} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
+                    <Bar dataKey="A" name={aLabel} fill="url(#raCmpA)" radius={[5, 5, 0, 0]} maxBarSize={26} />
+                    <Bar dataKey="B" name={bLabel} fill="url(#raCmpB)" radius={[5, 5, 0, 0]} maxBarSize={26} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -630,38 +624,35 @@ function CompareView() {
 // ───────────────────────── page ─────────────────────────
 export default function RevenueAnalytics() {
   return (
-    <div className="relative min-h-[calc(100vh-6rem)] overflow-hidden rounded-3xl bg-[#080B1F] p-5 text-white [color-scheme:dark] sm:p-7 md:p-9" data-testid="revenue-analytics-page">
-      {/* Blurred neon backdrop orbs */}
-      <div aria-hidden className="pointer-events-none absolute -left-[10%] -top-[12%] h-[42vw] w-[42vw] rounded-full bg-[#B026FF] opacity-20 blur-[130px]" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-[12%] -right-[10%] h-[42vw] w-[42vw] rounded-full bg-[#00F0FF] opacity-[0.14] blur-[130px]" />
-      <div aria-hidden className="pointer-events-none absolute left-[38%] top-[28%] h-[24vw] w-[24vw] rounded-full bg-[#FF00FF] opacity-10 blur-[120px]" />
+    <div className="relative min-h-[calc(100vh-6rem)] overflow-hidden rounded-3xl bg-gradient-to-br from-slate-50 via-white to-emerald-50/30 p-5 sm:p-7 md:p-9" data-testid="revenue-analytics-page">
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:22px_22px] opacity-40" />
 
       <div className="relative z-10 mx-auto max-w-[1400px]">
         <div className="mb-8 flex flex-col gap-4 duration-500 animate-in fade-in-50 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3.5">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-[#00F0FF] to-[#B026FF] shadow-[0_0_20px_rgba(0,240,255,0.5)]">
-              <BarChart3 className="h-6 w-6 text-[#080B1F]" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100">
+              <BarChart3 className="h-6 w-6 text-emerald-600" />
             </div>
             <div>
-              <h1 className="font-heading text-2xl font-semibold tracking-tight text-white md:text-3xl">Revenue Analytics</h1>
-              <p className="mt-0.5 text-sm text-slate-400">Invoice revenue by city, category, SKU, territory &amp; state — with month-over-month comparison.</p>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-800 md:text-3xl">Revenue Analytics</h1>
+              <p className="mt-0.5 text-sm text-slate-500">Invoice revenue by city, category, SKU, territory &amp; state — with month-over-month comparison.</p>
             </div>
           </div>
         </div>
 
         <Tabs defaultValue="breakdown">
-          <TabsList className="mb-6 inline-flex h-auto gap-1 rounded-xl border border-white/10 bg-[#101427]/70 p-1 backdrop-blur-md">
+          <TabsList className="mb-6 inline-flex h-auto gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
             <TabsTrigger
               value="breakdown"
               data-testid="ra-tab-breakdown"
-              className="rounded-lg px-4 py-2 font-medium text-slate-400 transition-all duration-200 hover:text-white data-[state=active]:bg-white/10 data-[state=active]:text-white data-[state=active]:shadow-[0_0_14px_rgba(0,240,255,0.18)]"
+              className="rounded-lg px-4 py-2 font-medium text-slate-500 transition-all duration-200 hover:text-slate-800 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
             >
               <BarChart3 className="mr-2 h-4 w-4" /> Breakdown
             </TabsTrigger>
             <TabsTrigger
               value="compare"
               data-testid="ra-tab-compare"
-              className="rounded-lg px-4 py-2 font-medium text-slate-400 transition-all duration-200 hover:text-white data-[state=active]:bg-white/10 data-[state=active]:text-white data-[state=active]:shadow-[0_0_14px_rgba(176,38,255,0.2)]"
+              className="rounded-lg px-4 py-2 font-medium text-slate-500 transition-all duration-200 hover:text-slate-800 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
             >
               <GitCompareArrows className="mr-2 h-4 w-4" /> Compare Months
             </TabsTrigger>
