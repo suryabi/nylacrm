@@ -45,7 +45,7 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
       onDragStart={(e) => onDragStart(e, req)}
       onDragOver={(e) => onDragOver(e, req)}
       onDragEnd={onDragEnd}
-      className={`group relative overflow-hidden rounded-lg p-2.5 ${req.created_by_city ? 'pt-7' : ''} mb-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${urgent ? 'bg-red-50/60 border-2 border-red-500 ring-1 ring-red-300' : 'bg-white border border-slate-200 hover:border-slate-300'} ${dragging ? 'opacity-50' : ''}`}
+      className={`group relative overflow-hidden rounded-lg p-2.5 ${req.created_by_city ? 'pt-7' : ''} mb-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${urgent ? 'bg-amber-50/60 border-2 border-amber-500 ring-1 ring-amber-300' : 'bg-white border border-slate-200 hover:border-slate-300'} ${dragging ? 'opacity-50' : ''}`}
       data-testid={`kanban-card-${req.id}`}
     >
       {req.created_by_city && (
