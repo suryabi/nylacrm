@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-22 — FIX (serious): promo stock-out "insufficient stock" for single-location distributors ✅
+- Bug: For a single-location ("not self-managed") distributor like Goa, the stock-out/promo-stock-out guard scoped its derived on-hand (received − delivered) by `distributor_location_id`. Legacy delivered shipments often have no `distributor_location_id`, so the location-scoped "received" tallied **0** while location-scoped "delivered" matched — driving on-hand negative (e.g. −720) and falsely blocking with "insufficient stock", even though the distributor dashboard (which is distributor-wide) showed thousands available.
+- Fix (`routes/distributors.py` `create_delivery`): when a distributor has a single non-factory location, the derived received/delivered view is computed **distributor-wide** (matching the dashboard) instead of location-scoped. Multi-location distributors keep location-scoped behavior (no change).
+- Verified with a seeded single-location scenario: old logic gave −852 (false block); fix gives 2,748 (= received 3,600 − delivered 852), matching the dashboard. Backend healthy (200).
+
+
 ## 2026-06-22 — Proposal template: drag-and-drop section reordering ✅
 - Added drag-and-drop reordering of proposal template sections via a grip handle, with prominent visual feedback (dragged card dims + teal ring; drop target shows a teal ring + insertion line) so it's intuitive. Kept the existing up/down buttons for accessibility. Added a "Drag the handle to reorder" hint.
 - Implemented with native HTML5 DnD (no new dependency); reorder updates local state (user still clicks Save to persist).

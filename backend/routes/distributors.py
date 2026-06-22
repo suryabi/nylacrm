@@ -4365,16 +4365,36 @@ async def create_delivery(
     if not source_is_factory and not source_tracks_batches:
         sku_ids_needed = list({sku for (sku, _) in stock_demand.keys() if sku})
         if sku_ids_needed:
-            # Received = sum(delivered shipment_items at this location for these SKUs)
-            delivered_ship_ids = await db.distributor_shipments.distinct(
-                "id",
-                {
-                    "tenant_id": tenant_id,
-                    "distributor_id": distributor_id,
-                    "distributor_location_id": data.distributor_location_id,
-                    "status": "delivered",
-                },
-            )
+            # Single-location distributors (e.g. third-party / "not self-managed"
+            # distributors with one default warehouse): scope the derived view to
+            # the DISTRIBUTOR, not the location. Legacy shipments are frequently
+            # missing `distributor_location_id`, so a location-scoped "received"
+            # tally returns 0 while location-scoped "delivered" matches — driving
+            # on-hand negative (e.g. -720) even though the dashboard (which is
+            # distributor-wide) shows thousands available. Matching the dashboard
+            # here keeps the guard consistent with what the user just saw.
+            # (Bug hit in production for the Goa distributor, 2026-06.)
+            non_factory_loc_count = await db.distributor_locations.count_documents({
+                "tenant_id": tenant_id, "distributor_id": distributor_id,
+                "is_factory": {"$ne": True},
+            })
+            single_location = non_factory_loc_count <= 1
+
+            ship_filter = {
+                "tenant_id": tenant_id,
+                "distributor_id": distributor_id,
+                "status": "delivered",
+            }
+            del_filter = {
+                "tenant_id": tenant_id, "distributor_id": distributor_id,
+                "status": {"$in": ["delivered", "completed", "complete"]},
+            }
+            if not single_location:
+                ship_filter["distributor_location_id"] = data.distributor_location_id
+                del_filter["distributor_location_id"] = data.distributor_location_id
+
+            # Received = sum(delivered shipment_items for these SKUs)
+            delivered_ship_ids = await db.distributor_shipments.distinct("id", ship_filter)
             for it in await db.distributor_shipment_items.find(
                 {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_ship_ids}, "sku_id": {"$in": sku_ids_needed}},
                 {"_id": 0, "sku_id": 1, "quantity": 1, "received_quantity": 1},
@@ -4384,15 +4404,8 @@ async def create_delivery(
                 # match what the dashboard tallies as "received".
                 q = int(it.get("received_quantity") or it.get("quantity") or 0)
                 derived_on_hand_by_sku[it["sku_id"]] = derived_on_hand_by_sku.get(it["sku_id"], 0) + q
-            # Delivered out = sum(items on completed deliveries at this location)
-            done_delivery_ids = await db.distributor_deliveries.distinct(
-                "id",
-                {
-                    "tenant_id": tenant_id, "distributor_id": distributor_id,
-                    "distributor_location_id": data.distributor_location_id,
-                    "status": {"$in": ["delivered", "completed", "complete"]},
-                },
-            )
+            # Delivered out = sum(items on completed deliveries)
+            done_delivery_ids = await db.distributor_deliveries.distinct("id", del_filter)
             for it in await db.distributor_delivery_items.find(
                 {"tenant_id": tenant_id, "delivery_id": {"$in": done_delivery_ids}, "sku_id": {"$in": sku_ids_needed}},
                 {"_id": 0, "sku_id": 1, "quantity": 1},
