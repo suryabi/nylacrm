@@ -13,7 +13,7 @@ import {
 } from '../components/ui/select';
 import {
   Loader2, Save, FileText, RotateCcw, Upload, Trash2, Plus, ChevronUp, ChevronDown, ImageIcon, X,
-  Layers, Copy, Pencil, Star, Type,
+  Layers, Copy, Pencil, Star, Type, GripVertical,
 } from 'lucide-react';
 import RichTextField from '../components/RichTextField';
 
@@ -166,6 +166,8 @@ export default function ProposalTemplateSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const logoInput = useRef(null);
   const imgInputs = useRef({});
 
@@ -281,6 +283,24 @@ export default function ProposalTemplateSettings() {
       [sections[idx], sections[j]] = [sections[j], sections[idx]];
       return { ...p, sections };
     });
+
+  const reorderSection = (from, to) =>
+    setTpl((p) => {
+      const sections = [...(p.sections || [])];
+      if (from == null || to == null || from === to || from < 0 || to < 0 || from >= sections.length || to >= sections.length) return p;
+      const [moved] = sections.splice(from, 1);
+      sections.splice(to, 0, moved);
+      return { ...p, sections };
+    });
+
+  const handleDrop = (targetIdx) => {
+    if (dragIndex != null && dragIndex !== targetIdx) {
+      reorderSection(dragIndex, targetIdx);
+      toast.success('Section moved — remember to Save');
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
 
   const removeSection = (idx) =>
     setTpl((p) => ({ ...p, sections: (p.sections || []).filter((_, i) => i !== idx) }));
@@ -504,14 +524,40 @@ export default function ProposalTemplateSettings() {
 
       {/* Dynamic sections */}
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold text-lg">Sections</h2>
+        <div>
+          <h2 className="font-semibold text-lg">Sections</h2>
+          <p className="text-xs text-muted-foreground">Drag the <GripVertical className="h-3 w-3 inline -mt-0.5" /> handle to reorder sections.</p>
+        </div>
         <Button size="sm" variant="outline" onClick={addSection} data-testid="add-section-btn"><Plus className="h-4 w-4 mr-1.5" /> Add section</Button>
       </div>
 
       {sections.map((sec, idx) => (
-        <Card key={sec.id || idx} className="p-5 space-y-4" data-testid={`section-card-${idx}`}>
+        <Card
+          key={sec.id || idx}
+          data-testid={`section-card-${idx}`}
+          onDragOver={(e) => { if (dragIndex != null) { e.preventDefault(); setDragOverIndex(idx); } }}
+          onDragLeave={(e) => { if (dragOverIndex === idx && !e.currentTarget.contains(e.relatedTarget)) setDragOverIndex(null); }}
+          onDrop={(e) => { e.preventDefault(); handleDrop(idx); }}
+          className={`p-5 space-y-4 transition-all duration-150 relative ${
+            dragIndex === idx ? 'opacity-50 ring-2 ring-teal-400 scale-[0.99]' : ''
+          } ${
+            dragOverIndex === idx && dragIndex !== idx
+              ? 'ring-2 ring-teal-500 shadow-lg shadow-teal-100 before:absolute before:-top-1.5 before:left-2 before:right-2 before:h-1 before:rounded-full before:bg-teal-500'
+              : ''
+          }`}
+        >
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
+              <span
+                draggable
+                onDragStart={(e) => { setDragIndex(idx); e.dataTransfer.effectAllowed = 'move'; }}
+                onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                title="Drag to reorder"
+                className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-teal-600 p-1 rounded hover:bg-teal-50 transition-colors"
+                data-testid={`section-drag-handle-${idx}`}
+              >
+                <GripVertical className="h-4 w-4" />
+              </span>
               <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded">#{idx + 1}</span>
               <Select value={sec.type} onValueChange={(v) => setSection(idx, { type: v })}>
                 <SelectTrigger className="h-9 w-48" data-testid={`section-type-${idx}`}><SelectValue /></SelectTrigger>

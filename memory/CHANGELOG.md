@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-22 — Proposal template: drag-and-drop section reordering ✅
+- Added drag-and-drop reordering of proposal template sections via a grip handle, with prominent visual feedback (dragged card dims + teal ring; drop target shows a teal ring + insertion line) so it's intuitive. Kept the existing up/down buttons for accessibility. Added a "Drag the handle to reorder" hint.
+- Implemented with native HTML5 DnD (no new dependency); reorder updates local state (user still clicks Save to persist).
+- Verified: dragging section #1 onto position #3 reorders correctly and shows "Section moved — remember to Save" (screenshot).
+
+
 ## 2026-06-22 — Account activation: require delivery coordinates + 10-digit delivery phone ✅
 - An account can no longer be activated unless its **delivery address has map coordinates (lat/lng)** — captured by selecting the address from Google suggestions — so the delivery team gets accurate directions. Enforced in `activation-status` (the "Delivery address is updated" check now also needs lat/lng) and in the `activate` endpoint (clear failure message). Updated the checklist helper text in the UI.
 - **Delivery contact phone** now accepts exactly **10 digits**: the input strips non-digits and caps at 10, shows an inline "Enter exactly 10 digits" hint, disables Save until valid, and the backend `delivery-info` endpoint rejects anything that isn't 10 digits.
