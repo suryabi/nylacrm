@@ -45,9 +45,20 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
       onDragStart={(e) => onDragStart(e, req)}
       onDragOver={(e) => onDragOver(e, req)}
       onDragEnd={onDragEnd}
-      className={`group rounded-lg p-2.5 mb-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${urgent ? 'bg-red-50/60 border-2 border-red-500 ring-1 ring-red-300' : 'bg-white border border-slate-200 hover:border-slate-300'} ${dragging ? 'opacity-50' : ''}`}
+      className={`group relative overflow-hidden rounded-lg p-2.5 ${req.created_by_city ? 'pt-7' : ''} mb-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${urgent ? 'bg-red-50/60 border-2 border-red-500 ring-1 ring-red-300' : 'bg-white border border-slate-200 hover:border-slate-300'} ${dragging ? 'opacity-50' : ''}`}
       data-testid={`kanban-card-${req.id}`}
     >
+      {req.created_by_city && (
+        <div
+          className="absolute top-0 left-0 w-[78px] h-[78px] overflow-hidden pointer-events-none z-10"
+          title={`Requestor city: ${req.created_by_city}`}
+          data-testid={`kanban-city-ribbon-${req.id}`}
+        >
+          <div className="absolute top-[13px] -left-[24px] w-[104px] -rotate-45 bg-gradient-to-r from-teal-600 to-emerald-600 text-white text-[8px] font-bold uppercase tracking-wider text-center py-[2px] shadow-md">
+            {req.created_by_city}
+          </div>
+        </div>
+      )}
       <div className="flex items-start gap-1.5">
         <span className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-500 shrink-0" title={`Priority #${index + 1}`}>
           {index + 1}

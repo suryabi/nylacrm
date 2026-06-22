@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-22 — Design Request tiles: requestor-city corner ribbon ✅
+- Added a diagonal corner ribbon to the top-left of each Design Request (marketing request) Kanban tile showing the **city of the requestor**. Cards get extra top padding so content clears the ribbon.
+- Backend: the requests list now returns `created_by_city` (batch user lookup), so existing requests get it too without a migration.
+- Verified via screenshot: ribbons render with "HYDERABAD" across all tiles.
+
+
 ## 2026-06-22 — FIX (serious): promo stock-out "insufficient stock" for single-location distributors ✅
 - Bug: For a single-location ("not self-managed") distributor like Goa, the stock-out/promo-stock-out guard scoped its derived on-hand (received − delivered) by `distributor_location_id`. Legacy delivered shipments often have no `distributor_location_id`, so the location-scoped "received" tallied **0** while location-scoped "delivered" matched — driving on-hand negative (e.g. −720) and falsely blocking with "insufficient stock", even though the distributor dashboard (which is distributor-wide) showed thousands available.
 - Fix (`routes/distributors.py` `create_delivery`): when a distributor has a single non-factory location, the derived received/delivered view is computed **distributor-wide** (matching the dashboard) instead of location-scoped. Multi-location distributors keep location-scoped behavior (no change).

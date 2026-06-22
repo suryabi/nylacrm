@@ -647,13 +647,28 @@ async def list_requests(
     sort_field = sort.lstrip("-+")
     sort_dir = -1 if sort.startswith("-") else 1
 
+    async def _attach_requestor_city(rows):
+        ids = list({r.get("created_by") for r in rows if r.get("created_by")})
+        if not ids:
+            return rows
+        city_by_id = {}
+        async for u in db.users.find(
+            {"id": {"$in": ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "city": 1}
+        ):
+            city_by_id[u["id"]] = u.get("city")
+        for r in rows:
+            r["created_by_city"] = city_by_id.get(r.get("created_by"))
+        return rows
+
     # Board/Kanban needs every matching request (no pagination cap).
     if no_limit:
         rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).to_list(2000)
+        await _attach_requestor_city(rows)
         return {"items": rows, "total": total, "page": 1, "limit": total, "pages": 1}
 
     limit = max(min(limit, 100), 1)
     rows = await db.marketing_requests.find(q, {"_id": 0}).sort(sort_field, sort_dir).skip((page - 1) * limit).limit(limit).to_list(limit)
+    await _attach_requestor_city(rows)
     return {
         "items": rows, "total": total, "page": page, "limit": limit,
         "pages": (total + limit - 1) // limit if total else 0,
