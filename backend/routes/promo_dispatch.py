@@ -205,6 +205,52 @@ async def _check_stock_availability(tenant_id: str, *, src_is_factory: bool, src
                 detail=f"Insufficient stock for {sku_name or sku_id}: {available} available, {qty} requested.")
 
 
+async def _derived_on_hand_by_sku(tenant_id: str, distributor_id: str, loc_id: str,
+                                  sku_ids: list) -> dict:
+    """Dashboard-consistent on-hand (received − delivered) for non-factory,
+    non-batch distributor sources. Single-location distributors are scoped
+    distributor-wide because legacy shipments often lack a
+    `distributor_location_id`, which would otherwise tally received=0 while
+    delivered matches — driving on-hand negative (e.g. -720) even though the
+    dashboard (distributor-wide) shows thousands available. Mirrors the regular
+    Stock-Out guard in routes/distributors.py::create_delivery so the promo
+    guard never disagrees with the dashboard the user just saw.
+    (Bug hit in production for the Goa distributor, 2026-06.)"""
+    out: dict = {}
+    sku_ids = [s for s in sku_ids if s]
+    if not sku_ids:
+        return out
+    non_factory_loc_count = await db.distributor_locations.count_documents({
+        "tenant_id": tenant_id, "distributor_id": distributor_id,
+        "is_factory": {"$ne": True},
+    })
+    single_location = non_factory_loc_count <= 1
+    ship_filter = {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "delivered"}
+    del_filter = {"tenant_id": tenant_id, "distributor_id": distributor_id,
+                  "status": {"$in": ["delivered", "completed", "complete"]}}
+    if not single_location:
+        ship_filter["distributor_location_id"] = loc_id
+        del_filter["distributor_location_id"] = loc_id
+    # Received = sum(delivered shipment_items)
+    delivered_ship_ids = await db.distributor_shipments.distinct("id", ship_filter)
+    for srow in await db.distributor_shipment_items.find(
+        {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_ship_ids}, "sku_id": {"$in": sku_ids}},
+        {"_id": 0, "sku_id": 1, "quantity": 1, "received_quantity": 1},
+    ).to_list(20000):
+        q = int(srow.get("received_quantity") or srow.get("quantity") or 0)
+        out[srow["sku_id"]] = out.get(srow["sku_id"], 0) + q
+    # Delivered out = sum(items on completed deliveries)
+    done_delivery_ids = await db.distributor_deliveries.distinct("id", del_filter)
+    for drow in await db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "delivery_id": {"$in": done_delivery_ids}, "sku_id": {"$in": sku_ids}},
+        {"_id": 0, "sku_id": 1, "quantity": 1},
+    ).to_list(20000):
+        out[drow["sku_id"]] = out.get(drow["sku_id"], 0) - int(drow.get("quantity") or 0)
+    # NOTE: open/pending orders are netted out separately via the Reserved map.
+    return out
+
+
+
 async def _push_promo_dispatch_to_zoho(tenant_id: str, dispatch_id: str, dispatch: dict, items: list, distributor: dict, coll=None) -> dict:
     """Best-effort Zoho delivery-challan push. Updates the dispatch/delivery row
     with the sync result and returns {status, error}. `coll` defaults to the
@@ -337,6 +383,11 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             bkey = it.batch_id if src_tracks_batches else None
             k = (it.sku_id, bkey, it.sku_name)
             demand_map[k] = demand_map.get(k, 0) + it.quantity
+        derived = {}
+        if not src_is_factory and not src_tracks_batches:
+            derived = await _derived_on_hand_by_sku(
+                tenant_id, distributor_id, data.distributor_location_id,
+                [s for (s, _b, _n) in demand_map.keys()])
         for (sku_id, bkey, sku_name), demand in demand_map.items():
             if src_is_factory:
                 key = {"tenant_id": tenant_id, "warehouse_location_id": data.distributor_location_id, "sku_id": sku_id}
@@ -348,7 +399,9 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
                        "distributor_location_id": data.distributor_location_id, "sku_id": sku_id}
                 key["batch_id"] = bkey if bkey else {"$in": [None]}
                 rows = await db.distributor_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
-            on_hand = sum((r.get("quantity") or 0) for r in rows)
+            on_hand_rows = sum((r.get("quantity") or 0) for r in rows)
+            # Never be more restrictive than the dashboard the user just saw.
+            on_hand = max(on_hand_rows, derived.get(sku_id, 0)) if (not src_is_factory and not src_tracks_batches) else on_hand_rows
             reserved = reserved_map.get((sku_id, bkey), 0)
             available = on_hand - reserved
             if available < demand:
@@ -646,6 +699,11 @@ async def confirm_promo_dispatch(distributor_id: str, dispatch_id: str, current_
         for it in items:
             bkey = it.get("batch_id") if tracks else None
             demand[(it.get("sku_id"), bkey, it.get("sku_name"))] = demand.get((it.get("sku_id"), bkey, it.get("sku_name")), 0) + (it.get("quantity") or 0)
+        derived = {}
+        if not d.get("is_factory") and not tracks:
+            derived = await _derived_on_hand_by_sku(
+                tenant_id, distributor_id, d.get("distributor_location_id"),
+                [s for (s, _b, _n) in demand.keys()])
         for (sku_id, bkey, sku_name), need in demand.items():
             if d.get("is_factory"):
                 key = {"tenant_id": tenant_id, "warehouse_location_id": d.get("distributor_location_id"), "sku_id": sku_id}
@@ -657,7 +715,8 @@ async def confirm_promo_dispatch(distributor_id: str, dispatch_id: str, current_
                        "distributor_location_id": d.get("distributor_location_id"), "sku_id": sku_id}
                 key["batch_id"] = bkey if bkey else {"$in": [None]}
                 rows = await db.distributor_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
-            on_hand = sum((r.get("quantity") or 0) for r in rows)
+            on_hand_rows = sum((r.get("quantity") or 0) for r in rows)
+            on_hand = max(on_hand_rows, derived.get(sku_id, 0)) if (not d.get("is_factory") and not tracks) else on_hand_rows
             available = on_hand - reserved_map.get((sku_id, bkey), 0)
             if available < need:
                 raise HTTPException(status_code=400, detail=f"Insufficient stock for {sku_name or sku_id}: need {need}, available {available}.")

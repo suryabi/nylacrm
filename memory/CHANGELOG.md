@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-22 — FIX (P0, production): Promo Stock-Out false "Insufficient stock" for single-location distributors ✅
+- **Reported (PRODUCTION, Goa "Pickval" distributor):** Promotional Stock-Out blocked "Insufficient stock for Nyla 660ml Silver: need 1, available -720 (-720 on-hand)" while the Stock-by-SKU dashboard showed 2,748 available.
+- **Root cause:** The promo guard (`routes/promo_dispatch.py`) computed on-hand by summing `distributor_stock` rows scoped to the location. For legacy single-location distributors those rows are missing/negative (e.g. -720), whereas the dashboard derives on-hand distributor-wide from received−delivered. The earlier fix was applied only to the regular `create_delivery` path, NOT the promo create/confirm paths.
+- **Fix:** Added shared helper `_derived_on_hand_by_sku()` mirroring `create_delivery`'s dashboard-consistent derivation (received − delivered; distributor-wide when single-location). Both the promo **create** and **confirm** guards now use `max(distributor_stock_rows, derived)` for non-factory, non-batch sources, so the guard never disagrees with the dashboard. Factory/batch sources unchanged.
+- **Tested:** `tests/test_promo_derived_on_hand.py` — seeds a single-location distributor with legacy shipments/deliveries lacking `distributor_location_id` + a stale -720 stock row → derived returns 2,748 (matches dashboard), guard passes. PASS. ⚠️ Redeploy required to apply on production.
+
+
+
 ## 2026-06-22 — Design Request detail: city ribbon + per-city color (VERIFIED) ✅
 - Confirmed the color-coded 3-letter city ribbon renders on the Design Request **detail** hero (not just Kanban). `MarketingRequestDetail.js` shows the diagonal corner ribbon using `created_by_city` + `created_by_city_color`.
 - Backend `_enrich_requestor_city` populates city/color on BOTH list and detail (`GET /{request_id}`) endpoints from the user's city + `master_cities.color`.
