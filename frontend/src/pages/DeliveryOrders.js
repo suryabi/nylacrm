@@ -21,6 +21,57 @@ import {
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, withCredentials: true });
 const fmtINR = (n) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+
+// Match a Google-returned address to a city in the Location Master so the city
+// always lines up with the master (e.g. "Rai Durg, Hyderabad" -> "Hyderabad").
+function matchMasterCity(masterCities, googleCity, formattedAddress) {
+  if (!masterCities?.length) return googleCity || '';
+  const fa = (formattedAddress || '').toLowerCase();
+  const gc = (googleCity || '').toLowerCase().trim();
+  const names = [];
+  masterCities.forEach((c) => {
+    names.push(c.name);
+    (c.aliases || []).forEach((a) => names.push(a));
+  });
+  let hit = names.find((n) => n && n.toLowerCase() === gc);
+  if (!hit) {
+    hit = names.find((n) => n && new RegExp(`(^|[,\\s])${n.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([,\\s]|$)`).test(fa));
+  }
+  if (hit) {
+    const canonical = masterCities.find((c) => c.name.toLowerCase() === hit.toLowerCase()
+      || (c.aliases || []).some((a) => a.toLowerCase() === hit.toLowerCase()));
+    return canonical ? canonical.name : hit;
+  }
+  return googleCity || '';
+}
+
+// Embedded Google map (no API key needed) with an expand-to-large option.
+function MapPreview({ lat, lng, label, height = 180 }) {
+  const [expanded, setExpanded] = useState(false);
+  if (lat == null || lng == null) return null;
+  const src = `https://maps.google.com/maps?q=${lat},${lng}&z=15&output=embed`;
+  const openUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200" data-testid="do-map-preview">
+      <iframe title="delivery-location" src={src} width="100%" height={height} style={{ border: 0 }} loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+      <div className="flex items-center justify-between bg-slate-50 px-3 py-1.5 text-xs">
+        <span className="truncate text-slate-500">📍 {Number(lat).toFixed(5)}, {Number(lng).toFixed(5)}{label ? ` · ${label}` : ''}</span>
+        <div className="flex items-center gap-3">
+          <button type="button" className="font-medium text-emerald-600 hover:underline" onClick={() => setExpanded(true)} data-testid="do-map-expand">Expand</button>
+          <a href={openUrl} target="_blank" rel="noreferrer" className="font-medium text-slate-500 hover:underline">Open ↗</a>
+        </div>
+      </div>
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="max-w-4xl" data-testid="do-map-expanded">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-rose-500" /> Delivery Location</DialogTitle></DialogHeader>
+          <iframe title="delivery-location-large" src={src} width="100%" height={520} style={{ border: 0 }} loading="lazy" />
+          <a href={openUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-600 hover:underline">Open in Google Maps ↗</a>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 const RECIPIENTS = [
   { key: 'lead', label: 'Lead', endpoint: 'leads' },
   { key: 'account', label: 'Account', endpoint: 'accounts' },
@@ -119,7 +170,7 @@ function RecipientPicker({ recipientType, setRecipientType, selected, onSelect }
 }
 
 // ───────────────────── Create dialog ─────────────────────
-function CreateOrderDialog({ open, onClose, skus, reasons, onCreated }) {
+function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) {
   const [recipientType, setRecipientType] = useState('account');
   const [selected, setSelected] = useState(null);
   const [requestedDate, setRequestedDate] = useState('');
@@ -188,14 +239,13 @@ function CreateOrderDialog({ open, onClose, skus, reasons, onCreated }) {
 
   const submit = async (alsoSubmit) => {
     if (!selected) return toast.error('Select a recipient.');
-    if (!requestedDate) return toast.error('Pick a requested delivery date.');
     if (!addr.city) return toast.error('Delivery city is required (use the address search).');
     if (!items.length || items.some((i) => !i.sku_id || !i.quantity)) return toast.error('Add at least one line with SKU and quantity.');
     setSaving(true);
     try {
       const payload = {
         recipient_type: recipientType, ...recipientId(),
-        requested_date: requestedDate, reason: reason || null,
+        requested_date: requestedDate || null, reason: reason || null,
         delivery_address: addr, contact_name: contactName || null, contact_phone: contactPhone || null,
         notes: notes || null,
         items: items.map((i) => ({
@@ -227,20 +277,15 @@ function CreateOrderDialog({ open, onClose, skus, reasons, onCreated }) {
         <div className="space-y-5">
           <RecipientPicker recipientType={recipientType} setRecipientType={setRecipientType} selected={selected} onSelect={setSelected} />
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Requested delivery date</Label>
-              <Input type="date" value={requestedDate} onChange={(e) => setRequestedDate(e.target.value)} data-testid="do-requested-date" />
-            </div>
-            <div>
-              <Label>Promotional reason</Label>
-              <Select value={reason} onValueChange={setReason}>
-                <SelectTrigger data-testid="do-reason"><SelectValue placeholder="Select reason" /></SelectTrigger>
-                <SelectContent>
-                  {reasons.map((r) => <SelectItem key={r.id || r.name} value={r.name}>{r.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+          <div>
+            <Label>Promotional reason</Label>
+            <Select value={reason} onValueChange={setReason}>
+              <SelectTrigger data-testid="do-reason"><SelectValue placeholder="Select reason" /></SelectTrigger>
+              <SelectContent>
+                {reasons.map((r) => <SelectItem key={r.id || r.name} value={r.name}>{r.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-slate-400">The delivery date can be set after the order is approved.</p>
           </div>
 
           {/* Delivery address */}
@@ -249,7 +294,9 @@ function CreateOrderDialog({ open, onClose, skus, reasons, onCreated }) {
             <GooglePlacesAddressSearch cityHint={addr.city} placeholder="Search address on Google…"
               testId="do-address-search"
               onPick={(p) => setAddr({
-                line1: p.address_line_1 || p.formatted_address || '', city: p.city || '', state: p.state || '',
+                line1: p.address_line_1 || p.formatted_address || '',
+                city: matchMasterCity(cities, p.city, p.formatted_address),
+                state: p.state || '',
                 pincode: p.pincode || '', lat: p.lat ?? null, lng: p.lng ?? null, formatted_address: p.formatted_address || '',
               })} />
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -257,10 +304,10 @@ function CreateOrderDialog({ open, onClose, skus, reasons, onCreated }) {
               <Input placeholder="City" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} data-testid="do-addr-city" />
               <Input placeholder="State" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} />
               <Input placeholder="Pincode" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} />
-              <div className="flex items-center text-xs text-slate-400">
-                {addr.lat && addr.lng ? `📍 ${Number(addr.lat).toFixed(4)}, ${Number(addr.lng).toFixed(4)}` : 'No coordinates'}
-              </div>
             </div>
+            {addr.lat != null && addr.lng != null && (
+              <div className="mt-2"><MapPreview lat={addr.lat} lng={addr.lng} label={addr.city} /></div>
+            )}
             <div className="mt-2 grid grid-cols-2 gap-2">
               <Input placeholder="Contact name" value={contactName} onChange={(e) => setContactName(e.target.value)} data-testid="do-contact-name" />
               <Input placeholder="Contact phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} data-testid="do-contact-phone" />
@@ -342,6 +389,8 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
   const [acting, setActing] = useState(false);
   const [commentFor, setCommentFor] = useState(null);
   const [comment, setComment] = useState('');
+  const [dateValue, setDateValue] = useState('');
+  const [savingDate, setSavingDate] = useState(false);
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -352,11 +401,24 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
         axios.get(`${API_URL}/delivery-orders/${orderId}/available-transitions`, auth()),
       ]);
       setOrder(o.data); setTransitions(t.data.transitions || []);
+      setDateValue(o.data.requested_date || '');
     } catch { toast.error('Failed to load order'); }
     finally { setLoading(false); }
   }, [orderId]);
 
   useEffect(() => { if (open) load(); }, [open, load]);
+
+  const saveDate = async () => {
+    if (!dateValue) return;
+    setSavingDate(true);
+    try {
+      await axios.put(`${API_URL}/delivery-orders/${orderId}`, { requested_date: dateValue }, auth());
+      toast.success('Delivery date saved');
+      await load(); onChanged();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save date');
+    } finally { setSavingDate(false); }
+  };
 
   const doTransition = async (t) => {
     if (t.comment_required && commentFor !== t.action_key) { setCommentFor(t.action_key); return; }
@@ -364,11 +426,7 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
     try {
       const { data } = await axios.post(`${API_URL}/delivery-orders/${orderId}/transition`,
         { action_key: t.action_key, comment: comment || null }, auth());
-      const f = data.fulfillment;
-      if (f) {
-        if (f.status === 'created') toast.success(`Approved — draft promo stock-out ${f.challan_number || ''} created`);
-        else toast.warning(`Approved, but auto stock-out could not be created: ${f.error}`);
-      } else toast.success('Updated');
+      toast.success(`Order ${data.order?.current_state_label || 'updated'}`);
       setCommentFor(null); setComment('');
       await load(); onChanged();
     } catch (e) {
@@ -397,18 +455,36 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
               <div className="grid grid-cols-2 gap-3">
                 <Info label="Recipient" value={order.recipient_name} />
                 <Info label="Type" value={order.recipient_type} />
-                <Info label="Requested date" value={order.requested_date} />
                 <Info label="Promo reason" value={order.reason || '—'} />
                 <Info label="Delivery city" value={order.delivery_city || '—'} />
                 <Info label="Total value" value={fmtINR(order.total_value)} />
                 <Info label="Contact" value={`${order.contact_name || '—'}${order.contact_phone ? ' · ' + order.contact_phone : ''}`} />
                 <Info label="Created by" value={order.created_by_name} />
               </div>
+
+              {/* Delivery date — only settable once approved */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="do-delivery-date-block">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">Date of delivery</p>
+                {order.current_state_key === 'approved' ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <Input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} className="w-44" data-testid="do-delivery-date-input" />
+                    <Button size="sm" onClick={saveDate} disabled={savingDate || !dateValue} className="bg-emerald-600 hover:bg-emerald-700" data-testid="do-delivery-date-save">
+                      {savingDate ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save date'}
+                    </Button>
+                    {order.requested_date && <span className="text-xs text-emerald-600">Set: {order.requested_date}</span>}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-500">{order.requested_date || 'Available after the order is approved.'}</p>
+                )}
+              </div>
+
               {order.delivery_address?.formatted_address && (
                 <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
                   <MapPin className="mr-1 inline h-3.5 w-3.5 text-rose-500" />{order.delivery_address.formatted_address}
-                  {order.delivery_address.lat ? `  ·  📍 ${order.delivery_address.lat}, ${order.delivery_address.lng}` : ''}
                 </div>
+              )}
+              {order.delivery_address?.lat != null && order.delivery_address?.lng != null && (
+                <MapPreview lat={order.delivery_address.lat} lng={order.delivery_address.lng} label={order.delivery_city} />
               )}
 
               <div className="rounded-lg border border-slate-200">
@@ -430,14 +506,6 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
                   </tbody>
                 </table>
               </div>
-
-              {order.fulfillment_status && (
-                <div className={`rounded-lg border px-3 py-2 text-xs ${order.fulfillment_status === 'created' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-700'}`} data-testid="do-fulfillment">
-                  {order.fulfillment_status === 'created'
-                    ? <><Truck className="mr-1 inline h-3.5 w-3.5" />Draft promo stock-out <b>{order.fulfillment_challan_number}</b> created for the covering distributor.</>
-                    : <>Auto stock-out not created: {order.fulfillment_error}</>}
-                </div>
-              )}
 
               {order.notes && <p className="text-xs text-slate-500"><b>Notes:</b> {order.notes}</p>}
 
@@ -497,6 +565,7 @@ export default function DeliveryOrders() {
   const [loading, setLoading] = useState(true);
   const [skus, setSkus] = useState([]);
   const [reasons, setReasons] = useState([]);
+  const [cities, setCities] = useState([]);
   const [stateFilter, setStateFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
@@ -524,6 +593,10 @@ export default function DeliveryOrders() {
         ]);
         setSkus((s.data.skus || []).filter((x) => x.is_active !== false));
         setReasons(r.data.reasons || r.data.promo_reasons || (Array.isArray(r.data) ? r.data : []));
+        try {
+          const c = await axios.get(`${API_URL}/master-locations/flat`, auth());
+          setCities(c.data.cities || []);
+        } catch { /* cities optional */ }
       } catch { /* non-blocking */ }
     })();
   }, []);
@@ -593,7 +666,7 @@ export default function DeliveryOrders() {
         </div>
       </div>
 
-      <CreateOrderDialog open={showCreate} onClose={() => setShowCreate(false)} skus={skus} reasons={reasons} onCreated={fetchOrders} />
+      <CreateOrderDialog open={showCreate} onClose={() => setShowCreate(false)} skus={skus} reasons={reasons} cities={cities} onCreated={fetchOrders} />
       <DetailDialog orderId={detailId} open={!!detailId} onClose={() => setDetailId(null)} onChanged={fetchOrders} />
     </div>
   );

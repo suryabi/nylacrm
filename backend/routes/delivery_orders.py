@@ -57,7 +57,7 @@ class DeliveryOrderCreate(BaseModel):
     account_id: Optional[str] = None
     contact_id: Optional[str] = None
     employee_id: Optional[str] = None
-    requested_date: str
+    requested_date: Optional[str] = None
     reason: Optional[str] = None           # promo reason (required to fulfil)
     delivery_address: DeliveryAddress
     contact_name: Optional[str] = None
@@ -367,11 +367,22 @@ async def update_delivery_order(order_id: str, data: DeliveryOrderUpdate, curren
     order = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Delivery order not found")
-    if order.get("current_state_key") != "draft":
-        raise HTTPException(400, "Only a draft delivery order can be edited.")
-    if order.get("created_by") != current_user.get("id") and not is_distributor_admin(current_user):
-        raise HTTPException(403, "Only the requester or an admin can edit this order.")
+    state = order.get("current_state_key")
     upd = data.model_dump(exclude_unset=True)
+    is_owner_or_admin = order.get("created_by") == current_user.get("id") or is_distributor_admin(current_user)
+    # After approval the requester/admin may set ONLY the requested delivery date.
+    if state == "approved":
+        if set(upd.keys()) - {"requested_date"}:
+            raise HTTPException(400, "An approved order can only have its delivery date set.")
+        if not is_owner_or_admin:
+            raise HTTPException(403, "Only the requester or an admin can set the delivery date.")
+        upd["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.delivery_orders.update_one({"id": order_id, "tenant_id": tenant_id}, {"$set": upd})
+        return await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+    if state != "draft":
+        raise HTTPException(400, "Only a draft delivery order can be edited.")
+    if not is_owner_or_admin:
+        raise HTTPException(403, "Only the requester or an admin can edit this order.")
     if "items" in upd and upd["items"] is not None:
         if not upd["items"]:
             raise HTTPException(400, "At least one line item is required.")
@@ -453,17 +464,6 @@ async def trigger_transition(order_id: str, payload: TransitionRequest, current_
         "updated_at": now,
     }
 
-    # Side-effect: entering 'approved' → auto-create a DRAFT promo stock-out.
-    fulfillment = None
-    if target["key"] == "approved" and not order.get("fulfillment_promo_id"):
-        fulfillment = await _auto_create_draft_promo(tenant_id, order, current_user)
-        set_doc["fulfillment_status"] = fulfillment.get("status")
-        set_doc["fulfillment_error"] = fulfillment.get("error")
-        if fulfillment.get("promo_id"):
-            set_doc["fulfillment_promo_id"] = fulfillment["promo_id"]
-            set_doc["fulfillment_distributor_id"] = fulfillment.get("distributor_id")
-            set_doc["fulfillment_challan_number"] = fulfillment.get("challan_number")
-
     history = {
         "state_key": target["key"], "state_label": target.get("label") or target["key"],
         "state_color": target.get("color"), "entered_at": now,
@@ -481,7 +481,4 @@ async def trigger_transition(order_id: str, payload: TransitionRequest, current_
             await _create_approval_task(tenant_id, {**order, **set_doc}, requester)
 
     updated = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
-    resp = {"ok": True, "order": updated}
-    if fulfillment:
-        resp["fulfillment"] = fulfillment
-    return resp
+    return {"ok": True, "order": updated}

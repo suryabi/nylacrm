@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 218 - Validated 4 follow-up fixes on Delivery Orders module (login: surya.yadavalli@nylaairwater.earth/test123, tenant nyla-air-water). All 4 acceptance scenarios PASS via combined UI + code review. (1) City master-match: typed 'HITEC City Hyderabad' in Google Places search; Google returned sub-locality candidate 'HITEC City, Hyderabad, Telangana, India' and matchMasterCity correctly normalised do-addr-city to 'Hyderabad' (NOT 'Rai Durg' / 'HITEC City'). (2) Map preview + expand: after picking the suggestion do-map-preview iframe rendered, do-map-expand opened do-map-expanded large dialog with pin (screenshot confirmed). (3) Date-of-delivery hidden at creation: do-requested-date count=0; helper text 'The delivery date can be set after the order is approved.' present. (4) NO auto stock-out on approve: routes/delivery_orders.py:434 trigger_transition no longer calls _auto_create_draft_promo (only creates approval task on submit), response is {ok, order} with no 'fulfillment' key; frontend DetailDialog has no do-fulfillment testid. The post-approval date input (do-delivery-date-input + do-delivery-date-save) is correctly gated on current_state_key==='approved' and PUT /delivery-orders/{id} restricts approved-state updates to requested_date only (delivery_orders.py:374-381).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Expanded map dialog (do-map-expanded) and the loading branch of DetailDialog", "issues": ["Radix a11y warning still firing: 'Missing Description or aria-describedby={undefined} for {DialogContent}'. The expanded map dialog has no <DialogDescription>; add one (or aria-describedby) to silence the warning. Same warning still applies to DetailDialog's loading spinner branch (no DialogTitle until order loads) - carried over from iter 217."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "[LOW] Add a <DialogDescription> (or VisuallyHidden one) to MapPreview's expanded Dialog (DeliveryOrders.js MapPreview ~line 65) to satisfy Radix accessibility requirements.",
+    "[LOW] GooglePlacesAddressSearch does not propagate the `testId` prop to its underlying <input>: the do-address-search data-testid is not actually rendered on the DOM. The test had to fall back to the placeholder selector. Propagate testId to the input element so future regression scripts can use the documented data-testid."
+  ],
+  "critical_code_review_comments": [
+    "delivery_orders.py:202-258 - _auto_create_draft_promo is dead code now (no caller). Either remove it entirely or leave a one-line comment explaining it's intentionally retained for a future opt-in path. Leaving dead orchestration code that imports routes/models is a maintenance smell.",
+    "delivery_orders.py:60,287 - requested_date is accepted in DeliveryOrderCreate but the new product requirement is that the date may only be set AFTER approval. Today the create endpoint will still persist a requested_date if a client sends one (frontend correctly sends null, but the backend doesn't enforce the rule). Recommendation: reject requested_date in POST /delivery-orders (HTTP 400) or strip it server-side, so the rule is enforced at the API contract level too.",
+    "DeliveryOrders.js:294 - testId='do-address-search' is passed to <GooglePlacesAddressSearch /> but the wrapping component must apply it to the actual <input>. Currently the data-testid is not on the DOM, so robust automation is blocked.",
+    "DeliveryOrders.js:64-70 - The expanded map <Dialog> has no <DialogDescription>; Radix logs a console warning every time it opens. Add a description or wrap in VisuallyHidden.",
+    "DeliveryOrders.js:411-421 - saveDate() does not validate that the picked date is >= today. Allow only forward-dated deliveries (or surface a confirmation if past) - currently the user can save 2020-01-01 as the delivery date.",
+    "DeliveryOrders.js:411-421 - if PUT /delivery-orders/{id} succeeds but load() throws (e.g. transient network), savingDate stays true. Wrap finally{} OK as-is, but consider toast.error fallback when the GET in load() fails."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (code review + behaviour inspection of the 3 changed code paths)", "frontend": "100% (4/4 acceptance scenarios verified live + via DOM inspection)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water, role CEO)",
+  "seed_data_creation": "No new delivery orders were created this run (the existing DO-2026-0001 from iter 217 is still present in Approved state). The create dialog was opened to validate the Google place flow and map preview, but the order was not submitted.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 review_request fixes are in place. New data-testids added in this iteration: do-map-preview, do-map-expand, do-map-expanded, do-delivery-date-block, do-delivery-date-input, do-delivery-date-save. do-requested-date is REMOVED on purpose. do-fulfillment is REMOVED on purpose. Be aware: do-address-search is declared in code but NOT applied to the DOM by GooglePlacesAddressSearch - use placeholder='Search address on Google…' for now. The expanded map Dialog needs a DialogDescription to silence the Radix a11y warning. matchMasterCity correctly maps Google sub-locality 'HITEC City' -> master 'Hyderabad' via /api/master-locations/flat cities+aliases (verified live).",
+  "rca of the issue": "N/A - all 4 fixes verified working. Minor observability gaps: (a) GooglePlacesAddressSearch swallows the testId prop, breaking documented data-testid contract; (b) Backend POST still accepts requested_date even though the UX hides it - tighten the API contract; (c) Radix DialogContent without DialogDescription on the expanded map dialog logs accessibility warnings."
+}
