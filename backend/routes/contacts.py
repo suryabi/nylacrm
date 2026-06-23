@@ -20,6 +20,13 @@ def get_tdb():
     """Get tenant-aware database wrapper"""
     return get_tenant_db()
 
+
+def _cap_name(s):
+    """Capitalize the first letter of each word, preserving the rest as typed."""
+    if not s:
+        return s
+    return " ".join(w[:1].upper() + w[1:] for w in s.strip().split(" ") if w)
+
 # ============== MODELS ==============
 
 class ContactCategoryCreate(BaseModel):
@@ -312,6 +319,8 @@ async def create_contact(
         'created_at': datetime.now(timezone.utc).isoformat(),
         'updated_at': datetime.now(timezone.utc).isoformat()
     }
+    if contact_data.get('name'):
+        contact_data['name'] = _cap_name(contact_data['name'])
     
     await tdb.contacts.insert_one(contact_data)
     return {k: v for k, v in contact_data.items() if k != '_id'}
@@ -329,6 +338,8 @@ async def update_contact(
         raise HTTPException(status_code=404, detail="Contact not found")
     
     update_data = {k: v for k, v in contact_update.model_dump().items() if v is not None}
+    if update_data.get('name'):
+        update_data['name'] = _cap_name(update_data['name'])
     
     # If category changed, update category name
     if 'category_id' in update_data:

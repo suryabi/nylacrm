@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-22 — Auto-capitalize contact names on save ✅
+- Contact names are now title-cased (first letter of each word capitalized, rest preserved) on **create + update** across all flows.
+- Lead/Account contacts (`routes/entity_contacts.py`): `first_name`, `last_name` and combined `name` (e.g. "john"/"mcdonald" → "John"/"Mcdonald").
+- Contacts section (`routes/contacts.py`): single `name` field (e.g. "jane o'brien smith" → "Jane O'brien Smith").
+- Verified via curl on both endpoints. ⚠️ Redeploy to apply on production; applies to newly saved/edited contacts only.
+
+
+
 ## 2026-06-22 — Reversals Audit Log (unified, admin + per-distributor) ✅
 - New read-only audit log of all reversed Stock-Out deliveries AND Promotional Stock-Outs (unified from `distributor_deliveries` incl. `is_promo`, plus legacy `promo_dispatches`).
 - Backend `routes/reversals.py`: `GET /api/reversals` (admin-wide, role-gated to distributor admins) and `GET /api/distributors/{id}/reversals` (admin or that distributor's user). Filters: from_date/to_date/type. Returns rows + total + total_value. Reason parsed from delivery remarks ("Reversed: …").

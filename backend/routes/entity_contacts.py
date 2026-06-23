@@ -51,8 +51,16 @@ class EntityContactUpdate(BaseModel):
     category: Optional[str] = None
 
 
+def _cap_name(s: Optional[str]) -> str:
+    """Capitalize the first letter of each word, preserving the rest as typed
+    (e.g. 'john' -> 'John', 'mcDonald' -> 'McDonald', 'mary jane' -> 'Mary Jane')."""
+    if not s:
+        return ""
+    return " ".join(w[:1].upper() + w[1:] for w in s.strip().split(" ") if w)
+
+
 def _full_name(first: Optional[str], last: Optional[str]) -> str:
-    return f"{(first or '').strip()} {(last or '').strip()}".strip()
+    return f"{_cap_name(first)} {_cap_name(last)}".strip()
 
 
 async def _get_parent(tdb, parent_type: str, parent_id: str) -> dict:
@@ -108,8 +116,8 @@ async def _create(parent_type: str, parent_id: str, data: EntityContactIn, curre
         "category_id": cat["id"],
         "category_name": cat["name"],
         "salutation": data.salutation,
-        "first_name": data.first_name.strip(),
-        "last_name": (data.last_name or "").strip(),
+        "first_name": _cap_name(data.first_name),
+        "last_name": _cap_name(data.last_name),
         "name": _full_name(data.first_name, data.last_name),
         "designation": data.designation,
         "phone": data.phone,
@@ -135,6 +143,10 @@ async def _update(parent_type: str, parent_id: str, contact_id: str, data: Entit
     if not existing:
         raise HTTPException(status_code=404, detail="Contact not found")
     update = {k: v for k, v in data.model_dump(exclude_unset=True).items()}
+    if "first_name" in update:
+        update["first_name"] = _cap_name(update["first_name"])
+    if "last_name" in update:
+        update["last_name"] = _cap_name(update["last_name"])
     if "first_name" in update or "last_name" in update:
         fn = update.get("first_name", existing.get("first_name"))
         ln = update.get("last_name", existing.get("last_name"))
