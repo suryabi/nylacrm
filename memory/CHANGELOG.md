@@ -1,6 +1,18 @@
 # Changelog
 
 
+## 2026-06-23 — Delivery Orders module (promotional stock-out requests) ✅
+- New module accessible from **Sales, Production & Distribution** navs (`/delivery-orders`).
+- Create a Delivery Order against ONE of Lead/Account/Contact/Employee; line items = SKU → packaging option (from SKU `packaging_config.promo_stock_out` ↦ falls back to `stock_out`) → quantity → unit/value; requested date; Google-address (lat/lng captured, prefilled from recipient, editable); promo reason; contact info; notes.
+- **State-machine lifecycle** (`delivery_orders` workflow registered in WORKFLOW_CATALOG + FIELD_REGISTRY; default seeded by `ensure_default_delivery_order_sm`): Draft → Pending Approval → Approved → Rejected/Cancelled/Fulfilled. Editable in Admin → State Machines.
+- **Approval = "both"**: reporting-manager task raised on submit + approve/reject role-gated (CEO/Director/VP/Heads/Admin).
+- **On Approval → auto-creates a DRAFT promotional stock-out** for the distributor whose operating coverage includes the delivery city (`_auto_create_draft_promo` via `create_promo_dispatch`, as_draft=True). Best-effort: records `fulfillment_status`/`error`/`promo_id`/`challan_number`; account recipients map to the account's first contact.
+- Backend `routes/delivery_orders.py` (CRUD + available-transitions + transition). Frontend `pages/DeliveryOrders.js` (list + create + detail/transitions).
+- Verified: backend curl e2e (create→submit→approve auto-created challan DC-… for Goa/Margao) and testing agent iteration_217 (5/6 PASS; the 6th — sidebar nav — was a false negative, confirmed present in the Requests group via DOM check). Test artifacts cleaned up. ⚠️ Redeploy to apply on production.
+- **Phase 2 (deferred):** on Approval optionally auto-confirm the promo (deduct stock/invoice) instead of leaving draft; per-module nav grouping polish; recipient address auto-fill from full entity detail.
+
+
+
 ## 2026-06-22 — Auto-capitalize contact names on save ✅
 - Contact names are now title-cased (first letter of each word capitalized, rest preserved) on **create + update** across all flows.
 - Lead/Account contacts (`routes/entity_contacts.py`): `first_name`, `last_name` and combined `name` (e.g. "john"/"mcdonald" → "John"/"Mcdonald").
