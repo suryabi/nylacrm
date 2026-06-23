@@ -71,6 +71,7 @@ import AdminSkuMigrate from './pages/AdminSkuMigrate';
 import VehiclesList from './pages/admin/VehiclesList';
 import DriversList from './pages/admin/DriversList';
 import ReversalsAudit from './pages/admin/ReversalsAudit';
+import DeliveryOrders from './pages/DeliveryOrders';
 import DeliverySchedulesList from './pages/distributor/DeliverySchedulesList';
 import DeliveryScheduleDetail from './pages/distributor/DeliveryScheduleDetail';
 import DriverLogin from './pages/driver/DriverLogin';
@@ -355,6 +356,7 @@ function AppRouter() {
           <Route path="/company-documents" element={<ProtectedRoute moduleKey="company_documents"><CompanyDocuments /></ProtectedRoute>} />
           <Route path="/master-contact-categories" element={<ProtectedRoute moduleKey="contact_categories"><MasterContactCategories /></ProtectedRoute>} />
           <Route path="/contacts" element={<ProtectedRoute moduleKey="contacts"><ContactsList /></ProtectedRoute>} />
+          <Route path="/delivery-orders" element={<ProtectedRoute moduleKey="delivery_orders"><DeliveryOrders /></ProtectedRoute>} />
           <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
           <Route path="/proposal-template" element={<ProtectedRoute><ProposalTemplateSettings /></ProtectedRoute>} />
           <Route path="/admin/slack" element={<ProtectedRoute><SlackSettings /></ProtectedRoute>} />

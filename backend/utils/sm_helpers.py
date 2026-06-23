@@ -244,6 +244,14 @@ FIELD_REGISTRY = {
         {"key": "lead_id", "label": "Linked lead", "type": "text"},
         {"key": "production.quantity_required", "label": "Production quantity", "type": "number"},
     ],
+    "delivery_orders": [
+        {"key": "items", "label": "Order line items", "type": "list"},
+        {"key": "recipient_type", "label": "Recipient type", "type": "enum"},
+        {"key": "requested_date", "label": "Requested delivery date", "type": "date"},
+        {"key": "delivery_city", "label": "Delivery city", "type": "text"},
+        {"key": "total_value", "label": "Total indicative value", "type": "number"},
+        {"key": "notes", "label": "Notes", "type": "text"},
+    ],
 }
 
 # Operators valid for each field type. Each carries `needs_value` so the UI
@@ -481,6 +489,89 @@ async def ensure_default_marketing_request_sm(tenant_id: str) -> dict:
             for t in _DEFAULT_MR_TRANSITIONS
         ],
         "applied_to": ["marketing_requests"],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": "system",
+        "updated_by": "system",
+    }
+    await db.state_machines.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Default Delivery Order lifecycle — seeded on first list call.
+# Approval = "both": a reporting-manager task is raised on submit (handled in the
+# delivery_orders route) AND the approve/reject transitions are role-gated here.
+# On entering `approved`, the route auto-creates a DRAFT promotional stock-out
+# for the distributor that covers the delivery city.
+# ─────────────────────────────────────────────────────────────────────────────
+_APPROVER_ROLES = [
+    "CEO", "Director", "Vice President", "National Sales Head",
+    "Regional Sales Manager", "Head of Business", "Admin", "System Admin",
+]
+
+_DEFAULT_DO_STATES = [
+    {"key": "draft",            "label": "Draft",            "color": "#94a3b8", "is_initial": True,  "is_terminal": False},
+    {"key": "pending_approval", "label": "Pending Approval", "color": "#f59e0b", "is_initial": False, "is_terminal": False},
+    {"key": "approved",         "label": "Approved",         "color": "#10b981", "is_initial": False, "is_terminal": False},
+    {"key": "rejected",         "label": "Rejected",         "color": "#ef4444", "is_initial": False, "is_terminal": True},
+    {"key": "cancelled",        "label": "Cancelled",        "color": "#6b7280", "is_initial": False, "is_terminal": True},
+    {"key": "fulfilled",        "label": "Fulfilled",        "color": "#16a34a", "is_initial": False, "is_terminal": True},
+]
+
+_DEFAULT_DO_ACTIONS = [
+    {"key": "submit",         "label": "Submit for Approval", "kind": "neutral",  "description": "Send the delivery order for approval."},
+    {"key": "approve",        "label": "Approve",             "kind": "positive", "description": "Approve — auto-creates a draft promotional stock-out."},
+    {"key": "reject",         "label": "Reject",              "kind": "negative", "description": "Reject the delivery order."},
+    {"key": "cancel",         "label": "Cancel",              "kind": "negative", "description": "Cancel the delivery order."},
+    {"key": "mark_fulfilled", "label": "Mark Fulfilled",      "kind": "positive", "description": "Mark the order as fulfilled."},
+    {"key": "reopen",         "label": "Reopen as Draft",     "kind": "neutral",  "description": "Reopen a rejected order for editing."},
+]
+
+_DEFAULT_DO_TRANSITIONS = [
+    {"action_key": "submit",         "action_label": "Submit for Approval", "from_state": "draft",            "to_state": "pending_approval", "requestor_only": True},
+    {"action_key": "approve",        "action_label": "Approve",             "from_state": "pending_approval", "to_state": "approved",         "allowed_role_keys": list(_APPROVER_ROLES)},
+    {"action_key": "reject",         "action_label": "Reject",              "from_state": "pending_approval", "to_state": "rejected",         "allowed_role_keys": list(_APPROVER_ROLES), "comment_required": True},
+    {"action_key": "cancel",         "action_label": "Cancel",              "from_state": "draft",            "to_state": "cancelled"},
+    {"action_key": "cancel",         "action_label": "Cancel",              "from_state": "pending_approval", "to_state": "cancelled"},
+    {"action_key": "mark_fulfilled", "action_label": "Mark Fulfilled",      "from_state": "approved",         "to_state": "fulfilled",        "allowed_role_keys": list(_APPROVER_ROLES)},
+    {"action_key": "reopen",         "action_label": "Reopen as Draft",     "from_state": "rejected",         "to_state": "draft",            "requestor_only": True},
+]
+
+
+async def ensure_default_delivery_order_sm(tenant_id: str) -> dict:
+    """If no state machine is attached to `delivery_orders` for this tenant,
+    seed a default one. Returns the attached SM."""
+    sm = await get_attached_state_machine(tenant_id, "delivery_orders")
+    if sm:
+        return sm
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": "Delivery Order Lifecycle (default)",
+        "code": "DO_DEFAULT_v1",
+        "description": "Auto-seeded default lifecycle for Delivery Orders. Edit or clone in Admin → State Machines.",
+        "states": [dict(s) for s in _DEFAULT_DO_STATES],
+        "actions": [dict(a) for a in _DEFAULT_DO_ACTIONS],
+        "transitions": [
+            {
+                "auto_assign_mode": None,
+                "auto_assign_user_id": None,
+                "auto_assign_department_id": None,
+                "auto_assign_role": None,
+                "notify_all": True,
+                "comment_required": False,
+                "allowed_role_keys": [],
+                "allowed_department_ids": [],
+                "requestor_only": False,
+                **t,
+            }
+            for t in _DEFAULT_DO_TRANSITIONS
+        ],
+        "applied_to": ["delivery_orders"],
         "created_at": now,
         "updated_at": now,
         "created_by": "system",

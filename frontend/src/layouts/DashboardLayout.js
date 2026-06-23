@@ -101,6 +101,7 @@ const salesNavigationGroups = [
       { name: 'Leaves', href: '/leaves', icon: CalendarOff, moduleKey: 'leaves', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Travel Request', href: '/travel-requests', icon: Plane, moduleKey: 'travel_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Budget Request', href: '/budget-requests', icon: Wallet, moduleKey: 'budget_requests', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
+      { name: 'Delivery Orders', href: '/delivery-orders', icon: Package, moduleKey: 'delivery_orders', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, moduleKey: 'task_management', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
     ]
   },
@@ -132,6 +133,7 @@ const productionNavigationGroups = [
       { name: 'Customer Returns', href: '/customer-returns', icon: PackageOpen, moduleKey: 'customer_returns', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Design Requests', href: '/marketing-requests', icon: Sparkles, moduleKey: 'marketing_requests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
+      { name: 'Delivery Orders', href: '/delivery-orders', icon: Package, moduleKey: 'delivery_orders', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Customer Complaints', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
     ]
@@ -168,6 +170,7 @@ const distributionNavigationGroups = [
       { name: 'Stock Transfers', href: '/distributor/stock-transfers', icon: ArrowLeftRight, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Customer Returns', href: '/customer-returns', icon: PackageOpen, moduleKey: 'customer_returns', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin', 'Distributor', 'Distributor Manager'] },
       { name: 'Stock Dashboard', href: '/stock-dashboard', icon: Package, moduleKey: 'stock_dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Delivery Orders', href: '/delivery-orders', icon: Package, moduleKey: 'delivery_orders', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Cost Cards', href: '/cost-cards', icon: DollarSign, moduleKey: 'cost_cards', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Admin', 'System Admin'] },
     ]
   },

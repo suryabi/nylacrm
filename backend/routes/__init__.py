@@ -289,6 +289,10 @@ routes_router.include_router(promo_dispatch_router, tags=["Promotional Dispatch"
 from .reversals import router as reversals_router
 routes_router.include_router(reversals_router, tags=["Reversals"])
 
+# Delivery Orders (promotional stock-out request module; full paths → /api)
+from .delivery_orders import router as delivery_orders_router
+routes_router.include_router(delivery_orders_router, tags=["Delivery Orders"])
+
 # Inventory Management — Item Master, Vendor Master, Vendor-Item pricing,
 # stock entries, purchase orders, GRN. See routes/inventory_management.py
 routes_router.include_router(inventory_management_router, prefix="/inventory", tags=["Inventory Management"])
