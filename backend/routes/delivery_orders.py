@@ -359,6 +359,8 @@ async def create_delivery_order(data: DeliveryOrderCreate, current_user: dict = 
 async def list_delivery_orders(
     state_key: Optional[str] = Query(None),
     recipient_type: Optional[str] = Query(None),
+    lead_id: Optional[str] = Query(None),
+    account_id: Optional[str] = Query(None),
     mine: bool = Query(False),
     search: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
@@ -370,6 +372,10 @@ async def list_delivery_orders(
         q["current_state_key"] = state_key
     if recipient_type:
         q["recipient_type"] = recipient_type
+    if lead_id:
+        q["lead_id"] = lead_id
+    if account_id:
+        q["account_id"] = account_id
     if mine:
         q["created_by"] = current_user.get("id")
     if search:
@@ -557,3 +563,127 @@ async def trigger_transition(order_id: str, payload: TransitionRequest, current_
 
     updated = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
     return {"ok": True, "order": updated, "promo": promo_result}
+
+
+
+# ───────────────────── Migration: Free Trial expenses → Delivery Orders ─────────────────────
+_MIGRATION_ROLES = {"CEO", "Director", "Vice President", "Admin", "System Admin"}
+
+
+@router.get("/admin/migrate-free-trial-expenses/preview")
+async def preview_free_trial_migration(current_user: dict = Depends(get_current_user)):
+    """Count how many lead/account Free Trial expense requests are eligible to
+    migrate into Delivery Orders for the current tenant (non-destructive)."""
+    if current_user.get("role") not in _MIGRATION_ROLES:
+        raise HTTPException(403, "Only CEO/Director/Admin can run this migration.")
+    tenant_id = get_current_tenant_id()
+    eligible = already = no_items = not_in_tenant = 0
+    async for exp in db.expense_requests.find(
+            {"entity_type": {"$in": ["lead", "account"]}, "expense_type": "free_trial"}):
+        if exp.get("migrated_to_delivery_order_id"):
+            already += 1
+            continue
+        if not (exp.get("sku_items") or []):
+            no_items += 1
+            continue
+        et, eid = exp.get("entity_type"), exp.get("entity_id")
+        if et == "lead":
+            ent = await db.leads.find_one({"id": eid, "tenant_id": tenant_id}, {"_id": 0, "id": 1})
+        else:
+            ent = await db.accounts.find_one(
+                {"$or": [{"id": eid}, {"account_id": eid}], "tenant_id": tenant_id}, {"_id": 0, "id": 1})
+        if not ent:
+            not_in_tenant += 1
+            continue
+        eligible += 1
+    return {"eligible": eligible, "already_migrated": already,
+            "skipped_no_items": no_items, "skipped_not_in_tenant": not_in_tenant}
+
+
+@router.post("/admin/migrate-free-trial-expenses")
+async def migrate_free_trial_expenses(current_user: dict = Depends(get_current_user)):
+    """One-time, idempotent migration: convert lead/account **Free Trial** expense
+    requests (which carry SKU stock) into Delivery Orders. Monetary expense types
+    are intentionally left untouched. Safe to re-run."""
+    if current_user.get("role") not in _MIGRATION_ROLES:
+        raise HTTPException(403, "Only CEO/Director/Admin can run this migration.")
+    tenant_id = get_current_tenant_id()
+    sm = await ensure_default_delivery_order_sm(tenant_id)
+    state_meta = {s["key"]: s for s in (sm.get("states") or [])}
+    created = 0
+    skipped: List[dict] = []
+    async for exp in db.expense_requests.find(
+            {"entity_type": {"$in": ["lead", "account"]}, "expense_type": "free_trial"}):
+        if exp.get("migrated_to_delivery_order_id"):
+            skipped.append({"id": exp.get("id"), "reason": "already migrated"})
+            continue
+        sku_items = exp.get("sku_items") or []
+        if not sku_items:
+            skipped.append({"id": exp.get("id"), "reason": "no SKU items"})
+            continue
+        et, eid = exp.get("entity_type"), exp.get("entity_id")
+        if et == "lead":
+            ent = await db.leads.find_one({"id": eid, "tenant_id": tenant_id}, {"_id": 0})
+        else:
+            ent = await db.accounts.find_one(
+                {"$or": [{"id": eid}, {"account_id": eid}], "tenant_id": tenant_id}, {"_id": 0})
+        if not ent:
+            skipped.append({"id": exp.get("id"), "reason": f"{et} not in this tenant"})
+            continue
+        if et == "lead":
+            rname = ent.get("contact_person") or ent.get("name") or ent.get("company")
+            rcompany, rphone, remail = ent.get("company"), ent.get("phone"), ent.get("email")
+            lead_id, account_id = ent["id"], None
+        else:
+            rname = ent.get("account_name") or ent.get("name")
+            rcompany, rphone, remail = rname, ent.get("contact_number") or ent.get("phone"), ent.get("email")
+            lead_id, account_id = None, ent.get("id")
+        city = exp.get("entity_city") or ent.get("city")
+        items = [{
+            "sku_id": s.get("sku_id"), "sku_name": s.get("sku_name"),
+            "quantity": int(s.get("quantity") or 0), "unit_price": float(s.get("minimum_landing_price") or 0),
+            "packaging_type_id": None, "packaging_type_name": None, "units_per_package": None,
+        } for s in sku_items]
+        d = exp.get("approval_date") or exp.get("created_at")
+        req_date = str(d)[:10] if d else None
+        st = exp.get("status") or "draft"
+        if st not in state_meta:
+            st = "draft"
+        meta = state_meta.get(st) or state_meta.get("draft") or {}
+        days = exp.get("free_trial_days")
+        now = datetime.now(timezone.utc).isoformat()
+        order = {
+            "id": str(uuid.uuid4()), "tenant_id": tenant_id,
+            "order_number": await _next_order_number(tenant_id),
+            "recipient_type": et, "lead_id": lead_id, "account_id": account_id,
+            "contact_id": None, "employee_id": None,
+            "recipient_name": rname, "recipient_company": rcompany,
+            "recipient_phone": rphone, "recipient_email": remail,
+            "requested_date": req_date,
+            "reason": f"Free Trial ({days} days)" if days else "Free Trial",
+            "delivery_address": {"line1": None, "city": city, "state": None, "pincode": None,
+                                 "lat": None, "lng": None, "formatted_address": None},
+            "delivery_city": city,
+            "contact_name": rname, "contact_phone": rphone, "delivery_instructions": None,
+            "notes": f"Migrated from Free Trial expense request {exp.get('id')}."
+                     + (f" {exp.get('description')}" if exp.get('description') else ""),
+            "items": items,
+            "total_value": round(sum(i["quantity"] * i["unit_price"] for i in items), 2),
+            "current_state_key": st, "current_state_label": meta.get("label") or st,
+            "current_state_color": meta.get("color") or "#94a3b8",
+            "fulfillment_status": None,
+            "status_history": [{
+                "state_key": st, "state_label": meta.get("label") or st, "state_color": meta.get("color"),
+                "entered_at": now, "by_user_id": exp.get("user_id"), "by_user_name": exp.get("user_name"),
+                "comment": "Migrated from Free Trial expense request.",
+            }],
+            "created_by": exp.get("user_id"), "created_by_name": exp.get("user_name"),
+            "created_at": exp.get("created_at") or now, "updated_at": now,
+            "migrated_from_expense_id": exp.get("id"),
+        }
+        await db.delivery_orders.insert_one(order)
+        await db.expense_requests.update_one(
+            {"id": exp.get("id")},
+            {"$set": {"migrated_to_delivery_order_id": order["id"], "migrated_at": now}})
+        created += 1
+    return {"created": created, "skipped": skipped, "skipped_count": len(skipped)}

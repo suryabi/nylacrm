@@ -40,6 +40,7 @@ import TimelineSummaryCompact from '../components/TimelineSummaryCompact';
 import InvoiceSummaryCard from '../components/InvoiceSummaryCard';
 import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
+import EntityDeliveryOrders from '../components/EntityDeliveryOrders';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import CelebrationAnimation from '../components/CelebrationAnimation';
 import AppBreadcrumb from '../components/AppBreadcrumb';
@@ -1815,6 +1816,16 @@ ${userEmail}`;
 
           {/* Invoice Summary */}
           <InvoiceSummaryCard invoiceData={invoiceData} />
+
+          {/* Delivery Orders (lead-specific) */}
+          {lead && (
+            <EntityDeliveryOrders
+              entityType="lead"
+              entityId={lead.id}
+              entityName={lead.company || lead.contact_person}
+              entity={lead}
+            />
+          )}
 
           {/* Expense Requests Section */}
           {lead && (

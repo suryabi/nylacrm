@@ -45,7 +45,6 @@ const EXPENSE_TYPES = [
   { id: 'onboarding', label: 'On-boarding Expense', requires_sku: false },
   { id: 'staff_gifting', label: 'Staff Gifting Expense', requires_sku: false },
   { id: 'sponsorship', label: 'Sponsorship Expense', requires_sku: false },
-  { id: 'free_trial', label: 'Free Trial Expense', requires_sku: true },
 ];
 
 const statusConfig = {
@@ -89,7 +88,8 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
         `${API_URL}/expense-requests?entity_type=${entityType}&entity_id=${entityId}`,
         { withCredentials: true }
       );
-      setExpenses(response.data || []);
+      // Free Trial requests now live as Delivery Orders; hide migrated ones.
+      setExpenses((response.data || []).filter((e) => !e.migrated_to_delivery_order_id));
     } catch (error) {
       console.log('Could not load expenses');
     } finally {

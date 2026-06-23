@@ -88,7 +88,7 @@ const STATE_FILTERS = [
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
-const StateBadge = ({ order }) => (
+export const StateBadge = ({ order }) => (
   <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
     style={{ color: order.current_state_color || '#475569', background: `${order.current_state_color || '#475569'}1a` }}
     data-testid={`do-state-${order.id}`}>
@@ -175,7 +175,7 @@ function RecipientPicker({ recipientType, setRecipientType, selected, onSelect }
 }
 
 // ───────────────────── Create dialog ─────────────────────
-function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) {
+export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated, presetRecipient = null }) {
   const [recipientType, setRecipientType] = useState('account');
   const [selected, setSelected] = useState(null);
   const [requestedDate, setRequestedDate] = useState('');
@@ -190,7 +190,9 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
 
   useEffect(() => {
     if (open) {
-      setRecipientType('account'); setSelected(null); setRequestedDate(''); setReason('');
+      setRecipientType(presetRecipient?.type || 'account');
+      setSelected(presetRecipient?.entity || null);
+      setRequestedDate(''); setReason('');
       setAddr({ line1: '', city: '', state: '', pincode: '', lat: null, lng: null, formatted_address: '' });
       setContactName(''); setContactPhone(''); setNotes(''); setDeliveryInstructions(''); setItems([]);
     }
@@ -283,7 +285,14 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
         </DialogHeader>
 
         <div className="space-y-5">
-          <RecipientPicker recipientType={recipientType} setRecipientType={setRecipientType} selected={selected} onSelect={setSelected} />
+          {presetRecipient ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3" data-testid="do-preset-recipient">
+              <p className="text-[11px] uppercase tracking-wide text-emerald-600">{presetRecipient.type}</p>
+              <p className="text-sm font-semibold text-slate-800">{presetRecipient.name || selected?.name || selected?.account_name || selected?.company || '—'}</p>
+            </div>
+          ) : (
+            <RecipientPicker recipientType={recipientType} setRecipientType={setRecipientType} selected={selected} onSelect={setSelected} />
+          )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
@@ -632,7 +641,7 @@ const FULFILLMENT_COLORS = {
   delivered: 'bg-emerald-100 text-emerald-700', partially_delivered: 'bg-emerald-100 text-emerald-700',
   returned: 'bg-rose-100 text-rose-700', cancelled: 'bg-slate-200 text-slate-500',
 };
-const FulfillmentBadge = ({ status }) => {
+export const FulfillmentBadge = ({ status }) => {
   if (!status) return null;
   return (
     <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${FULFILLMENT_COLORS[status] || 'bg-slate-100 text-slate-600'}`} data-testid="do-fulfillment-badge">

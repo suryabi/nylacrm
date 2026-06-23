@@ -38,6 +38,7 @@ import {
 import { Checkbox } from '../components/ui/checkbox';
 import LogoUploader from '../components/LogoUploader';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
+import EntityDeliveryOrders from '../components/EntityDeliveryOrders';
 import EntityCommentThread from '../components/EntityCommentThread';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import AccountScoringCard from '../components/AccountScoringCard';
@@ -2217,6 +2218,16 @@ ${googleMapsLink}`;
               </div>
             )}
           </Card>
+
+          {/* Delivery Orders (account-specific) */}
+          {account && (
+            <EntityDeliveryOrders
+              entityType="account"
+              entityId={account.id || account.account_id}
+              entityName={account.account_name}
+              entity={account}
+            />
+          )}
 
           {/* Expense Requests Section */}
           {account && (

@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 222 — Full E2E test of Free-Trial Expense → Delivery Order MIGRATION + lead/account inline Delivery Orders section + Expense Request type-list change. BACKEND: 6/6 pytest cases PASS (migration preview, idempotent re-run with created=0 + already_migrated>=1, GET /api/delivery-orders?lead_id filter returns DO-2026-0011 'Taj Sarees', GET ?account_id filter, entity-bound DO create, migrated expense hidden). FRONTEND: every acceptance criterion verified — entity-delivery-orders section + entity-do-new-btn on both /leads/{taj_sarees} and /accounts/{empire_restaurant}; DO-2026-0011 listed with state badge on lead page; inline New opens do-create-dialog with do-preset-recipient ('lead Taj Sarees' / 'account Empire Restaurant') and do-recipient-picker hidden; created DO-2026-0013 on Empire Restaurant via UI and it appeared in the list immediately; Expense Request New Request dropdown shows ONLY 'Gifting Expense / On-boarding Expense / Staff Gifting Expense / Sponsorship Expense' — Free Trial Expense is GONE; migrated free-trial record no longer appears in the Lead's Expense Requests list ('No expense requests yet'). No code changes needed; previous tester's distributor_name fix is intact.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_free_trial_migration.py",
+    "/app/test_reports/pytest/free_trial_migration.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "delivery_orders.py is now ~690 lines (helpers + migration). Recommend extracting (a) _resolve_distributor_* + _auto_create_draft_promo into routes/delivery_orders_helpers.py and (b) the migration endpoints into routes/delivery_orders_migration.py to keep each module <500 lines.",
+    "Migration endpoint uses no DB transaction: if db.delivery_orders.insert_one succeeds and db.expense_requests.update_one fails, the next preview/migrate run would re-create the DO (since migrated_to_delivery_order_id is still null on the expense). Low likelihood (Mongo single-doc ops are reliable) but worth noting — could be hardened by writing the migration flag on the expense FIRST or by using a check+update guard.",
+    "EntityDeliveryOrders.js fetches /api/admin/promo-reasons on mount for every lead/account detail page open. Consider caching reasons / SKUs at the page or context level to avoid N requests when navigating.",
+    "Migration role list `_MIGRATION_ROLES` is hard-coded; consider gating via the existing RBAC permission system for consistency with other admin endpoints."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_free_trial_migration.py (new — 6 tests)"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "100% (all acceptance points)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water, CEO)",
+  "seed_data_creation": "Created two new DOs during this test pass: DO-2026-0012 (lead 'Taj Sarees', backend test) and DO-2026-0013 (account 'Empire Restaurant', UI test). Migrated DO-2026-0011 (lead 'Taj Sarees') remains intact and unchanged; migrated_to_delivery_order_id flag preserved.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Migration is idempotent — pytest re-runs are safe. The 5a9b... free-trial expense source-id on Taj Sarees is hidden from the Expense Requests UI because ExpenseRequestSection filters records with migrated_to_delivery_order_id. To re-test, hit GET /api/admin/migrate-free-trial-expenses/preview (expect already_migrated>=1, eligible=0) and POST /api/admin/migrate-free-trial-expenses (expect created=0). Lead Taj Sarees id 2a3ca2de-8e26-406a-8be0-d9a28adfc0fb; account Empire Restaurant id d4e2187a-5e7d-4847-902b-b6699ae910fc. Tests live at /app/backend/tests/test_free_trial_migration.py; junit XML at /app/test_reports/pytest/free_trial_migration.xml.",
+  "rca of the issue": "No bugs found in this iteration."
+}
