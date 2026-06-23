@@ -15,7 +15,7 @@ import {
 import GooglePlacesAddressSearch from '../components/GooglePlacesAddressSearch';
 import {
   Package, Plus, Trash2, Loader2, MapPin, Search, X, ClipboardList,
-  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight,
+  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
