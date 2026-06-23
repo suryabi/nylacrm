@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-22 — Universal Stock-Out (regular delivery) REVERSAL at any stage ✅
+- Extended `reverse_delivery` (`routes/distributors.py`) from "not-yet-delivered only" to **any stage** except cancelled/reversed and settlement-locked (blocked with a clear message — user chose option a).
+- **Completed/delivered reversal** now adds stock back to the source warehouse via new `_readd_completed_delivery_stock()` (inverse of `complete_delivery`, factory_warehouse_stock or distributor_stock, batch-aware). Always voids the Zoho invoice (best-effort, retry-pending flag) OR deletes the External Billing Entry, undoes the local mirror + account `outstanding_balance`, and reverts applied credit notes. Marks `reversed` with `reversed_from_status`/`stock_readded` for audit.
+- **Double-confirm:** draft reverses immediately (no prompt); non-draft requires server-side `acknowledge=true` (else 400) + a frontend dialog where the user must type **REVERSE** to enable the destructive button (+ optional reason). `DistributorDetail.js`: split `handleReverseDelivery`/`doReverseDelivery`, broadened `canReverse`, new `reverse-delivery-dialog`.
+- **Tested:** backend e2e `tests/test_delivery_reverse_any_stage.py` PASS (guard 400, stock 100→110, status reversed). Frontend testing agent iteration_216 — all 4 behaviors PASS (draft no-prompt, non-draft type-REVERSE gating, reversed/cancelled hide action). ⚠️ Redeploy to apply on production.
+
+
+
 ## 2026-06-22 — Revenue Analytics theme aligned with app (light) ✅
 - Reworked `pages/RevenueAnalytics.js` from a dark/neon glass theme (cyan/magenta glows, `bg-[#080B1F]`, white-on-dark) to the app's light design system: white cards with `border-slate-200`/soft shadows, slate text, emerald/teal accents, dotted `from-slate-50 via-white to-emerald-50/30` page background, emerald active tabs.
 - Updated chart palette (`CHART`/`DONUT`) and gradients to emerald/teal/sky/violet, light grid lines, slate axes/tooltips; removed neon glow filters and text-shadows. KPI tiles now use gradient emerald/teal icon tiles. All logic, data-testids, and structure unchanged.
