@@ -245,6 +245,7 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
 
   const submit = async (alsoSubmit) => {
     if (!selected) return toast.error('Select a recipient.');
+    if (!requestedDate) return toast.error('Delivery date is required.');
     if (!addr.city) return toast.error('Delivery city is required (use the address search).');
     if (!items.length || items.some((i) => !i.sku_id || !i.quantity)) return toast.error('Add at least one line with SKU and quantity.');
     setSaving(true);
@@ -284,15 +285,22 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
         <div className="space-y-5">
           <RecipientPicker recipientType={recipientType} setRecipientType={setRecipientType} selected={selected} onSelect={setSelected} />
 
-          <div>
-            <Label>Promotional reason</Label>
-            <Select value={reason} onValueChange={setReason}>
-              <SelectTrigger data-testid="do-reason"><SelectValue placeholder="Select reason" /></SelectTrigger>
-              <SelectContent>
-                {reasons.map((r) => <SelectItem key={r.id || r.name} value={r.name}>{r.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <p className="mt-1 text-xs text-slate-400">The delivery date can be set after the order is approved.</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Promotional reason</Label>
+              <Select value={reason} onValueChange={setReason}>
+                <SelectTrigger data-testid="do-reason"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                <SelectContent>
+                  {reasons.map((r) => <SelectItem key={r.id || r.name} value={r.name}>{r.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Delivery date <span className="text-rose-500">*</span></Label>
+              <Input type="date" value={requestedDate} min={new Date().toISOString().split('T')[0]}
+                onChange={(e) => setRequestedDate(e.target.value)} data-testid="do-requested-date" />
+              <p className="mt-1 text-xs text-slate-400">When the stock should reach the recipient.</p>
+            </div>
           </div>
 
           {/* ── Delivery Address ── */}
@@ -438,8 +446,6 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
   const [acting, setActing] = useState(false);
   const [commentFor, setCommentFor] = useState(null);
   const [comment, setComment] = useState('');
-  const [dateValue, setDateValue] = useState('');
-  const [savingDate, setSavingDate] = useState(false);
 
   const load = useCallback(async () => {
     if (!orderId) return;
@@ -450,24 +456,11 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
         axios.get(`${API_URL}/delivery-orders/${orderId}/available-transitions`, auth()),
       ]);
       setOrder(o.data); setTransitions(t.data.transitions || []);
-      setDateValue(o.data.requested_date || '');
     } catch { toast.error('Failed to load order'); }
     finally { setLoading(false); }
   }, [orderId]);
 
   useEffect(() => { if (open) load(); }, [open, load]);
-
-  const saveDate = async () => {
-    if (!dateValue) return;
-    setSavingDate(true);
-    try {
-      await axios.put(`${API_URL}/delivery-orders/${orderId}`, { requested_date: dateValue }, auth());
-      toast.success('Delivery date saved');
-      await load(); onChanged();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to save date');
-    } finally { setSavingDate(false); }
-  };
 
   const doTransition = async (t) => {
     if (t.comment_required && commentFor !== t.action_key) { setCommentFor(t.action_key); return; }
@@ -475,7 +468,16 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
     try {
       const { data } = await axios.post(`${API_URL}/delivery-orders/${orderId}/transition`,
         { action_key: t.action_key, comment: comment || null }, auth());
-      toast.success(`Order ${data.order?.current_state_label || 'updated'}`);
+      if (t.action_key === 'place_order') {
+        const p = data.promo;
+        if (p?.status === 'created') {
+          toast.success(`Order placed · draft stock-out ${p.challan_number || ''} created at ${p.distributor_name || 'distributor'}`);
+        } else {
+          toast.warning(`Order placed, but stock-out was not created: ${p?.error || 'unknown reason'}`);
+        }
+      } else {
+        toast.success(`Order ${data.order?.current_state_label || 'updated'}`);
+      }
       setCommentFor(null); setComment('');
       await load(); onChanged();
     } catch (e) {
@@ -483,7 +485,7 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
     } finally { setActing(false); }
   };
 
-  const actionIcon = (k) => ({ approve: CheckCircle2, reject: XCircle, cancel: XCircle, submit: ChevronRight, mark_fulfilled: Truck, reopen: RotateCcw }[k] || ChevronRight);
+  const actionIcon = (k) => ({ approve: CheckCircle2, reject: XCircle, cancel: XCircle, submit: ChevronRight, place_order: Truck, mark_fulfilled: Truck, reopen: RotateCcw }[k] || ChevronRight);
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -511,21 +513,29 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
                 <Info label="Created by" value={order.created_by_name} />
               </div>
 
-              {/* Delivery date — only settable once approved */}
+              {/* Delivery date (set at order creation) */}
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="do-delivery-date-block">
                 <p className="text-[11px] uppercase tracking-wide text-slate-400">Date of delivery</p>
-                {order.current_state_key === 'approved' ? (
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <Input type="date" value={dateValue} onChange={(e) => setDateValue(e.target.value)} className="w-44" data-testid="do-delivery-date-input" />
-                    <Button size="sm" onClick={saveDate} disabled={savingDate || !dateValue} className="bg-emerald-600 hover:bg-emerald-700" data-testid="do-delivery-date-save">
-                      {savingDate ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save date'}
-                    </Button>
-                    {order.requested_date && <span className="text-xs text-emerald-600">Set: {order.requested_date}</span>}
-                  </div>
-                ) : (
-                  <p className="mt-1 text-sm text-slate-500">{order.requested_date || 'Available after the order is approved.'}</p>
-                )}
+                <p className="mt-1 text-sm font-medium text-slate-700" data-testid="do-delivery-date-value">
+                  {order.requested_date ? new Date(order.requested_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                </p>
               </div>
+
+              {/* Linked promotional stock-out + live fulfillment status */}
+              {order.promo_dispatch_id && (
+                <div className="rounded-lg border border-sky-200 bg-sky-50 p-3" data-testid="do-fulfillment-block">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-sky-500">Promotional stock-out</p>
+                      <p className="mt-0.5 text-sm font-medium text-slate-700">
+                        {order.promo_challan_number || '—'}
+                        {order.promo_distributor_name ? <span className="text-slate-400"> · {order.promo_distributor_name}</span> : null}
+                      </p>
+                    </div>
+                    <FulfillmentBadge status={order.fulfillment_status} />
+                  </div>
+                </div>
+              )}
 
               {order.delivery_address?.formatted_address && (
                 <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -607,6 +617,29 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
 const Info = ({ label, value }) => (
   <div><p className="text-[11px] uppercase tracking-wide text-slate-400">{label}</p><p className="font-medium text-slate-700">{value || '—'}</p></div>
 );
+
+const FULFILLMENT_LABELS = {
+  draft: 'Draft', confirmed: 'Confirmed', delivery_assigned: 'Delivery Assigned',
+  delivery_scheduled: 'Scheduled', scheduled: 'Scheduled', on_the_way: 'On the Way',
+  in_transit: 'In Transit', complete: 'Complete', delivered: 'Delivered',
+  partially_delivered: 'Partially Delivered', returned: 'Returned', cancelled: 'Cancelled',
+};
+const FULFILLMENT_COLORS = {
+  draft: 'bg-slate-100 text-slate-600', confirmed: 'bg-amber-100 text-amber-700',
+  delivery_assigned: 'bg-indigo-100 text-indigo-700', delivery_scheduled: 'bg-indigo-100 text-indigo-700',
+  scheduled: 'bg-indigo-100 text-indigo-700', on_the_way: 'bg-blue-100 text-blue-700',
+  in_transit: 'bg-blue-100 text-blue-700', complete: 'bg-emerald-100 text-emerald-700',
+  delivered: 'bg-emerald-100 text-emerald-700', partially_delivered: 'bg-emerald-100 text-emerald-700',
+  returned: 'bg-rose-100 text-rose-700', cancelled: 'bg-slate-200 text-slate-500',
+};
+const FulfillmentBadge = ({ status }) => {
+  if (!status) return null;
+  return (
+    <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${FULFILLMENT_COLORS[status] || 'bg-slate-100 text-slate-600'}`} data-testid="do-fulfillment-badge">
+      {FULFILLMENT_LABELS[status] || status}
+    </span>
+  );
+};
 
 // ───────────────────── Main page ─────────────────────
 export default function DeliveryOrders() {
@@ -690,14 +723,15 @@ export default function DeliveryOrders() {
                 <th className="px-4 py-3 text-right">Value</th>
                 <th className="px-4 py-3 text-left">Requested</th>
                 <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3 text-left">Fulfillment</th>
                 <th className="px-4 py-3 text-left">Created by</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-600" /></td></tr>
+                <tr><td colSpan={9} className="py-16 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-emerald-600" /></td></tr>
               ) : orders.length === 0 ? (
-                <tr><td colSpan={8} className="py-16 text-center text-sm text-slate-500" data-testid="do-empty">No delivery orders yet. Create your first one.</td></tr>
+                <tr><td colSpan={9} className="py-16 text-center text-sm text-slate-500" data-testid="do-empty">No delivery orders yet. Create your first one.</td></tr>
               ) : orders.map((o) => (
                 <tr key={o.id} onClick={() => setDetailId(o.id)} className="cursor-pointer border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50" data-testid={`do-row-${o.order_number}`}>
                   <td className="px-4 py-3 font-mono font-medium text-emerald-700">{o.order_number}</td>
@@ -707,6 +741,7 @@ export default function DeliveryOrders() {
                   <td className="px-4 py-3 text-right font-mono font-semibold text-slate-900">{fmtINR(o.total_value)}</td>
                   <td className="px-4 py-3 text-slate-600">{o.requested_date || '—'}</td>
                   <td className="px-4 py-3"><StateBadge order={o} /></td>
+                  <td className="px-4 py-3">{o.fulfillment_status ? <FulfillmentBadge status={o.fulfillment_status} /> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3 text-slate-500">{o.created_by_name || '—'}</td>
                 </tr>
               ))}

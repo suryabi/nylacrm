@@ -27,6 +27,11 @@
 - Distributor ID: 99fb55dc-532c-4e85-b618-6b8a5e552c04
 - Name: Test (DIST-0002)
 
+## Delivery Orders → auto Promo Stock-Out testing
+- Account-assignment path: Account "Empire Restaurant" (id d4e2187a-5e7d-4847-902b-b6699ae910fc) has an active PRIMARY distributor assignment → distributor "Test" (location set). It now has a linked contact "Empire Promo Contact" (required for account→promo). Create a Delivery Order with recipient=Account "Empire Restaurant", set a delivery date, add a SKU/qty, Submit → Approve → Place Order. Place Order auto-creates a DRAFT promo stock-out at "Test" distributor; the DO shows a "Promotional stock-out" badge with live status.
+- City-coverage fallback: any DO whose delivery city is covered by a distributor (e.g. Bangalore → Brian) but no account assignment.
+- DO state machine (nyla-air-water) now: draft → pending_approval → approved → placed (place_order, auto-creates promo) → fulfilled.
+
 ## Promo Stock-Out (Delivery Challan) testing — use Brian
 - Distributor "Brian" id `bb12d90e-4d33-4890-ac5f-17573c551b5c` has 2 active locations (Bangalore Warehouse, Delhi; non-factory, no batch tracking) and stock available.
 - Test Contact: "Promo Test Contact" (company Acme Promo, Bengaluru) — use as recipient in the Promo Stock-Out dialog.

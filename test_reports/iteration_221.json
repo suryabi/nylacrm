@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 221 — Full E2E test of Delivery Orders → auto Promo Stock-Out feature (mandatory date + place_order auto-creates draft promo + live-mirror badge). BACKEND: 3/3 pytest cases pass after fixing one tester-detected bug (see RCA). FRONTEND: full Playwright run PASSES every acceptance criterion. ONE PRODUCTION BUG FOUND & FIXED by this tester: _auto_create_draft_promo queried db.distributors with projection {'name':1} but the canonical field is 'distributor_name' → promo_distributor_name persisted as null on the DO, badge would show empty distributor. Fixed in /app/backend/routes/delivery_orders.py line 290-292 (projection + accessor falls back to 'name' for safety). After fix: DO-2026-0010 (account path) → DC-2606-0006 at distributor 'Test', badge 'Draft', live-mirror works. City-fallback path also creates a draft promo.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/promotional-reasons", "issue": "Returns 404 — the actual route is /api/admin/promo-reasons. UI/tests should use the correct one. Not blocking; reason is optional in payload."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_do_promo_autocreate.py",
+    "/app/test_reports/pytest/do_promo_results.xml"
+  ],
+  "action_items": [
+    "[INFO] Tester applied a production fix to /app/backend/routes/delivery_orders.py (_auto_create_draft_promo distributor name resolution). Main agent should keep this change. RCA in 'rca of the issue'."
+  ],
+  "critical_code_review_comments": [
+    "BUG (fixed by tester): /app/backend/routes/delivery_orders.py:290-292 — db.distributors stores the name under field 'distributor_name', not 'name'. The previous code projected {'_id':0,'name':1} and dereferenced dist.get('name'), so promo_distributor_name was always null on the DO and the UI badge would render as 'undefined · Draft'. Fixed: projection now includes 'distributor_name' and accessor falls back to 'name' for safety. Recommend a unit test pinning this contract.",
+    "DRY: get_delivery_order live-mirror block (lines 407-416) and the place_order $set in trigger_transition (lines 547-556) both touch the same fulfillment fields; extracting a single helper `_mirror_promo_status(order_id, promo_doc)` would prevent drift.",
+    "delivery_orders.py is ~560 lines; manageable but the helpers (_resolve_distributor_for_*, _auto_create_draft_promo, _create_approval_task) deserve their own module (e.g. /app/backend/routes/delivery_orders_helpers.py) for clarity.",
+    "Toast UX: when place_order succeeds but auto-promo fails (city-fallback with no covering distributor) the DO still transitions to 'placed' — leaves the user with a placed DO and no fulfillment. Consider either rolling back the state transition or surfacing the warning more prominently than a single toast."
+  ],
+  "updated_files": [
+    "/app/backend/routes/delivery_orders.py (lines 290-292 — distributor name projection fix)",
+    "/app/backend/tests/test_do_promo_autocreate.py (new test file covering all 3 acceptance criteria)"
+  ],
+  "success_rate": {"backend": "100% (3/3 pytest)", "frontend": "100% (all 8 acceptance points)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water, CEO)",
+  "seed_data_creation": "Created several DOs during test runs: DO-2026-0005..0010 in nyla-air-water. DO-2026-0010 is account-path with promo DC-2606-0006 at distributor 'Test', status Draft. Promo dispatches DC-2606-0006 through DC-2606-0009 created in distributor_deliveries collection as is_promo=true, status=draft.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Feature is end-to-end working after the distributor_name projection fix. Mandatory date validation, place_order → draft promo, fulfillment badge live mirror, list-column badge all verified UI+API. Tests live at /app/backend/tests/test_do_promo_autocreate.py — re-run via `REACT_APP_BACKEND_URL=... pytest backend/tests/test_do_promo_autocreate.py -v`. Pytest junit at /app/test_reports/pytest/do_promo_results.xml.",
+  "rca of the issue": "Bug RCA — promo_distributor_name persisted as null on DO. Trigger: place_order on a DO with account assignment. _auto_create_draft_promo (delivery_orders.py:290) did `db.distributors.find_one({...}, {'_id':0, 'name': 1})` and returned `(dist or {}).get('name')`. distributors collection stores the display name under `distributor_name` (see routes/distributors.py uses across lines 171, 291, 424, 669, 1159), so the projection returned an empty dict-like {'id':...} and the name resolved to None. The None propagated through trigger_transition's $set and into the DO. The UI block correctly showed 'DC-2606-0006 · undefined Draft' (Test would not appear). Mitigation applied: projection now includes 'distributor_name' and the accessor uses distributor_name with 'name' fallback. Verified via re-run: DO-2026-0010 has promo_distributor_name='Test' and badge shows 'DC-2606-0006 · Test Draft' as required."
+}

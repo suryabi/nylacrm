@@ -201,6 +201,43 @@ async def _resolve_distributor_for_city(tenant_id: str, city: Optional[str]):
     return dist_id, chosen["id"], None
 
 
+async def _pick_distributor_location(tenant_id: str, dist_id: str, city: Optional[str]):
+    """Pick a sensible non-factory active location for a distributor, preferring
+    one in `city`."""
+    locs = await db.distributor_locations.find(
+        {"tenant_id": tenant_id, "distributor_id": dist_id}, {"_id": 0}).to_list(200)
+    active = [l for l in locs if (l.get("status") or "active") == "active" and not l.get("is_factory")]
+    target = normalize_city(city) if city else None
+    chosen = (next((l for l in active if target and normalize_city(l.get("city")) == target), None)
+              or (active[0] if active else (locs[0] if locs else None)))
+    return chosen["id"] if chosen else None
+
+
+async def _resolve_distributor_for_order(tenant_id: str, order: dict):
+    """Resolve the servicing distributor + location for a delivery order.
+
+    Priority: (1) if the recipient is an Account with an active distributor
+    assignment, use the assigned distributor (primary first) + its location;
+    (2) otherwise fall back to matching the delivery city against distributor
+    operating coverage."""
+    city = (order.get("delivery_address") or {}).get("city") or order.get("delivery_city")
+    if order.get("recipient_type") == "account" and order.get("account_id"):
+        assigns = await db.account_distributor_assignments.find(
+            {"tenant_id": tenant_id, "account_id": order["account_id"]}, {"_id": 0}).to_list(50)
+        active = [a for a in assigns if (a.get("status") or "active") == "active"]
+        active.sort(key=lambda a: (not a.get("is_primary", False)))  # primary first
+        if active:
+            a = active[0]
+            dist_id = a.get("distributor_id")
+            loc_id = a.get("distributor_location_id") or await _pick_distributor_location(
+                tenant_id, dist_id, a.get("servicing_city") or city)
+            if dist_id and loc_id:
+                return dist_id, loc_id, None
+            if dist_id and not loc_id:
+                return dist_id, None, "Assigned distributor has no location to dispatch from."
+    return await _resolve_distributor_for_city(tenant_id, city)
+
+
 async def _auto_create_draft_promo(tenant_id: str, order: dict, current_user: dict) -> dict:
     """On approval, create a DRAFT promotional stock-out for the distributor
     that covers the delivery city. Best-effort; returns a status dict."""
@@ -208,7 +245,7 @@ async def _auto_create_draft_promo(tenant_id: str, order: dict, current_user: di
     from models.distributor import PromoDeliveryCreate, PromoDeliveryItemCreate
 
     city = (order.get("delivery_address") or {}).get("city")
-    dist_id, loc_id, err = await _resolve_distributor_for_city(tenant_id, city)
+    dist_id, loc_id, err = await _resolve_distributor_for_order(tenant_id, order)
     if err or not loc_id:
         return {"status": "failed", "error": err or "Could not resolve a distributor location."}
 
@@ -250,8 +287,11 @@ async def _auto_create_draft_promo(tenant_id: str, order: dict, current_user: di
     try:
         res = await create_promo_dispatch(dist_id, payload, current_user)
         d = res.get("dispatch") or {}
+        dist = await db.distributors.find_one({"id": dist_id, "tenant_id": tenant_id}, {"_id": 0, "distributor_name": 1, "name": 1})
         return {"status": "created", "distributor_id": dist_id,
-                "promo_id": d.get("id"), "challan_number": d.get("challan_number")}
+                "distributor_name": (dist or {}).get("distributor_name") or (dist or {}).get("name"),
+                "promo_id": d.get("id"), "challan_number": d.get("challan_number"),
+                "promo_status": d.get("status") or "draft"}
     except HTTPException as exc:
         return {"status": "failed", "error": f"{exc.detail}"}
     except Exception as exc:
@@ -270,6 +310,8 @@ async def create_delivery_order(data: DeliveryOrderCreate, current_user: dict = 
     tenant_id = get_current_tenant_id()
     if not data.items:
         raise HTTPException(400, "At least one line item is required.")
+    if not data.requested_date:
+        raise HTTPException(400, "Delivery date is required.")
     for it in data.items:
         if not it.quantity or it.quantity <= 0:
             raise HTTPException(400, "Quantity must be greater than zero for every line.")
@@ -361,6 +403,19 @@ async def get_delivery_order(order_id: str, current_user: dict = Depends(get_cur
     order = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Delivery order not found")
+    # Mirror the linked promo stock-out's live fulfillment status (read-only).
+    if order.get("promo_dispatch_id"):
+        promo = await db.distributor_deliveries.find_one(
+            {"id": order["promo_dispatch_id"], "tenant_id": tenant_id},
+            {"_id": 0, "status": 1, "challan_number": 1, "delivery_number": 1})
+        if promo:
+            live = promo.get("status")
+            if live and live != order.get("fulfillment_status"):
+                await db.delivery_orders.update_one(
+                    {"id": order_id, "tenant_id": tenant_id}, {"$set": {"fulfillment_status": live}})
+                order["fulfillment_status"] = live
+            if not order.get("promo_challan_number"):
+                order["promo_challan_number"] = promo.get("challan_number") or promo.get("delivery_number")
     return order
 
 
@@ -483,5 +538,22 @@ async def trigger_transition(order_id: str, payload: TransitionRequest, current_
         if requester:
             await _create_approval_task(tenant_id, {**order, **set_doc}, requester)
 
+    # Placing the order auto-creates a DRAFT promotional stock-out at the
+    # servicing distributor (account assignment first, else delivery-city coverage).
+    promo_result = None
+    if payload.action_key == "place_order":
+        promo_result = await _auto_create_draft_promo(tenant_id, {**order, **set_doc}, current_user)
+        if promo_result.get("status") == "created":
+            await db.delivery_orders.update_one(
+                {"id": order_id, "tenant_id": tenant_id},
+                {"$set": {
+                    "promo_dispatch_id": promo_result.get("promo_id"),
+                    "promo_challan_number": promo_result.get("challan_number"),
+                    "promo_distributor_id": promo_result.get("distributor_id"),
+                    "promo_distributor_name": promo_result.get("distributor_name"),
+                    "fulfillment_status": promo_result.get("promo_status") or "draft",
+                    "updated_at": now,
+                }})
+
     updated = await db.delivery_orders.find_one({"id": order_id, "tenant_id": tenant_id}, {"_id": 0})
-    return {"ok": True, "order": updated}
+    return {"ok": True, "order": updated, "promo": promo_result}

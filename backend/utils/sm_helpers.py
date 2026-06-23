@@ -516,6 +516,7 @@ _DEFAULT_DO_STATES = [
     {"key": "draft",            "label": "Draft",            "color": "#94a3b8", "is_initial": True,  "is_terminal": False},
     {"key": "pending_approval", "label": "Pending Approval", "color": "#f59e0b", "is_initial": False, "is_terminal": False},
     {"key": "approved",         "label": "Approved",         "color": "#10b981", "is_initial": False, "is_terminal": False},
+    {"key": "placed",           "label": "Order Placed",     "color": "#0ea5e9", "is_initial": False, "is_terminal": False},
     {"key": "rejected",         "label": "Rejected",         "color": "#ef4444", "is_initial": False, "is_terminal": True},
     {"key": "cancelled",        "label": "Cancelled",        "color": "#6b7280", "is_initial": False, "is_terminal": True},
     {"key": "fulfilled",        "label": "Fulfilled",        "color": "#16a34a", "is_initial": False, "is_terminal": True},
@@ -523,8 +524,9 @@ _DEFAULT_DO_STATES = [
 
 _DEFAULT_DO_ACTIONS = [
     {"key": "submit",         "label": "Submit for Approval", "kind": "neutral",  "description": "Send the delivery order for approval."},
-    {"key": "approve",        "label": "Approve",             "kind": "positive", "description": "Approve — auto-creates a draft promotional stock-out."},
+    {"key": "approve",        "label": "Approve",             "kind": "positive", "description": "Approve the delivery order."},
     {"key": "reject",         "label": "Reject",              "kind": "negative", "description": "Reject the delivery order."},
+    {"key": "place_order",    "label": "Place Order",         "kind": "positive", "description": "Place the order — auto-creates a draft promotional stock-out at the servicing distributor."},
     {"key": "cancel",         "label": "Cancel",              "kind": "negative", "description": "Cancel the delivery order."},
     {"key": "mark_fulfilled", "label": "Mark Fulfilled",      "kind": "positive", "description": "Mark the order as fulfilled."},
     {"key": "reopen",         "label": "Reopen as Draft",     "kind": "neutral",  "description": "Reopen a rejected order for editing."},
@@ -534,9 +536,10 @@ _DEFAULT_DO_TRANSITIONS = [
     {"action_key": "submit",         "action_label": "Submit for Approval", "from_state": "draft",            "to_state": "pending_approval", "requestor_only": True},
     {"action_key": "approve",        "action_label": "Approve",             "from_state": "pending_approval", "to_state": "approved",         "allowed_role_keys": list(_APPROVER_ROLES)},
     {"action_key": "reject",         "action_label": "Reject",              "from_state": "pending_approval", "to_state": "rejected",         "allowed_role_keys": list(_APPROVER_ROLES), "comment_required": True},
+    {"action_key": "place_order",    "action_label": "Place Order",         "from_state": "approved",         "to_state": "placed",           "allowed_role_keys": list(_APPROVER_ROLES)},
     {"action_key": "cancel",         "action_label": "Cancel",              "from_state": "draft",            "to_state": "cancelled"},
     {"action_key": "cancel",         "action_label": "Cancel",              "from_state": "pending_approval", "to_state": "cancelled"},
-    {"action_key": "mark_fulfilled", "action_label": "Mark Fulfilled",      "from_state": "approved",         "to_state": "fulfilled",        "allowed_role_keys": list(_APPROVER_ROLES)},
+    {"action_key": "mark_fulfilled", "action_label": "Mark Fulfilled",      "from_state": "placed",           "to_state": "fulfilled",        "allowed_role_keys": list(_APPROVER_ROLES)},
     {"action_key": "reopen",         "action_label": "Reopen as Draft",     "from_state": "rejected",         "to_state": "draft",            "requestor_only": True},
 ]
 
