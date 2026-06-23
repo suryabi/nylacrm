@@ -1,6 +1,19 @@
 # Changelog
 
 
+## 2026-06-24 — Delivery Orders: mandatory date + auto Promo Stock-Out on "Place Order" ✅ (testing_agent verified, iteration_221)
+- **Mandatory delivery date:** `requested_date` is now required at order creation (Create dialog has a required `do-requested-date` field; backend `create_delivery_order` rejects missing date). Removed the old "set after approval" gating — detail dialog now shows the date read-only.
+- **Place Order → auto draft Promo Stock-Out:** transitioning a DO via the `place_order` action auto-creates a **DRAFT** promotional stock-out at the servicing distributor. Resolution priority: (1) existing **Account with an active (primary) distributor assignment** → assigned distributor + location; (2) fallback to **delivery-city coverage** (`distributor_operating_coverage`). New helpers `_resolve_distributor_for_order` / `_pick_distributor_location`; wired in `trigger_transition`.
+- **Live status mirror (no SM duplication):** the created promo is linked on the DO (`promo_dispatch_id`, `promo_challan_number`, `promo_distributor_name`) and its live fulfillment status is mirrored read-only on `GET /api/delivery-orders/{id}`. UI shows a `do-fulfillment-block` + `FulfillmentBadge` on the detail dialog and a Fulfillment column in the list. Promo statuses are NOT duplicated into the DO state machine (per design decision).
+- **Default DO state machine** updated: added `placed` state + `place_order` action (approved → placed); `mark_fulfilled` now from `placed`. Preview tenant SM patched to match (production managed separately by user).
+- Bug fixed during testing: distributor name projection (`distributor_name` vs `name`) so the badge shows the distributor.
+- ⚠️ Redeploy to apply on production. Production must also have a `place_order` action configured in its DO state machine.
+
+## 2026-06-24 — State Machines: actions now persist on Save ✅ (testing_agent verified, iteration_220)
+- Fixed: the editor's `save()` omitted the `actions` array from the PUT/POST body, so added actions were never saved. Added `actions: editing.actions || []`.
+
+
+
 ## 2026-06-23 — Delivery Orders: 4 follow-up fixes ✅ (testing_agent verified, iteration_218)
 - **City master-match:** Google address city now normalizes to the **Location Master** city (e.g. "Rai Durg / HITEC City" → "Hyderabad") via new `matchMasterCity()` (matches city/aliases against the formatted address; cities loaded from `GET /api/master-locations/flat`). Was showing the sub-locality before.
 - **Google map wizard:** added `MapPreview` (keyless `maps.google.com ...output=embed` iframe with a pin) in the create dialog (after address pick) and the order detail, with an **Expand** button → large map dialog + "Open in Google Maps".
