@@ -62,6 +62,7 @@ class DeliveryOrderCreate(BaseModel):
     delivery_address: DeliveryAddress
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    delivery_instructions: Optional[str] = None
     notes: Optional[str] = None
     items: List[DeliveryOrderItem]
 
@@ -72,6 +73,7 @@ class DeliveryOrderUpdate(BaseModel):
     delivery_address: Optional[DeliveryAddress] = None
     contact_name: Optional[str] = None
     contact_phone: Optional[str] = None
+    delivery_instructions: Optional[str] = None
     notes: Optional[str] = None
     items: Optional[List[DeliveryOrderItem]] = None
 
@@ -290,6 +292,7 @@ async def create_delivery_order(data: DeliveryOrderCreate, current_user: dict = 
         "delivery_city": data.delivery_address.city,
         "contact_name": data.contact_name or snap["recipient_name"],
         "contact_phone": data.contact_phone or snap["recipient_phone"],
+        "delivery_instructions": data.delivery_instructions,
         "notes": data.notes,
         "items": [i.model_dump() for i in data.items],
         "total_value": _doc_total(data.items),

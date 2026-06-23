@@ -1,22 +1,22 @@
-<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters and UI, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, introducing reusable Email Templates, implementing an  system within comments, a robust Document Sharing Framework, and dynamic PDF Proposal/Deck generation. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, scalable document sharing architectures, and highly customizable PDF proposal generation.
+<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, Document Sharing, and dynamic PDF generation. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, and robust workflow approvals. Recently requested: Universal Stock-Out reversal capabilities, a unified Reversals audit log, a complete Delivery Orders approval module for promotional stock, and a future SKU Variant/Hierarchy system.
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lead management, Master SKU pricing, Invoice exports, Document sharing, and a highly customizable Proposal PDF Generator (ReportLab/ReactQuill) + Deck Generator (Gamma API). Recently, the Proposal & Deck UI sections were unified, and robust drag-and-drop template editing, font embedding, and comprehensive global email sharing features have been integrated. 
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lead management, Invoice exports, Document sharing, and a dynamic Proposal PDF Generator. Recently stabilized inventory calculations for promotional stock-outs. The app now includes a robust State Machine module managing marketing requests and a newly added Delivery Orders module. It also features a Universal Reversal system for stock-out deliveries at any stage, tied to a global Reversals Audit Log.
 
 **Last working item**: 
-    - Last item agent was working: Displaying a color-coded 3-letter city code ribbon on Marketing Request (Design Request) tiles and their detail pages. The user requested admins to assign colors to cities in the Master Locations, and for those colors and a 3-letter code (e.g., HYD) to show up on the request ribbon.
+    - Last item agent was working: UI polish for the  in . The user requested making the recipient selection pills bigger, separating the Delivery Contact section from Delivery Address, making the Items listing visually distinctive, and adding a new Delivery instructions text input.
     - Status: IN PROGRESS
-    - Agent Testing Done: Y
-    - Which testing method agent to use? screenshot tool
+    - Agent Testing Done: N
+    - Which testing method agent to use? screenshot tool followed by testing_agent
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:  
-  Issue 1: City ribbon missing on Marketing Request Detail page (P0)
-     - Attempted fixes: The agent added the ribbon to , but the final screenshot test reported . 
-     - Next debug checklist: Check  to ensure the corner ribbon is properly rendering inside the hero header and that  and  are properly available in the component.
-     - Why fix this issue and what will be achieved with the fix? Fulfills the user's specific request to have the colored 3-letter city ribbon on the detail page, not just the kanban board.
+  Issue 1: Finish UI restructuring of  (P0)
+     - Attempted fixes: The agent successfully added  to the backend models and routes. However, while attempting to execute  to restructure the frontend JSX in , the agent hit a sequence of Bad Gateway transport errors and the context limit was reached.
+     - Next debug checklist: Open . Locate . Implement the UI changes: 1. Enlarge recipient pills (Lead/Account/Contact/Employee). 2. Split Contact details and Delivery Address into clear, separate sections. 3. Add a textarea bound to . 4. Give the line items table/list a distinctive UI treatment.
+     - Why fix this issue and what will be achieved with the fix? Completes the user's latest UI/UX request for the newly built Delivery Orders module.
      - Status: IN PROGRESS
      - Is recurring issue? N
      - Should Test frontend/backend/both after fix? frontend
@@ -51,7 +51,7 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lea
 
 **In progress Task List**:
   Task 1: Document Sharing Framework Phase 2 (WhatsApp Integration) (P1)
-     - Where to resume: User selected Meta Cloud API. The agent provided the integration playbook and steps. Awaiting the user to provide 6 required credentials (WABA ID, Phone Number ID, Permanent Token, App Secret, Template Name, Graph API version).
+     - Where to resume: Awaiting the user to provide 6 required credentials for Meta Cloud API (WABA ID, Phone Number ID, Permanent Token, App Secret, Template Name, Graph API version).
      - What will be achieved with this? Allows reps to share proposals/decks directly to WhatsApp.
      - Status: BLOCKED
      - Should Test frontend/backend/both after fix? both
@@ -59,6 +59,7 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lea
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
+    - P0: SKU Hierarchy & Variant Management Phase 1 (Model + CRUD + UI for Variant Config). *NOTE: User explicitly requested to PLAN ONLY and NOT START coding yet. The plan is saved in .* Wait for user's explicit go-ahead.
     - P1: Bloated  collection & MinIO integration: Build  settings page to replace base64 mongo storage.
     - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
     - P1: Happenstance integration (Agent asked user for API key & scope previously, pending user answer).
@@ -71,18 +72,16 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lea
     - P2: Inventory Management Module - Phase 2+ (Stock Entries, Purchase Receipts, Adjustments).
 
 **Completed work in this session**
-- Extracted all per-lead proposal endpoints from  to  (DONE)
-- Added modern brand fonts (Poppins, Montserrat, Lato, RobotoSlab) to Proposal Templates (DONE)
-- Fixed Proposal PDF Mixed Font Bug: Replaced ₹ symbol with INR (so prices don't default back to DejaVu font) and unified font inheritance (DONE)
-- Unified Lead Documents UI: Moved Proposal card under SKUs side-by-side with Gamma Deck card (DONE)
-- Deck Approval & Versioning: Implemented full approval flow for Decks (like proposals), incrementing versions and matching review history timestamps (DONE)
-- Global Share via Email UI Redesign: Restored rich email compose dialog, widened it, made it auto-grow, and added multi-attachment support (Proposals, Decks, Files & Documents) (DONE)
-- Email Templates Attachments: Attached template files now show up as removable chips in the email compose window (DONE)
-- Promo Stock-Out Bug Fix: Resolved false insufficient stock calculation for single-location (non-self-managed) distributors by doing distributor-wide derivation (DONE)
-- Account Activation Rules: Added strict validation requiring delivery address coordinates (lat/lng) and exactly 10-digit phone numbers before account activation (DONE)
-- Proposal Template drag-and-drop: Added native drag-and-drop handles for rearranging sections with clear visual UI feedback (DONE)
-- Master Locations City Colors: Added color pickers for Cities in Master Locations admin module (DONE)
-- Marketing Kanban 3-Letter City Ribbon: Kanban board requests now show a color-coded diagonal top-left ribbon with the 3-letter requestor city code (e.g., HYD) (DONE)
+- Verified City ribbon on Marketing Request detail page (DONE)
+- Changed urgent Kanban card outline from red to amber (DONE)
+- Fixed missing recipients list in Promotional Stock-Out by adding  to native  calls (DONE)
+- Fixed false Insufficient stock error in Promo Stock-Out by implementing global  helper (DONE)
+- Redesigned Revenue Analytics page from neon/dark mode to standard app light theme (DONE)
+- Drafted Architecture Plan for SKU Variants and saved to memory file (DONE)
+- Implemented Universal Stock-Out Reversal (allow undoing deliveries at any stage with double confirmation logic) (DONE)
+- Built global Reversals Audit Log (Admin module + Distributor detail tab) (DONE)
+- Auto-capitalize first and last names on save for Contacts, Leads, and Accounts (DONE)
+- Built brand new Delivery Orders module with State Machine approval flow, Google Address lookup matching Master Cities, and delayed delivery date field (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: usage: pdfplumber [-h] [--structure | --structure-text]
@@ -114,69 +113,72 @@ options:
   --precision PRECISION
   --pages PAGES [PAGES ...]
   --indent INDENT       Indent level for JSON pretty-printing. import error in testing scripts (minor environment script error, doesn't break app but affects some backend file checks).
-   
+
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork (Check 1st <LLM message history> array entry): Production vs Preview testing confusion.
-  - Recurrence count: 48
+  - Issue recurrence in previous fork: Production vs Preview testing confusion.
+  - Recurrence count: 50+
   - Status: IN PROGRESS
-  - Note: User deploys to production manually but requests fixes based on it. Ensure the user is reminded that changes only apply to Preview until they redeploy.
+  - Note: User continuously reports issues seen on production. Changes made by the agent ONLY apply to Preview. The user must manually redeploy to production. Remind the user of this when pushing fixes.
 
 **Code Architecture**
-- : Core FastAPI router (refactored slightly, proposals moved).
-- : Domain routers (, , , ).
-- : Shared logic ( uses ReportLab,  handles links).
-- : Reusable React components (, , , ).
+- : Core FastAPI router.
+- : Domain routers (, , , , ).
+- : Heavy lifting for state-machine validations and transitions.
+- : Main views (, , ).
+- : Reusable components ().
 
 **Key Technical Concepts**
-- ReportLab: Used heavily in  for PDF generation, handles font mapping.
-- ReactQuill: Rich text editor used for proposals and email composition ().
-- Gamma API: Used for generating presentation decks ().
+-  handles auth via  globally, but native  calls must manually include  to pass the session cookie.
+- Inventory availability is dynamically calculated (derived) by subtracting delivered/committed stock from received stock, overriding stale  table rows.
+- Approvals are governed by a dynamic JSON-based State Machine architecture seeded upon first use.
 
 **key DB schema**
-  - , , : Documents generation tracking.
-  - : Added  field.
-  - : Tracks design tasks.
-  -  & : Tracks inventory (used for stock-out calculations).
+  - : newly added collection for promo order requests.
+  - : used to validate and standardize Google maps locality results.
+  - : Tracks stock-out fulfillment.
+  - : Tracks workflow definitions.
 
 **changes in tech stack**
-  - No new stack additions, though  and  are actively utilized.
+  - None
 
 **All files of reference** 
-  -  (Failing the detail ribbon test).
-  -  (Kanban ribbon added).
-  -  (City color backend).
-  -  (City color frontend).
-  -  (New extracted router).
-  -  (Global share component).
+  -  (Needs immediate UI finish)
+  -  (New module backend)
+  -  (Do not implement until user says so)
+  - 
 
 **Areas that need refactoring**: 
   - Base64 storage approach for legacy Documents should be refactored to Object Storage (MinIO).
+  - Any remaining native  calls across the frontend should be audited to ensure they pass , otherwise they will fail silently on production when localStorage token expires.
 
 **key api endpoints**
   - 
   - 
   - 
+  - 
 
 **Critical Info for New Agent** 
-  - The final action taken was taking a screenshot of the Marketing Requests board vs detail page. The Kanban ribbon rendered fine, but the Detail page ribbon failed the check (). Your immediate task should be fixing the missing ribbon rendering on .
-  - The user has approved Meta WhatsApp API integration but is supposed to provide credentials. 
-  - Never replace  files entirely or reset  when doing bash commands.
-  - When fixing UI layout, utilize Shadcn UI components available in the  directory.
+  - Start immediately by finishing the UI layout changes in  ( component). The backend support for  is already done, but the frontend edits failed due to Bad Gateway errors.
+  - The user has approved a massive new feature (SKU Variants/Hierarchy) but explicitly commanded: **Do not start with anything now. Just plan**. The plan is stored in . Do not start coding this feature until the user requests it.
+  - Always remember that the backend auth mechanism prioritizes the httpOnly session cookie. 
 
 **documents and test reports created in this job** 
   - 
   - 
   - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - User: Meta Cloud API. Messages, PDFs etc. include guidance (Agent provided playbook).
- - User: Bug report: Promotional stock out saying insufficient stock for Goa. (Agent fixed single-location distributor logic).
- - User: for the design request tiles, please add this stripe on the left top corner, with the city... (Agent added city ribbon).
- - User: Now in admin under locations master, add an option to the user choose or pick a color code for each city. Use that color code to display the corner ribbon on design requests. Also, in the design request detail, add that corner ribbon. Secondly, display only 3 letter city code... (Agent added color picker, 3-letter code, and attempted to add it to the detail view but the detail view ribbon check failed).
- *PENDING HUMAN MESSAGES*: None technically pending, but the detail page ribbon needs to be fixed based on the final failed check. Also, the user owes credentials for the Meta API.
+ - User: Request to reverse Stock Out entries at any stage with double confirmation. (Agent implemented).
+ - User: Request a Reversals audit log. (Agent built global admin view and distributor tab).
+ - User: Auto-capitalize first/last names on save for Contacts/Leads/Accounts. (Agent implemented).
+ - User: Create a Delivery Orders module for promotional stock outs with an approval flow. (Agent implemented).
+ - User: Reported bug with Delivery Orders city populating incorrectly, requested Map wizard, and requested delivery date be gated post-approval. (Agent fixed all).
+ - User: First - Lead , account , contact , Employee the pills are very small - Make bigger and easier to click. THe delivery contact seperate from Delivery address and Keep it a sepearte section... Item listing - Keep it seperate section... Add Delivery instructions section...
+ *PENDING HUMAN MESSAGES*: None. You must fulfill the last message's UI requests on .
 
 **Project Health Check:**
-Broken: Marketing Request Detail Ribbon missing.
+Broken:  might have incomplete edits.
 Mocked: None.
 
 **3rd Party Integrations** 
@@ -188,13 +190,13 @@ Mocked: None.
  - Meta WhatsApp Cloud API (Pending integration, requires User API Keys)
 
 **Testing status**
-  - Testing agent used after significant changes: YES
+  - Testing agent used after significant changes: YES (Iterations 216, 217, 218)
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: 
-  - Known regressions: Marketing Request Detail ribbon not rendering.
+  - Test files created: , , 
+  - Known regressions: None, but ongoing UI edits were interrupted.
 
 **Credentials to test flow:**
 Refer to  (CEO: surya.yadavalli@nylaairwater.earth / test123)
 
 **What agent forgot to execute**
-The agent finished the job directly after the screenshot tool returned  for the  page. The detail page ribbon was missed or improperly implemented and needs to be resolved.</analysis>
+The agent did not finish restructuring the JSX in  for the final UI polish because it encountered repeated  errors while invoking the  tool. You must complete this task.</analysis>

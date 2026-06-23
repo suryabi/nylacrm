@@ -127,12 +127,17 @@ function RecipientPicker({ recipientType, setRecipientType, selected, onSelect }
   return (
     <div className="space-y-2">
       <Label>Recipient</Label>
-      <div className="flex flex-wrap gap-1.5">
-        {RECIPIENTS.map((r) => (
-          <button key={r.key} type="button" onClick={() => { setRecipientType(r.key); onSelect(null); }}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${recipientType === r.key ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-            data-testid={`do-recipient-type-${r.key}`}>{r.label}</button>
-        ))}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {RECIPIENTS.map((r) => {
+          const active = recipientType === r.key;
+          return (
+            <button key={r.key} type="button" onClick={() => { setRecipientType(r.key); onSelect(null); }}
+              className={`flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-all ${active ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50'}`}
+              data-testid={`do-recipient-type-${r.key}`}>
+              {r.label}
+            </button>
+          );
+        })}
       </div>
       {selected ? (
         <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2" data-testid="do-recipient-selected">
@@ -179,6 +184,7 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [deliveryInstructions, setDeliveryInstructions] = useState('');
   const [items, setItems] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -186,7 +192,7 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
     if (open) {
       setRecipientType('account'); setSelected(null); setRequestedDate(''); setReason('');
       setAddr({ line1: '', city: '', state: '', pincode: '', lat: null, lng: null, formatted_address: '' });
-      setContactName(''); setContactPhone(''); setNotes(''); setItems([]);
+      setContactName(''); setContactPhone(''); setNotes(''); setDeliveryInstructions(''); setItems([]);
     }
   }, [open]);
 
@@ -247,6 +253,7 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
         recipient_type: recipientType, ...recipientId(),
         requested_date: requestedDate || null, reason: reason || null,
         delivery_address: addr, contact_name: contactName || null, contact_phone: contactPhone || null,
+        delivery_instructions: deliveryInstructions || null,
         notes: notes || null,
         items: items.map((i) => ({
           sku_id: i.sku_id, sku_name: i.sku_name, quantity: Number(i.quantity), unit_price: Number(i.unit_price || 0),
@@ -288,9 +295,15 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
             <p className="mt-1 text-xs text-slate-400">The delivery date can be set after the order is approved.</p>
           </div>
 
-          {/* Delivery address */}
-          <div className="rounded-lg border border-slate-200 p-3">
-            <Label className="mb-1.5 flex items-center gap-1.5"><MapPin className="h-4 w-4 text-rose-500" /> Delivery Address</Label>
+          {/* ── Delivery Address ── */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50"><MapPin className="h-4 w-4 text-rose-500" /></span>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Where should we deliver?</h3>
+                <p className="text-xs text-slate-400">Search on Google to auto-fill & capture the location pin.</p>
+              </div>
+            </div>
             <GooglePlacesAddressSearch cityHint={addr.city} placeholder="Search address on Google…"
               testId="do-address-search"
               onPick={(p) => setAddr({
@@ -308,62 +321,98 @@ function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCreated }) 
             {addr.lat != null && addr.lng != null && (
               <div className="mt-2"><MapPreview lat={addr.lat} lng={addr.lng} label={addr.city} /></div>
             )}
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <Input placeholder="Contact name" value={contactName} onChange={(e) => setContactName(e.target.value)} data-testid="do-contact-name" />
-              <Input placeholder="Contact phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} data-testid="do-contact-phone" />
+            <div className="mt-3">
+              <Label className="text-xs font-medium text-slate-600">Delivery instructions</Label>
+              <Textarea value={deliveryInstructions} onChange={(e) => setDeliveryInstructions(e.target.value)}
+                placeholder="How should the stock be handed over? e.g. Call on arrival, deliver to security gate, unload at rear dock between 9–11 AM…"
+                className="mt-1" rows={2} data-testid="do-delivery-instructions" />
             </div>
           </div>
 
-          {/* Line items */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <Label>Line Items (SKU · packaging · qty · value)</Label>
-              <Button type="button" variant="outline" size="sm" onClick={addItem} data-testid="do-add-item"><Plus className="mr-1 h-3.5 w-3.5" /> Add line</Button>
+          {/* ── Delivery Contact (separate) ── */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50"><Phone className="h-4 w-4 text-sky-500" /></span>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Who receives the delivery?</h3>
+                <p className="text-xs text-slate-400">Point of contact at the delivery location.</p>
+              </div>
             </div>
-            {items.length === 0 && <p className="rounded-lg border border-dashed border-slate-200 py-4 text-center text-sm text-slate-400">No items yet. Add a line.</p>}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs font-medium text-slate-600">Contact name</Label>
+                <Input placeholder="Contact name" value={contactName} onChange={(e) => setContactName(e.target.value)} className="mt-1" data-testid="do-contact-name" />
+              </div>
+              <div>
+                <Label className="text-xs font-medium text-slate-600">Contact phone</Label>
+                <Input placeholder="Phone number" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="mt-1" data-testid="do-contact-phone" />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Line Items (distinctive) ── */}
+          <div className="rounded-xl border-2 border-emerald-100 bg-emerald-50/40 p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100"><Package className="h-4 w-4 text-emerald-600" /></span>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-800">Stock to deliver</h3>
+                  <p className="text-xs text-slate-400">SKU · packaging · quantity · unit value</p>
+                </div>
+              </div>
+              <Button type="button" size="sm" onClick={addItem} className="bg-emerald-600 hover:bg-emerald-700" data-testid="do-add-item"><Plus className="mr-1 h-3.5 w-3.5" /> Add item</Button>
+            </div>
+            {items.length === 0 && <p className="rounded-lg border border-dashed border-emerald-200 bg-white py-5 text-center text-sm text-slate-400">No items yet — click "Add item" to begin.</p>}
             <div className="space-y-2">
               {items.map((it, i) => {
                 const sku = skus.find((s) => s.id === it.sku_id);
                 const pkgs = pkgsFor(sku);
+                const lineTotal = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
                 return (
-                  <div key={i} className="grid grid-cols-12 items-center gap-2 rounded-lg border border-slate-200 p-2" data-testid={`do-item-row-${i}`}>
-                    <div className="col-span-12 sm:col-span-4">
-                      <Select value={it.sku_id} onValueChange={(v) => onSkuChange(i, v)}>
-                        <SelectTrigger data-testid={`do-item-sku-${i}`}><SelectValue placeholder="SKU" /></SelectTrigger>
-                        <SelectContent>
-                          {skus.map((s) => <SelectItem key={s.id} value={s.id}>{s.sku_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                  <div key={i} className="rounded-lg border border-emerald-100 bg-white p-2.5 shadow-sm" data-testid={`do-item-row-${i}`}>
+                    <div className="grid grid-cols-12 items-center gap-2">
+                      <div className="col-span-12 sm:col-span-4">
+                        <Select value={it.sku_id} onValueChange={(v) => onSkuChange(i, v)}>
+                          <SelectTrigger data-testid={`do-item-sku-${i}`}><SelectValue placeholder="Select SKU" /></SelectTrigger>
+                          <SelectContent>
+                            {skus.map((s) => <SelectItem key={s.id} value={s.id}>{s.sku_name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-5 sm:col-span-3">
+                        <Select value={it.packaging_type_id} onValueChange={(v) => onPkgChange(i, v)} disabled={!it.sku_id}>
+                          <SelectTrigger data-testid={`do-item-pkg-${i}`}><SelectValue placeholder={pkgs.length ? 'Packaging' : 'No packaging'} /></SelectTrigger>
+                          <SelectContent>
+                            {pkgs.map((p) => <SelectItem key={p.packaging_type_id} value={p.packaging_type_id}>{p.packaging_type_name}{p.units_per_package ? ` (${p.units_per_package})` : ''}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-3 sm:col-span-2">
+                        <Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} placeholder="Qty" data-testid={`do-item-qty-${i}`} />
+                      </div>
+                      <div className="col-span-3 sm:col-span-2">
+                        <Input type="number" min="0" value={it.unit_price} onChange={(e) => updateItem(i, { unit_price: e.target.value })} placeholder="Unit ₹" data-testid={`do-item-price-${i}`} />
+                      </div>
+                      <div className="col-span-1 flex justify-end">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(i)}><Trash2 className="h-4 w-4 text-rose-500" /></Button>
+                      </div>
                     </div>
-                    <div className="col-span-5 sm:col-span-3">
-                      <Select value={it.packaging_type_id} onValueChange={(v) => onPkgChange(i, v)} disabled={!it.sku_id}>
-                        <SelectTrigger data-testid={`do-item-pkg-${i}`}><SelectValue placeholder={pkgs.length ? 'Packaging' : 'No packaging'} /></SelectTrigger>
-                        <SelectContent>
-                          {pkgs.map((p) => <SelectItem key={p.packaging_type_id} value={p.packaging_type_id}>{p.packaging_type_name}{p.units_per_package ? ` (${p.units_per_package})` : ''}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-3 sm:col-span-2">
-                      <Input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })} placeholder="Qty" data-testid={`do-item-qty-${i}`} />
-                    </div>
-                    <div className="col-span-3 sm:col-span-2">
-                      <Input type="number" min="0" value={it.unit_price} onChange={(e) => updateItem(i, { unit_price: e.target.value })} placeholder="Unit ₹" data-testid={`do-item-price-${i}`} />
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(i)}><Trash2 className="h-4 w-4 text-rose-500" /></Button>
-                    </div>
+                    {it.sku_id && <div className="mt-1 text-right text-xs text-slate-500">Line total: <span className="font-semibold text-slate-700">{fmtINR(lineTotal)}</span></div>}
                   </div>
                 );
               })}
             </div>
             {items.length > 0 && (
-              <div className="mt-2 text-right text-sm font-semibold text-slate-800" data-testid="do-total">Total indicative value: {fmtINR(total)}</div>
+              <div className="mt-3 flex items-center justify-end gap-2 border-t border-emerald-200 pt-2 text-sm" data-testid="do-total">
+                <span className="text-slate-500">Total indicative value</span>
+                <span className="text-base font-bold text-emerald-700">{fmtINR(total)}</span>
+              </div>
             )}
           </div>
 
           <div>
-            <Label>Notes</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any special instructions…" data-testid="do-notes" />
+            <Label>Notes (internal)</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any internal notes for approvers…" data-testid="do-notes" />
           </div>
         </div>
 
