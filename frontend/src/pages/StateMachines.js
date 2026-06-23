@@ -80,6 +80,7 @@ export default function StateMachines() {
         code: editing.code || null,
         description: editing.description || '',
         states: editing.states,
+        actions: editing.actions || [],
         transitions: editing.transitions,
         applied_to: editing.applied_to,
       };

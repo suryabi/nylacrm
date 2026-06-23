@@ -1,0 +1,25 @@
+{
+  "summary": "Verified the bug fix for State Machines actions persistence end-to-end via Playwright. Login → open existing 'Delivery Order Lifecycle (default)' SM → Add action → set unique key/label → Save → assert PUT response status 200 & response.actions contains new key → reload page → re-open SM → confirmed new action still present (persisted). Bug fix is working correctly.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "StateMachines.js is 882 lines — exceeds the 700-line guideline; consider splitting StateMachineEditor and the per-section subcomponents (States/Actions/Transitions/Options/Guards/Required-fields) into separate files for maintainability.",
+    "Review request says 'Auth via httpOnly session cookie (axios withCredentials)' but the code uses localStorage token in Authorization Bearer headers (authHeaders() at line 15). Mismatch between docs and impl, but it works because backend currently accepts Bearer tokens. Worth a doc/code reconciliation.",
+    "Inside save(): on POST (new SM) the response is set into editing state but editing.id only becomes available afterwards — fine, but the immediate loadAll() will refetch list; no concern, just noted.",
+    "addAction() generates default key 'action_N' which can collide if rows are deleted then re-added; the existing while-loop handles this safely — good."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "Added a temporary action key 'test_action_244060' to SM id 3c86fc6d-3ada-4725-a859-99a32f588109 ('Delivery Order Lifecycle (default)') to validate persistence, then deleted it and saved again — final state matches pre-test (6 original actions).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "State Machines actions persistence is verified fixed (iteration 220). Save() now includes `actions: editing.actions || []` in PUT/POST body. Confirmed via: (a) request body contains 'actions' and the new key; (b) PUT /api/state-machines/{id} returns 200 with the new key in response.actions; (c) reload + re-open preserves the new action. Login flow works with localStorage Bearer token via /login form. Use data-testid='state-machine-{id}-open' to open, 'add-action-btn' to add, 'action-key-{idx}'/'action-label-{idx}' to edit, 'save-state-machine' to save, 'cancel-editor' to go back.",
+  "rca of the issue": "Original RCA (fixed by main agent): save() built the PUT/POST body but omitted the `actions` array. Backend StateMachineUpdate model only updates fields present in the payload, so actions never persisted. Fix: added `actions: editing.actions || []` to the body in StateMachines.js save() (~line 83). Verified end-to-end."
+}
