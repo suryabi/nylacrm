@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 2026-06-23 — Delivery Orders: 4 follow-up fixes ✅ (testing_agent verified, iteration_218)
+- **City master-match:** Google address city now normalizes to the **Location Master** city (e.g. "Rai Durg / HITEC City" → "Hyderabad") via new `matchMasterCity()` (matches city/aliases against the formatted address; cities loaded from `GET /api/master-locations/flat`). Was showing the sub-locality before.
+- **Google map wizard:** added `MapPreview` (keyless `maps.google.com ...output=embed` iframe with a pin) in the create dialog (after address pick) and the order detail, with an **Expand** button → large map dialog + "Open in Google Maps".
+- **Delivery date gated:** removed the requested-date field from creation; it's now settable **only after approval** (detail dialog shows an editable date + Save when `state==='approved'`; backend `update_delivery_order` allows only `requested_date` edits in approved state; `requested_date` made Optional).
+- **No auto order on approval:** removed the auto-create-draft-promo side-effect from the approve transition (per user). Approval now only changes state (+ manager task on submit); no stock-out is placed automatically.
+- ⚠️ Redeploy to apply on production.
+
+
+
 ## 2026-06-23 — Delivery Orders module (promotional stock-out requests) ✅
 - New module accessible from **Sales, Production & Distribution** navs (`/delivery-orders`).
 - Create a Delivery Order against ONE of Lead/Account/Contact/Employee; line items = SKU → packaging option (from SKU `packaging_config.promo_stock_out` ↦ falls back to `stock_out`) → quantity → unit/value; requested date; Google-address (lat/lng captured, prefilled from recipient, editable); promo reason; contact info; notes.
