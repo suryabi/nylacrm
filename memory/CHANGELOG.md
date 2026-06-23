@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-24 — Migrate Free Trial expenses → Delivery Orders + entity DO sections ✅ (testing_agent verified, iteration_222)
+- **Migration (admin-triggered, idempotent):** new endpoints `GET/POST /api/admin/migrate-free-trial-expenses[/preview]` convert lead/account **Free Trial** expense requests (the only stock-carrying type, has SKU items) into Delivery Orders. Maps status, defaults delivery date to approval/created date, pulls city/recipient from the linked lead/account, scoped to the current tenant's entities. Sets `migrated_to_delivery_order_id` on the expense and `migrated_from_expense_id` on the DO. Monetary expense types (gifting/onboarding/staff_gifting/sponsorship) are LEFT untouched. An admin-only banner + "Migrate Free Trials" button on the Delivery Orders page lets the user run it on production after deploy.
+- **Expense section kept, free_trial removed:** `ExpenseRequestSection` no longer offers the "Free Trial" type, and hides already-migrated free-trial records.
+- **Entity Delivery Orders:** `GET /api/delivery-orders` now accepts `lead_id`/`account_id` filters. New `EntityDeliveryOrders` component shows lead/account-specific DOs on the detail pages, with an inline "New" button that opens the Create dialog pre-bound to that lead/account (`CreateOrderDialog` exported + new `presetRecipient` prop).
+- ⚠️ Redeploy to apply on production; then click "Migrate Free Trials" on the Delivery Orders page once.
+
+
+
 ## 2026-06-24 — Delivery Orders: mandatory date + auto Promo Stock-Out on "Place Order" ✅ (testing_agent verified, iteration_221)
 - **Mandatory delivery date:** `requested_date` is now required at order creation (Create dialog has a required `do-requested-date` field; backend `create_delivery_order` rejects missing date). Removed the old "set after approval" gating — detail dialog now shows the date read-only.
 - **Place Order → auto draft Promo Stock-Out:** transitioning a DO via the `place_order` action auto-creates a **DRAFT** promotional stock-out at the servicing distributor. Resolution priority: (1) existing **Account with an active (primary) distributor assignment** → assigned distributor + location; (2) fallback to **delivery-city coverage** (`distributor_operating_coverage`). New helpers `_resolve_distributor_for_order` / `_pick_distributor_location`; wired in `trigger_transition`.

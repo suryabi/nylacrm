@@ -661,6 +661,25 @@ export default function DeliveryOrders() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [detailId, setDetailId] = useState(null);
+  const [role, setRole] = useState(null);
+  const [migrating, setMigrating] = useState(false);
+
+  const runMigration = async () => {
+    try {
+      const { data: prev } = await axios.get(`${API_URL}/admin/migrate-free-trial-expenses/preview`, auth());
+      if (!prev.eligible) {
+        toast.info(`Nothing to migrate. ${prev.already_migrated} already migrated, ${prev.skipped_no_items} have no SKUs.`);
+        return;
+      }
+      if (!window.confirm(`Migrate ${prev.eligible} Free Trial expense request(s) into Delivery Orders? This is safe to re-run.`)) return;
+      setMigrating(true);
+      const { data } = await axios.post(`${API_URL}/admin/migrate-free-trial-expenses`, {}, auth());
+      toast.success(`Migrated ${data.created} Free Trial expense(s) into Delivery Orders.`);
+      fetchOrders();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Migration failed');
+    } finally { setMigrating(false); }
+  };
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -688,6 +707,10 @@ export default function DeliveryOrders() {
           const c = await axios.get(`${API_URL}/master-locations/flat`, auth());
           setCities(c.data.cities || []);
         } catch { /* cities optional */ }
+        try {
+          const me = await axios.get(`${API_URL}/auth/me`, auth());
+          setRole(me.data?.role || null);
+        } catch { /* ignore */ }
       } catch { /* non-blocking */ }
     })();
   }, []);
@@ -708,6 +731,15 @@ export default function DeliveryOrders() {
           <Plus className="mr-1.5 h-4 w-4" /> New Delivery Order
         </Button>
       </div>
+
+      {['CEO', 'Director', 'Vice President', 'Admin', 'System Admin'].includes(role) && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5" data-testid="do-migration-banner">
+          <p className="text-xs text-amber-700">One-time data migration: convert legacy <b>Free Trial</b> expense requests into Delivery Orders. Safe to re-run.</p>
+          <Button size="sm" variant="outline" disabled={migrating} onClick={runMigration} className="border-amber-300 text-amber-700 hover:bg-amber-100" data-testid="do-migrate-free-trials-btn">
+            {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <><RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Migrate Free Trials</>}
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <Select value={stateFilter} onValueChange={setStateFilter}>
