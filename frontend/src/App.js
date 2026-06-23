@@ -70,6 +70,7 @@ import MasterCOGSComponents from './pages/MasterCOGSComponents';
 import AdminSkuMigrate from './pages/AdminSkuMigrate';
 import VehiclesList from './pages/admin/VehiclesList';
 import DriversList from './pages/admin/DriversList';
+import ReversalsAudit from './pages/admin/ReversalsAudit';
 import DeliverySchedulesList from './pages/distributor/DeliverySchedulesList';
 import DeliveryScheduleDetail from './pages/distributor/DeliveryScheduleDetail';
 import DriverLogin from './pages/driver/DriverLogin';
@@ -332,6 +333,7 @@ function AppRouter() {
           <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
           <Route path="/admin/vehicles" element={<ProtectedRoute><VehiclesList /></ProtectedRoute>} />
           <Route path="/admin/drivers" element={<ProtectedRoute><DriversList /></ProtectedRoute>} />
+          <Route path="/admin/reversals" element={<ProtectedRoute><ReversalsAudit /></ProtectedRoute>} />
           <Route path="/distributor/delivery-schedules" element={<ProtectedRoute><DeliverySchedulesList /></ProtectedRoute>} />
           <Route path="/distributor/delivery-schedules/:id" element={<ProtectedRoute><DeliveryScheduleDetail /></ProtectedRoute>} />
           <Route path="/accounts/:id" element={<ProtectedRoute moduleKey="accounts"><AccountDetail /></ProtectedRoute>} />

@@ -18,7 +18,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning, RotateCcw
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -283,6 +283,12 @@ const adminNavigationGroups = [
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'COGS Components', href: '/master/cogs-components', icon: Receipt, moduleKey: 'cogs_components', roles: ['CEO', 'Director', 'System Admin'] },
       { name: 'Lead Scoring Model', href: '/lead-scoring-model', icon: Gauge, moduleKey: 'lead_scoring_model', roles: ADMIN_ONLY_ROLES },
+    ],
+  },
+  {
+    title: 'Finance & Audit',
+    items: [
+      { name: 'Reversals Log', href: '/admin/reversals', icon: RotateCcw, roles: ADMIN_ONLY_ROLES },
     ],
   },
   {

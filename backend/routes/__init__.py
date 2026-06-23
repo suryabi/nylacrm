@@ -285,6 +285,10 @@ routes_router.include_router(revenue_analytics_router, tags=["Revenue Analytics"
 from .promo_dispatch import router as promo_dispatch_router
 routes_router.include_router(promo_dispatch_router, tags=["Promotional Dispatch"])
 
+# Reversals audit log (full paths declared in router → mounts under /api)
+from .reversals import router as reversals_router
+routes_router.include_router(reversals_router, tags=["Reversals"])
+
 # Inventory Management — Item Master, Vendor Master, Vendor-Item pricing,
 # stock entries, purchase orders, GRN. See routes/inventory_management.py
 routes_router.include_router(inventory_management_router, prefix="/inventory", tags=["Inventory Management"])

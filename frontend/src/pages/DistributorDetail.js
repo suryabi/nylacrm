@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { ReversalsLog } from '../components/reversals/ReversalsLog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
@@ -2589,7 +2590,7 @@ export default function DistributorDetail() {
       {/* Tabs - Consolidated Structure */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         {!isDistributorRole && (
-        <TabsList className={`grid w-full ${distributor?.is_self_managed ? 'grid-cols-9' : 'grid-cols-8'} h-auto p-1`}>
+        <TabsList className={`grid w-full ${distributor?.is_self_managed ? 'grid-cols-10' : 'grid-cols-9'} h-auto p-1`}>
           <TabsTrigger value="stock-dashboard" className="flex items-center gap-2 py-2.5" data-testid="stock-dashboard-tab">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Stock</span>
@@ -2621,6 +2622,10 @@ export default function DistributorDetail() {
           <TabsTrigger value="billing" className="flex items-center gap-2 py-2.5" data-testid="billing-tab">
             <Calculator className="h-4 w-4" />
             <span className="hidden sm:inline">Reconciliation</span>
+          </TabsTrigger>
+          <TabsTrigger value="reversals" className="flex items-center gap-2 py-2.5" data-testid="reversals-tab">
+            <RotateCcw className="h-4 w-4" />
+            <span className="hidden sm:inline">Reversals</span>
           </TabsTrigger>
         </TabsList>
         )}
@@ -2949,6 +2954,10 @@ export default function DistributorDetail() {
             API_URL={API_URL}
             token={token}
           />
+        </TabsContent>
+
+        <TabsContent value="reversals" className="space-y-4">
+          <ReversalsLog distributorId={id} />
         </TabsContent>
       </Tabs>
 

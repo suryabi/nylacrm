@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 2026-06-22 — Reversals Audit Log (unified, admin + per-distributor) ✅
+- New read-only audit log of all reversed Stock-Out deliveries AND Promotional Stock-Outs (unified from `distributor_deliveries` incl. `is_promo`, plus legacy `promo_dispatches`).
+- Backend `routes/reversals.py`: `GET /api/reversals` (admin-wide, role-gated to distributor admins) and `GET /api/distributors/{id}/reversals` (admin or that distributor's user). Filters: from_date/to_date/type. Returns rows + total + total_value. Reason parsed from delivery remarks ("Reversed: …").
+- Frontend reusable `components/reversals/ReversalsLog.jsx` (date-range + type filters, client search, CSV export, summary). Used by new admin page `/admin/reversals` (nav: Admin → Finance & Audit → Reversals Log) and a new "Reversals" tab on the distributor detail page (scoped via `distributorId`).
+- Columns: Date reversed · Distributor · Type · Reference # · Account/Recipient · Value · Original status · Stock added back · Reversed by · Reason (+ Zoho-pending flag).
+- Verified: backend curl (6 reversals, ₹5,650, distributor names + type filter + per-distributor scope) and admin UI screenshot (table, filters, CSV all render). ⚠️ Redeploy to apply on production.
+
+
+
 ## 2026-06-22 — Universal Stock-Out (regular delivery) REVERSAL at any stage ✅
 - Extended `reverse_delivery` (`routes/distributors.py`) from "not-yet-delivered only" to **any stage** except cancelled/reversed and settlement-locked (blocked with a clear message — user chose option a).
 - **Completed/delivered reversal** now adds stock back to the source warehouse via new `_readd_completed_delivery_stock()` (inverse of `complete_delivery`, factory_warehouse_stock or distributor_stock, batch-aware). Always voids the Zoho invoice (best-effort, retry-pending flag) OR deletes the External Billing Entry, undoes the local mirror + account `outstanding_balance`, and reverts applied credit notes. Marks `reversed` with `reversed_from_status`/`stock_readded` for audit.
