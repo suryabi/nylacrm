@@ -243,6 +243,9 @@ export default function DistributorDetail() {
   const [savingDelivery, setSavingDelivery] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
   const [showDeliveryDetail, setShowDeliveryDetail] = useState(false);
+  const [reverseDialog, setReverseDialog] = useState({ open: false, delivery: null });
+  const [reverseConfirmText, setReverseConfirmText] = useState('');
+  const [reverseReason, setReverseReason] = useState('');
   const [downloadingInvoice, setDownloadingInvoice] = useState(false);
   
   // Settlement state
@@ -1988,24 +1991,37 @@ export default function DistributorDetail() {
     }
   };
 
-  const handleReverseDelivery = async (deliveryId) => {
-    if (!window.confirm(
-      'Reverse this delivery? The Zoho invoice will be VOIDED, the committed stock released back to inventory, and any applied credit notes returned to available. Use this only when an already-invoiced delivery did NOT actually happen. This cannot be undone.'
-    )) return;
+  const doReverseDelivery = async (deliveryId, { acknowledge = false, reason = null } = {}) => {
     try {
       const { data } = await axios.post(
         `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/reverse`, {},
-        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true, params: { acknowledge, reason } }
       );
       toast.success(data?.message || 'Delivery reversed');
       if (data?.zoho_void_pending) {
         toast.warning('Zoho invoice void is pending — retry from the delivery once Zoho is reachable.');
       }
+      setReverseDialog({ open: false, delivery: null });
+      setReverseConfirmText('');
+      setReverseReason('');
       setShowDeliveryDetail(false);
       fetchDeliveries();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to reverse delivery');
     }
+  };
+
+  // Draft → reverse immediately (nothing committed). Past draft → require the
+  // double-confirm dialog (type REVERSE) before anything is touched.
+  const handleReverseDelivery = (delivery) => {
+    const st = (delivery?.status || '').toLowerCase();
+    if (st === 'draft') {
+      doReverseDelivery(delivery.id, { acknowledge: false });
+      return;
+    }
+    setReverseConfirmText('');
+    setReverseReason('');
+    setReverseDialog({ open: true, delivery });
   };
 
   const handleRetryDeliveryVoid = async (deliveryId) => {
@@ -3253,6 +3269,63 @@ export default function DistributorDetail() {
       </Dialog>
 
 
+      {/* Reverse delivery — double-confirm (type REVERSE) for non-draft */}
+      <Dialog open={reverseDialog.open} onOpenChange={(o) => { if (!o) { setReverseDialog({ open: false, delivery: null }); setReverseConfirmText(''); setReverseReason(''); } }}>
+        <DialogContent className="max-w-lg" data-testid="reverse-delivery-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700">
+              <RotateCcw className="h-5 w-5" /> Reverse delivery {reverseDialog.delivery?.delivery_number}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-800">
+              <p className="font-semibold">This will undo the delivery completely:</p>
+              <ul className="mt-1.5 list-disc pl-5 space-y-0.5 text-rose-700">
+                {['complete', 'completed', 'delivered'].includes((reverseDialog.delivery?.status || '').toLowerCase())
+                  ? <li><b>Stock will be added back</b> to the source warehouse.</li>
+                  : <li>The committed <b>stock reservation will be released</b>.</li>}
+                <li>The Zoho invoice will be <b>voided</b> (or the External Billing Entry deleted) and the account outstanding adjusted.</li>
+                <li>Any applied <b>credit notes return to available</b>.</li>
+              </ul>
+              <p className="mt-2 font-medium">This cannot be undone.</p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Reason (optional)</Label>
+              <Input
+                value={reverseReason}
+                onChange={(e) => setReverseReason(e.target.value)}
+                placeholder="e.g. Entered by mistake / delivery did not happen"
+                className="mt-1"
+                data-testid="reverse-delivery-reason"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Type <span className="font-mono font-bold text-rose-700">REVERSE</span> to confirm</Label>
+              <Input
+                value={reverseConfirmText}
+                onChange={(e) => setReverseConfirmText(e.target.value)}
+                placeholder="REVERSE"
+                className="mt-1"
+                data-testid="reverse-delivery-confirm-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setReverseDialog({ open: false, delivery: null }); setReverseConfirmText(''); setReverseReason(''); }} data-testid="reverse-delivery-cancel">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={reverseConfirmText.trim().toUpperCase() !== 'REVERSE'}
+              onClick={() => doReverseDelivery(reverseDialog.delivery.id, { acknowledge: true, reason: reverseReason.trim() || null })}
+              data-testid="reverse-delivery-confirm-btn"
+            >
+              <RotateCcw className="h-4 w-4 mr-1.5" /> Reverse delivery
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delivery Detail Dialog */}
       <Dialog open={showDeliveryDetail} onOpenChange={setShowDeliveryDetail}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -3269,8 +3342,7 @@ export default function DistributorDetail() {
                 const canConfirm = st === 'draft';
                 const canComplete = st === 'confirmed' || st === 'in_transit';
                 const canCancel = st === 'draft' || st === 'confirmed';
-                const canReverse = selectedDelivery.zoho_invoice_id &&
-                  !['draft', 'complete', 'completed', 'delivered', 'cancelled', 'reversed'].includes(st);
+                const canReverse = !['cancelled', 'reversed'].includes(st) && !selectedDelivery.settlement_id;
                 const canRetryVoid = st === 'reversed' && selectedDelivery.zoho_void_pending;
                 if (!(canConfirm || canComplete || canCancel || canReverse || canRetryVoid)) return null;
                 return (
@@ -3294,8 +3366,8 @@ export default function DistributorDetail() {
                         </DropdownMenuItem>
                       )}
                       {canReverse && (
-                        <DropdownMenuItem onClick={() => handleReverseDelivery(selectedDelivery.id)} data-testid="reverse-delivery-action">
-                          <RotateCcw className="h-4 w-4 mr-2 text-rose-600" /> Reverse (void invoice)
+                        <DropdownMenuItem onClick={() => handleReverseDelivery(selectedDelivery)} data-testid="reverse-delivery-action">
+                          <RotateCcw className="h-4 w-4 mr-2 text-rose-600" /> Reverse delivery
                         </DropdownMenuItem>
                       )}
                       {canRetryVoid && (
