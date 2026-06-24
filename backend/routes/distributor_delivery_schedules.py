@@ -358,7 +358,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
         sku_ids: set = set()
         async for it in db.distributor_delivery_items.find(
             {"delivery_id": {"$in": ids}, "tenant_id": tenant_id},
-            {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1, "sku_code": 1, "quantity": 1, "unit_price": 1}
+            {"_id": 0, "delivery_id": 1, "sku_id": 1, "sku_name": 1, "sku_code": 1, "quantity": 1, "unit_price": 1,
+             "packaging_type_name": 1, "units_per_package": 1, "delivered_quantity": 1}
         ):
             items_by_delivery.setdefault(it["delivery_id"], []).append(it)
             if it.get("sku_id"):
@@ -693,7 +694,7 @@ async def list_schedules(
         sku_ids: set[str] = set()
         async for it in db.distributor_delivery_items.find(
             {"delivery_id": {"$in": all_delivery_ids}, "tenant_id": tenant_id},
-            {"_id": 0, "delivery_id": 1, "sku_id": 1, "quantity": 1}
+            {"_id": 0, "delivery_id": 1, "sku_id": 1, "quantity": 1, "packaging_type_name": 1}
         ):
             items_by_delivery.setdefault(it["delivery_id"], []).append(it)
             if it.get("sku_id"):

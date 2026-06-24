@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 227 — Verified BOTH (1) frontend collapsible date-grouping UI (with Today-only-expanded default + Past pill) on the Distributor Detail → Stock Out tab, AND (2) backend packaging-projection fix in routes/distributor_delivery_schedules.py (line-level packaging_type_name like 'Bottle' (upp=1) must NOT be silently converted to the SKU 'Crate' default on the bundle PDF / challan PDF). 5/5 pytest cases PASS in /app/backend/tests/test_delivery_pdf_packaging.py covering: (a) _enrich_schedule trusts line packaging_label='Bottle' / units_per_package=1 / quantity stays as 3 bottles, not 3 crates, (b) crate-total aggregation respects line packaging (total_packages=3, total_units=3, NOT 36), (c) GET /api/distributor/delivery-schedules/{sid}/pdf (logged in as john.distributor → Brian) returns a valid %PDF (200, ~media_type application/pdf) for a seeded schedule containing a Bottle-packaged promo line, (d) GET /api/distributors/{did}/promo-deliveries/{pid}/challan-pdf (CEO session) returns a valid PDF for the same Bottle-packaged promo, (e) Regression on existing promo e07703e0… with packaging_type_name='Crate - 12' upp=12 — packaging_label stays 'Crate - 12', quantity=2 crates, quantity_units=24 (i.e. the fix does NOT regress the legacy crate path). Frontend: on Brian (DIST-0003) > Stock Out tab, the new date-group headers render with chevrons and the default state matches spec — 'Stock Out (Distributor → Customer)' shows 1 group (Today, 2 deliveries) expanded; 'Promotional Stock-Out (Delivery Challan)' shows 3 groups — TOMORROW 2026-06-25 (collapsed by default), TODAY 2026-06-24 (expanded by default), THU 04 JUN 2026 (collapsed by default with the PAST pill rendered via data-testid='promo-past-pill-2026-06-04'). Click toggles the group state (verified Today group collapsed to 0 visible rows after click).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Distributor Detail > Stock Out tab", "issues": [
+        "No 'Future' date group (>tomorrow) is present in current seed data, so the delivery-future-pill / promo-future-pill could only be verified by code inspection (utils/dateGrouping.js sets isFuture for dates beyond tomorrow; DeliveriesTab.jsx ~L1704 and PromoDispatchSection.jsx ~L618 wire the pill with the correct data-testid). The 'Tomorrow' group uses a special 'TOMORROW' label (not 'Future') per spec — confirmed in DOM text 'TOMORROW SCHEDULING · 1 challan'."
+      ]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_delivery_pdf_packaging.py",
+    "/app/test_reports/pytest/iteration_227.xml"
+  ],
+  "action_items": [
+    "Optional: seed at least one delivery > tomorrow so the Future pill (data-testid delivery-future-pill-* / promo-future-pill-*) can be exercised end-to-end in UI."
+  ],
+  "critical_code_review_comments": [
+    "routes/distributor_delivery_schedules.py L532-552: the line-packaging-trust branch uses `qty * (line_upp or 1)` for quantity_units BUT computes pkg_count = qty (raw). This is correct for 'Bottle' (upp=1) but if a line ever stores packaging_type_name='Crate - 12' with units_per_package=12 AND quantity is stored as crate-count (e.g. 2), this still works (2 crates, 24 units). However, if a legacy line stored quantity as base-units (24) with a line packaging_type_name set, the result would over-count (24 crates of 12 = 288 units). Worth a guard / migration note — currently relies on writer-side consistency.",
+    "routes/distributor_delivery_schedules.py L697 projection: now includes 'packaging_type_name' (the fix). However, the crate-total loop (~L713-728) uses int(pkg.get('units_per_package') or 0) where pkg = SKU-default packaging — the line's own units_per_package is NOT fetched in this aggregation projection. If a Bottle (1) line and a Crate (12) line for the SAME SKU are mixed in one schedule, the total summary may misrepresent units. Consider also projecting units_per_package in this loop and using line.units_per_package when present (mirror the L532 logic).",
+    "Frontend DeliveriesTab.jsx / PromoDispatchSection.jsx: openDateGroups[group.key] ?? group.isToday correctly defaults Today open and everything else closed, but state is held in component memory — re-mounting (tab switch + return) loses user-expanded groups. Acceptable, but if persistence is desired, localStorage scoped by distributor_id+section would be straightforward.",
+    "DeliveriesTab.jsx ~L1692: the entire <tr> is clickable for toggle but there is no role/aria-expanded on the header row, so keyboard / screen-reader users cannot collapse. Add role='button' tabIndex={0} aria-expanded={isOpen} for accessibility.",
+    "Stock Out (Distributor → Customer) section in current Brian seed has only ONE Today group — so the Future/Past code branches there were not exercisable in UI. Code-level verification only."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_delivery_pdf_packaging.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (5/5 pytest)",
+    "frontend": "100% (default-expanded Today, collapsed Tomorrow & Past, Past pill rendered, click-toggle verified — Future pill only verifiable by code inspection due to seed data)"
+  },
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123; Distributor: john.distributor@test.com / nyladist## (linked to Brian DIST-0003)",
+  "seed_data_creation": "All temp docs use id-prefix 'qa-pkg-*' and are deleted in each test's teardown. Verified 0 'qa-pkg-' docs remain post-run across distributor_deliveries / distributor_delivery_items / distributor_delivery_schedules. Pre-existing seed untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run with: cd /app/backend && python -m pytest tests/test_delivery_pdf_packaging.py -v. The test loads BOTH /app/backend/.env and /app/frontend/.env via python-dotenv (for MONGO_URL, DB_NAME and REACT_APP_BACKEND_URL). Each test owns its event loop via asyncio.new_event_loop() because conftest pins a session loop. Bundle-PDF endpoint /api/distributor/delivery-schedules/{sid}/pdf is DISTRIBUTOR-ONLY (raises 403 'Your user account is not linked to a distributor.' for CEO) — the test logs in as john.distributor@test.com / nyladist## and seeds the temporary promo under distributor_id=bb12d90e (Brian). The challan-PDF endpoint accepts the CEO session. For UI, to fully cover Future/Past pills, seed at least 1 delivery 2+ days in the future under a single distributor."
+}

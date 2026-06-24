@@ -77,7 +77,12 @@ export default function DeliveriesTab({
   batchesBySku = {},
 }) {
   const [downloading, setDownloading] = useState(false);
-  
+
+  // Per-date-group open/close state. Default (when a key is absent) is driven
+  // by `isToday` so only Today's group is expanded on first render.
+  const [openDateGroups, setOpenDateGroups] = useState({});
+  const toggleDateGroup = (key) => setOpenDateGroups(prev => ({ ...prev, [key]: !(prev[key] ?? false) }));
+
   // Collapsible section state
   const [custSectionOpen, setCustSectionOpen] = useState(true);
   const [factorySectionOpen, setFactorySectionOpen] = useState(true);
@@ -1678,24 +1683,34 @@ export default function DeliveriesTab({
                 </tr>
               </thead>
               <tbody>
-                {groupByDateDesc(deliveries, (d) => d.delivery_date).map((group) => (
+                {groupByDateDesc(deliveries, (d) => d.delivery_date).map((group) => {
+                  const isOpen = openDateGroups[group.key] ?? group.isToday;
+                  return (
                   <React.Fragment key={group.key}>
                     <tr
-                      className={`border-y ${group.isToday ? 'bg-emerald-100/80 border-emerald-300' : group.isTomorrow ? 'bg-amber-100/80 border-amber-300' : 'bg-slate-50 border-slate-200'}`}
+                      className={`border-y cursor-pointer ${group.isToday ? 'bg-emerald-100/80 border-emerald-300' : group.isTomorrow ? 'bg-amber-100/80 border-amber-300' : 'bg-slate-50 border-slate-200'}`}
                       data-testid={`delivery-date-group-${group.key}`}
+                      onClick={() => toggleDateGroup(group.key)}
                     >
                       <td colSpan="11" className="px-3 py-2">
                         <div className="flex items-center gap-2">
+                          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? '' : '-rotate-90'} ${group.isToday ? 'text-emerald-700' : group.isTomorrow ? 'text-amber-700' : 'text-slate-400'}`} />
                           <Calendar className={`h-3.5 w-3.5 ${group.isToday ? 'text-emerald-700' : group.isTomorrow ? 'text-amber-700' : 'text-slate-400'}`} />
                           <span className={`text-xs font-bold uppercase tracking-wider ${group.isToday ? 'text-emerald-800' : group.isTomorrow ? 'text-amber-800' : 'text-slate-600'}`}>{group.label}</span>
                           {(group.isToday || group.isTomorrow) && (
                             <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${group.isToday ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'}`}>Scheduling</span>
                           )}
+                          {group.isFuture && (
+                            <span className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 border border-sky-200" data-testid={`delivery-future-pill-${group.key}`}>Future</span>
+                          )}
+                          {group.isPast && (
+                            <span className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 border border-slate-300" data-testid={`delivery-past-pill-${group.key}`}>Past</span>
+                          )}
                           <span className="text-[11px] font-normal text-slate-400">· {group.items.length} {group.items.length === 1 ? 'delivery' : 'deliveries'}</span>
                         </div>
                       </td>
                     </tr>
-                    {group.items.map((delivery) => {
+                    {isOpen && group.items.map((delivery) => {
                   const items = delivery.items || [];
                   
                   // Credit notes info
@@ -1874,7 +1889,8 @@ export default function DeliveriesTab({
                   );
                 })}
                   </React.Fragment>
-                ))}
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-emerald-300 bg-emerald-50/70 font-semibold" data-testid="deliveries-totals-row">
