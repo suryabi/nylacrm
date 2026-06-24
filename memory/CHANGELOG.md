@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-24 — Fix: promo stock-out "Insufficient stock (available 0)" on batch-tracked warehouses ✅ (testing_agent verified, iteration_223, 3/3 pytest)
+- **Bug:** Confirming a promotional stock-out that a Delivery Order auto-created failed with `Insufficient stock for <SKU>: need 1, available 0`, even though the (batch-tracked) warehouse had plenty of stock (e.g. Madapur Warehouse, Hyderabad/Jaitra Wellness distributor). DO-auto-created lines have no `batch_id`, so the confirm validation queried only null-batch stock rows — which are always zero on a batch-tracked warehouse.
+- **Fix:** new `_allocate_batches_if_needed` in `promo_dispatch.py` runs at confirm for batch-tracked sources: allocates available batches **FIFO** (production/created date), reservation-aware, splitting a line across batches as needed, and rewrites the delivery's line items with the chosen batches (atomic delete_many + insert_many). Genuine shortfalls now raise the **real** available count, not 0.
+- Verified: batchless qty-6 draft → confirms, split into B1:5 + B2:1; over-demand qty-5 (only 2 left after reservation) → 400 "need 5, available 2"; non-batch locations unaffected.
+- ⚠️ Production: redeploy to apply. This was a shared-logic bug, so it also affected regular stock-outs created without a batch on batch-tracked warehouses.
+
+
+
 ## 2026-06-24 — Migrate Free Trial expenses → Delivery Orders + entity DO sections ✅ (testing_agent verified, iteration_222)
 - **Migration (admin-triggered, idempotent):** new endpoints `GET/POST /api/admin/migrate-free-trial-expenses[/preview]` convert lead/account **Free Trial** expense requests (the only stock-carrying type, has SKU items) into Delivery Orders. Maps status, defaults delivery date to approval/created date, pulls city/recipient from the linked lead/account, scoped to the current tenant's entities. Sets `migrated_to_delivery_order_id` on the expense and `migrated_from_expense_id` on the DO. Monetary expense types (gifting/onboarding/staff_gifting/sponsorship) are LEFT untouched. An admin-only banner + "Migrate Free Trials" button on the Delivery Orders page lets the user run it on production after deploy.
 - **Expense section kept, free_trial removed:** `ExpenseRequestSection` no longer offers the "Free Trial" type, and hides already-migrated free-trial records.

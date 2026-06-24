@@ -271,12 +271,15 @@ async def _allocate_batches_if_needed(tenant_id: str, d: dict, items: list, disp
             new_items.append(line)
     if changed:
         await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": dispatch_id})
+        docs = []
         for line in new_items:
             doc = {**line}
             doc["id"] = str(uuid.uuid4())
             doc["tenant_id"] = tenant_id
             doc["delivery_id"] = dispatch_id
-            await db.distributor_delivery_items.insert_one(doc)
+            docs.append(doc)
+        if docs:
+            await db.distributor_delivery_items.insert_many(docs)
     return new_items
 
 
