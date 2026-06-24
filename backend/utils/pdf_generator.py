@@ -74,7 +74,8 @@ def build_maps_qr(address_text: str = None, lat=None, lng=None, size: float = 22
         img.save(bio, format="PNG")
         bio.seek(0)
         return Image(bio, width=size, height=size)
-    except Exception:
+    except Exception as exc:
+        logger.warning("build_maps_qr failed to render QR (degrading to no QR): %s", exc)
         return None
 
 
@@ -1034,6 +1035,14 @@ def generate_delivery_challan_pdf(
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
             ]))
             story.append(qr_table)
+            story.append(Spacer(1, 12))
+        else:
+            # Address resolved but QR could not render — still show the address
+            # clearly with a small note (never drop it silently).
+            story.append(Paragraph(
+                f"<b>Deliver To:</b> {contact_data.get('name', '')} — {addr} "
+                f"<font color='#92400e'>(map QR unavailable)</font>",
+                ParagraphStyle('DeliverTo', parent=normal_style, fontSize=10, leading=13)))
             story.append(Spacer(1, 12))
     else:
         story.append(Paragraph(

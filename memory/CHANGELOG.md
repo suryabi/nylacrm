@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 2026-06-24 — Delivery bundle & challans always show address + Google Maps QR ✅ (testing_agent verified, iteration_226, 5/5 pytest)
+- **Problem:** The scheduled delivery bundle/driver sheet and delivery challans were missing the customer address + a QR code, especially for promotional stock-outs (direct & DO-created), because the QR only rendered from GPS lat/lng and the bundle's address resolution was account-only.
+- **Fix (both surfaces — driver-sheet bundle `_build_schedule_pdf` AND individual challan PDF `generate_delivery_challan_pdf`):**
+  - QR now falls back to a Google Maps **search link built from the text address** when no lat/lng — so a scannable QR (and 'Scan for directions') appears whenever any address exists.
+  - Address is resolved for **all recipient types** — Account, plus promo recipients Contact/Lead/Employee and DO delivery addresses (`_enrich_schedule` now fetches recipient entities; `_addr_from` reads `address`/`street2`/`zip`).
+  - A bold red **"⚠ ADDRESS MISSING"** guard prints when nothing can be resolved (never silently blank); challan endpoint stays HTTP 200 (no crash). QR-render failures are logged, and if a QR can't render the address still prints with a "(map QR unavailable)" note.
+- New helper `build_maps_qr()` in `pdf_generator.py`.
+- ⚠️ Note: Zoho-synced challans return the Zoho PDF (our QR isn't injected there); the **driver-sheet bundle** carries address+QR per stop regardless, so scheduled runs are always covered. Redeploy to apply on production.
+
+
+
 ## 2026-06-24 — Fix: DO list now mirrors live promo fulfillment status ✅ (testing_agent verified, iteration_225, 8/8 + frontend)
 - **Bug:** Delivery Orders list showed Fulfillment = "Draft" even when the linked Promotional Stock-Out challan was "Confirmed". The live-status mirror only ran on the detail GET, not on the list endpoint, so the stored value (set at place-order time) stayed stale.
 - **Fix:** `list_delivery_orders` now batch-looks-up each linked promo's current status from `distributor_deliveries` and reflects + persists it (single `bulk_write`). Detail GET already did this. Lead/account DO sections benefit too (same endpoint).
