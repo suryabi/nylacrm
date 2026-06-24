@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { leadsAPI } from '../utils/api';
+import { isValidMapsLink } from '../utils/mapsLink';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const getHeaders = () => {
@@ -47,6 +48,7 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
     landmark: saved.landmark || '',
     lat: saved.lat ?? null,
     lng: saved.lng ?? null,
+    maps_link: saved.maps_link || '',
     formatted_address: saved.formatted_address || '',
   });
 
@@ -67,6 +69,7 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
       landmark: s.landmark || '',
       lat: s.lat ?? null,
       lng: s.lng ?? null,
+      maps_link: s.maps_link || '',
       formatted_address: s.formatted_address || '',
     });
     setSearchQuery(s.address_line1 || '');
@@ -155,6 +158,10 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
       toast.error('Please enter or pick an address');
       return;
     }
+    if (!isValidMapsLink(form.maps_link)) {
+      toast.error('Enter a valid Google Maps link (e.g. https://maps.app.goo.gl/...)');
+      return;
+    }
     setSaving(true);
     try {
       await leadsAPI.update(lead.id, { delivery_address: form });
@@ -179,6 +186,7 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
       landmark: s.landmark || '',
       lat: s.lat ?? null,
       lng: s.lng ?? null,
+      maps_link: s.maps_link || '',
       formatted_address: s.formatted_address || '',
     });
     setSearchQuery(s.address_line1 || '');
@@ -478,6 +486,18 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
                   data-testid="lead-address-landmark-input"
                 />
               </div>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                <ExternalLink className="h-3 w-3" /> Google Maps Link
+              </Label>
+              <Input
+                value={form.maps_link}
+                onChange={(e) => setForm({ ...form, maps_link: e.target.value })}
+                placeholder="Paste a Google Maps link e.g. https://maps.app.goo.gl/..."
+                data-testid="lead-address-maps-link-input"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">Used for the delivery QR code when GPS isn't available.</p>
             </div>
           </div>
 

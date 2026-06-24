@@ -457,6 +457,7 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 "pincode": pincode or None,
                 "lat": src.get("lat") or src.get("latitude"),
                 "lng": src.get("lng") or src.get("longitude"),
+                "maps_link": src.get("maps_link") or None,
                 "formatted": ", ".join([p for p in (line1, line2, city, state, pincode) if p]) or None,
             }
 
@@ -485,7 +486,12 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
             if not addr:
                 addr = _addr_from(r.get("recipient_shipping_address"))
             if not addr and isinstance(dlv_addr, str) and dlv_addr.strip():
-                addr = {"formatted": dlv_addr.strip(), "lat": None, "lng": None}
+                addr = {"formatted": dlv_addr.strip(), "lat": None, "lng": None,
+                        "maps_link": r.get("maps_link") or (r.get("recipient_shipping_address") or {}).get("maps_link")}
+            # Ensure a dispatch-level pasted maps link wins even when the address
+            # was resolved from a source dict that had no link of its own.
+            if isinstance(addr, dict) and not addr.get("maps_link"):
+                addr["maps_link"] = r.get("maps_link") or (r.get("recipient_shipping_address") or {}).get("maps_link")
             # Delivery contact — the on-ground person the driver should call.
             # Precedence: the account's "Delivery"-category contact (the explicit
             # delivery contact) → the delivery row's override → the account's
@@ -1565,18 +1571,22 @@ async def download_schedule_bundle_pdf(
     )
 
 
-def _maps_qr_flowable(lat, lng, address_text=None, size_mm: float = 22):
-    """Return a ReportLab Image of a QR code that opens Google Maps directions:
-    by GPS coordinates when present, else by the text address (search). Returns
-    None only when there is neither usable coordinates nor an address string."""
+def _maps_qr_flowable(lat, lng, address_text=None, maps_link=None, size_mm: float = 22):
+    """Return a ReportLab Image of a QR code that opens Google Maps directions.
+    Priority: a pasted Google Maps link → GPS coordinates → the text address
+    (search). Returns None when none of the three are usable."""
     url = None
-    try:
-        flat = float(lat)
-        flng = float(lng)
-        if not (flat == 0 and flng == 0):
-            url = f"https://www.google.com/maps/dir/?api=1&destination={flat},{flng}"
-    except (TypeError, ValueError):
-        pass
+    link = str(maps_link or "").strip()
+    if link and (link.startswith("http://") or link.startswith("https://")):
+        url = link
+    if not url:
+        try:
+            flat = float(lat)
+            flng = float(lng)
+            if not (flat == 0 and flng == 0):
+                url = f"https://www.google.com/maps/dir/?api=1&destination={flat},{flng}"
+        except (TypeError, ValueError):
+            pass
     if not url:
         txt = str(address_text or "").strip()
         if not txt or txt == "—":
@@ -1607,10 +1617,11 @@ def _address_cell(addr: dict, addr_str: str, body_style, small_style):
     from reportlab.lib.units import mm
 
     has_addr = bool(addr_str and addr_str.strip() and addr_str.strip() != "—")
-    if not has_addr:
+    maps_link = (addr or {}).get("maps_link")
+    if not has_addr and not maps_link:
         return [Paragraph("<b><font color='#dc2626'>&#9888; ADDRESS MISSING</font></b>", body_style)]
-    flowables = [Paragraph(addr_str, body_style)]
-    qr = _maps_qr_flowable((addr or {}).get("lat"), (addr or {}).get("lng"), addr_str)
+    flowables = [Paragraph(addr_str if has_addr else "<font color='#1E3A8A'>Google Maps location</font>", body_style)]
+    qr = _maps_qr_flowable((addr or {}).get("lat"), (addr or {}).get("lng"), addr_str, maps_link)
     if qr is not None:
         flowables.append(Spacer(1, 2 * mm))
         flowables.append(qr)

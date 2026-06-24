@@ -19,6 +19,7 @@ import {
   Package, Plus, Trash2, Loader2, MapPin, Search, X, ClipboardList,
   CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon,
 } from 'lucide-react';
+import { isValidMapsLink } from '../utils/mapsLink';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, withCredentials: true });
@@ -183,7 +184,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
   const [selected, setSelected] = useState(null);
   const [requestedDate, setRequestedDate] = useState('');
   const [reason, setReason] = useState('');
-  const [addr, setAddr] = useState({ line1: '', city: '', state: '', pincode: '', lat: null, lng: null, formatted_address: '' });
+  const [addr, setAddr] = useState({ line1: '', city: '', state: '', pincode: '', lat: null, lng: null, maps_link: '', formatted_address: '' });
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [notes, setNotes] = useState('');
@@ -196,7 +197,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
       setRecipientType(presetRecipient?.type || 'account');
       setSelected(presetRecipient?.entity || null);
       setRequestedDate(''); setReason('');
-      setAddr({ line1: '', city: '', state: '', pincode: '', lat: null, lng: null, formatted_address: '' });
+      setAddr({ line1: '', city: '', state: '', pincode: '', lat: null, lng: null, maps_link: '', formatted_address: '' });
       setContactName(''); setContactPhone(''); setNotes(''); setDeliveryInstructions(''); setItems([]);
     }
   }, [open]);
@@ -253,6 +254,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
     if (!selected) return toast.error('Select a recipient.');
     if (!requestedDate) return toast.error('Delivery date is required.');
     if (!addr.city) return toast.error('Delivery city is required (use the address search).');
+    if (!isValidMapsLink(addr.maps_link)) return toast.error('Enter a valid Google Maps link (e.g. https://maps.app.goo.gl/...)');
     if (!items.length || items.some((i) => !i.sku_id || !i.quantity)) return toast.error('Add at least one line with SKU and quantity.');
     setSaving(true);
     try {
@@ -356,6 +358,10 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
               <Input placeholder="City" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} data-testid="do-addr-city" />
               <Input placeholder="State" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} />
               <Input placeholder="Pincode" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} />
+            </div>
+            <div className="mt-2">
+              <Input placeholder="Google Maps link e.g. https://maps.app.goo.gl/..." value={addr.maps_link} onChange={(e) => setAddr({ ...addr, maps_link: e.target.value })} data-testid="do-addr-maps-link" />
+              <p className="text-[11px] text-slate-400 mt-1">Used for the delivery QR code when GPS isn't available.</p>
             </div>
             {addr.lat != null && addr.lng != null && (
               <div className="mt-2"><MapPreview lat={addr.lat} lng={addr.lng} label={addr.city} /></div>

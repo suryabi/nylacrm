@@ -500,6 +500,8 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     # Discovery carry a nested `delivery_address` dict; older leads/contacts
     # carry the same fields at the top level. We accept both.
     da = recipient.get("delivery_address") if isinstance(recipient.get("delivery_address"), dict) else {}
+    # Pasted Google Maps link — dispatch form wins, else the recipient's saved link.
+    maps_link = (data.maps_link or da.get("maps_link") or recipient.get("maps_link") or "").strip() or None
     recipient_shipping = {
         "attention": recipient_name or "",
         "address": (da.get("address_line1") or recipient.get("address") or "")[:200],
@@ -509,6 +511,7 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "zip":     str(da.get("pincode") or recipient.get("pincode") or "")[:20],
         "country": (da.get("country") or recipient.get("country") or "India")[:50],
         "phone":   recipient_phone or "",
+        "maps_link": maps_link,
     }
 
     total_qty = sum(it.quantity for it in data.items)
@@ -552,6 +555,7 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "driver_name": data.driver_name,
         "driver_contact": data.driver_contact,
         "delivery_address": data.delivery_address or contact_addr,
+        "maps_link": maps_link,
         "recipient_shipping_address": recipient_shipping,
         "source_zoho_branch_id": loc.get("zoho_branch_id"),
         "source_location_name": loc.get("location_name"),

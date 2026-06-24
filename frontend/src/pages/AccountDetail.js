@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import TaxBillingCard from '../components/TaxBillingCard';
+import { isValidMapsLink } from '../utils/mapsLink';
 import GammaGenerateButton from '../components/gamma/GammaGenerateButton';
 import {
   Select,
@@ -302,7 +303,8 @@ export default function AccountDetail() {
     city: '',
     state: '',
     pincode: '',
-    landmark: ''
+    landmark: '',
+    maps_link: ''
   });
   const [addressSearchQuery, setAddressSearchQuery] = useState('');
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -475,6 +477,10 @@ export default function AccountDetail() {
   const handleSaveDeliveryAddress = async () => {
     if (!deliveryAddress.address_line1) {
       toast.error('Please enter an address');
+      return;
+    }
+    if (!isValidMapsLink(deliveryAddress.maps_link)) {
+      toast.error('Enter a valid Google Maps link (e.g. https://maps.app.goo.gl/...)');
       return;
     }
 
@@ -2814,6 +2820,16 @@ ${googleMapsLink}`;
                           data-testid="address-landmark-input"
                         />
                       </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Google Maps Link</Label>
+                      <Input
+                        value={deliveryAddress.maps_link || ''}
+                        onChange={(e) => setDeliveryAddress({...deliveryAddress, maps_link: e.target.value})}
+                        placeholder="Paste a Google Maps link e.g. https://maps.app.goo.gl/..."
+                        data-testid="address-maps-link-input"
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1">Used for the delivery QR code when GPS isn't available.</p>
                     </div>
                   </div>
 

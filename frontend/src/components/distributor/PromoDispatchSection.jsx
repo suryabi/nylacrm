@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { groupByDateDesc } from '../../utils/dateGrouping';
+import { isValidMapsLink } from '../../utils/mapsLink';
 import { Calendar } from 'lucide-react';
 import BatchPickerCards from './BatchPickerCards';
 
@@ -73,6 +74,7 @@ export default function PromoDispatchSection({
     driver_name: '',
     driver_contact: '',
     delivery_address: '',
+    maps_link: '',
     remarks: '',
   });
   const selectedLoc = useMemo(
@@ -258,6 +260,7 @@ export default function PromoDispatchSection({
       driver_name: '',
       driver_contact: '',
       delivery_address: '',
+      maps_link: '',
       remarks: '',
     });
   };
@@ -311,6 +314,10 @@ export default function PromoDispatchSection({
 
   const handleCreate = async (asDraft = false) => {
     if (!canSubmit) return;
+    if (!isValidMapsLink(form.maps_link)) {
+      toast.error('Enter a valid Google Maps link (e.g. https://maps.app.goo.gl/...)');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -326,6 +333,7 @@ export default function PromoDispatchSection({
         driver_name: form.driver_name || null,
         driver_contact: form.driver_contact || null,
         delivery_address: form.delivery_address || null,
+        maps_link: form.maps_link || null,
         remarks: form.remarks || null,
         as_draft: asDraft,
         items: items.filter(i => i.sku_id && (parseInt(i.quantity) || 0) > 0).map(i => ({
@@ -1039,6 +1047,12 @@ export default function PromoDispatchSection({
             <div className="space-y-2">
               <Label>Delivery Address</Label>
               <Textarea rows={2} value={form.delivery_address} onChange={(e) => setForm(f => ({ ...f, delivery_address: e.target.value }))} placeholder="Defaults to the contact's address" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Google Maps Link</Label>
+              <Input value={form.maps_link} onChange={(e) => setForm(f => ({ ...f, maps_link: e.target.value }))} placeholder="Paste a Google Maps link e.g. https://maps.app.goo.gl/..." data-testid="promo-maps-link-input" />
+              <p className="text-[11px] text-muted-foreground">Used for the delivery QR code when GPS isn't available.</p>
             </div>
 
             {/* Items */}

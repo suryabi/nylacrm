@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
+import { isValidMapsLink } from '../utils/mapsLink';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -244,6 +245,7 @@ export default function ContactsList() {
     lat: null,
     lng: null,
     formatted_address: '',
+    maps_link: '',
     notes: ''
   });
 
@@ -434,6 +436,7 @@ export default function ContactsList() {
       lat: null,
       lng: null,
       formatted_address: '',
+      maps_link: '',
       notes: ''
     });
     setCardFront(null);
@@ -461,6 +464,7 @@ export default function ContactsList() {
       lat: contact.lat ?? null,
       lng: contact.lng ?? null,
       formatted_address: contact.formatted_address || '',
+      maps_link: contact.maps_link || '',
       notes: contact.notes || ''
     });
     setCardFront(contact.card_front_url || null);
@@ -527,6 +531,10 @@ export default function ContactsList() {
     }
     if (!formData.name.trim()) {
       toast.error('Name is required');
+      return;
+    }
+    if (!isValidMapsLink(formData.maps_link)) {
+      toast.error('Enter a valid Google Maps link (e.g. https://maps.app.goo.gl/...)');
       return;
     }
 
@@ -1004,6 +1012,17 @@ export default function ContactsList() {
                     GPS captured: {Number(formData.lat).toFixed(6)}, {Number(formData.lng).toFixed(6)}
                   </p>
                 )}
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Google Maps Link</Label>
+                  <Input
+                    value={formData.maps_link || ''}
+                    onChange={(e) => setFormData({ ...formData, maps_link: e.target.value })}
+                    placeholder="Paste a Google Maps link e.g. https://maps.app.goo.gl/..."
+                    data-testid="contact-maps-link"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Used for the delivery QR code when GPS isn't available.</p>
+                </div>
               </div>
 
               <div className="space-y-2">

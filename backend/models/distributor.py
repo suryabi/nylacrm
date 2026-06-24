@@ -597,6 +597,7 @@ class PromoDeliveryCreate(BaseModel):
     driver_name: Optional[str] = None
     driver_contact: Optional[str] = None
     delivery_address: Optional[str] = None
+    maps_link: Optional[str] = None       # pasted Google Maps link → drives delivery QR
     remarks: Optional[str] = None
     items: List[PromoDeliveryItemCreate]
     as_draft: bool = False            # save without deducting stock / Zoho push

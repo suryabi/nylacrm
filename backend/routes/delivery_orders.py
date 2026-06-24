@@ -49,6 +49,7 @@ class DeliveryAddress(BaseModel):
     pincode: Optional[str] = None
     lat: Optional[float] = None
     lng: Optional[float] = None
+    maps_link: Optional[str] = None
     formatted_address: Optional[str] = None
 
 

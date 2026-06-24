@@ -47,19 +47,24 @@ MONTH_NAMES = {
 }
 
 
-def build_maps_qr(address_text: str = None, lat=None, lng=None, size: float = 22 * mm):
-    """QR code that opens Google Maps directions — by GPS coordinates when
-    present, otherwise by the text address. Returns None when neither is usable."""
+def build_maps_qr(address_text: str = None, lat=None, lng=None, maps_link: str = None, size: float = 22 * mm):
+    """QR code that opens Google Maps directions. Priority: a pasted Google Maps
+    link (e.g. https://maps.app.goo.gl/...) → GPS coordinates → the text address.
+    Returns None when none are usable."""
     try:
         import qrcode
         from urllib.parse import quote_plus
         url = None
-        try:
-            flat, flng = float(lat), float(lng)
-            if not (flat == 0 and flng == 0):
-                url = f"https://www.google.com/maps/dir/?api=1&destination={flat},{flng}"
-        except (TypeError, ValueError):
-            pass
+        link = str(maps_link or "").strip()
+        if link and (link.startswith("http://") or link.startswith("https://")):
+            url = link
+        if not url:
+            try:
+                flat, flng = float(lat), float(lng)
+                if not (flat == 0 and flng == 0):
+                    url = f"https://www.google.com/maps/dir/?api=1&destination={flat},{flng}"
+            except (TypeError, ValueError):
+                pass
         if not url:
             txt = str(address_text or "").strip()
             if not txt:
@@ -1018,7 +1023,8 @@ def generate_delivery_challan_pdf(
 
     # ===== Delivery address QR (Google Maps) / missing-address guard =====
     _ship = delivery_data.get('recipient_shipping_address') or {}
-    qr_img = build_maps_qr(address_text=addr, lat=_ship.get('lat'), lng=_ship.get('lng'))
+    _maps_link = _ship.get('maps_link') or delivery_data.get('maps_link')
+    qr_img = build_maps_qr(address_text=addr, lat=_ship.get('lat'), lng=_ship.get('lng'), maps_link=_maps_link)
     if addr:
         if qr_img is not None:
             qr_caption = ParagraphStyle('QrCap', parent=normal_style, fontSize=9, leading=12)

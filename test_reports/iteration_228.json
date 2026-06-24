@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 228 — Verified the new Google Maps Link field + QR-link-first behavior. BACKEND: 8/8 pytest pass in /app/backend/tests/test_maps_link_qr.py covering (a) PromoDeliveryCreate.maps_link is on the Pydantic model, (b) routes/delivery_orders.DeliveryAddress.maps_link is on the model (no 422 with valid str), (c) POST /api/distributors/{did}/promo-deliveries with body.maps_link='https://maps.app.goo.gl/eU2YJBYWqCEyFwhr9?g_st=iw' returns 200 and the persisted dispatch in mongo carries BOTH dispatch.maps_link == link AND dispatch.recipient_shipping_address.maps_link == link, (d) GET /api/distributors/{did}/promo-deliveries/{pid}/challan-pdf returns 200 + a valid %PDF (>1.5KB), (e) Tolerance: maps_link=null AND maps_link='' both yield 200 with no 422 (field optional + stored as None/empty), (f) GET /api/distributor/delivery-schedules/{sched_id}/pdf (distributor-only) for a seeded schedule whose promo dispatch carries maps_link returns 200 + valid %PDF, (g+h) Priority logic verified by SOURCE INSPECTION of both utils/pdf_generator.build_maps_qr AND routes/distributor_delivery_schedules._maps_qr_flowable — the 'link = str(maps_link or \"\").strip()' branch occurs BEFORE 'float(lat)' in both functions, i.e. maps_link is consumed FIRST when present (then GPS, then text-search fallback). FRONTEND: Confirmed render of the new data-testid inputs on the public preview URL via Playwright — 'promo-maps-link-input' renders inside the Promo Stock-Out (Delivery Challan) create dialog at /distributors/{id}?tab=stockout, 'do-addr-maps-link' renders in the New Delivery Order dialog at /delivery-orders, 'contact-maps-link' renders in the Add-Contact dialog at /contacts. Lead and Account inputs (lead-address-maps-link-input, address-maps-link-input) confirmed present in code (grep verified in components/LeadDeliveryAddressCard.js L498 and pages/AccountDetail.js L2830) but their parent edit-mode toggles were not exercised end-to-end in this run (timing/visibility — see action_items).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_maps_link_qr.py",
+    "/app/test_reports/pytest/iteration_228.xml"
+  ],
+  "action_items": [
+    "Optional: main agent can self-verify the Lead Address edit form (data-testid='lead-address-maps-link-input') and Account delivery-address edit form (data-testid='address-maps-link-input') render and validate — both inputs are confirmed present in code at LeadDeliveryAddressCard.js L498 and AccountDetail.js L2830 respectively; e2e click-into-edit was not fully exercised in this iteration."
+  ],
+  "critical_code_review_comments": [
+    "Priority logic for QR is implemented identically and correctly in TWO places (utils/pdf_generator.build_maps_qr and routes/distributor_delivery_schedules._maps_qr_flowable). This is duplicated code — consider centralising on the utils helper to avoid drift if validation rules change later.",
+    "routes/promo_dispatch.py L504: maps_link is taken from (data.maps_link or da.get('maps_link') or recipient.get('maps_link')). When a Lead is the recipient and lead.delivery_address.maps_link exists, the resolver works because da = recipient.get('delivery_address'). Good. However, NO server-side validation of the URL shape is performed — the frontend isValidMapsLink() is the ONLY guard. Consider adding a light server-side check (https + recognised host) so a curl bypass cannot store junk that breaks QR rendering. Currently build_maps_qr falls back gracefully (returns None on exception), so worst case is a missing QR, not a crash.",
+    "routes/distributor_delivery_schedules.py L490-494: when neither recipient.delivery_address nor recipient_shipping_address carries maps_link, the code merges in r.get('maps_link') / r.get('recipient_shipping_address').maps_link as a final fallback. Good defensive layering.",
+    "utils/pdf_generator.py L58-60: validates 'http://' or 'https://' prefix only; rejects schemeless 'maps.app.goo.gl/...' silently (falls through to GPS/text). This is intentional but worth documenting — the frontend validator should normalise the input by prepending 'https://' if the user pastes without scheme to avoid a silent downgrade.",
+    "Frontend data-testid 'promo-generate-btn' was searched for but the actual Generate button in PromoDispatchSection.jsx doesn't carry a data-testid; the test fell back to text matching 'Generate'. Add data-testid='promo-generate-btn' for testability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_maps_link_qr.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 pytest)",
+    "frontend": "100% on Promo/DO/Contact maps-link inputs; Lead+Account inputs verified by grep, not click-through"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (challan PDF + create promo). Distributor john.distributor@test.com / nyladist## (Brian DIST-0003) for the distributor-only bundle PDF endpoint.",
+  "seed_data_creation": "All temp docs prefixed 'qa-maps-' (and the per-test dispatch IDs returned by the API) are deleted in each test's teardown across distributor_deliveries / distributor_delivery_items / distributor_delivery_schedules. Pre-existing seed (Brian's Delhi location, Promo Test Contact, SKU ee1e5f58…) untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run with: cd /app/backend && python -m pytest tests/test_maps_link_qr.py -v. The test loads /app/backend/.env and /app/frontend/.env via python-dotenv to get MONGO_URL, DB_NAME and REACT_APP_BACKEND_URL (currently https://promo-stock-sync.preview.emergentagent.com). Promo creation uses as_draft=True to skip stock validation (still proves maps_link persistence + PDF rendering). The bundle-PDF endpoint /api/distributor/delivery-schedules/{sid}/pdf remains DISTRIBUTOR-ONLY — use john.distributor session. Build_maps_qr priority assertion uses inspect.getsource() string-position check (link defined BEFORE float(lat)) — robust to formatting changes. Public preview URL was 'Preview Unavailable' on the alternate hostname; use the REACT_APP_BACKEND_URL value from /app/frontend/.env (promo-stock-sync.preview.emergentagent.com).",
+  "rca of the issue": "Not applicable — this is feature-validation, not a bug. Implementation is correct: maps_link is consistently captured (POST body → form), persisted (dispatch top-level + recipient_shipping_address.maps_link), and consumed FIRST by both QR generators (build_maps_qr, _maps_qr_flowable) ahead of GPS and text-search fallbacks. PDF endpoints render successfully."
+}
