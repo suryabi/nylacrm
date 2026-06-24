@@ -516,22 +516,38 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 or acct.get("contact_number")
             )
 
-            # Items — convert raw bottle counts into packaging units (crates).
+            # Items — show the packaging EXACTLY as captured on the line.
+            #   • Promo / DO lines carry their own `packaging_type_name` +
+            #     `units_per_package`, and their `quantity` is already the number
+            #     of those packages (e.g. user picked "Bottle (1)", qty 1 → 1
+            #     Bottle). We MUST NOT reconvert these to the SKU's default crate,
+            #     or drivers ship crates instead of bottles.
+            #   • Regular stock-out lines store raw base-unit (bottle) counts and
+            #     no line packaging → convert to the SKU's default crate.
             raw_items = items_by_delivery.get(did) or r.get("items") or []
             items = []
             total_packages = 0
             total_units = 0
             for line in raw_items:
-                qty_units = int(line.get("quantity") or line.get("delivered_quantity") or 0)
-                total_units += qty_units
-                pkg_info = sku_packaging.get(line.get("sku_id")) or {}
-                upp = pkg_info.get("units_per_package")
-                pkg_label = pkg_info.get("packaging_type_name") or "Crate"
-                if upp and upp > 0:
-                    # Round UP — partial crates ship as a full crate
-                    pkg_count = -(-qty_units // upp)
+                qty = int(line.get("quantity") or line.get("delivered_quantity") or 0)
+                line_label = line.get("packaging_type_name")
+                line_upp = line.get("units_per_package")
+                if line_label:
+                    # Line already expressed in its chosen packaging — trust it.
+                    pkg_count = qty
+                    pkg_label = line_label
+                    upp = line_upp or 1
+                    qty_units = qty * (line_upp or 1)
                 else:
-                    pkg_count = qty_units  # fallback: treat each unit as one package
+                    pkg_info = sku_packaging.get(line.get("sku_id")) or {}
+                    upp = pkg_info.get("units_per_package")
+                    pkg_label = pkg_info.get("packaging_type_name") or "Crate"
+                    qty_units = qty
+                    if upp and upp > 0:
+                        pkg_count = -(-qty // upp)  # round up — partial crates ship full
+                    else:
+                        pkg_count = qty  # fallback: treat each unit as one package
+                total_units += qty_units
                 total_packages += pkg_count
                 items.append({
                     "sku_name": line.get("sku_name") or line.get("sku_code") or "Item",
@@ -700,8 +716,14 @@ async def list_schedules(
             total = 0
             for ln in lines:
                 qty = int(ln.get("quantity") or 0)
-                upp = sku_upp.get(ln.get("sku_id"))
-                total += (-(-qty // upp)) if upp and upp > 0 else qty
+                # Promo/DO lines carry their own packaging — quantity is already
+                # in those package units; count it as-is. Regular lines store raw
+                # bottle counts → convert to the SKU's default crate.
+                if ln.get("packaging_type_name"):
+                    total += qty
+                else:
+                    upp = sku_upp.get(ln.get("sku_id"))
+                    total += (-(-qty // upp)) if upp and upp > 0 else qty
             crate_total_by_delivery[did] = total
 
     for s in schedules:
@@ -803,11 +825,13 @@ async def list_eligible_deliveries(current_user: dict = Depends(get_current_user
         elig_ids = [d["id"] for d in eligible]
         async for it in db.distributor_delivery_items.find(
             {"delivery_id": {"$in": elig_ids}, "tenant_id": tenant_id},
-            {"_id": 0, "delivery_id": 1, "quantity": 1, "sku_id": 1}
+            {"_id": 0, "delivery_id": 1, "quantity": 1, "sku_id": 1,
+             "packaging_type_name": 1, "units_per_package": 1}
         ):
             line_skus.setdefault(it["delivery_id"], []).append({
                 "sku_id": it.get("sku_id"),
                 "quantity": int(it.get("quantity") or 0),
+                "packaging_type_name": it.get("packaging_type_name"),
             })
             s = item_stats.setdefault(it["delivery_id"], {"count": 0, "qty_units": 0})
             s["count"] += 1
@@ -846,9 +870,12 @@ async def list_eligible_deliveries(current_user: dict = Depends(get_current_user
         # Compute total packages by summing each line's packages (round-up).
         total_packages = 0
         for sku_line in line_skus.get(d["id"], []):
-            upp = sku_packaging.get(sku_line.get("sku_id"))
             qty = sku_line["quantity"]
-            total_packages += (-(-qty // upp)) if (upp and upp > 0) else qty
+            if sku_line.get("packaging_type_name"):
+                total_packages += qty  # already in chosen package units
+            else:
+                upp = sku_packaging.get(sku_line.get("sku_id"))
+                total_packages += (-(-qty // upp)) if (upp and upp > 0) else qty
         trimmed.append({
             "id": d.get("id"),
             "delivery_number": d.get("delivery_number"),

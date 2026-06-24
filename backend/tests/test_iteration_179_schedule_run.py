@@ -20,7 +20,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 load_dotenv("/app/backend/.env")
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://reversals-audit-log.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://promo-stock-sync.preview.emergentagent.com").rstrip("/")
 DIST_EMAIL = "john.distributor@test.com"
 DIST_PASS = "nyladist##"
 

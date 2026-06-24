@@ -28,11 +28,13 @@ export function groupByDateDesc(items, getDate) {
   return keys.map((key) => {
     const isToday = key === todayKey;
     const isTomorrow = key === tomorrowKey;
+    const isFuture = key !== 'no-date' && key > tomorrowKey;
+    const isPast = key !== 'no-date' && key < todayKey;
     let label;
     if (key === 'no-date') label = 'No date';
     else if (isToday) label = 'Today';
     else if (isTomorrow) label = 'Tomorrow';
     else label = new Date(key + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-    return { key, label, isToday, isTomorrow, items: groups[key] };
+    return { key, label, isToday, isTomorrow, isFuture, isPast, items: groups[key] };
   });
 }

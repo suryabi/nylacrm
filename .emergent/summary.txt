@@ -1,25 +1,29 @@
-<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, Document Sharing, and dynamic PDF generation. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, and robust workflow approvals. Recently requested: Universal Stock-Out reversal capabilities, a unified Reversals audit log, a complete Delivery Orders approval module for promotional stock, and a future SKU Variant/Hierarchy system.
+<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, Document Sharing, and dynamic PDF generation. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, and robust workflow approvals. Recently requested: Migrating free-trial expenses to Delivery Orders, State Machine fixes, PDF delivery bundle enrichments (QR codes/addresses), and proper unit tracking (bottles vs crates) for driver schedules.
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lead management, Invoice exports, Document sharing, and a dynamic Proposal PDF Generator. Recently stabilized inventory calculations for promotional stock-outs. The app now includes a robust State Machine module managing marketing requests and a newly added Delivery Orders module. It also features a Universal Reversal system for stock-out deliveries at any stage, tied to a global Reversals Audit Log.
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lead management, Invoice exports, Document sharing, and a dynamic Proposal PDF Generator. It includes a robust State Machine module managing marketing requests and a recently stabilized Delivery Orders module. Features dynamic delivery scheduling, PDF generation for delivery bundles/challans, stock out date grouping, and batch-tracked FIFO inventory confirmation.
 
 **Last working item**: 
-    - Last item agent was working: UI polish for the  in . The user requested making the recipient selection pills bigger, separating the Delivery Contact section from Delivery Address, making the Items listing visually distinctive, and adding a new Delivery instructions text input.
+    - Last item agent was working: The agent was simultaneously working on two items requested by the user: 1) Fixing a critical backend bug where promotional stock-out items showed as Crates instead of Bottles on the delivery bundle PDF. 2) Updating the newly implemented Stock Out date grouping UI to make only the Today group expanded by default, while adding Future and Past UI pills to respective date groups.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? screenshot tool followed by testing_agent
+    - Which testing method agent to use? both (testing_agent for full verification of the frontend UI and backend PDF generation)
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:  
-  Issue 1: Finish UI restructuring of  (P0)
-     - Attempted fixes: The agent successfully added  to the backend models and routes. However, while attempting to execute  to restructure the frontend JSX in , the agent hit a sequence of Bad Gateway transport errors and the context limit was reached.
-     - Next debug checklist: Open . Locate . Implement the UI changes: 1. Enlarge recipient pills (Lead/Account/Contact/Employee). 2. Split Contact details and Delivery Address into clear, separate sections. 3. Add a textarea bound to . 4. Give the line items table/list a distinctive UI treatment.
-     - Why fix this issue and what will be achieved with the fix? Completes the user's latest UI/UX request for the newly built Delivery Orders module.
+  Issue 1: Finish Collapsible Date Grouping UI & Verify Packaging Unit Bug Fix (P0)
+     - Attempted fixes: The agent successfully updated  to honor the line's specific packaging type instead of the SKU's default crate. The agent also updated  to include  and  flags. However, the agent was interrupted before updating the frontend React components to consume these flags and manage the collapsible state.
+     - Next debug checklist: 
+        1. Open  and .
+        2. Implement state management so that only the date group corresponding to Today is expanded by default (others collapsed).
+        3. Add rendering logic for Past and Future pills in the group headers based on the flags from .
+        4. Run the testing agent to verify BOTH the UI behavior and the previously applied backend PDF fix (packaging units displaying correctly).
+     - Why fix this issue and what will be achieved with the fix? Ensures accurate unit displays for warehouse/driver dispatch (preventing wrong quantity shipments) and improves UI/UX for dispatch scheduling.
      - Status: IN PROGRESS
      - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? frontend
+     - Should Test frontend/backend/both after fix? both
      - Blocked on other issue: None
 
   Issue 2: Gemini API Key returns 403 PERMISSION DENIED (P2)
@@ -51,7 +55,7 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lea
 
 **In progress Task List**:
   Task 1: Document Sharing Framework Phase 2 (WhatsApp Integration) (P1)
-     - Where to resume: Awaiting the user to provide 6 required credentials for Meta Cloud API (WABA ID, Phone Number ID, Permanent Token, App Secret, Template Name, Graph API version).
+     - Where to resume: Awaiting the user to provide 6 required credentials for Meta Cloud API.
      - What will be achieved with this? Allows reps to share proposals/decks directly to WhatsApp.
      - Status: BLOCKED
      - Should Test frontend/backend/both after fix? both
@@ -63,25 +67,24 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features advanced Lea
     - P1: Bloated  collection & MinIO integration: Build  settings page to replace base64 mongo storage.
     - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
     - P1: Happenstance integration (Agent asked user for API key & scope previously, pending user answer).
-    - P2: Auto-attach generated Presentations to the Lead/Account and Document Sharing framework.
     
     Future Tasks:
+    - P2: Auto-attach generated Presentations to the Lead/Account and Document Sharing framework.
     - P2: Auto-suggest Vehicle on distributor deliveries based on customer city.
     - P2: KB Phase 2: Per-document permissions, embedding-based retrieval, Google Drive auto-sync.
     - P2: Website Wrapper around CRM.
     - P2: Inventory Management Module - Phase 2+ (Stock Entries, Purchase Receipts, Adjustments).
 
 **Completed work in this session**
-- Verified City ribbon on Marketing Request detail page (DONE)
-- Changed urgent Kanban card outline from red to amber (DONE)
-- Fixed missing recipients list in Promotional Stock-Out by adding  to native  calls (DONE)
-- Fixed false Insufficient stock error in Promo Stock-Out by implementing global  helper (DONE)
-- Redesigned Revenue Analytics page from neon/dark mode to standard app light theme (DONE)
-- Drafted Architecture Plan for SKU Variants and saved to memory file (DONE)
-- Implemented Universal Stock-Out Reversal (allow undoing deliveries at any stage with double confirmation logic) (DONE)
-- Built global Reversals Audit Log (Admin module + Distributor detail tab) (DONE)
-- Auto-capitalize first and last names on save for Contacts, Leads, and Accounts (DONE)
-- Built brand new Delivery Orders module with State Machine approval flow, Google Address lookup matching Master Cities, and delayed delivery date field (DONE)
+- Verified and finished Delivery Orders UI Restructuring (enlarged pills, separated sections) (DONE)
+- Fixed State Machine actions array omission during save on the frontend (DONE)
+- Built auto-creation of Draft Promo Stock-Outs from Delivery Orders ( action) (DONE)
+- Migrated Lead/Account  expense requests into Delivery Orders (with admin one-click migration endpoint) (DONE)
+- Replaced native date inputs with Shadcn Calendar enforcing a  days restriction for DO delivery dates (DONE)
+- Fixed Promo Stock-Out Insufficient stock error on confirm by implementing FIFO batch auto-allocation (DONE)
+- Grouped Stock Out and Promo Stock Out tables by Date with Today/Tomorrow highlighting (DONE)
+- Synced live Promo fulfillment status to the Delivery Orders list view (DONE)
+- Ensured delivery addresses and fallback Google Map QR codes consistently render on Delivery Bundles and individual Challan PDFs (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: usage: pdfplumber [-h] [--structure | --structure-text]
@@ -115,70 +118,68 @@ options:
   --indent INDENT       Indent level for JSON pretty-printing. import error in testing scripts (minor environment script error, doesn't break app but affects some backend file checks).
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Production vs Preview testing confusion.
+  - Issue recurrence in previous fork (Check 1st <LLM message history> array entry)
   - Recurrence count: 50+
   - Status: IN PROGRESS
   - Note: User continuously reports issues seen on production. Changes made by the agent ONLY apply to Preview. The user must manually redeploy to production. Remind the user of this when pushing fixes.
 
 **Code Architecture**
 - : Core FastAPI router.
-- : Domain routers (, , , , ).
-- : Heavy lifting for state-machine validations and transitions.
-- : Main views (, , ).
-- : Reusable components ().
+- : Domain routers (, , , ).
+-  & : Heavy lifting for state-machine validations and PDF generation.
+- : Main views (, ).
+- : UI partials (, ).
+- : Helper utilities ().
 
 **Key Technical Concepts**
--  handles auth via  globally, but native  calls must manually include  to pass the session cookie.
-- Inventory availability is dynamically calculated (derived) by subtracting delivered/committed stock from received stock, overriding stale  table rows.
+-  handles auth via  globally.
 - Approvals are governed by a dynamic JSON-based State Machine architecture seeded upon first use.
+- Deliveries group logic relies on formatting dates and categorizing them relatively against the client's 'today'.
+- PDF generation leverages .
 
 **key DB schema**
-  - : newly added collection for promo order requests.
-  - : used to validate and standardize Google maps locality results.
+  - : Holds promo order requests.
   - : Tracks stock-out fulfillment.
+  - : Tracks driver dispatch run sheets.
+  - : Lead/Account expense claims (free trials migrated to DOs).
   - : Tracks workflow definitions.
 
 **changes in tech stack**
-  - None
+  - Replaced native HTML date inputs with  (Shadcn Calendar components) for enhanced date selection constraints.
 
 **All files of reference** 
-  -  (Needs immediate UI finish)
-  -  (New module backend)
+  -  (Updated to add Future/Past flags)
+  -  (Requires UI edits for collapsible/pills)
+  -  (Requires UI edits for collapsible/pills)
+  -  (Updated to fix packaging units; needs testing)
   -  (Do not implement until user says so)
-  - 
 
 **Areas that need refactoring**: 
   - Base64 storage approach for legacy Documents should be refactored to Object Storage (MinIO).
-  - Any remaining native  calls across the frontend should be audited to ensure they pass , otherwise they will fail silently on production when localStorage token expires.
 
 **key api endpoints**
   - 
   - 
-  - 
-  - 
 
 **Critical Info for New Agent** 
-  - Start immediately by finishing the UI layout changes in  ( component). The backend support for  is already done, but the frontend edits failed due to Bad Gateway errors.
-  - The user has approved a massive new feature (SKU Variants/Hierarchy) but explicitly commanded: **Do not start with anything now. Just plan**. The plan is stored in . Do not start coding this feature until the user requests it.
+  - Start immediately by finishing the frontend UI edits for the date groupings in  and  (Issue 1). The helper file  is already updated. Ensure only Today is expanded by default.
+  - Once the frontend is updated, you **MUST** run the testing agent to verify BOTH the UI behavior and the backend fix that was applied to  right before the fork (packaging sizes showing as Crates instead of Bottles in the PDF).
   - Always remember that the backend auth mechanism prioritizes the httpOnly session cookie. 
+  - Remind the user that fixes are only visible on Preview until they redeploy.
 
 **documents and test reports created in this job** 
   - 
-  - 
-  - 
-  - 
+  -  through 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - User: Request to reverse Stock Out entries at any stage with double confirmation. (Agent implemented).
- - User: Request a Reversals audit log. (Agent built global admin view and distributor tab).
- - User: Auto-capitalize first/last names on save for Contacts/Leads/Accounts. (Agent implemented).
- - User: Create a Delivery Orders module for promotional stock outs with an approval flow. (Agent implemented).
- - User: Reported bug with Delivery Orders city populating incorrectly, requested Map wizard, and requested delivery date be gated post-approval. (Agent fixed all).
- - User: First - Lead , account , contact , Employee the pills are very small - Make bigger and easier to click. THe delivery contact seperate from Delivery address and Keep it a sepearte section... Item listing - Keep it seperate section... Add Delivery instructions section...
- *PENDING HUMAN MESSAGES*: None. You must fulfill the last message's UI requests on .
+ - User: Bug: Promo fulfillment status not reflecting in the Delivery Orders list. (Agent fixed).
+ - User: Bug: Delivery bundle is missing customer addresses and QR codes. (Agent fixed).
+ - User: Bug: Promotional stock out window shows packaging size 1 Bottle, but the delivery bundle PDF says Crates. (Agent updated backend logic, pending verification).
+ - User: Enhancement: Keep only today's date group expanded by default (others collapsed) in the Delivery tabs, and add Future / Past pill indicators. (Agent started edits in  but was interrupted).
+ *PENDING HUMAN MESSAGES*: None. Proceed directly to fulfilling the last UX request and verifying the un-tested backend bug fix.
 
 **Project Health Check:**
-Broken:  might have incomplete edits.
+Broken: The frontend UI components handling date grouping (, ) may be in a transitional state needing completion.
 Mocked: None.
 
 **3rd Party Integrations** 
@@ -190,13 +191,25 @@ Mocked: None.
  - Meta WhatsApp Cloud API (Pending integration, requires User API Keys)
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iterations 216, 217, 218)
+  - Testing agent used after significant changes: YES (Iterations 219 - 226)
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: , , 
-  - Known regressions: None, but ongoing UI edits were interrupted.
+  - Test files created:  to 
+  - Known regressions: The recent fixes to  regarding packaging units have NOT been tested yet.
 
 **Credentials to test flow:**
 Refer to  (CEO: surya.yadavalli@nylaairwater.earth / test123)
 
 **What agent forgot to execute**
-The agent did not finish restructuring the JSX in  for the final UI polish because it encountered repeated  errors while invoking the  tool. You must complete this task.</analysis>
+The agent modified the backend to fix the Crates vs Bottles bug in the delivery bundle PDF, but immediately jumped to modifying  for the next user request without executing the  or validating the PDF generation fix first. Both changes must be verified together in the new session.
+
+**Debugging checklist for current issue**
+    Issue: Collapsible Date Groupings UI + Packaging Unit PDF Verification
+
+    Frontend files to check:
+    - 
+    - 
+      *Action:* Map over the groups returned by . Maintain an open/close state dictionary for the groups. Initialize the dictionary so that the group representing Today is open, and all others are closed. Conditionally render a small PAST or FUTURE UI badge based on the boolean flags added to the helper.
+
+    Backend files to check:
+    - 
+      *Action:* Review lines ~367-384 and ~519-541 to ensure the package extraction correctly prioritizes the line's  and  over the SKU's default configurations. Invoke  to confirm PDF generation renders Bottles (or chosen package) instead of defaulting to Crates.</analysis>
