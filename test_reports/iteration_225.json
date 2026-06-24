@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 225 — Full-stack verification of the bug fix that makes the Delivery Orders LIST endpoint mirror the live promo stock-out status into fulfillment_status (was only mirrored on detail GET before). Backend: 8/8 pytest cases passed in /app/backend/tests/test_delivery_order_fulfillment_mirror.py — including (a) stale state simulation (promo=confirmed, stored DO=draft) returning 'confirmed' from GET /api/delivery-orders, (b) persistence verified by re-reading from Mongo, (c) live-update on promo flip to 'delivery_assigned' and 'on_the_way' (proving it always mirrors, not just once), (d) DOs without promo_dispatch_id are unaffected and the list still returns all rows, (e) account_id-filtered list also mirrors live status (the same endpoint used by the lead/account detail Delivery Orders sections). Frontend: with stored DO=draft + live promo=confirmed, the Delivery Orders page row for DO-2026-0005 (data-testid=do-row-DO-2026-0005) renders the Fulfillment badge as green 'Confirmed' (NOT 'Draft'); the in-row badge inspected via [data-testid=do-fulfillment-badge] returned text 'Confirmed'. Account-filtered list (account_id=d4e2187a…, Empire Restaurant) also returned 'confirmed'. Final DB state restored to a consistent promo=confirmed / DO=confirmed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_delivery_order_fulfillment_mirror.py",
+    "/app/test_reports/pytest/iteration_225.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/delivery_orders.py list_delivery_orders performs an in-loop await db.delivery_orders.update_one(...) for every row whose live promo status differs — for a page that ever returns many orders this is N writes per LIST call. Consider batching with bulk_write(UpdateMany / UpdateOne) so the persistence step is one round-trip, not one per stale order.",
+    "The list endpoint persists fulfillment_status on every GET — this couples a read endpoint to writes (side effects on GET). It works but means GET /delivery-orders is no longer idempotent for observability/replay. Acceptable trade-off, but consider documenting it or splitting 'read-through' (return live value) from 'background reconcile' (cron/job).",
+    "Both list_delivery_orders and get_delivery_order now duplicate the promo→DO mirror logic. Extract into a small helper (e.g. _mirror_fulfillment_from_promo(order_or_orders)) to avoid drift if the rule changes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_delivery_order_fulfillment_mirror.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8 pytest)", "frontend": "100% (list + account-filtered list + UI badge)"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "No new seed data — used the pre-existing DO-2026-0005 (id a8697ae8-7644-4e86-b692-8830f1abd70b) and its linked promo (id 9d4d2c0b-f37a-41b2-b0b3-6889950c2910). The test toggles the promo's distributor_deliveries.status and the DO's fulfillment_status directly in Mongo to simulate stale states. The test_z_restore_final_state case (and a final manual write) leaves both at 'confirmed'.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "DO-2026-0005 → promo 9d4d2c0b…; stored fulfillment_status is now 'confirmed' and promo status is 'confirmed' in DB. To re-test stale-state UI, set DO.fulfillment_status='draft' and promo.status='confirmed' in mongodb.delivery_orders / distributor_deliveries for tenant_id='nyla-air-water', then GET /api/delivery-orders — it should still come back 'confirmed' and persist the mirror. Frontend selector: [data-testid=do-row-DO-2026-0005] [data-testid=do-fulfillment-badge].",
+  "final_db_state": "promo 9d4d2c0b-… status='confirmed'; DO a8697ae8-… fulfillment_status='confirmed' (consistent / not stale)"
+}

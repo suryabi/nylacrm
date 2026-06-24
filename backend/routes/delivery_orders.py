@@ -392,6 +392,20 @@ async def list_delivery_orders(
             {"delivery_city": {"$regex": search, "$options": "i"}},
         ]
     rows = await db.delivery_orders.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Mirror each linked promo stock-out's live fulfillment status (batched, read-only).
+    promo_ids = [r["promo_dispatch_id"] for r in rows if r.get("promo_dispatch_id")]
+    if promo_ids:
+        promos = await db.distributor_deliveries.find(
+            {"id": {"$in": promo_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "status": 1}).to_list(len(promo_ids))
+        live_by_id = {p["id"]: p.get("status") for p in promos}
+        for r in rows:
+            pid = r.get("promo_dispatch_id")
+            live = live_by_id.get(pid)
+            if live and live != r.get("fulfillment_status"):
+                r["fulfillment_status"] = live
+                await db.delivery_orders.update_one(
+                    {"id": r["id"], "tenant_id": tenant_id}, {"$set": {"fulfillment_status": live}})
     return {"orders": rows, "total": len(rows)}
 
 
