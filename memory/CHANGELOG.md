@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-24 — Google Maps Link field on addresses + QR uses link first ✅ (testing_agent verified, iteration_228, 8/8 pytest)
+- **New "Google Maps Link" field** (pasteable, e.g. `https://maps.app.goo.gl/...`) added to: Lead delivery address (`LeadDeliveryAddressCard.js`), Account delivery address (`AccountDetail.js`), Contact address (`ContactsList.js`), Delivery Order address (`DeliveryOrders.js`), and Promo Stock-Out dialog (`PromoDispatchSection.jsx`). Light Google-Maps-URL validation via new `utils/mapsLink.js` (`isValidMapsLink`).
+- **QR priority changed** in delivery bundle + challan PDFs to: **pasted maps link → GPS coords → text-address search** (`build_maps_qr` in `pdf_generator.py`, `_maps_qr_flowable`/`_address_cell`/`_addr_from` in `distributor_delivery_schedules.py`). Bundle stop cell now renders a QR even when only a maps link exists (no longer "ADDRESS MISSING").
+- Backend models updated: `PromoDeliveryCreate.maps_link`, DO `DeliveryAddress.maps_link`; `promo_dispatch.py` stores link on dispatch + `recipient_shipping_address`.
+- Link stored as-is (no short-link expansion). Tests: `/app/backend/tests/test_maps_link_qr.py` (8/8). ⚠️ Redeploy to production to go live.
+
+
 ## 2026-06-24 — Collapsible date groups + "Bottles vs Crates" PDF fix ✅ (testing_agent verified, iteration_227, 5/5 pytest + UI)
 - **Collapsible date grouping UI** (DeliveriesTab.jsx "Stock Out" section + PromoDispatchSection.jsx "Promotional Stock-Out"): date-group header rows are now clickable with a rotating chevron; only the **Today** group is expanded by default (`openDateGroups[group.key] ?? group.isToday`), all others collapsed. Added **Future** / **Past** pill badges (data-testids `delivery-future-pill-*`/`delivery-past-pill-*` and `promo-*`).
 - **Backend PDF packaging fix** (`routes/distributor_delivery_schedules.py`): the line-item projections at the bundle-PDF query (~L361) and crate-total aggregation (~L697) did NOT fetch `packaging_type_name`/`units_per_package`, so promo/DO lines (e.g. "Bottle (1)") were silently re-converted to the SKU's default **Crate**. Added the missing projection fields → PDF now shows the line's own packaging (Bottles). Legacy Crate-12 path regression-tested OK.
