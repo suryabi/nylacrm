@@ -13,14 +13,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
 import GooglePlacesAddressSearch from '../components/GooglePlacesAddressSearch';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Calendar } from '../components/ui/calendar';
 import {
   Package, Plus, Trash2, Loader2, MapPin, Search, X, ClipboardList,
-  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone,
+  CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon,
 } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, withCredentials: true });
 const fmtINR = (n) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const toYMD = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // Match a Google-returned address to a city in the Location Master so the city
 // always lines up with the master (e.g. "Rai Durg, Hyderabad" -> "Hyderabad").
@@ -239,6 +242,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
   };
 
   const total = useMemo(() => items.reduce((s, i) => s + (i.quantity || 0) * (i.unit_price || 0), 0), [items]);
+  const minDeliveryDate = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + 2); return d; }, []);
 
   const recipientId = () => {
     const m = { lead: 'lead_id', account: 'account_id', contact: 'contact_id', employee: 'employee_id' };
@@ -306,9 +310,27 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
             </div>
             <div>
               <Label>Delivery date <span className="text-rose-500">*</span></Label>
-              <Input type="date" value={requestedDate} min={new Date().toISOString().split('T')[0]}
-                onChange={(e) => setRequestedDate(e.target.value)} data-testid="do-requested-date" />
-              <p className="mt-1 text-xs text-slate-400">When the stock should reach the recipient.</p>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline"
+                    className={`w-full justify-start text-left font-normal ${requestedDate ? 'text-slate-800' : 'text-slate-400'}`}
+                    data-testid="do-requested-date">
+                    <CalendarIcon className="mr-2 h-4 w-4 text-slate-400" />
+                    {requestedDate
+                      ? new Date(requestedDate + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                      : 'Pick a delivery date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single"
+                    selected={requestedDate ? new Date(requestedDate + 'T00:00:00') : undefined}
+                    onSelect={(d) => d && setRequestedDate(toYMD(d))}
+                    disabled={{ before: minDeliveryDate }}
+                    defaultMonth={requestedDate ? new Date(requestedDate + 'T00:00:00') : minDeliveryDate}
+                    initialFocus />
+                </PopoverContent>
+              </Popover>
+              <p className="mt-1 text-xs text-slate-400">Earliest delivery is 2 days from today.</p>
             </div>
           </div>
 

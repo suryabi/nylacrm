@@ -10,7 +10,7 @@ for the distributor that covers the delivery city.
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, timedelta
 import uuid
 import logging
 
@@ -312,6 +312,13 @@ async def create_delivery_order(data: DeliveryOrderCreate, current_user: dict = 
         raise HTTPException(400, "At least one line item is required.")
     if not data.requested_date:
         raise HTTPException(400, "Delivery date is required.")
+    try:
+        req_d = date.fromisoformat(str(data.requested_date)[:10])
+    except ValueError:
+        raise HTTPException(400, "Invalid delivery date.")
+    min_d = datetime.now(timezone.utc).date() + timedelta(days=2)
+    if req_d < min_d:
+        raise HTTPException(400, f"Delivery date must be on or after {min_d.isoformat()} (at least 2 days from today).")
     for it in data.items:
         if not it.quantity or it.quantity <= 0:
             raise HTTPException(400, "Quantity must be greater than zero for every line.")
