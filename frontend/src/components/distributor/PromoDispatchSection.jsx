@@ -14,6 +14,8 @@ import {
   AlertCircle, Settings2, Users, Ban, ShieldCheck, CheckCircle2, Undo2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { groupByDateDesc } from '../../utils/dateGrouping';
+import { Calendar } from 'lucide-react';
 import BatchPickerCards from './BatchPickerCards';
 
 const ADMIN_ROLES = ['CEO', 'Director', 'Admin', 'admin', 'Super Admin', 'super_admin', 'System Admin'];
@@ -592,7 +594,24 @@ export default function PromoDispatchSection({
                     </tr>
                   </thead>
                   <tbody>
-                    {dispatches.map((d) => (
+                    {groupByDateDesc(dispatches, (d) => d.delivery_date).map((group) => (
+                      <React.Fragment key={group.key}>
+                        <tr
+                          className={`border-y ${group.isToday ? 'bg-emerald-100/80 border-emerald-300' : group.isTomorrow ? 'bg-amber-100/80 border-amber-300' : 'bg-slate-50 border-slate-200'}`}
+                          data-testid={`promo-date-group-${group.key}`}
+                        >
+                          <td colSpan="10" className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <Calendar className={`h-3.5 w-3.5 ${group.isToday ? 'text-emerald-700' : group.isTomorrow ? 'text-amber-700' : 'text-slate-400'}`} />
+                              <span className={`text-xs font-bold uppercase tracking-wider ${group.isToday ? 'text-emerald-800' : group.isTomorrow ? 'text-amber-800' : 'text-slate-600'}`}>{group.label}</span>
+                              {(group.isToday || group.isTomorrow) && (
+                                <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${group.isToday ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'}`}>Scheduling</span>
+                              )}
+                              <span className="text-[11px] font-normal text-slate-400">· {group.items.length} {group.items.length === 1 ? 'challan' : 'challans'}</span>
+                            </div>
+                          </td>
+                        </tr>
+                        {group.items.map((d) => (
                       <tr key={d.id} className={`border-b border-slate-100 transition-colors ${d.status === 'reversed' ? 'opacity-60 bg-slate-50' : 'hover:bg-fuchsia-50/40'}`} data-testid={`promo-dispatch-row-${d.id}`}>
                         <td className="p-3">
                           <span className="font-semibold text-fuchsia-700">{d.challan_number}</span>
@@ -756,6 +775,8 @@ export default function PromoDispatchSection({
                           </div>
                         </td>
                       </tr>
+                    ))}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>

@@ -13,6 +13,7 @@ import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check } from 'lucide-react';
 import PromoDispatchSection from './PromoDispatchSection';
+import { groupByDateDesc } from '../../utils/dateGrouping';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -1677,7 +1678,24 @@ export default function DeliveriesTab({
                 </tr>
               </thead>
               <tbody>
-                {deliveries.map((delivery) => {
+                {groupByDateDesc(deliveries, (d) => d.delivery_date).map((group) => (
+                  <React.Fragment key={group.key}>
+                    <tr
+                      className={`border-y ${group.isToday ? 'bg-emerald-100/80 border-emerald-300' : group.isTomorrow ? 'bg-amber-100/80 border-amber-300' : 'bg-slate-50 border-slate-200'}`}
+                      data-testid={`delivery-date-group-${group.key}`}
+                    >
+                      <td colSpan="11" className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Calendar className={`h-3.5 w-3.5 ${group.isToday ? 'text-emerald-700' : group.isTomorrow ? 'text-amber-700' : 'text-slate-400'}`} />
+                          <span className={`text-xs font-bold uppercase tracking-wider ${group.isToday ? 'text-emerald-800' : group.isTomorrow ? 'text-amber-800' : 'text-slate-600'}`}>{group.label}</span>
+                          {(group.isToday || group.isTomorrow) && (
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${group.isToday ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'}`}>Scheduling</span>
+                          )}
+                          <span className="text-[11px] font-normal text-slate-400">· {group.items.length} {group.items.length === 1 ? 'delivery' : 'deliveries'}</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {group.items.map((delivery) => {
                   const items = delivery.items || [];
                   
                   // Credit notes info
@@ -1855,6 +1873,8 @@ export default function DeliveriesTab({
                     </tr>
                   );
                 })}
+                  </React.Fragment>
+                ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-emerald-300 bg-emerald-50/70 font-semibold" data-testid="deliveries-totals-row">

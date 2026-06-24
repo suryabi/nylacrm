@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 224 — Frontend-only verification of the date-grouping presentational change on Distributor Detail → Stock Out tab for distributor 'Brian' (bb12d90e-4d33-4890-ac5f-17573c551b5c). Logged in as CEO surya.yadavalli@nylaairwater.earth, opened the Stock Out tab (data-testid=stockout-tab) and verified that BOTH the regular Stock Out table (data-testid=deliveries-table) and the Promotional Stock-Out (Delivery Challan) table now render rows under date-group header rows ordered DESCENDING. Today is highlighted green with a 'Scheduling' badge and Tomorrow is highlighted amber with a 'Scheduling' badge; non-today/non-tomorrow groups render with a neutral slate background and a localized 'Wed, 27 May, 2026'-style label. All existing columns, the totals/footer row, the Confirm action buttons, and the row action icons (download, delete, reverse, PDF) still render correctly. Also re-verified after switching the Time Period filter from 'This Month' to 'Last 6 Months' — grouping still applies on the new filtered set and order remains descending. No React/page errors in the console (only 2 unrelated background 401s).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/frontend/src/utils/dateGrouping.js",
+    "/app/frontend/src/components/distributor/DeliveriesTab.jsx",
+    "/app/frontend/src/components/distributor/PromoDispatchSection.jsx"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DeliveriesTab.jsx is now 2339 lines — well over the 700-line guideline. The new grouping wrapper at ~L1681 is small and contained, but the file as a whole should be split (header/filters, summary, table, modals, footer/totals each into their own component).",
+    "groupByDateDesc(deliveries, d=>d.delivery_date) is called inline inside the JSX render path on every render — for tabs that may carry hundreds of rows when filter is 'Lifetime', memoize with useMemo keyed on the deliveries array to avoid recomputing the groups & re-sorting keys on each render.",
+    "dateGrouping.js uses string slice(0, 10) as the key — if the API ever returns a delivery_date with a trailing 'Z' / timezone the slice will still take the YYYY-MM-DD prefix in UTC, which can disagree with local 'Today/Tomorrow' (computed via new Date() local midnight). For the current preview the API returns plain YYYY-MM-DD strings so this is fine; flag for future-proofing once timestamped dates are introduced.",
+    "Group-header <tr> uses colSpan=11 (deliveries) and colSpan=10 (promo) — these magic numbers must be kept in sync with the <thead> column count. A small constant or a CSS '*:not(:first-child){display:none}' pattern would be safer if columns are added/removed in future."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only scope)", "frontend": "100% (6/6 verification points passed)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water, CEO)",
+  "seed_data_creation": "None — used existing test data prepared by main agent (Brian distributor with regular deliveries + promo challans dated 2026-06-24 and 2026-06-25).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Date-group testids to assert on: data-testid^='delivery-date-group-' for regular Stock Out rows and data-testid^='promo-date-group-' for the promo table; both are followed by the YYYY-MM-DD key (e.g. delivery-date-group-2026-06-24). Today→green emerald-100/80 bg + emerald 'Scheduling' pill; Tomorrow→amber-100/80 bg + amber 'Scheduling' pill. Group header row spans the full table (colSpan=11 in deliveries, colSpan=10 in promo). Time Period dropdown is a Radix combobox — open via button[role='combobox']:has-text('This Month') then click [role='option']:has-text('Last 6 Months') (NOT a native <select>; the only native select on the page is data-testid='factory-time-filter'). Login is via httpOnly cookie — no token in body.",
+  "verified_evidence": {
+    "deliveries_table_groups_this_month": ["delivery-date-group-2026-06-24 = 'Today · Scheduling · 2 deliveries' (green)"],
+    "deliveries_table_groups_last_6_months": [
+      "delivery-date-group-2026-06-24 = 'Today · Scheduling · 2 deliveries' (green)",
+      "delivery-date-group-2026-05-27 = 'Wed, 27 May, 2026 · 1 delivery' (slate)",
+      "delivery-date-group-2026-05-18 = 'Mon, 18 May, 2026 · 4 deliveries' (slate)"
+    ],
+    "promo_table_groups": [
+      "promo-date-group-2026-06-25 = 'Tomorrow · Scheduling · 1 challan' (amber)",
+      "promo-date-group-2026-06-24 = 'Today · Scheduling · 1 challan' (green)",
+      "promo-date-group-2026-06-04 = 'Thu, 04 Jun, 2026 · 5 challans' (slate)"
+    ],
+    "descending_order_verified": true,
+    "totals_footer_row_present": true,
+    "row_actions_render": "Confirm buttons present on draft promo challans; download/delete icons on delivery rows; PDF/Reverse on confirmed challans — all rendered correctly under their group headers.",
+    "table_layout_intact": "All columns (DELIVERY/CHALLAN #, ACCOUNT/CONTACT, REASON, FROM, ITEMS/CRATES, BILLING/INDICATIVE VALUE, RETURN CREDIT, NET BILLING, MARGIN AMT, BILLABLE, NET BILLABLE, STATUS, ZOHO, CHALLAN, ACTIONS) render aligned under their group headers — no broken markup.",
+    "console_errors": "0 React errors / 0 pageerrors. 2 generic '401' resource fetch warnings unrelated to this feature."
+  }
+}
