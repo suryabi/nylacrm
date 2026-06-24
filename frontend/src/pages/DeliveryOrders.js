@@ -274,11 +274,11 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
       if (alsoSubmit) {
         await axios.post(`${API_URL}/delivery-orders/${data.id}/transition`, { action_key: 'submit' }, auth());
       }
-      toast.success(`Delivery order ${data.order_number} created${alsoSubmit ? ' & submitted' : ''}`);
+      toast.success(`Stock delivery request ${data.order_number} created${alsoSubmit ? ' & submitted' : ''}`);
       onCreated();
       onClose();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to create delivery order');
+      toast.error(e.response?.data?.detail || 'Failed to create stock delivery request');
     } finally { setSaving(false); }
   };
 
@@ -286,7 +286,7 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto" data-testid="do-create-dialog">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-emerald-600" /> New Delivery Order</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Package className="h-5 w-5 text-emerald-600" /> New Stock Delivery Request</DialogTitle>
           <DialogDescription>Raise a promotional stock-out request for approval.</DialogDescription>
         </DialogHeader>
 
@@ -699,10 +699,10 @@ export default function DeliveryOrders() {
         toast.info(`Nothing to migrate. ${prev.already_migrated} already migrated, ${prev.skipped_no_items} have no SKUs.`);
         return;
       }
-      if (!window.confirm(`Migrate ${prev.eligible} Free Trial expense request(s) into Delivery Orders? This is safe to re-run.`)) return;
+      if (!window.confirm(`Migrate ${prev.eligible} Free Trial expense request(s) into Stock Delivery Requests? This is safe to re-run.`)) return;
       setMigrating(true);
       const { data } = await axios.post(`${API_URL}/admin/migrate-free-trial-expenses`, {}, auth());
-      toast.success(`Migrated ${data.created} Free Trial expense(s) into Delivery Orders.`);
+      toast.success(`Migrated ${data.created} Free Trial expense(s) into Stock Delivery Requests.`);
       fetchOrders();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Migration failed');
@@ -717,7 +717,7 @@ export default function DeliveryOrders() {
       if (search) params.search = search;
       const { data } = await axios.get(`${API_URL}/delivery-orders`, { ...auth(), params });
       setOrders(data.orders || []);
-    } catch { toast.error('Failed to load delivery orders'); }
+    } catch { toast.error('Failed to load stock delivery requests'); }
     finally { setLoading(false); }
   }, [stateFilter, search]);
 
@@ -751,18 +751,18 @@ export default function DeliveryOrders() {
             <Package className="h-6 w-6 text-emerald-600" />
           </span>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-800 md:text-3xl">Delivery Orders</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-800 md:text-3xl">Stock Delivery Requests</h1>
             <p className="text-sm text-slate-500">Promotional stock-out requests with approval workflow.</p>
           </div>
         </div>
         <Button onClick={() => setShowCreate(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="do-new-btn">
-          <Plus className="mr-1.5 h-4 w-4" /> New Delivery Order
+          <Plus className="mr-1.5 h-4 w-4" /> New Stock Delivery Request
         </Button>
       </div>
 
       {['CEO', 'Director', 'Vice President', 'Admin', 'System Admin'].includes(role) && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5" data-testid="do-migration-banner">
-          <p className="text-xs text-amber-700">One-time data migration: convert legacy <b>Free Trial</b> expense requests into Delivery Orders. Safe to re-run.</p>
+          <p className="text-xs text-amber-700">One-time data migration: convert legacy <b>Free Trial</b> expense requests into Stock Delivery Requests. Safe to re-run.</p>
           <Button size="sm" variant="outline" disabled={migrating} onClick={runMigration} className="border-amber-300 text-amber-700 hover:bg-amber-100" data-testid="do-migrate-free-trials-btn">
             {migrating ? <Loader2 className="h-4 w-4 animate-spin" /> : <><RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Migrate Free Trials</>}
           </Button>

@@ -52,7 +52,7 @@ export default function EntityDeliveryOrders({ entityType, entityId, entityName,
     <Card className="p-4 sm:p-6" data-testid="entity-delivery-orders">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-base font-semibold sm:text-lg">
-          <Truck className="h-4 w-4 text-emerald-600 sm:h-5 sm:w-5" /> Delivery Orders
+          <Truck className="h-4 w-4 text-emerald-600 sm:h-5 sm:w-5" /> Stock Delivery Requests
         </h2>
         <Button size="sm" onClick={() => setShowCreate(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="entity-do-new-btn">
           <Plus className="mr-1 h-4 w-4" /> New
@@ -63,7 +63,7 @@ export default function EntityDeliveryOrders({ entityType, entityId, entityName,
         <div className="py-8 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-emerald-600" /></div>
       ) : orders.length === 0 ? (
         <p className="py-6 text-center text-sm text-slate-400" data-testid="entity-do-empty">
-          No delivery orders yet for this {entityType}.
+          No stock delivery requests yet for this {entityType}.
         </p>
       ) : (
         <div className="space-y-2" data-testid="entity-do-list">
