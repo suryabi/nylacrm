@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-24 — Stock Out & Promo Stock-Out grouped by date (Today/Tomorrow highlighted) ✅ (testing_agent verified, iteration_224, 6/6)
+- On Distributor Detail → Stock Out tab, both the regular **Stock Out** table (`DeliveriesTab`) and the **Promotional Stock-Out** table (`PromoDispatchSection`) now group rows by delivery date, ordered **descending**, with date-group header rows.
+- **Today** (green) and **Tomorrow** (amber) groups are highlighted with a "Scheduling" badge; other dates show a neutral header with a localized date label + item count.
+- New shared helper `frontend/src/utils/dateGrouping.js` (`groupByDateDesc`). All existing columns, totals footer, and row actions remain intact.
+- ⚠️ Redeploy to apply on production.
+
+
+
 ## 2026-06-24 — Fix: promo stock-out "Insufficient stock (available 0)" on batch-tracked warehouses ✅ (testing_agent verified, iteration_223, 3/3 pytest)
 - **Bug:** Confirming a promotional stock-out that a Delivery Order auto-created failed with `Insufficient stock for <SKU>: need 1, available 0`, even though the (batch-tracked) warehouse had plenty of stock (e.g. Madapur Warehouse, Hyderabad/Jaitra Wellness distributor). DO-auto-created lines have no `batch_id`, so the confirm validation queried only null-batch stock rows — which are always zero on a batch-tracked warehouse.
 - **Fix:** new `_allocate_batches_if_needed` in `promo_dispatch.py` runs at confirm for batch-tracked sources: allocates available batches **FIFO** (production/created date), reservation-aware, splitting a line across batches as needed, and rewrites the delivery's line items with the chosen batches (atomic delete_many + insert_many). Genuine shortfalls now raise the **real** available count, not 0.
