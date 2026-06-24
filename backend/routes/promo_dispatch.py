@@ -205,6 +205,81 @@ async def _check_stock_availability(tenant_id: str, *, src_is_factory: bool, src
                 detail=f"Insufficient stock for {sku_name or sku_id}: {available} available, {qty} requested.")
 
 
+async def _allocate_batches_if_needed(tenant_id: str, d: dict, items: list, dispatch_id: str) -> list:
+    """For a batch-tracked source, replace any line lacking a `batch_id` with one
+    or more batch-allocated lines (FIFO across available stock, reservation-aware).
+
+    This is essential for stock-outs auto-created from a Delivery Order, which
+    never pick a batch: without this, confirm looks only for null-batch stock
+    (which is zero on a batch-tracked warehouse) and falsely reports
+    "available 0" even though plenty of batched stock exists. Rewrites the
+    delivery's line items in place. Raises 400 if a SKU cannot be fully
+    allocated from available batches."""
+    distributor_id = d.get("distributor_id")
+    loc_id = d.get("distributor_location_id")
+    src_is_factory = bool(d.get("is_factory"))
+    reserved = await _reserved_qty_map(tenant_id, distributor_id, loc_id, True, exclude_delivery_id=dispatch_id)
+    new_items: list = []
+    changed = False
+    for it in items:
+        if it.get("batch_id"):
+            new_items.append(it)
+            continue
+        sku_id = it.get("sku_id")
+        sku_name = it.get("sku_name")
+        need = int(it.get("quantity") or 0)
+        unit_price = float(it.get("unit_price") or 0)
+        if src_is_factory:
+            rows = await db.factory_warehouse_stock.find(
+                {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": sku_id,
+                 "batch_id": {"$ne": None}, "quantity": {"$gt": 0}},
+                {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "production_date": 1, "created_at": 1}).to_list(2000)
+            rows.sort(key=lambda r: (r.get("production_date") or r.get("created_at") or "9999"))
+        else:
+            rows = await db.distributor_stock.find(
+                {"tenant_id": tenant_id, "distributor_id": distributor_id, "distributor_location_id": loc_id,
+                 "sku_id": sku_id, "batch_id": {"$ne": None}, "quantity": {"$gt": 0}},
+                {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1}).to_list(2000)
+            rows.sort(key=lambda r: (r.get("created_at") or "9999"))
+        remaining = need
+        allocations = []
+        for r in rows:
+            bid = r.get("batch_id")
+            avail = int(r.get("quantity") or 0) - int(reserved.get((sku_id, bid), 0))
+            if avail <= 0:
+                continue
+            take = min(avail, remaining)
+            allocations.append((bid, r.get("batch_code"), take))
+            # Reserve within this allocation pass so multiple null-batch lines of
+            # the same SKU don't double-allocate the same batch.
+            reserved[(sku_id, bid)] = int(reserved.get((sku_id, bid), 0)) + take
+            remaining -= take
+            if remaining <= 0:
+                break
+        if remaining > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for {sku_name or sku_id}: need {need}, available {need - remaining}.")
+        changed = True
+        for bid, bcode, take in allocations:
+            line = {**it}
+            line.pop("_id", None)
+            line["batch_id"] = bid
+            line["batch_code"] = bcode
+            line["quantity"] = take
+            line["line_value"] = round(take * unit_price, 2)
+            new_items.append(line)
+    if changed:
+        await db.distributor_delivery_items.delete_many({"tenant_id": tenant_id, "delivery_id": dispatch_id})
+        for line in new_items:
+            doc = {**line}
+            doc["id"] = str(uuid.uuid4())
+            doc["tenant_id"] = tenant_id
+            doc["delivery_id"] = dispatch_id
+            await db.distributor_delivery_items.insert_one(doc)
+    return new_items
+
+
 async def _derived_on_hand_by_sku(tenant_id: str, distributor_id: str, loc_id: str,
                                   sku_ids: list) -> dict:
     """Dashboard-consistent on-hand (received − delivered) for non-factory,
@@ -693,6 +768,12 @@ async def confirm_promo_dispatch(distributor_id: str, dispatch_id: str, current_
     else:
         # New flow: reservation-aware validation, NO deduction (reserve only).
         tracks = bool(loc.get("track_batches"))
+        # A stock-out auto-created from a Delivery Order never picks a batch.
+        # On a batch-tracked warehouse, allocate batches FIFO now so the
+        # validation below finds the (batched) stock instead of falsely
+        # reporting "available 0" against the non-existent null batch.
+        if tracks and any(not it.get("batch_id") for it in items):
+            items = await _allocate_batches_if_needed(tenant_id, d, items, dispatch_id)
         reserved_map = await _reserved_qty_map(
             tenant_id, distributor_id, d.get("distributor_location_id"), tracks, exclude_delivery_id=dispatch_id)
         demand: dict = {}
