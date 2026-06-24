@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 226 — Independent verification of the 'delivery bundle & challan must ALWAYS show address + Google Maps QR' fix (backend-only, as requested). All 5 pytest cases in /app/backend/tests/test_delivery_qr_address.py PASSED. Coverage: (1) Individual Promo Challan PDF: GET /api/distributors/99fb55dc.../promo-deliveries/9d4d2c0b.../challan-pdf → HTTP 200, content-type application/pdf, valid %PDF header, embeds image XObjects (/Image count=4, /Subtype /Image count=1) — confirms the Google-Maps QR is drawn for a recipient with a text address ('Empire Promo Contact, Bengaluru, Karnataka') and NO lat/lng (text-fallback path). (2) Address-missing guard: inserted a temp is_promo=draft delivery with NO contact_address / NO delivery_address / empty recipient_shipping_address (+ one line item), called challan-pdf — endpoint returned HTTP 200 with a valid PDF (does NOT crash; the red ADDRESS MISSING block is emitted). Temp doc cleaned up. (3) Schedule bundle driver-sheet: loaded the existing schedule e2ec4623... via motor, set routes.distributor_delivery_schedules.db, called _enrich_schedule then _build_schedule_pdf — both stops resolved to non-empty addresses (.formatted populated; no '—'), PDF embeds image XObjects (QR per stop) via text fallback since lat/lng are null. (4) Promo-recipient address resolution: built a temp promo (is_promo, recipient_type=contact, real contact_id, delivery_address='MG Road, Bengaluru, Karnataka 560001') attached to a temp schedule — _enrich_schedule resolved the stop's address to a non-empty dict (formatted text present) and the bundle PDF still embedded an image XObject. (5) Regression: regular non-promo account-based delivery still resolves its address from account.delivery_address / billing_address and the bundle PDF builds successfully. All temp 'qa-'-prefixed docs cleaned up; existing schedule e2ec4623 and promo 9d4d2c0b are untouched.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_delivery_qr_address.py",
+    "/app/test_reports/pytest/iteration_226.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "utils/pdf_generator.py:build_maps_qr() silently catches every exception (bare 'except Exception: return None'). If qrcode/PIL ever break in production a QR will quietly stop rendering with NO log line — consider logging the exception via the module logger so operators see when the QR generation degrades to a no-op.",
+    "utils/pdf_generator.py: the QR table only renders when 'addr' is truthy AND qr_img is not None — but if addr is set yet build_maps_qr returns None (e.g. qrcode lib missing), the user sees the address WITHOUT a QR and without any warning. Either (a) still draw the address block with a small 'QR unavailable' note, or (b) fall back to the ADDRESS-MISSING-style guard when QR failed. Currently silent degradation.",
+    "routes/distributor_delivery_schedules.py:_enrich_schedule lookups for promo recipients use plain $in queries with no projection on contacts/leads/users — large tenants could return heavy docs; consider projecting only the address-related fields (already done for accounts).",
+    "routes/distributor_delivery_schedules.py:_addr_from now accepts 'address', 'street2', 'zip' as aliases — good, but the resulting `formatted` joins line1+line2+city+state+pincode separated by comma even when some are None-filtered, which can produce 'City, State' with no commas issue if the underlying schema ever stores a single comma-joined string in line1 (double-comma in output). Edge case only.",
+    "Test file uses asyncio.new_event_loop() per test instead of pytest-asyncio because the existing conftest pins a session-wide loop that motor binds to. Acceptable, but the project would benefit from removing the session-scope event_loop fixture in /app/backend/tests/conftest.py — current pytest-asyncio guidance is to let each test own its loop (which fixed the 'Event loop is closed' surprise we hit here)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_delivery_qr_address.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5 pytest)", "frontend": "n/a (backend-only review)"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "All seed docs are id-prefixed 'qa-' and deleted in each test's teardown. Verified post-run: 0 'qa-' docs remain across distributor_deliveries / distributor_delivery_items / distributor_delivery_schedules. Existing schedule e2ec4623-7f5e-4020-91a7-8b0ae9f3b9a1 and promo 9d4d2c0b-f37a-41b2-b0b3-6889950c2910 are untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run with: cd /app/backend && python -m pytest tests/test_delivery_qr_address.py -v. The test loads /app/backend/.env via python-dotenv (MONGO_URL/DB_NAME), logs in as CEO over REACT_APP_BACKEND_URL, and builds the AsyncIOMotorClient lazily INSIDE each test's event loop (via motor_db_factory fixture) — required because the project's conftest.py pins a session-scoped event_loop. Spec verification: assertion helper _pdf_has_embedded_image() implements the spec rule literally — accepts EITHER data.count(b'/Image') >= 2 OR b'/Subtype /Image' present. For the existing promo PDF observed counts were /Image=4, /Subtype /Image=1.",
+  "rca of the issue": "n/a — feature verification, no bug found. The fix is functioning as designed: (a) QR falls back to the Google-Maps 'search' URL when lat/lng absent, (b) address is resolved across contact/lead/employee/account/delivery_address-string sources via _addr_from + the promo-recipient fetch in _enrich_schedule, (c) the red ADDRESS MISSING guard renders on both the challan PDF (utils/pdf_generator.py) and the driver-sheet PDF (_address_cell) when nothing can be resolved, and (d) the challan endpoint stays at HTTP 200 even on totally-empty addresses (no crash)."
+}

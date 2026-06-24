@@ -47,6 +47,38 @@ MONTH_NAMES = {
 }
 
 
+def build_maps_qr(address_text: str = None, lat=None, lng=None, size: float = 22 * mm):
+    """QR code that opens Google Maps directions — by GPS coordinates when
+    present, otherwise by the text address. Returns None when neither is usable."""
+    try:
+        import qrcode
+        from urllib.parse import quote_plus
+        url = None
+        try:
+            flat, flng = float(lat), float(lng)
+            if not (flat == 0 and flng == 0):
+                url = f"https://www.google.com/maps/dir/?api=1&destination={flat},{flng}"
+        except (TypeError, ValueError):
+            pass
+        if not url:
+            txt = str(address_text or "").strip()
+            if not txt:
+                return None
+            url = f"https://www.google.com/maps/search/?api=1&query={quote_plus(txt)}"
+        qr = qrcode.QRCode(version=None, box_size=10, border=1,
+                           error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        bio = BytesIO()
+        img.save(bio, format="PNG")
+        bio.seek(0)
+        return Image(bio, width=size, height=size)
+    except Exception:
+        return None
+
+
+
 def fetch_logo_image(logo_url: str, max_width: float = 60, max_height: float = 40) -> Image:
     """
     Fetch and return a ReportLab Image from a URL.
@@ -959,8 +991,11 @@ def generate_delivery_challan_pdf(
     if contact_data.get('company'):
         c_lines.append(contact_data.get('company'))
     addr = ', '.join([x for x in [contact_data.get('address'), contact_data.get('city'), contact_data.get('state')] if x])
-    if delivery_data.get('delivery_address'):
+    if delivery_data.get('delivery_address') and isinstance(delivery_data.get('delivery_address'), str):
         addr = delivery_data.get('delivery_address')
+    if not addr:
+        _ship = delivery_data.get('recipient_shipping_address') or {}
+        addr = ', '.join([x for x in [_ship.get('address'), _ship.get('street2'), _ship.get('city'), _ship.get('state'), _ship.get('zip')] if x])
     if addr:
         c_lines.append(addr)
     if contact_data.get('phone'):
@@ -978,7 +1013,34 @@ def generate_delivery_challan_pdf(
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
     ]))
     story.append(party_table)
-    story.append(Spacer(1, 14))
+    story.append(Spacer(1, 10))
+
+    # ===== Delivery address QR (Google Maps) / missing-address guard =====
+    _ship = delivery_data.get('recipient_shipping_address') or {}
+    qr_img = build_maps_qr(address_text=addr, lat=_ship.get('lat'), lng=_ship.get('lng'))
+    if addr:
+        if qr_img is not None:
+            qr_caption = ParagraphStyle('QrCap', parent=normal_style, fontSize=9, leading=12)
+            qr_table = Table([[qr_img, Paragraph(
+                f"<b>Deliver To:</b> {contact_data.get('name', '')}<br/>{addr}<br/>"
+                f"<font color='#1E3A8A'>Scan the QR for Google Maps directions.</font>", qr_caption)]],
+                colWidths=[80, 420])
+            qr_table.setStyle(TableStyle([
+                ('FONTNAME', (0, 0), (-1, -1), _REGULAR_FONT),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('BOX', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+                ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ]))
+            story.append(qr_table)
+            story.append(Spacer(1, 12))
+    else:
+        story.append(Paragraph(
+            "<b><font color='#dc2626'>&#9888; DELIVERY ADDRESS MISSING — confirm the recipient address with the office before dispatch.</font></b>",
+            ParagraphStyle('AddrMissing', parent=normal_style, fontSize=10, backColor=colors.HexColor('#FEE2E2'),
+                           borderPadding=6, leading=13)))
+        story.append(Spacer(1, 12))
 
     # ===== Items =====
     story.append(Paragraph("Items Dispatched", header_style))

@@ -395,6 +395,25 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
             ):
                 accounts_by_id[a["id"]] = a
 
+        # Promotional stock-outs (is_promo) have NO account — the recipient is a
+        # Contact / Lead / Employee. Fetch those so the bundle always prints a
+        # real delivery address + contact, never a blank "—".
+        recip_contacts: dict = {}
+        recip_leads: dict = {}
+        recip_emps: dict = {}
+        c_ids = list({r.get("contact_id") for r in rows if r.get("contact_id")})
+        l_ids = list({r.get("lead_id") for r in rows if r.get("lead_id")})
+        e_ids = list({r.get("employee_id") for r in rows if r.get("employee_id")})
+        if c_ids:
+            async for c in db.contacts.find({"id": {"$in": c_ids}, "tenant_id": tenant_id}, {"_id": 0}):
+                recip_contacts[c["id"]] = c
+        if l_ids:
+            async for ld in db.leads.find({"id": {"$in": l_ids}, "tenant_id": tenant_id}, {"_id": 0}):
+                recip_leads[ld["id"]] = ld
+        if e_ids:
+            async for u in db.users.find({"id": {"$in": e_ids}, "tenant_id": tenant_id}, {"_id": 0, "password": 0}):
+                recip_emps[u["id"]] = u
+
         # Delivery contact = a contact tagged with category "Delivery" under the
         # account (entity_contacts → shared `contacts` collection). Account
         # contacts are keyed by whichever id the UI passed when created — usually
@@ -422,8 +441,8 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
         def _addr_from(src):
             if not isinstance(src, dict):
                 return None
-            line1 = src.get("address_line1") or src.get("address_line_1") or src.get("line1") or ""
-            line2 = src.get("address_line2") or src.get("address_line_2") or src.get("line2") or ""
+            line1 = src.get("address_line1") or src.get("address_line_1") or src.get("line1") or src.get("address") or ""
+            line2 = src.get("address_line2") or src.get("address_line_2") or src.get("line2") or src.get("street2") or ""
             city = src.get("city") or ""
             state = src.get("state") or ""
             pincode = src.get("pincode") or src.get("zip") or ""
@@ -448,11 +467,24 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
 
             # Customer name precedence: delivery.account_name → account.account_name → "Unknown"
             customer_name = r.get("account_name") or r.get("customer_name") or acct.get("account_name") or "Unknown"
-            # Address precedence: delivery.delivery_address (if non-empty dict) → account.delivery_address → account.billing_address
+            # Address precedence (always resolve something printable):
+            #   delivery.delivery_address dict → promo recipient entity's address
+            #   → account delivery/billing → recipient_shipping dict
+            #   → delivery.delivery_address string.
             dlv_addr = r.get("delivery_address")
             addr = _addr_from(dlv_addr) if isinstance(dlv_addr, dict) else None
             if not addr:
+                recip = (recip_contacts.get(r.get("contact_id"))
+                         or recip_leads.get(r.get("lead_id"))
+                         or recip_emps.get(r.get("employee_id")) or {})
+                if recip:
+                    addr = _addr_from(recip.get("delivery_address")) or _addr_from(recip)
+            if not addr:
                 addr = _addr_from(acct.get("delivery_address")) or _addr_from(acct.get("billing_address"))
+            if not addr:
+                addr = _addr_from(r.get("recipient_shipping_address"))
+            if not addr and isinstance(dlv_addr, str) and dlv_addr.strip():
+                addr = {"formatted": dlv_addr.strip(), "lat": None, "lng": None}
             # Delivery contact — the on-ground person the driver should call.
             # Precedence: the account's "Delivery"-category contact (the explicit
             # delivery contact) → the delivery row's override → the account's
@@ -467,6 +499,7 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 dc_contact.get("name")
                 or r.get("delivery_contact_name")
                 or acct.get("delivery_contact_name")
+                or r.get("contact_name")
             )
             delivery_contact_phone = (
                 dc_contact.get("phone")
@@ -1504,22 +1537,28 @@ async def download_schedule_bundle_pdf(
     )
 
 
-def _maps_qr_flowable(lat, lng, size_mm: float = 22):
-    """Return a ReportLab Image of a QR code linking to Google Maps turn-by-turn
-    directions for the given coordinates, or None when coordinates are absent
-    or invalid (the caller then renders address text only)."""
+def _maps_qr_flowable(lat, lng, address_text=None, size_mm: float = 22):
+    """Return a ReportLab Image of a QR code that opens Google Maps directions:
+    by GPS coordinates when present, else by the text address (search). Returns
+    None only when there is neither usable coordinates nor an address string."""
+    url = None
     try:
         flat = float(lat)
         flng = float(lng)
+        if not (flat == 0 and flng == 0):
+            url = f"https://www.google.com/maps/dir/?api=1&destination={flat},{flng}"
     except (TypeError, ValueError):
-        return None
-    if flat == 0 and flng == 0:
-        return None
+        pass
+    if not url:
+        txt = str(address_text or "").strip()
+        if not txt or txt == "—":
+            return None
+        from urllib.parse import quote_plus
+        url = f"https://www.google.com/maps/search/?api=1&query={quote_plus(txt)}"
     import qrcode
     from reportlab.lib.units import mm
     from reportlab.platypus import Image as RLImage
 
-    url = f"https://www.google.com/maps/dir/?api=1&destination={flat},{flng}"
     qr = qrcode.QRCode(version=None, box_size=10, border=1,
                        error_correction=qrcode.constants.ERROR_CORRECT_M)
     qr.add_data(url)
@@ -1532,13 +1571,18 @@ def _maps_qr_flowable(lat, lng, size_mm: float = 22):
 
 
 def _address_cell(addr: dict, addr_str: str, body_style, small_style):
-    """Address table cell: address text + (when GPS coordinates exist) a QR code
-    that opens turn-by-turn Google Maps directions to the stop."""
+    """Address table cell: address text + a QR code that opens Google Maps
+    directions to the stop (GPS when available, else the text address). When no
+    address can be resolved at all, prints a bold red ADDRESS MISSING flag so a
+    stop is never silently dispatched without a destination."""
     from reportlab.platypus import Paragraph, Spacer
     from reportlab.lib.units import mm
 
+    has_addr = bool(addr_str and addr_str.strip() and addr_str.strip() != "—")
+    if not has_addr:
+        return [Paragraph("<b><font color='#dc2626'>&#9888; ADDRESS MISSING</font></b>", body_style)]
     flowables = [Paragraph(addr_str, body_style)]
-    qr = _maps_qr_flowable((addr or {}).get("lat"), (addr or {}).get("lng"))
+    qr = _maps_qr_flowable((addr or {}).get("lat"), (addr or {}).get("lng"), addr_str)
     if qr is not None:
         flowables.append(Spacer(1, 2 * mm))
         flowables.append(qr)
