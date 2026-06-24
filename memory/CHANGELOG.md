@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-24 — Collapsible date groups + "Bottles vs Crates" PDF fix ✅ (testing_agent verified, iteration_227, 5/5 pytest + UI)
+- **Collapsible date grouping UI** (DeliveriesTab.jsx "Stock Out" section + PromoDispatchSection.jsx "Promotional Stock-Out"): date-group header rows are now clickable with a rotating chevron; only the **Today** group is expanded by default (`openDateGroups[group.key] ?? group.isToday`), all others collapsed. Added **Future** / **Past** pill badges (data-testids `delivery-future-pill-*`/`delivery-past-pill-*` and `promo-*`).
+- **Backend PDF packaging fix** (`routes/distributor_delivery_schedules.py`): the line-item projections at the bundle-PDF query (~L361) and crate-total aggregation (~L697) did NOT fetch `packaging_type_name`/`units_per_package`, so promo/DO lines (e.g. "Bottle (1)") were silently re-converted to the SKU's default **Crate**. Added the missing projection fields → PDF now shows the line's own packaging (Bottles). Legacy Crate-12 path regression-tested OK.
+- Tests: `/app/backend/tests/test_delivery_pdf_packaging.py` (new, 5/5). ⚠️ Redeploy to apply on production.
+
+
 ## 2026-06-24 — Delivery bundle & challans always show address + Google Maps QR ✅ (testing_agent verified, iteration_226, 5/5 pytest)
 - **Problem:** The scheduled delivery bundle/driver sheet and delivery challans were missing the customer address + a QR code, especially for promotional stock-outs (direct & DO-created), because the QR only rendered from GPS lat/lng and the bundle's address resolution was account-only.
 - **Fix (both surfaces — driver-sheet bundle `_build_schedule_pdf` AND individual challan PDF `generate_delivery_challan_pdf`):**
