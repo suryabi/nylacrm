@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-24 — Fix: DO list now mirrors live promo fulfillment status ✅ (testing_agent verified, iteration_225, 8/8 + frontend)
+- **Bug:** Delivery Orders list showed Fulfillment = "Draft" even when the linked Promotional Stock-Out challan was "Confirmed". The live-status mirror only ran on the detail GET, not on the list endpoint, so the stored value (set at place-order time) stayed stale.
+- **Fix:** `list_delivery_orders` now batch-looks-up each linked promo's current status from `distributor_deliveries` and reflects + persists it (single `bulk_write`). Detail GET already did this. Lead/account DO sections benefit too (same endpoint).
+- ⚠️ Redeploy to apply on production.
+
+
+
 ## 2026-06-24 — Stock Out & Promo Stock-Out grouped by date (Today/Tomorrow highlighted) ✅ (testing_agent verified, iteration_224, 6/6)
 - On Distributor Detail → Stock Out tab, both the regular **Stock Out** table (`DeliveriesTab`) and the **Promotional Stock-Out** table (`PromoDispatchSection`) now group rows by delivery date, ordered **descending**, with date-group header rows.
 - **Today** (green) and **Tomorrow** (amber) groups are highlighted with a "Scheduling" badge; other dates show a neutral header with a localized date label + item count.

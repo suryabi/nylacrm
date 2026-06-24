@@ -13,6 +13,7 @@ from typing import Optional, List
 from datetime import datetime, timezone, date, timedelta
 import uuid
 import logging
+from pymongo import UpdateOne
 
 from deps import get_current_user
 from database import db
@@ -399,13 +400,15 @@ async def list_delivery_orders(
             {"id": {"$in": promo_ids}, "tenant_id": tenant_id},
             {"_id": 0, "id": 1, "status": 1}).to_list(len(promo_ids))
         live_by_id = {p["id"]: p.get("status") for p in promos}
+        writes = []
         for r in rows:
-            pid = r.get("promo_dispatch_id")
-            live = live_by_id.get(pid)
+            live = live_by_id.get(r.get("promo_dispatch_id"))
             if live and live != r.get("fulfillment_status"):
                 r["fulfillment_status"] = live
-                await db.delivery_orders.update_one(
-                    {"id": r["id"], "tenant_id": tenant_id}, {"$set": {"fulfillment_status": live}})
+                writes.append(UpdateOne(
+                    {"id": r["id"], "tenant_id": tenant_id}, {"$set": {"fulfillment_status": live}}))
+        if writes:
+            await db.delivery_orders.bulk_write(writes, ordered=False)
     return {"orders": rows, "total": len(rows)}
 
 
