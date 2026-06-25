@@ -18,6 +18,10 @@ class DeliveryAddress(BaseModel):
     state: Optional[str] = None
     pincode: Optional[str] = None
     landmark: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    formatted_address: Optional[str] = None
+    maps_link: Optional[str] = None
 
 class Account(BaseModel):
     model_config = ConfigDict(extra="allow")

@@ -20,6 +20,7 @@ import {
 import { format } from 'date-fns';
 import TaxBillingCard from '../components/TaxBillingCard';
 import { isValidMapsLink } from '../utils/mapsLink';
+import { MapsLinkInput } from '../components/MapsLinkInput';
 import GammaGenerateButton from '../components/gamma/GammaGenerateButton';
 import {
   Select,
@@ -2822,14 +2823,11 @@ ${googleMapsLink}`;
                       </div>
                     </div>
                     <div>
-                      <Label className="text-xs text-muted-foreground">Google Maps Link</Label>
-                      <Input
+                      <MapsLinkInput
                         value={deliveryAddress.maps_link || ''}
-                        onChange={(e) => setDeliveryAddress({...deliveryAddress, maps_link: e.target.value})}
-                        placeholder="Paste a Google Maps link e.g. https://maps.app.goo.gl/..."
-                        data-testid="address-maps-link-input"
+                        onChange={(val) => setDeliveryAddress({...deliveryAddress, maps_link: val})}
+                        testId="address-maps-link-input"
                       />
-                      <p className="text-[11px] text-muted-foreground mt-1">Used for the delivery QR code when GPS isn't available.</p>
                     </div>
                   </div>
 

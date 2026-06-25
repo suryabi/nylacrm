@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 229 — Verified the maps_link persistence fix for Contacts (PRIMARY BUG) and Accounts (PUT + PATCH delivery-info), plus regression on Leads and Promo/DO. BACKEND: 8/8 pytest pass in /app/backend/tests/test_maps_link_persistence.py covering: (a) Model acceptance — ContactCreate/ContactUpdate/routes.accounts.DeliveryAddress/models.account.DeliveryAddress all expose maps_link; PromoDeliveryCreate still accepts maps_link (regression). (b) POST /api/contacts with maps_link='https://maps.app.goo.gl/eU2YJBYWqCEyFwhr9?g_st=iw' → create response carries maps_link AND GET /api/contacts/{id} returns the same value (persistence proven). (c) PUT /api/contacts/{id} updating maps_link to a different valid link → update response + GET both reflect the new value. (d) PUT /api/accounts/{id} with delivery_address.maps_link → GET returns delivery_address.maps_link unchanged (also lat/lng/formatted_address round-trip). (e) PATCH /api/accounts/{id}/delivery-info with delivery_address.maps_link → GET returns it (the iteration-228-missed PATCH path is now covered by Pydantic + persisted). (f) PUT /api/leads/{id} with delivery_address.maps_link → GET returns it (server.py LeadUpdate uses Dict[str,Any], so the dict passes through; verified end-to-end). All account/lead tests snapshot the original delivery_address and restore on teardown. FRONTEND: Playwright login + /contacts → opened 'Add New Contact' dialog. Confirmed (i) the styled MapsLinkInput card 'contact-maps-link-card' + input 'contact-maps-link' render (location pin icon + helper text 'Paste a Maps share link — powers the delivery QR when GPS isn't set.' visible). (ii) Typing 'hello' surfaces inline error via 'contact-maps-link-error' (red text). (iii) Typing the valid share link clears the error AND renders the 'Open' button 'contact-maps-link-open'. Screenshot saved at .screenshots/contact_maps_valid.png shows the rendered card.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_maps_link_persistence.py",
+    "/app/test_reports/pytest/iteration_229.xml"
+  ],
+  "action_items": [
+    "Optional: main agent can self-verify the remaining FE render points (promo-maps-link-input, do-addr-maps-link, address-maps-link-input, lead-address-maps-link-input) — these were already render-verified in iteration_228 (Promo/DO/Contact) and grep-verified in code for Lead/Account. The primary contact form (the actual bug fix) is fully validated in this run."
+  ],
+  "critical_code_review_comments": [
+    "GOOD: routes/contacts.py:317 uses contact.model_dump() (whole dict, no whitelist), and routes/contacts.py:342 uses contact_update.model_dump() filtered by 'is not None'. With maps_link now in the Pydantic model, it correctly flows to Mongo and is round-trippable. Same applies to routes/accounts.py PUT and PATCH delivery-info via AccountUpdate.delivery_address (DeliveryAddress now has maps_link). Root cause fix is correct.",
+    "OBSERVATION: routes/accounts.py and models/account.py BOTH define a DeliveryAddress class. Both were updated to include maps_link in this iteration — code duplication is mild risk; consider importing the model from models/account.py into routes/accounts.py to avoid future drift.",
+    "OBSERVATION: PATCH /api/accounts/{id}/delivery-info accepts the full AccountUpdate model but only persists 3 keys (delivery_address, delivery_contact_name, delivery_contact_phone). That's intentional but worth a docstring note — silently ignored extra fields can confuse callers.",
+    "OBSERVATION (server-side validation gap, carried over from iteration_228): No server-side URL-shape check on maps_link; the FE's isValidMapsLink() is the only guard. A curl bypass could store any string. Not a blocker — build_maps_qr fails gracefully, but a light backend regex (https + recognised host) would harden it.",
+    "OBSERVATION: server.py update_lead uses LeadUpdate with delivery_address: Optional[Dict[str, Any]] (passthrough). This is why the lead test passes despite no explicit DeliveryAddress model on the lead side. Future tightening: switch leads to a typed DeliveryAddress for consistency with accounts."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_maps_link_persistence.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 pytest)",
+    "frontend": "100% on Contact form (primary bug). Other forms verified by grep / iteration_228."
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). No distributor login used in this iteration.",
+  "seed_data_creation": "Backend tests create exactly one contact (cleaned up via DELETE in teardown) and temporarily mutate the delivery_address on account 81263309-2118-4d51-b1d9-fe9549da07b7 ('Toopa Ice-creamery') and lead 1b5f9703-91c1-46a5-bb36-68d36fa475eb ('INNO-MUM-L26-001') with the prefix 'TEST_'; both are restored to their pre-test value in the teardown. No long-lived test data is left behind.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Re-run with: cd /app/backend && python -m pytest tests/test_maps_link_persistence.py -v. Loads /app/backend/.env and /app/frontend/.env via python-dotenv. Hard-coded seed IDs: ACCOUNT_ID='81263309-2118-4d51-b1d9-fe9549da07b7', LEAD_ID='1b5f9703-91c1-46a5-bb36-68d36fa475eb', CATEGORY_ID='fb290a76-20fa-4952-b32d-17cf0ae3d2c9' (Vendors). If these seeds are reset, refresh via: db.accounts.find_one({tenant_id:'nyla-air-water'}), db.leads.find_one(...), db.contact_categories.find_one({is_active:true}). Frontend test: login via input[type='email']/input[type='password'] then button[type='submit'] (the 'Sign In' button is NOT uniquely text-matchable because Google login uses the same primary style; always use button[type='submit'] selector for the form submit). Public preview URL: https://promo-stock-sync.preview.emergentagent.com.",
+  "rca of the issue": "Original bug: ContactCreate/ContactUpdate (routes/contacts.py) and routes/accounts.py + models/account.py DeliveryAddress lacked maps_link in their Pydantic models. Because the write paths use model_dump() (not raw request.json()), Pydantic silently dropped the unknown field on parse, so contacts saved had no maps_link and Account PUT/PATCH delivery-info wrote a DeliveryAddress without maps_link. FIX (already applied by main agent): added 'maps_link: Optional[str] = None' to all four models. Validation (this iteration): backend pytest now POST/PUT/GET-asserts maps_link round-trips through (a) contacts create+update, (b) accounts PUT, (c) accounts PATCH /delivery-info, (d) leads PUT (passthrough Dict path). FE renders the new MapsLinkInput on the Contact form with valid/invalid inline validation."
+}

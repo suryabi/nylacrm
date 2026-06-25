@@ -46,6 +46,7 @@ import {
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { isValidMapsLink } from '../utils/mapsLink';
+import { MapsLinkInput } from '../components/MapsLinkInput';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -1014,14 +1015,11 @@ export default function ContactsList() {
                 )}
 
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Google Maps Link</Label>
-                  <Input
+                  <MapsLinkInput
                     value={formData.maps_link || ''}
-                    onChange={(e) => setFormData({ ...formData, maps_link: e.target.value })}
-                    placeholder="Paste a Google Maps link e.g. https://maps.app.goo.gl/..."
-                    data-testid="contact-maps-link"
+                    onChange={(val) => setFormData({ ...formData, maps_link: val })}
+                    testId="contact-maps-link"
                   />
-                  <p className="text-[11px] text-muted-foreground">Used for the delivery QR code when GPS isn't available.</p>
                 </div>
               </div>
 

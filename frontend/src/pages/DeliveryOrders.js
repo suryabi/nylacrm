@@ -20,6 +20,7 @@ import {
   CheckCircle2, XCircle, RotateCcw, Truck, Clock, ChevronRight, Phone, Calendar as CalendarIcon,
 } from 'lucide-react';
 import { isValidMapsLink } from '../utils/mapsLink';
+import { MapsLinkInput } from '../components/MapsLinkInput';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, withCredentials: true });
@@ -360,8 +361,11 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
               <Input placeholder="Pincode" value={addr.pincode} onChange={(e) => setAddr({ ...addr, pincode: e.target.value })} />
             </div>
             <div className="mt-2">
-              <Input placeholder="Google Maps link e.g. https://maps.app.goo.gl/..." value={addr.maps_link} onChange={(e) => setAddr({ ...addr, maps_link: e.target.value })} data-testid="do-addr-maps-link" />
-              <p className="text-[11px] text-slate-400 mt-1">Used for the delivery QR code when GPS isn't available.</p>
+              <MapsLinkInput
+                value={addr.maps_link}
+                onChange={(val) => setAddr({ ...addr, maps_link: val })}
+                testId="do-addr-maps-link"
+              />
             </div>
             {addr.lat != null && addr.lng != null && (
               <div className="mt-2"><MapPreview lat={addr.lat} lng={addr.lng} label={addr.city} /></div>

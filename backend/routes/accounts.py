@@ -104,6 +104,7 @@ class DeliveryAddress(BaseModel):
     lat: Optional[float] = None
     lng: Optional[float] = None
     formatted_address: Optional[str] = None
+    maps_link: Optional[str] = None
 
 
 class BillingAddress(BaseModel):

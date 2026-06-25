@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner';
 import { leadsAPI } from '../utils/api';
 import { isValidMapsLink } from '../utils/mapsLink';
+import { MapsLinkInput } from './MapsLinkInput';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const getHeaders = () => {
@@ -488,16 +489,11 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                <ExternalLink className="h-3 w-3" /> Google Maps Link
-              </Label>
-              <Input
+              <MapsLinkInput
                 value={form.maps_link}
-                onChange={(e) => setForm({ ...form, maps_link: e.target.value })}
-                placeholder="Paste a Google Maps link e.g. https://maps.app.goo.gl/..."
-                data-testid="lead-address-maps-link-input"
+                onChange={(val) => setForm({ ...form, maps_link: val })}
+                testId="lead-address-maps-link-input"
               />
-              <p className="text-[11px] text-muted-foreground mt-1">Used for the delivery QR code when GPS isn't available.</p>
             </div>
           </div>
 

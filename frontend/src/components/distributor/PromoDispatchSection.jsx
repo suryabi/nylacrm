@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { groupByDateDesc } from '../../utils/dateGrouping';
 import { isValidMapsLink } from '../../utils/mapsLink';
+import { MapsLinkInput } from '../MapsLinkInput';
 import { Calendar } from 'lucide-react';
 import BatchPickerCards from './BatchPickerCards';
 
@@ -1050,9 +1051,11 @@ export default function PromoDispatchSection({
             </div>
 
             <div className="space-y-2">
-              <Label>Google Maps Link</Label>
-              <Input value={form.maps_link} onChange={(e) => setForm(f => ({ ...f, maps_link: e.target.value }))} placeholder="Paste a Google Maps link e.g. https://maps.app.goo.gl/..." data-testid="promo-maps-link-input" />
-              <p className="text-[11px] text-muted-foreground">Used for the delivery QR code when GPS isn't available.</p>
+              <MapsLinkInput
+                value={form.maps_link}
+                onChange={(val) => setForm(f => ({ ...f, maps_link: val }))}
+                testId="promo-maps-link-input"
+              />
             </div>
 
             {/* Items */}
