@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-24 — Debit reasons + flow-aware wording for Track Customer Return ✅ (testing_agent verified, iteration_237, backend 6/6 + ReturnsTab UI)
+- **Debit reasons**: return reasons now carry `note_type` ('credit'|'debit'). Seeded 4 default debit reasons (Not Returned, Lost at Customer, Broken at Customer, Pilferage). `GET /return-reasons?note_type=debit` auto-seeds them for existing tenants (idempotent); `?note_type=credit` excludes debit (legacy rows treated as credit).
+- **ReturnsTab dialog** adapts to the choice: Missing → "Add Missing Items" / "Debit Reason" / missing-oriented placeholders + the dropdown lists only debit reasons; Returned → "Add Returned Items" / "Credit Reason" + credit reasons. Switching the choice refetches reasons and clears already-picked item reasons.
+- **Tenant Settings → Return Reasons**: added a Note Type (Credit/Debit) selector in the editor and a Credit/Debit badge per row, so admins can manage/add debit reasons later.
+- Bug fixed during testing: `POST /return-reasons` was dropping `note_type`/`applies_to` (explicit-kwargs constructor) — now spreads `**data.model_dump()`. ⚠️ Redeploy to production to go live.
+
+
 ## 2026-06-24 — Track Customer Return: Returned (Credit Note) vs Missing (Debit Note) ✅ (testing_agent verified, iteration_236, backend 5/5 + frontend)
 - Renamed the dialog to **"Track Customer Return"** and added two prominent, distinct choice cards: **Returned bottles** (emerald → "System will create a Credit Note", default) and **Missing bottles** (amber → "System will generate a Debit Note"), with inline advisory text. Submit button label adapts to the choice.
 - Backend: `CustomerReturn(Create).return_type` ('returned'|'missing', default returned, invalid→returned). On approve: returned → credit note (existing); **missing → new debit note** in `db.debit_notes` (DN-YYYY-####, note_type='debit', amount = total_credit, status pending) and sets `return.debit_note_number/_id`. Debit notes are **local-only (no Zoho push this phase)** per user choice.

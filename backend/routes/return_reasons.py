@@ -205,20 +205,14 @@ async def create_return_reason(
             detail=f"Return reason with code '{data.reason_code}' already exists"
         )
     
-    # Create the reason
+    # Create the reason — spread all fields so newly-added ones (note_type,
+    # applies_to, …) are never silently dropped.
+    payload = data.model_dump()
+    payload["reason_code"] = data.reason_code.upper()
     reason = ReturnReason(
         tenant_id=tenant_id,
-        reason_code=data.reason_code.upper(),
-        reason_name=data.reason_name,
-        description=data.description,
-        category=data.category,
-        credit_type=data.credit_type,
-        credit_percentage=data.credit_percentage,
-        return_to_factory=data.return_to_factory,
-        requires_inspection=data.requires_inspection,
-        display_order=data.display_order,
-        color=data.color,
-        created_by=current_user.get('id')
+        created_by=current_user.get('id'),
+        **payload
     )
     
     await db.return_reasons.insert_one(reason.model_dump())
