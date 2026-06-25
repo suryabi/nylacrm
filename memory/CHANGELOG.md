@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-24 — Track Customer Return: Returned (Credit Note) vs Missing (Debit Note) ✅ (testing_agent verified, iteration_236, backend 5/5 + frontend)
+- Renamed the dialog to **"Track Customer Return"** and added two prominent, distinct choice cards: **Returned bottles** (emerald → "System will create a Credit Note", default) and **Missing bottles** (amber → "System will generate a Debit Note"), with inline advisory text. Submit button label adapts to the choice.
+- Backend: `CustomerReturn(Create).return_type` ('returned'|'missing', default returned, invalid→returned). On approve: returned → credit note (existing); **missing → new debit note** in `db.debit_notes` (DN-YYYY-####, note_type='debit', amount = total_credit, status pending) and sets `return.debit_note_number/_id`. Debit notes are **local-only (no Zoho push this phase)** per user choice.
+- Frontend list: column renamed to "Credit / Debit Note"; row shows CN badge (emerald) for returned and DN badge (amber) for missing. `db.debit_notes` is a brand-new collection — no collision with distributor billing.
+- ⚠️ Redeploy to production to go live. Follow-ups: Zoho push for debit notes, a dedicated debit-notes list/report, server-side approve RBAC (matches existing credit-note pattern today).
+
+
 ## 2026-06-24 — Contact form: distinct address section + Alternative Contact ✅ (testing_agent verified, iteration_235, frontend 100%)
 - Add/Edit Contact form (`ContactsList.js`): the address area is now a clearly-headed **"Delivery Address"** section (emerald header bar + map-pin icon, `contact-address-section`) wrapping search/address fields + Google Maps link.
 - New **"Alternative Contact"** section (sky header + person icon, `contact-alt-section`) with two new fields: Alternative Contact Name (`contact-alt-name`) and Alternative Phone Number (`contact-alt-phone`) — helpful for deliveries/follow-ups.
