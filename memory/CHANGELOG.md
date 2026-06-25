@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-24 — Contact form: distinct address section + Alternative Contact ✅ (testing_agent verified, iteration_235, frontend 100%)
+- Add/Edit Contact form (`ContactsList.js`): the address area is now a clearly-headed **"Delivery Address"** section (emerald header bar + map-pin icon, `contact-address-section`) wrapping search/address fields + Google Maps link.
+- New **"Alternative Contact"** section (sky header + person icon, `contact-alt-section`) with two new fields: Alternative Contact Name (`contact-alt-name`) and Alternative Phone Number (`contact-alt-phone`) — helpful for deliveries/follow-ups.
+- Backend: `ContactCreate`/`ContactUpdate` (`routes/contacts.py`) now persist `alt_contact_name` + `alt_contact_phone` (curl + UI round-trip verified). ⚠️ Redeploy to production to go live.
+
+
 ## 2026-06-24 — Per-transition Notifications + Notification Templates ✅ (testing_agent verified, iteration_234, backend 8/8)
 - **State Machine transitions** now carry a `notifications` config: each rule = channels (in_app, email, whatsapp, sms, push) + optional template + recipient list (stakeholders requestor/assignee/watchers, plus role/department/specific-user). UI added in the transition editor (`StateMachines.js`). Validation rejects invalid channels and role/department/user recipients missing a value.
 - **Notification Templates** admin: new collection `notification_templates` (tenant-scoped, admin-managed) with `{{placeholder}}` subject+body; new page `/admin/notification-templates` + nav link; CRUD in `routes/notification_templates.py`. Variables: request_number, title, action, from_state, to_state, actor_name, requestor_name, assignee_name, comment, link.
