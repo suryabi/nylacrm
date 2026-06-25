@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 2026-06-24 — Fix: Stock-Out grouped by completion date instead of delivery date ✅ (testing_agent verified, iteration_231, 3/3 pytest)
+- **Root cause:** `complete_delivery` (`routes/distributors.py` ~L5037) overwrote `delivery_date` with the completion date (`now[:10]`) whenever the caller didn't pass an explicit date. Since the Stock-Out/Promo tables group by `delivery_date`, a delivery physically done yesterday but marked complete today jumped into Today's group.
+- **Fix:** completion now records only `delivered_at` (actual completion timestamp) + status/updated_at, and leaves `delivery_date` untouched unless an explicit `delivery_date` query param is supplied (user's responsibility to correct). Promo complete never had the bug (verified).
+- **Verified:** no-arg complete preserves yesterday's delivery_date; explicit override still works; stock deduction + status side-effects intact. Test: `tests/test_complete_delivery_date_preservation.py`.
+- ⚠️ Caveat: existing records already completed in production had their `delivery_date` clobbered before this fix — those cannot be auto-recovered; users must correct them manually. Redeploy to apply going forward.
+
+## 2026-06-24 — Per-date subtotal rows in Stock-Out & Promo tables ✅ (testing_agent verified, iteration_230)
+- Added a subtotal row at the bottom of each expanded date group: Stock-Out sums deliveries count + Billing/Return Credit/Net Billing/Margin/Billable/Net Billable (`delivery-date-subtotal-{key}`); Promo sums total quantity + Indicative Value + challan count (`promo-date-subtotal-{key}`). Extracted reusable `sumDeliveries()` helper in DeliveriesTab.jsx.
+
+
 ## 2026-06-24 — Fix: Google Maps link not saving (Contacts/Accounts) + styled field ✅ (testing_agent verified, iteration_229, 8/8 pytest)
 - **Root cause:** `ContactCreate`/`ContactUpdate` (`routes/contacts.py`) and the account write-path `DeliveryAddress` (`routes/accounts.py` + `models/account.py`) were missing the `maps_link` field. Since write paths use `model_dump()`, Pydantic silently dropped the field → contacts/accounts saved without the link. Fixed by adding `maps_link` to all four models. Promo/DO and Lead (server.py dict passthrough) already persisted it.
 - **Verified persistence:** Contact create+update, Account PUT + PATCH /delivery-info, and Lead PUT all round-trip `maps_link` (8/8 pytest in `tests/test_maps_link_persistence.py`).
