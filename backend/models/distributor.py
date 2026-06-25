@@ -548,6 +548,12 @@ class CreditNoteApplicationCreate(BaseModel):
     amount_to_apply: float
 
 
+class DebitNoteApplicationCreate(BaseModel):
+    """Debit note to apply (charge) during delivery creation"""
+    debit_note_id: str
+    amount_to_apply: float
+
+
 class AccountDeliveryCreate(BaseModel):
     distributor_id: str
     distributor_location_id: str
@@ -562,6 +568,8 @@ class AccountDeliveryCreate(BaseModel):
     items: List[DeliveryItemCreate]
     # Credit notes to apply
     credit_notes_to_apply: Optional[List[CreditNoteApplicationCreate]] = None
+    # Debit notes to apply (charges the customer for missing bottles)
+    debit_notes_to_apply: Optional[List[DebitNoteApplicationCreate]] = None
 
 
 class PromoDeliveryItemCreate(BaseModel):

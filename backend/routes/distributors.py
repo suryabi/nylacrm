@@ -4673,6 +4673,47 @@ async def create_delivery(
     delivery_doc['total_credit_applied'] = round(total_credit_applied, 2)
     delivery_doc['net_customer_billing'] = round(net_customer_billing, 2)
     
+    # Handle debit notes if provided — these ADD to the customer's billing
+    # (customer owes us for missing/unreturned bottles).
+    applied_debit_notes = []
+    total_debit_applied = 0
+
+    if data.debit_notes_to_apply:
+        from routes.credit_notes import apply_debit_note_to_delivery
+
+        for dn_request in data.debit_notes_to_apply:
+            dn_id = dn_request.debit_note_id
+            amount = dn_request.amount_to_apply
+
+            if not dn_id or amount <= 0:
+                continue
+
+            try:
+                result = await apply_debit_note_to_delivery(
+                    tenant_id=tenant_id,
+                    debit_note_id=dn_id,
+                    delivery_id=delivery_id,
+                    delivery_number=delivery_number,
+                    amount_to_apply=amount,
+                    applied_by=current_user.get('id')
+                )
+
+                applied_debit_notes.append({
+                    'debit_note_id': dn_id,
+                    'debit_note_number': result.get('debit_note_number'),
+                    'amount_applied': amount,
+                    'return_number': result.get('return_number')
+                })
+                total_debit_applied += amount
+            except HTTPException as e:
+                logger.warning(f"Failed to apply debit note {dn_id} during delivery creation: {e.detail}")
+
+    # Recompute net billing including debit charges
+    net_customer_billing = max(0, total_net_amount - total_credit_applied + total_debit_applied)
+    delivery_doc['applied_debit_notes'] = applied_debit_notes
+    delivery_doc['total_debit_applied'] = round(total_debit_applied, 2)
+    delivery_doc['net_customer_billing'] = round(net_customer_billing, 2)
+    
     # Insert delivery and items
     await db.distributor_deliveries.insert_one(delivery_doc)
     if items_to_insert:

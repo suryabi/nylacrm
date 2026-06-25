@@ -176,7 +176,7 @@ export default function CustomerReturnsList() {
         </Card>
         <Card className="p-5 border-emerald-100 dark:border-emerald-900/30 bg-gradient-to-br from-emerald-50 to-white dark:from-emerald-900/20 dark:to-slate-900">
           <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-wide text-emerald-700/70">Total Credit</p>
+            <p className="text-xs uppercase tracking-wide text-emerald-700/70">Total Value</p>
             <IndianRupee className="h-4 w-4 text-emerald-500" />
           </div>
           <p className="text-2xl font-bold text-emerald-800 dark:text-emerald-300 mt-2 tabular-nums">
@@ -240,7 +240,7 @@ export default function CustomerReturnsList() {
                 <TableHead>Account</TableHead>
                 <TableHead>Distributor</TableHead>
                 <TableHead className="text-right">Bottles</TableHead>
-                <TableHead className="text-right">Credit</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -303,12 +303,14 @@ export default function CustomerReturnsList() {
                       <TableCell className="text-right tabular-nums font-semibold">
                         {(r.total_quantity || 0).toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-300">
+                      <TableCell className={`text-right tabular-nums font-semibold ${r.return_type === 'missing' ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-300'}`}>
                         {formatCurrency(r.total_credit)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className={STATUS_STYLES[status] || 'bg-slate-100 text-slate-700 border-slate-300'}>
-                          {STATUS_LABELS[status] || String(status).replace(/_/g, ' ')}
+                          {r.return_type === 'missing'
+                            ? (STATUS_LABELS[status] || String(status).replace(/_/g, ' ')).replace(/Credit/g, 'Debit')
+                            : (STATUS_LABELS[status] || String(status).replace(/_/g, ' '))}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -323,8 +325,8 @@ export default function CustomerReturnsList() {
                                   <th className="text-left py-2 px-3 font-medium">Reason</th>
                                   <th className="text-right py-2 px-3 font-medium">Crates</th>
                                   <th className="text-right py-2 px-3 font-medium">Bottles</th>
-                                  <th className="text-right py-2 px-3 font-medium">Credit / Unit</th>
-                                  <th className="text-right py-2 px-3 font-medium">Total Credit</th>
+                                  <th className="text-right py-2 px-3 font-medium">{r.return_type === 'missing' ? 'Debit / Unit' : 'Credit / Unit'}</th>
+                                  <th className="text-right py-2 px-3 font-medium">{r.return_type === 'missing' ? 'Total Debit' : 'Total Credit'}</th>
                                 </tr>
                               </thead>
                               <tbody>

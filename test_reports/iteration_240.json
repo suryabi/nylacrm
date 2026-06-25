@@ -1,0 +1,62 @@
+{
+  "summary": "Frontend verification of (a) Returns badge wording fix and (b) new Apply Debit Notes section + live net-billing math in Stock-Out Record Delivery dialog. ALL CHECKS PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_240.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DeliveriesTab.jsx is 2639 lines — exceeds the 700-line guideline; consider splitting (account picker, credit-notes section, debit-notes section, net-billing summary, items grid) into smaller components for maintainability.",
+    "Customer Returns global page shows distributor column as '-' for all rows even though data exists in distributor-scoped view (Brian's grid resolves them). Out of scope for this iteration but worth tracking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, nyla-air-water tenant)",
+  "seed_data_creation": "None — relied on pre-existing Empire Restaurant (5 outstanding debit notes ₹450 total) and RET-2026-0001..0007.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Account typeahead in Record Delivery dialog uses [data-testid='delivery-account-option-{account_id}']. Empire Restaurant id is d4e2187a-5e7d-4847-902b-b6699ae910fc. Clicking via .click() on the testid works; .evaluate(el => el.click()) does NOT trigger React onClick. Location dropdown uses [data-testid='delivery-location-select']. SKU combobox in item row has no testid (use nth(1) of dialog comboboxes).",
+  "detailed_verification": {
+    "phase_1_returns_badges": {
+      "distributor_brian_returns_tab": {
+        "RET-2026-0007 (missing, Debit Issued)": "Debit Issued — PASS",
+        "RET-2026-0005 (missing, approved)": "Debit Note Created — PASS",
+        "RET-2026-0002 (returned, applied)": "Credit Issued — PASS",
+        "RET-2026-0001 (returned, applied)": "Credit Issued — PASS"
+      },
+      "customer_returns_global_page": {
+        "RET-2026-0007": "Debit Issued — PASS",
+        "RET-2026-0005": "Debit Note Created — PASS",
+        "RET-2026-0003": "Credit Note Created — PASS",
+        "RET-2026-0002": "Credit Issued — PASS",
+        "RET-2026-0001": "Credit Issued — PASS",
+        "amount_header": "Amount — PASS",
+        "summary_card": "TOTAL VALUE — PASS"
+      }
+    },
+    "phase_2_record_delivery_dialog": {
+      "credit_section_renders": true,
+      "debit_section_renders": true,
+      "debit_section_data_testid": "debit-notes-section — found",
+      "amber_available_badge_text": "5 outstanding · ₹450.00 — PASS",
+      "amber_styling_present": true,
+      "debit_section_below_credit_section": "cnTop=781 dnTop=897 — PASS (debit below)",
+      "debit_note_rows_visible": "DN-2026-0001/0002/0003/0004 visible in scrollable list (5 total inc DN-2026-0005)",
+      "delhi_non_batch_warehouse_selected": true,
+      "sku_added": "Nyla – 600 ml / Silver @ ₹140, qty 5 crates (12 units each) → Delivery Total ₹8,400",
+      "debit_checkbox_toggled": "DN-2026-0001 @ ₹90 selected",
+      "net_billing_summary_data_testid": "net-billing-summary — present",
+      "net_billing_lines": {
+        "Delivery Total": "₹8,400.00",
+        "Debit Notes Charged (1)": "+ ₹90.00",
+        "Net Customer Billing": "₹8,490.00 (= 8400 + 90) — MATH CORRECT"
+      },
+      "submit_clicked": false
+    }
+  }
+}

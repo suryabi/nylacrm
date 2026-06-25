@@ -421,6 +421,10 @@ export default function DeliveriesTab({
   const [availableCreditNotes, setAvailableCreditNotes] = useState([]);
   const [loadingCreditNotes, setLoadingCreditNotes] = useState(false);
   const [selectedCreditNotes, setSelectedCreditNotes] = useState({}); // {credit_note_id: amount_to_apply}
+  // Debit notes state (customer owes us — adds to billing)
+  const [availableDebitNotes, setAvailableDebitNotes] = useState([]);
+  const [loadingDebitNotes, setLoadingDebitNotes] = useState(false);
+  const [selectedDebitNotes, setSelectedDebitNotes] = useState({}); // {debit_note_id: amount_to_apply}
   
   const totalPages = Math.ceil((deliveriesTotal || 0) / (deliveriesPageSize || 20));
 
@@ -494,15 +498,49 @@ export default function DeliveriesTab({
     fetchCreditNotes();
   }, [selectedDeliveryAccount, distributor.id, API_URL, token]);
   
+  // Fetch available debit notes when account is selected
+  useEffect(() => {
+    const fetchDebitNotes = async () => {
+      if (!selectedDeliveryAccount?.account_id && !selectedDeliveryAccount?.id) {
+        setAvailableDebitNotes([]);
+        setSelectedDebitNotes({});
+        return;
+      }
+      setLoadingDebitNotes(true);
+      try {
+        const accountId = selectedDeliveryAccount.account_id || selectedDeliveryAccount.id;
+        const response = await fetch(
+          `${API_URL}/api/distributors/${distributor.id}/debit-notes/for-account/${accountId}`,
+          { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableDebitNotes(data.debit_notes || []);
+        } else {
+          setAvailableDebitNotes([]);
+        }
+      } catch (error) {
+        console.error('Error fetching debit notes:', error);
+        setAvailableDebitNotes([]);
+      } finally {
+        setLoadingDebitNotes(false);
+      }
+    };
+    fetchDebitNotes();
+  }, [selectedDeliveryAccount, distributor.id, API_URL, token]);
+  
   // Reset credit notes when dialog closes
   useEffect(() => {
     if (!showDeliveryDialog) {
       setSelectedCreditNotes({});
+      setSelectedDebitNotes({});
     }
   }, [showDeliveryDialog]);
   
   // Calculate total credit to be applied
   const totalCreditToApply = Object.values(selectedCreditNotes).reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
+  // Calculate total debit to be applied (adds to billing)
+  const totalDebitToApply = Object.values(selectedDebitNotes).reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
   
   // Calculate delivery total amount (subtotal without GST — GST shown separately)
   const deliverySubtotal = deliveryItems.reduce((sum, item) => {
@@ -515,7 +553,7 @@ export default function DeliveriesTab({
   const deliveryTotalAmount = deliverySubtotal;
   
   // Calculate net billing amount
-  const netBillingAmount = Math.max(0, deliveryTotalAmount - totalCreditToApply);
+  const netBillingAmount = Math.max(0, deliveryTotalAmount - totalCreditToApply + totalDebitToApply);
   
   // Handle credit note selection toggle
   const handleCreditNoteToggle = (creditNote, checked) => {
@@ -563,9 +601,44 @@ export default function DeliveriesTab({
         credit_note_id,
         amount_to_apply
       }));
+    // Prepare debit notes for submission
+    const debitNotesToApply = Object.entries(selectedDebitNotes)
+      .filter(([_, amount]) => amount > 0)
+      .map(([debit_note_id, amount_to_apply]) => ({
+        debit_note_id,
+        amount_to_apply
+      }));
     
-    // Pass credit notes to the parent handler
-    await handleCreateDelivery(creditNotesToApply);
+    // Pass credit + debit notes to the parent handler
+    await handleCreateDelivery(creditNotesToApply, debitNotesToApply);
+  };
+
+  // Handle debit note selection toggle
+  const handleDebitNoteToggle = (debitNote, checked) => {
+    if (checked) {
+      setSelectedDebitNotes(prev => ({ ...prev, [debitNote.id]: debitNote.balance_amount }));
+    } else {
+      setSelectedDebitNotes(prev => {
+        const updated = { ...prev };
+        delete updated[debitNote.id];
+        return updated;
+      });
+    }
+  };
+
+  // Handle debit note amount change
+  const handleDebitNoteAmountChange = (debitNoteId, value, maxAmount) => {
+    const numValue = parseFloat(value) || 0;
+    const clampedValue = Math.min(Math.max(0, numValue), maxAmount);
+    if (clampedValue > 0) {
+      setSelectedDebitNotes(prev => ({ ...prev, [debitNoteId]: clampedValue }));
+    } else {
+      setSelectedDebitNotes(prev => {
+        const updated = { ...prev };
+        delete updated[debitNoteId];
+        return updated;
+      });
+    }
   };
   
   // Download as Excel
@@ -1459,28 +1532,147 @@ export default function DeliveriesTab({
                           })}
                         </div>
                         
-                        {/* Credit Notes Summary */}
-                        {totalCreditToApply > 0 && (
-                          <div className="border rounded-md p-3 bg-emerald-50/50 space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Delivery Total:</span>
-                              <span className="font-medium">₹{deliveryTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex justify-between text-sm text-emerald-600">
-                              <span className="flex items-center gap-1">
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                                Credit Notes Applied ({Object.keys(selectedCreditNotes).length}):
-                              </span>
-                              <span className="font-medium">- ₹{totalCreditToApply.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex justify-between text-base font-bold border-t pt-2">
-                              <span>Net Customer Billing:</span>
-                              <span className="text-emerald-700">₹{netBillingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Debit Notes Section — customer owes us for missing bottles;
+                   applying these ADDS to the customer billing. Shown separately
+                   below the credit notes section. */}
+                {selectedDeliveryAccount && (availableDebitNotes.length > 0 || loadingDebitNotes) && (
+                  <div className="space-y-3 border-t pt-4" data-testid="debit-notes-section">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Receipt className="h-5 w-5 text-amber-600" />
+                        <Label className="text-base font-semibold">Apply Debit Notes</Label>
+                      </div>
+                      {!loadingDebitNotes && availableDebitNotes.length > 0 && (
+                        <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50" data-testid="debit-notes-available-badge">
+                          {availableDebitNotes.length} outstanding · ₹{availableDebitNotes.reduce((s, dn) => s + (dn.balance_amount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {loadingDebitNotes ? (
+                      <div className="flex items-center justify-center py-4">
+                        <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+                        <span className="ml-2 text-sm text-muted-foreground">Loading debit notes…</span>
+                      </div>
+                    ) : deliveryItems.length === 0 ? (
+                      <div className="border rounded-md bg-amber-50/50 border-amber-200 px-4 py-3 flex items-start gap-3" data-testid="debit-notes-pending-items-banner">
+                        <Receipt className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                          <p className="font-medium text-amber-800">
+                            {availableDebitNotes.length} debit note{availableDebitNotes.length !== 1 ? 's' : ''} outstanding — total ₹{availableDebitNotes.reduce((s, dn) => s + (dn.balance_amount || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} owed by this customer.
+                          </p>
+                          <p className="text-xs text-amber-700/80 mt-0.5">
+                            Add at least one line item above to charge them onto this delivery.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground">
+                          Select debit notes to charge (add) onto the customer billing for missing/unreturned bottles
+                        </p>
+                        <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+                          {availableDebitNotes.map(dn => {
+                            const isSelected = selectedDebitNotes[dn.id] !== undefined;
+                            const selectedAmount = selectedDebitNotes[dn.id] || 0;
+                            return (
+                              <div
+                                key={dn.id}
+                                className={`p-3 transition-colors ${isSelected ? 'bg-amber-50/50' : 'hover:bg-muted/30'}`}
+                                data-testid={`debit-note-row-${dn.id}`}
+                              >
+                                <div className="flex items-start gap-3">
+                                  <Checkbox
+                                    id={`dn-${dn.id}`}
+                                    checked={isSelected}
+                                    onCheckedChange={(checked) => handleDebitNoteToggle(dn, checked)}
+                                    className="mt-0.5"
+                                    data-testid={`debit-note-checkbox-${dn.id}`}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center justify-between">
+                                      <label htmlFor={`dn-${dn.id}`} className="font-medium text-sm cursor-pointer truncate">
+                                        {dn.debit_note_number}
+                                      </label>
+                                      <span className="text-sm font-semibold text-amber-600 shrink-0 ml-2">
+                                        ₹{dn.balance_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })} owed
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                                      <span>Return: {dn.return_number || 'N/A'}</span>
+                                      <span>•</span>
+                                      <span>{dn.debit_note_date ? new Date(dn.debit_note_date).toLocaleDateString() : 'N/A'}</span>
+                                      <span>•</span>
+                                      <span>Original: ₹{dn.original_amount?.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    </div>
+                                    {isSelected && (
+                                      <div className="flex items-center gap-2 mt-2">
+                                        <span className="text-xs text-muted-foreground">Charge:</span>
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          max={dn.balance_amount}
+                                          step="0.01"
+                                          value={selectedAmount}
+                                          onChange={(e) => handleDebitNoteAmountChange(dn.id, e.target.value, dn.balance_amount)}
+                                          className="h-7 w-28 text-sm"
+                                          data-testid={`debit-note-amount-${dn.id}`}
+                                        />
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 px-2 text-xs"
+                                          onClick={() => handleDebitNoteAmountChange(dn.id, dn.balance_amount, dn.balance_amount)}
+                                        >
+                                          Max
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Combined Net Billing Summary (credits subtract, debits add) */}
+                {selectedDeliveryAccount && deliveryItems.length > 0 && (totalCreditToApply > 0 || totalDebitToApply > 0) && (
+                  <div className="border rounded-md p-3 bg-slate-50 space-y-2" data-testid="net-billing-summary">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Delivery Total:</span>
+                      <span className="font-medium">₹{deliveryTotalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {totalCreditToApply > 0 && (
+                      <div className="flex justify-between text-sm text-emerald-600">
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Credit Notes Applied ({Object.keys(selectedCreditNotes).length}):
+                        </span>
+                        <span className="font-medium">- ₹{totalCreditToApply.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    {totalDebitToApply > 0 && (
+                      <div className="flex justify-between text-sm text-amber-600">
+                        <span className="flex items-center gap-1">
+                          <Receipt className="h-3.5 w-3.5" />
+                          Debit Notes Charged ({Object.keys(selectedDebitNotes).length}):
+                        </span>
+                        <span className="font-medium">+ ₹{totalDebitToApply.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-base font-bold border-t pt-2">
+                      <span>Net Customer Billing:</span>
+                      <span className="text-slate-900">₹{netBillingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
                   </div>
                 )}
 

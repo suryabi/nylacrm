@@ -1740,7 +1740,7 @@ export default function DistributorDetail() {
 
   // ============ Delivery Handlers ============
 
-  const handleCreateDelivery = async (creditNotesToApply = []) => {
+  const handleCreateDelivery = async (creditNotesToApply = [], debitNotesToApply = []) => {
     if (!deliveryForm.account_id) {
       toast.error('Please select an account');
       return;
@@ -1791,7 +1791,9 @@ export default function DistributorDetail() {
           };
         }),
         // Include credit notes if any
-        credit_notes_to_apply: creditNotesToApply.length > 0 ? creditNotesToApply : null
+        credit_notes_to_apply: creditNotesToApply.length > 0 ? creditNotesToApply : null,
+        // Include debit notes if any (charges customer for missing bottles)
+        debit_notes_to_apply: debitNotesToApply.length > 0 ? debitNotesToApply : null
       };
       
       const response = await axios.post(`${API_URL}/api/distributors/${id}/deliveries`, deliveryData, {
@@ -1799,10 +1801,14 @@ export default function DistributorDetail() {
         withCredentials: true
       });
       
-      // Show success message with credit info if applicable
+      // Show success message with credit/debit info if applicable
       const creditApplied = response.data.total_credit_applied || 0;
-      if (creditApplied > 0) {
-        toast.success(`Delivery ${response.data.delivery_number} created with ₹${creditApplied.toLocaleString('en-IN')} in credit notes applied`);
+      const debitApplied = response.data.total_debit_applied || 0;
+      const parts = [];
+      if (creditApplied > 0) parts.push(`₹${creditApplied.toLocaleString('en-IN')} credit applied`);
+      if (debitApplied > 0) parts.push(`₹${debitApplied.toLocaleString('en-IN')} debit charged`);
+      if (parts.length > 0) {
+        toast.success(`Delivery ${response.data.delivery_number} created — ${parts.join(', ')}`);
       } else {
         toast.success(`Delivery ${response.data.delivery_number} created successfully`);
       }

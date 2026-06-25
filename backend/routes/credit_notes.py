@@ -948,6 +948,126 @@ async def apply_credit_note_to_delivery(
     }
 
 
+# ==========================================
+# Debit Notes (customer owes us — from "missing bottles" returns)
+# ==========================================
+
+@router.get("/{distributor_id}/debit-notes/for-account/{account_id}")
+async def get_available_debit_notes_for_account(
+    distributor_id: str,
+    account_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all debit notes with outstanding balance for an account
+    (so they can be applied/added to a delivery's customer billing)."""
+    tenant_id = get_current_tenant_id()
+
+    debit_notes = await db.debit_notes.find(
+        {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "account_id": account_id,
+            "balance_amount": {"$gt": 0},
+            "status": {"$in": ["pending", "partially_applied"]}
+        },
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(100)  # Oldest first
+
+    total_available = sum(dn.get("balance_amount", 0) for dn in debit_notes)
+
+    return {
+        "debit_notes": debit_notes,
+        "total_available": round(total_available, 2),
+        "count": len(debit_notes)
+    }
+
+
+async def apply_debit_note_to_delivery(
+    tenant_id: str,
+    debit_note_id: str,
+    delivery_id: str,
+    delivery_number: str,
+    amount_to_apply: float,
+    applied_by: str = None
+) -> dict:
+    """Apply (charge) a debit note onto a delivery — increases the customer's
+    billing for the value of the missing/unreturned items."""
+
+    debit_note = await db.debit_notes.find_one(
+        {"id": debit_note_id, "tenant_id": tenant_id}
+    )
+
+    if not debit_note:
+        raise HTTPException(status_code=404, detail="Debit note not found")
+
+    balance = debit_note.get("balance_amount", 0)
+
+    if amount_to_apply > balance:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Amount to apply (₹{amount_to_apply}) exceeds outstanding balance (₹{balance})"
+        )
+
+    application = {
+        "delivery_id": delivery_id,
+        "delivery_number": delivery_number,
+        "amount_applied": amount_to_apply,
+        "applied_at": datetime.now(timezone.utc).isoformat(),
+        "applied_by": applied_by,
+    }
+
+    new_applied = debit_note.get("applied_amount", 0) + amount_to_apply
+    new_balance = debit_note.get("original_amount", 0) - new_applied
+
+    new_status = "pending"
+    if new_balance <= 0:
+        new_status = "applied"
+    elif new_applied > 0:
+        new_status = "partially_applied"
+
+    await db.debit_notes.update_one(
+        {"id": debit_note_id, "tenant_id": tenant_id},
+        {
+            "$set": {
+                "applied_amount": round(new_applied, 2),
+                "balance_amount": round(max(0, new_balance), 2),
+                "status": new_status,
+                "applied_to_delivery_id": delivery_id,
+                "applied_to_delivery_number": delivery_number,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            },
+            "$push": {"applications": application}
+        }
+    )
+
+    # Mark the originating return as settled-to-invoice when fully applied
+    return_id = debit_note.get("return_id")
+    if new_status == "applied" and return_id:
+        await db.customer_returns.update_one(
+            {"id": return_id, "tenant_id": tenant_id},
+            {"$set": {
+                "status": "credit_issued",  # rendered as "Debit Issued" for missing returns
+                "debit_applied_to_delivery_id": delivery_id,
+                "debit_applied_to_delivery_number": delivery_number,
+                "debit_applied_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        logger.info(f"Debit note {debit_note.get('debit_note_number')} fully applied to delivery {delivery_number}")
+
+    logger.info(f"Applied ₹{amount_to_apply} from debit note {debit_note.get('debit_note_number')} to delivery {delivery_number}")
+
+    return {
+        "debit_note_id": debit_note_id,
+        "debit_note_number": debit_note.get("debit_note_number"),
+        "return_id": debit_note.get("return_id"),
+        "return_number": debit_note.get("return_number"),
+        "amount_applied": amount_to_apply,
+        "remaining_balance": round(max(0, new_balance), 2)
+    }
+
+
+
 
 async def revert_credit_note_application(
     tenant_id: str,
