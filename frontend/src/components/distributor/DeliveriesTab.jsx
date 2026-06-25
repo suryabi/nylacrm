@@ -28,12 +28,17 @@ const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' }
 ];
 
+// Statuses whose figures are voided — excluded from totals & shown struck-through.
+const VOIDED_DELIVERY_STATUSES = ['reversed', 'cancelled'];
+
 // Sum the billing/margin columns across a list of deliveries. Mirrors the
 // per-row math in the table so the grand total and per-date subtotals stay
-// consistent.
+// consistent. Reversed/cancelled deliveries are skipped — their numbers are
+// voided and must not contribute to any total.
 function sumDeliveries(list) {
   const t = { items: 0, billing: 0, credit: 0, netBilling: 0, margin: 0, billable: 0, netBillable: 0 };
   (list || []).forEach((delivery) => {
+    if (VOIDED_DELIVERY_STATUSES.includes(delivery.status)) return;
     const items = delivery.items || [];
     const totalCreditApplied = delivery.total_credit_applied || 0;
     const customerBilling = items.reduce((sum, item) => {
@@ -1783,11 +1788,16 @@ export default function DeliveriesTab({
                   
                   // Final Billable to Dist (pre-tax, after credit)
                   const finalBillableToDist = totalActualBillable - totalCreditApplied;
-                  
+
+                  // Reversed / cancelled deliveries are voided: strike the figures
+                  // out and exclude them from totals (handled in sumDeliveries).
+                  const isVoided = VOIDED_DELIVERY_STATUSES.includes(delivery.status);
+                  const voidCls = isVoided ? 'line-through decoration-rose-400 decoration-2' : '';
+
                   return (
                     <tr 
                       key={delivery.id} 
-                      className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer transition-colors"
+                      className={`border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer transition-colors ${isVoided ? 'opacity-60 bg-rose-50/30' : ''}`}
                       onClick={() => viewDeliveryDetail(delivery.id)}
                       data-testid={`delivery-row-${delivery.id}`}
                     >
@@ -1855,7 +1865,7 @@ export default function DeliveriesTab({
                       
                       {/* Customer: Billing */}
                       <td className="p-3 text-right bg-blue-50/20">
-                        <span className="font-medium text-slate-800">
+                        <span className={`font-medium text-slate-800 ${voidCls}`}>
                           ₹{customerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
@@ -1867,7 +1877,7 @@ export default function DeliveriesTab({
                             <span className="inline-flex items-center bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded-full">
                               {appliedCreditNotes.length} CN
                             </span>
-                            <span className="text-emerald-600 font-medium">
+                            <span className={`text-emerald-600 font-medium ${voidCls}`}>
                               -₹{totalCreditApplied.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </span>
                           </div>
@@ -1878,28 +1888,28 @@ export default function DeliveriesTab({
                       
                       {/* Customer: Net Billing */}
                       <td className="p-3 text-right bg-blue-50/20">
-                        <span className={`font-bold ${hasCreditNotes ? 'text-blue-600' : 'text-slate-700'}`}>
+                        <span className={`font-bold ${hasCreditNotes ? 'text-blue-600' : 'text-slate-700'} ${voidCls}`}>
                           ₹{netCustomerBilling.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
                       {/* Distributor: Margin Amount */}
                       <td className="p-3 text-right bg-purple-50/20">
-                        <span className="font-medium text-purple-600">
+                        <span className={`font-medium text-purple-600 ${voidCls}`}>
                           ₹{totalMarginAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
                       {/* Distributor: Billable (before credit) */}
                       <td className="p-3 text-right bg-purple-50/20">
-                        <span className="text-slate-700">
+                        <span className={`text-slate-700 ${voidCls}`}>
                           ₹{totalActualBillable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                       </td>
                       
                       {/* Distributor: Net Billable (after credit) */}
                       <td className="p-3 text-right bg-purple-50/20">
-                        <span className="font-bold text-purple-700">
+                        <span className={`font-bold text-purple-700 ${voidCls}`}>
                           ₹{finalBillableToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </span>
                         {hasCreditNotes && (
@@ -1951,12 +1961,14 @@ export default function DeliveriesTab({
                 })}
                     {isOpen && (() => {
                       const gt = sumDeliveries(group.items);
+                      const liveCount = group.items.filter((d) => !VOIDED_DELIVERY_STATUSES.includes(d.status)).length;
+                      const voidedCount = group.items.length - liveCount;
                       return (
                         <tr className="border-b-2 border-emerald-200 bg-emerald-50/50 text-sm" data-testid={`delivery-date-subtotal-${group.key}`}>
                           <td className="px-3 py-2 font-semibold text-emerald-800" colSpan="2">
                             Subtotal · {group.label}
                           </td>
-                          <td className="px-3 py-2 text-center font-medium text-slate-600">{group.items.length} {group.items.length === 1 ? 'delivery' : 'deliveries'}</td>
+                          <td className="px-3 py-2 text-center font-medium text-slate-600">{liveCount} {liveCount === 1 ? 'delivery' : 'deliveries'}{voidedCount > 0 ? ` · ${voidedCount} reversed` : ''}</td>
                           <td className="px-3 py-2 text-right font-semibold text-slate-800 bg-blue-50/30">₹{fmtINR(gt.billing)}</td>
                           <td className="px-3 py-2 text-right font-medium text-emerald-600 bg-blue-50/30">{gt.credit > 0 ? `-₹${fmtINR(gt.credit)}` : '—'}</td>
                           <td className="px-3 py-2 text-right font-bold text-blue-700 bg-blue-50/30">₹{fmtINR(gt.netBilling)}</td>
@@ -1975,7 +1987,7 @@ export default function DeliveriesTab({
               <tfoot>
                 <tr className="border-t-2 border-emerald-300 bg-emerald-50/70 font-semibold" data-testid="deliveries-totals-row">
                   <td className="p-3 text-slate-700" colSpan="2">
-                    Totals{totalPages > 1 ? ' (this page)' : ''} · {deliveries.length} {deliveries.length === 1 ? 'delivery' : 'deliveries'}
+                    Totals{totalPages > 1 ? ' (this page)' : ''} · {deliveries.filter((d) => !VOIDED_DELIVERY_STATUSES.includes(d.status)).length} {deliveries.filter((d) => !VOIDED_DELIVERY_STATUSES.includes(d.status)).length === 1 ? 'delivery' : 'deliveries'}
                   </td>
                   <td className="p-3 text-center text-slate-700" data-testid="totals-items">{deliveryTotals.items}</td>
                   <td className="p-3 text-right bg-blue-50/40 text-slate-800" data-testid="totals-billing">₹{fmtINR(deliveryTotals.billing)}</td>

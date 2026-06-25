@@ -648,9 +648,9 @@ export default function PromoDispatchSection({
                         </td>
                         <td className="p-3 text-slate-700 text-sm">{d.location_name}</td>
                         <td className="p-3 text-center">
-                          <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2 py-0.5 rounded-full">{d.total_quantity}</span>
+                          <span className={`inline-flex items-center justify-center bg-slate-100 text-slate-700 text-sm font-medium px-2 py-0.5 rounded-full ${d.status === 'reversed' ? 'line-through decoration-rose-400 decoration-2' : ''}`}>{d.total_quantity}</span>
                         </td>
-                        <td className="p-3 text-right text-slate-700 tabular-nums">₹{fmtINR(d.total_indicative_value)}</td>
+                        <td className={`p-3 text-right text-slate-700 tabular-nums ${d.status === 'reversed' ? 'line-through decoration-rose-400 decoration-2' : ''}`}>₹{fmtINR(d.total_indicative_value)}</td>
                         <td className="p-3 text-center" data-testid={`promo-status-${d.id}`}>
                           {d.status === 'draft' ? (
                             <Badge className="bg-amber-100 text-amber-700 border border-amber-200">Draft</Badge>
@@ -799,14 +799,15 @@ export default function PromoDispatchSection({
                       </tr>
                     ))}
                         {isOpen && (() => {
-                          const totalQ = group.items.reduce((s, d) => s + (d.total_quantity || 0), 0);
-                          const totalV = group.items.reduce((s, d) => s + (d.total_indicative_value || 0), 0);
+                          const live = group.items.filter((d) => d.status !== 'reversed');
+                          const totalQ = live.reduce((s, d) => s + (d.total_quantity || 0), 0);
+                          const totalV = live.reduce((s, d) => s + (d.total_indicative_value || 0), 0);
                           return (
                             <tr className="border-b-2 border-fuchsia-200 bg-fuchsia-50/50 text-sm" data-testid={`promo-date-subtotal-${group.key}`}>
                               <td className="px-3 py-2 font-semibold text-fuchsia-800" colSpan="4">Subtotal · {group.label}</td>
                               <td className="px-3 py-2 text-center font-bold text-slate-800">{totalQ}</td>
                               <td className="px-3 py-2 text-right font-bold text-slate-800 tabular-nums">₹{fmtINR(totalV)}</td>
-                              <td className="px-3 py-2 text-center text-[11px] text-slate-500">{group.items.length} {group.items.length === 1 ? 'challan' : 'challans'}</td>
+                              <td className="px-3 py-2 text-center text-[11px] text-slate-500">{live.length} {live.length === 1 ? 'challan' : 'challans'}{group.items.length > live.length ? ` · ${group.items.length - live.length} reversed` : ''}</td>
                               <td className="px-3 py-2"></td>
                               <td className="px-3 py-2"></td>
                               <td className="px-3 py-2"></td>
