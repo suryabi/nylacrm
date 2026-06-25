@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-24 — Fix: Google Maps link not saving (Contacts/Accounts) + styled field ✅ (testing_agent verified, iteration_229, 8/8 pytest)
+- **Root cause:** `ContactCreate`/`ContactUpdate` (`routes/contacts.py`) and the account write-path `DeliveryAddress` (`routes/accounts.py` + `models/account.py`) were missing the `maps_link` field. Since write paths use `model_dump()`, Pydantic silently dropped the field → contacts/accounts saved without the link. Fixed by adding `maps_link` to all four models. Promo/DO and Lead (server.py dict passthrough) already persisted it.
+- **Verified persistence:** Contact create+update, Account PUT + PATCH /delivery-info, and Lead PUT all round-trip `maps_link` (8/8 pytest in `tests/test_maps_link_persistence.py`).
+- **Visual upgrade:** New reusable `components/MapsLinkInput.js` — a distinct sky-tinted card with a navigation/location pin, helper text, inline validation error for bad URLs, and an "Open" button when a valid link is present. Applied across all 5 forms (Lead, Account, Contact, Stock Delivery Request, Promo Stock-Out).
+- Backlog note: add light server-side URL validation for `maps_link` (currently frontend-only guard). ⚠️ Redeploy to production to go live.
+
+
 ## 2026-06-24 — Google Maps Link field on addresses + QR uses link first ✅ (testing_agent verified, iteration_228, 8/8 pytest)
 - **New "Google Maps Link" field** (pasteable, e.g. `https://maps.app.goo.gl/...`) added to: Lead delivery address (`LeadDeliveryAddressCard.js`), Account delivery address (`AccountDetail.js`), Contact address (`ContactsList.js`), Delivery Order address (`DeliveryOrders.js`), and Promo Stock-Out dialog (`PromoDispatchSection.jsx`). Light Google-Maps-URL validation via new `utils/mapsLink.js` (`isValidMapsLink`).
 - **QR priority changed** in delivery bundle + challan PDFs to: **pasted maps link → GPS coords → text-address search** (`build_maps_qr` in `pdf_generator.py`, `_maps_qr_flowable`/`_address_cell`/`_addr_from` in `distributor_delivery_schedules.py`). Bundle stop cell now renders a QR even when only a maps link exists (no longer "ADDRESS MISSING").
