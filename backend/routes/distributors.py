@@ -5029,15 +5029,19 @@ async def complete_delivery(
         raise HTTPException(status_code=400, detail="Delivery cannot be completed in current status")
     
     now = datetime.now(timezone.utc).isoformat()
-    actual_date = delivery_date or now[:10]
-    
+
+    # Group by the planned DELIVERY date, not the completion date. Completing a
+    # delivery records `delivered_at` (the actual completion timestamp) but must
+    # NOT clobber the original `delivery_date`. We only update delivery_date when
+    # the caller explicitly passes a new one (their responsibility to correct it).
     update_data = {
         "status": "complete",
-        "delivery_date": actual_date,
         "delivered_at": now,
         "delivered_by": current_user.get('id'),
         "updated_at": now
     }
+    if delivery_date:
+        update_data["delivery_date"] = delivery_date
     
     if remarks:
         update_data['remarks'] = (delivery.get('remarks', '') + '\n' + remarks).strip()

@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 231 — Backend regression for the Stock Out / Promo Stock Out completion endpoint date-preservation fix. Wrote /app/backend/tests/test_complete_delivery_date_preservation.py exercising the four review criteria against the live preview backend (REACT_APP_BACKEND_URL). All 3 tests PASS: (1) POST /api/distributors/{id}/deliveries/{id}/complete with NO query params keeps delivery_date = the yesterday value set at create time, sets delivered_at to ~now (within 5min), advances status to 'complete', and deducts 1 unit from distributor_stock (verified via /api/distributors/{id}/stock before vs after); (2) the same endpoint WITH explicit ?delivery_date=2026-01-15 overrides delivery_date to that exact value while still setting delivered_at and status='complete'; (3) the promo regression — POST /api/distributors/{id}/promo-deliveries/{id}/complete leaves delivery_date untouched (still yesterday) and sets status='complete'. Run executed against Brian DIST-0003 (bb12d90e-4d33-4890-ac5f-17573c551b5c) on Bangalore Warehouse / 1 SKU per delivery. The root-cause fix in routes/distributors.py L5037-5044 is correct: update_data only contains delivery_date when the optional query param is provided; delivered_at = datetime.now(...) records the actual completion timestamp.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_complete_delivery_date_preservation.py",
+    "/app/test_reports/pytest/iter231_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/distributors.py L5037-5044 (complete_delivery): The conditional `if delivery_date: update_data['delivery_date'] = delivery_date` correctly preserves the original delivery_date on the no-arg completion path while still allowing explicit override. delivered_at = now is the right field for actual-completion-time. Good.",
+    "routes/promo_dispatch.py L848-852 (complete_promo_dispatch): Does not touch delivery_date — confirmed via regression. Consider also storing completed_by_name like the rest of the doc (already done). Note inconsistency: regular stock-out uses 'delivered_at' while promo uses 'completed_at'; both work, but a shared field name would simplify UI grouping/timeline queries later. Non-blocking.",
+    "complete_delivery still accepts delivery_date and remarks as QUERY params (not body) — frontend callers (DistributorDetail.js L1948, distributor/DeliveryScheduleDetail.js L358) correctly POST {} with no body, so the new contract holds. Any future caller wanting to override must use ?delivery_date=YYYY-MM-DD on the URL.",
+    "Stock deduction side-effect path (L5054-end) was not refactored — verified via stock-before/stock-after diff (= -1 for 1-unit delivery). Refactor did not regress inventory integrity."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_complete_delivery_date_preservation.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (3/3 tests passed)",
+    "frontend": "n/a (backend-only run as requested)"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water). Distributor used: Brian DIST-0003 id bb12d90e-4d33-4890-ac5f-17573c551b5c.",
+  "seed_data_creation": "Three transient test deliveries created on Brian DIST-0003 (Bangalore Warehouse): 2 regular Stock-Out deliveries (reference TEST-REGR-*) — both completed; 1 promo Stock-Out (TEST-PROMO-*, qty=1) — completed. Each deducts 1 unit from the first SKU with stock at that location. No teardown — the test does not delete completed records (matches the bug-fix semantics where 'complete' is terminal). If stock balances need restoration after several iterations of this suite, main agent may want to reverse/cancel these challans manually.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: `export REACT_APP_BACKEND_URL=$(grep REACT_APP_BACKEND_URL /app/frontend/.env | cut -d= -f2) && python -m pytest /app/backend/tests/test_complete_delivery_date_preservation.py -v`. The test file picks the first non-factory, non-batch-tracked location of Brian with on-hand stock; if Brian's stock is exhausted by repeated runs, replenish via the Stock-In APIs or switch DISTRIBUTOR. The complete endpoints take delivery_date/remarks as QUERY params (not body) — important when curl-testing manually. Promo dispatches created with as_draft=False are created already in 'confirmed' state, so the suite skips an explicit confirm in that case.",
+  "rca of the issue": "Original bug: the complete_delivery endpoint set update_data['delivery_date'] = now[:10] unconditionally (or to the optional query arg if provided), clobbering the planned delivery_date with the system's completion date. The UI groups deliveries by delivery_date in DeliveriesTab.jsx and PromoDispatchSection.jsx, so a delivery scheduled+physically delivered yesterday but marked complete today would appear under TODAY's group on the dashboard. Fix (routes/distributors.py L5037-5044): build update_data with only {status, delivered_at, delivered_by, updated_at} by default; conditionally add delivery_date ONLY when the caller passes the query param. delivered_at now carries the actual completion timestamp. The promo endpoint never had this bug (verified via regression). Mitigation/verification: the regression suite hits both endpoints end-to-end (create → confirm → complete → GET) and asserts the planned delivery_date is preserved, completion side-effects (status='complete', delivered_at populated, stock deducted) still fire, and the explicit override path still works."
+}
