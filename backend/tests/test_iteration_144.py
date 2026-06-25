@@ -19,7 +19,7 @@ import uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://promo-stock-sync.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://supply-chain-hub-229.preview.emergentagent.com').rstrip('/')
 EMAIL = "surya.yadavalli@nylaairwater.earth"
 PASSWORD = "test123"
 
