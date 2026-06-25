@@ -57,6 +57,10 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Debit (missing bottles) vs Credit (returned bottles) wording/colors for the detail dialog
+  const isMissingReturn = selectedReturn?.return_type === 'missing';
+  const noteWord = isMissingReturn ? 'Debit' : 'Credit';
+  const amountAccentText = isMissingReturn ? 'text-amber-600' : 'text-emerald-600';
   // Tracks which return is mid-retry for the Zoho-push action
   const [retryingZohoPush, setRetryingZohoPush] = useState(null);
 
@@ -513,7 +517,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
               <p className="text-2xl font-bold text-blue-700">{summary.total_quantity || 0}</p>
             </div>
             <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
-              <p className="text-sm text-amber-600 font-medium">Total Credit</p>
+              <p className="text-sm text-amber-600 font-medium">Total Value</p>
               <p className="text-2xl font-bold text-amber-700">₹{(summary.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</p>
             </div>
             <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
@@ -608,7 +612,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                   <th className="text-left p-4 font-medium">Account</th>
                   <th className="text-left p-4 font-medium">Date</th>
                   <th className="text-center p-4 font-medium">Items</th>
-                  <th className="text-right p-4 font-medium">Credit</th>
+                  <th className="text-right p-4 font-medium">Amount</th>
                   <th className="text-center p-4 font-medium">Credit / Debit Note</th>
                   <th className="text-center p-4 font-medium">Factory Return</th>
                   <th className="text-center p-4 font-medium">Status</th>
@@ -635,7 +639,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                       <td className="p-4 text-center">
                         <Badge variant="outline">{ret.total_quantity}</Badge>
                       </td>
-                      <td className="p-4 text-right font-medium text-emerald-600">
+                      <td className={`p-4 text-right font-medium ${ret.return_type === 'missing' ? 'text-amber-600' : 'text-emerald-600'}`}>
                         ₹{(ret.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-4 text-center">
@@ -1013,7 +1017,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <th className="text-center p-3 font-medium">Qty</th>
                         <th className="text-left p-3 font-medium">Reason</th>
                         <th className="text-center p-3 font-medium">Category</th>
-                        <th className="text-right p-3 font-medium">Est. Credit</th>
+                        <th className="text-right p-3 font-medium">{createForm.return_type === 'missing' ? 'Est. Debit' : 'Est. Credit'}</th>
                         <th className="text-center p-3 font-medium"></th>
                       </tr>
                     </thead>
@@ -1035,7 +1039,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                             <td className="p-3 text-center">
                               <Badge className={`${catInfo.bg} ${catInfo.text}`}>{catInfo.label}</Badge>
                             </td>
-                            <td className="p-3 text-right font-medium text-emerald-600">
+                            <td className={`p-3 text-right font-medium ${createForm.return_type === 'missing' ? 'text-amber-600' : 'text-emerald-600'}`}>
                               ₹{(item.estimated_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                             </td>
                             <td className="p-3 text-center">
@@ -1049,8 +1053,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                     </tbody>
                     <tfoot className="bg-muted/30">
                       <tr>
-                        <td className="p-3 font-bold" colSpan={4}>Total Estimated Credit</td>
-                        <td className="p-3 text-right font-bold text-emerald-600">
+                        <td className="p-3 font-bold" colSpan={4}>{createForm.return_type === 'missing' ? 'Total Estimated Debit' : 'Total Estimated Credit'}</td>
+                        <td className={`p-3 text-right font-bold ${createForm.return_type === 'missing' ? 'text-amber-600' : 'text-emerald-600'}`}>
                           ₹{createForm.items.reduce((sum, item) => sum + (item.estimated_credit || 0), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="p-3"></td>
@@ -1096,7 +1100,9 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                     <DialogTitle className="flex items-center gap-2">
                       {selectedReturn.return_number}
                       <Badge className={`${STATUS_BADGES[selectedReturn.status]?.bg} ${STATUS_BADGES[selectedReturn.status]?.text}`}>
-                        {STATUS_BADGES[selectedReturn.status]?.label}
+                        {isMissingReturn
+                          ? STATUS_BADGES[selectedReturn.status]?.label?.replace(/Credit/g, 'Debit')
+                          : STATUS_BADGES[selectedReturn.status]?.label}
                       </Badge>
                     </DialogTitle>
                     <DialogDescription>
@@ -1104,10 +1110,10 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                     </DialogDescription>
                   </div>
                   <div className="text-right">
-                    <p className="text-2xl font-bold text-emerald-600">
+                    <p className={`text-2xl font-bold ${amountAccentText}`}>
                       ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </p>
-                    <p className="text-xs text-muted-foreground">Total Credit</p>
+                    <p className="text-xs text-muted-foreground">Total {noteWord}</p>
                   </div>
                 </div>
               </DialogHeader>
@@ -1131,16 +1137,16 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                   </div>
                 </div>
 
-                {/* Credit Note Information */}
-                {selectedReturn.credit_note_number && (
-                  <div className="p-4 rounded-lg border border-emerald-200 bg-emerald-50/50">
+                {/* Credit / Debit Note Information */}
+                {(selectedReturn.credit_note_number || selectedReturn.debit_note_number) && (
+                  <div className={`p-4 rounded-lg border ${isMissingReturn ? 'border-amber-200 bg-amber-50/50' : 'border-emerald-200 bg-emerald-50/50'}`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5 text-emerald-600" />
+                        <CreditCard className={`h-5 w-5 ${isMissingReturn ? 'text-amber-600' : 'text-emerald-600'}`} />
                         <div>
-                          <p className="text-sm font-medium text-emerald-700">Credit Note Issued</p>
-                          <p className="text-xs text-emerald-600">{selectedReturn.credit_note_number}</p>
-                          {selectedReturn.zoho_creditnote_number &&
+                          <p className={`text-sm font-medium ${isMissingReturn ? 'text-amber-700' : 'text-emerald-700'}`}>{noteWord} Note Issued</p>
+                          <p className={`text-xs ${isMissingReturn ? 'text-amber-600' : 'text-emerald-600'}`}>{isMissingReturn ? selectedReturn.debit_note_number : selectedReturn.credit_note_number}</p>
+                          {!isMissingReturn && selectedReturn.zoho_creditnote_number &&
                             selectedReturn.zoho_creditnote_number !== selectedReturn.credit_note_number && (
                               <p className="text-[11px] text-emerald-600 font-mono mt-0.5">
                                 Zoho: {selectedReturn.zoho_creditnote_number}
@@ -1148,11 +1154,20 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                             )}
                         </div>
                       </div>
-                      <Badge className="bg-emerald-100 text-emerald-700">
+                      <Badge className={isMissingReturn ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}>
                         ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </Badge>
                     </div>
-                    {selectedReturn.zoho_creditnote_url ? (
+                    {isMissingReturn ? (
+                      <div className="mt-3 pt-3 border-t border-amber-200">
+                        <p className="text-xs text-amber-700 font-medium">
+                          Amount owed by the customer for unreturned / missing bottles.
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-1">
+                          Tracked locally as a debit note for finance recovery.
+                        </p>
+                      </div>
+                    ) : selectedReturn.zoho_creditnote_url ? (
                       <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
                         <span className="text-xs text-emerald-600">Synced to Zoho Books</span>
                         <a
@@ -1167,11 +1182,6 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         </a>
                       </div>
                     ) : (
-                      // New flow: bottle-return CNs are no longer pushed to Zoho as
-                      // separate documents. Instead, when the CN is applied to a
-                      // delivery, the deduction is added as a post-tax
-                      // "Sustainability Incentive" adjustment on the Zoho invoice.
-                      // The local CN doc remains for settlement math & audit.
                       <div className="mt-3 pt-3 border-t border-emerald-200">
                         <p className="text-xs text-emerald-700 font-medium">
                           Tracked locally — appears as a “Sustainability Incentive”
@@ -1182,7 +1192,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         </p>
                       </div>
                     )}
-                    {selectedReturn.credit_issued_to_delivery_number && (
+                    {!isMissingReturn && selectedReturn.credit_issued_to_delivery_number && (
                       <div className="mt-3 pt-3 border-t border-emerald-200 flex items-center justify-between">
                         <span className="text-xs text-emerald-600">Applied to Delivery:</span>
                         <span className="text-sm font-medium text-emerald-700">
@@ -1201,8 +1211,8 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <th className="text-left p-3 font-medium">SKU</th>
                         <th className="text-center p-3 font-medium">Qty</th>
                         <th className="text-left p-3 font-medium">Reason</th>
-                        <th className="text-right p-3 font-medium">Credit/Unit</th>
-                        <th className="text-right p-3 font-medium">Total Credit</th>
+                        <th className="text-right p-3 font-medium">{noteWord}/Unit</th>
+                        <th className="text-right p-3 font-medium">Total {noteWord}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1224,7 +1234,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                               </div>
                             </td>
                             <td className="p-3 text-right">₹{(item.credit_per_unit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-3 text-right font-medium text-emerald-600">₹{(item.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td className={`p-3 text-right font-medium ${amountAccentText}`}>₹{(item.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         );
                       })}
@@ -1234,7 +1244,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         <td className="p-3 font-bold" colSpan={2}>Total</td>
                         <td className="p-3"></td>
                         <td className="p-3"></td>
-                        <td className="p-3 text-right font-bold text-emerald-600">
+                        <td className={`p-3 text-right font-bold ${amountAccentText}`}>
                           ₹{(selectedReturn.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -1263,7 +1273,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                     </Button>
                     <Button onClick={() => approveReturn(selectedReturn.id)} data-testid="create-credit-note-btn">
                       <Check className="h-4 w-4 mr-2" />
-                      Create Credit Note
+                      Create {noteWord} Note
                     </Button>
                   </>
                 )}
