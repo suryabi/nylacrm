@@ -15,10 +15,13 @@ import {
 } from '../components/ui/select';
 import {
   ArrowLeftRight, Plus, Search, X, Loader2, Truck, AlertTriangle, ExternalLink,
-  RefreshCw, FileText, Package, Building2, Download, Undo2,
+  RefreshCw, FileText, Package, Building2, Download, Undo2, Pencil, ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ShareButton } from '../components/share/ShareButton';
+import { useAuth } from '../context/AuthContext';
+
+const QTY_EDIT_ROLES = ['CEO', 'System Admin'];
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -576,7 +579,169 @@ function NewTransferDialog({ open, onClose, onCreated }) {
   );
 }
 
+function EditQtyDialog({ transfer, onClose, onSaved }) {
+  const [qtys, setQtys] = useState([]);
+  const [reason, setReason] = useState('');
+  const [confirming, setConfirming] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (transfer) {
+      setQtys((transfer.items || []).map((it) => String(it.quantity ?? 0)));
+      setReason('');
+      setConfirming(false);
+    }
+  }, [transfer]);
+
+  if (!transfer) return null;
+  const items = transfer.items || [];
+
+  const changed = items.some((it, i) => parseInt(qtys[i] || '0', 10) !== Number(it.quantity || 0));
+  const allValid = qtys.every((q) => q !== '' && parseInt(q, 10) > 0);
+
+  const deltas = items.map((it, i) => {
+    const oldQ = Number(it.quantity || 0);
+    const newQ = parseInt(qtys[i] || '0', 10) || 0;
+    const upp = Number(it.units_per_package || 1);
+    return { it, oldQ, newQ, deltaUnits: (newQ - oldQ) * upp, upp };
+  });
+
+  const submit = async () => {
+    if (!allValid) { toast.error('Quantities must be whole numbers greater than 0'); return; }
+    if (!changed) { toast.error('No quantity changes to save'); return; }
+    setSaving(true);
+    try {
+      const body = { items: qtys.map((q) => ({ quantity: parseInt(q, 10) })), reason: reason || null };
+      const { data } = await axios.patch(
+        `${API}/distributor/stock-transfers/${transfer.id}/quantities`, body, { headers: HEAD() },
+      );
+      toast.success(data?.message || 'Quantities updated');
+      if (data?.zoho_sync === 'failed') {
+        toast.warning('Zoho document could not be updated automatically — update it manually in Zoho Books.');
+      }
+      onSaved?.();
+      onClose();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update quantities');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open={!!transfer} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
+      <DialogContent className="max-w-2xl" data-testid="edit-transfer-qty-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-5 w-5 text-amber-600" /> Edit Quantities — {transfer.transfer_number}
+          </DialogTitle>
+          <DialogDescription>
+            Adjust line quantities for this <b>completed</b> transfer. The change is applied as a delta to both
+            warehouses and reflects in the Stock Dashboard. {transfer.zoho_status === 'synced' && 'The linked Zoho document will be updated in place. '}
+            This is logged for audit.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="text-left p-2.5 font-medium">SKU</th>
+                  <th className="text-center p-2.5 font-medium">Current</th>
+                  <th className="text-center p-2.5 font-medium">New Qty</th>
+                  <th className="text-right p-2.5 font-medium">Δ Units</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => {
+                  const d = deltas[i];
+                  return (
+                    <tr key={i} className="border-t border-slate-100" data-testid={`edit-qty-row-${i}`}>
+                      <td className="p-2.5">
+                        <div className="font-medium text-slate-800">{it.sku_name}</div>
+                        <div className="text-[11px] text-slate-500">
+                          {it.packaging_type_name || 'package'} · {it.units_per_package}/pkg
+                          {it.batch_code ? ` · Batch ${it.batch_code}` : ''}
+                        </div>
+                      </td>
+                      <td className="p-2.5 text-center text-slate-600">{it.quantity}</td>
+                      <td className="p-2.5">
+                        <Input
+                          type="number" min="1" disabled={confirming || saving}
+                          className="h-8 w-24 mx-auto text-center"
+                          value={qtys[i] ?? ''}
+                          onChange={(e) => setQtys((p) => p.map((q, j) => (j === i ? e.target.value : q)))}
+                          data-testid={`edit-qty-input-${i}`}
+                        />
+                      </td>
+                      <td className={`p-2.5 text-right font-mono ${d.deltaUnits === 0 ? 'text-slate-400' : d.deltaUnits > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {d.deltaUnits > 0 ? '+' : ''}{d.deltaUnits}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <Label className="text-xs text-slate-500">Reason (optional)</Label>
+            <Textarea
+              rows={2} placeholder="e.g. Miscount at dispatch — corrected after physical verification"
+              value={reason} onChange={(e) => setReason(e.target.value)} disabled={confirming || saving}
+              data-testid="edit-qty-reason"
+            />
+          </div>
+
+          {confirming && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm" data-testid="edit-qty-confirm-panel">
+              <div className="flex items-center gap-2 font-medium text-amber-800">
+                <AlertTriangle className="h-4 w-4" /> Confirm stock adjustment
+              </div>
+              <ul className="mt-2 space-y-1 text-amber-900">
+                {deltas.filter((d) => d.newQ !== d.oldQ).map((d, i) => (
+                  <li key={i}>
+                    <b>{d.it.sku_name}</b>: {d.oldQ} → {d.newQ} {d.it.packaging_type_name || 'pkg'}
+                    {' '}({d.deltaUnits > 0 ? '+' : ''}{d.deltaUnits} units {d.deltaUnits > 0 ? 'deducted from source, added to destination' : 'returned to source, removed from destination'})
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[11px] text-amber-700">Source warehouse stock may go negative if it doesn't have enough on-hand.</p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={saving} data-testid="edit-qty-cancel">Cancel</Button>
+          {!confirming ? (
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={!changed || !allValid}
+              onClick={() => setConfirming(true)}
+              data-testid="edit-qty-review-btn"
+            >
+              Review changes
+            </Button>
+          ) : (
+            <Button
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              disabled={saving}
+              onClick={submit}
+              data-testid="edit-qty-confirm-btn"
+            >
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+              Confirm &amp; Apply
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function StockTransfers() {
+  const { user } = useAuth();
+  const canEditQty = QTY_EDIT_ROLES.includes(user?.role);
+  const [editTransfer, setEditTransfer] = useState(null);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -854,16 +1019,29 @@ export default function StockTransfers() {
                             )}
                           </>
                         ) : (
-                          <Button
-                            size="sm" variant="ghost"
-                            className="h-7 px-2 text-[10px] text-rose-700 hover:text-rose-800 hover:bg-rose-50"
-                            onClick={() => reverseTransfer(t)}
-                            disabled={reversingId === t.id}
-                            title="Reverse this transfer — restore stock in both warehouses and void/delete the Zoho document"
-                            data-testid={`reverse-transfer-btn-${t.id}`}
-                          >
-                            {reversingId === t.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Undo2 className="h-3 w-3 mr-1" />} Reverse
-                          </Button>
+                          <>
+                            {canEditQty && (
+                              <Button
+                                size="sm" variant="ghost"
+                                className="h-7 px-2 text-[10px] text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                                onClick={() => setEditTransfer(t)}
+                                title="Edit line quantities (CEO / System Admin) — adjusts stock in both warehouses"
+                                data-testid={`edit-qty-btn-${t.id}`}
+                              >
+                                <Pencil className="h-3 w-3 mr-1" /> Edit Qty
+                              </Button>
+                            )}
+                            <Button
+                              size="sm" variant="ghost"
+                              className="h-7 px-2 text-[10px] text-rose-700 hover:text-rose-800 hover:bg-rose-50"
+                              onClick={() => reverseTransfer(t)}
+                              disabled={reversingId === t.id}
+                              title="Reverse this transfer — restore stock in both warehouses and void/delete the Zoho document"
+                              data-testid={`reverse-transfer-btn-${t.id}`}
+                            >
+                              {reversingId === t.id ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Undo2 className="h-3 w-3 mr-1" />} Reverse
+                            </Button>
+                          </>
                         )}
                       </div>
                       {t.zoho_status === 'failed' && t.zoho_error && (
@@ -880,6 +1058,7 @@ export default function StockTransfers() {
       </Card>
 
       <NewTransferDialog open={showNew} onClose={() => setShowNew(false)} onCreated={() => { setPage(1); load(); }} />
+      <EditQtyDialog transfer={editTransfer} onClose={() => setEditTransfer(null)} onSaved={load} />
     </div>
   );
 }

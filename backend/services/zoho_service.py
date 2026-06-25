@@ -2737,3 +2737,57 @@ async def sync_warehouse_to_zoho_branch(*, tenant_id: str, location: dict) -> di
         timeout=10.0,
     )
     return result.get("branch") or result
+
+
+async def update_stock_transfer_zoho_quantities(tenant_id: str, transfer_doc: dict) -> dict:
+    """Best-effort sync of edited package quantities onto the EXISTING Zoho
+    Invoice / Delivery Challan for a stock transfer (read-modify-write so the
+    line_item_ids are preserved and lines are updated in place, not duplicated).
+
+    Returns {ok, error, action}. Never raises — a failure flags the caller so
+    the local inventory edit still succeeds and Zoho can be fixed manually.
+    """
+    zoho_id = transfer_doc.get("zoho_invoice_id")
+    doc_type = transfer_doc.get("zoho_doc_type") or "invoice"
+    if not zoho_id or transfer_doc.get("zoho_status") != "synced":
+        return {"ok": True, "error": None, "action": "skipped"}
+
+    resource = "deliverychallans" if doc_type == "delivery_challan" else "invoices"
+    key = "deliverychallan" if doc_type == "delivery_challan" else "invoice"
+    new_items = transfer_doc.get("items") or []
+    try:
+        current = await _zoho_request("GET", f"/books/v3/{resource}/{zoho_id}", tenant_id=tenant_id)
+        zdoc = current.get(key) or {}
+        existing_lines = zdoc.get("line_items") or []
+        # Our line_items are pushed 1:1 in the same order as transfer["items"],
+        # so match by index and only change `quantity` (in packages).
+        updated_lines = []
+        for idx, line in enumerate(existing_lines):
+            new_line = {
+                "line_item_id": line.get("line_item_id"),
+                "item_id": line.get("item_id"),
+                "name": line.get("name"),
+                "rate": line.get("rate"),
+            }
+            if idx < len(new_items):
+                new_line["quantity"] = float(new_items[idx].get("quantity", 0) or 0)
+            else:
+                new_line["quantity"] = float(line.get("quantity", 0) or 0)
+            updated_lines.append(new_line)
+
+        if not updated_lines:
+            return {"ok": True, "error": None, "action": "no_lines"}
+
+        await _zoho_request(
+            "PUT",
+            f"/books/v3/{resource}/{zoho_id}",
+            tenant_id=tenant_id,
+            json={"line_items": updated_lines},
+        )
+        return {"ok": True, "error": None, "action": f"{key}_updated"}
+    except Exception as e:
+        logger.warning(
+            f"[zoho] Failed to update quantities on {doc_type} for stock transfer "
+            f"{transfer_doc.get('transfer_number')}: {e}"
+        )
+        return {"ok": False, "error": str(e)[:500], "action": "failed"}

@@ -41,6 +41,7 @@ from services.zoho_service import (
     fetch_invoice_pdf,
     is_zoho_configured,
     void_invoice,
+    update_stock_transfer_zoho_quantities,
     MissingZohoMappingError,
     MissingAgreedPriceError,
     AccountNotLinkedToZohoError,
@@ -1260,6 +1261,152 @@ async def delete_stock_transfer(
         "zoho_doc_voided": False,  # Reminder: void the Zoho doc manually in Zoho Books.
         "zoho_invoice_id": doc.get("zoho_invoice_id"),
     }
+
+
+class TransferQtyEditItem(BaseModel):
+    quantity: int = Field(..., gt=0)
+
+
+class TransferQtyEditRequest(BaseModel):
+    # Aligned by index with the transfer's existing `items` array.
+    items: List[TransferQtyEditItem]
+    reason: Optional[str] = None
+
+
+_QTY_EDIT_ROLES = {"CEO", "System Admin"}
+
+
+@router.patch("/{transfer_id}/quantities")
+async def edit_transfer_quantities(
+    transfer_id: str,
+    payload: TransferQtyEditRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Edit the line quantities of an already-completed Stock Transfer
+    (CEO / System Admin only). Applies the inventory DELTA to both warehouses
+    so the Stock Dashboard stays accurate, keeps an audit trail, and
+    best-effort syncs the new quantities onto the existing Zoho document.
+
+    Increases that exceed source on-hand are allowed (stock may go negative) —
+    by design, per ops requirement.
+    """
+    role = current_user.get("role")
+    if role not in _QTY_EDIT_ROLES:
+        raise HTTPException(403, "Only CEO and System Admin can edit stock transfer quantities.")
+
+    tenant_id = get_current_tenant_id()
+    doc = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(404, "Stock transfer not found")
+    if doc.get("status") != "completed":
+        raise HTTPException(400, "Only a completed stock transfer can have its quantities edited.")
+
+    old_items = doc.get("items", [])
+    if len(payload.items) != len(old_items):
+        raise HTTPException(400, "Item count mismatch — refresh and try again.")
+
+    src_loc = await _load_location(tenant_id, doc["source_location_id"])
+    dst_loc = await _load_location(tenant_id, doc["dest_location_id"])
+    src_dist = await _load_distributor(tenant_id, doc["source_distributor_id"])
+    dst_dist = await _load_distributor(tenant_id, doc["dest_distributor_id"])
+    src_name = src_dist.get("distributor_name") or ""
+    dst_name = dst_dist.get("distributor_name") or ""
+
+    new_items: list[dict] = []
+    changes: list[dict] = []
+    applied: list[tuple] = []  # (TransferItem, delta_units, side) for rollback
+    try:
+        for idx, old in enumerate(old_items):
+            new_qty = int(payload.items[idx].quantity)
+            old_qty = int(old.get("quantity") or 0)
+            upp = int(old.get("units_per_package") or 1)
+            new_units = new_qty * upp
+            old_units = int(old.get("quantity_units") or old_qty * upp)
+            delta_units = new_units - old_units
+
+            updated = dict(old)
+            updated["quantity"] = new_qty
+            updated["quantity_units"] = new_units
+            updated["line_total"] = round(new_qty * float(old.get("rate") or 0), 2)
+            new_items.append(updated)
+
+            if delta_units != 0:
+                ti = TransferItem(
+                    sku_id=old["sku_id"],
+                    sku_name=old.get("sku_name"),
+                    packaging_type_id=old.get("packaging_type_id"),
+                    packaging_type_name=old.get("packaging_type_name") or "package",
+                    units_per_package=upp,
+                    quantity=max(1, new_qty),
+                    batch_id=old.get("batch_id"),
+                    batch_code=old.get("batch_code"),
+                )
+                # Source loses the extra (deduct delta); destination gains it.
+                await _adjust_stock_for_location(tenant_id, src_loc, ti, -delta_units, distributor_name=src_name)
+                applied.append((ti, -delta_units, "src"))
+                await _adjust_stock_for_location(tenant_id, dst_loc, ti, delta_units, distributor_name=dst_name)
+                applied.append((ti, delta_units, "dst"))
+                changes.append({
+                    "sku_id": old["sku_id"],
+                    "sku_name": old.get("sku_name"),
+                    "old_quantity": old_qty,
+                    "new_quantity": new_qty,
+                    "old_units": old_units,
+                    "new_units": new_units,
+                })
+    except Exception as e:
+        logger.exception("Quantity edit failed; rolling back inventory delta")
+        for (ti, d, side) in applied:
+            loc = src_loc if side == "src" else dst_loc
+            nm = src_name if side == "src" else dst_name
+            await _adjust_stock_for_location(tenant_id, loc, ti, -d, distributor_name=nm)
+        raise HTTPException(500, f"Failed to adjust stock; rolled back. ({e})")
+
+    if not changes:
+        raise HTTPException(400, "No quantity changes detected.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    audit = doc.get("quantity_edits") or []
+    audit.append({
+        "edited_at": now,
+        "edited_by": current_user.get("id"),
+        "edited_by_name": current_user.get("name") or current_user.get("email"),
+        "edited_by_role": role,
+        "reason": payload.reason,
+        "changes": changes,
+    })
+
+    set_fields = {
+        "items": new_items,
+        "total_packages": sum(i["quantity"] for i in new_items),
+        "total_units": sum(i["quantity_units"] for i in new_items),
+        "total_value": round(sum(i["line_total"] for i in new_items), 2),
+        "quantity_edits": audit,
+        "quantity_edited_at": now,
+        "quantity_edited_by_name": current_user.get("name") or current_user.get("email"),
+        "updated_at": now,
+    }
+
+    # Best-effort: update the SAME Zoho invoice / delivery challan in place.
+    zoho_result = await update_stock_transfer_zoho_quantities(tenant_id, {**doc, "items": new_items})
+    set_fields["zoho_qty_sync_pending"] = not zoho_result["ok"]
+    set_fields["zoho_qty_sync_error"] = zoho_result["error"]
+
+    await db.distributor_stock_transfers.update_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"$set": set_fields},
+    )
+    refreshed = await db.distributor_stock_transfers.find_one(
+        {"id": transfer_id, "tenant_id": tenant_id}, {"_id": 0},
+    )
+    msg = f"Quantities updated for {doc.get('transfer_number')} — stock adjusted in both warehouses."
+    if not zoho_result["ok"]:
+        msg += " ⚠️ The Zoho document could not be updated automatically — please update it manually in Zoho Books."
+    elif zoho_result["action"] not in ("skipped", "no_lines"):
+        msg += " Zoho document updated."
+    return {"ok": True, "transfer": refreshed, "changes": changes, "zoho_sync": zoho_result["action"], "message": msg}
+
 
 
 async def _restore_transfer_inventory(tenant_id: str, doc: dict) -> None:

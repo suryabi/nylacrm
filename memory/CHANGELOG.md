@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-25 — Stock Transfer: editable quantities post-completion (CEO/System Admin) ✅ (self-tested: curl + DB delta verification + UI screenshot + 403 role check)
+- New `PATCH /api/distributor/stock-transfers/{id}/quantities` (role-gated to **CEO / System Admin**, 403 otherwise). Edits line quantities on a **completed** transfer and applies the inventory **delta** to both warehouses — correctly routing factory vs distributor stock (`factory_warehouse_stock` / `distributor_stock`) so the Stock Dashboard stays accurate. Verified: SRC factory −24, DST distributor +24, then reverted to 0/19 cleanly.
+- Recomputes `total_packages` / `total_units` / `total_value`; keeps an **audit trail** (`quantity_edits`: edited_by/role/reason/old→new). Source stock is allowed to go negative (per ops choice).
+- **Zoho**: new `update_stock_transfer_zoho_quantities()` (read-modify-write, preserves `line_item_id`) updates the SAME invoice/delivery challan in place via `PUT /books/v3/{invoices|deliverychallans}/{id}`. Best-effort — flags `zoho_qty_sync_pending` if it fails, local edit still succeeds.
+- Frontend (`StockTransfers.js`): "Edit Qty" action (CEO/System Admin only, completed rows) → dialog with editable qty, live Δ-units, reason, and a confirmation panel before applying.
+
+
 ## 2026-06-25 — Revenue Analytics: multi-period Compare (week/month/quarter/FY) ✅ (self-tested: API all 4 granularities + UI screenshots)
 - Replaced the fixed 2-month "Compare Months" with a flexible **Compare** tab: a "Compare by" dropdown (Week · Month · Quarter · Financial Year) + a multi-select to pick **2–4 periods** (capped at 4; extra options disabled).
 - Renders one stat card per period (baseline + sequential % vs previous), a table with one column per period + a "Δ (first→last)" column, and a grouped bar chart (one bar per period).
