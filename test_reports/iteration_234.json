@@ -1,0 +1,41 @@
+{
+  "summary": "Tested transition-notifications feature end-to-end. Backend (8/8) and Notification Templates UI fully pass. Found and FIXED a critical frontend bug that crashed the State Machine editor with 'notifTemplates is not defined' as soon as users opened any workflow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "StateMachineEditor (pages/StateMachines.js)",
+        "issue": "Critical: notifTemplates state was defined in StateMachines() but never passed as a prop to <StateMachineEditor/>. Result: Uncaught runtime ReferenceError 'notifTemplates is not defined' on first render of the editor (template <select> at line 783 maps over it). Crashed the entire SM admin page. FIXED by passing notifTemplates={notifTemplates} from parent and accepting it as a prop with default [].",
+        "selector": "[data-testid=\"state-machine-editor\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_notification_templates_and_sm_notify.py",
+    "/app/test_reports/pytest/iter_234_notif.xml"
+  ],
+  "action_items": [
+    "Self-test: open /admin/state-machines, click any workflow (e.g. Marketing Request Lifecycle), expand a transition (chevron) and confirm the new 'Notifications on this transition' section renders + add-notification-{idx} works. Save → reload → verify rule persists.",
+    "Optional: consider lifting the notif templates fetch into a context if more places need it, but the prop-passing fix is sufficient."
+  ],
+  "critical_code_review_comments": [
+    "BUG (fixed in this iteration): pages/StateMachines.js — notifTemplates state was orphaned; child component referenced it as a free variable, crashing the editor.",
+    "frontend tries /api/notification-templates with .catch -> ({data:{templates:[]}}) which is good defensive code; however the destructuring still leaked notifTemplates as a closure-only reference inside the editor subtree.",
+    "Backend dispatch_transition_notifications correctly filters the actor from recipients (verified with in-app channel + 'user' recipient targeting another user — notification document was created in DB with kind='workflow_notification').",
+    "Validation logic in routes/state_machines.py correctly rejects invalid channels and missing recipient values for role/department/user (4xx returned)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_notification_templates_and_sm_notify.py",
+    "/app/frontend/src/pages/StateMachines.js"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "85%"},
+  "test_credentials": "CEO admin: surya.yadavalli@nylaairwater.earth / test123 (httpOnly cookie session)",
+  "seed_data_creation": "Test templates created with name prefix TEST_ — cleaned up by the CRUD test. One marketing request created and deleted by the dispatch test (TEST_notif_*).",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_notification_templates_and_sm_notify.py — covers templates CRUD, SM validation (invalid channel, missing recipient value), and end-to-end transition dispatch with direct MongoDB verification of the in-app notification doc. After the prop-passing fix in StateMachines.js, the SM editor loads without runtime error; UI flow for adding notification rules to a transition still needs full manual / playwright validation (the transition expand toggle uses `transition-options-{idx}` chevron — click that button itself to expand, then add-notification-{idx} becomes visible).",
+  "rca of the issue": "RCA: StateMachineEditor sub-component reads notifTemplates (line 786, 788) but the parent did not pass it as a prop. notifTemplates is declared with useState in the parent (StateMachines line 39). Sub-component is defined OUTSIDE the parent (line 219), so it cannot close over parent state — leading to ReferenceError at first render. Reproduction: login as CEO -> /admin/state-machines -> click any workflow's name. Mitigation applied: parent now passes notifTemplates={notifTemplates} prop; child signature accepts it with default []."
+}

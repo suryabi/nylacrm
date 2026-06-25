@@ -1058,6 +1058,33 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
         except Exception:
             logger.exception("Assignee notification failed for marketing request transition")
 
+    # Configurable per-transition notifications (channels + template + recipients).
+    try:
+        from utils.sm_notify import dispatch_transition_notifications
+        base = os.environ.get("APP_BASE_URL", "").rstrip("/")
+        link = f"{base}/marketing-requests/{request_id}"
+        from_state = find_state(sm, transition.get("from_state") or "") or {}
+        vars_map = {
+            "request_number": doc.get("request_number") or "",
+            "title": doc.get("title") or "",
+            "action": transition.get("action_label") or transition.get("action_key") or "",
+            "from_state": from_state.get("label") or transition.get("from_state") or "",
+            "to_state": target_state.get("label") or target_state["key"],
+            "actor_name": current_user.get("name") or current_user.get("email") or "Someone",
+            "requestor_name": doc.get("created_by_name") or "",
+            "assignee_name": assign.get("assignee_label") or doc.get("assigned_user_name") or "",
+            "comment": payload.comment or "",
+            "link": link,
+        }
+        await dispatch_transition_notifications(
+            tenant_id, transition, doc, assign,
+            actor=current_user, vars_map=vars_map, link=link,
+            entity_type="marketing_request", entity_id=request_id,
+            category="approval",
+        )
+    except Exception:
+        logger.exception("Transition notification dispatch failed for marketing request")
+
     # Slack notification (best-effort)
     try:
         await slack_post_event(

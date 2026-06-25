@@ -131,6 +131,23 @@ class RequiredField(BaseModel):
     applies_when: Optional[dict] = None
 
 
+class RecipientSpec(BaseModel):
+    """A notification recipient target. `value` carries the role key / department
+    id / user id for the role|department|user types; ignored for stakeholders."""
+    model_config = ConfigDict(extra="allow")
+    type: str  # requestor | assignee | watchers | role | department | user
+    value: Optional[str] = None
+
+
+class NotificationRule(BaseModel):
+    """One notification fired on a transition: a set of channels, an optional
+    template, and a recipient list."""
+    model_config = ConfigDict(extra="allow")
+    channels: List[str] = Field(default_factory=list)  # in_app|email|whatsapp|sms|push
+    template_id: Optional[str] = None
+    recipients: List[RecipientSpec] = Field(default_factory=list)
+
+
 class Transition(BaseModel):
     action_key: str  # one of ACTION_CATALOG.key (or "custom")
     action_label: Optional[str] = None  # override / display text
@@ -158,6 +175,8 @@ class Transition(BaseModel):
     #   required_fields → new data captured at transition time
     guards: Optional[Guards] = None
     required_fields: List[RequiredField] = Field(default_factory=list)
+    # Per-transition notifications (channels + template + recipients).
+    notifications: List[NotificationRule] = Field(default_factory=list)
 
 
 class StateMachineCreate(BaseModel):
@@ -242,6 +261,18 @@ def _validate(states: List[State], actions: List[Action], transitions: List[Tran
                     400,
                     f"Transition #{idx + 1}: auto_assign_mode is '{t.auto_assign_mode}' but no target ID provided",
                 )
+        # Notification rules: valid channels + recipient types.
+        valid_channels = {"in_app", "email", "whatsapp", "sms", "push"}
+        valid_rtypes = {"requestor", "assignee", "watchers", "role", "department", "user"}
+        for rn, rule in enumerate(t.notifications or []):
+            bad_ch = [c for c in (rule.channels or []) if c not in valid_channels]
+            if bad_ch:
+                raise HTTPException(400, f"Transition #{idx + 1} notification #{rn + 1}: invalid channel(s) {bad_ch}")
+            for rec in (rule.recipients or []):
+                if rec.type not in valid_rtypes:
+                    raise HTTPException(400, f"Transition #{idx + 1} notification #{rn + 1}: invalid recipient type '{rec.type}'")
+                if rec.type in ("role", "department", "user") and not rec.value:
+                    raise HTTPException(400, f"Transition #{idx + 1} notification #{rn + 1}: recipient '{rec.type}' needs a value")
 
 
 def _migrate_actions_inplace(doc: dict) -> dict:

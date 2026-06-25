@@ -36,17 +36,19 @@ export default function StateMachines() {
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [notifTemplates, setNotifTemplates] = useState([]);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [smRes, actRes, wfRes, usrRes, deptRes, rolesRes] = await Promise.all([
+      const [smRes, actRes, wfRes, usrRes, deptRes, rolesRes, tplRes] = await Promise.all([
         axios.get(`${API}/state-machines/`, { headers: authHeaders() }),
         axios.get(`${API}/state-machines/actions/catalog`, { headers: authHeaders() }),
         axios.get(`${API}/state-machines/workflows/catalog`, { headers: authHeaders() }),
         axios.get(`${API}/users`, { headers: authHeaders() }).catch(() => ({ data: [] })),
         axios.get(`${API}/master-departments`, { headers: authHeaders() }).catch(() => ({ data: { departments: [] } })),
         axios.get(`${API}/state-machines/roles/catalog`, { headers: authHeaders() }).catch(() => ({ data: { roles: [] } })),
+        axios.get(`${API}/notification-templates`, { headers: authHeaders() }).catch(() => ({ data: { templates: [] } })),
       ]);
       setList(smRes.data || []);
       setActionCatalog(actRes.data?.actions || []);
@@ -54,6 +56,7 @@ export default function StateMachines() {
       setUsers(Array.isArray(usrRes.data) ? usrRes.data : (usrRes.data?.users || []));
       setDepartments(Array.isArray(deptRes.data) ? deptRes.data : (deptRes.data?.departments || []));
       setRoles(rolesRes.data?.roles || []);
+      setNotifTemplates(tplRes.data?.templates || []);
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Failed to load state machines');
     } finally {
@@ -137,6 +140,7 @@ export default function StateMachines() {
         users={users}
         departments={departments}
         roles={roles}
+        notifTemplates={notifTemplates}
       />
     );
   }
@@ -213,7 +217,7 @@ export default function StateMachines() {
 // ───────────────────────────────────────────────────────────────────────────
 // Editor
 // ───────────────────────────────────────────────────────────────────────────
-function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workflowCatalog, users, departments, roles }) {
+function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workflowCatalog, users, departments, roles, notifTemplates = [] }) {
   const stateKeys = useMemo(() => (sm.states || []).map((s) => s.key), [sm.states]);
   const [expandedTxn, setExpandedTxn] = useState(null);
   // Field registry for the workflow(s) this SM is attached to — powers the rule builder.
@@ -294,6 +298,56 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
     const next = [...sm.transitions];
     next.splice(idx, 1);
     setSm({ ...sm, transitions: next });
+  };
+
+  // ── Notification rules ─────────────────────────────────────────────
+  const NOTIF_CHANNELS = [
+    { key: 'in_app', label: '@ In-app', live: true },
+    { key: 'email', label: 'Email', live: true },
+    { key: 'whatsapp', label: 'WhatsApp', live: false },
+    { key: 'sms', label: 'SMS', live: false },
+    { key: 'push', label: 'Push', live: false },
+  ];
+  const RECIPIENT_TYPES = [
+    { key: 'requestor', label: 'Requestor (creator)' },
+    { key: 'assignee', label: 'Assigned-to' },
+    { key: 'watchers', label: 'Watchers' },
+    { key: 'role', label: 'Role…' },
+    { key: 'department', label: 'Department…' },
+    { key: 'user', label: 'Specific user…' },
+  ];
+  const addNotification = (idx) => {
+    const cur = sm.transitions[idx].notifications || [];
+    updateTransition(idx, { notifications: [...cur, { channels: ['in_app'], template_id: null, recipients: [{ type: 'requestor' }] }] });
+  };
+  const updateNotification = (idx, ni, patch) => {
+    const cur = [...(sm.transitions[idx].notifications || [])];
+    cur[ni] = { ...cur[ni], ...patch };
+    updateTransition(idx, { notifications: cur });
+  };
+  const removeNotification = (idx, ni) => {
+    const cur = (sm.transitions[idx].notifications || []).filter((_, i) => i !== ni);
+    updateTransition(idx, { notifications: cur });
+  };
+  const toggleChannel = (idx, ni, ch) => {
+    const rule = (sm.transitions[idx].notifications || [])[ni] || {};
+    const set = new Set(rule.channels || []);
+    set.has(ch) ? set.delete(ch) : set.add(ch);
+    updateNotification(idx, ni, { channels: Array.from(set) });
+  };
+  const addRecipient = (idx, ni) => {
+    const rule = (sm.transitions[idx].notifications || [])[ni] || {};
+    updateNotification(idx, ni, { recipients: [...(rule.recipients || []), { type: 'requestor' }] });
+  };
+  const updateRecipient = (idx, ni, ri, patch) => {
+    const rule = (sm.transitions[idx].notifications || [])[ni] || {};
+    const recs = [...(rule.recipients || [])];
+    recs[ri] = { ...recs[ri], ...patch };
+    updateNotification(idx, ni, { recipients: recs });
+  };
+  const removeRecipient = (idx, ni, ri) => {
+    const rule = (sm.transitions[idx].notifications || [])[ni] || {};
+    updateNotification(idx, ni, { recipients: (rule.recipients || []).filter((_, i) => i !== ri) });
   };
 
   // ── Guards (preconditions on existing data) ────────────────────────
@@ -680,6 +734,106 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                       />
                       <span>Notify assignee (in-app + email when this transition assigns someone)</span>
                     </label>
+                  </div>
+
+                  {/* ── Notifications (channels + template + recipients) ─── */}
+                  <div className="pt-3 mt-2 border-t border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-slate-700">Notifications on this transition</div>
+                      <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => addNotification(idx)} data-testid={`add-notification-${idx}`}>
+                        <Plus className="h-3 w-3 mr-1" /> Add notification
+                      </Button>
+                    </div>
+                    {(t.notifications || []).length === 0 && (
+                      <p className="text-[11px] text-slate-400">No notifications configured. Add one to alert stakeholders when this action runs.</p>
+                    )}
+                    {(t.notifications || []).map((rule, ni) => (
+                      <div key={ni} className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2" data-testid={`notification-rule-${idx}-${ni}`}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-slate-600">Notification #{ni + 1}</span>
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-600" onClick={() => removeNotification(idx, ni)} data-testid={`remove-notification-${idx}-${ni}`}><Trash2 className="h-3 w-3" /></Button>
+                        </div>
+                        {/* Channels */}
+                        <div>
+                          <div className="text-slate-500 mb-1">Channels</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {NOTIF_CHANNELS.map((ch) => {
+                              const on = (rule.channels || []).includes(ch.key);
+                              return (
+                                <button
+                                  key={ch.key}
+                                  type="button"
+                                  onClick={() => toggleChannel(idx, ni, ch.key)}
+                                  className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${on ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                                  data-testid={`notif-channel-${idx}-${ni}-${ch.key}`}
+                                  title={ch.live ? 'Active channel' : 'Configured — pending integration'}
+                                >
+                                  {ch.label}{!ch.live && <span className="ml-1 opacity-70">(soon)</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        {/* Template */}
+                        <div>
+                          <div className="text-slate-500 mb-1">Template</div>
+                          <select
+                            value={rule.template_id || ''}
+                            onChange={(e) => updateNotification(idx, ni, { template_id: e.target.value || null })}
+                            className="w-full h-8 text-xs border border-slate-200 rounded px-2"
+                            data-testid={`notif-template-${idx}-${ni}`}
+                          >
+                            <option value="">Default message</option>
+                            {notifTemplates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
+                          </select>
+                          {notifTemplates.length === 0 && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">Tip: create reusable templates in <span className="font-medium">Admin → Notification Templates</span>.</p>
+                          )}
+                        </div>
+                        {/* Recipients */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-slate-500">Recipients</span>
+                            <Button size="sm" variant="ghost" className="h-6 text-[11px] px-1.5" onClick={() => addRecipient(idx, ni)} data-testid={`add-recipient-${idx}-${ni}`}><Plus className="h-3 w-3 mr-1" /> Add</Button>
+                          </div>
+                          <div className="space-y-1.5">
+                            {(rule.recipients || []).map((rec, ri) => (
+                              <div key={ri} className="flex items-center gap-1.5" data-testid={`recipient-${idx}-${ni}-${ri}`}>
+                                <select
+                                  value={rec.type}
+                                  onChange={(e) => updateRecipient(idx, ni, ri, { type: e.target.value, value: null })}
+                                  className="h-7 text-[11px] border border-slate-200 rounded px-1"
+                                  data-testid={`recipient-type-${idx}-${ni}-${ri}`}
+                                >
+                                  {RECIPIENT_TYPES.map((rt) => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
+                                </select>
+                                {rec.type === 'role' && (
+                                  <select value={rec.value || ''} onChange={(e) => updateRecipient(idx, ni, ri, { value: e.target.value })} className="h-7 text-[11px] border border-slate-200 rounded px-1 flex-1" data-testid={`recipient-value-${idx}-${ni}-${ri}`}>
+                                    <option value="">Select role…</option>
+                                    {roles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                                  </select>
+                                )}
+                                {rec.type === 'department' && (
+                                  <select value={rec.value || ''} onChange={(e) => updateRecipient(idx, ni, ri, { value: e.target.value })} className="h-7 text-[11px] border border-slate-200 rounded px-1 flex-1" data-testid={`recipient-value-${idx}-${ni}-${ri}`}>
+                                    <option value="">Select department…</option>
+                                    {departments.map((d) => <option key={d.id || d.code} value={d.id || d.code}>{d.name || d.label || d.id}</option>)}
+                                  </select>
+                                )}
+                                {rec.type === 'user' && (
+                                  <select value={rec.value || ''} onChange={(e) => updateRecipient(idx, ni, ri, { value: e.target.value })} className="h-7 text-[11px] border border-slate-200 rounded px-1 flex-1" data-testid={`recipient-value-${idx}-${ni}-${ri}`}>
+                                    <option value="">Select user…</option>
+                                    {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+                                  </select>
+                                )}
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-500" onClick={() => removeRecipient(idx, ni, ri)} data-testid={`remove-recipient-${idx}-${ni}-${ri}`}><Trash2 className="h-3 w-3" /></Button>
+                              </div>
+                            ))}
+                            {(rule.recipients || []).length === 0 && <p className="text-[10px] text-slate-400">Add at least one recipient.</p>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-[10px] text-slate-400">Only In-app & Email send today. WhatsApp / SMS / Push are saved and will activate once their integrations are connected. Notifications currently fire for the Marketing Requests workflow.</p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
