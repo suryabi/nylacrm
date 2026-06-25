@@ -4795,9 +4795,11 @@ async def update_delivery(
     
     current_status = delivery.get('status')
     
-    # Only allow limited updates for non-draft deliveries
+    # Only allow limited updates for non-draft deliveries. `delivery_date` is
+    # editable here so users can CORRECT the planned delivery date (e.g. when a
+    # delivery was completed late) without it affecting the completion record.
     if current_status != 'draft':
-        allowed_fields = ['remarks', 'vehicle_number', 'driver_name', 'driver_contact']
+        allowed_fields = ['remarks', 'vehicle_number', 'driver_name', 'driver_contact', 'delivery_date']
         update_data = {"updated_at": datetime.now(timezone.utc).isoformat()}
         
         for field in allowed_fields:

@@ -11,9 +11,11 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check } from 'lucide-react';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check, Pencil } from 'lucide-react';
 import PromoDispatchSection from './PromoDispatchSection';
 import { groupByDateDesc } from '../../utils/dateGrouping';
+import { Calendar as DatePicker } from '../ui/calendar';
+import { toast } from 'sonner';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' },
@@ -420,6 +422,33 @@ export default function DeliveriesTab({
   // Column totals for the visible deliveries (mirrors the per-row math below).
   const deliveryTotals = useMemo(() => sumDeliveries(deliveries), [deliveries]);
   const fmtINR = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Inline correction of a delivery's planned date (grouping is by delivery_date).
+  const [savingDateId, setSavingDateId] = useState(null);
+  const [openDatePickerId, setOpenDatePickerId] = useState(null);
+  const updateDeliveryDate = useCallback(async (deliveryId, dateObj) => {
+    if (!dateObj) return;
+    const ymd = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+    setSavingDateId(deliveryId);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/deliveries/${deliveryId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delivery_date: ymd }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to update delivery date');
+      }
+      toast.success('Delivery date updated');
+      setOpenDatePickerId(null);
+      fetchDeliveries?.();
+    } catch (e) {
+      toast.error(e.message || 'Failed to update delivery date');
+    } finally {
+      setSavingDateId(null);
+    }
+  }, [API_URL, distributor?.id, token, fetchDeliveries]);
   
   // Fetch available credit notes when account is selected
   useEffect(() => {
@@ -1770,9 +1799,35 @@ export default function DeliveriesTab({
                         >
                           {delivery.delivery_number}
                         </button>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {new Date(delivery.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </p>
+                        <div className="mt-0.5 flex items-center gap-1">
+                          <p className="text-xs text-slate-500">
+                            {new Date(delivery.delivery_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </p>
+                          <Popover open={openDatePickerId === delivery.id} onOpenChange={(o) => setOpenDatePickerId(o ? delivery.id : null)}>
+                            <PopoverTrigger asChild>
+                              <button
+                                onClick={(e) => e.stopPropagation()}
+                                disabled={savingDateId === delivery.id}
+                                className="rounded p-0.5 text-slate-400 hover:bg-emerald-100 hover:text-emerald-700 transition-colors disabled:opacity-50"
+                                title="Edit delivery date"
+                                data-testid={`edit-delivery-date-${delivery.id}`}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start" onClick={(e) => e.stopPropagation()}>
+                              <div className="border-b px-3 py-2 text-xs text-slate-500">
+                                Set the planned <span className="font-medium text-slate-700">delivery date</span> (used for date grouping).
+                              </div>
+                              <DatePicker
+                                mode="single"
+                                selected={delivery.delivery_date ? new Date(String(delivery.delivery_date).slice(0, 10) + 'T00:00:00') : undefined}
+                                onSelect={(d) => updateDeliveryDate(delivery.id, d)}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
                       </td>
                       
                       {/* Account */}

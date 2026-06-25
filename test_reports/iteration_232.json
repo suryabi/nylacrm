@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 232 — Validated the new inline 'Edit delivery date' control on Distributor → Customer Stock-Out deliveries. Backend: created /app/backend/tests/test_delivery_date_inline_edit.py with 3 tests (all PASS) — (a) PUT delivery_date on a CONFIRMED (non-draft) delivery succeeds (200) and GET reflects the past date; (b) sending a disallowed field (total_amount) along with delivery_date does NOT corrupt the doc — only whitelisted fields are persisted; (c) PUT delivery_date on a DRAFT delivery still works (regression). Frontend: logged in as CEO, navigated to /distributors/{Brian DIST-0003}, opened Stock Out tab. The pencil button with data-testid 'edit-delivery-date-{deliveryId}' is rendered next to each delivery date. Clicking it does NOT navigate to the delivery detail (verified URL unchanged), opens the calendar popover with helper text 'Set the planned delivery date (used for date grouping)', selecting a past day fires PUT, shows 'Delivery date updated' toast, closes popover, refreshes list, and the row re-groups (TODAY count went from 1 → 2 after a row moved into today's group). All review criteria met.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_delivery_date_inline_edit.py",
+    "/app/test_reports/pytest/iter232.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/distributors.py L4798-4808 (update_delivery non-draft branch): adding 'delivery_date' to allowed_fields is the right minimal change. The branch uses getattr(data, field, None) with `is not None` filter, so partial updates remain safe and other restricted fields (total_amount, items, status, etc.) cannot be sneaked in via this endpoint — verified by test #2.",
+    "models/distributor.py AccountDeliveryUpdate.delivery_date: Optional[str] — pydantic does not validate ISO format here. Acceptable since the UI sends YYYY-MM-DD strictly, but a regex/date validator would prevent stray inputs from corrupting grouping. Non-blocking.",
+    "DeliveriesTab.jsx updateDeliveryDate (L429-451) constructs YYYY-MM-DD from local Date components and PUTs; on 200 it toasts, closes popover, calls fetchDeliveries. Optimistic UX is fine. The Popover Calendar trigger uses e.stopPropagation via the wrapped Button — pencil click correctly does NOT bubble to the row navigation handler (verified in UI run). Good.",
+    "Minor enhancement opportunity: the calendar does not show today's `selected` marker tied to the existing delivery_date (it always defaults to the current month). Pre-selecting the current delivery_date as `selected` in DatePicker would help users see the current value. Non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_delivery_date_inline_edit.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (3/3 tests passed)",
+    "frontend": "100% (all review criteria validated)"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water). Distributor used: Brian DIST-0003 id bb12d90e-4d33-4890-ac5f-17573c551b5c.",
+  "seed_data_creation": "Backend test creates 4 transient deliveries on Brian DIST-0003 / Bangalore Warehouse (reference TEST-INLINE-*). 3 are confirmed (stock deducted by 1 unit each); 1 remains in draft. No teardown — main agent may wish to clean these up if accumulated test runs deplete stock.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: `export REACT_APP_BACKEND_URL=$(grep REACT_APP_BACKEND_URL /app/frontend/.env | cut -d= -f2) && python -m pytest /app/backend/tests/test_delivery_date_inline_edit.py -v`. The test relies on Brian's locations having stock and at least one assigned account. The inline pencil button data-testid pattern is edit-delivery-date-{deliveryId}; the calendar popover renders with helper text containing 'used for date grouping'. The selected day uses role='gridcell' button or [name='day'] selectors. The PUT endpoint is /api/distributors/{distId}/deliveries/{deliveryId} with JSON body {delivery_date: YYYY-MM-DD}; non-draft now accepts delivery_date, remarks, vehicle_number, driver_name, driver_contact only.",
+  "rca of the issue": "N/A — this iteration is an enhancement validation, not a bug fix. The previously-blocked delivery_date PUT on non-draft deliveries is now explicitly whitelisted in routes/distributors.py L4802; the frontend pencil control in DeliveriesTab.jsx L1806-1830 wraps a Popover+Calendar around a per-row date cell; click stopPropagation prevents the row-click handler from firing. Date grouping (groupByDateDesc on delivery_date) automatically re-sorts after fetchDeliveries refresh."
+}
