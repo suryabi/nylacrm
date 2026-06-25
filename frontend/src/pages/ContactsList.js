@@ -41,7 +41,7 @@ import {
   Plus, Search, Filter, Loader2, Users, Phone, Mail, Building2,
   MapPin, Pencil, Trash2, Upload, Camera, X, CreditCard, Eye,
   ChevronLeft, ChevronRight, ScanLine, Sparkles, RotateCcw,
-  Share2, Copy, Check, MessageCircle, ExternalLink, Link2Off
+  Share2, Copy, Check, MessageCircle, ExternalLink, Link2Off, UserPlus
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import AppBreadcrumb from '../components/AppBreadcrumb';
@@ -247,6 +247,8 @@ export default function ContactsList() {
     lng: null,
     formatted_address: '',
     maps_link: '',
+    alt_contact_name: '',
+    alt_contact_phone: '',
     notes: ''
   });
 
@@ -438,6 +440,8 @@ export default function ContactsList() {
       lng: null,
       formatted_address: '',
       maps_link: '',
+      alt_contact_name: '',
+      alt_contact_phone: '',
       notes: ''
     });
     setCardFront(null);
@@ -466,6 +470,8 @@ export default function ContactsList() {
       lng: contact.lng ?? null,
       formatted_address: contact.formatted_address || '',
       maps_link: contact.maps_link || '',
+      alt_contact_name: contact.alt_contact_name || '',
+      alt_contact_phone: contact.alt_contact_phone || '',
       notes: contact.notes || ''
     });
     setCardFront(contact.card_front_url || null);
@@ -913,8 +919,18 @@ export default function ContactsList() {
                 </div>
               </div>
 
-              {/* Address with Google Places autocomplete (same as Lead / Account) */}
-              <div className="space-y-3 rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+              {/* Delivery Address — distinct, clearly-headed section */}
+              <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 overflow-hidden" data-testid="contact-address-section">
+                <div className="flex items-center gap-2.5 border-b border-emerald-200 bg-emerald-100/60 px-3.5 py-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white shrink-0">
+                    <MapPin className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-emerald-900 leading-tight">Delivery Address</h3>
+                    <p className="text-[11px] text-emerald-700/80 leading-tight">Where we deliver or visit this contact.</p>
+                  </div>
+                </div>
+                <div className="space-y-3 p-3.5">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">Search Address</Label>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1020,6 +1036,40 @@ export default function ContactsList() {
                     onChange={(val) => setFormData({ ...formData, maps_link: val })}
                     testId="contact-maps-link"
                   />
+                </div>
+                </div>
+              </div>
+
+              {/* Alternative / Delivery Contact — distinct section */}
+              <div className="rounded-xl border-2 border-sky-200 bg-sky-50/40 overflow-hidden" data-testid="contact-alt-section">
+                <div className="flex items-center gap-2.5 border-b border-sky-200 bg-sky-100/60 px-3.5 py-2.5">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-600 text-white shrink-0">
+                    <UserPlus className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-sky-900 leading-tight">Alternative Contact</h3>
+                    <p className="text-[11px] text-sky-700/80 leading-tight">A backup person to reach for deliveries or follow-ups.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Alternative Contact Name</Label>
+                    <Input
+                      value={formData.alt_contact_name || ''}
+                      onChange={(e) => setFormData({ ...formData, alt_contact_name: e.target.value })}
+                      placeholder="e.g. Receptionist, spouse, manager"
+                      data-testid="contact-alt-name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Alternative Phone Number</Label>
+                    <Input
+                      value={formData.alt_contact_phone || ''}
+                      onChange={(e) => setFormData({ ...formData, alt_contact_phone: e.target.value })}
+                      placeholder="+91 9876543210"
+                      data-testid="contact-alt-phone"
+                    />
+                  </div>
                 </div>
               </div>
 

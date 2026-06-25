@@ -60,6 +60,8 @@ class ContactCreate(BaseModel):
     lng: Optional[float] = None
     formatted_address: Optional[str] = None
     maps_link: Optional[str] = None
+    alt_contact_name: Optional[str] = None
+    alt_contact_phone: Optional[str] = None
     notes: Optional[str] = None
     card_front_url: Optional[str] = None
     card_back_url: Optional[str] = None
@@ -81,6 +83,8 @@ class ContactUpdate(BaseModel):
     lng: Optional[float] = None
     formatted_address: Optional[str] = None
     maps_link: Optional[str] = None
+    alt_contact_name: Optional[str] = None
+    alt_contact_phone: Optional[str] = None
     notes: Optional[str] = None
     card_front_url: Optional[str] = None
     card_back_url: Optional[str] = None
