@@ -798,6 +798,21 @@ export default function PromoDispatchSection({
                         </td>
                       </tr>
                     ))}
+                        {isOpen && (() => {
+                          const totalQ = group.items.reduce((s, d) => s + (d.total_quantity || 0), 0);
+                          const totalV = group.items.reduce((s, d) => s + (d.total_indicative_value || 0), 0);
+                          return (
+                            <tr className="border-b-2 border-fuchsia-200 bg-fuchsia-50/50 text-sm" data-testid={`promo-date-subtotal-${group.key}`}>
+                              <td className="px-3 py-2 font-semibold text-fuchsia-800" colSpan="4">Subtotal · {group.label}</td>
+                              <td className="px-3 py-2 text-center font-bold text-slate-800">{totalQ}</td>
+                              <td className="px-3 py-2 text-right font-bold text-slate-800 tabular-nums">₹{fmtINR(totalV)}</td>
+                              <td className="px-3 py-2 text-center text-[11px] text-slate-500">{group.items.length} {group.items.length === 1 ? 'challan' : 'challans'}</td>
+                              <td className="px-3 py-2"></td>
+                              <td className="px-3 py-2"></td>
+                              <td className="px-3 py-2"></td>
+                            </tr>
+                          );
+                        })()}
                       </React.Fragment>
                       );
                     })}

@@ -26,6 +26,45 @@ const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' }
 ];
 
+// Sum the billing/margin columns across a list of deliveries. Mirrors the
+// per-row math in the table so the grand total and per-date subtotals stay
+// consistent.
+function sumDeliveries(list) {
+  const t = { items: 0, billing: 0, credit: 0, netBilling: 0, margin: 0, billable: 0, netBillable: 0 };
+  (list || []).forEach((delivery) => {
+    const items = delivery.items || [];
+    const totalCreditApplied = delivery.total_credit_applied || 0;
+    const customerBilling = items.reduce((sum, item) => {
+      const qty = item.quantity || 0;
+      const price = item.customer_selling_price || item.unit_price || 0;
+      const disc = item.discount_percent || 0;
+      return sum + qty * price * (1 - disc / 100);
+    }, 0);
+    const netCustomerBilling = Math.max(0, customerBilling - totalCreditApplied);
+    const totalMarginAmount = items.reduce((sum, item) => {
+      const qty = item.quantity || 0;
+      const customerPrice = item.customer_selling_price || item.unit_price || 0;
+      const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+      return sum + qty * customerPrice * (commissionPct / 100);
+    }, 0);
+    const totalActualBillable = items.reduce((sum, item) => {
+      const qty = item.quantity || 0;
+      const customerPrice = item.customer_selling_price || item.unit_price || 0;
+      const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
+      const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
+      return sum + qty * newTransferPrice;
+    }, 0);
+    t.items += items.length;
+    t.billing += customerBilling;
+    t.credit += totalCreditApplied;
+    t.netBilling += netCustomerBilling;
+    t.margin += totalMarginAmount;
+    t.billable += totalActualBillable;
+    t.netBillable += totalActualBillable - totalCreditApplied;
+  });
+  return t;
+}
+
 export default function DeliveriesTab({
   distributor,
   canManage,
@@ -379,41 +418,7 @@ export default function DeliveriesTab({
   const totalPages = Math.ceil((deliveriesTotal || 0) / (deliveriesPageSize || 20));
 
   // Column totals for the visible deliveries (mirrors the per-row math below).
-  const deliveryTotals = useMemo(() => {
-    const t = { items: 0, billing: 0, credit: 0, netBilling: 0, margin: 0, billable: 0, netBillable: 0 };
-    (deliveries || []).forEach((delivery) => {
-      const items = delivery.items || [];
-      const totalCreditApplied = delivery.total_credit_applied || 0;
-      const customerBilling = items.reduce((sum, item) => {
-        const qty = item.quantity || 0;
-        const price = item.customer_selling_price || item.unit_price || 0;
-        const disc = item.discount_percent || 0;
-        return sum + qty * price * (1 - disc / 100);
-      }, 0);
-      const netCustomerBilling = Math.max(0, customerBilling - totalCreditApplied);
-      const totalMarginAmount = items.reduce((sum, item) => {
-        const qty = item.quantity || 0;
-        const customerPrice = item.customer_selling_price || item.unit_price || 0;
-        const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-        return sum + qty * customerPrice * (commissionPct / 100);
-      }, 0);
-      const totalActualBillable = items.reduce((sum, item) => {
-        const qty = item.quantity || 0;
-        const customerPrice = item.customer_selling_price || item.unit_price || 0;
-        const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-        const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
-        return sum + qty * newTransferPrice;
-      }, 0);
-      t.items += items.length;
-      t.billing += customerBilling;
-      t.credit += totalCreditApplied;
-      t.netBilling += netCustomerBilling;
-      t.margin += totalMarginAmount;
-      t.billable += totalActualBillable;
-      t.netBillable += totalActualBillable - totalCreditApplied;
-    });
-    return t;
-  }, [deliveries]);
+  const deliveryTotals = useMemo(() => sumDeliveries(deliveries), [deliveries]);
   const fmtINR = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   
   // Fetch available credit notes when account is selected
@@ -1888,6 +1893,25 @@ export default function DeliveriesTab({
                     </tr>
                   );
                 })}
+                    {isOpen && (() => {
+                      const gt = sumDeliveries(group.items);
+                      return (
+                        <tr className="border-b-2 border-emerald-200 bg-emerald-50/50 text-sm" data-testid={`delivery-date-subtotal-${group.key}`}>
+                          <td className="px-3 py-2 font-semibold text-emerald-800" colSpan="2">
+                            Subtotal · {group.label}
+                          </td>
+                          <td className="px-3 py-2 text-center font-medium text-slate-600">{group.items.length} {group.items.length === 1 ? 'delivery' : 'deliveries'}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-800 bg-blue-50/30">₹{fmtINR(gt.billing)}</td>
+                          <td className="px-3 py-2 text-right font-medium text-emerald-600 bg-blue-50/30">{gt.credit > 0 ? `-₹${fmtINR(gt.credit)}` : '—'}</td>
+                          <td className="px-3 py-2 text-right font-bold text-blue-700 bg-blue-50/30">₹{fmtINR(gt.netBilling)}</td>
+                          <td className="px-3 py-2 text-right font-medium text-purple-600 bg-purple-50/30">₹{fmtINR(gt.margin)}</td>
+                          <td className="px-3 py-2 text-right text-slate-700 bg-purple-50/30">₹{fmtINR(gt.billable)}</td>
+                          <td className="px-3 py-2 text-right font-bold text-purple-700 bg-purple-50/30">₹{fmtINR(gt.netBillable)}</td>
+                          <td className="px-3 py-2"></td>
+                          <td className="px-3 py-2"></td>
+                        </tr>
+                      );
+                    })()}
                   </React.Fragment>
                   );
                 })}

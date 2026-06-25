@@ -1,0 +1,30 @@
+{
+  "summary": "Iteration 230 — Verified per-date SUBTOTAL rows in Distributor Detail > Stock Out tab for BOTH (a) Stock Out (Distributor → Customer) [DeliveriesTab.jsx] and (b) Promotional Stock-Out (Delivery Challan) [PromoDispatchSection.jsx]. Logged in as CEO surya.yadavalli@nylaairwater.earth, opened Brian DIST-0003 (id bb12d90e-4d33-4890-ac5f-17573c551b5c) → Stock Out tab. The 'Today' group (2026-06-25) is expanded by default; 'Wed 24 Jun 2026 PAST' and 'Thu 04 Jun 2026 PAST' are collapsed by default. STOCK OUT: data-testid='delivery-date-subtotal-2026-06-25' renders 'Subtotal · Today' with '2 deliveries' and 6 ₹ sums = [₹50.00, -₹450.00, ₹50.00, ₹1.25, ₹48.75, ₹-401.25] which exactly equals the arithmetic sum of the 2 visible rows (DC-2606-0006 + DEL-2026-0002). 'delivery-date-subtotal-2026-06-24' is NOT in DOM while that group is collapsed; after clicking the past header it appears with '2 deliveries' and sums [₹50.00, —, ₹50.00, ₹1.25, ₹48.75, ₹48.75] which combined with Today subtotal exactly reconstructs the grand total [₹100.00, -₹450.00, ₹100.00, ₹2.50, ₹97.50, -₹352.50] in 'deliveries-totals-row' (intact, no duplication). PROMO: data-testid='promo-date-subtotal-2026-06-25' renders 'Subtotal · Today', total quantity (Crates) = 1, total Indicative Value = ₹50.00, and '1 challan' — equals the only Today row (DC-2606-0006: 1 crate / ₹50). Promo past subtotals 'promo-date-subtotal-2026-06-04' and 'promo-date-subtotal-2026-06-24' are NOT in DOM while collapsed; expanding 04-Jun renders its subtotal row with 'challans' count text. All testids confirmed via DOM query and a final screenshot saved at .screenshots/subtotals_verified.png and .screenshots/dist_stockout_initial.png.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Distributor Detail > Stock Out > Stock Out (Distributor → Customer)", "issues": [
+        "Negative Net Billable is rendered as '₹-401.25' / '₹-352.50' (minus AFTER the currency symbol). Convention is usually '-₹401.25'. This is purely cosmetic (existing behaviour, not introduced by this iteration) but the inconsistency is visible in both the per-group subtotal row and the grand totals row."
+      ]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DeliveriesTab.jsx ~L1899: subtotal row uses colSpan=2 for the first cell, then 9 single cells = 11 columns — matches the 11-column delivery table. Good.",
+    "DeliveriesTab.jsx ~L1897: gt = sumDeliveries(group.items) is computed inside the IIFE on every render of an open group. For very large groups consider useMemo, but for typical sub-50-row groups this is fine.",
+    "PromoDispatchSection.jsx ~L802-803: totalQ/totalV are computed inline via reduce on every render of an open group; for normal-sized groups this is fine, but a useMemo keyed on group.items would be marginally cleaner.",
+    "PromoDispatchSection.jsx ~L806: colSpan=4 for the label cell, then qty/value/count/3 empty cells. Confirm against the 10-column promo table — verified visually that columns align (challan/contact/reason/from cluster collapsed to one Subtotal label, then CRATES/INDICATIVE VALUE/STATUS-as-challan-count, then ZOHO/CHALLAN/ACTIONS empty). OK.",
+    "Negative-amount rendering inconsistency ('₹-401.25' vs '-₹450.00') already noted in design_issues — same fmtINR helper is used; the minus position depends on whether the negative is applied before or after the ₹ prefix in JSX. Worth a unified formatter."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "100% on the 4 review criteria: subtotal rendering (Stock Out + Promo), arithmetic correctness, isOpen-gating (collapsed → hidden), regression on grand-total row & collapsible default-Today behaviour."},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water). Distributor used: Brian DIST-0003 id bb12d90e-4d33-4890-ac5f-17573c551b5c.",
+  "seed_data_creation": "None. Read-only UI verification against existing seed (2 deliveries on 2026-06-25 + 2 on 2026-06-24 in Stock Out; 1 promo challan on 2026-06-25, 1 on 2026-06-24, 5 on 2026-06-04).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Subtotal-row feature is gated by isOpen (the same openDateGroups state introduced in iteration_227). To exercise a Past/Future subtotal you MUST click the group header (data-testid 'delivery-date-group-{YYYY-MM-DD}' or 'promo-date-group-{YYYY-MM-DD}') to expand it; only the Today group is open by default. The testids confirmed in DOM are: delivery-date-subtotal-2026-06-25, delivery-date-subtotal-2026-06-24 (after expand), promo-date-subtotal-2026-06-25, promo-date-subtotal-2026-06-04 (after expand). For the Stock Out section, the subtotal row colSpan/cell layout mirrors the 11-column table; for Promo it mirrors the 10-column table. Today's real-world date during this run was 2026-06-25 so 'Today' = 2026-06-25 and 'Wed, 24 Jun 2026' is the immediate PAST group.",
+  "rca of the issue": "Not a bug — additive UI enhancement. Implementation correctness: sumDeliveries (DeliveriesTab.jsx L32) is a pure module-level reducer that returns {items, billing, credit, netBilling, margin, billable, netBillable}; the per-group subtotal calls sumDeliveries(group.items) and renders the same 6 currency cells as the grand-total tfoot, ensuring the partial-sum invariant Σ(group subtotals) = grand total holds (verified arithmetically: Today + Past = Grand for all 6 columns). Promo subtotal uses inline reduce on d.total_quantity and d.total_indicative_value plus group.items.length for the challan count; verified against the visible Today row."
+}
