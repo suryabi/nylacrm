@@ -681,7 +681,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         </div>
                       </td>
                       <td className="p-4 text-center">
-                        <Badge className={`${statusInfo.bg} ${statusInfo.text} font-semibold whitespace-nowrap border ${statusInfo.border || 'border-transparent'}`}>{statusInfo.label}</Badge>
+                        <Badge className={`${statusInfo.bg} ${statusInfo.text} font-semibold whitespace-nowrap border ${statusInfo.border || 'border-transparent'}`}>{ret.return_type === 'missing' ? statusInfo.label?.replace(/Credit/g, 'Debit') : statusInfo.label}</Badge>
                       </td>
                       <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
