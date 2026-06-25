@@ -1822,6 +1822,7 @@ export default function DeliveriesTab({
                               <DatePicker
                                 mode="single"
                                 selected={delivery.delivery_date ? new Date(String(delivery.delivery_date).slice(0, 10) + 'T00:00:00') : undefined}
+                                defaultMonth={delivery.delivery_date ? new Date(String(delivery.delivery_date).slice(0, 10) + 'T00:00:00') : undefined}
                                 onSelect={(d) => updateDeliveryDate(delivery.id, d)}
                                 initialFocus
                               />

@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-24 — Inline "Edit delivery date" on Stock-Out rows ✅ (testing_agent verified, iteration_232, 3/3 pytest + UI)
+- Added a pencil button (`edit-delivery-date-{id}`) next to each Stock-Out delivery's date opening a calendar popover; selecting a date updates `delivery_date` and the row re-groups. Click is stopped so it doesn't open the delivery detail. Calendar opens on the existing date's month; past dates allowed (so users can correct a late-completed delivery to its real date).
+- Backend: `update_delivery` (`routes/distributors.py`) now whitelists `delivery_date` for NON-draft deliveries (previously blocked) so completed deliveries can be corrected. Other restricted fields remain protected (verified).
+- Verified: PUT on confirmed/draft works, disallowed fields ignored, UI popover edits + re-groups correctly.
+
+
 ## 2026-06-24 — Fix: Stock-Out grouped by completion date instead of delivery date ✅ (testing_agent verified, iteration_231, 3/3 pytest)
 - **Root cause:** `complete_delivery` (`routes/distributors.py` ~L5037) overwrote `delivery_date` with the completion date (`now[:10]`) whenever the caller didn't pass an explicit date. Since the Stock-Out/Promo tables group by `delivery_date`, a delivery physically done yesterday but marked complete today jumped into Today's group.
 - **Fix:** completion now records only `delivered_at` (actual completion timestamp) + status/updated_at, and leaves `delivery_date` untouched unless an explicit `delivery_date` query param is supplied (user's responsibility to correct). Promo complete never had the bug (verified).
