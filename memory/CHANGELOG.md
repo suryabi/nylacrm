@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-24 — Per-transition Notifications + Notification Templates ✅ (testing_agent verified, iteration_234, backend 8/8)
+- **State Machine transitions** now carry a `notifications` config: each rule = channels (in_app, email, whatsapp, sms, push) + optional template + recipient list (stakeholders requestor/assignee/watchers, plus role/department/specific-user). UI added in the transition editor (`StateMachines.js`). Validation rejects invalid channels and role/department/user recipients missing a value.
+- **Notification Templates** admin: new collection `notification_templates` (tenant-scoped, admin-managed) with `{{placeholder}}` subject+body; new page `/admin/notification-templates` + nav link; CRUD in `routes/notification_templates.py`. Variables: request_number, title, action, from_state, to_state, actor_name, requestor_name, assignee_name, comment, link.
+- **Dispatch** (`utils/sm_notify.py`): on a Marketing Requests transition, resolves recipients, renders the template, and sends via In-app + Email (live). WhatsApp/SMS/Push are saved but **no-op + logged ('pending integration')** until those channels are wired. Best-effort — never breaks the transition. Actor is excluded from recipients.
+- Scope: notifications fire only for the **Marketing Requests** workflow this phase (config is generic for all). Watchers resolve from `doc.watcher_user_ids` (no watcher UI yet — follow-up).
+- Note: testing agent fixed a `notifTemplates` prop-passing crash in StateMachines.js. ⚠️ Redeploy to production to go live.
+
+
 ## 2026-06-24 — Fix: reversed transactions excluded from Stock-Out/Promo totals + struck-through ✅ (testing_agent verified, iteration_233)
 - **Bug:** reversed (and cancelled) deliveries/challans were still counted in the per-date subtotals and grand totals.
 - **Fix (frontend):** `DeliveriesTab.jsx` — `VOIDED_DELIVERY_STATUSES=['reversed','cancelled']`; `sumDeliveries()` skips them (so both subtotals and grand total exclude them); voided rows render dimmed (`opacity-60 bg-rose-50/30`) with all ₹ figures `line-through`; counts show "{live} deliveries · {n} reversed". `PromoDispatchSection.jsx` — subtotal qty/value computed from `live=items.filter(status!=='reversed')`; reversed rows' Crates + Indicative Value cells struck-through; count shows "{live} challans · {n} reversed".
