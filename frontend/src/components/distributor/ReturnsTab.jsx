@@ -465,7 +465,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   };
 
   return (
-    <Card data-testid="returns-tab">
+    <Card data-testid="returns-tab-content">
       <CardHeader>
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>

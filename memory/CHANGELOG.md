@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-25 — Fix hardcoded "Credit" wording in Debit return View Dialog ✅ (testing_agent verified, iteration_238, frontend 100%)
+- ReturnsTab.jsx View/Detail dialog now flow-aware via derived flags (`isMissingReturn`, `noteWord`, `amountAccentText`): for `return_type==='missing'` it shows "Total Debit", "Debit/Unit", "Debit Note Issued" (amber) and "Create Debit Note"; credit returns keep emerald wording. Status badge label transforms Credit→Debit for missing.
+- Create form item table switches to "Est. Debit"/"Total Estimated Debit" (amber) when missing selected.
+- List grid: amount column header renamed to "Amount", summary card to "Total Value", missing rows colored amber. User chose amber for owed/debit amounts.
+- Cleaned duplicate `data-testid="returns-tab"` → Card root now `returns-tab-content`.
+
+
 ## 2026-06-24 — Debit reasons + flow-aware wording for Track Customer Return ✅ (testing_agent verified, iteration_237, backend 6/6 + ReturnsTab UI)
 - **Debit reasons**: return reasons now carry `note_type` ('credit'|'debit'). Seeded 4 default debit reasons (Not Returned, Lost at Customer, Broken at Customer, Pilferage). `GET /return-reasons?note_type=debit` auto-seeds them for existing tenants (idempotent); `?note_type=credit` excludes debit (legacy rows treated as credit).
 - **ReturnsTab dialog** adapts to the choice: Missing → "Add Missing Items" / "Debit Reason" / missing-oriented placeholders + the dropdown lists only debit reasons; Returned → "Add Returned Items" / "Credit Reason" + credit reasons. Switching the choice refetches reasons and clears already-picked item reasons.
