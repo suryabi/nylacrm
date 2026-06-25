@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-06-24 — Fix: reversed transactions excluded from Stock-Out/Promo totals + struck-through ✅ (testing_agent verified, iteration_233)
+- **Bug:** reversed (and cancelled) deliveries/challans were still counted in the per-date subtotals and grand totals.
+- **Fix (frontend):** `DeliveriesTab.jsx` — `VOIDED_DELIVERY_STATUSES=['reversed','cancelled']`; `sumDeliveries()` skips them (so both subtotals and grand total exclude them); voided rows render dimmed (`opacity-60 bg-rose-50/30`) with all ₹ figures `line-through`; counts show "{live} deliveries · {n} reversed". `PromoDispatchSection.jsx` — subtotal qty/value computed from `live=items.filter(status!=='reversed')`; reversed rows' Crates + Indicative Value cells struck-through; count shows "{live} challans · {n} reversed".
+- Verified arithmetically + visually in both tables. Note: pre-existing cosmetic — negative grand total shows "₹-X" instead of "-₹X" (flagged iter 230/233, not introduced here).
+
+
 ## 2026-06-24 — Inline "Edit delivery date" on Stock-Out rows ✅ (testing_agent verified, iteration_232, 3/3 pytest + UI)
 - Added a pencil button (`edit-delivery-date-{id}`) next to each Stock-Out delivery's date opening a calendar popover; selecting a date updates `delivery_date` and the row re-groups. Click is stopped so it doesn't open the delivery detail. Calendar opens on the existing date's month; past dates allowed (so users can correct a late-completed delivery to its real date).
 - Backend: `update_delivery` (`routes/distributors.py`) now whitelists `delivery_date` for NON-draft deliveries (previously blocked) so completed deliveries can be corrected. Other restricted fields remain protected (verified).
