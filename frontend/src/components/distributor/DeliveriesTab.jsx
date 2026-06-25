@@ -1743,7 +1743,7 @@ export default function DeliveriesTab({
                             <span className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-sky-100 text-sky-700 border border-sky-200" data-testid={`delivery-future-pill-${group.key}`}>Future</span>
                           )}
                           {group.isPast && (
-                            <span className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 border border-slate-300" data-testid={`delivery-past-pill-${group.key}`}>Past</span>
+                            <span className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 border border-slate-300" data-testid={`delivery-past-pill-${group.key}`}>{group.daysAgo === 1 ? '1 day ago' : `${group.daysAgo} days ago`}</span>
                           )}
                           <span className="text-[11px] font-normal text-slate-400">· {group.items.length} {group.items.length === 1 ? 'delivery' : 'deliveries'}</span>
                         </div>
