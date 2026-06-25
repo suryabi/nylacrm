@@ -5,6 +5,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Checkbox } from '../components/ui/checkbox';
 import { toast } from 'sonner';
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -49,6 +51,22 @@ const TIME_FILTERS = [
 ];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Multi-period comparison config
+const PERIOD_TYPES = [
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+  { value: 'quarter', label: 'Quarter' },
+  { value: 'fy', label: 'Financial Year' },
+];
+const MAX_COMPARE = 4;
+// Per-bar gradients + solid colours (legend / table accents), one per period.
+const CMP_BARS = [
+  { id: 'raCmp0', from: CHART.cyan, to: CHART.aqua, solid: CHART.cyan, gradient: 'cyan' },
+  { id: 'raCmp1', from: CHART.purple, to: CHART.blue, solid: CHART.purple, gradient: 'purple' },
+  { id: 'raCmp2', from: '#d97706', to: '#f59e0b', solid: '#d97706', gradient: 'teal' },
+  { id: 'raCmp3', from: '#db2777', to: '#f472b6', solid: '#db2777', gradient: 'magenta' },
+];
 
 // Annual Run Rate = selected-period gross annualized to a full year.
 // Named periods use a fixed multiplier (month → ×12); custom / all-time
@@ -167,6 +185,12 @@ const ChartDefs = () => (
       <stop offset="0%" stopColor={CHART.purple} stopOpacity={1} />
       <stop offset="100%" stopColor={CHART.blue} stopOpacity={0.35} />
     </linearGradient>
+    {CMP_BARS.map((b) => (
+      <linearGradient key={b.id} id={b.id} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={b.from} stopOpacity={1} />
+        <stop offset="100%" stopColor={b.to} stopOpacity={0.4} />
+      </linearGradient>
+    ))}
   </defs>
 );
 
@@ -460,30 +484,105 @@ function BreakdownView() {
 }
 
 // ───────────────────────── Compare ─────────────────────────
+function PeriodMultiSelect({ options, selected, onChange, max, testid }) {
+  const [open, setOpen] = useState(false);
+  const toggle = (val) => {
+    if (selected.includes(val)) {
+      onChange(selected.filter((v) => v !== val));
+    } else {
+      if (selected.length >= max) { toast.error(`You can compare up to ${max} periods`); return; }
+      onChange([...selected, val]);
+    }
+  };
+  const text = selected.length === 0
+    ? 'Select periods'
+    : selected.length === 1
+      ? (options.find((o) => o.value === selected[0])?.label || '1 selected')
+      : `${selected.length} periods selected`;
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 transition-colors hover:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          data-testid={testid}
+        >
+          <span className="truncate">{text}</span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[280px] p-0 rounded-xl border-slate-200 shadow-xl" align="start">
+        <div className="max-h-[320px] overflow-auto py-1">
+          {options.map((o) => {
+            const checked = selected.includes(o.value);
+            const disabled = !checked && selected.length >= max;
+            return (
+              <div
+                key={o.value}
+                className={`flex items-center gap-2.5 px-3 py-2 transition-colors ${disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-slate-50'} ${checked ? 'bg-emerald-50/60' : ''}`}
+                onClick={() => !disabled && toggle(o.value)}
+                data-testid={`ra-cmp-period-opt-${o.value}`}
+              >
+                <Checkbox checked={checked} className="h-4 w-4 rounded" />
+                <span className="truncate text-sm">{o.label}</span>
+              </div>
+            );
+          })}
+          {options.length === 0 && (
+            <div className="px-3 py-4 text-center text-sm text-muted-foreground">No periods available</div>
+          )}
+        </div>
+        <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
+          <span className="text-[11px] text-slate-400">{selected.length}/{max} selected</span>
+          {selected.length > 0 && (
+            <button type="button" className="text-xs text-slate-500 transition-colors hover:text-rose-500" onClick={() => onChange([])}>Clear</button>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function CompareView() {
-  const now = new Date();
-  const years = [];
-  for (let y = now.getFullYear(); y >= now.getFullYear() - 5; y--) years.push(y);
-
-  const prevMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-  const prevMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-
-  const [aYear, setAYear] = useState(prevMonthYear);
-  const [aMonth, setAMonth] = useState(prevMonth);
-  const [bYear, setBYear] = useState(now.getFullYear());
-  const [bMonth, setBMonth] = useState(now.getMonth() + 1);
+  const [periodType, setPeriodType] = useState('month');
+  const [options, setOptions] = useState([]);
+  const [selected, setSelected] = useState([]);
   const [groupBy, setGroupBy] = useState('city');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
+  // Load selectable periods whenever the granularity changes; default to the
+  // two most-recent periods so the view renders something meaningful at once.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await axios.get(`${API_URL}/reports/compare-periods`, {
+          ...authHeaders(), params: { period_type: periodType },
+        });
+        if (!active) return;
+        const opts = (res.data?.periods || []).map((p) => ({ value: p.id, label: p.label, short_label: p.short_label }));
+        setOptions(opts);
+        setSelected(opts.slice(0, 2).map((o) => o.value));
+      } catch (e) {
+        if (!active) return;
+        setOptions([]); setSelected([]);
+        toast.error(e.response?.data?.detail || 'Failed to load periods');
+      }
+    })();
+    return () => { active = false; };
+  }, [periodType]);
+
   const fetchData = useCallback(async () => {
+    if (selected.length < 2) { setData(null); setLoading(false); return; }
     setLoading(true);
     try {
-      const params = {
-        period_a_year: aYear, period_a_month: aMonth,
-        period_b_year: bYear, period_b_month: bMonth, group_by: groupBy, top_n: 12,
-      };
-      const res = await axios.get(`${API_URL}/reports/revenue-compare`, { ...authHeaders(), params });
+      const params = new URLSearchParams();
+      params.append('period_type', periodType);
+      selected.forEach((p) => params.append('periods', p));
+      params.append('group_by', groupBy);
+      params.append('top_n', '12');
+      const res = await axios.get(`${API_URL}/reports/revenue-compare-multi?${params.toString()}`, authHeaders());
       setData(res.data);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load comparison');
@@ -491,44 +590,38 @@ function CompareView() {
     } finally {
       setLoading(false);
     }
-  }, [aYear, aMonth, bYear, bMonth, groupBy]);
+  }, [periodType, selected, groupBy]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const periods = data?.periods || [];
   const rows = data?.rows || [];
-  const aLabel = `${MONTHS[aMonth - 1]?.slice(0, 3)} ${aYear}`;
-  const bLabel = `${MONTHS[bMonth - 1]?.slice(0, 3)} ${bYear}`;
-  const chartData = useMemo(() => rows.map((r) => ({ name: r.label, A: r.a_revenue, B: r.b_revenue })), [rows]);
-  const delta = data?.delta || 0;
-  const up = delta >= 0;
   const dimLabel = GROUP_BY_OPTIONS.find((o) => o.value === groupBy)?.label;
+  const ptLabel = PERIOD_TYPES.find((o) => o.value === periodType)?.label;
 
-  const monthSel = (label, value, onChange, testid) => (
-    <div className="min-w-[130px] flex-1">
-      <FieldLabel>{label}</FieldLabel>
-      <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
-        <SelectTrigger className={SELECT_TRIGGER} data-testid={testid}><SelectValue /></SelectTrigger>
-        <SelectContent className={SELECT_CONTENT}>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)} className={SELECT_ITEM}>{m}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
-  );
-  const yearSel = (label, value, onChange, testid) => (
-    <div className="min-w-[100px] flex-1">
-      <FieldLabel>{label}</FieldLabel>
-      <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
-        <SelectTrigger className={SELECT_TRIGGER} data-testid={testid}><SelectValue /></SelectTrigger>
-        <SelectContent className={SELECT_CONTENT}>{years.map((y) => <SelectItem key={y} value={String(y)} className={SELECT_ITEM}>{y}</SelectItem>)}</SelectContent>
-      </Select>
-    </div>
+  const chartData = useMemo(
+    () => rows.map((r) => {
+      const o = { name: r.label };
+      (r.values || []).forEach((v, i) => { o[`p${i}`] = v; });
+      return o;
+    }),
+    [rows],
   );
 
   return (
     <div className="space-y-6 duration-500 animate-in fade-in-50">
       <div className={`${GLASS} flex flex-wrap items-end gap-3 p-4`}>
-        {monthSel('Period A — Month', aMonth, setAMonth, 'ra-cmp-a-month')}
-        {yearSel('Year', aYear, setAYear, 'ra-cmp-a-year')}
-        {monthSel('Period B — Month', bMonth, setBMonth, 'ra-cmp-b-month')}
-        {yearSel('Year', bYear, setBYear, 'ra-cmp-b-year')}
+        <div className="min-w-[150px] flex-1">
+          <FieldLabel>Compare by</FieldLabel>
+          <Select value={periodType} onValueChange={(t) => { setSelected([]); setData(null); setPeriodType(t); }}>
+            <SelectTrigger className={SELECT_TRIGGER} data-testid="ra-cmp-period-type"><SelectValue /></SelectTrigger>
+            <SelectContent className={SELECT_CONTENT}>{PERIOD_TYPES.map((o) => <SelectItem key={o.value} value={o.value} className={SELECT_ITEM}>{o.label}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="min-w-[220px] flex-[2]">
+          <FieldLabel>{ptLabel}s to compare (max {MAX_COMPARE})</FieldLabel>
+          <PeriodMultiSelect options={options} selected={selected} onChange={setSelected} max={MAX_COMPARE} testid="ra-cmp-periods" />
+        </div>
         <div className="min-w-[150px] flex-1">
           <FieldLabel>Group by</FieldLabel>
           <Select value={groupBy} onValueChange={setGroupBy}>
@@ -538,29 +631,36 @@ function CompareView() {
         </div>
       </div>
 
-      {loading ? <Spinner /> : (
+      {selected.length < 2 ? (
+        <Empty testid="ra-cmp-need-more">Select at least 2 {ptLabel?.toLowerCase()}s to compare.</Empty>
+      ) : loading ? <Spinner /> : (
         <>
-          <div className="grid grid-cols-1 gap-4 duration-500 animate-in fade-in-50 slide-in-from-bottom-2 sm:grid-cols-3 md:gap-6">
-            <StatCard label={`${aLabel} · Baseline`} value={formatCurrency(data?.period_a?.total)} sub="Baseline period" icon={IndianRupee} gradient="teal" testid="ra-cmp-a-total" />
-            <StatCard label={`${bLabel} · Current`} value={formatCurrency(data?.period_b?.total)} sub="Comparison period" icon={IndianRupee} gradient="purple" testid="ra-cmp-b-total" />
-            <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md" data-testid="ra-cmp-delta">
-              <div className="relative flex items-start justify-between">
-                <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500">Change (MoM)</span>
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ color: up ? POS : NEG, background: `${up ? POS : NEG}14` }}>
-                  {up ? <TrendingUp className="h-[18px] w-[18px]" /> : <TrendingDown className="h-[18px] w-[18px]" />}
-                </span>
-              </div>
-              <p className="relative mt-4 font-mono text-3xl font-semibold tracking-tight tabular-nums md:text-[2.15rem]" style={{ color: up ? POS : NEG }} data-testid="ra-cmp-delta-pct">
-                {up ? '+' : ''}{data?.delta_pct ?? 0}%
-              </p>
-              <span className="relative mt-2 inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium" style={{ color: up ? POS : NEG, borderColor: `${up ? POS : NEG}40`, background: `${up ? POS : NEG}12` }} data-testid="ra-cmp-delta-amount">
-                {up ? '+' : ''}{formatCurrency(delta)} vs {aLabel}
-              </span>
-            </div>
+          <div className="grid gap-4 duration-500 animate-in fade-in-50 slide-in-from-bottom-2 md:gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            {periods.map((p, i) => {
+              const isBase = p.delta_pct === null || p.delta_pct === undefined;
+              const up = (p.delta_pct ?? 0) >= 0;
+              return (
+                <div key={p.id} className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md" data-testid={`ra-cmp-period-card-${i}`}>
+                  <div className="flex items-start justify-between">
+                    <span className="text-[11px] font-medium uppercase tracking-[0.1em] text-slate-500">{p.short_label}</span>
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: CMP_BARS[i % CMP_BARS.length].solid }} />
+                  </div>
+                  <p className="mt-4 font-mono text-3xl font-semibold tracking-tight tabular-nums text-slate-900 md:text-[2rem]" data-testid={`ra-cmp-period-total-${i}`}>{formatCurrency(p.total)}</p>
+                  {isBase ? (
+                    <span className="mt-2 inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs font-medium text-slate-500">Baseline</span>
+                  ) : (
+                    <span className="mt-2 inline-flex w-fit items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium" style={{ color: up ? POS : NEG, borderColor: `${up ? POS : NEG}40`, background: `${up ? POS : NEG}12` }} data-testid={`ra-cmp-period-delta-${i}`}>
+                      {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                      {up ? '+' : ''}{p.delta_pct}% vs prev
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {rows.length === 0 ? (
-            <Empty testid="ra-cmp-empty">No revenue found for either period.</Empty>
+            <Empty testid="ra-cmp-empty">No revenue found for the selected periods.</Empty>
           ) : (
             <>
               <div className={`${GLASS} overflow-hidden p-0`} data-testid="ra-cmp-table">
@@ -569,22 +669,25 @@ function CompareView() {
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
                         <th className="px-5 py-3.5 text-left font-semibold">{dimLabel}</th>
-                        <th className="px-5 py-3.5 text-right font-semibold">{aLabel}</th>
-                        <th className="px-5 py-3.5 text-right font-semibold">{bLabel}</th>
-                        <th className="px-5 py-3.5 text-right font-semibold">Change</th>
-                        <th className="px-5 py-3.5 text-right font-semibold">%</th>
+                        {periods.map((p) => <th key={p.id} className="px-5 py-3.5 text-right font-semibold">{p.short_label}</th>)}
+                        <th className="px-5 py-3.5 text-right font-semibold">Δ (first→last)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map((r) => {
-                        const rUp = r.delta >= 0;
+                        const vals = r.values || [];
+                        const first = vals[0] || 0;
+                        const last = vals[vals.length - 1] || 0;
+                        const d = last - first;
+                        const dPct = first ? Math.round((d / first) * 1000) / 10 : (last ? 100 : 0);
+                        const rUp = d >= 0;
                         return (
                           <tr key={r.label} className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50">
                             <td className="px-5 py-4 font-medium text-slate-800">{r.label}</td>
-                            <td className="px-5 py-4 text-right font-mono tabular-nums text-slate-500">{formatCurrency(r.a_revenue)}</td>
-                            <td className="px-5 py-4 text-right font-mono font-semibold tabular-nums text-slate-900">{formatCurrency(r.b_revenue)}</td>
-                            <td className="px-5 py-4 text-right font-mono font-medium tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{formatCurrency(r.delta)}</td>
-                            <td className="px-5 py-4 text-right font-mono tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{r.delta_pct}%</td>
+                            {vals.map((v, i) => (
+                              <td key={i} className={`px-5 py-4 text-right font-mono tabular-nums ${i === vals.length - 1 ? 'font-semibold text-slate-900' : 'text-slate-500'}`}>{formatCurrency(v)}</td>
+                            ))}
+                            <td className="px-5 py-4 text-right font-mono font-medium tabular-nums" style={{ color: rUp ? POS : NEG }}>{rUp ? '+' : ''}{formatCurrency(d)} <span className="text-xs opacity-70">({rUp ? '+' : ''}{dPct}%)</span></td>
                           </tr>
                         );
                       })}
@@ -595,21 +698,23 @@ function CompareView() {
 
               <div className={`${GLASS} p-6`} data-testid="ra-cmp-chart">
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-                  <SectionTitle>{aLabel} vs {bLabel} — by {dimLabel}</SectionTitle>
-                  <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART.cyan }} />{aLabel}</span>
-                    <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CHART.purple }} />{bLabel}</span>
+                  <SectionTitle>Revenue by {dimLabel}</SectionTitle>
+                  <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
+                    {periods.map((p, i) => (
+                      <span key={p.id} className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: CMP_BARS[i % CMP_BARS.length].solid }} />{p.short_label}</span>
+                    ))}
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={6} barCategoryGap="26%">
+                  <BarChart data={chartData} margin={{ left: 8, right: 8, bottom: 50 }} barGap={4} barCategoryGap="24%">
                     <ChartDefs />
                     <CartesianGrid stroke={GRID} strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} angle={-22} textAnchor="end" interval={0} height={60} tick={{ fill: '#475569', fontSize: 11 }} dy={6} />
                     <YAxis tickFormatter={compactAxis} axisLine={false} tickLine={false} tick={{ fill: AXIS, fontSize: 11 }} dx={-6} />
                     <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(15,23,42,0.04)' }} />
-                    <Bar dataKey="A" name={aLabel} fill="url(#raCmpA)" radius={[5, 5, 0, 0]} maxBarSize={26} />
-                    <Bar dataKey="B" name={bLabel} fill="url(#raCmpB)" radius={[5, 5, 0, 0]} maxBarSize={26} />
+                    {periods.map((p, i) => (
+                      <Bar key={p.id} dataKey={`p${i}`} name={p.short_label} fill={`url(#${CMP_BARS[i % CMP_BARS.length].id})`} radius={[5, 5, 0, 0]} maxBarSize={26} />
+                    ))}
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -635,7 +740,7 @@ export default function RevenueAnalytics() {
             </div>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-800 md:text-3xl">Revenue Analytics</h1>
-              <p className="mt-0.5 text-sm text-slate-500">Invoice revenue by city, category, SKU, territory &amp; state — with month-over-month comparison.</p>
+              <p className="mt-0.5 text-sm text-slate-500">Invoice revenue by city, category, SKU, territory &amp; state — with multi-period comparison.</p>
             </div>
           </div>
         </div>
@@ -654,7 +759,7 @@ export default function RevenueAnalytics() {
               data-testid="ra-tab-compare"
               className="rounded-lg px-4 py-2 font-medium text-slate-500 transition-all duration-200 hover:text-slate-800 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
             >
-              <GitCompareArrows className="mr-2 h-4 w-4" /> Compare Months
+              <GitCompareArrows className="mr-2 h-4 w-4" /> Compare
             </TabsTrigger>
           </TabsList>
           <TabsContent value="breakdown"><BreakdownView /></TabsContent>

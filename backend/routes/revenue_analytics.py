@@ -18,9 +18,9 @@ matches what users see on the Invoices tab.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from calendar import monthrange
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -353,6 +353,188 @@ async def revenue_compare(
         "rows": rows,
         "raw_group_count": len(union_labels),
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Multi-period comparison — compare 2–4 periods of the SAME granularity
+# (week / month / quarter / financial-year). Financial year = India FY
+# (April → March). Period ids:
+#   week    → "YYYY-Www"   e.g. "2026-W23"
+#   month   → "YYYY-MM"    e.g. "2026-06"
+#   quarter → "YYYY-Qn"    e.g. "2026-Q2"
+#   fy      → "YYYY"       (FY start year; "2025" == FY 2025-26)
+# ──────────────────────────────────────────────────────────────────────────
+PERIOD_TYPE = Literal["week", "month", "quarter", "fy"]
+_MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _resolve_period(period_type: str, pid: str) -> dict:
+    """Resolve a period id into {id, from, to, label, short_label, sort}."""
+    try:
+        if period_type == "month":
+            y_s, m_s = pid.split("-")
+            y, m = int(y_s), int(m_s)
+            if not 1 <= m <= 12:
+                raise ValueError
+            frm, to = _month_window(y, m)
+            label = f"{_MONTH_ABBR[m - 1]} {y}"
+            return {"id": pid, "from": frm, "to": to, "label": label, "short_label": label, "sort": frm}
+        if period_type == "quarter":
+            y_s, q_s = pid.split("-Q")
+            y, q = int(y_s), int(q_s)
+            if not 1 <= q <= 4:
+                raise ValueError
+            sm = (q - 1) * 3 + 1
+            em = sm + 2
+            last = monthrange(y, em)[1]
+            frm = f"{y:04d}-{sm:02d}-01"
+            to = f"{y:04d}-{em:02d}-{last:02d}"
+            short = f"Q{q} {y}"
+            label = f"Q{q} {y} ({_MONTH_ABBR[sm - 1]}\u2013{_MONTH_ABBR[em - 1]})"
+            return {"id": pid, "from": frm, "to": to, "label": label, "short_label": short, "sort": frm}
+        if period_type == "fy":
+            sy = int(pid)
+            frm = f"{sy:04d}-04-01"
+            to = f"{sy + 1:04d}-03-31"
+            short = f"FY {sy}-{str(sy + 1)[2:]}"
+            return {"id": pid, "from": frm, "to": to, "label": short, "short_label": short, "sort": frm}
+        if period_type == "week":
+            y_s, w_s = pid.split("-W")
+            y, w = int(y_s), int(w_s)
+            monday = date.fromisocalendar(y, w, 1)
+            sunday = monday + timedelta(days=6)
+            short = f"W{w} {y}"
+            if monday.month == sunday.month:
+                rng = f"{_MONTH_ABBR[monday.month - 1]} {monday.day}\u2013{sunday.day}"
+            else:
+                rng = f"{_MONTH_ABBR[monday.month - 1]} {monday.day}\u2013{_MONTH_ABBR[sunday.month - 1]} {sunday.day}"
+            label = f"W{w} {y} ({rng})"
+            return {"id": pid, "from": monday.isoformat(), "to": sunday.isoformat(),
+                    "label": label, "short_label": short, "sort": monday.isoformat()}
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=400, detail=f"Invalid period id '{pid}' for type '{period_type}'")
+    raise HTTPException(status_code=400, detail=f"Unknown period_type '{period_type}'")
+
+
+def _recent_periods(period_type: str, count: int) -> list[dict]:
+    """Most-recent-first list of selectable periods for the picker."""
+    today = datetime.now(timezone.utc).date()
+    ids: list[str] = []
+    if period_type == "month":
+        y, m = today.year, today.month
+        for _ in range(count):
+            ids.append(f"{y:04d}-{m:02d}")
+            m -= 1
+            if m == 0:
+                m, y = 12, y - 1
+    elif period_type == "quarter":
+        q = (today.month - 1) // 3 + 1
+        y = today.year
+        for _ in range(count):
+            ids.append(f"{y:04d}-Q{q}")
+            q -= 1
+            if q == 0:
+                q, y = 4, y - 1
+    elif period_type == "fy":
+        sy = today.year if today.month >= 4 else today.year - 1
+        for _ in range(count):
+            ids.append(str(sy))
+            sy -= 1
+    elif period_type == "week":
+        cur = today - timedelta(days=today.weekday())  # Monday of current ISO week
+        for _ in range(count):
+            iso = cur.isocalendar()
+            ids.append(f"{iso[0]:04d}-W{iso[1]:02d}")
+            cur -= timedelta(days=7)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown period_type '{period_type}'")
+    return [_resolve_period(period_type, pid) for pid in ids]
+
+
+@router.get("/reports/compare-periods")
+async def compare_periods(
+    period_type: PERIOD_TYPE = "month",
+    count: int = Query(0, ge=0, le=120),
+    _user: dict = Depends(get_current_user),
+):
+    """Selectable period options for the multi-period comparison picker."""
+    defaults = {"week": 26, "month": 24, "quarter": 12, "fy": 6}
+    n = count or defaults.get(period_type, 12)
+    return {"period_type": period_type, "periods": _recent_periods(period_type, n)}
+
+
+@router.get("/reports/revenue-compare-multi")
+async def revenue_compare_multi(
+    period_type: PERIOD_TYPE = "month",
+    periods: List[str] = Query(...),
+    group_by: GROUP_BY = "total",
+    top_n: int = Query(15, ge=1, le=200),
+    _user: dict = Depends(get_current_user),
+):
+    """Compare revenue across 2–4 periods of the same granularity. Rows are
+    paired by group label with one value per period; periods are sorted
+    chronologically and each carries a sequential delta vs the prior one."""
+    resolved = [_resolve_period(period_type, p) for p in periods]
+
+    # De-duplicate by id, then sort chronologically (baseline = earliest)
+    seen: set = set()
+    uniq: list[dict] = []
+    for r in resolved:
+        if r["id"] not in seen:
+            seen.add(r["id"])
+            uniq.append(r)
+    uniq.sort(key=lambda r: r["sort"])
+
+    if len(uniq) < 2:
+        raise HTTPException(status_code=400, detail="Select at least 2 distinct periods")
+    if len(uniq) > 4:
+        raise HTTPException(status_code=400, detail="A maximum of 4 periods can be compared")
+
+    aggs = []
+    for r in uniq:
+        groups = await _aggregate(r["from"], r["to"], group_by)
+        gmap = {g["label"]: g for g in groups}
+        total = sum(g.get("gross", 0) for g in groups)
+        aggs.append({"meta": r, "map": gmap, "total": total})
+
+    union_labels = list({lbl for a in aggs for lbl in a["map"].keys()})
+
+    def _key(lbl: str) -> float:
+        return max((a["map"].get(lbl) or {}).get("gross", 0) for a in aggs)
+
+    union_labels.sort(key=_key, reverse=True)
+    head = union_labels[:top_n]
+    tail = union_labels[top_n:]
+
+    rows = []
+    for lbl in head:
+        values = [round((a["map"].get(lbl) or {}).get("gross", 0.0), 2) for a in aggs]
+        rows.append({"label": lbl, "values": values})
+    if tail:
+        values = [round(sum((a["map"].get(l) or {}).get("gross", 0.0) for l in tail), 2) for a in aggs]
+        rows.append({"label": f"Others ({len(tail)})", "values": values, "is_others": True})
+
+    period_out = []
+    prev_total = None
+    for a in aggs:
+        t = round(a["total"], 2)
+        if prev_total is None:
+            d_val, d_pct = None, None
+        else:
+            d_val = round(t - prev_total, 2)
+            d_pct = round(((t - prev_total) / prev_total * 100) if prev_total else (100.0 if t else 0.0), 1)
+        period_out.append({**a["meta"], "total": t, "delta": d_val, "delta_pct": d_pct})
+        prev_total = t
+
+    return {
+        "period_type": period_type,
+        "group_by": group_by,
+        "periods": period_out,
+        "rows": rows,
+        "raw_group_count": len(union_labels),
+    }
+
 
 
 # ──────────────────────────────────────────────────────────────────────────

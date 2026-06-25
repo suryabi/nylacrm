@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-25 — Revenue Analytics: multi-period Compare (week/month/quarter/FY) ✅ (self-tested: API all 4 granularities + UI screenshots)
+- Replaced the fixed 2-month "Compare Months" with a flexible **Compare** tab: a "Compare by" dropdown (Week · Month · Quarter · Financial Year) + a multi-select to pick **2–4 periods** (capped at 4; extra options disabled).
+- Renders one stat card per period (baseline + sequential % vs previous), a table with one column per period + a "Δ (first→last)" column, and a grouped bar chart (one bar per period).
+- Backend: new `GET /reports/compare-periods` (selectable options) and `GET /reports/revenue-compare-multi` (2–4 periods, chronologically sorted, sequential deltas). FY = India April–March; week=ISO Mon–Sun. Labels e.g. "Q2 2026 (Apr–Jun)", "W23 2026 (Jun 2–8)", "FY 2025-26".
+- Fixed a granularity-switch race that briefly fetched with stale period ids (now clears selection on type change).
+
+
 ## 2026-06-25 — Apply Debit Notes during Stock-Out + debit badge wording fix ✅ (testing_agent verified, iterations 239-240)
 - **Bug fix**: Returns status badge wrongly read "Credit Note Created" for debit/missing returns. Now reads "Debit Note Created"/"Debit Issued" in BOTH the distributor `ReturnsTab.jsx` grid AND the global `CustomerReturnsList.js` page (badge label .replace(/Credit/g,'Debit') for return_type==='missing'). Also: global page column "Credit"→"Amount", summary "Total Credit"→"Total Value", expanded item headers + amount color amber for debit.
 - **Feature: apply debit notes during stock-out delivery** (customer owes for missing bottles → ADDS to billing):
