@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import {
   RotateCcw, Plus, Download, RefreshCw, Search, Calendar, Trash2,
   Check, X, Package, Truck, ShieldCheck, Eye, FileText, DollarSign, CreditCard,
-  Send, Clock, ExternalLink, Building2
+  Send, Clock, ExternalLink, Building2, PackageCheck, PackageX, ArrowDownCircle, ArrowUpCircle
 } from 'lucide-react';
 import axios from 'axios';
 import PayCustomerDialog from './PayCustomerDialog';
@@ -73,6 +73,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   // Create form
   const [createForm, setCreateForm] = useState({
     account_id: '',
+    return_type: 'returned',
     return_date: new Date().toISOString().split('T')[0],
     items: [],
     notes: ''
@@ -252,6 +253,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
         `${API_URL}/api/distributors/${distributorId}/returns`,
         {
           account_id: createForm.account_id,
+          return_type: createForm.return_type,
           return_date: createForm.return_date,
           items: createForm.items.map(item => ({
             sku_id: item.sku_id,
@@ -279,6 +281,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
   const resetCreateForm = () => {
     setCreateForm({
       account_id: '',
+      return_type: 'returned',
       return_date: new Date().toISOString().split('T')[0],
       items: [],
       notes: ''
@@ -599,7 +602,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                   <th className="text-left p-4 font-medium">Date</th>
                   <th className="text-center p-4 font-medium">Items</th>
                   <th className="text-right p-4 font-medium">Credit</th>
-                  <th className="text-center p-4 font-medium">Credit Note</th>
+                  <th className="text-center p-4 font-medium">Credit / Debit Note</th>
                   <th className="text-center p-4 font-medium">Factory Return</th>
                   <th className="text-center p-4 font-medium">Status</th>
                   <th className="text-center p-4 font-medium">Actions</th>
@@ -629,30 +632,35 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                         ₹{(ret.total_credit || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-4 text-center">
-                        {ret.credit_note_number ? (
-                          <div className="flex items-center justify-center gap-1.5">
-                            <Badge variant="outline" className="text-emerald-600 border-emerald-300 bg-emerald-50">
-                              {ret.credit_note_number}
-                            </Badge>
-                            {ret.zoho_creditnote_url && (
-                              <a
-                                href={ret.zoho_creditnote_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center text-emerald-700 hover:text-emerald-900 transition-colors"
-                                title={`View / download in Zoho Books (${ret.zoho_creditnote_number || ret.credit_note_number})`}
-                                data-testid={`view-zoho-creditnote-${ret.id}`}
-                              >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </a>
-                            )}
-                          </div>
-                        ) : ret.status === 'approved' ? (
-                          <span className="text-xs text-amber-600">Pending</span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
+                        {(() => {
+                          const isMissing = ret.return_type === 'missing';
+                          const noteNum = isMissing ? ret.debit_note_number : ret.credit_note_number;
+                          if (noteNum) {
+                            return (
+                              <div className="flex items-center justify-center gap-1.5" data-testid={`note-badge-${ret.id}`}>
+                                <Badge variant="outline" className={isMissing ? 'text-amber-700 border-amber-300 bg-amber-50' : 'text-emerald-600 border-emerald-300 bg-emerald-50'}>
+                                  {noteNum}
+                                </Badge>
+                                {!isMissing && ret.zoho_creditnote_url && (
+                                  <a
+                                    href={ret.zoho_creditnote_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="inline-flex items-center text-emerald-700 hover:text-emerald-900 transition-colors"
+                                    title={`View / download in Zoho Books (${ret.zoho_creditnote_number || ret.credit_note_number})`}
+                                    data-testid={`view-zoho-creditnote-${ret.id}`}
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                  </a>
+                                )}
+                              </div>
+                            );
+                          }
+                          return ret.status === 'approved'
+                            ? <span className="text-xs text-amber-600">Pending</span>
+                            : <span className="text-muted-foreground">-</span>;
+                        })()}
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -722,13 +730,58 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Customer Return</DialogTitle>
+            <DialogTitle>Track Customer Return</DialogTitle>
             <DialogDescription>
-              Record items returned by a customer
+              Track bottles returned or missing from a customer
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
+            {/* What are you tracking? — drives credit vs debit note */}
+            <div>
+              <Label className="mb-2 block">What are you tracking? <span className="text-red-500">*</span></Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCreateForm(prev => ({ ...prev, return_type: 'returned' }))}
+                  data-testid="return-type-returned"
+                  className={`text-left rounded-xl border-2 p-3.5 transition-all ${createForm.return_type === 'returned' ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200' : 'border-slate-200 bg-white hover:border-emerald-300'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${createForm.return_type === 'returned' ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-700'}`}>
+                      <PackageCheck className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 leading-tight">Returned bottles from customer</p>
+                      <p className="text-[11px] text-slate-500 leading-tight">Bottles physically returned</p>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 flex items-center gap-1.5 rounded-md bg-emerald-100/70 px-2 py-1 text-[11px] font-medium text-emerald-800">
+                    <ArrowDownCircle className="h-3.5 w-3.5" /> System will create a <b>Credit Note</b>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreateForm(prev => ({ ...prev, return_type: 'missing' }))}
+                  data-testid="return-type-missing"
+                  className={`text-left rounded-xl border-2 p-3.5 transition-all ${createForm.return_type === 'missing' ? 'border-amber-500 bg-amber-50 ring-2 ring-amber-200' : 'border-slate-200 bg-white hover:border-amber-300'}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${createForm.return_type === 'missing' ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-700'}`}>
+                      <PackageX className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 leading-tight">Missing bottles from customer</p>
+                      <p className="text-[11px] text-slate-500 leading-tight">Bottles not returned / lost</p>
+                    </div>
+                  </div>
+                  <div className="mt-2.5 flex items-center gap-1.5 rounded-md bg-amber-100/70 px-2 py-1 text-[11px] font-medium text-amber-800">
+                    <ArrowUpCircle className="h-3.5 w-3.5" /> System will generate a <b>Debit Note</b>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             {/* Account Selection — searchable picker (same UX as Stock Out) */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1017,9 +1070,9 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
             <Button variant="outline" onClick={() => { setShowCreateDialog(false); resetCreateForm(); }}>
               Cancel
             </Button>
-            <Button onClick={createReturn} disabled={saving || !createForm.account_id || createForm.items.length === 0}>
+            <Button onClick={createReturn} disabled={saving || !createForm.account_id || createForm.items.length === 0} data-testid="submit-track-return-btn">
               {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
-              Create Return
+              {createForm.return_type === 'missing' ? 'Track Missing (Debit Note)' : 'Track Return (Credit Note)'}
             </Button>
           </DialogFooter>
         </DialogContent>

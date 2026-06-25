@@ -44,6 +44,78 @@ async def generate_return_number(tenant_id: str) -> str:
     return f"RET-{year}-{new_num:04d}"
 
 
+async def generate_debit_note_number(tenant_id: str) -> str:
+    """Generate a unique debit note number (DN-YYYY-####)."""
+    year = datetime.now().year
+    latest = await db.debit_notes.find_one(
+        {"tenant_id": tenant_id, "debit_note_number": {"$regex": f"^DN-{year}-"}},
+        sort=[("debit_note_number", -1)]
+    )
+    new_num = 1
+    if latest:
+        try:
+            new_num = int(latest["debit_note_number"].split("-")[-1]) + 1
+        except (ValueError, IndexError):
+            new_num = 1
+    return f"DN-{year}-{new_num:04d}"
+
+
+async def create_debit_note_from_return(
+    tenant_id: str,
+    distributor_id: str,
+    return_doc: dict,
+    created_by: str = None,
+) -> dict:
+    """Create a DEBIT note for a 'missing bottles' return — the customer owes us
+    the value of the unreturned items. Stored in the `debit_notes` collection.
+    Zoho push is intentionally NOT wired yet (local-only this phase)."""
+    existing = await db.debit_notes.find_one(
+        {"tenant_id": tenant_id, "return_id": return_doc.get("id")}
+    )
+    if existing:
+        logger.info(f"Debit note already exists for return {return_doc.get('return_number')}")
+        existing.pop("_id", None)
+        return existing
+
+    dn_number = await generate_debit_note_number(tenant_id)
+    amount = return_doc.get("total_credit", 0)
+    now = datetime.now(timezone.utc)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "distributor_id": distributor_id,
+        "debit_note_number": dn_number,
+        "note_type": "debit",
+        "return_id": return_doc.get("id"),
+        "return_number": return_doc.get("return_number"),
+        "account_id": return_doc.get("account_id"),
+        "account_name": return_doc.get("account_name"),
+        "reason": "missing_bottles",
+        "original_amount": amount,
+        "balance_amount": amount,
+        "status": "pending",
+        "debit_note_date": now.strftime('%Y-%m-%d'),
+        "created_by": created_by,
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+    }
+    await db.debit_notes.insert_one(doc)
+    await db.customer_returns.update_one(
+        {"id": return_doc.get("id"), "tenant_id": tenant_id},
+        {"$set": {
+            "debit_note_id": doc["id"],
+            "debit_note_number": dn_number,
+            "updated_at": now.isoformat(),
+        }}
+    )
+    logger.info(
+        f"Created debit note {dn_number} for return {return_doc.get('return_number')} "
+        f"amount ₹{amount} (Zoho push not wired this phase)"
+    )
+    doc.pop("_id", None)
+    return doc
+
+
 async def calculate_item_credit(
     item: dict,
     reason: dict,
@@ -328,6 +400,7 @@ async def create_customer_return(
         account_id=data.account_id,
         account_name=account.get('account_name') or account.get('name'),
         account_city=account.get('city'),
+        return_type=(data.return_type if data.return_type in ('returned', 'missing') else 'returned'),
         return_date=data.return_date or datetime.now(timezone.utc).strftime('%Y-%m-%d'),
         received_by=current_user.get('name') or current_user.get('email'),
         items=processed_items,
@@ -421,24 +494,41 @@ async def approve_customer_return(
         }}
     )
     
-    # Auto-create credit note for the approved return
+    # Auto-create the accounting note for the approved return:
+    #  - returned bottles  → Credit Note (we owe the customer)
+    #  - missing bottles    → Debit Note  (the customer owes us)
+    is_missing = ret.get('return_type') == 'missing'
     credit_note = None
+    debit_note = None
     if ret.get('total_credit', 0) > 0:
-        try:
-            credit_note = await create_credit_note_from_return(
-                tenant_id=tenant_id,
-                distributor_id=distributor_id,
-                return_doc=ret,
-                created_by=current_user.get('id')
-            )
-            logger.info(f"Auto-created credit note {credit_note.get('credit_note_number')} for return {ret['return_number']}")
-        except Exception as e:
-            logger.error(f"Failed to create credit note for return {ret['return_number']}: {e}")
-    
+        if is_missing:
+            try:
+                debit_note = await create_debit_note_from_return(
+                    tenant_id=tenant_id,
+                    distributor_id=distributor_id,
+                    return_doc=ret,
+                    created_by=current_user.get('id'),
+                )
+                logger.info(f"Auto-created debit note {debit_note.get('debit_note_number')} for return {ret['return_number']}")
+            except Exception as e:
+                logger.error(f"Failed to create debit note for return {ret['return_number']}: {e}")
+        else:
+            try:
+                credit_note = await create_credit_note_from_return(
+                    tenant_id=tenant_id,
+                    distributor_id=distributor_id,
+                    return_doc=ret,
+                    created_by=current_user.get('id')
+                )
+                logger.info(f"Auto-created credit note {credit_note.get('credit_note_number')} for return {ret['return_number']}")
+            except Exception as e:
+                logger.error(f"Failed to create credit note for return {ret['return_number']}: {e}")
+
     return {
         "message": "Return approved",
         "status": "approved",
-        "credit_note": credit_note
+        "credit_note": credit_note,
+        "debit_note": debit_note,
     }
 
 

@@ -1,0 +1,43 @@
+{
+  "summary": "Verified the new Customer Returns 'return_type' feature end-to-end. Backend: 5/5 pytest tests pass — RETURNED approve→Credit Note (CN-...), MISSING approve→Debit Note (DN-YYYY-####) written to db.debit_notes with original==balance==total_credit, status='pending'; return doc reflects only debit_note_id/_number (no credit_note_id); default+invalid return_type fall back to 'returned'; re-approve is rejected (only draft → approved) so create_debit_note_from_return is effectively idempotent. Frontend: dialog title 'Track Customer Return', both choice cards present (return-type-returned default-emerald w/ 'Credit Note' advisory, return-type-missing amber w/ 'Debit Note' advisory), submit label toggles between 'Track Return (Credit Note)' and 'Track Missing (Debit Note)', note-badge-{id} renders CN-* (emerald) on existing returned rows.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": [
+    "tests/test_iteration_236_return_types.py::test_returned_path_creates_credit_note PASSED",
+    "tests/test_iteration_236_return_types.py::test_missing_path_creates_debit_note PASSED",
+    "tests/test_iteration_236_return_types.py::test_default_return_type_is_returned PASSED",
+    "tests/test_iteration_236_return_types.py::test_invalid_return_type_falls_back_to_returned PASSED",
+    "tests/test_iteration_236_return_types.py::test_cannot_reapprove_and_debit_note_is_idempotent PASSED",
+    "Playwright: dialog title 'Track Customer Return' confirmed",
+    "Playwright: return-type-returned default-selected (emerald-500 in class)",
+    "Playwright: return-type-missing selects (amber-500 in class) and submit label flips to 'Track Missing (Debit Note)'",
+    "Playwright: toggling back restores 'Track Return (Credit Note)'",
+    "Playwright: existing CN- badges render via [data-testid=note-badge-{id}]"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_236_return_types.py",
+    "/app/test_reports/pytest/iteration_236.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/customer_returns.py: approve endpoint does not require role check (only 'admins approve' is enforced via UI). Confirm RBAC at backend matches spec — at present any authenticated user with route access can call /approve. If CEO-only is required server-side, add a role guard.",
+    "calculate_item_credit ignores return_type — for 'missing' you still compute credit using sku_return_credit / full_price / percentage. This is intentional per spec ('debit amount = same total_credit') but worth a code comment so future maintainers do not 'fix' it.",
+    "create_debit_note_from_return idempotency works on the document level (early-return when existing), but the second /approve call now returns 400 before reaching it — so the idempotency guard is currently dead code. Either keep it as defense-in-depth (fine) or expose a re-issue endpoint that uses it.",
+    "Debit notes are stored in the same db.debit_notes collection as credit-note records share (per generate_debit_note_number regex on debit_note_number). Make sure no existing collection users assume note_type='credit' only — quick grep recommended.",
+    "ReturnsTab.jsx is large (>1000 lines) — splitting the Track-Return Dialog into its own component would help."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_236_return_types.py (new)"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "100% (UI assertions all passed)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (from /app/memory/test_credentials.md). Distributor used: Brian DIST-0003 (id bb12d90e-4d33-4890-ac5f-17573c551b5c).",
+  "seed_data_creation": "Backend tests created ~5 customer_returns (mix of returned/missing) for Brian and approved 4 of them. All created returns were deleted in fixture teardown; the linked debit_notes documents are NOT auto-cleaned (delete endpoint only cancels credit_notes). Operator may want to purge db.debit_notes where note_type='debit' and return_number not in db.customer_returns to keep dev data tidy.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Distributor Returns tab URL: /distributors/{id}?tab=returns (do NOT click the sidebar 'Customer Returns' — it navigates to global sales module page). Key selectors: create-return-btn, return-type-returned, return-type-missing, submit-track-return-btn, note-badge-{return_id}. Backend endpoints: POST/GET /api/distributors/{distributor_id}/returns, POST .../{return_id}/approve returns {credit_note, debit_note} where exactly one is non-null. For total_credit>0 use an account whose sku_pricing entry has return_bottle_credit>0 plus a return_reason with credit_type='sku_return_credit'.",
+  "rca of the issue": "n/a — no defects found"
+}

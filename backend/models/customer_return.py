@@ -77,6 +77,10 @@ class CustomerReturn(BaseModel):
     # Status
     status: str = "draft"  # draft, confirmed, processed, settled, cancelled
     
+    # Return type: 'returned' (bottles returned → credit note) or
+    # 'missing' (bottles missing → debit note charging the customer)
+    return_type: str = "returned"
+
     # Settlement linking
     settlement_id: Optional[str] = None
     settled_at: Optional[str] = None
@@ -111,6 +115,7 @@ class CustomerReturnItemCreate(BaseModel):
 class CustomerReturnCreate(BaseModel):
     """Schema for creating a customer return"""
     account_id: str
+    return_type: str = "returned"  # 'returned' (credit note) | 'missing' (debit note)
     return_date: Optional[str] = None  # Defaults to today
     items: List[CustomerReturnItemCreate] = Field(default_factory=list)
     notes: Optional[str] = None
