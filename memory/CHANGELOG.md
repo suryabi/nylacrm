@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-25 — Apply Debit Notes during Stock-Out + debit badge wording fix ✅ (testing_agent verified, iterations 239-240)
+- **Bug fix**: Returns status badge wrongly read "Credit Note Created" for debit/missing returns. Now reads "Debit Note Created"/"Debit Issued" in BOTH the distributor `ReturnsTab.jsx` grid AND the global `CustomerReturnsList.js` page (badge label .replace(/Credit/g,'Debit') for return_type==='missing'). Also: global page column "Credit"→"Amount", summary "Total Credit"→"Total Value", expanded item headers + amount color amber for debit.
+- **Feature: apply debit notes during stock-out delivery** (customer owes for missing bottles → ADDS to billing):
+  - Backend: new `GET /api/distributors/{id}/debit-notes/for-account/{account_id}`; `apply_debit_note_to_delivery()` (credit_notes.py) transitions debit note pending→partially_applied→applied, stores applied_to_delivery_number, marks originating return as debit-issued. `create_delivery` accepts `debit_notes_to_apply`, recomputes net_customer_billing = max(0, total_net − credits + debits). New model `DebitNoteApplicationCreate`.
+  - Frontend: new amber "Apply Debit Notes" section in Record Delivery dialog (DeliveriesTab.jsx) BELOW the green credit section; combined `net-billing-summary` block showing −credits and +debits. `handleCreateDelivery(credits, debits)` in DistributorDetail.js sends both.
+  - Verified: net math 8400 + 90 = 8490; debit note status flips to applied; return → "Debit Issued".
+
+
 ## 2026-06-25 — Fix hardcoded "Credit" wording in Debit return View Dialog ✅ (testing_agent verified, iteration_238, frontend 100%)
 - ReturnsTab.jsx View/Detail dialog now flow-aware via derived flags (`isMissingReturn`, `noteWord`, `amountAccentText`): for `return_type==='missing'` it shows "Total Debit", "Debit/Unit", "Debit Note Issued" (amber) and "Create Debit Note"; credit returns keep emerald wording. Status badge label transforms Credit→Debit for missing.
 - Create form item table switches to "Est. Debit"/"Total Estimated Debit" (amber) when missing selected.
