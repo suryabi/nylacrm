@@ -1,0 +1,53 @@
+{
+  "summary": "Iteration 237 — Debit reasons (note_type='debit') for missing-bottle customer returns. Backend pytest: 5/6 PASS — debit-reason auto-seed (4 defaults present), idempotency (4 rows after 2 fetches, no dupes), credit-filter excludes debit reasons, missing+debit → DN-YYYY-#### created, returned+credit → CN-* created. 1 FAIL: POST /api/return-reasons drops note_type (and applies_to) on persistence — server stores note_type='credit' even when payload says 'debit'. Frontend ReturnsTab UX wording verified end-to-end via Playwright (CEO on Brian DIST-0003): default Returned shows 'Add Returned Items'+'Credit Reason' (credit dropdown only); clicking 'return-type-missing' switches to 'Add Missing Items'+'Debit Reason'+'Missing Items' header and the reason field is cleared ('Select debit reason' placeholder) and now lists exactly the 4 default debit reasons (Not Returned, Lost at Customer, Broken at Customer, Pilferage) with zero credit leakage.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/return-reasons",
+        "issue": "Route handler create_return_reason does NOT pass note_type or applies_to into ReturnReason() constructor (only reason_code/name/description/category/credit_type/credit_percentage/return_to_factory/requires_inspection/display_order/color/created_by). As a result, any client-supplied note_type='debit' is silently stored as 'credit' (model default). Confirmed via test_create_debit_reason_and_update_note_type: POST {note_type:'debit'} -> GET shows note_type='credit'. Same drop bug affects applies_to (defaults to ['customer','distributor'] regardless of payload).",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": [
+    "tests/test_iteration_237_debit_reasons.py::test_debit_reasons_seeded_and_filtered PASSED",
+    "tests/test_iteration_237_debit_reasons.py::test_debit_seed_is_idempotent PASSED",
+    "tests/test_iteration_237_debit_reasons.py::test_credit_filter_excludes_debit PASSED",
+    "tests/test_iteration_237_debit_reasons.py::test_create_debit_reason_and_update_note_type FAILED (POST drops note_type)",
+    "tests/test_iteration_237_debit_reasons.py::test_missing_return_with_debit_reason_creates_debit_note PASSED",
+    "tests/test_iteration_237_debit_reasons.py::test_returned_with_credit_reason_creates_credit_note PASSED",
+    "Playwright ReturnsTab: default Returned shows 'Add Returned Items' + 'Credit Reason'; dropdown has credit reasons (Empty Return / Expired / Damaged Stock / Promotional/FOC); no debit leakage",
+    "Playwright ReturnsTab: clicked return-type-missing → 'Add Missing Items' + 'Debit Reason' + 'Missing Items' header present; 'Add Returned Items'/'Credit Reason' gone; reason placeholder = 'Select debit reason' (proves clear-on-switch)",
+    "Playwright ReturnsTab: debit dropdown lists all 4 defaults (Not Returned, Lost at Customer, Broken at Customer, Pilferage); no credit reason leakage"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_237_debit_reasons.py",
+    "/app/test_reports/pytest/iteration_237.xml"
+  ],
+  "action_items": [
+    "FIX backend/routes/return_reasons.py create_return_reason: pass note_type=data.note_type and applies_to=data.applies_to (and is_active if exposed) into the ReturnReason(...) constructor. Currently both fields are silently dropped, so the Tenant Settings 'Add Reason → Note Type = Debit' flow cannot persist a debit reason via the API. PUT works (uses model_dump) so editor can repair existing rows, but new ones default to credit."
+  ],
+  "critical_code_review_comments": [
+    "routes/return_reasons.py create_return_reason: explicit field copy is brittle — every time a new field is added to ReturnReasonCreate it must be remembered here. Recommend `ReturnReason(tenant_id=tenant_id, created_by=current_user.get('id'), **data.model_dump())` (matches what initialize-defaults does for DEFAULT_DEBIT_REASONS). This would have prevented the note_type/applies_to drop.",
+    "routes/return_reasons.py list endpoint: query['$and'] / query['$or'] are both written separately for note_type and applies_to filters — when BOTH are passed, the second assignment to query['$or'] (applies_to) overwrites the $or added under $and for note_type? Actually note_type uses $and+$or wrapper while applies_to writes $or directly, so combining them works but the construction is fragile. Consider always pushing into $and.",
+    "Auto-seed on first ?note_type=debit fetch is a side-effect on a GET — acceptable here but worth noting. If multiple concurrent first-fetches happen, insert_many could race and create duplicates (no unique index on reason_code+tenant_id). Consider an upsert or a uniqueness index.",
+    "Frontend Notes textarea placeholder text was not captured (Playwright picked up the global 'Ask Nyla' chat textarea). Worth adding a data-testid to the return-notes textarea so wording assertions are deterministic.",
+    "TenantSettings Returns tab (full UI assertion for reason-note-type-select and Credit/Debit badges) not fully exercised — second navigation lost session in this Playwright run. The reason-note-type-select is wired in code per the request; recommend main agent self-test after fixing the POST bug."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_237_debit_reasons.py (new)"
+  ],
+  "success_rate": {"backend": "83% (5/6)", "frontend": "100% (ReturnsTab wording + dropdown filter verified)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (from /app/memory/test_credentials.md). Distributor Brian DIST-0003 id bb12d90e-4d33-4890-ac5f-17573c551b5c.",
+  "seed_data_creation": "Backend tests created 1 custom debit reason (TEST_DEBIT_*) and 2 customer_returns (1 missing+debit, 1 returned+credit) on Brian. The custom reason was deleted in teardown; the returns were deleted in teardown but the linked credit_notes/debit_notes rows are NOT auto-cleaned by the DELETE endpoint (same caveat as iter236). Default debit reasons were already seeded prior to this run.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend bug = POST /api/return-reasons silently drops note_type and applies_to. Fix in routes/return_reasons.py create_return_reason (use **data.model_dump() or explicitly include note_type/applies_to). After fix, re-run pytest backend/tests/test_iteration_237_debit_reasons.py::test_create_debit_reason_and_update_note_type and then exercise TenantSettings → Returns tab → Add Reason dialog: reason-note-type-select (Credit/Debit) and the new row should render a Debit badge. ReturnsTab missing/returned wording + dropdown filtering already verified — selectors: create-return-btn, return-type-returned, return-type-missing, return-reason-select.",
+  "rca of the issue": "create_return_reason was authored before note_type/applies_to were added to ReturnReasonCreate. The constructor call explicitly enumerates fields, so the new fields fall back to ReturnReason model defaults (note_type='credit', applies_to=['customer','distributor']). PUT was unaffected because update_return_reason uses model_dump() and a $set update. Fix: replace the explicit kwargs with **data.model_dump() (plus tenant_id, created_by) — mirrors how initialize-defaults builds reasons from DEFAULT_DEBIT_REASONS."
+}

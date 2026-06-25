@@ -271,6 +271,7 @@ export default function TenantSettings() {
     return_to_factory: true,
     requires_inspection: false,
     applies_to: ['customer', 'distributor'],
+    note_type: 'credit',
     color: '#10B981'
   });
   
@@ -642,6 +643,7 @@ export default function TenantSettings() {
       return_to_factory: true,
       requires_inspection: false,
       applies_to: ['customer', 'distributor'],
+      note_type: 'credit',
       color: '#10B981'
     });
   };
@@ -661,6 +663,7 @@ export default function TenantSettings() {
       applies_to: Array.isArray(reason.applies_to) && reason.applies_to.length > 0
         ? reason.applies_to
         : ['customer'],  // legacy data → customer-only
+      note_type: reason.note_type || 'credit',
       color: reason.color || '#10B981'
     });
     setShowReasonDialog(true);
@@ -1518,6 +1521,7 @@ export default function TenantSettings() {
                           <div className="flex items-center gap-2">
                             <span className="font-medium">{reason.reason_name}</span>
                             <Badge variant="outline" className="text-xs">{reason.reason_code}</Badge>
+                            <Badge className={`text-xs ${reason.note_type === 'debit' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'}`}>{reason.note_type === 'debit' ? 'Debit' : 'Credit'}</Badge>
                             {reason.is_system && <Badge variant="secondary" className="text-xs">System</Badge>}
                             {!reason.is_active && <Badge variant="destructive" className="text-xs">Inactive</Badge>}
                           </div>
@@ -1632,6 +1636,22 @@ export default function TenantSettings() {
                     placeholder="Describe when this reason applies..."
                     rows={2}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Note Type</Label>
+                  <Select
+                    value={reasonForm.note_type || 'credit'}
+                    onValueChange={(v) => setReasonForm(prev => ({ ...prev, note_type: v }))}
+                  >
+                    <SelectTrigger data-testid="reason-note-type-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="credit">Credit — returned bottles (Credit Note)</SelectItem>
+                      <SelectItem value="debit">Debit — missing bottles (Debit Note)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">Determines which flow this reason appears in and whether a credit or debit note is generated.</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

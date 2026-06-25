@@ -476,6 +476,10 @@ class ReturnReason(BaseModel):
     # Applicability — which return flows can use this reason.
     # Possible values: 'customer', 'distributor'. Default: both.
     applies_to: List[str] = Field(default_factory=lambda: ['customer', 'distributor'])
+
+    # Which note this reason belongs to: 'credit' (returned bottles → credit note)
+    # or 'debit' (missing bottles → debit note).
+    note_type: str = "credit"
     
     # Status
     is_active: bool = True
@@ -507,6 +511,7 @@ class ReturnReasonCreate(BaseModel):
     return_to_factory: bool = True
     requires_inspection: bool = False
     applies_to: List[str] = Field(default_factory=lambda: ['customer', 'distributor'])
+    note_type: str = "credit"
     display_order: int = 0
     color: Optional[str] = None
 
@@ -521,6 +526,7 @@ class ReturnReasonUpdate(BaseModel):
     return_to_factory: Optional[bool] = None
     requires_inspection: Optional[bool] = None
     applies_to: Optional[List[str]] = None
+    note_type: Optional[str] = None
     is_active: Optional[bool] = None
     display_order: Optional[int] = None
     color: Optional[str] = None
@@ -579,5 +585,66 @@ DEFAULT_RETURN_REASONS = [
         "is_system": True,
         "display_order": 4,
         "color": "#6B7280"  # Gray
+    }
+]
+
+
+# Default DEBIT reasons (missing bottles → debit note). Editable later by admins.
+DEFAULT_DEBIT_REASONS = [
+    {
+        "reason_code": "NOT_RETURNED",
+        "reason_name": "Not Returned",
+        "description": "Customer did not return the bottles — charged at return value",
+        "category": "empty_reusable",
+        "credit_type": "sku_return_credit",
+        "return_to_factory": False,
+        "requires_inspection": False,
+        "applies_to": ["customer"],
+        "note_type": "debit",
+        "is_system": True,
+        "display_order": 1,
+        "color": "#F59E0B"  # Amber
+    },
+    {
+        "reason_code": "LOST_AT_CUSTOMER",
+        "reason_name": "Lost at Customer",
+        "description": "Bottles lost at the customer premises",
+        "category": "empty_reusable",
+        "credit_type": "sku_return_credit",
+        "return_to_factory": False,
+        "requires_inspection": False,
+        "applies_to": ["customer"],
+        "note_type": "debit",
+        "is_system": True,
+        "display_order": 2,
+        "color": "#F97316"  # Orange
+    },
+    {
+        "reason_code": "BROKEN_AT_CUSTOMER",
+        "reason_name": "Broken at Customer",
+        "description": "Bottles broken/damaged beyond return at the customer",
+        "category": "damaged",
+        "credit_type": "sku_return_credit",
+        "return_to_factory": False,
+        "requires_inspection": False,
+        "applies_to": ["customer"],
+        "note_type": "debit",
+        "is_system": True,
+        "display_order": 3,
+        "color": "#EF4444"  # Red
+    },
+    {
+        "reason_code": "PILFERAGE",
+        "reason_name": "Pilferage",
+        "description": "Bottles unaccounted for / pilfered",
+        "category": "empty_reusable",
+        "credit_type": "sku_return_credit",
+        "return_to_factory": False,
+        "requires_inspection": False,
+        "applies_to": ["customer"],
+        "note_type": "debit",
+        "is_system": True,
+        "display_order": 4,
+        "color": "#991B1B"  # Dark red
     }
 ]

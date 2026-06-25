@@ -114,10 +114,10 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
     }
   }, [distributorId, token, statusFilter, accountFilter]);
 
-  // Fetch return reasons
-  const fetchReturnReasons = useCallback(async () => {
+  // Fetch return reasons for the active flow (credit = returned, debit = missing)
+  const fetchReturnReasons = useCallback(async (noteType = 'credit') => {
     try {
-      const response = await axios.get(`${API_URL}/api/return-reasons?is_active=true&applies_to=customer`, {
+      const response = await axios.get(`${API_URL}/api/return-reasons?is_active=true&applies_to=customer&note_type=${noteType}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setReturnReasons(response.data.reasons || []);
@@ -171,8 +171,15 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
 
   useEffect(() => {
     fetchReturns();
-    fetchReturnReasons();
+    fetchReturnReasons('credit');
   }, [fetchReturns, fetchReturnReasons]);
+
+  // Re-fetch reasons for the selected flow whenever the choice changes.
+  useEffect(() => {
+    if (showCreateDialog) {
+      fetchReturnReasons(createForm.return_type === 'missing' ? 'debit' : 'credit');
+    }
+  }, [createForm.return_type, showCreateDialog, fetchReturnReasons]);
 
   // Fetch account SKUs when account changes in create form
   useEffect(() => {
@@ -743,7 +750,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setCreateForm(prev => ({ ...prev, return_type: 'returned' }))}
+                  onClick={() => setCreateForm(prev => ({ ...prev, return_type: 'returned', items: (prev.items || []).map(it => ({ ...it, reason_id: '', reason_name: '' })) }))}
                   data-testid="return-type-returned"
                   className={`text-left rounded-xl border-2 p-3.5 transition-all ${createForm.return_type === 'returned' ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200' : 'border-slate-200 bg-white hover:border-emerald-300'}`}
                 >
@@ -762,7 +769,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCreateForm(prev => ({ ...prev, return_type: 'missing' }))}
+                  onClick={() => setCreateForm(prev => ({ ...prev, return_type: 'missing', items: (prev.items || []).map(it => ({ ...it, reason_id: '', reason_name: '' })) }))}
                   data-testid="return-type-missing"
                   className={`text-left rounded-xl border-2 p-3.5 transition-all ${createForm.return_type === 'missing' ? 'border-amber-500 bg-amber-50 ring-2 ring-amber-200' : 'border-slate-200 bg-white hover:border-amber-300'}`}
                 >
@@ -905,7 +912,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
             {/* Add Item Form */}
             <div className="p-4 rounded-lg bg-muted/30 border space-y-4">
               <div className="flex items-center justify-between">
-                <p className="font-medium text-sm">Add Return Items</p>
+                <p className="font-medium text-sm">{createForm.return_type === 'missing' ? 'Add Missing Items' : 'Add Returned Items'}</p>
                 {!createForm.account_id && (
                   <p className="text-xs text-amber-600">Select an account first to see available SKUs</p>
                 )}
@@ -968,10 +975,10 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Return Reason</Label>
+                  <Label className="text-xs">{createForm.return_type === 'missing' ? 'Debit Reason' : 'Credit Reason'}</Label>
                   <Select value={itemForm.reason_id} onValueChange={(v) => setItemForm(prev => ({ ...prev, reason_id: v }))}>
                     <SelectTrigger className="h-9" data-testid="return-reason-select">
-                      <SelectValue placeholder="Select reason" />
+                      <SelectValue placeholder={createForm.return_type === 'missing' ? 'Select debit reason' : 'Select credit reason'} />
                     </SelectTrigger>
                     <SelectContent>
                       {returnReasons.map(reason => (
@@ -997,7 +1004,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
             {/* Items List */}
             {createForm.items.length > 0 && (
               <div className="space-y-2">
-                <Label>Return Items ({createForm.items.length})</Label>
+                <Label>{createForm.return_type === 'missing' ? 'Missing Items' : 'Returned Items'} ({createForm.items.length})</Label>
                 <div className="rounded-lg border overflow-hidden">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
@@ -1060,7 +1067,7 @@ export default function ReturnsTab({ distributorId, accounts = [], skus = [], ca
               <Textarea
                 value={createForm.notes}
                 onChange={(e) => setCreateForm(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Additional notes about this return..."
+                placeholder={createForm.return_type === 'missing' ? 'Additional notes about these missing bottles...' : 'Additional notes about this return...'}
                 rows={2}
               />
             </div>

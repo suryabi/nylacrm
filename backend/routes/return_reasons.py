@@ -13,7 +13,7 @@ from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.tenant import (
     ReturnReason, ReturnReasonCreate, ReturnReasonUpdate,
-    DEFAULT_RETURN_REASONS
+    DEFAULT_RETURN_REASONS, DEFAULT_DEBIT_REASONS
 )
 
 router = APIRouter(tags=["Return Reasons"])
@@ -25,18 +25,43 @@ async def list_return_reasons(
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     category: Optional[str] = Query(None, description="Filter by category"),
     applies_to: Optional[str] = Query(None, description="Filter by applicability — 'customer' or 'distributor'"),
+    note_type: Optional[str] = Query(None, description="Filter by note type — 'credit' or 'debit'"),
     current_user: dict = Depends(get_current_user)
 ):
     """List all return reasons for the current tenant"""
     tenant_id = get_current_tenant_id()
-    
+
+    # Auto-seed default DEBIT reasons for tenants that were initialized before
+    # debit reasons existed (one-time, idempotent).
+    if note_type == 'debit':
+        has_debit = await db.return_reasons.count_documents({"tenant_id": tenant_id, "note_type": "debit"})
+        if has_debit == 0:
+            now = datetime.now(timezone.utc)
+            seed = []
+            for rd in DEFAULT_DEBIT_REASONS:
+                seed.append(ReturnReason(tenant_id=tenant_id, created_by=current_user.get("id"),
+                                         created_at=now, updated_at=now, **rd).model_dump())
+            if seed:
+                await db.return_reasons.insert_many(seed)
+
     query = {"tenant_id": tenant_id}
-    
+
     if is_active is not None:
         query["is_active"] = is_active
     
     if category:
         query["category"] = category
+
+    if note_type:
+        # Match the requested note_type OR legacy rows with no note_type (→ credit).
+        if note_type == 'credit':
+            query["$and"] = query.get("$and", []) + [{"$or": [
+                {"note_type": "credit"},
+                {"note_type": {"$exists": False}},
+                {"note_type": None},
+            ]}]
+        else:
+            query["note_type"] = note_type
 
     if applies_to:
         # Match reasons that include the requested side OR have no applies_to set
@@ -59,6 +84,8 @@ async def list_return_reasons(
     for r in reasons:
         if not r.get("applies_to"):
             r["applies_to"] = ["customer"]
+        if not r.get("note_type"):
+            r["note_type"] = "credit"
     
     return {"reasons": reasons, "total": len(reasons)}
 
@@ -290,9 +317,9 @@ async def initialize_default_reasons(
     if existing_count > 0:
         return {"message": "Return reasons already exist", "count": existing_count}
     
-    # Create default reasons
+    # Create default reasons (credit + debit)
     created = []
-    for reason_data in DEFAULT_RETURN_REASONS:
+    for reason_data in (DEFAULT_RETURN_REASONS + DEFAULT_DEBIT_REASONS):
         reason = ReturnReason(
             tenant_id=tenant_id,
             **reason_data,
