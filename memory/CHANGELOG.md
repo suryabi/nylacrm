@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-25 — Promo Stock-Out: "Crates" column → "Items" with per-row unit of measure ✅ (testing_agent verified, iteration_242, 100%)
+- Bug: Promotional Stock-Out table hardcoded a "Crates" header even when items were crates/cartons/bottles, etc.
+- Backend (`promo_dispatch.py`): `list_promo_dispatches` now attaches a derived `unit_label` per dispatch via `_promo_unit_label()` (reads line items' packaging_type_name from distributor_delivery_items / promo_dispatch_items; strips size suffix like "(12)", lowercases last word). Single shared unit → that word; mixed/unknown → null.
+- Frontend (`PromoDispatchSection.jsx`): column header "Crates" → "Items"; each row shows the qty pill with a small unit sub-label (crate/crates, bottle/bottles, or generic item/items when null); date subtotal shows the group's unit (or "items" if mixed). data-testid `promo-unit-<id>`.
+- Verified live: a "Crate (12)" item → unit_label "crate". Existing seeds with null packaging correctly show "items".
+
+
 ## 2026-06-25 — Promo Dispatch challan: condensed Notes to fit 1 page ✅ (testing_agent verified, iteration_241)
 - Bug: the Zoho-generated Promo Dispatch delivery challan printed on 2 pages because the auto Notes was ~9 lines (3-line banner + up to 6 separate recipient lines).
 - Fix (`zoho_service.create_delivery_challan_for_promo_dispatch`): Notes now = **2 lines** — line 1 single-line "NOT FOR SALE · NO COMMERCIAL VALUE…" banner; line 2 all recipient details (Recipient, Ph, Reason, Vehicle, Driver, Remarks) joined with " · ".
