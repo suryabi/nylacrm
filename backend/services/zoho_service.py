@@ -2278,24 +2278,25 @@ async def create_delivery_challan_for_promo_dispatch(
     if not line_items:
         raise RuntimeError(f"Promo dispatch {dispatch.get('challan_number')} has no items to push.")
 
-    # The banner the user explicitly asked for — same wording as the existing
-    # local PDF — placed at the top of `notes` so it shows on the printed
-    # Zoho delivery-challan PDF.
-    banner = (
-        "*** NOT FOR SALE · NO COMMERCIAL VALUE ***\n"
-        "Promotional / non-sale stock-out. Indicative values for asset "
-        "tracking only — no GST applicable, no consideration receivable.\n"
-    )
-    recipient_block = (
+    # Condensed to TWO short lines so the printed Zoho challan stays on ONE
+    # page (the recipient details were previously 6 separate lines, which pushed
+    # the notes block onto a 2nd page). Banner = 1 line; recipient = 1 line.
+    banner = "*** NOT FOR SALE · NO COMMERCIAL VALUE — Promotional stock-out (no GST, no consideration receivable) ***"
+    recipient_bits = [
         f"Recipient: {dispatch.get('contact_name') or '—'}"
         + (f" ({dispatch.get('contact_company')})" if dispatch.get('contact_company') else "")
-        + (f"\nPhone: {dispatch.get('contact_phone')}" if dispatch.get('contact_phone') else "")
-        + (f"\nReason: {dispatch.get('promo_reason')}" if dispatch.get('promo_reason') else "")
-        + (f"\nVehicle: {dispatch.get('vehicle_number')}" if dispatch.get('vehicle_number') else "")
-        + (f"\nDriver: {dispatch.get('driver_name')}" if dispatch.get('driver_name') else "")
-        + (f"\nRemarks: {dispatch.get('remarks')}" if dispatch.get('remarks') else "")
-    )
-    notes = (banner + "\n" + recipient_block).strip()
+    ]
+    if dispatch.get('contact_phone'):
+        recipient_bits.append(f"Ph: {dispatch.get('contact_phone')}")
+    if dispatch.get('promo_reason'):
+        recipient_bits.append(f"Reason: {dispatch.get('promo_reason')}")
+    if dispatch.get('vehicle_number'):
+        recipient_bits.append(f"Vehicle: {dispatch.get('vehicle_number')}")
+    if dispatch.get('driver_name'):
+        recipient_bits.append(f"Driver: {dispatch.get('driver_name')}")
+    if dispatch.get('remarks'):
+        recipient_bits.append(f"Remarks: {dispatch.get('remarks')}")
+    notes = (banner + "\n" + " · ".join(recipient_bits)).strip()
 
     payload = {
         "customer_id": customer_id,

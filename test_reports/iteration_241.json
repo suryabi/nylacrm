@@ -1,0 +1,23 @@
+{
+  "summary": "Verified the Promo Dispatch Zoho delivery-challan NOTES condensation fix. The new unit tests (test_zoho_promo_challan_notes.py) both PASS, confirming notes is exactly 2 lines: line 1 contains the 'NOT FOR SALE' banner and line 2 collapses all recipient details (Recipient, Ph:, Reason:, Vehicle:, Driver:, Remarks:) onto one line joined by ' · '. Minimal-dispatch case also produces exactly 2 lines with line 2 == 'Recipient: Ravi Kumar'. Regression suites (test_zoho_debit_note_lines.py and test_zoho_warehouse_branch_gst.py) all 4 tests PASS. Backend supervisor log shows clean 'Application startup complete' after the change — only pre-existing ActiveMQ 'could not connect' warnings (explicitly noted as unrelated).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_zoho_promo_challan_notes.py",
+    "/app/backend/tests/test_zoho_debit_note_lines.py",
+    "/app/backend/tests/test_zoho_warehouse_branch_gst.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "services/zoho_service.py is 2853 lines — exceeds the 700-line guideline. Consider splitting per-document-type Zoho builders (invoice, debit note, delivery challan, stock transfer, promo dispatch) into separate modules. Pre-existing, not introduced by this fix.",
+    "Recipient name fallback uses an em-dash literal ('—'). Fine for now, but if Zoho's print font ever drops em-dash glyph it would render as a box. Low priority."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (6/6 tests)", "frontend": "skipped (backend-only request)"},
+  "test_credentials": "N/A — unit tests with mocked Zoho HTTP and DB",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Promo-dispatch challan notes are now 2 lines. The actual single-page PDF render is owned by Zoho's print template and can only be confirmed in production after redeploy — unit-level assertions are the correct proxy here. Re-run `pytest tests/test_zoho_promo_challan_notes.py tests/test_zoho_debit_note_lines.py tests/test_zoho_warehouse_branch_gst.py -v` if zoho_service.py changes.",
+  "rca of the issue": "Previous notes block had ~9 lines: a 3-line NOT-FOR-SALE banner + 6 per-field recipient lines, which overflowed Zoho's challan template to a 2nd printed page. Fix in services/zoho_service.py L2281-2299 collapses banner to a single line and joins all conditionally-included recipient fields with ' · ' on a single second line. Verified by capturing the POST /books/v3/deliverychallans payload via a mocked _zoho_request and asserting len(notes.split('\\n')) == 2 for both the full and the minimal-contact-only cases."
+}
