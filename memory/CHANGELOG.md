@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-25 — Debit notes reflected in Zoho as TAXABLE invoice line items ✅ (unit-tested w/ mocked Zoho + DB; live push verifiable only in prod where Zoho is connected)
+- Decision (user): Option A — reflect on the delivery invoice; **taxable line item WITH GST** (not the GST-neutral post-tax adjustment used for credit notes).
+- `create_debit_note_from_return` now copies the per-SKU breakdown onto the debit note (`items`: sku_id, sku_name, quantity, rate_per_unit, line_total).
+- `create_invoice_for_delivery` (zoho_service.py) now appends taxable line items for each applied debit note: **full** application → one line per SKU using the SKU's Zoho `item_id` (so GST auto-applies via the item's tax mapping); **partial** → a single line on a representative SKU item with rate = amount applied. Falls back gracefully (line without item_id) if a SKU isn't mapped, so the invoice push never breaks.
+- Tests: `tests/test_zoho_debit_note_lines.py` (full + partial line-item assertions) pass; existing `test_zoho_warehouse_branch_gst.py` still passes (no regression). DN now persists items (verified DN-2026-0007).
+- NOTE: Zoho is **not connected in preview**, so the actual invoice in Zoho can only be confirmed in **production** after redeploy.
+
+
 ## 2026-06-25 — Stock Transfer: editable quantities post-completion (CEO/System Admin) ✅ (self-tested: curl + DB delta verification + UI screenshot + 403 role check)
 - New `PATCH /api/distributor/stock-transfers/{id}/quantities` (role-gated to **CEO / System Admin**, 403 otherwise). Edits line quantities on a **completed** transfer and applies the inventory **delta** to both warehouses — correctly routing factory vs distributor stock (`factory_warehouse_stock` / `distributor_stock`) so the Stock Dashboard stays accurate. Verified: SRC factory −24, DST distributor +24, then reverted to 0/19 cleanly.
 - Recomputes `total_packages` / `total_units` / `total_value`; keeps an **audit trail** (`quantity_edits`: edited_by/role/reason/old→new). Source stock is allowed to go negative (per ops choice).

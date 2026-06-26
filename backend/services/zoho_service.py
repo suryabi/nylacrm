@@ -1343,6 +1343,64 @@ async def create_invoice_for_delivery(
             + ". Add pricing under Account → SKU Pricing before this delivery can be pushed to Zoho."
         )
 
+    # ── Missing-bottle Debit Notes → TAXABLE line items on the invoice ──────
+    # When a debit note (customer owes us for unreturned bottles) is applied to
+    # this delivery, charge it back as real taxable line items so Zoho applies
+    # GST via each SKU's tax mapping. Full application pushes the per-SKU lines;
+    # a partial application pushes a single line (on a representative SKU item so
+    # GST still applies) whose rate equals the applied amount.
+    applied_dns = delivery.get("applied_debit_notes") or []
+    for entry in applied_dns:
+        dn_id = entry.get("debit_note_id")
+        try:
+            amount_applied = float(entry.get("amount_applied") or 0)
+        except (TypeError, ValueError):
+            amount_applied = 0.0
+        if not dn_id or amount_applied <= 0:
+            continue
+        dn = await db.debit_notes.find_one({"id": dn_id, "tenant_id": tenant_id}) or {}
+        dn_number = entry.get("debit_note_number") or dn.get("debit_note_number") or ""
+        dn_items = dn.get("items") or []
+        try:
+            original_amount = float(dn.get("original_amount") or 0)
+        except (TypeError, ValueError):
+            original_amount = 0.0
+        is_full = bool(dn_items) and abs(amount_applied - original_amount) < 0.01
+
+        async def _dn_item_id(sku_id):
+            if not sku_id:
+                return None
+            try:
+                return await get_zoho_item_id(tenant_id, sku_id)
+            except Exception as e:
+                logger.warning(f"[zoho] No Zoho item mapping for debit-note SKU {sku_id}: {e}")
+                return None
+
+        if is_full:
+            for di in dn_items:
+                zid = await _dn_item_id(di.get("sku_id"))
+                line = {
+                    "name": (di.get("sku_name") or "Missing Bottle Recovery").strip(),
+                    "description": f"Missing / unreturned bottles — {dn_number}",
+                    "quantity": float(di.get("quantity") or 0),
+                    "rate": float(di.get("rate_per_unit") or 0),
+                }
+                if zid:
+                    line["item_id"] = zid
+                line_items.append(line)
+        else:
+            rep_sku = dn_items[0].get("sku_id") if dn_items else None
+            zid = await _dn_item_id(rep_sku)
+            line = {
+                "name": f"Missing Bottle Recovery — {dn_number}",
+                "description": "Charge for unreturned / missing bottles",
+                "quantity": 1,
+                "rate": round(amount_applied, 2),
+            }
+            if zid:
+                line["item_id"] = zid
+            line_items.append(line)
+
     invoice_payload = {
         "customer_id": customer_id,
         "reference_number": delivery.get("delivery_number"),

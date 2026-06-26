@@ -93,6 +93,18 @@ async def create_debit_note_from_return(
         "reason": "missing_bottles",
         "original_amount": amount,
         "balance_amount": amount,
+        # Per-SKU breakdown copied from the return — used to push taxable
+        # line items onto the delivery's Zoho invoice when this DN is applied.
+        "items": [
+            {
+                "sku_id": it.get("sku_id"),
+                "sku_name": it.get("sku_name"),
+                "quantity": it.get("quantity"),
+                "rate_per_unit": it.get("credit_per_unit"),
+                "line_total": it.get("total_credit"),
+            }
+            for it in (return_doc.get("items") or [])
+        ],
         "status": "pending",
         "debit_note_date": now.strftime('%Y-%m-%d'),
         "created_by": created_by,
