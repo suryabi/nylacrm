@@ -1,0 +1,28 @@
+{
+  "summary": "Verified iteration 242 bug-fix: PromoDispatchSection 'Crates' -> 'Items' rename with derived per-row unit label. Backend GET /api/distributors/{id}/promo-deliveries returns unit_label on each dispatch. Frontend distributor detail (Brian) > Stock Out tab shows the Promotional Stock-Out section with the new header and proper per-row + subtotal unit labels. No regressions observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_242_promo_unit_label.py",
+    "/app/test_reports/pytest/iteration_242.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_promo_unit_label regex r'\\(.*\\)$' only strips a trailing parenthesised suffix. Names like 'Crate (12) Pack' or 'Crate (12)/box' would not be normalised (minor; existing seeds are unaffected).",
+    "next(iter(words)) on a set is non-deterministic ordering, but only matters when |words|==1 so it's safe here.",
+    "Aggregating items by joining 10k+ docs via $in is fine for current scale; consider an aggregation pipeline if dispatches per distributor grow large."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "None. Used existing seeded DC-2606-0001..0006 challans for Brian (bb12d90e-4d33-4890-ac5f-17573c551b5c).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest: /app/backend/tests/test_iteration_242_promo_unit_label.py (3/3 pass). Frontend: distributor /distributors/<id> -> 'Stock Out' tab contains the Promotional Stock-Out (Delivery Challan) table. data-testids in use: promo-dispatches-table, promo-date-group-<key>, promo-dispatch-row-<id>, promo-unit-<id>, promo-date-subtotal-<key>, promo-status-<id>. Seeded items currently have no packaging_type_name -> they correctly render 'item'/'items' (expected, not a bug).",
+  "verification_evidence": {
+    "header_text_observed": ["Challan #", "Contact", "Reason", "From", "Items", "Indicative Value", "Status", "Zoho", "Challan", "Actions"],
+    "row_units_observed": ["item x5", "items x3"],
+    "subtotal_units_observed": ["3 items / 3 challans", "6 items / 4 challans (1 reversed)", "1 item / 1 challan"],
+    "regressions_checked": ["reversed strike-through OK", "indicative value formatting OK", "status badges OK", "9 dispatch rows + 3 subtotals rendered"]
+  }
+}

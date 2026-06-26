@@ -23,6 +23,7 @@ from typing import Optional
 from datetime import datetime, timezone
 import uuid
 import logging
+import re
 
 from database import db
 from deps import get_current_user
@@ -658,6 +659,23 @@ async def _load_promo(tenant_id: str, distributor_id: str, dispatch_id: str):
     return None, None, None
 
 
+def _promo_unit_label(items: list) -> Optional[str]:
+    """Derive the unit-of-measure word (e.g. 'crate', 'bottle', 'carton') shared
+    by a dispatch's line items so the list can show '12 crates' instead of a
+    hardcoded 'Crates' column. Returns the singular word when all items use the
+    same packaging unit, else None (frontend then shows the generic 'items')."""
+    words = set()
+    for it in items or []:
+        name = (it.get("packaging_type_name") or "").strip()
+        if not name:
+            continue
+        base = re.sub(r"\(.*\)$", "", name).strip()  # drop "(12)" size suffix
+        parts = base.split()
+        if parts:
+            words.add(parts[-1].lower())
+    return next(iter(words)) if len(words) == 1 else None
+
+
 @router.get("/distributors/{distributor_id}/promo-deliveries")
 async def list_promo_dispatches(distributor_id: str, current_user: dict = Depends(get_current_user)):
     if not can_manage_distributor_data(current_user, distributor_id):
@@ -666,10 +684,33 @@ async def list_promo_dispatches(distributor_id: str, current_user: dict = Depend
     new_rows = await db.distributor_deliveries.find(
         {"tenant_id": tenant_id, "distributor_id": distributor_id, "is_promo": True}, {"_id": 0}).to_list(2000)
     rows = [_promo_delivery_response(r) for r in new_rows]
+
+    # Attach the per-dispatch unit label (crate / bottle / carton …) so the UI
+    # shows the right unit per row instead of a fixed "Crates" header.
+    new_ids = [r["id"] for r in rows if r.get("id")]
+    items_by_did: dict = {}
+    if new_ids:
+        for it in await db.distributor_delivery_items.find(
+            {"tenant_id": tenant_id, "delivery_id": {"$in": new_ids}},
+            {"_id": 0, "delivery_id": 1, "packaging_type_name": 1},
+        ).to_list(20000):
+            items_by_did.setdefault(it.get("delivery_id"), []).append(it)
+    for r in rows:
+        r["unit_label"] = _promo_unit_label(items_by_did.get(r.get("id"), []))
+
     legacy = await db.promo_dispatches.find(
         {"tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0}).to_list(2000)
+    legacy_ids = [r["id"] for r in legacy if r.get("id")]
+    legacy_items: dict = {}
+    if legacy_ids:
+        for it in await db.promo_dispatch_items.find(
+            {"tenant_id": tenant_id, "dispatch_id": {"$in": legacy_ids}},
+            {"_id": 0, "dispatch_id": 1, "packaging_type_name": 1},
+        ).to_list(20000):
+            legacy_items.setdefault(it.get("dispatch_id"), []).append(it)
     for r in legacy:
         r["is_legacy"] = True
+        r["unit_label"] = _promo_unit_label(legacy_items.get(r.get("id"), []))
     rows.extend(legacy)
     rows.sort(key=lambda d: d.get("created_at", ""), reverse=True)
     return {"dispatches": rows}
