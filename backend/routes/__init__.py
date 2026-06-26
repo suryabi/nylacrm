@@ -34,6 +34,7 @@ from .lead_proposals import router as lead_proposals_router
 from .distributors import router as distributors_router
 from .task_management import router as task_management_router
 from .return_reasons import router as return_reasons_router
+from .accounting_masters import router as accounting_masters_router
 from .customer_returns import router as customer_returns_router
 from .customer_returns_list import router as customer_returns_list_router
 from .credit_notes import router as credit_notes_router
@@ -106,6 +107,7 @@ routes_router.include_router(task_management_router, prefix="/task-management", 
 
 # Return Reasons Master
 routes_router.include_router(return_reasons_router, prefix="/return-reasons", tags=["Return Reasons"])
+routes_router.include_router(accounting_masters_router, tags=["Accounting Masters"])
 
 # Customer Returns (under distributors)
 routes_router.include_router(customer_returns_router, prefix="/distributors", tags=["Customer Returns"])

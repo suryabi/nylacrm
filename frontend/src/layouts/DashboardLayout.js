@@ -291,6 +291,7 @@ const adminNavigationGroups = [
   {
     title: 'Finance & Audit',
     items: [
+      { name: 'Accounting Masters', href: '/accounting/masters', icon: Calculator, roles: ['CEO', 'Director', 'System Admin', 'Admin', 'Vice President', 'Head of Business'] },
       { name: 'Reversals Log', href: '/admin/reversals', icon: RotateCcw, roles: ADMIN_ONLY_ROLES },
     ],
   },
