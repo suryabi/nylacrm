@@ -404,11 +404,11 @@ def _resolve_period(period_type: str, pid: str) -> dict:
             y, w = int(y_s), int(w_s)
             monday = date.fromisocalendar(y, w, 1)
             sunday = monday + timedelta(days=6)
-            short = f"W{w} {y}"
             if monday.month == sunday.month:
                 rng = f"{_MONTH_ABBR[monday.month - 1]} {monday.day}\u2013{sunday.day}"
             else:
                 rng = f"{_MONTH_ABBR[monday.month - 1]} {monday.day}\u2013{_MONTH_ABBR[sunday.month - 1]} {sunday.day}"
+            short = f"W{w} {y} \u00b7 {rng}"
             label = f"W{w} {y} ({rng})"
             return {"id": pid, "from": monday.isoformat(), "to": sunday.isoformat(),
                     "label": label, "short_label": short, "sort": monday.isoformat()}
