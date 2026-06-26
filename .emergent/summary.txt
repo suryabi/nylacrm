@@ -1,31 +1,37 @@
-<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, Document Sharing, dynamic PDF generation, delivery routing logic, and State Machine workflows. PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, and robust workflow approvals. 
+<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, Document Sharing, dynamic PDF generation, delivery routing logic, and State Machine workflows. User also requested the creation of a comprehensive Accounting module to categorize transactions (Expense Type, Category, Department, Cost Center, etc.). PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, robust workflow approvals, and a dedicated accounting master data architecture.
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features include advanced Lead/Account management, dynamic Proposal and Delivery Challan PDF generation, and a State Machine module managing workflows with newly added notification templates. The delivery module handles Stock-Outs and Promo Stock-Outs grouped by relative dates. A Track Customer Return flow allows distinguishing between Returned (Credit Note) and Missing (Debit Note) tracking. 
+A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features include advanced Lead/Account management, dynamic PDF generation, State Machine workflows, Delivery grouping, and a Track Customer Return flow supporting both Credit (Returned) and Debit (Missing) notes. It also features a Revenue Analytics dashboard with multi-period comparison, editable post-completion Stock Transfers, and Zoho Books integration for invoices and delivery challans. A newly added Accounting Masters module allows hierarchical data management for expenses.
 
 **Last working item**: 
-    - Last item agent was working: The user noted a bug in the newly built Debit Note flow for tracking missing customer returns. When viewing a specific debit-type return in the detail/view modal, the UI hardcodes Credit wording everywhere (e.g., Total Credit, Credit Note Created, Return Credit). The agent was investigating  to dynamically switch wording based on the  or .
+    - Last item agent was working: Moving the newly created Accounting Masters out of the Sales context and making Accounting a standalone top-level module in the frontend app module switcher (alongside Sales, Distribution, Marketing). The agent was inspecting  to implement this.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? testing_agent
+    - Which testing method agent to use? screenshot tool
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:  
-  Issue 1: Hardcoded Credit wording in Customer Return view/detail modal for Debit flows (P0)
-     - Attempted fixes: The agent just started grepping the frontend code for  to find the  state and modal rendering blocks. 
-     - Next debug checklist: 
-        1. Open .
-        2. Locate the View Return Dialog (triggered by clicking a return row).
-        3. Use conditional rendering based on  to dynamically change text from Credit to Debit (e.g., Total Debit, Debit Note, Amount Owed).
-        4. Check if any summary columns or badges (like the green  span) inside the view modal need color/text tweaks.
-     - Why fix this issue and what will be achieved with the fix? Completes the Debit flow feature correctly and prevents user confusion between refunds and missing inventory charges.
-     - Status: IN PROGRESS
+  Issue 1: 12-vs-11 data-testid match in Accounting Masters frontend (P2)
+     - Attempted fixes: None. Was flagged in the  testing agent report as a minor test suite artifact/duplicate.
+     - Next debug checklist: Check  for duplicate  values or update the regex match in the frontend test suite.
+     - Why fix this issue and what will be achieved with the fix? Ensures clean automated testing reports without false positives.
+     - Status: NOT STARTED
      - Is recurring issue? N
      - Should Test frontend/backend/both after fix? frontend
+     - Blocked on other issue: None
 
-  Issue 2: Gemini API Key returns 403 PERMISSION DENIED (P2)
+  Issue 2: Slack Integration failing for Marketing Requests (P2)
+     - Attempted fixes: Verified bot configuration previously.
+     - Next debug checklist: User needs to confirm production environment configurations.
+     - Why fix this issue and what will be achieved with the fix? Ensures notifications flow correctly.
+     - Status: USER VERIFICATION PENDING
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? backend
+     - Blocked on other issue: User action required
+
+  Issue 3: Gemini API Key returns 403 PERMISSION DENIED (P2)
      - Attempted fixes: Key provided by user resulted in GCP denial in previous forks.
      - Next debug checklist: Await user providing a valid key from a brand new Google Cloud project.
      - Why fix this issue and what will be achieved with the fix? Required for KB/Embeddings.
@@ -33,15 +39,6 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features include adva
      - Is recurring issue? Y
      - Should Test frontend/backend/both after fix? backend
      - Blocked on other issue: User action required
-
-  Issue 3: Slack Integration failing for Marketing Requests (P2)
-     - Attempted fixes: Verified bot configuration previously.
-     - Next debug checklist: User needs to confirm production environment configurations.
-     - Why fix this issue and what will be achieved with the fix? Ensures notifications flow correctly.
-     - Status: USER VERIFICATION PENDING
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? backend
-     - Blocked on other issue: None
 
   Issue 4: ActiveMQ subscriber logging warnings (P2)
      - Attempted fixes: None yet.
@@ -63,12 +60,13 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features include adva
 **Upcoming and Future Tasks**
     Upcoming Tasks:
     - P0: SKU Hierarchy & Variant Management Phase 1 (Model + CRUD + UI for Variant Config). *NOTE: User explicitly requested to PLAN ONLY and NOT START coding yet. The plan is saved in .* Wait for user's explicit go-ahead.
+    - P1: Refactor  (~2,850 lines) — split the per-document Zoho builders (invoice, debit note, challan, promo) into separate modules for maintainability.
     - P1: Bloated  collection & MinIO integration: Build  settings page to replace base64 mongo storage.
     - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
     - P1: Happenstance integration (Agent asked user for API key & scope previously, pending user answer).
     
     Future Tasks:
-    - P2: Debit Notes report tab showing totals of what customers owe for missing bottles (by customer/period) for finance to chase recoveries.
+    - P2: Amounts Owed report tab showing totals of what customers owe for missing bottles (by customer/period) for finance to chase recoveries.
     - P2: Auto-attach generated Presentations to the Lead/Account and Document Sharing framework.
     - P2: Auto-suggest Vehicle on distributor deliveries based on customer city.
     - P2: KB Phase 2: Per-document permissions, embedding-based retrieval, Google Drive auto-sync.
@@ -76,18 +74,15 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features include adva
     - P2: Inventory Management Module - Phase 2+ (Stock Entries, Purchase Receipts, Adjustments).
 
 **Completed work in this session**
-- Finished Collapsible Date Grouping UI & verified Bottles vs Crates PDF packaging fix (DONE)
-- Added 'Google Maps Link' feature with QR code generation priority over GPS/text search; integrated  on all 5 relevant forms (DONE)
-- Renamed Delivery Orders module to Stock Delivery Requests site-wide (DONE)
-- Fixed bug where  field wasn't persisting to DB for Contacts and Accounts (DONE)
-- Added Subtotal Rows at the bottom of each date grouping in Stock Out & Promo Dispatch tables (DONE)
-- Fixed bug where delivery completion overwrote the planned  instead of preserving it (DONE)
-- Added inline 'pencil' edit capability to  on Stock-Out rows (DONE)
-- Excluded Reversed/Cancelled transactions from subtotals and grand totals + added strike-through styling (DONE)
-- Replaced the Past grouping UI pill with relative text (e.g., 9 days ago) (DONE)
-- Built State Machine Transition Notification framework (email/in-app) + new Notification Templates UI module (DONE)
-- Restructured Contact forms: created specific Delivery Address and Alternative Contact sections with dual-fields (DONE)
-- Upgraded Track Customer Return flow: distinct Credit (Returned) vs Debit (Missing) flows with separate return reasons and document construction (DONE)
+- Fixed hardcoded Credit Note Created terminology in Track Customer Return modal for Debit/Missing returns (DONE)
+- Added Apply Debit Notes feature to the Stock-Out / Delivery Record dialog, correctly adjusting net billing math and persisting states (DONE)
+- Upgraded Revenue Analytics Compare tab to support multi-select (up to 4 periods) across Week, Month, Quarter, and FY (DONE)
+- Enabled editable quantities on completed Stock Transfers for CEO/System Admin roles with an audit trail and proper delta inventory routing (DONE)
+- Integrated Customer Debit Notes as taxable line items (with GST) pushed to Zoho Books delivery invoices (DONE)
+- Updated Revenue Analytics week labels to display actual date ranges (e.g., W23 2026 · Jun 1-7) (DONE)
+- Condensed auto-generated Notes in Zoho Promo Dispatch Delivery Challans to 2 lines to prevent 2-page PDF spillage (DONE)
+- Updated Crates to Items with per-row dynamic unit of measure labels in the Promotional Stock-Out table (DONE)
+- Built the new Accounting Masters module (Model, Router, and UI) supporting flat and hierarchical expense categories (DONE)
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: usage: pdfplumber [-h] [--structure | --structure-text]
@@ -128,86 +123,86 @@ options:
 
 **Code Architecture**
 - : Core FastAPI router.
-- : Domain routers (, , , , , , ).
-- : Helpers like  and .
+- : Domain routers (, , , , ,  etc.).
 - : Main views (, , ).
 - : UI partials (, , ).
-- : Resusable inputs like .
+- : Top-level module switching logic.
 
 **Key Technical Concepts**
 -  handles auth via  globally.
-- Deliveries group logic relies on formatting dates relative to 'today'.
-- Approvals leverage a dynamic JSON-based State Machine architecture; Transitions can now dispatch templated notifications via .
+- Multi-period comparisons process aggregate chronological sorting with sequential deltas.
+- Zoho service logic relies heavily on matching  and overriding default tax behaviors locally.
 
 **key DB schema**
-  -  / : Tracks outbound delivery runs and promo requests.
-  - : Used to build both Credit Notes and Debit Notes based on .
-  - : Populated with  flags (credit vs debit) for frontend dropdown filters.
-  - : Custom message bodies for multi-channel state machine notifications.
+  - : New collection storing Expense Types, Categories, Cost Centers, Departments, etc. Supports hierarchical data ().
+  - : Handles applied debit/credit notes array tracking.
+  - : Now stores per-SKU line items ( array) to push taxable amounts to Zoho.
+  - : Audits array for quantity edits (, , ).
 
 **changes in tech stack**
-  - Created standalone API endpoints & routing for .
+  - None
 
 **All files of reference** 
-  -  (Currently holds hardcoded Credit text in the view dialog)
+  -  (Currently modifying to make Accounting a top-level module)
+  -  (Route registration)
   - 
   - 
-  -  (Do not implement until user says so)
 
 **Areas that need refactoring**: 
-  - The  file is ~1280 lines long. The Add/Edit form could be extracted into a  component for maintainability.
-  - Base64 storage approach for legacy Documents should be refactored to Object Storage (MinIO).
+  -  is approaching 3000 lines. It should be refactored into distinct modules (invoice, challan, debit note, promo).
+  -  (~1280 lines).
 
 **key api endpoints**
   - 
   - 
+  - 
+  - 
 
 **Critical Info for New Agent** 
-  - Jump immediately to fixing the Credit wording in the View Return Dialog in . Look for  or similar logic to toggle Debit wording.
-  - Always remember that the backend auth mechanism prioritizes the httpOnly session cookie. 
-  - Remind the user that fixes are only visible on Preview until they redeploy.
+  - Continue immediately with moving Accounting into a top-level module in  alongside Sales, Distribution, Marketing. Ensure the  is rendered strictly under this new context.
+  - Remind the user that all new features/fixes are visible only on Preview until they push a redeploy to Production (crm.nylaairwater.earth).
 
 **documents and test reports created in this job** 
   - 
   - 
-  -  through 
+  -  to 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - User: Can you highlight entire address section to be more distinctly visible with clear section header... (Agent implemented Delivery/Alternative Address sections)
- - User: Instead of create customer return, make it track customer return... generate debit note or credit note based on missing vs returned. (Agent built debit/credit split paths).
- - User: In debit note flow the system should also capture the SKU, quantity and reason... wording should change according to user's choice. (Agent built specific debit reasons and adapted UI).
- - User: I chose the debit flow however, system is showing wording credit everywhere. Look at the screen shot. (Agent in progress of fixing the detail view modal).
- *PENDING HUMAN MESSAGES*: None. Proceed to fix the Credit hardcoding in the view modal in .
+ - User: The distributor stock transfer- there should be an optiton to CEO and Admin to be able to edit the quantities... (Agent built edit quantities flow with audit trailing)
+ - User: Debit note should be created in zoho , what needs to be done ? (Agent asked preference, user asked for taxable line item with GST, Agent implemented it).
+ - User: The weeks shows W23 , W24 and such but it should also show exact time range... (Agent fixed week labels).
+ - User: The notes , in the delivery challan that is currently getting created using Zoho integration has some issue... taking 2 pages. (Agent condensed Promo dispatch notes to 2 lines).
+ - User: Currently the promotional stock out has a column name as crates. But the unit of mesaures could be crates or bottles... (Agent converted to Items with dynamic ).
+ - User: I would like to create a comprehensive accounting module... Expense Type, Expense Category... (Agent built  module).
+ - User: Accounting should be a separate module along with sales , distribution, marketing .. cant be in sales Continue (Agent started modifying module switcher in ).
+ *PENDING HUMAN MESSAGES*: None. Proceed to separate the Accounting Module in .
 
 **Project Health Check:**
-Broken: The detail view modal for  inside  shows incorrect terminology for missing stock.
+Broken: None.
 Mocked: None.
 
 **3rd Party Integrations** 
- - Zoho Books (Requires User API Key)
+ - Zoho Books (Requires User API Key - Note: Not connected in Preview environment)
  - Google Maps API (Requires User API Key)
  - Slack API (Bot token webhook)
  - Resend (Configured via env vars)
  - Meta WhatsApp Cloud API (Pending integration, requires User API Keys)
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iterations 227 - 237)
+  - Testing agent used after significant changes: YES (Iterations 238 to 243)
   - Troubleshoot agent used after agent stuck in loop: NO
   - Test files created:  to 
-  - Known regressions: None detected, but verify the View Dialog correctly displays standard credits when required, alongside the new debits.
+  - Known regressions: None detected.
 
 **Credentials to test flow:**
 Refer to  (CEO: surya.yadavalli@nylaairwater.earth / test123)
 
 **What agent forgot to execute**
-The agent modified the Create Customer Return flow thoroughly, but forgot to comb the *View/Detail* dialog ( state) for hardcoded occurrences of the word Credit and Credit Note. 
+Agent successfully started creating the Accounting Module but stopped midway while editing  to elevate the accounting section to a top-level App Module context (sibling to Sales/Distribution/Marketing).
 
 **Debugging checklist for current issue**
-    Issue: Track Customer Return View Dialog shows Credit terminology for Debit/Missing returns.
+    Issue: Accounting is currently grouped under the Sales or generic context. It needs to be a top-level module in the app switcher.
 
     Frontend files to check:
     - 
-      *Action:* Search for  rendering blocks (approx lines 1080-1200 depending on recent edits). Use conditional checks like  to dynamically display Debit, Total Debit, and Debit Note Generated. Also verify the summary rows/badges use correct coloring (perhaps Amber/Red for debit owed instead of Emerald for credit back).
-
-    Backend files to check:
-    - Ensure  endpoint explicitly passes  properly back to the frontend (Agent verified this earlier but worth a sanity check).</analysis>
+      *Action:* Find the  array or object that defines 'Sales', 'Distribution', 'Marketing'. Add an 'Accounting' entry. Ensure the sidebar items for  render only when the active context is 'Accounting'.</analysis>

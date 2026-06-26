@@ -31,7 +31,7 @@ sys.path.insert(0, "/app/backend")
 from dotenv import load_dotenv  # noqa: E402
 load_dotenv("/app/backend/.env")
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://supply-chain-hub-229.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://expense-hierarchy-v1.preview.emergentagent.com").rstrip("/")
 TENANT_ID = "nyla-air-water"
 CEO_EMAIL = "surya.yadavalli@nylaairwater.earth"
 CEO_PASSWORD = "test123"
