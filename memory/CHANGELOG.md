@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-06-25 — Promo Dispatch challan: condensed Notes to fit 1 page ✅ (testing_agent verified, iteration_241)
+- Bug: the Zoho-generated Promo Dispatch delivery challan printed on 2 pages because the auto Notes was ~9 lines (3-line banner + up to 6 separate recipient lines).
+- Fix (`zoho_service.create_delivery_challan_for_promo_dispatch`): Notes now = **2 lines** — line 1 single-line "NOT FOR SALE · NO COMMERCIAL VALUE…" banner; line 2 all recipient details (Recipient, Ph, Reason, Vehicle, Driver, Remarks) joined with " · ".
+- Verified by testing_agent via mocked-Zoho unit tests (`tests/test_zoho_promo_challan_notes.py`, full + minimal) + regression suites pass; backend starts clean.
+- NOTE: PDF pagination itself is governed by Zoho's print template — actual 1-page result confirmable only in **production** (Zoho not connected in preview).
+
+
 ## 2026-06-25 — Debit notes reflected in Zoho as TAXABLE invoice line items ✅ (unit-tested w/ mocked Zoho + DB; live push verifiable only in prod where Zoho is connected)
 - Decision (user): Option A — reflect on the delivery invoice; **taxable line item WITH GST** (not the GST-neutral post-tax adjustment used for credit notes).
 - `create_debit_note_from_return` now copies the per-SKU breakdown onto the debit note (`items`: sku_id, sku_name, quantity, rate_per_unit, line_total).
