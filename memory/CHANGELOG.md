@@ -628,3 +628,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Expense Type list replaced with authoritative 10-item list; one-time guarded swap removes legacy short defaults (OPEX/COGS/CAPEX/Financial/Tax) and installs full list without touching user-created values.
 - All seeding is code-driven on first API access → auto-populates in PRODUCTION after redeploy (separate DB; no manual migration needed).
 - PENDING: Expense Category 3-level hierarchy seeding (awaiting user answers on 4 ambiguous level-2 parents: Software/Logistics/HR/Travel). Also pending: standalone Employees & Vendors pages + City-from-Admin-Locations (field lists awaiting confirmation).
+
+## 2026-06-27 (cont.) — Expense Category hierarchy + standalone Vendors/Employees ✅
+- Seeded 3-level Expense Category tree (11 roots, 137 nodes): IT>Software Licenses(11), HR>Salaries(6), Production>Raw Materials(9), Marketing>Digital Marketing(6), Production>Utilities(4), Admin>Repairs(4); extra L1s under Logistics (Local Transport, Interstate Freight, Cold Chain, Last Mile Delivery) and Travel (Airfare, Hotel Stay, Toll Charges, Food). Seeder is duplicate-aware (merges with existing nodes) + run-once marker (accounting_seed_markers key expense_category_v1).
+- Removed Vendor, Employee, City/Location from Accounting Masters tabs (MASTER_TYPES). City is now sourced from Admin → Locations everywhere.
+- New standalone Accounting pages: Vendors (/accounting/vendors) and Employees (/accounting/employees) with rich fields (GSTIN/PAN/bank/payment terms/TDS etc.; employees: dept/designation/DOJ/PAN/bank/linked CRM user). City via /api/master-locations/flat datalist; Vendor Type via /api/vendor-types. Backend: routes/accounting_entities.py (accounting_vendors / accounting_employees collections).
+- Sidebar (Accounting module): Accounting Masters, Vendors, Employees.
+- Verified: iteration_246 — 16/16 backend + all frontend flows PASS. Only a cosmetic React Select warning (non-blocking).
