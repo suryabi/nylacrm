@@ -2605,10 +2605,24 @@ async def update_shipment(
     return updated
 
 
+async def _safe_sync_shipment_to_zoho(tenant_id: str, distributor_id: str, shipment_id: str) -> None:
+    """Background wrapper around sync_shipment_to_zoho that swallows the
+    expected skip case (Zoho not configured/connected) so it doesn't surface as
+    a noisy task error. Real failures are already recorded by the orchestrator."""
+    from services.zoho_service import sync_shipment_to_zoho, ZohoPushSkippedError
+    try:
+        await sync_shipment_to_zoho(tenant_id, distributor_id, shipment_id)
+    except ZohoPushSkippedError as e:
+        logger.info(f"Zoho shipment push skipped for {shipment_id}: {e}")
+    except Exception:
+        logger.exception(f"Unexpected error during Zoho shipment push for {shipment_id}")
+
+
 @router.post("/{distributor_id}/shipments/{shipment_id}/confirm")
 async def confirm_shipment(
     distributor_id: str,
     shipment_id: str,
+    background_tasks: BackgroundTasks,
     current_user: dict = Depends(get_current_user)
 ):
     """Confirm a draft shipment - marks it ready for dispatch"""
@@ -2708,6 +2722,11 @@ async def confirm_shipment(
     )
     
     logger.info(f"Shipment {shipment['shipment_number']} confirmed by {current_user['email']}")
+    
+    # On confirm, push a Zoho Books Tax Invoice billing the distributor (best-effort,
+    # with retry). The shipment is flagged zoho_push_pending on failure so the UI can
+    # offer a manual Retry. Skipped cleanly when Zoho is not configured/connected.
+    background_tasks.add_task(_safe_sync_shipment_to_zoho, tenant_id, distributor_id, shipment_id)
     
     return {"message": f"Shipment {shipment['shipment_number']} confirmed successfully", "status": "confirmed"}
 
@@ -3300,6 +3319,48 @@ async def cancel_shipment(
     logger.info(f"Shipment {shipment['shipment_number']} cancelled by {current_user['email']} (source_restored={source_restored})")
     
     return {"message": f"Shipment {shipment['shipment_number']} cancelled", "status": "cancelled"}
+
+
+@router.post("/{distributor_id}/shipments/{shipment_id}/retry-zoho-push")
+async def retry_shipment_zoho_push(
+    distributor_id: str,
+    shipment_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Manually re-attempt the Zoho Books invoice push for a confirmed shipment."""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0}
+    )
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+    if shipment.get("status") in ("draft", "cancelled", "reversed"):
+        raise HTTPException(status_code=400, detail="Only confirmed/dispatched/delivered shipments can be invoiced.")
+
+    from services.zoho_service import sync_shipment_to_zoho, ZohoPushSkippedError
+    try:
+        await sync_shipment_to_zoho(tenant_id, distributor_id, shipment_id)
+    except ZohoPushSkippedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    fresh = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id},
+        {"_id": 0, "zoho_invoice_url": 1, "zoho_invoice_number": 1, "zoho_invoice_id": 1, "zoho_push_error": 1},
+    )
+    if not fresh.get("zoho_invoice_url"):
+        raise HTTPException(
+            status_code=400,
+            detail=fresh.get("zoho_push_error") or "Zoho push completed but no invoice URL was produced. Check that the source warehouse is mapped to a Zoho Branch and SKUs have Zoho item mappings.",
+        )
+    return {
+        "message": "Zoho invoice generated.",
+        "zoho_invoice_url": fresh.get("zoho_invoice_url"),
+        "zoho_invoice_number": fresh.get("zoho_invoice_number"),
+        "zoho_invoice_id": fresh.get("zoho_invoice_id"),
+    }
 
 
 async def _readd_shipment_source_stock(tenant_id: str, shipment: dict) -> None:

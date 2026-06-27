@@ -23,7 +23,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2, MoreVertical, ChevronDown, ChevronRight
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2, MoreVertical, ChevronDown, ChevronRight, Cable
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -2341,6 +2341,20 @@ export default function DistributorDetail() {
     }
   };
 
+  const handleRetryShipmentZoho = async (shipmentId) => {
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/shipments/${shipmentId}/retry-zoho-push`, {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      toast.success(data?.message || 'Zoho invoice generated');
+      fetchShipments();
+      viewShipmentDetail(shipmentId);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to generate Zoho invoice');
+    }
+  };
+
   const handleGenerateProvisionalInvoice = async (shipmentId) => {
     try {
       await axios.post(`${API_URL}/api/distributors/${id}/provisional-invoices/generate?shipment_id=${shipmentId}`, {}, {
@@ -3125,6 +3139,36 @@ export default function DistributorDetail() {
                   ? 'Margin applied upfront at the time of shipment. Transfer price = Base price - Margin.'
                   : 'Cost-based pricing. Margin applied at the time of reconciliation based on customer sell-through.'}
               </div>
+
+              {/* Zoho Books invoice status (generated on Confirm) */}
+              {!['draft', 'cancelled', 'reversed'].includes(selectedShipment.status) && (
+                <div className="rounded-md border px-3 py-2.5 flex items-center justify-between gap-3" data-testid="shipment-zoho-status">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Cable className="h-4 w-4 text-emerald-600" />
+                    {selectedShipment.zoho_invoice_url ? (
+                      <span className="text-slate-700">
+                        Zoho invoice <span className="font-semibold">{selectedShipment.zoho_invoice_number || ''}</span> generated.
+                      </span>
+                    ) : selectedShipment.zoho_push_pending ? (
+                      <span className="text-amber-700">Zoho invoice push pending{selectedShipment.zoho_push_error ? `: ${selectedShipment.zoho_push_error}` : ''}</span>
+                    ) : (
+                      <span className="text-slate-500">No Zoho invoice yet for this stock-in.</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedShipment.zoho_invoice_url && (
+                      <a href={selectedShipment.zoho_invoice_url} target="_blank" rel="noopener noreferrer" data-testid="shipment-zoho-view-link">
+                        <Button variant="outline" size="sm"><FileText className="h-4 w-4 mr-1.5" /> View in Zoho</Button>
+                      </a>
+                    )}
+                    {canManage && !selectedShipment.zoho_invoice_url && (
+                      <Button variant="outline" size="sm" onClick={() => handleRetryShipmentZoho(selectedShipment.id)} data-testid="shipment-zoho-retry-btn">
+                        <RefreshCw className="h-4 w-4 mr-1.5" /> {selectedShipment.zoho_push_pending ? 'Retry Zoho push' : 'Generate Zoho invoice'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Discrepancy review panel (admin) */}
               {selectedShipment.status === 'discrepancy_pending' && (

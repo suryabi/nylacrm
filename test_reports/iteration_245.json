@@ -1,0 +1,48 @@
+{
+  "summary": "Backend-only verification of Stock-In shipment Zoho push wiring in Preview (Zoho NOT connected). Confirmed that POST .../confirm still succeeds (200, status=confirmed, source stock deducted) and the background Zoho push is gracefully skipped (no zoho_invoice_url / zoho_invoice_id, no hard failure). Verified retry-zoho-push endpoint returns HTTP 400 with the expected clear messages for confirmed (Zoho not connected) and draft/cancelled/reversed (Only confirmed/dispatched/delivered shipments can be invoiced). Also re-ran the iteration_244 reverse/cancel regression suite — all 8 cases still pass. 14/14 tests green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_shipment_zoho_push.py",
+    "/app/backend/tests/test_shipment_reverse_cancel.py",
+    "/app/test_reports/pytest/iteration_245_zoho.xml",
+    "/app/test_reports/pytest/iteration_245_regression.xml"
+  ],
+  "tests_executed": [
+    "TestZohoConfirmWiring::test_confirm_succeeds_when_zoho_not_connected -> PASS (confirm returns 200, status=confirmed, source -QTY; after background task no zoho_invoice_url/id; reverse restores source)",
+    "TestZohoRetryEndpoint::test_retry_on_confirmed_returns_400_zoho_skipped -> PASS (HTTP 400, detail='Zoho Books is not connected for this tenant. Go to Settings → Integrations → Zoho Books and click Connect.')",
+    "TestZohoRetryEndpoint::test_retry_on_draft_returns_400 -> PASS (HTTP 400, detail contains 'Only confirmed/dispatched/delivered shipments can be invoiced.')",
+    "TestZohoRetryEndpoint::test_retry_on_cancelled_returns_400 -> PASS",
+    "TestZohoRetryEndpoint::test_retry_on_reversed_returns_400 -> PASS",
+    "TestZohoRetryEndpoint::test_retry_on_nonexistent_returns_404 -> PASS",
+    "Regression (iteration_244) test_shipment_reverse_cancel.py -> 8/8 PASS"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "retry_shipment_zoho_push currently 404s for a non-existent shipment BEFORE the status check — that is correct; but it also accepts in_transit / discrepancy_pending statuses by exclusion (status not in draft/cancelled/reversed). If business logic does not want to allow invoicing in_transit shipments, tighten the allowlist instead of denylist.",
+    "_safe_sync_shipment_to_zoho only swallows ZohoPushSkippedError. Any other unexpected exception (network, malformed Zoho response, code bug) inside sync_shipment_to_zoho will propagate to the BackgroundTasks loop. sync_shipment_to_zoho does set zoho_push_pending on failure but its outer try should also catch Exception so a background crash never affects observability.",
+    "distributors.py is now ~9518 lines — well over the 700-line guideline. The Zoho retry, reverse, cancel and zoho-related helpers are good candidates to extract into a dedicated module/router.",
+    "retry_shipment_zoho_push reads back only zoho_invoice_url and treats absence as a generic 400. If sync_shipment_to_zoho writes zoho_push_error, it is surfaced — good. Ensure that field is reset on every retry attempt so stale errors don't mask new ones.",
+    "Background task scheduled in confirm endpoint runs after the response is returned; clients calling retry-zoho-push immediately after confirm may race with the background task. Consider a short debounce or an idempotency flag in sync_shipment_to_zoho to avoid duplicate pushes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_shipment_zoho_push.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Tenant: nyla-air-water). Distributor Brian id bb12d90e-4d33-4890-ac5f-17573c551b5c, dest Delhi loc aa2eda05-1902-4a17-92bb-d33533535297, source factory warehouse 6eb87219-5585-4d73-8bc4-3c563da62233, SKU 49e14d21-7f9a-4ed2-ad4c-3b69cadb4252, batch 63e5d415-d2c1-4251-93b3-37a6628f568a.",
+  "seed_data_creation": "No seed required. Each test creates its own shipment (qty=4) and reverses or cancels it so source pool is restored. A handful of TEST-ZOHO-* / TEST-REV-* shipments remain on distributor Brian in reversed or cancelled status as audit records.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_shipment_zoho_push.py for Zoho wiring regression and /app/backend/tests/test_shipment_reverse_cancel.py for stock-restoration regression. Both are self-contained and verify real persisted stock/state via the public API. NOTE: success-path (real Zoho invoice creation) cannot be tested in Preview because Zoho is not connected. Once tenant connects Zoho in a non-preview env, add positive-path tests asserting zoho_invoice_url is populated after confirm and that retry returns 200 with a URL.",
+  "rca of the issue": "N/A — requested feature wiring works as designed. Confirm endpoint schedules _safe_sync_shipment_to_zoho via BackgroundTasks AFTER updating status=confirmed and deducting factory stock; the helper catches ZohoPushSkippedError, so Zoho being disconnected never causes confirm to fail. retry-zoho-push enforces (1) shipment exists -> 404 else 200 path, (2) status not in draft/cancelled/reversed else 400, (3) propagates ZohoPushSkippedError as 400 with a human-readable reason."
+}

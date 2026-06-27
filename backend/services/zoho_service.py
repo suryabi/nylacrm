@@ -2850,3 +2850,243 @@ async def update_stock_transfer_zoho_quantities(tenant_id: str, transfer_doc: di
             f"{transfer_doc.get('transfer_number')}: {e}"
         )
         return {"ok": False, "error": str(e)[:500], "action": "failed"}
+
+
+# ---------- Stock In (factory → distributor shipment) Tax Invoice ----------
+
+async def create_invoice_for_shipment(
+    *, tenant_id: str, shipment: dict, items: list[dict], distributor: dict
+) -> dict:
+    """Push a Nyla Stock In (factory → distributor) shipment as a Zoho Books
+    *Tax Invoice*, billing the DISTRIBUTOR who receives the stock.
+
+    Pricing follows EXACTLY what the Stock In record already stores: each line's
+    `unit_price` already encodes the distributor's billing approach —
+      • cost-based  → unit_price == base_price (margin applied later at reconciliation)
+      • margin_upfront → unit_price == transfer_price (= base − margin)
+    so we simply push `rate = unit_price` and let the per-SKU Zoho item tax
+    mapping apply GST (same model as `create_invoice_for_delivery`).
+
+    Sibling of `create_invoice_for_stock_transfer`; mapping uses
+    `source_type='distributor_shipment'`.
+    """
+    if not is_zoho_configured():
+        raise RuntimeError("Zoho Books integration is not configured (ZOHO_CLIENT_ID missing).")
+
+    # Idempotency — if this shipment was already pushed, return existing mapping.
+    existing_mapping = await db.zoho_invoice_mappings.find_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_shipment",
+         "source_id": shipment.get("id"), "status": "synced"},
+        {"_id": 0},
+    )
+    if existing_mapping and existing_mapping.get("zoho_invoice_id"):
+        logger.info(
+            f"Zoho invoice already synced for shipment "
+            f"{shipment.get('shipment_number')}; skipping re-push."
+        )
+        return existing_mapping
+
+    # Bill the distributor receiving the stock.
+    customer_id = await upsert_contact(tenant_id, {
+        "id": distributor.get("id"),
+        "account_name": distributor.get("distributor_name") or distributor.get("legal_entity_name"),
+        "legal_entity_name": distributor.get("legal_entity_name") or distributor.get("distributor_name"),
+        "gst_legal_name": distributor.get("legal_entity_name") or distributor.get("distributor_name"),
+        "gst_trade_name": distributor.get("distributor_name") or distributor.get("legal_entity_name"),
+        "gstin": distributor.get("gstin"),
+        "primary_contact_name": distributor.get("primary_contact_name"),
+        "primary_contact_email": distributor.get("primary_contact_email"),
+        "primary_contact_mobile": distributor.get("primary_contact_mobile"),
+        "billing_address": distributor.get("billing_address") or distributor.get("registered_address"),
+        "delivery_address": distributor.get("registered_address"),
+        "zoho_contact_id": distributor.get("zoho_contact_id"),
+    })
+
+    # Build line items — rate = the shipment item's stored unit_price (already
+    # base-vs-transfer correct), GST applied via each SKU's Zoho item tax mapping.
+    line_items: list[dict] = []
+    for it in items:
+        zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
+        sku_name = (it.get("sku_name") or it.get("sku_code") or "Item").strip()
+        batch_code = (it.get("batch_code") or "").strip()
+        description = f"Batch: {batch_code}" if batch_code else ""
+        line_items.append({
+            "item_id": zoho_item_id,
+            "name": sku_name,
+            "description": description,
+            "quantity": float(it.get("quantity", 0) or 0),
+            "rate": float(it.get("unit_price", 0) or 0),
+            "discount": float(it.get("discount_percent", 0) or 0),
+            "discount_type": "entity_level",
+        })
+
+    if not line_items:
+        raise RuntimeError(f"Shipment {shipment.get('shipment_number')} has no items to push.")
+
+    invoice_payload = {
+        "customer_id": customer_id,
+        "reference_number": shipment.get("shipment_number"),
+        "date": (shipment.get("shipment_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
+        "line_items": line_items,
+        "notes": f"Generated from Nyla CRM Stock In {shipment.get('shipment_number')}",
+    }
+
+    # Branch (multi-GSTIN): book the invoice under the SOURCE factory warehouse's
+    # Zoho Branch so Zoho applies that warehouse's GSTIN + correct CGST/SGST/IGST.
+    src_wh_id = shipment.get("source_warehouse_id")
+    src_wh = None
+    if src_wh_id:
+        src_wh = await db.distributor_locations.find_one(
+            {"id": src_wh_id, "tenant_id": tenant_id},
+            {"_id": 0, "zoho_branch_id": 1, "location_name": 1},
+        )
+    branch_id = (src_wh or {}).get("zoho_branch_id")
+    if branch_id:
+        invoice_payload["branch_id"] = str(branch_id)
+    else:
+        loc_name = (src_wh or {}).get("location_name") or "the source warehouse"
+        raise ZohoBranchNotMappedError(
+            f"Source factory warehouse '{loc_name}' is not mapped to a Zoho Branch, so "
+            f"the invoice would carry the wrong GSTIN. Map it to the correct Zoho Branch "
+            f"under Admin → Fleet/Warehouses, then retry the push."
+        )
+
+    tenant_creds = await get_credentials(tenant_id) or {}
+    invoice_tmpl = (tenant_creds.get("invoice_template_id") or "").strip()
+    if invoice_tmpl:
+        invoice_payload["template_id"] = invoice_tmpl
+
+    result = await _zoho_request("POST", "/books/v3/invoices", tenant_id=tenant_id, json=invoice_payload)
+    invoice = result.get("invoice") or {}
+    zoho_invoice_id = invoice.get("invoice_id")
+    zoho_invoice_number = invoice.get("invoice_number")
+
+    # Flip draft → sent so it appears as an open receivable instantly.
+    if zoho_invoice_id:
+        try:
+            await _zoho_request(
+                "POST", f"/books/v3/invoices/{zoho_invoice_id}/status/sent", tenant_id=tenant_id,
+            )
+        except Exception as e:
+            logger.warning(
+                f"[zoho] Could not mark shipment invoice {zoho_invoice_number} as sent: {e}. "
+                "It will stay in Drafts until sent manually."
+            )
+
+    creds = await get_credentials(tenant_id) or {}
+    zoho_invoice_url = invoice.get("invoice_url") or _zoho_books_url(zoho_invoice_id, creds)
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Stamp Zoho identifiers on the source shipment (visible on Stock In detail).
+    try:
+        await db.distributor_shipments.update_one(
+            {"id": shipment.get("id"), "tenant_id": tenant_id},
+            {"$set": {
+                "zoho_invoice_id": zoho_invoice_id,
+                "zoho_invoice_number": zoho_invoice_number,
+                "zoho_invoice_url": zoho_invoice_url,
+                "zoho_synced_at": now,
+                "zoho_push_pending": False,
+                "zoho_push_error": None,
+            }}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to stamp Zoho ids on shipment {shipment.get('id')}: {e}")
+
+    mapping_doc = {
+        "tenant_id": tenant_id,
+        "source_type": "distributor_shipment",
+        "source_id": shipment.get("id"),
+        "source_reference": shipment.get("shipment_number"),
+        "distributor_id": shipment.get("distributor_id"),
+        "zoho_invoice_id": zoho_invoice_id,
+        "zoho_invoice_number": zoho_invoice_number,
+        "zoho_invoice_url": zoho_invoice_url,
+        "zoho_customer_id": customer_id,
+        "zoho_doc_type": "invoice",
+        "status": "synced",
+        "synced_at": now,
+        "error": None,
+        "attempts": 1,
+    }
+    await db.zoho_invoice_mappings.update_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_shipment", "source_id": shipment.get("id")},
+        {"$set": mapping_doc, "$setOnInsert": {"created_at": now}},
+        upsert=True,
+    )
+    return mapping_doc
+
+
+async def sync_shipment_to_zoho(tenant_id: str, distributor_id: str, shipment_id: str) -> None:
+    """Background task: push a confirmed Stock In shipment to Zoho with retry.
+    Never raises for transient errors — records a failure flag so the UI can
+    surface a Retry. Raises ZohoPushSkippedError only for clear skip cases."""
+    if not is_zoho_configured():
+        logger.info("Zoho not configured, skipping shipment auto-push")
+        raise ZohoPushSkippedError("Zoho Books integration is not configured on this tenant.")
+    creds = await get_credentials(tenant_id)
+    if not creds:
+        logger.info(f"Zoho not connected for tenant {tenant_id}, skipping shipment auto-push")
+        raise ZohoPushSkippedError("Zoho Books is not connected for this tenant. Go to Settings → Integrations → Zoho Books and click Connect.")
+
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0}
+    )
+    if not shipment:
+        logger.warning(f"sync_shipment_to_zoho: shipment {shipment_id} not found")
+        raise ZohoPushSkippedError("Shipment not found.")
+
+    items = await db.distributor_shipment_items.find(
+        {"shipment_id": shipment_id, "tenant_id": tenant_id}, {"_id": 0}
+    ).to_list(500)
+    if not items:
+        logger.warning(f"sync_shipment_to_zoho: no items for shipment {shipment_id}")
+        raise ZohoPushSkippedError("This shipment has no line items to invoice.")
+
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0}
+    )
+    if not distributor:
+        raise ZohoPushSkippedError("Distributor not found for this shipment.")
+
+    backoff_seconds = [0, 4, 16]  # 3 attempts: immediate, +4s, +16s
+    last_error: Optional[str] = None
+    for attempt, wait_s in enumerate(backoff_seconds, start=1):
+        if wait_s:
+            await asyncio.sleep(wait_s)
+        try:
+            await create_invoice_for_shipment(
+                tenant_id=tenant_id, shipment=shipment, items=items, distributor=distributor
+            )
+            logger.info(f"Zoho invoice created for shipment {shipment.get('shipment_number')} (attempt {attempt})")
+            return
+        except (MissingZohoMappingError, ZohoBranchNotMappedError) as e:
+            # Configuration issues — don't retry.
+            last_error = str(e)
+            logger.warning(f"Zoho push aborted (config) for shipment {shipment.get('shipment_number')}: {e}")
+            break
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(
+                f"Zoho push attempt {attempt}/{len(backoff_seconds)} failed for shipment "
+                f"{shipment.get('shipment_number')}: {e}"
+            )
+
+    # All attempts failed — flag for retry.
+    await record_sync_failure(
+        tenant_id=tenant_id,
+        source_type="distributor_shipment",
+        source_id=shipment_id,
+        source_reference=shipment.get("shipment_number"),
+        distributor_id=distributor_id,
+        error=last_error or "Unknown error",
+        attempts=len(backoff_seconds),
+    )
+    try:
+        await db.distributor_shipments.update_one(
+            {"id": shipment_id, "tenant_id": tenant_id},
+            {"$set": {"zoho_push_pending": True, "zoho_push_error": (last_error or "Unknown error")[:500]}},
+        )
+    except Exception:
+        logger.exception(f"Failed to flag zoho_push_pending on shipment {shipment_id}")
