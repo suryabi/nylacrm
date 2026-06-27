@@ -80,6 +80,7 @@ import AccountDetail from './pages/AccountDetail';
 import AccountPerformance from './pages/AccountPerformance';
 import RevenueAnalytics from './pages/RevenueAnalytics';
 import AccountingMasters from './pages/AccountingMasters';
+import VendorTypes from './pages/VendorTypes';
 import InvoicesList from './pages/InvoicesList';
 import CustomerReturnsList from './pages/CustomerReturnsList';
 import TransportationCostCalculator from './pages/TransportationCostCalculator';
@@ -393,6 +394,7 @@ function AppRouter() {
           <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributor/stock-transfers" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockTransfers /></ProtectedRoute>} />
           <Route path="/accounting/masters" element={<ProtectedRoute><AccountingMasters /></ProtectedRoute>} />
+          <Route path="/admin/vendor-types" element={<ProtectedRoute><VendorTypes /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockDashboard /></ProtectedRoute>} />
           <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><CostCards /></ProtectedRoute>} />
           

@@ -294,6 +294,7 @@ const adminNavigationGroups = [
       { name: 'Design Request Types', href: '/admin/request-types', icon: Tag, moduleKey: 'marketing_request_types', roles: ADMIN_ONLY_ROLES },
       { name: 'Print Settings', href: '/admin/print-settings', icon: Printer, moduleKey: 'print_request_statuses', roles: ADMIN_ONLY_ROLES },
       { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ADMIN_ONLY_ROLES },
+      { name: 'Vendor Types', href: '/admin/vendor-types', icon: Truck, roles: ADMIN_ONLY_ROLES },
       { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'COGS Components', href: '/master/cogs-components', icon: Receipt, moduleKey: 'cogs_components', roles: ['CEO', 'Director', 'System Admin'] },

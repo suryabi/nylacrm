@@ -14,7 +14,7 @@ from database import db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.accounting_master import (
-    MASTER_TYPES, HIERARCHICAL_TYPES, DEFAULT_EXPENSE_TYPES,
+    MASTER_TYPES, HIERARCHICAL_TYPES, DEFAULT_EXPENSE_TYPES, DEFAULT_SEEDS,
     AccountingMasterCreate, AccountingMasterUpdate,
 )
 
@@ -35,19 +35,28 @@ def _validate_type(master_type: str):
         raise HTTPException(status_code=404, detail=f"Unknown master type '{master_type}'")
 
 
-async def _seed_expense_types(tenant_id: str, user_id: str):
-    """One-time idempotent seed of the standard expense types."""
-    existing = await db[COLL].count_documents({"tenant_id": tenant_id, "master_type": "expense_type"})
+async def _seed_type(tenant_id: str, user_id: str, master_type: str):
+    """One-time idempotent seed of a master type's standard values."""
+    defaults = DEFAULT_SEEDS.get(master_type)
+    if not defaults:
+        return
+    existing = await db[COLL].count_documents({"tenant_id": tenant_id, "master_type": master_type})
     if existing:
         return
     now = datetime.now(timezone.utc).isoformat()
     docs = [{
-        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "master_type": "expense_type",
+        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "master_type": master_type,
         "name": n, "code": None, "description": None, "parent_id": None,
         "is_active": True, "sort_order": i, "gstin": None, "email": None, "phone": None,
         "linked_user_id": None, "created_at": now, "updated_at": now, "created_by": user_id,
-    } for i, n in enumerate(DEFAULT_EXPENSE_TYPES)]
+    } for i, n in enumerate(defaults)]
     await db[COLL].insert_many(docs)
+
+
+async def _seed_all(tenant_id: str, user_id: str):
+    """Seed every master type that has a default list (idempotent)."""
+    for mt in DEFAULT_SEEDS:
+        await _seed_type(tenant_id, user_id, mt)
 
 
 def _level_of(node_id, parent_map):
@@ -64,7 +73,7 @@ def _level_of(node_id, parent_map):
 async def masters_summary(current_user: dict = Depends(get_current_user)):
     """List master types + counts so the UI can render the module overview."""
     tenant_id = get_current_tenant_id()
-    await _seed_expense_types(tenant_id, current_user.get("id"))
+    await _seed_all(tenant_id, current_user.get("id"))
     counts = {}
     pipeline = [{"$match": {"tenant_id": tenant_id}},
                 {"$group": {"_id": "$master_type", "n": {"$sum": 1}}}]
@@ -84,8 +93,7 @@ async def list_masters(
 ):
     _validate_type(master_type)
     tenant_id = get_current_tenant_id()
-    if master_type == "expense_type":
-        await _seed_expense_types(tenant_id, current_user.get("id"))
+    await _seed_type(tenant_id, current_user.get("id"), master_type)
 
     query = {"tenant_id": tenant_id, "master_type": master_type}
     if not include_inactive:
