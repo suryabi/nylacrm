@@ -602,3 +602,14 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Backend (routes/production_qc.py update_batch): recomputes unallocated_crates = new_total − already-moved, and total_bottles; blocks reducing below crates already in QC/allocations (clear 400). Bottles-per-crate stays locked after QC starts (unchanged).
 - Frontend (BatchDetail.js edit dialog): crates input unlocked with a "min X in QC" hint; bottles/crate still locked.
 - Verified via API (increase→unallocated recomputed; reduce-below-allocated→400; restore) + UI screenshot (crates enabled, bpc disabled).
+
+## 2026-06-27 — Distributor Stock-In: Reverse anytime + correct cancel stock adjustment ✅
+- New endpoint POST /api/distributors/{id}/shipments/{shipment_id}/reverse (params reason, acknowledge). Reverses a stock-in at any stage and keeps it as audit (status 'reversed'):
+  - delivered/partially_delivered → removes units from destination distributor_stock AND adds them back to source factory_warehouse_stock.
+  - confirmed/in_transit/discrepancy_pending → restores source factory_warehouse_stock only.
+  - draft → no stock change. Non-draft requires acknowledge=true (server-side double confirm).
+- Helpers: _readd_shipment_source_stock, _remove_shipment_destination_stock (batch-aware).
+- Fixed cancel_shipment bug: cancelling a CONFIRMED shipment now restores source factory stock (previously stayed deducted/"reserved"). Draft cancel remains a no-op for stock.
+- Frontend: Reverse (RotateCcw) action button in Stock In table for non-draft/non-cancelled/non-reversed shipments; double-confirmation dialog (reason + type REVERSE) in DistributorDetail.js; 'reversed' status badge.
+- Verified: testing agent 8/8 backend tests PASS (real Mongo stock deltas) + UI screenshot of button & dialog.
+- NOTE: changes are on Preview only — redeploy to Production (crm.nylaairwater.earth) to go live.
