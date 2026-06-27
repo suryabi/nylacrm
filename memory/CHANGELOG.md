@@ -621,3 +621,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - services/zoho_service.py: create_invoice_for_shipment + sync_shipment_to_zoho (source_type 'distributor_shipment').
 - Frontend: shipment detail dialog shows Zoho status — "View in Zoho" link when generated, or "Generate Zoho invoice"/"Retry Zoho push" button otherwise.
 - Verified: 14/14 backend tests (iteration_245) — confirm-doesn't-break, graceful skip when Zoho disconnected, retry 400s, + reverse/cancel regression. ACTUAL Zoho invoice creation can only be verified on PRODUCTION (Zoho not connected in Preview).
+
+## 2026-06-27 — Accounting/Admin master data + default seeds ✅
+- New ADMIN module page **Vendor Types** (/admin/vendor-types) with full CRUD (backend routes/vendor_types.py, collection vendor_types) + sidebar item under Admin → Master Data. Seeds 17 default vendor types.
+- Default seeds added to accounting_masters (runtime, per-tenant, idempotent): payment_source (13), project_business_unit / Business Units (14), cost_center (19).
+- Expense Type list replaced with authoritative 10-item list; one-time guarded swap removes legacy short defaults (OPEX/COGS/CAPEX/Financial/Tax) and installs full list without touching user-created values.
+- All seeding is code-driven on first API access → auto-populates in PRODUCTION after redeploy (separate DB; no manual migration needed).
+- PENDING: Expense Category 3-level hierarchy seeding (awaiting user answers on 4 ambiguous level-2 parents: Software/Logistics/HR/Travel). Also pending: standalone Employees & Vendors pages + City-from-Admin-Locations (field lists awaiting confirmation).

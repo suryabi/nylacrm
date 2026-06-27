@@ -14,7 +14,7 @@ from database import db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.accounting_master import (
-    MASTER_TYPES, HIERARCHICAL_TYPES, DEFAULT_EXPENSE_TYPES, DEFAULT_SEEDS,
+    MASTER_TYPES, HIERARCHICAL_TYPES, DEFAULT_EXPENSE_TYPES, LEGACY_EXPENSE_TYPES, DEFAULT_SEEDS,
     AccountingMasterCreate, AccountingMasterUpdate,
 )
 
@@ -53,10 +53,38 @@ async def _seed_type(tenant_id: str, user_id: str, master_type: str):
     await db[COLL].insert_many(docs)
 
 
+async def _reconcile_expense_types(tenant_id: str, user_id: str):
+    """One-time swap of the legacy short expense-type defaults to the
+    authoritative list. Guarded so it only runs while NONE of the new
+    canonical names exist yet — it never deletes user-created values."""
+    names = set()
+    async for r in db[COLL].find({"tenant_id": tenant_id, "master_type": "expense_type"}, {"_id": 0, "name": 1}):
+        names.add(r.get("name"))
+    if any(n in names for n in DEFAULT_EXPENSE_TYPES):
+        return  # already on the authoritative list
+    # Remove only the known legacy auto-defaults, then install the full list.
+    await db[COLL].delete_many({
+        "tenant_id": tenant_id, "master_type": "expense_type",
+        "name": {"$in": LEGACY_EXPENSE_TYPES},
+    })
+    now = datetime.now(timezone.utc).isoformat()
+    docs = [{
+        "id": str(uuid.uuid4()), "tenant_id": tenant_id, "master_type": "expense_type",
+        "name": n, "code": None, "description": None, "parent_id": None,
+        "is_active": True, "sort_order": i, "gstin": None, "email": None, "phone": None,
+        "linked_user_id": None, "created_at": now, "updated_at": now, "created_by": user_id,
+    } for i, n in enumerate(DEFAULT_EXPENSE_TYPES)]
+    if docs:
+        await db[COLL].insert_many(docs)
+
+
 async def _seed_all(tenant_id: str, user_id: str):
     """Seed every master type that has a default list (idempotent)."""
     for mt in DEFAULT_SEEDS:
-        await _seed_type(tenant_id, user_id, mt)
+        if mt == "expense_type":
+            await _reconcile_expense_types(tenant_id, user_id)
+        else:
+            await _seed_type(tenant_id, user_id, mt)
 
 
 def _level_of(node_id, parent_map):
@@ -93,7 +121,10 @@ async def list_masters(
 ):
     _validate_type(master_type)
     tenant_id = get_current_tenant_id()
-    await _seed_type(tenant_id, current_user.get("id"), master_type)
+    if master_type == "expense_type":
+        await _reconcile_expense_types(tenant_id, current_user.get("id"))
+    else:
+        await _seed_type(tenant_id, current_user.get("id"), master_type)
 
     query = {"tenant_id": tenant_id, "master_type": master_type}
     if not include_inactive:

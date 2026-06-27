@@ -26,7 +26,23 @@ MASTER_TYPES = {
 HIERARCHICAL_TYPES = {k for k, v in MASTER_TYPES.items() if v["hierarchical"]}
 
 # Seeded once per tenant on first access — still fully editable afterwards.
-DEFAULT_EXPENSE_TYPES = ["OPEX", "COGS", "CAPEX", "Financial", "Tax"]
+# Authoritative Expense Type list.
+DEFAULT_EXPENSE_TYPES = [
+    "COGS (Cost of Goods Sold)",
+    "Operating Expense (OPEX)",
+    "Capital Expense (CAPEX)",
+    "Financial Expense",
+    "Tax & Statutory",
+    "Depreciation & Amortization",
+    "Extraordinary / Exceptional Expense",
+    "Intercompany Expense",
+    "Prepaid Expense",
+    "Accrued Expense",
+]
+
+# Old short auto-seeded defaults — cleaned up once when installing the
+# authoritative list above (never touches user-created values).
+LEGACY_EXPENSE_TYPES = ["OPEX", "COGS", "CAPEX", "Financial", "Tax"]
 
 DEFAULT_PAYMENT_SOURCES = [
     "Petty Cash", "Cash", "Bank Transfer", "Cheque", "UPI",
