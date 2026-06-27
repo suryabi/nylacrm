@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, Paperclip, Upload,
   Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
-  Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Eye, Hash,
+  Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Hash,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -550,7 +550,7 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
           {proofs.length > 0 && (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
               {proofs.map((p) => (
-                <ProofThumb key={p.id} proof={p} txnId={it.id} onPreview={() => openPreview(p)} onDelete={() => deleteProof(p)} />
+                <ProofThumb key={p.id} proof={p} txnId={it.id} onPreview={() => openPreview(p)} />
               ))}
             </div>
           )}
@@ -570,9 +570,21 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
             <DialogHeader>
               <DialogTitle className="flex items-center justify-between gap-3 pr-6">
                 <span className="truncate text-sm">{preview.proof.display_name || preview.proof.original_filename}</span>
-                <a href={preview.url} download={preview.proof.display_name || preview.proof.original_filename}>
-                  <Button size="sm" variant="outline" data-testid="proof-download-btn"><Download className="mr-1.5 h-4 w-4" /> Download</Button>
-                </a>
+                <div className="flex items-center gap-2">
+                  <a href={preview.url} download={preview.proof.display_name || preview.proof.original_filename}>
+                    <Button size="sm" variant="outline" data-testid="proof-download-btn"><Download className="mr-1.5 h-4 w-4" /> Download</Button>
+                  </a>
+                  <Button size="sm" variant="outline" data-testid="proof-delete-btn"
+                    className="border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                    onClick={async () => {
+                      if (!window.confirm('Delete this document?')) return;
+                      await deleteProof(preview.proof);
+                      URL.revokeObjectURL(preview.url);
+                      setPreview(null);
+                    }}>
+                    <Trash2 className="mr-1.5 h-4 w-4" /> Delete
+                  </Button>
+                </div>
               </DialogTitle>
             </DialogHeader>
             <div className="max-h-[70vh] overflow-auto rounded-lg bg-slate-50 p-2">
@@ -587,7 +599,7 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
   );
 }
 
-function ProofThumb({ proof, txnId, onPreview, onDelete }) {
+function ProofThumb({ proof, txnId, onPreview }) {
   const [thumb, setThumb] = useState(null);
   useEffect(() => {
     let url;
@@ -599,22 +611,17 @@ function ProofThumb({ proof, txnId, onPreview, onDelete }) {
   }, [proof.id, proof.is_image, txnId]);
 
   return (
-    <div className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-50" data-testid={`proof-${proof.id}`}>
-      <button className="flex h-full w-full items-center justify-center" onClick={onPreview} title="Preview">
+    <button type="button" onClick={onPreview} title="Preview"
+      className="group relative aspect-square w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-50 transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      data-testid={`proof-${proof.id}`}>
+      <div className="flex h-full w-full items-center justify-center">
         {proof.is_image
           ? (thumb ? <img src={thumb} alt={proof.display_name} className="h-full w-full object-cover" /> : <Loader2 className="h-4 w-4 animate-spin text-slate-300" />)
           : <div className="flex flex-col items-center gap-1 text-rose-500"><FileText className="h-7 w-7" /><span className="text-[9px] font-medium">PDF</span></div>}
-      </button>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-black/55 px-1.5 py-0.5 text-[9px] font-medium text-white">
+      </div>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-black/55 px-1.5 py-0.5 text-left text-[9px] font-medium text-white">
         {proof.display_name || proof.original_filename}
       </div>
-      <button onClick={onDelete} data-testid={`delete-proof-${proof.id}`}
-        className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-rose-500 opacity-0 shadow transition-opacity group-hover:opacity-100" title="Delete">
-        <Trash2 className="h-3 w-3" />
-      </button>
-      <button onClick={onPreview} className="absolute left-1 top-1 rounded-full bg-white/90 p-1 text-slate-600 opacity-0 shadow transition-opacity group-hover:opacity-100" title="Preview">
-        <Eye className="h-3 w-3" />
-      </button>
-    </div>
+    </button>
   );
 }
