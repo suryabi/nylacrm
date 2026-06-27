@@ -649,3 +649,11 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Frontend AccountingTransactions.js (/accounting/transactions, sidebar 'Transactions'): tabs (Untagged/Tagged/All), filters, side panel to tag expense/income masters + vendor + notes, link account (income→outstanding), upload payment/invoice proofs.
 - Verified iteration_247: 11/11 backend pass; frontend flows pass. Fixes applied: startup index, tag-status only on real selection, account search min-length 1.
 - PREREQ for production: Zoho must be (re)connected with ZohoBooks.banking.READ scope; real bank pull only verifiable on Production. Phase 2 = reports/GST summary.
+
+## 2026-06-27 (cont.) — Transactions UX: grouping, pagination, time filter, zebra, Zoho ref
+- Inline expand/collapse rows (replaced side panel); generic multi-file document uploader (any file type, multiple at once) instead of fixed payment/invoice buttons.
+- Transactions grouped by date with date headers; zebra-striped alternate rows.
+- Pagination (25/page) using list endpoint total; Prev/Next + range label.
+- Same preset time filter as Leads (this/last week, month, quarter, last 3/6 months, lifetime) → computed to date_start/date_end on client.
+- Subtle Zoho correlation: bank description/narration shown prominently + click-to-copy monospace Zoho transaction-ID chip.
+- Frontend-only (AccountingTransactions.js); backend list already supported page/limit/date_start/date_end/total. Verified via live screenshot.

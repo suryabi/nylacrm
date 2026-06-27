@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import {
   RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, Paperclip, Upload,
   Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
+  Copy, ChevronLeft, CalendarRange,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -26,6 +27,39 @@ const EXPENSE_MASTERS = [
   { key: 'payment_source', label: 'Payment Source' },
 ];
 const INCOME_MASTERS = [{ key: 'revenue_stream', label: 'Revenue Stream' }];
+const PER_PAGE = 25;
+
+const TIME_FILTERS = [
+  { value: 'lifetime', label: 'Lifetime' },
+  { value: 'this_week', label: 'This Week' }, { value: 'last_week', label: 'Last Week' },
+  { value: 'this_month', label: 'This Month' }, { value: 'last_month', label: 'Last Month' },
+  { value: 'this_quarter', label: 'This Quarter' }, { value: 'last_quarter', label: 'Last Quarter' },
+  { value: 'last_3_months', label: 'Last 3 Months' }, { value: 'last_6_months', label: 'Last 6 Months' },
+];
+
+const iso = (d) => d.toISOString().slice(0, 10);
+function presetRange(preset) {
+  if (!preset || preset === 'lifetime') return null;
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const monday = (d) => { const x = new Date(d); const day = (x.getDay() + 6) % 7; x.setDate(x.getDate() - day); return x; };
+  switch (preset) {
+    case 'this_week': { const s = monday(now); const e = new Date(s); e.setDate(s.getDate() + 6); return { start: iso(s), end: iso(e) }; }
+    case 'last_week': { const s = monday(now); s.setDate(s.getDate() - 7); const e = new Date(s); e.setDate(s.getDate() + 6); return { start: iso(s), end: iso(e) }; }
+    case 'this_month': return { start: iso(new Date(y, m, 1)), end: iso(new Date(y, m + 1, 0)) };
+    case 'last_month': return { start: iso(new Date(y, m - 1, 1)), end: iso(new Date(y, m, 0)) };
+    case 'this_quarter': { const q = Math.floor(m / 3); return { start: iso(new Date(y, q * 3, 1)), end: iso(new Date(y, q * 3 + 3, 0)) }; }
+    case 'last_quarter': { const q = Math.floor(m / 3) - 1; const yy = q < 0 ? y - 1 : y; const qq = (q + 4) % 4; return { start: iso(new Date(yy, qq * 3, 1)), end: iso(new Date(yy, qq * 3 + 3, 0)) }; }
+    case 'last_3_months': return { start: iso(new Date(y, m - 2, 1)), end: iso(new Date(y, m + 1, 0)) };
+    case 'last_6_months': return { start: iso(new Date(y, m - 5, 1)), end: iso(new Date(y, m + 1, 0)) };
+    default: return null;
+  }
+}
+
+const dateHeading = (d) => {
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+};
 
 export default function AccountingTransactions() {
   const [tab, setTab] = useState('untagged');
@@ -35,6 +69,9 @@ export default function AccountingTransactions() {
   const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState('');
   const [direction, setDirection] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('lifetime');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [masters, setMasters] = useState({});
   const [vendors, setVendors] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
@@ -57,11 +94,16 @@ export default function AccountingTransactions() {
       if (tab !== 'all') params.set('status', tab);
       if (direction !== 'all') params.set('direction', direction);
       if (search) params.set('search', search);
+      const range = presetRange(timeFilter);
+      if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
+      params.set('page', page);
+      params.set('limit', PER_PAGE);
       const { data } = await axios.get(`${API}/api/accounting/transactions?${params}`, auth());
       setItems(data.items || []);
+      setTotal(data.total || 0);
       setSummary(data.summary || { untagged: 0, tagged: 0, all: 0 });
     } catch (e) { toast.error('Failed to load transactions'); } finally { setLoading(false); }
-  }, [tab, direction, search]);
+  }, [tab, direction, search, timeFilter, page]);
 
   useEffect(() => { loadMasters(); }, [loadMasters]);
   useEffect(() => { load(); }, [load]);
@@ -104,14 +146,14 @@ export default function AccountingTransactions() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           {tabs.map((t) => (
-            <button key={t.key} onClick={() => { setTab(t.key); setExpandedId(null); }}
+            <button key={t.key} onClick={() => { setTab(t.key); setExpandedId(null); setPage(1); }}
               className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === t.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
               data-testid={`tab-${t.key}`}>
               {t.label} <span className={`ml-1 rounded-full px-1.5 text-xs ${tab === t.key ? 'bg-white/20' : 'bg-slate-100'}`}>{t.count}</span>
             </button>
           ))}
         </div>
-        <Select value={direction} onValueChange={(v) => { setDirection(v); setExpandedId(null); }}>
+        <Select value={direction} onValueChange={(v) => { setDirection(v); setExpandedId(null); setPage(1); }}>
           <SelectTrigger className="h-9 w-40" data-testid="filter-direction"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All directions</SelectItem>
@@ -119,9 +161,17 @@ export default function AccountingTransactions() {
             <SelectItem value="debit">Money Out (Expense)</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={timeFilter} onValueChange={(v) => { setTimeFilter(v); setExpandedId(null); setPage(1); }}>
+          <SelectTrigger className="h-9 w-40" data-testid="filter-time">
+            <CalendarRange className="mr-1 h-4 w-4 text-slate-400" /><SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TIME_FILTERS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-          <Input placeholder="Search payee / ref…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-56 pl-8" data-testid="txn-search" />
+          <Input placeholder="Search payee / ref…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="h-9 w-56 pl-8" data-testid="txn-search" />
         </div>
       </div>
 
@@ -137,7 +187,6 @@ export default function AccountingTransactions() {
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="w-10 p-3"></th>
-                <th className="p-3 text-left font-medium">Date</th>
                 <th className="p-3 text-left font-medium">Description</th>
                 <th className="p-3 text-left font-medium">Bank</th>
                 <th className="p-3 text-right font-medium">Amount</th>
@@ -146,16 +195,54 @@ export default function AccountingTransactions() {
               </tr>
             </thead>
             <tbody>
-              {items.map((it) => (
-                <Row key={it.id} it={it} masters={masters} vendors={vendors}
-                  expanded={expandedId === it.id}
-                  onToggle={() => setExpandedId(expandedId === it.id ? null : it.id)}
-                  onChange={patchRow} />
-              ))}
+              {(() => {
+                const groups = [];
+                let cur = null;
+                items.forEach((it) => {
+                  if (!cur || cur.date !== it.date) { cur = { date: it.date, rows: [] }; groups.push(cur); }
+                  cur.rows.push(it);
+                });
+                let zi = 0;
+                return groups.map((g) => (
+                  <React.Fragment key={g.date}>
+                    <tr className="bg-slate-100/70" data-testid={`date-group-${g.date}`}>
+                      <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {dateHeading(g.date)}
+                      </td>
+                    </tr>
+                    {g.rows.map((it) => {
+                      const z = zi++ % 2 === 1;
+                      return (
+                        <Row key={it.id} it={it} masters={masters} vendors={vendors} zebra={z}
+                          expanded={expandedId === it.id}
+                          onToggle={() => setExpandedId(expandedId === it.id ? null : it.id)}
+                          onChange={patchRow} />
+                      );
+                    })}
+                  </React.Fragment>
+                ));
+              })()}
             </tbody>
           </table>
         )}
       </div>
+
+      {!loading && total > 0 && (
+        <div className="mt-3 flex items-center justify-between text-sm text-slate-500" data-testid="txn-pagination">
+          <span>
+            Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => { setPage((p) => p - 1); setExpandedId(null); }} data-testid="page-prev">
+              <ChevronLeft className="h-4 w-4" /> Prev
+            </Button>
+            <span className="px-1">Page {page} / {Math.max(1, Math.ceil(total / PER_PAGE))}</span>
+            <Button variant="outline" size="sm" disabled={page >= Math.ceil(total / PER_PAGE)} onClick={() => { setPage((p) => p + 1); setExpandedId(null); }} data-testid="page-next">
+              Next <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -165,20 +252,35 @@ function masterLabel(item) {
   return `${indent}${item.name}`;
 }
 
-function Row({ it, masters, vendors, expanded, onToggle, onChange }) {
+function Row({ it, masters, vendors, expanded, onToggle, onChange, zebra }) {
   const credit = it.direction === 'credit';
   const proofs = (it.proofs || []).filter((p) => !p.is_deleted);
+  const copyZoho = (e) => {
+    e.stopPropagation();
+    navigator.clipboard?.writeText(it.zoho_transaction_id || '');
+    toast.success('Zoho transaction ID copied');
+  };
+  const baseBg = expanded ? 'bg-indigo-50/60' : (zebra ? 'bg-slate-50/40 hover:bg-slate-100/70' : 'bg-white hover:bg-slate-50');
   return (
     <>
-      <tr className={`cursor-pointer border-b border-slate-100 transition-colors ${expanded ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+      <tr className={`cursor-pointer border-b border-slate-100 transition-colors ${baseBg}`}
         onClick={onToggle} data-testid={`txn-row-${it.id}`}>
         <td className="p-3 text-slate-400">
           <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? 'rotate-90 text-indigo-600' : ''}`} />
         </td>
-        <td className="p-3 text-slate-500">{it.date}</td>
         <td className="p-3">
           <div className="font-medium text-slate-800">{it.payee || it.description || '—'}</div>
-          <div className="text-xs text-slate-400">{it.reference_number || it.zoho_transaction_type || ''}</div>
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
+            {it.description && it.description !== it.payee && <span className="truncate max-w-[280px]">{it.description}</span>}
+            {it.reference_number && <span>· {it.reference_number}</span>}
+            {it.zoho_transaction_id && (
+              <button onClick={copyZoho} title="Click to copy Zoho transaction ID"
+                className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                data-testid={`zoho-ref-${it.id}`}>
+                <Copy className="h-2.5 w-2.5" />{String(it.zoho_transaction_id).slice(-10)}
+              </button>
+            )}
+          </div>
         </td>
         <td className="p-3 text-slate-500">{it.bank_account_name || '—'}</td>
         <td className={`p-3 text-right font-semibold ${credit ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -193,7 +295,7 @@ function Row({ it, masters, vendors, expanded, onToggle, onChange }) {
       </tr>
       {expanded && (
         <tr className="border-b-2 border-indigo-100 bg-gradient-to-b from-indigo-50/40 to-white" data-testid={`txn-expanded-${it.id}`}>
-          <td colSpan={7} className="p-0">
+          <td colSpan={6} className="p-0">
             <ExpandedEditor it={it} credit={credit} masters={masters} vendors={vendors} onChange={onChange} />
           </td>
         </tr>
