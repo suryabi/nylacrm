@@ -613,3 +613,11 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Frontend: Reverse (RotateCcw) action button in Stock In table for non-draft/non-cancelled/non-reversed shipments; double-confirmation dialog (reason + type REVERSE) in DistributorDetail.js; 'reversed' status badge.
 - Verified: testing agent 8/8 backend tests PASS (real Mongo stock deltas) + UI screenshot of button & dialog.
 - NOTE: changes are on Preview only — redeploy to Production (crm.nylaairwater.earth) to go live.
+
+## 2026-06-27 — Stock-In generates Zoho invoice on Confirm ✅
+- On shipment CONFIRM, a Zoho Books Tax Invoice is now pushed (best-effort, 3-retry background task) billing the DISTRIBUTOR receiving the stock.
+- Pricing follows the existing Stock In record exactly: rate = item.unit_price, which already encodes base-vs-transfer price per distributor.billing_approach (cost-based → base price; margin_upfront → transfer price). GST applied via each SKU's Zoho item-tax mapping; invoice booked under the SOURCE factory warehouse's Zoho branch (correct GSTIN).
+- Confirm never fails if Zoho is down/disconnected; failures set shipment.zoho_push_pending + zoho_push_error. New POST .../shipments/{id}/retry-zoho-push to retry/generate manually.
+- services/zoho_service.py: create_invoice_for_shipment + sync_shipment_to_zoho (source_type 'distributor_shipment').
+- Frontend: shipment detail dialog shows Zoho status — "View in Zoho" link when generated, or "Generate Zoho invoice"/"Retry Zoho push" button otherwise.
+- Verified: 14/14 backend tests (iteration_245) — confirm-doesn't-break, graceful skip when Zoho disconnected, retry 400s, + reverse/cancel regression. ACTUAL Zoho invoice creation can only be verified on PRODUCTION (Zoho not connected in Preview).
