@@ -10766,6 +10766,13 @@ async def startup_event():
         except Exception as e:
             logger.error(f"Failed to start ActiveMQ subscriber: {e}")
             MQ_AVAILABLE = False
+    # Ensure the accounting-transactions de-dup unique index exists from boot,
+    # so the no-duplicate guarantee holds even before the first Zoho sync.
+    try:
+        from routes.accounting_transactions import ensure_indexes as _ensure_txn_indexes
+        await _ensure_txn_indexes()
+    except Exception as e:
+        logger.error(f"Failed to ensure accounting_transactions indexes: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

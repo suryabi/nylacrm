@@ -641,3 +641,11 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - New income master **Revenue Stream** (master_type revenue_stream) seeded with 9 defaults (Product Sales, Services, Subscription, Licensing, Distribution, Consulting, Franchise, Advertising, Partnerships) + full CRUD via the existing generic endpoints.
 - Refactored AccountingMasters.js to accept {group,title} props (DRY) — same component powers both Expense and Income masters. New route /accounting/income-masters + sidebar item "Income Masters" under Accounting.
 - Verified: income/expense group filtering, revenue_stream seed(9), CRUD + duplicate guard (curl); UI screenshot of Income Masters page + expense page still defaults correctly.
+
+## 2026-06-27 (cont.) — Accounting Transactions (Zoho bank-feed tagging) — Phase 1 ✅
+- New module: pull bank transactions from Zoho Books (GET /books/v3/banktransactions) → enrich, never manual-entry.
+- De-dup: one doc per Zoho bank_transaction_id; UNIQUE index (tenant_id, zoho_org_id, zoho_transaction_id) created at startup. Sync is incremental (last_synced_date + overlap) and upserts: new→'untagged', existing→refresh Zoho fields only (preserves user tags/proofs/account links).
+- Backend routes/accounting_transactions.py: /sync, list+summary, /bank-accounts, /{id}/tags, /{id}/apply-account, /{id}/unapply-account, proofs upload/download/delete (object storage). Account apply reduces db.accounts.outstanding_balance by amount (reversible).
+- Frontend AccountingTransactions.js (/accounting/transactions, sidebar 'Transactions'): tabs (Untagged/Tagged/All), filters, side panel to tag expense/income masters + vendor + notes, link account (income→outstanding), upload payment/invoice proofs.
+- Verified iteration_247: 11/11 backend pass; frontend flows pass. Fixes applied: startup index, tag-status only on real selection, account search min-length 1.
+- PREREQ for production: Zoho must be (re)connected with ZohoBooks.banking.READ scope; real bank pull only verifiable on Production. Phase 2 = reports/GST summary.

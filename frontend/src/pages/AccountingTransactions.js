@@ -241,7 +241,7 @@ function TxnDetail({ txn, masters, vendors, onClose, onSaved }) {
 
   const searchAccounts = async (q) => {
     setAcctQuery(q);
-    if (q.length < 2) { setAcctResults([]); return; }
+    if (!q || q.trim().length < 1) { setAcctResults([]); return; }
     try {
       const { data } = await axios.get(`${API}/api/accounts?page=1&page_size=8&search=${encodeURIComponent(q)}`, auth());
       setAcctResults(data.data || data.accounts || []);

@@ -228,11 +228,13 @@ async def tag_transaction(txn_id: str, payload: TagPayload, current_user: dict =
     txn = await db[COLL].find_one({"id": txn_id, "tenant_id": tenant_id}, {"_id": 0})
     if not txn:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    clean_tags = {k: v for k, v in (payload.tags or {}).items() if v}
+    has_selection = bool(clean_tags) or bool(payload.vendor_id)
     updates = {
-        "tags": payload.tags or {},
+        "tags": clean_tags,
         "vendor_id": payload.vendor_id, "vendor_name": payload.vendor_name,
         "notes": payload.notes,
-        "status": "tagged" if (payload.tags or payload.vendor_id) else "untagged",
+        "status": "tagged" if has_selection else "untagged",
         "tagged_by": current_user.get("id"), "tagged_at": _now(), "updated_at": _now(),
     }
     await db[COLL].update_one({"id": txn_id, "tenant_id": tenant_id}, {"$set": updates})
