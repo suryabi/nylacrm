@@ -657,3 +657,4 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Same preset time filter as Leads (this/last week, month, quarter, last 3/6 months, lifetime) → computed to date_start/date_end on client.
 - Subtle Zoho correlation: bank description/narration shown prominently + click-to-copy monospace Zoho transaction-ID chip.
 - Frontend-only (AccountingTransactions.js); backend list already supported page/limit/date_start/date_end/total. Verified via live screenshot.
+- Date groups now collapsible (click header); each header shows total count + amber "N to tag" (untagged) badge / green "All tagged".

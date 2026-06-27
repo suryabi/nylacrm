@@ -75,6 +75,8 @@ export default function AccountingTransactions() {
   const [masters, setMasters] = useState({});
   const [vendors, setVendors] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
+  const [collapsedDates, setCollapsedDates] = useState({});
+  const toggleDate = (d) => setCollapsedDates((p) => ({ ...p, [d]: !p[d] }));
 
   const loadMasters = useCallback(async () => {
     const keys = ['expense_type', 'expense_category', 'cost_center', 'project_business_unit', 'payment_source', 'revenue_stream'];
@@ -203,24 +205,43 @@ export default function AccountingTransactions() {
                   cur.rows.push(it);
                 });
                 let zi = 0;
-                return groups.map((g) => (
-                  <React.Fragment key={g.date}>
-                    <tr className="bg-slate-100/70" data-testid={`date-group-${g.date}`}>
-                      <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        {dateHeading(g.date)}
-                      </td>
-                    </tr>
-                    {g.rows.map((it) => {
-                      const z = zi++ % 2 === 1;
-                      return (
-                        <Row key={it.id} it={it} masters={masters} vendors={vendors} zebra={z}
-                          expanded={expandedId === it.id}
-                          onToggle={() => setExpandedId(expandedId === it.id ? null : it.id)}
-                          onChange={patchRow} />
-                      );
-                    })}
-                  </React.Fragment>
-                ));
+                return groups.map((g) => {
+                  const untagged = g.rows.filter((r) => r.status !== 'tagged').length;
+                  const collapsed = !!collapsedDates[g.date];
+                  return (
+                    <React.Fragment key={g.date}>
+                      <tr className="cursor-pointer bg-slate-100/70 hover:bg-slate-200/60" onClick={() => toggleDate(g.date)} data-testid={`date-group-${g.date}`}>
+                        <td colSpan={6} className="px-3 py-2">
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                              <ChevronRight className={`h-3.5 w-3.5 transition-transform ${collapsed ? '' : 'rotate-90'}`} />
+                              {dateHeading(g.date)}
+                              <span className="ml-1 rounded-full bg-slate-200 px-1.5 text-[10px] font-medium text-slate-500">{g.rows.length}</span>
+                            </span>
+                            {untagged > 0 ? (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700" data-testid={`date-untagged-${g.date}`}>
+                                {untagged} to tag
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600" data-testid={`date-untagged-${g.date}`}>
+                                <CheckCircle2 className="h-3.5 w-3.5" /> All tagged
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {!collapsed && g.rows.map((it) => {
+                        const z = zi++ % 2 === 1;
+                        return (
+                          <Row key={it.id} it={it} masters={masters} vendors={vendors} zebra={z}
+                            expanded={expandedId === it.id}
+                            onToggle={() => setExpandedId(expandedId === it.id ? null : it.id)}
+                            onChange={patchRow} />
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                });
               })()}
             </tbody>
           </table>
