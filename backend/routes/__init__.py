@@ -36,6 +36,7 @@ from .task_management import router as task_management_router
 from .return_reasons import router as return_reasons_router
 from .accounting_masters import router as accounting_masters_router
 from .accounting_entities import router as accounting_entities_router
+from .accounting_transactions import router as accounting_transactions_router
 from .vendor_types import router as vendor_types_router
 from .customer_returns import router as customer_returns_router
 from .customer_returns_list import router as customer_returns_list_router
@@ -111,6 +112,7 @@ routes_router.include_router(task_management_router, prefix="/task-management", 
 routes_router.include_router(return_reasons_router, prefix="/return-reasons", tags=["Return Reasons"])
 routes_router.include_router(accounting_masters_router, tags=["Accounting Masters"])
 routes_router.include_router(accounting_entities_router, tags=["Accounting Entities"])
+routes_router.include_router(accounting_transactions_router, tags=["Accounting Transactions"])
 routes_router.include_router(vendor_types_router, tags=["Vendor Types"])
 
 # Customer Returns (under distributors)
