@@ -8,13 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
+import re
 import logging
 
 from database import db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
 from models.accounting_master import (
-    MASTER_TYPES, HIERARCHICAL_TYPES, DEFAULT_EXPENSE_TYPES, LEGACY_EXPENSE_TYPES, DEFAULT_SEEDS,
+    MASTER_TYPES, HIERARCHICAL_TYPES, DEFAULT_EXPENSE_TYPES, LEGACY_EXPENSE_TYPES,
+    DEFAULT_SEEDS, EXPENSE_CATEGORY_TREE,
     AccountingMasterCreate, AccountingMasterUpdate,
 )
 
@@ -78,6 +80,48 @@ async def _reconcile_expense_types(tenant_id: str, user_id: str):
         await db[COLL].insert_many(docs)
 
 
+async def _seed_expense_categories(tenant_id: str, user_id: str):
+    """One-time seed of the 3-level Expense Category tree.
+
+    Duplicate-aware: at each level it REUSES an existing node with the same
+    (name, parent) instead of creating a second one — so it merges cleanly with
+    any pre-existing categories. Runs once per tenant (guarded by a marker), so
+    it never re-adds items the user later removes."""
+    marker = await db["accounting_seed_markers"].find_one(
+        {"tenant_id": tenant_id, "key": "expense_category_v1"}
+    )
+    if marker:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+
+    async def _get_or_create(name: str, parent_id, order: int) -> str:
+        existing = await db[COLL].find_one({
+            "tenant_id": tenant_id, "master_type": "expense_category",
+            "parent_id": parent_id, "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+        }, {"_id": 0, "id": 1})
+        if existing:
+            return existing["id"]
+        new_id = str(uuid.uuid4())
+        await db[COLL].insert_one({
+            "id": new_id, "tenant_id": tenant_id, "master_type": "expense_category",
+            "name": name, "code": None, "description": None, "parent_id": parent_id,
+            "is_active": True, "sort_order": order, "gstin": None, "email": None, "phone": None,
+            "linked_user_id": None, "created_at": now, "updated_at": now, "created_by": user_id,
+        })
+        return new_id
+
+    for ci, (cat, subs) in enumerate(EXPENSE_CATEGORY_TREE.items()):
+        cat_id = await _get_or_create(cat, None, ci)
+        for si, (sub, items) in enumerate(subs.items()):
+            sub_id = await _get_or_create(sub, cat_id, si)
+            for ii, item in enumerate(items):
+                await _get_or_create(item, sub_id, ii)
+
+    await db["accounting_seed_markers"].insert_one({
+        "tenant_id": tenant_id, "key": "expense_category_v1", "created_at": now,
+    })
+
+
 async def _seed_all(tenant_id: str, user_id: str):
     """Seed every master type that has a default list (idempotent)."""
     for mt in DEFAULT_SEEDS:
@@ -85,6 +129,7 @@ async def _seed_all(tenant_id: str, user_id: str):
             await _reconcile_expense_types(tenant_id, user_id)
         else:
             await _seed_type(tenant_id, user_id, mt)
+    await _seed_expense_categories(tenant_id, user_id)
 
 
 def _level_of(node_id, parent_map):
@@ -123,6 +168,8 @@ async def list_masters(
     tenant_id = get_current_tenant_id()
     if master_type == "expense_type":
         await _reconcile_expense_types(tenant_id, current_user.get("id"))
+    elif master_type == "expense_category":
+        await _seed_expense_categories(tenant_id, current_user.get("id"))
     else:
         await _seed_type(tenant_id, current_user.get("id"), master_type)
 

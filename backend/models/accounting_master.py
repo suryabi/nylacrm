@@ -16,9 +16,6 @@ MASTER_TYPES = {
     "cost_center": {"label": "Cost Center", "hierarchical": False},
     "project_business_unit": {"label": "Project / Business Unit", "hierarchical": False},
     "payment_source": {"label": "Payment Source", "hierarchical": False},
-    "vendor": {"label": "Vendor", "hierarchical": False},
-    "employee": {"label": "Employee", "hierarchical": False},
-    "city_location": {"label": "City / Location", "hierarchical": False},
     "budget_head": {"label": "Budget Head", "hierarchical": False},
     "approval_category": {"label": "Approval Category", "hierarchical": False},
 }
@@ -71,6 +68,59 @@ DEFAULT_SEEDS = {
     "payment_source": DEFAULT_PAYMENT_SOURCES,
     "project_business_unit": DEFAULT_PROJECT_BUSINESS_UNITS,
     "cost_center": DEFAULT_COST_CENTERS,
+}
+
+# Hierarchical Expense Category seed: top category -> { sub-category -> [items] }.
+# Seeded once per tenant (gated on the canonical root being absent).
+EXPENSE_CATEGORY_TREE = {
+    "Production & Manufacturing": {
+        "Raw Materials": ["Glass Bottles", "Caps", "Neck Tags", "Labels", "Cartons", "Crates", "Shrink Wrap", "Minerals", "Chemicals"],
+        "Packaging Materials": [], "Consumables": [],
+        "Utilities": ["Electricity", "Water", "Diesel", "Generator Fuel"],
+        "Factory Maintenance": [], "Quality Control": [], "Production Labour": [], "Production Overheads": [],
+    },
+    "Sales": {
+        "Customer Acquisition": [], "Sales Commission": [], "Customer Entertainment": [], "Samples": [],
+        "Sales Promotions": [], "Dealer Incentives": [], "Trade Schemes": [],
+    },
+    "Marketing": {
+        "Digital Marketing": ["Google Ads", "Meta Ads", "LinkedIn Ads", "SEO", "Email Marketing", "Influencer Marketing"],
+        "Branding": [], "Events": [], "Sponsorships": [], "Photography": [], "Video Production": [],
+        "Public Relations": [], "Printing": [], "Merchandise": [],
+    },
+    "Logistics": {
+        "Freight": [], "Transportation": [], "Fuel": [], "Warehousing": [], "Courier": [],
+        "Loading & Unloading": [], "Reverse Logistics": [],
+        "Local Transport": [], "Interstate Freight": [], "Cold Chain": [], "Last Mile Delivery": [],
+    },
+    "HR": {
+        "Salaries": ["Monthly Salary", "Bonus", "Incentives", "PF", "ESI", "Gratuity"],
+        "Recruitment": [], "Training": [], "Employee Welfare": [], "Uniforms": [], "Insurance": [],
+    },
+    "Administration": {
+        "Office Expenses": [], "Housekeeping": [], "Pantry": [], "Security": [],
+        "Repairs": ["Machinery Repair", "Vehicle Repair", "Building Maintenance", "Computer Repair"],
+        "Rent": [], "Electricity": [], "Internet": [],
+    },
+    "IT": {
+        "Cloud Services": [], "AI Services": [],
+        "Software Licenses": ["Zoho", "Microsoft 365", "Google Workspace", "OpenAI", "Emergent", "AWS", "Azure", "Oracle", "GitHub", "Slack", "Canva"],
+        "Hardware": [], "Mobile Bills": [], "Website": [], "Domains": [], "Cyber Security": [],
+    },
+    "Finance": {
+        "Audit": [], "Accounting": [], "Legal": [], "Bank Charges": [], "Interest": [], "Consultancy": [],
+    },
+    "Travel": {
+        "Flights": [], "Hotels": [], "Taxi": [], "Local Travel": [], "Fuel": [], "Meals": [],
+        "Airfare": [], "Hotel Stay": [], "Toll Charges": [], "Food": [],
+    },
+    "Capital Assets": {
+        "Machinery": [], "Vehicles": [], "Furniture": [], "Computers": [],
+        "Factory Equipment": [], "Laboratory Equipment": [], "Office Equipment": [],
+    },
+    "Taxes": {
+        "GST": [], "Customs Duty": [], "Import Duty": [], "TDS": [], "Professional Tax": [], "Stamp Duty": [],
+    },
 }
 
 

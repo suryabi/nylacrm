@@ -266,6 +266,8 @@ const accountingNavigationGroups = [
     title: 'Accounting',
     items: [
       { name: 'Accounting Masters', href: '/accounting/masters', icon: Calculator, roles: ACCOUNTING_ROLES },
+      { name: 'Vendors', href: '/accounting/vendors', icon: Building, roles: ACCOUNTING_ROLES },
+      { name: 'Employees', href: '/accounting/employees', icon: Users, roles: ACCOUNTING_ROLES },
     ],
   },
 ];
