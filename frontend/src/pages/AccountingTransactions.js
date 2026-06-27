@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
   RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, Paperclip, Upload,
-  Trash2, FileText, Link2, X, Banknote, CheckCircle2,
+  Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -13,9 +13,6 @@ import { Badge } from '../components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
-import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
-} from '../components/ui/sheet';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, withCredentials: true });
@@ -40,7 +37,7 @@ export default function AccountingTransactions() {
   const [direction, setDirection] = useState('all');
   const [masters, setMasters] = useState({});
   const [vendors, setVendors] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [expandedId, setExpandedId] = useState(null);
 
   const loadMasters = useCallback(async () => {
     const keys = ['expense_type', 'expense_category', 'cost_center', 'project_business_unit', 'payment_source', 'revenue_stream'];
@@ -78,6 +75,12 @@ export default function AccountingTransactions() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Sync failed'); } finally { setSyncing(false); }
   };
 
+  // Update a single row in place (so expand state + counts stay smooth after edits)
+  const patchRow = (updated) => {
+    setItems((prev) => prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+    load();
+  };
+
   const tabs = [
     { key: 'untagged', label: 'Untagged', count: summary.untagged },
     { key: 'tagged', label: 'Tagged', count: summary.tagged },
@@ -85,13 +88,13 @@ export default function AccountingTransactions() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl p-6" data-testid="transactions-page">
+    <div className="mx-auto max-w-6xl p-6" data-testid="transactions-page">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
             <Banknote className="h-6 w-6 text-indigo-600" /> Transactions
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">Bank transactions pulled from Zoho. Tag expense/income masters, link accounts &amp; attach proofs.</p>
+          <p className="mt-0.5 text-sm text-slate-500">Bank transactions from Zoho. Click a row to categorise, link an account &amp; attach documents.</p>
         </div>
         <Button onClick={sync} disabled={syncing} className="bg-indigo-600 hover:bg-indigo-700" data-testid="sync-zoho-btn">
           {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Sync from Zoho
@@ -99,16 +102,16 @@ export default function AccountingTransactions() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-slate-200 bg-white p-1">
+        <div className="flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           {tabs.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${tab === t.key ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+            <button key={t.key} onClick={() => { setTab(t.key); setExpandedId(null); }}
+              className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === t.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
               data-testid={`tab-${t.key}`}>
-              {t.label} <span className="ml-1 opacity-70">{t.count}</span>
+              {t.label} <span className={`ml-1 rounded-full px-1.5 text-xs ${tab === t.key ? 'bg-white/20' : 'bg-slate-100'}`}>{t.count}</span>
             </button>
           ))}
         </div>
-        <Select value={direction} onValueChange={setDirection}>
+        <Select value={direction} onValueChange={(v) => { setDirection(v); setExpandedId(null); }}>
           <SelectTrigger className="h-9 w-40" data-testid="filter-direction"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All directions</SelectItem>
@@ -122,7 +125,7 @@ export default function AccountingTransactions() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="flex justify-center py-16 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : items.length === 0 ? (
@@ -132,48 +135,27 @@ export default function AccountingTransactions() {
         ) : (
           <table className="w-full text-sm" data-testid="txn-table">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+              <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] uppercase tracking-wide text-slate-500">
+                <th className="w-10 p-3"></th>
                 <th className="p-3 text-left font-medium">Date</th>
                 <th className="p-3 text-left font-medium">Description</th>
                 <th className="p-3 text-left font-medium">Bank</th>
                 <th className="p-3 text-right font-medium">Amount</th>
                 <th className="p-3 text-center font-medium">Status</th>
-                <th className="p-3 text-center font-medium">Proofs</th>
+                <th className="p-3 text-center font-medium">Docs</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((it) => {
-                const credit = it.direction === 'credit';
-                const proofs = (it.proofs || []).filter((p) => !p.is_deleted);
-                return (
-                  <tr key={it.id} className="cursor-pointer border-b border-slate-100 hover:bg-slate-50" onClick={() => setSelected(it)} data-testid={`txn-row-${it.id}`}>
-                    <td className="p-3 text-slate-500">{it.date}</td>
-                    <td className="p-3">
-                      <div className="font-medium text-slate-800">{it.payee || it.description || '—'}</div>
-                      <div className="text-xs text-slate-400">{it.reference_number || it.zoho_transaction_type || ''}</div>
-                    </td>
-                    <td className="p-3 text-slate-500">{it.bank_account_name || '—'}</td>
-                    <td className={`p-3 text-right font-semibold ${credit ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      <span className="inline-flex items-center gap-1 justify-end">
-                        {credit ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}{fmt(it.amount)}
-                      </span>
-                    </td>
-                    <td className="p-3 text-center">
-                      <Badge variant="outline" className={it.status === 'tagged' ? 'border-emerald-200 text-emerald-700' : 'text-amber-600 border-amber-200'}>{it.status}</Badge>
-                    </td>
-                    <td className="p-3 text-center text-slate-500">{proofs.length ? <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />{proofs.length}</span> : '—'}</td>
-                  </tr>
-                );
-              })}
+              {items.map((it) => (
+                <Row key={it.id} it={it} masters={masters} vendors={vendors}
+                  expanded={expandedId === it.id}
+                  onToggle={() => setExpandedId(expandedId === it.id ? null : it.id)}
+                  onChange={patchRow} />
+              ))}
             </tbody>
           </table>
         )}
       </div>
-
-      {selected && (
-        <TxnDetail txn={selected} masters={masters} vendors={vendors}
-          onClose={() => setSelected(null)} onSaved={() => { setSelected(null); load(); }} />
-      )}
     </div>
   );
 }
@@ -183,19 +165,67 @@ function masterLabel(item) {
   return `${indent}${item.name}`;
 }
 
-function TxnDetail({ txn, masters, vendors, onClose, onSaved }) {
-  const credit = txn.direction === 'credit';
-  const [tags, setTags] = useState(txn.tags || {});
-  const [vendorId, setVendorId] = useState(txn.vendor_id || '');
-  const [notes, setNotes] = useState(txn.notes || '');
-  const [proofs, setProofs] = useState((txn.proofs || []).filter((p) => !p.is_deleted));
+function Row({ it, masters, vendors, expanded, onToggle, onChange }) {
+  const credit = it.direction === 'credit';
+  const proofs = (it.proofs || []).filter((p) => !p.is_deleted);
+  return (
+    <>
+      <tr className={`cursor-pointer border-b border-slate-100 transition-colors ${expanded ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+        onClick={onToggle} data-testid={`txn-row-${it.id}`}>
+        <td className="p-3 text-slate-400">
+          <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? 'rotate-90 text-indigo-600' : ''}`} />
+        </td>
+        <td className="p-3 text-slate-500">{it.date}</td>
+        <td className="p-3">
+          <div className="font-medium text-slate-800">{it.payee || it.description || '—'}</div>
+          <div className="text-xs text-slate-400">{it.reference_number || it.zoho_transaction_type || ''}</div>
+        </td>
+        <td className="p-3 text-slate-500">{it.bank_account_name || '—'}</td>
+        <td className={`p-3 text-right font-semibold ${credit ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <span className="inline-flex items-center justify-end gap-1">
+            {credit ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}{fmt(it.amount)}
+          </span>
+        </td>
+        <td className="p-3 text-center">
+          <Badge variant="outline" className={it.status === 'tagged' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-600'}>{it.status}</Badge>
+        </td>
+        <td className="p-3 text-center text-slate-500">{proofs.length ? <span className="inline-flex items-center gap-1"><Paperclip className="h-3.5 w-3.5" />{proofs.length}</span> : '—'}</td>
+      </tr>
+      {expanded && (
+        <tr className="border-b-2 border-indigo-100 bg-gradient-to-b from-indigo-50/40 to-white" data-testid={`txn-expanded-${it.id}`}>
+          <td colSpan={7} className="p-0">
+            <ExpandedEditor it={it} credit={credit} masters={masters} vendors={vendors} onChange={onChange} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function SectionCard({ icon: Icon, title, accent = 'indigo', children }) {
+  const accentClass = accent === 'emerald' ? 'text-emerald-600' : 'text-indigo-600';
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className={`mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide ${accentClass}`}>
+        <Icon className="h-3.5 w-3.5" /> {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
+  const [tags, setTags] = useState(it.tags || {});
+  const [vendorId, setVendorId] = useState(it.vendor_id || '');
+  const [notes, setNotes] = useState(it.notes || '');
+  const [proofs, setProofs] = useState((it.proofs || []).filter((p) => !p.is_deleted));
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [adjustment, setAdjustment] = useState(txn.account_adjustment || null);
-  const [accountName, setAccountName] = useState(txn.account_name || '');
-  // account search
+  const [adjustment, setAdjustment] = useState(it.account_adjustment || null);
+  const [accountName, setAccountName] = useState(it.account_name || '');
   const [acctQuery, setAcctQuery] = useState('');
   const [acctResults, setAcctResults] = useState([]);
+  const fileRef = useRef(null);
 
   const masterGroups = credit ? INCOME_MASTERS : EXPENSE_MASTERS;
   const setTag = (k, v) => setTags((p) => ({ ...p, [k]: v === '__none__' ? undefined : v }));
@@ -204,39 +234,52 @@ function TxnDetail({ txn, masters, vendors, onClose, onSaved }) {
     setSaving(true);
     try {
       const vendor = vendors.find((v) => v.id === vendorId);
-      await axios.patch(`${API}/api/accounting/transactions/${txn.id}/tags`, {
+      const { data } = await axios.patch(`${API}/api/accounting/transactions/${it.id}/tags`, {
         tags: Object.fromEntries(Object.entries(tags).filter(([, v]) => v)),
         vendor_id: vendorId || null, vendor_name: vendor ? vendor.name : null, notes,
       }, auth());
-      toast.success('Tags saved'); onSaved();
+      toast.success('Saved'); onChange(data);
     } catch (e) { toast.error(e.response?.data?.detail || 'Save failed'); } finally { setSaving(false); }
   };
 
-  const onUpload = async (e, proofType) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const onUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('proof_type', proofType);
-      const { data } = await axios.post(`${API}/api/accounting/transactions/${txn.id}/proofs`, fd, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'multipart/form-data' }, withCredentials: true,
-      });
-      setProofs((p) => [...p, data]); toast.success('Proof uploaded');
-    } catch (err) { toast.error(err.response?.data?.detail || 'Upload failed'); } finally { setUploading(false); e.target.value = ''; }
+    const added = [];
+    for (const file of files) {
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('proof_type', 'document');
+        const { data } = await axios.post(`${API}/api/accounting/transactions/${it.id}/proofs`, fd, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'multipart/form-data' }, withCredentials: true,
+        });
+        added.push(data);
+      } catch (err) { toast.error(`${file.name}: ${err.response?.data?.detail || 'upload failed'}`); }
+    }
+    if (added.length) {
+      const next = [...proofs, ...added];
+      setProofs(next); onChange({ ...it, proofs: next });
+      toast.success(`${added.length} document${added.length > 1 ? 's' : ''} uploaded`);
+    }
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const viewProof = async (p) => {
     try {
-      const res = await axios.get(`${API}/api/accounting/transactions/${txn.id}/proofs/${p.id}/download`, { ...auth(), responseType: 'blob' });
+      const res = await axios.get(`${API}/api/accounting/transactions/${it.id}/proofs/${p.id}/download`, { ...auth(), responseType: 'blob' });
       window.open(URL.createObjectURL(res.data), '_blank');
-    } catch { toast.error('Could not open proof'); }
+    } catch { toast.error('Could not open document'); }
   };
 
   const deleteProof = async (p) => {
-    try { await axios.delete(`${API}/api/accounting/transactions/${txn.id}/proofs/${p.id}`, auth()); setProofs((x) => x.filter((q) => q.id !== p.id)); }
-    catch { toast.error('Delete failed'); }
+    try {
+      await axios.delete(`${API}/api/accounting/transactions/${it.id}/proofs/${p.id}`, auth());
+      const next = proofs.filter((q) => q.id !== p.id);
+      setProofs(next); onChange({ ...it, proofs: next });
+    } catch { toast.error('Delete failed'); }
   };
 
   const searchAccounts = async (q) => {
@@ -251,127 +294,113 @@ function TxnDetail({ txn, masters, vendors, onClose, onSaved }) {
   const applyAccount = async (acct) => {
     try {
       const aid = acct.id || acct.account_id;
-      const { data } = await axios.post(`${API}/api/accounting/transactions/${txn.id}/apply-account`, { account_id: aid, account_name: acct.account_name }, auth());
+      const { data } = await axios.post(`${API}/api/accounting/transactions/${it.id}/apply-account`, { account_id: aid, account_name: acct.account_name }, auth());
       setAdjustment(data.adjustment); setAccountName(acct.account_name); setAcctResults([]); setAcctQuery('');
+      onChange({ ...it, account_adjustment: data.adjustment, account_name: acct.account_name });
       toast.success(data.message);
     } catch (e) { toast.error(e.response?.data?.detail || 'Apply failed'); }
   };
 
   const unapplyAccount = async () => {
     try {
-      const { data } = await axios.post(`${API}/api/accounting/transactions/${txn.id}/unapply-account`, {}, auth());
-      setAdjustment(null); setAccountName(''); toast.success(data.message);
+      const { data } = await axios.post(`${API}/api/accounting/transactions/${it.id}/unapply-account`, {}, auth());
+      setAdjustment(null); setAccountName('');
+      onChange({ ...it, account_adjustment: null, account_name: null });
+      toast.success(data.message);
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
 
   return (
-    <Sheet open onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg" data-testid="txn-detail">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            {credit ? <ArrowDownLeft className="h-5 w-5 text-emerald-600" /> : <ArrowUpRight className="h-5 w-5 text-rose-600" />}
-            {credit ? 'Money In' : 'Money Out'} · {fmt(txn.amount)}
-          </SheetTitle>
-          <SheetDescription>
-            {txn.date} · {txn.payee || txn.description || '—'} · {txn.bank_account_name || ''}
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="mt-5 space-y-5">
-          {/* Master tags */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{credit ? 'Income Tags' : 'Expense Tags'}</h3>
-            {masterGroups.map((m) => (
-              <div key={m.key}>
-                <Label className="text-xs text-slate-600">{m.label}</Label>
-                <Select value={tags[m.key] || undefined} onValueChange={(v) => setTag(m.key, v)}>
-                  <SelectTrigger data-testid={`tag-${m.key}`}><SelectValue placeholder="Select" /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    <SelectItem value="__none__">— None —</SelectItem>
-                    {(masters[m.key] || []).map((it) => <SelectItem key={it.id} value={it.id}>{masterLabel(it)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            ))}
-            {!credit && (
-              <div>
-                <Label className="text-xs text-slate-600">Vendor</Label>
-                <Select value={vendorId || undefined} onValueChange={(v) => setVendorId(v === '__none__' ? '' : v)}>
-                  <SelectTrigger data-testid="tag-vendor"><SelectValue placeholder="Select vendor" /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    <SelectItem value="__none__">— None —</SelectItem>
-                    {vendors.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-            <div>
-              <Label className="text-xs text-slate-600">Notes</Label>
-              <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="tag-notes" />
+    <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-2">
+      {/* Categorisation */}
+      <SectionCard icon={Tag} title={credit ? 'Income Categorisation' : 'Expense Categorisation'}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {masterGroups.map((m) => (
+            <div key={m.key} className={m.key === 'expense_category' ? 'sm:col-span-2' : ''}>
+              <Label className="text-xs text-slate-600">{m.label}</Label>
+              <Select value={tags[m.key] || undefined} onValueChange={(v) => setTag(m.key, v)}>
+                <SelectTrigger className="mt-1" data-testid={`tag-${m.key}`}><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {(masters[m.key] || []).map((x) => <SelectItem key={x.id} value={x.id}>{masterLabel(x)}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <Button onClick={saveTags} disabled={saving} className="w-full bg-indigo-600 hover:bg-indigo-700" data-testid="save-tags-btn">
-              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Save Tags
-            </Button>
-          </div>
-
-          {/* Account application (income only) */}
-          {credit && (
-            <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-              <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Link2 className="h-3.5 w-3.5" /> Payment Received — Link Account</h3>
-              {adjustment?.applied ? (
-                <div className="flex items-center justify-between gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800" data-testid="account-applied">
-                  <span><CheckCircle2 className="mr-1 inline h-4 w-4" />Applied {fmt(adjustment.amount)} to <b>{accountName}</b></span>
-                  <Button variant="ghost" size="sm" className="h-7 text-rose-600" onClick={unapplyAccount} data-testid="unapply-account-btn">Remove</Button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <Input placeholder="Search account…" value={acctQuery} onChange={(e) => searchAccounts(e.target.value)} data-testid="account-search" />
-                  {acctResults.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
-                      {acctResults.map((a) => (
-                        <button key={a.id || a.account_id} onClick={() => applyAccount(a)}
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-50" data-testid={`account-opt-${a.id || a.account_id}`}>
-                          <span>{a.account_name}</span>
-                          <span className="text-xs text-slate-400">Out: {fmt(a.outstanding_balance)}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <p className="mt-1 text-xs text-slate-400">Applying reduces the account's outstanding balance by {fmt(txn.amount)}.</p>
-                </div>
-              )}
+          ))}
+          {!credit && (
+            <div className="sm:col-span-2">
+              <Label className="text-xs text-slate-600">Vendor</Label>
+              <Select value={vendorId || undefined} onValueChange={(v) => setVendorId(v === '__none__' ? '' : v)}>
+                <SelectTrigger className="mt-1" data-testid="tag-vendor"><SelectValue placeholder="Select vendor" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {vendors.map((v) => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           )}
-
-          {/* Proofs */}
-          <div className="space-y-2 rounded-lg border border-slate-200 p-3">
-            <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"><Paperclip className="h-3.5 w-3.5" /> Proofs</h3>
-            {proofs.length === 0 && <p className="text-xs text-slate-400">No proofs attached.</p>}
-            {proofs.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-sm" data-testid={`proof-${p.id}`}>
-                <button className="flex items-center gap-2 truncate text-left text-slate-700 hover:text-indigo-600" onClick={() => viewProof(p)}>
-                  <FileText className="h-4 w-4 shrink-0" /><span className="truncate">{p.original_filename}</span>
-                  <Badge variant="outline" className="text-[10px]">{p.type}</Badge>
-                </button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-rose-500" onClick={() => deleteProof(p)} data-testid={`delete-proof-${p.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
-              </div>
-            ))}
-            <div className="flex gap-2 pt-1">
-              <ProofUploadButton label="Payment Proof" type="payment_proof" onUpload={onUpload} uploading={uploading} />
-              <ProofUploadButton label="Invoice Proof" type="invoice_proof" onUpload={onUpload} uploading={uploading} />
-            </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs text-slate-600">Notes</Label>
+            <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1" data-testid="tag-notes" />
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
+        <Button onClick={saveTags} disabled={saving} className="mt-3 w-full bg-indigo-600 hover:bg-indigo-700" data-testid="save-tags-btn">
+          {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />} Save
+        </Button>
+      </SectionCard>
 
-function ProofUploadButton({ label, type, onUpload, uploading }) {
-  return (
-    <label className="flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-300 px-2 py-2 text-xs text-slate-600 hover:border-indigo-400 hover:text-indigo-600" data-testid={`upload-${type}`}>
-      {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {label}
-      <input type="file" className="hidden" accept=".pdf,.png,.jpg,.jpeg,.webp" disabled={uploading} onChange={(e) => onUpload(e, type)} />
-    </label>
+      {/* Right column */}
+      <div className="space-y-4">
+        {credit && (
+          <SectionCard icon={Link2} title="Payment Received — Link Account" accent="emerald">
+            {adjustment?.applied ? (
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800" data-testid="account-applied">
+                <span><CheckCircle2 className="mr-1.5 inline h-4 w-4" />Applied <b>{fmt(adjustment.amount)}</b> to <b>{accountName}</b></span>
+                <Button variant="ghost" size="sm" className="h-7 text-rose-600" onClick={unapplyAccount} data-testid="unapply-account-btn">Remove</Button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                <Input className="pl-8" placeholder="Search account…" value={acctQuery} onChange={(e) => searchAccounts(e.target.value)} data-testid="account-search" />
+                {acctResults.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+                    {acctResults.map((a) => (
+                      <button key={a.id || a.account_id} onClick={() => applyAccount(a)}
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-emerald-50" data-testid={`account-opt-${a.id || a.account_id}`}>
+                        <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-slate-400" />{a.account_name}</span>
+                        <span className="text-xs text-slate-400">Outstanding {fmt(a.outstanding_balance)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-1.5 text-xs text-slate-400">Linking reduces the account's outstanding balance by <b>{fmt(it.amount)}</b>.</p>
+              </div>
+            )}
+          </SectionCard>
+        )}
+
+        {/* Documents — generic multi-upload */}
+        <SectionCard icon={Paperclip} title="Documents">
+          <div className="space-y-1.5">
+            {proofs.length === 0 && <p className="text-xs text-slate-400">No documents attached yet.</p>}
+            {proofs.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm" data-testid={`proof-${p.id}`}>
+                <button className="flex items-center gap-2 truncate text-left text-slate-700 hover:text-indigo-600" onClick={() => viewProof(p)}>
+                  <FileText className="h-4 w-4 shrink-0 text-slate-400" /><span className="truncate">{p.original_filename}</span>
+                </button>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-rose-500" onClick={() => deleteProof(p)} data-testid={`delete-proof-${p.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+              </div>
+            ))}
+          </div>
+          <label className="mt-3 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500 transition-colors hover:border-indigo-400 hover:bg-indigo-50/40 hover:text-indigo-600" data-testid="upload-document">
+            {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+            <span className="font-medium">{uploading ? 'Uploading…' : 'Upload documents'}</span>
+            <span className="text-xs text-slate-400">Any file — invoices, receipts, payment proofs. Select multiple.</span>
+            <input ref={fileRef} type="file" multiple className="hidden" disabled={uploading} onChange={onUpload}
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt" />
+          </label>
+        </SectionCard>
+      </div>
+    </div>
   );
 }
