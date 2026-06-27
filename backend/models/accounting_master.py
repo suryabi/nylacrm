@@ -9,15 +9,17 @@ from typing import Optional
 
 
 # master_type -> config. `hierarchical` types support parent_id drill-down.
+# `group` separates Expense vs Income masters (same architecture, same collection).
 MASTER_TYPES = {
-    "expense_type": {"label": "Expense Type", "hierarchical": False},
-    "expense_category": {"label": "Expense Category", "hierarchical": True},
-    "department": {"label": "Department", "hierarchical": False},
-    "cost_center": {"label": "Cost Center", "hierarchical": False},
-    "project_business_unit": {"label": "Project / Business Unit", "hierarchical": False},
-    "payment_source": {"label": "Payment Source", "hierarchical": False},
-    "budget_head": {"label": "Budget Head", "hierarchical": False},
-    "approval_category": {"label": "Approval Category", "hierarchical": False},
+    "expense_type": {"label": "Expense Type", "hierarchical": False, "group": "expense"},
+    "expense_category": {"label": "Expense Category", "hierarchical": True, "group": "expense"},
+    "department": {"label": "Department", "hierarchical": False, "group": "expense"},
+    "cost_center": {"label": "Cost Center", "hierarchical": False, "group": "expense"},
+    "project_business_unit": {"label": "Project / Business Unit", "hierarchical": False, "group": "expense"},
+    "payment_source": {"label": "Payment Source", "hierarchical": False, "group": "expense"},
+    "budget_head": {"label": "Budget Head", "hierarchical": False, "group": "expense"},
+    "approval_category": {"label": "Approval Category", "hierarchical": False, "group": "expense"},
+    "revenue_stream": {"label": "Revenue Stream", "hierarchical": False, "group": "income"},
 }
 
 HIERARCHICAL_TYPES = {k for k, v in MASTER_TYPES.items() if v["hierarchical"]}
@@ -62,12 +64,18 @@ DEFAULT_COST_CENTERS = [
     "R&D Center", "Distribution Network",
 ]
 
+DEFAULT_REVENUE_STREAMS = [
+    "Product Sales", "Services", "Subscription", "Licensing", "Distribution",
+    "Consulting", "Franchise", "Advertising", "Partnerships",
+]
+
 # master_type -> list of default values seeded once per tenant on first access.
 DEFAULT_SEEDS = {
     "expense_type": DEFAULT_EXPENSE_TYPES,
     "payment_source": DEFAULT_PAYMENT_SOURCES,
     "project_business_unit": DEFAULT_PROJECT_BUSINESS_UNITS,
     "cost_center": DEFAULT_COST_CENTERS,
+    "revenue_stream": DEFAULT_REVENUE_STREAMS,
 }
 
 # Hierarchical Expense Category seed: top category -> { sub-category -> [items] }.

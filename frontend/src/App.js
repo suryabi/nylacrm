@@ -395,7 +395,8 @@ function AppRouter() {
           <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributor/stock-transfers" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockTransfers /></ProtectedRoute>} />
-          <Route path="/accounting/masters" element={<ProtectedRoute><AccountingMasters /></ProtectedRoute>} />
+          <Route path="/accounting/masters" element={<ProtectedRoute><AccountingMasters group="expense" /></ProtectedRoute>} />
+          <Route path="/accounting/income-masters" element={<ProtectedRoute><AccountingMasters group="income" /></ProtectedRoute>} />
           <Route path="/accounting/vendors" element={<ProtectedRoute><VendorsAccounting /></ProtectedRoute>} />
           <Route path="/accounting/employees" element={<ProtectedRoute><EmployeesAccounting /></ProtectedRoute>} />
           <Route path="/admin/vendor-types" element={<ProtectedRoute><VendorTypes /></ProtectedRoute>} />

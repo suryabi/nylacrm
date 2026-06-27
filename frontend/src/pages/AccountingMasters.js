@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   Plus, Pencil, Trash2, ChevronRight, ChevronDown, Search, Loader2,
   Layers, Wallet, Building2, Target, Briefcase, CreditCard, Truck, Users,
-  MapPin, BookMarked, CheckCircle2, FolderTree, CornerDownRight,
+  MapPin, BookMarked, CheckCircle2, FolderTree, CornerDownRight, TrendingUp,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -26,13 +26,16 @@ const authHeaders = () => ({ headers: { Authorization: `Bearer ${localStorage.ge
 const ICONS = {
   expense_type: Wallet, expense_category: FolderTree, department: Building2,
   cost_center: Target, project_business_unit: Briefcase, payment_source: CreditCard,
-  vendor: Truck, employee: Users, city_location: MapPin, budget_head: BookMarked,
-  approval_category: CheckCircle2,
+  budget_head: BookMarked, approval_category: CheckCircle2, revenue_stream: TrendingUp,
 };
 
-export default function AccountingMasters() {
+export default function AccountingMasters({ group = 'expense', title, subtitle }) {
+  const heading = title || (group === 'income' ? 'Accounting · Income Masters' : 'Accounting · Masters');
+  const subheading = subtitle || (group === 'income'
+    ? 'Configure the master data that categorises income & revenue. Sourced from a single source of truth across the platform.'
+    : 'Configure the master data that categorises every accounting transaction. Expense Categories support multi-level drill-down.');
   const [types, setTypes] = useState([]);
-  const [active, setActive] = useState('expense_type');
+  const [active, setActive] = useState(null);
   const [items, setItems] = useState([]);
   const [hierarchical, setHierarchical] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -43,12 +46,15 @@ export default function AccountingMasters() {
 
   const loadTypes = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API}/api/accounting/masters`, authHeaders());
-      setTypes(data.types || []);
+      const { data } = await axios.get(`${API}/api/accounting/masters?group=${group}`, authHeaders());
+      const t = data.types || [];
+      setTypes(t);
+      setActive((prev) => (prev && t.some((x) => x.key === prev)) ? prev : (t[0]?.key || null));
     } catch (e) { toast.error('Failed to load accounting masters'); }
-  }, []);
+  }, [group]);
 
   const loadItems = useCallback(async (type) => {
+    if (!type) { setItems([]); setLoading(false); return; }
     setLoading(true);
     try {
       const { data } = await axios.get(`${API}/api/accounting/masters/${type}`, authHeaders());
@@ -124,9 +130,9 @@ export default function AccountingMasters() {
     <div className="mx-auto max-w-7xl p-6" data-testid="accounting-masters-page">
       <div className="mb-6">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
-          <Layers className="h-6 w-6 text-indigo-600" /> Accounting · Masters
+          <Layers className="h-6 w-6 text-indigo-600" /> {heading}
         </h1>
-        <p className="mt-0.5 text-sm text-slate-500">Configure the master data that categorises every accounting transaction. Expense Categories support multi-level drill-down.</p>
+        <p className="mt-0.5 text-sm text-slate-500">{subheading}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">

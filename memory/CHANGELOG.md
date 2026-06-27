@@ -635,3 +635,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - New standalone Accounting pages: Vendors (/accounting/vendors) and Employees (/accounting/employees) with rich fields (GSTIN/PAN/bank/payment terms/TDS etc.; employees: dept/designation/DOJ/PAN/bank/linked CRM user). City via /api/master-locations/flat datalist; Vendor Type via /api/vendor-types. Backend: routes/accounting_entities.py (accounting_vendors / accounting_employees collections).
 - Sidebar (Accounting module): Accounting Masters, Vendors, Employees.
 - Verified: iteration_246 — 16/16 backend + all frontend flows PASS. Only a cosmetic React Select warning (non-blocking).
+
+## 2026-06-27 (cont.) — Income Masters (same architecture as Expense) ✅
+- Added `group` ("expense"/"income") to MASTER_TYPES; masters_summary now accepts ?group= filter and returns group per type.
+- New income master **Revenue Stream** (master_type revenue_stream) seeded with 9 defaults (Product Sales, Services, Subscription, Licensing, Distribution, Consulting, Franchise, Advertising, Partnerships) + full CRUD via the existing generic endpoints.
+- Refactored AccountingMasters.js to accept {group,title} props (DRY) — same component powers both Expense and Income masters. New route /accounting/income-masters + sidebar item "Income Masters" under Accounting.
+- Verified: income/expense group filtering, revenue_stream seed(9), CRUD + duplicate guard (curl); UI screenshot of Income Masters page + expense page still defaults correctly.

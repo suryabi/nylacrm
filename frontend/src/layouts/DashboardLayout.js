@@ -18,7 +18,7 @@ import {
   Calculator, Truck, Package, Droplets,
   FolderOpen, Building, UserCog, CalendarOff,
   Kanban, Wrench, Box, ShieldCheck, Boxes,
-  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning, RotateCcw
+  Factory, ArrowLeftRight, ArrowRight, MapPin, Sun, Moon, Home, Settings, Bell, Plane, Wallet, Receipt, FileText, Contact, Crown, Gauge, ClipboardList, BarChart3, LineChart, Megaphone, CalendarRange, Layers, NotebookPen, AlertTriangle, DollarSign, Tag, KeyRound, IndianRupee, Sparkles, BookOpen, PackageOpen, Cable, PackagePlus, PanelLeftClose, PanelLeftOpen, Printer, Mail, Share2, MessageSquareWarning, RotateCcw, TrendingUp
 } from 'lucide-react';
 
 // Platform Admin emails
@@ -266,6 +266,7 @@ const accountingNavigationGroups = [
     title: 'Accounting',
     items: [
       { name: 'Accounting Masters', href: '/accounting/masters', icon: Calculator, roles: ACCOUNTING_ROLES },
+      { name: 'Income Masters', href: '/accounting/income-masters', icon: TrendingUp, roles: ACCOUNTING_ROLES },
       { name: 'Vendors', href: '/accounting/vendors', icon: Building, roles: ACCOUNTING_ROLES },
       { name: 'Employees', href: '/accounting/employees', icon: Users, roles: ACCOUNTING_ROLES },
     ],

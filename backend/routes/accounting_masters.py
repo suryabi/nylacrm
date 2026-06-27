@@ -143,8 +143,12 @@ def _level_of(node_id, parent_map):
 
 
 @router.get("/masters")
-async def masters_summary(current_user: dict = Depends(get_current_user)):
-    """List master types + counts so the UI can render the module overview."""
+async def masters_summary(
+    group: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """List master types + counts so the UI can render the module overview.
+    Optionally filter by `group` ('expense' | 'income')."""
     tenant_id = get_current_tenant_id()
     await _seed_all(tenant_id, current_user.get("id"))
     counts = {}
@@ -153,8 +157,10 @@ async def masters_summary(current_user: dict = Depends(get_current_user)):
     async for row in db[COLL].aggregate(pipeline):
         counts[row["_id"]] = row["n"]
     return {"types": [
-        {"key": k, "label": v["label"], "hierarchical": v["hierarchical"], "count": counts.get(k, 0)}
+        {"key": k, "label": v["label"], "hierarchical": v["hierarchical"],
+         "group": v.get("group", "expense"), "count": counts.get(k, 0)}
         for k, v in MASTER_TYPES.items()
+        if group is None or v.get("group", "expense") == group
     ]}
 
 
