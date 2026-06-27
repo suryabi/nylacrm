@@ -26,7 +26,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 # ---- env / config ----------------------------------------------------------
 load_dotenv("/app/backend/.env")
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/") if os.environ.get(
-    "REACT_APP_BACKEND_URL") else "https://expense-hierarchy-v1.preview.emergentagent.com"
+    "REACT_APP_BACKEND_URL") else "https://accounting-inbox.preview.emergentagent.com"
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 TENANT = "nyla-air-water"

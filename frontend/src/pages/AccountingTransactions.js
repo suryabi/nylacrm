@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import {
   RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, Paperclip, Upload,
   Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
-  Copy, ChevronLeft, CalendarRange,
+  Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Eye, Hash,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,6 +14,12 @@ import { Badge } from '../components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '../components/ui/dialog';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, withCredentials: true });
@@ -62,7 +68,7 @@ const dateHeading = (d) => {
 };
 
 export default function AccountingTransactions() {
-  const [tab, setTab] = useState('untagged');
+  const [tab, setTab] = useState('all');
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState({ untagged: 0, tagged: 0, all: 0 });
   const [loading, setLoading] = useState(true);
@@ -125,11 +131,26 @@ export default function AccountingTransactions() {
     load();
   };
 
-  const tabs = [
-    { key: 'untagged', label: 'Untagged', count: summary.untagged },
-    { key: 'tagged', label: 'Tagged', count: summary.tagged },
-    { key: 'all', label: 'All', count: summary.all },
-  ];
+  const exportData = async (format) => {
+    try {
+      const params = new URLSearchParams();
+      if (tab !== 'all') params.set('status', tab);
+      if (direction !== 'all') params.set('direction', direction);
+      if (search) params.set('search', search);
+      const range = presetRange(timeFilter);
+      if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
+      params.set('format', format);
+      const res = await axios.get(`${API}/api/accounting/transactions/export?${params}`, { ...auth(), responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      const ext = format === 'xlsx' ? 'xlsx' : format;
+      a.download = `transactions.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${format.toUpperCase()}`);
+    } catch (e) { toast.error('Export failed'); }
+  };
 
   return (
     <div className="mx-auto max-w-6xl p-6" data-testid="transactions-page">
@@ -138,23 +159,36 @@ export default function AccountingTransactions() {
           <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-900">
             <Banknote className="h-6 w-6 text-indigo-600" /> Transactions
           </h1>
-          <p className="mt-0.5 text-sm text-slate-500">Bank transactions from Zoho. Click a row to categorise, link an account &amp; attach documents.</p>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Bank transactions from Zoho. <span className="font-medium text-amber-600">{summary.untagged} to tag</span> · {summary.all} total.
+          </p>
         </div>
-        <Button onClick={sync} disabled={syncing} className="bg-indigo-600 hover:bg-indigo-700" data-testid="sync-zoho-btn">
-          {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Sync from Zoho
-        </Button>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" data-testid="download-menu-btn"><Download className="mr-2 h-4 w-4" /> Download</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => exportData('xlsx')} data-testid="download-xlsx"><FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" /> Excel (.xlsx)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportData('csv')} data-testid="download-csv"><FileDown className="mr-2 h-4 w-4 text-slate-600" /> CSV</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportData('pdf')} data-testid="download-pdf"><FileText className="mr-2 h-4 w-4 text-rose-600" /> PDF</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={sync} disabled={syncing} className="bg-indigo-600 hover:bg-indigo-700" data-testid="sync-zoho-btn">
+            {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Sync from Zoho
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
-          {tabs.map((t) => (
-            <button key={t.key} onClick={() => { setTab(t.key); setExpandedId(null); setPage(1); }}
-              className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors ${tab === t.key ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
-              data-testid={`tab-${t.key}`}>
-              {t.label} <span className={`ml-1 rounded-full px-1.5 text-xs ${tab === t.key ? 'bg-white/20' : 'bg-slate-100'}`}>{t.count}</span>
-            </button>
-          ))}
-        </div>
+        <Select value={tab} onValueChange={(v) => { setTab(v); setExpandedId(null); setPage(1); }}>
+          <SelectTrigger className="h-9 w-40" data-testid="filter-status"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All status</SelectItem>
+            <SelectItem value="untagged">Untagged</SelectItem>
+            <SelectItem value="tagged">Tagged</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={direction} onValueChange={(v) => { setDirection(v); setExpandedId(null); setPage(1); }}>
           <SelectTrigger className="h-9 w-40" data-testid="filter-direction"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -290,7 +324,14 @@ function Row({ it, masters, vendors, expanded, onToggle, onChange, zebra }) {
           <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? 'rotate-90 text-indigo-600' : ''}`} />
         </td>
         <td className="p-3">
-          <div className="font-medium text-slate-800">{it.payee || it.description || '—'}</div>
+          <div className="flex items-center gap-2">
+            {it.txn_code && (
+              <span className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-indigo-600" data-testid={`txn-code-${it.id}`}>
+                <Hash className="h-2.5 w-2.5" />{it.txn_code.replace('TXN-', '')}
+              </span>
+            )}
+            <span className="font-medium text-slate-800">{it.payee || it.description || '—'}</span>
+          </div>
           <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-400">
             {it.description && it.description !== it.payee && <span className="truncate max-w-[280px]">{it.description}</span>}
             {it.reference_number && <span>· {it.reference_number}</span>}
@@ -349,6 +390,7 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
   const [acctQuery, setAcctQuery] = useState('');
   const [acctResults, setAcctResults] = useState([]);
   const fileRef = useRef(null);
+  const [preview, setPreview] = useState(null); // { proof, url }
 
   const masterGroups = credit ? INCOME_MASTERS : EXPENSE_MASTERS;
   const setTag = (k, v) => setTags((p) => ({ ...p, [k]: v === '__none__' ? undefined : v }));
@@ -390,10 +432,10 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const viewProof = async (p) => {
+  const openPreview = async (p) => {
     try {
       const res = await axios.get(`${API}/api/accounting/transactions/${it.id}/proofs/${p.id}/download`, { ...auth(), responseType: 'blob' });
-      window.open(URL.createObjectURL(res.data), '_blank');
+      setPreview({ proof: p, url: URL.createObjectURL(res.data) });
     } catch { toast.error('Could not open document'); }
   };
 
@@ -502,28 +544,77 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
           </SectionCard>
         )}
 
-        {/* Documents — generic multi-upload */}
+        {/* Documents — thumbnails, generic multi-upload (images/PDF only) */}
         <SectionCard icon={Paperclip} title="Documents">
-          <div className="space-y-1.5">
-            {proofs.length === 0 && <p className="text-xs text-slate-400">No documents attached yet.</p>}
-            {proofs.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-sm" data-testid={`proof-${p.id}`}>
-                <button className="flex items-center gap-2 truncate text-left text-slate-700 hover:text-indigo-600" onClick={() => viewProof(p)}>
-                  <FileText className="h-4 w-4 shrink-0 text-slate-400" /><span className="truncate">{p.original_filename}</span>
-                </button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-rose-500" onClick={() => deleteProof(p)} data-testid={`delete-proof-${p.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
-              </div>
-            ))}
-          </div>
+          {proofs.length === 0 && <p className="text-xs text-slate-400">No documents attached yet.</p>}
+          {proofs.length > 0 && (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {proofs.map((p) => (
+                <ProofThumb key={p.id} proof={p} txnId={it.id} onPreview={() => openPreview(p)} onDelete={() => deleteProof(p)} />
+              ))}
+            </div>
+          )}
           <label className="mt-3 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500 transition-colors hover:border-indigo-400 hover:bg-indigo-50/40 hover:text-indigo-600" data-testid="upload-document">
             {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
             <span className="font-medium">{uploading ? 'Uploading…' : 'Upload documents'}</span>
-            <span className="text-xs text-slate-400">Any file — invoices, receipts, payment proofs. Select multiple.</span>
+            <span className="text-xs text-slate-400">Images or PDF only. Select multiple. Auto-named {it.txn_code ? `${it.txn_code}-1, -2…` : 'by transaction id'}.</span>
             <input ref={fileRef} type="file" multiple className="hidden" disabled={uploading} onChange={onUpload}
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt" />
+              accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" />
           </label>
         </SectionCard>
       </div>
+
+      {preview && (
+        <Dialog open onOpenChange={(o) => { if (!o) { URL.revokeObjectURL(preview.url); setPreview(null); } }}>
+          <DialogContent className="max-w-3xl" data-testid="proof-preview">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+                <span className="truncate text-sm">{preview.proof.display_name || preview.proof.original_filename}</span>
+                <a href={preview.url} download={preview.proof.display_name || preview.proof.original_filename}>
+                  <Button size="sm" variant="outline" data-testid="proof-download-btn"><Download className="mr-1.5 h-4 w-4" /> Download</Button>
+                </a>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="max-h-[70vh] overflow-auto rounded-lg bg-slate-50 p-2">
+              {preview.proof.is_image
+                ? <img src={preview.url} alt={preview.proof.display_name} className="mx-auto max-h-[65vh] rounded" />
+                : <iframe title="proof" src={preview.url} className="h-[65vh] w-full rounded" />}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+function ProofThumb({ proof, txnId, onPreview, onDelete }) {
+  const [thumb, setThumb] = useState(null);
+  useEffect(() => {
+    let url;
+    if (proof.is_image) {
+      axios.get(`${API}/api/accounting/transactions/${txnId}/proofs/${proof.id}/download`, { ...auth(), responseType: 'blob' })
+        .then((res) => { url = URL.createObjectURL(res.data); setThumb(url); }).catch(() => {});
+    }
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [proof.id, proof.is_image, txnId]);
+
+  return (
+    <div className="group relative aspect-square overflow-hidden rounded-lg border border-slate-200 bg-slate-50" data-testid={`proof-${proof.id}`}>
+      <button className="flex h-full w-full items-center justify-center" onClick={onPreview} title="Preview">
+        {proof.is_image
+          ? (thumb ? <img src={thumb} alt={proof.display_name} className="h-full w-full object-cover" /> : <Loader2 className="h-4 w-4 animate-spin text-slate-300" />)
+          : <div className="flex flex-col items-center gap-1 text-rose-500"><FileText className="h-7 w-7" /><span className="text-[9px] font-medium">PDF</span></div>}
+      </button>
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-black/55 px-1.5 py-0.5 text-[9px] font-medium text-white">
+        {proof.display_name || proof.original_filename}
+      </div>
+      <button onClick={onDelete} data-testid={`delete-proof-${proof.id}`}
+        className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-rose-500 opacity-0 shadow transition-opacity group-hover:opacity-100" title="Delete">
+        <Trash2 className="h-3 w-3" />
+      </button>
+      <button onClick={onPreview} className="absolute left-1 top-1 rounded-full bg-white/90 p-1 text-slate-600 opacity-0 shadow transition-opacity group-hover:opacity-100" title="Preview">
+        <Eye className="h-3 w-3" />
+      </button>
     </div>
   );
 }

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import json
 
 class NylaCRMTester:
-    def __init__(self, base_url="https://expense-hierarchy-v1.preview.emergentagent.com"):
+    def __init__(self, base_url="https://accounting-inbox.preview.emergentagent.com"):
         self.base_url = base_url
         self.tokens = {}
         self.users = {}

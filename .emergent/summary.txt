@@ -1,26 +1,26 @@
-<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The core requests revolve around expanding capabilities across multiple modules: enhancing Target Planning filters, adding packaging configuration to Promotional Stock-Outs, fixing Zoho Books sync, Document Sharing, dynamic PDF generation, delivery routing logic, and State Machine workflows. User also requested the creation of a comprehensive Accounting module to categorize transactions (Expense Type, Category, Department, Cost Center, etc.). PRODUCT REQUIREMENTS: Deliver scalable multi-tenant CRM functionality while ensuring UI fluidity, precise supply chain traceability, reliable external accounting sync, robust workflow approvals, and a dedicated accounting master data architecture.
+<analysis>**original_problem_statement**: The application is a robust multi-tenant CRM for beverage and FMCG operations. The user requested enhancements to Distributor Stock-In (Reversals and Zoho Invoice integration) and the creation of a comprehensive Accounting module. PRODUCT REQUIREMENTS: Deliver a fully standalone Accounting module featuring hierarchical Expense and Income Masters, standalone Vendor and Employee management, and a Zoho-synced Bank Transactions inbox that allows users to tag bank feed entries (Expense/Income), adjust CRM account balances, and upload proof documents (with thumbnails and previews).
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?** 
-A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features include advanced Lead/Account management, dynamic PDF generation, State Machine workflows, Delivery grouping, and a Track Customer Return flow supporting both Credit (Returned) and Debit (Missing) notes. It also features a Revenue Analytics dashboard with multi-period comparison, editable post-completion Stock Transfers, and Zoho Books integration for invoices and delivery challans. A newly added Accounting Masters module allows hierarchical data management for expenses.
+A full-stack multi-tenant CRM with a newly expanded top-level Accounting module. The accounting module includes fully seeded Expense Masters (hierarchical categories), Income Masters (Revenue Streams), standalone Vendor and Employee CRUD pages, and a robust Zoho-synced Bank Transactions inbox. Distributor Stock-In now supports cancellations, warehouse stock-reversals, and automatic Zoho Tax Invoice generation upon confirmation.
 
 **Last working item**: 
-    - Last item agent was working: Moving the newly created Accounting Masters out of the Sales context and making Accounting a standalone top-level module in the frontend app module switcher (alongside Sales, Distribution, Marketing). The agent was inspecting  to implement this.
-    - Status: IN PROGRESS
-    - Agent Testing Done: N
-    - Which testing method agent to use? screenshot tool
+    - Last item agent was working: Implementing the final UX requests for the Accounting Transactions inbox: replacing Tagged/Untagged tabs with a status filter, restricting uploads to Image/PDF, rendering uploaded proofs as thumbnails with a preview/download modal, auto-renaming files to , displaying human-readable  IDs, and adding CSV/XLSX/PDF export endpoints.
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y (Backend tested via bash/curl)
+    - Which testing method agent to use? screenshot tool (Need to take a frontend screenshot of the new thumbnail UI and filter dropdown before finishing).
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:  
-  Issue 1: 12-vs-11 data-testid match in Accounting Masters frontend (P2)
-     - Attempted fixes: None. Was flagged in the  testing agent report as a minor test suite artifact/duplicate.
-     - Next debug checklist: Check  for duplicate  values or update the regex match in the frontend test suite.
-     - Why fix this issue and what will be achieved with the fix? Ensures clean automated testing reports without false positives.
-     - Status: NOT STARTED
+  Issue 1: Reconnect Zoho Books in Production with Banking Scope (P0)
+     - Attempted fixes: None. Handled strictly via user action.
+     - Next debug checklist: Inform user they must reconnect Zoho in the Production environment to grant the  scope, otherwise the new Sync from Zoho button will fail on Production.
+     - Why fix this issue and what will be achieved with the fix? Required to pull live bank feed transactions.
+     - Status: BLOCKED / USER VERIFICATION PENDING
      - Is recurring issue? N
-     - Should Test frontend/backend/both after fix? frontend
-     - Blocked on other issue: None
+     - Should Test frontend/backend/both after fix? NA
+     - Blocked on other issue: User action required in Production.
 
   Issue 2: Slack Integration failing for Marketing Requests (P2)
      - Attempted fixes: Verified bot configuration previously.
@@ -29,60 +29,42 @@ A full-stack multi-tenant CRM (React + FastAPI + MongoDB). Features include adva
      - Status: USER VERIFICATION PENDING
      - Is recurring issue? Y
      - Should Test frontend/backend/both after fix? backend
-     - Blocked on other issue: User action required
 
   Issue 3: Gemini API Key returns 403 PERMISSION DENIED (P2)
-     - Attempted fixes: Key provided by user resulted in GCP denial in previous forks.
      - Next debug checklist: Await user providing a valid key from a brand new Google Cloud project.
-     - Why fix this issue and what will be achieved with the fix? Required for KB/Embeddings.
      - Status: BLOCKED
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? backend
-     - Blocked on other issue: User action required
 
   Issue 4: ActiveMQ subscriber logging warnings (P2)
-     - Attempted fixes: None yet.
-     - Next debug checklist: Check  spamming the backend logs.
-     - Why fix this issue and what will be achieved with the fix? It pollutes logs. Needs AWS network reachability fix or a toggle to turn it off.
+     - Next debug checklist: Check  spamming backend logs.
      - Status: NOT STARTED
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? backend
-     - Blocked on other issue: None
 
 **In progress Task List**:
   Task 1: Document Sharing Framework Phase 2 (WhatsApp Integration) (P1)
-     - Where to resume: Awaiting the user to provide 6 required credentials for Meta Cloud API.
+     - Where to resume: Awaiting user to provide 6 required credentials for Meta Cloud API.
      - What will be achieved with this? Allows reps to share proposals/decks directly to WhatsApp.
      - Status: BLOCKED
-     - Should Test frontend/backend/both after fix? both
-     - Blocked on something: Waiting for user to provide Meta API credentials.
 
 **Upcoming and Future Tasks**
     Upcoming Tasks:
-    - P0: SKU Hierarchy & Variant Management Phase 1 (Model + CRUD + UI for Variant Config). *NOTE: User explicitly requested to PLAN ONLY and NOT START coding yet. The plan is saved in .* Wait for user's explicit go-ahead.
-    - P1: Refactor  (~2,850 lines) — split the per-document Zoho builders (invoice, debit note, challan, promo) into separate modules for maintainability.
-    - P1: Bloated  collection & MinIO integration: Build  settings page to replace base64 mongo storage.
+    - P0: SKU Hierarchy & Variant Management Phase 1 (Model + CRUD + UI for Variant Config). *NOTE: Plan is saved in . Awaiting user's explicit go-ahead.*
+    - P1: Refactor  (~2,850 lines) and  (~9,500 lines) — extract Zoho, reverse, and cancel helpers into smaller modules for maintainability.
     - P1: Target Planning: Actual-vs-monthly-target performance view (Heatmap tracking city-wise monthly achievement % against targets).
-    - P1: Happenstance integration (Agent asked user for API key & scope previously, pending user answer).
+    - P2: Accounting Phase 2: Accounting Dashboard / Reports — Income vs Expense by category/cost-center/period + GST summary (built on the newly tagged transaction data).
     
     Future Tasks:
-    - P2: Amounts Owed report tab showing totals of what customers owe for missing bottles (by customer/period) for finance to chase recoveries.
+    - P2: Employee Payroll Management System (Leaves, PF, salary breakdown, Payslips). *Note: User explicitly requested to park this for later.*
     - P2: Auto-attach generated Presentations to the Lead/Account and Document Sharing framework.
-    - P2: Auto-suggest Vehicle on distributor deliveries based on customer city.
     - P2: KB Phase 2: Per-document permissions, embedding-based retrieval, Google Drive auto-sync.
-    - P2: Website Wrapper around CRM.
     - P2: Inventory Management Module - Phase 2+ (Stock Entries, Purchase Receipts, Adjustments).
 
 **Completed work in this session**
-- Fixed hardcoded Credit Note Created terminology in Track Customer Return modal for Debit/Missing returns (DONE)
-- Added Apply Debit Notes feature to the Stock-Out / Delivery Record dialog, correctly adjusting net billing math and persisting states (DONE)
-- Upgraded Revenue Analytics Compare tab to support multi-select (up to 4 periods) across Week, Month, Quarter, and FY (DONE)
-- Enabled editable quantities on completed Stock Transfers for CEO/System Admin roles with an audit trail and proper delta inventory routing (DONE)
-- Integrated Customer Debit Notes as taxable line items (with GST) pushed to Zoho Books delivery invoices (DONE)
-- Updated Revenue Analytics week labels to display actual date ranges (e.g., W23 2026 · Jun 1-7) (DONE)
-- Condensed auto-generated Notes in Zoho Promo Dispatch Delivery Challans to 2 lines to prevent 2-page PDF spillage (DONE)
-- Updated Crates to Items with per-row dynamic unit of measure labels in the Promotional Stock-Out table (DONE)
-- Built the new Accounting Masters module (Model, Router, and UI) supporting flat and hierarchical expense categories (DONE)
+- Made Accounting a top-level module in  accessible by CEO, Director, Admin, and Accounting roles (DONE).
+- Implemented Reverse and Cancel flows for Distributor Stock-In, correctly adjusting source warehouse stock with double-confirmation (DONE).
+- Wired Zoho Books Tax Invoice push to Distributor Stock-In on Confirm status, correctly applying Base vs Transfer pricing based on distributor flags (DONE).
+- Seeded comprehensive default Accounting Masters: Vendor Types (17), Payment Sources (13), Business Units (14), Cost Centers (19), and a 137-node hierarchical Expense Category tree (DONE).
+- Created standalone  and  pages under the Accounting module, pulling Cities natively from Admin Locations (DONE).
+- Configured Income Masters using the same architecture as Expense Masters, seeding Revenue Streams (DONE).
+- Built Accounting Transactions inbox (Phase 1): Zoho Bank Feed sync (idempotent via  unique index), date grouping, pagination, Leads time-filter, zebra rows, inline row expansion for tagging, and automatic adjustment of CRM Account Outstanding Balances (DONE).
 
 **Earlier issues found/mentioned but not fixed**
    - Issue 1: usage: pdfplumber [-h] [--structure | --structure-text]
@@ -113,44 +95,42 @@ options:
   --laparams LAPARAMS
   --precision PRECISION
   --pages PAGES [PAGES ...]
-  --indent INDENT       Indent level for JSON pretty-printing. import error in testing scripts (minor environment script error, doesn't break app but affects some backend file checks).
+  --indent INDENT       Indent level for JSON pretty-printing. import error in testing scripts (minor environment script error, doesn't break app).
 
 **Known issue recurrence from previous fork**
   - Issue recurrence in previous fork (Check 1st <LLM message history> array entry)
   - Recurrence count: 50+
   - Status: IN PROGRESS
-  - Note: User continuously reports issues seen on production. Changes made by the agent ONLY apply to Preview. The user must manually redeploy to production. Remind the user of this when pushing fixes.
+  - Note: User continuously reports issues seen on production. Changes made by the agent ONLY apply to Preview. The user must manually redeploy to production to see fixes/new database seeds. 
 
 **Code Architecture**
-- : Core FastAPI router.
-- : Domain routers (, , , , ,  etc.).
-- : Main views (, , ).
-- : UI partials (, , ).
-- : Top-level module switching logic.
+-  & : Handles generic masters, vendors, and employees.
+- : Handles Zoho bank sync, transaction listing, tagging, and export.
+- : The complex, collapsible transactions inbox UI.
+- : Contains new endpoints for Stock-In invoices and Bank Transaction fetching.
+- : Manages file uploads for transaction proofs.
 
 **Key Technical Concepts**
--  handles auth via  globally.
-- Multi-period comparisons process aggregate chronological sorting with sequential deltas.
-- Zoho service logic relies heavily on matching  and overriding default tax behaviors locally.
+- Accounting Transactions are deduplicated using a MongoDB unique index on .
+- Proof document uploads utilize chunked object storage, saved directly via  (not stored as Base64 in Mongo).
+- Accounting Masters utilize a single collection mapped by  (expense vs income) and .
 
 **key DB schema**
-  - : New collection storing Expense Types, Categories, Cost Centers, Departments, etc. Supports hierarchical data ().
-  - : Handles applied debit/credit notes array tracking.
-  - : Now stores per-SKU line items ( array) to push taxable amounts to Zoho.
-  - : Audits array for quantity edits (, , ).
+  - : Stores synced bank lines. Fields: , , , ,  (object),  (array).
+  - : Tagged by  (income/expense).
+  -  & : Standalone collections now.
 
 **changes in tech stack**
-  - None
+  - Added object storage usage for generic document uploads.
 
 **All files of reference** 
-  -  (Currently modifying to make Accounting a top-level module)
-  -  (Route registration)
+  -  (Currently working on this)
+  - 
   - 
   - 
 
 **Areas that need refactoring**: 
-  -  is approaching 3000 lines. It should be refactored into distinct modules (invoice, challan, debit note, promo).
-  -  (~1280 lines).
+  -  is nearly 10,000 lines long. Needs severe modularization.
 
 **key api endpoints**
   - 
@@ -159,50 +139,46 @@ options:
   - 
 
 **Critical Info for New Agent** 
-  - Continue immediately with moving Accounting into a top-level module in  alongside Sales, Distribution, Marketing. Ensure the  is rendered strictly under this new context.
-  - Remind the user that all new features/fixes are visible only on Preview until they push a redeploy to Production (crm.nylaairwater.earth).
+  - The agent just finished implementing the last UX requests for the Accounting Transactions screen (thumbnails, PDF/Image restriction, status dropdown, file rename, TXN ID, and CSV/XLSX/PDF export). The backend is verified, but you should take a quick frontend screenshot of the updated inbox UI to ensure nothing is broken before reporting completion to the user.
+  - Remind the user they MUST reconnect Zoho with the  scope in their production environment, otherwise the new Sync from Zoho button will fail. 
 
 **documents and test reports created in this job** 
   - 
   - 
-  -  to 
+  - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - User: The distributor stock transfer- there should be an optiton to CEO and Admin to be able to edit the quantities... (Agent built edit quantities flow with audit trailing)
- - User: Debit note should be created in zoho , what needs to be done ? (Agent asked preference, user asked for taxable line item with GST, Agent implemented it).
- - User: The weeks shows W23 , W24 and such but it should also show exact time range... (Agent fixed week labels).
- - User: The notes , in the delivery challan that is currently getting created using Zoho integration has some issue... taking 2 pages. (Agent condensed Promo dispatch notes to 2 lines).
- - User: Currently the promotional stock out has a column name as crates. But the unit of mesaures could be crates or bottles... (Agent converted to Items with dynamic ).
- - User: I would like to create a comprehensive accounting module... Expense Type, Expense Category... (Agent built  module).
- - User: Accounting should be a separate module along with sales , distribution, marketing .. cant be in sales Continue (Agent started modifying module switcher in ).
- *PENDING HUMAN MESSAGES*: None. Proceed to separate the Accounting Module in .
+ - User: Since its grouped by every date should be collapsible and also on the date row it should show the number of transactions that are yet to be tagged... (Done)
+ - User: Remove tagged or untagged tabs, instead provide a filter. Also, when the files are uploaded , accept only image files or pdfs , show them as thumbnails, provide preview option... rename the files with the transaction id followed by the serial number. For each transaction its better to provide the transaction id... Secondly provide an option to download the data... CSV or PDF option. (Agent implemented backend and frontend code for this. Pending final UI smoke test and reply to user).
 
 **Project Health Check:**
 Broken: None.
 Mocked: None.
 
 **3rd Party Integrations** 
- - Zoho Books (Requires User API Key - Note: Not connected in Preview environment)
+ - Zoho Books (Requires User API Key)
  - Google Maps API (Requires User API Key)
  - Slack API (Bot token webhook)
  - Resend (Configured via env vars)
  - Meta WhatsApp Cloud API (Pending integration, requires User API Keys)
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iterations 238 to 243)
+  - Testing agent used after significant changes: YES (Iterations 244 to 247)
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created:  to 
+  - Test files created: 
   - Known regressions: None detected.
 
 **Credentials to test flow:**
 Refer to  (CEO: surya.yadavalli@nylaairwater.earth / test123)
 
 **What agent forgot to execute**
-Agent successfully started creating the Accounting Module but stopped midway while editing  to elevate the accounting section to a top-level App Module context (sibling to Sales/Distribution/Marketing).
+The agent modified  and  for the final UI changes (thumbnails, exports, TXN-IDs) but stopped before taking a  verification of the frontend and summarizing the completion to the user.
 
 **Debugging checklist for current issue**
-    Issue: Accounting is currently grouped under the Sales or generic context. It needs to be a top-level module in the app switcher.
-
-    Frontend files to check:
-    - 
-      *Action:* Find the  array or object that defines 'Sales', 'Distribution', 'Marketing'. Add an 'Accounting' entry. Ensure the sidebar items for  render only when the active context is 'Accounting'.</analysis>
+    Issue: Final visual verification of  before concluding the batch.
+    
+    Frontend files to check: 
+    - Verify  renders the new status filter correctly.
+    - Verify expanding a row shows  and the new Thumbnail grid for uploaded documents.
+    - Take a screenshot, and finish the response to the user.</analysis>

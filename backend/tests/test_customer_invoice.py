@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://expense-hierarchy-v1.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://accounting-inbox.preview.emergentagent.com')
 
 class TestCustomerInvoice:
     """Customer Invoice PDF Generation Tests"""

@@ -1,6 +1,19 @@
 # Changelog
 
 
+## 2026-06-27 — Accounting Transactions inbox: final UX polish ✅ (self-verified: backend curl + frontend screenshots)
+- Replaced Tagged/Untagged tabs with a single **All status** filter dropdown (data-testid `txn-status-filter`).
+- Documents: image/PDF uploads only (`accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"`); backend rejects other mimes/extensions.
+- Auto-rename: uploaded files persisted with `display_name = "{TXN_CODE}-{serial}.{ext}"` (e.g. `TXN-000005-1.jpeg`); original filename retained for display fallback only.
+- Backend sets `is_image` on each proof (`content_type.startswith('image/')` OR ext ∈ png/jpg/jpeg/webp/gif) so legacy items default to PDF icon while new uploads render as actual thumbnails.
+- New `ProofThumb` component (aspect-square card, hover-reveal preview + delete) fetches blob for images via `/api/accounting/transactions/{id}/proofs/{pid}/download` and renders <img>; non-images show a red FileText icon + "PDF" label.
+- Preview modal renders `<img>` for images and `<iframe>` for PDFs, with inline Download button (data-testid `proof-download-btn`).
+- Human-readable `# TXN-XXXXXX` IDs surfaced on every row in the description column.
+- **Exports**: new `GET /api/accounting-transactions/export?format=csv|xlsx|pdf` endpoint plus a Download dropdown (Excel/CSV/PDF) on the inbox header (data-testids `download-xlsx|csv|pdf`).
+- Verified live in preview: filter dropdown, expanded-row layout with thumbnails + proof preview, Download dropdown all render correctly. Legacy test proofs (uploaded pre-flag) still show as PDF icons — expected; new uploads will render true thumbnails.
+
+
+
 ## 2026-06-25 — Promo Stock-Out: "Crates" column → "Items" with per-row unit of measure ✅ (testing_agent verified, iteration_242, 100%)
 - Bug: Promotional Stock-Out table hardcoded a "Crates" header even when items were crates/cartons/bottles, etc.
 - Backend (`promo_dispatch.py`): `list_promo_dispatches` now attaches a derived `unit_label` per dispatch via `_promo_unit_label()` (reads line items' packaging_type_name from distributor_delivery_items / promo_dispatch_items; strips size suffix like "(12)", lowercases last word). Single shared unit → that word; mixed/unknown → null.
