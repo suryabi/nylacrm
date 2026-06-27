@@ -394,6 +394,7 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
 
   const masterGroups = credit ? INCOME_MASTERS : EXPENSE_MASTERS;
   const setTag = (k, v) => setTags((p) => ({ ...p, [k]: v === '__none__' ? undefined : v }));
+  const setExpenseCategoryId = (id) => setTags((p) => ({ ...p, expense_category: id || undefined }));
 
   const saveTags = async () => {
     setSaving(true);
@@ -481,16 +482,27 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
       <SectionCard icon={Tag} title={credit ? 'Income Categorisation' : 'Expense Categorisation'}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {masterGroups.map((m) => (
-            <div key={m.key} className={m.key === 'expense_category' ? 'sm:col-span-2' : ''}>
-              <Label className="text-xs text-slate-600">{m.label}</Label>
-              <Select value={tags[m.key] || undefined} onValueChange={(v) => setTag(m.key, v)}>
-                <SelectTrigger className="mt-1" data-testid={`tag-${m.key}`}><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent className="max-h-72">
-                  <SelectItem value="__none__">— None —</SelectItem>
-                  {(masters[m.key] || []).map((x) => <SelectItem key={x.id} value={x.id}>{masterLabel(x)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            m.key === 'expense_category' ? (
+              <div key={m.key} className="sm:col-span-2">
+                <Label className="text-xs text-slate-600">{m.label}</Label>
+                <CategoryCascader
+                  items={masters.expense_category || []}
+                  value={tags.expense_category || ''}
+                  onChange={setExpenseCategoryId}
+                />
+              </div>
+            ) : (
+              <div key={m.key}>
+                <Label className="text-xs text-slate-600">{m.label}</Label>
+                <Select value={tags[m.key] || undefined} onValueChange={(v) => setTag(m.key, v)}>
+                  <SelectTrigger className="mt-1" data-testid={`tag-${m.key}`}><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {(masters[m.key] || []).map((x) => <SelectItem key={x.id} value={x.id}>{masterLabel(x)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )
           ))}
           {!credit && (
             <div className="sm:col-span-2">
@@ -623,5 +635,82 @@ function ProofThumb({ proof, txnId, onPreview }) {
         {proof.display_name || proof.original_filename}
       </div>
     </button>
+  );
+}
+
+
+function CategoryCascader({ items, value, onChange }) {
+  // Build lookup maps once per `items` change.
+  const byId = React.useMemo(() => {
+    const m = {}; (items || []).forEach((x) => { m[x.id] = x; }); return m;
+  }, [items]);
+  const childrenOf = React.useMemo(() => {
+    const m = {}; (items || []).forEach((x) => {
+      const p = x.parent_id || '__root__';
+      (m[p] = m[p] || []).push(x);
+    });
+    Object.values(m).forEach((arr) => arr.sort((a, b) => a.name.localeCompare(b.name)));
+    return m;
+  }, [items]);
+
+  // Compute ancestor chain from current selected leaf (deepest first → reverse).
+  const chain = React.useMemo(() => {
+    const out = [];
+    let cur = value && byId[value];
+    while (cur) { out.unshift(cur); cur = cur.parent_id ? byId[cur.parent_id] : null; }
+    return out;
+  }, [value, byId]);
+
+  // Levels to render: roots, then a level for each selected node's children if any.
+  const levels = [];
+  levels.push({ depth: 0, parentId: '__root__', selectedId: chain[0]?.id || '' });
+  for (let i = 0; i < chain.length; i++) {
+    const node = chain[i];
+    if ((childrenOf[node.id] || []).length > 0) {
+      levels.push({ depth: i + 1, parentId: node.id, selectedId: chain[i + 1]?.id || '' });
+    }
+  }
+
+  const pickAtLevel = (depth, parentId, newId) => {
+    if (!newId || newId === '__none__') {
+      // Clear from this level down. Use the parent of this level (depth-1's selection) as new value.
+      const parentNode = depth === 0 ? null : chain[depth - 1];
+      onChange(parentNode ? parentNode.id : '');
+    } else {
+      onChange(newId);
+    }
+  };
+
+  const labelFor = (depth) => depth === 0 ? 'Category' : (depth === 1 ? 'Sub-category' : `Level ${depth + 1}`);
+  const path = chain.map((c) => c.name).join(' / ');
+
+  return (
+    <div className="mt-1 space-y-2" data-testid="tag-expense_category">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {levels.map((lvl, idx) => {
+          const opts = childrenOf[lvl.parentId] || [];
+          if (opts.length === 0) return null;
+          return (
+            <div key={`${lvl.parentId}-${idx}`}>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{labelFor(lvl.depth)}</span>
+              <Select value={lvl.selectedId || undefined} onValueChange={(v) => pickAtLevel(lvl.depth, lvl.parentId, v)}>
+                <SelectTrigger className="mt-0.5 h-9" data-testid={`expense-cat-level-${lvl.depth}`}>
+                  <SelectValue placeholder={lvl.depth === 0 ? 'Select category' : 'Select…'} />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {lvl.depth > 0 && <SelectItem value="__none__">— None —</SelectItem>}
+                  {opts.map((o) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        })}
+      </div>
+      {path && (
+        <p className="truncate text-xs text-slate-500" data-testid="expense-cat-path">
+          <span className="font-medium text-slate-400">Selected:</span> {path}
+        </p>
+      )}
+    </div>
   );
 }

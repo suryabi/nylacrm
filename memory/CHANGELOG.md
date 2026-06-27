@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-27 — Accounting Transactions: cascading Expense Category dropdowns + slash-path export ✅ (self-verified: live UI + CSV)
+- **Frontend (`AccountingTransactions.js`)**: replaced the single 138-row indented `expense_category` Select with a new `CategoryCascader` that renders dropdowns level-by-level (Category → Sub-category → Level 3 → …). Subsequent dropdowns appear only after the parent is picked; selecting `— None —` collapses back to the parent. Final selected node id (leaf OR intermediate) is stored in `tags.expense_category`; a breadcrumb `Selected: A / B / C` shows the full path under the controls.
+- **Backend (`accounting_transactions.py` export)**: built a `parent_map` once per request; new `_path(mid)` walks parent_id up the tree to render the full hierarchy as `"Parent / Child / Leaf"` into the single existing `Expense Category` CSV/XLSX/PDF column (no schema change — only the rendering changed).
+- Verified live: cascader walked Marketing → Digital Marketing → Google Ads; saved tag and the CSV now shows `Expense Category: "Marketing / Digital Marketing / Google Ads"` in one column.
+- Other masters (expense_type, cost_center, business_unit, payment_source, revenue_stream) are flat (level 0 only) and remain single dropdowns — no change.
+
+
+
 ## 2026-06-27 — Accounting Transactions inbox: final UX polish ✅ (self-verified: backend curl + frontend screenshots)
 - Replaced Tagged/Untagged tabs with a single **All status** filter dropdown (data-testid `txn-status-filter`).
 - Documents: image/PDF uploads only (`accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"`); backend rejects other mimes/extensions.

@@ -267,11 +267,27 @@ async def export_transactions(
 
     # id -> name maps for master tags + vendors
     name_map = {}
-    async for m in db["accounting_masters"].find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1}):
+    parent_map = {}
+    async for m in db["accounting_masters"].find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1, "parent_id": 1}):
         name_map[m["id"]] = m["name"]
+        if m.get("parent_id"):
+            parent_map[m["id"]] = m["parent_id"]
     vendor_map = {}
     async for v in db["accounting_vendors"].find({"tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1}):
         vendor_map[v["id"]] = v["name"]
+
+    def _path(mid: str) -> str:
+        """Return slash-separated 'Parent / Child / Leaf' path for a master id."""
+        if not mid:
+            return ""
+        chain = []
+        cur = mid
+        seen = set()
+        while cur and cur not in seen:
+            seen.add(cur)
+            chain.append(name_map.get(cur, ""))
+            cur = parent_map.get(cur)
+        return " / ".join(reversed([n for n in chain if n]))
 
     headers = ["Transaction ID", "Date", "Direction", "Amount", "Currency", "Bank Account",
                "Payee", "Description", "Reference", "Zoho Transaction ID", "Status",
@@ -286,7 +302,7 @@ async def export_transactions(
             t.get("amount") or 0, t.get("currency") or "INR", t.get("bank_account_name") or "",
             t.get("payee") or "", t.get("description") or "", t.get("reference_number") or "",
             t.get("zoho_transaction_id") or "", t.get("status") or "",
-            name_map.get(tags.get("expense_type"), ""), name_map.get(tags.get("expense_category"), ""),
+            name_map.get(tags.get("expense_type"), ""), _path(tags.get("expense_category")),
             name_map.get(tags.get("cost_center"), ""), name_map.get(tags.get("project_business_unit"), ""),
             name_map.get(tags.get("payment_source"), ""), vendor_map.get(t.get("vendor_id"), t.get("vendor_name") or ""),
             name_map.get(tags.get("revenue_stream"), ""), t.get("account_name") or "", t.get("notes") or "",
