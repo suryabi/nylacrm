@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-06-27 — Accounting Transactions: month-scoped Zoho sync dialog ✅ (self-verified UI + backend curl)
+- **Frontend (`AccountingTransactions.js`)**: clicking "Sync from Zoho" now opens a modal (`data-testid="sync-dialog"`) with Month + Year selects (`sync-month`, `sync-year`), defaulting to the current month/year. "Sync this month" computes `start = YYYY-MM-01`, `end = last day of month` and posts to `/api/accounting/transactions/sync?date_start=…&date_end=…`. Toast shows the synced window. Cancel + Confirm buttons (`sync-cancel`, `sync-confirm`).
+- **Backend (`accounting_transactions.py`)**: `sync_transactions` now skips advancing `last_synced_date` whenever the caller passes an explicit range — explicit per-month syncs no longer rewind / interfere with the cumulative cursor.
+- Rationale: massive historical bank feeds were overwhelming the inbox; users can now pull just the month they want to tag.
+- Verified live: dialog opens with June 2026 pre-selected; year dropdown lists the last 8 years for historical pulls.
+
+
+
 ## 2026-06-27 — Accounting Transactions: per-root category filter + summary chip strip ✅ (self-verified backend + UI)
 - **Backend (`accounting_transactions.py`)**:
   - New helper `_expense_category_descendants(tenant_id, root_id)` BFS-walks the master tree.

@@ -130,6 +130,7 @@ async def sync_transactions(
         raise HTTPException(status_code=400, detail="Zoho Books is not connected for this tenant. Connect it under Settings → Integrations → Zoho Books (with banking access).")
     org_id = creds.get("organization_id")
 
+    explicit_range = bool(date_start or date_end)
     # Incremental window: from last sync (minus a 5-day overlap) unless caller overrides.
     state = await db[SYNC_COLL].find_one({"tenant_id": tenant_id}, {"_id": 0})
     if not date_start and state and state.get("last_synced_date"):
@@ -174,12 +175,15 @@ async def sync_transactions(
         logger.exception("Zoho bank transaction sync failed")
         raise HTTPException(status_code=502, detail=f"Zoho sync failed: {str(e)[:300]}")
 
-    await db[SYNC_COLL].update_one(
-        {"tenant_id": tenant_id},
-        {"$set": {"tenant_id": tenant_id, "last_synced_date": date_end, "last_synced_at": _now(),
-                  "last_synced_by": current_user.get("id")}},
-        upsert=True,
-    )
+    # Only advance the incremental cursor when the caller didn't supply an
+    # explicit range — explicit per-month syncs should never rewind it.
+    if not explicit_range:
+        await db[SYNC_COLL].update_one(
+            {"tenant_id": tenant_id},
+            {"$set": {"tenant_id": tenant_id, "last_synced_date": date_end, "last_synced_at": _now(),
+                      "last_synced_by": current_user.get("id")}},
+            upsert=True,
+        )
     return {"new": new_count, "updated": updated_count, "from": date_start, "to": date_end}
 
 

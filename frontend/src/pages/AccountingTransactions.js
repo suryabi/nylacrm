@@ -133,12 +133,25 @@ export default function AccountingTransactions() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadCategorySummary(); }, [loadCategorySummary]);
 
+  const [syncOpen, setSyncOpen] = useState(false);
+  const now = new Date();
+  const [syncYear, setSyncYear] = useState(now.getFullYear());
+  const [syncMonth, setSyncMonth] = useState(now.getMonth() + 1); // 1-12
+
   const sync = async () => {
     setSyncing(true);
     try {
-      const { data } = await axios.post(`${API}/api/accounting/transactions/sync`, {}, auth());
-      toast.success(`Synced from Zoho — ${data.new} new, ${data.updated} updated`);
+      const y = Number(syncYear);
+      const m = Number(syncMonth);
+      const start = `${y}-${String(m).padStart(2, '0')}-01`;
+      const endDate = new Date(y, m, 0); // last day of month
+      const end = `${y}-${String(m).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+      const params = new URLSearchParams({ date_start: start, date_end: end });
+      const { data } = await axios.post(`${API}/api/accounting/transactions/sync?${params}`, {}, auth());
+      toast.success(`Synced ${start} → ${end} · ${data.new} new, ${data.updated} updated`);
+      setSyncOpen(false);
       load();
+      loadCategorySummary();
     } catch (e) { toast.error(e.response?.data?.detail || 'Sync failed'); } finally { setSyncing(false); }
   };
 
@@ -192,8 +205,8 @@ export default function AccountingTransactions() {
               <DropdownMenuItem onClick={() => exportData('pdf')} data-testid="download-pdf"><FileText className="mr-2 h-4 w-4 text-rose-600" /> PDF</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={sync} disabled={syncing} className="bg-indigo-600 hover:bg-indigo-700" data-testid="sync-zoho-btn">
-            {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Sync from Zoho
+          <Button onClick={() => setSyncOpen(true)} className="bg-indigo-600 hover:bg-indigo-700" data-testid="sync-zoho-btn">
+            <RefreshCw className="mr-2 h-4 w-4" /> Sync from Zoho
           </Button>
         </div>
       </div>
@@ -357,6 +370,47 @@ export default function AccountingTransactions() {
           </div>
         </div>
       )}
+
+      <Dialog open={syncOpen} onOpenChange={(o) => { if (!syncing) setSyncOpen(o); }}>
+        <DialogContent className="max-w-md" data-testid="sync-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><RefreshCw className="h-4 w-4 text-indigo-600" /> Sync from Zoho</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-slate-500">
+            Pick the <b>month &amp; year</b> for which bank transactions should be pulled. Default is the current month — narrowing the window keeps the inbox focused while you tag.
+          </p>
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <div>
+              <Label className="text-xs text-slate-600">Month</Label>
+              <Select value={String(syncMonth)} onValueChange={(v) => setSyncMonth(Number(v))}>
+                <SelectTrigger className="mt-1" data-testid="sync-month"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {['January','February','March','April','May','June','July','August','September','October','November','December'].map((n, i) => (
+                    <SelectItem key={n} value={String(i + 1)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs text-slate-600">Year</Label>
+              <Select value={String(syncYear)} onValueChange={(v) => setSyncYear(Number(v))}>
+                <SelectTrigger className="mt-1" data-testid="sync-year"><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {Array.from({ length: 8 }, (_, i) => now.getFullYear() - i).map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setSyncOpen(false)} disabled={syncing} data-testid="sync-cancel">Cancel</Button>
+            <Button onClick={sync} disabled={syncing} className="bg-indigo-600 hover:bg-indigo-700" data-testid="sync-confirm">
+              {syncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Sync this month
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
