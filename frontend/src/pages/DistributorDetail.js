@@ -247,6 +247,9 @@ export default function DistributorDetail() {
   const [reverseDialog, setReverseDialog] = useState({ open: false, delivery: null });
   const [reverseConfirmText, setReverseConfirmText] = useState('');
   const [reverseReason, setReverseReason] = useState('');
+  const [reverseShipmentDialog, setReverseShipmentDialog] = useState({ open: false, shipment: null });
+  const [reverseShipmentConfirmText, setReverseShipmentConfirmText] = useState('');
+  const [reverseShipmentReason, setReverseShipmentReason] = useState('');
   const [downloadingInvoice, setDownloadingInvoice] = useState(false);
   
   // Settlement state
@@ -1694,6 +1697,36 @@ export default function DistributorDetail() {
     }
   };
 
+  const doReverseShipment = async (shipmentId, { acknowledge = false, reason = null } = {}) => {
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/shipments/${shipmentId}/reverse`, {},
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true, params: { acknowledge, reason } }
+      );
+      toast.success(data?.message || 'Shipment reversed');
+      setReverseShipmentDialog({ open: false, shipment: null });
+      setReverseShipmentConfirmText('');
+      setReverseShipmentReason('');
+      setShowShipmentDetail(false);
+      fetchShipments();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reverse shipment');
+    }
+  };
+
+  // Draft → reverse immediately (nothing committed). Past draft → require the
+  // double-confirm dialog (type REVERSE) before any stock is touched.
+  const handleReverseShipment = (shipment) => {
+    const st = (shipment?.status || '').toLowerCase();
+    if (st === 'draft') {
+      doReverseShipment(shipment.id, { acknowledge: false });
+      return;
+    }
+    setReverseShipmentConfirmText('');
+    setReverseShipmentReason('');
+    setReverseShipmentDialog({ open: true, shipment });
+  };
+
   const handleDeleteShipment = async (shipmentId) => {
     try {
       setDeleting(true);
@@ -1732,7 +1765,8 @@ export default function DistributorDetail() {
       delivered: { label: 'Delivered', color: 'bg-green-100 text-green-800' },
       partially_delivered: { label: 'Partial', color: 'bg-orange-100 text-orange-800' },
       discrepancy_pending: { label: 'Discrepancy — Awaiting Approval', color: 'bg-amber-100 text-amber-900' },
-      cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' }
+      cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800' },
+      reversed: { label: 'Reversed', color: 'bg-rose-100 text-rose-800' }
     };
     const config = statusConfig[status] || statusConfig.draft;
     return <Badge className={config.color}>{config.label}</Badge>;
@@ -2825,6 +2859,7 @@ export default function DistributorDetail() {
             savingShipment={savingShipment}
             viewShipmentDetail={viewShipmentDetail}
             setDeleteTarget={setDeleteTarget}
+            handleReverseShipment={handleReverseShipment}
             getShipmentStatusBadge={getShipmentStatusBadge}
             sourceTracksBatches={!!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches)}
             destTracksBatches={destDistributorTracksBatches}
@@ -3340,6 +3375,63 @@ export default function DistributorDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reverse Shipment (Stock In) Dialog — double confirmation */}
+      <Dialog open={reverseShipmentDialog.open} onOpenChange={(o) => { if (!o) { setReverseShipmentDialog({ open: false, shipment: null }); setReverseShipmentConfirmText(''); setReverseShipmentReason(''); } }}>
+        <DialogContent className="max-w-lg" data-testid="reverse-shipment-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700">
+              <RotateCcw className="h-5 w-5" /> Reverse stock-in {reverseShipmentDialog.shipment?.shipment_number}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-rose-800">
+              <p className="font-semibold">This will undo the stock-in completely:</p>
+              <ul className="mt-1.5 list-disc pl-5 space-y-0.5 text-rose-700">
+                {['delivered', 'partially_delivered'].includes((reverseShipmentDialog.shipment?.status || '').toLowerCase())
+                  ? <li>The received units will be <b>removed from the distributor location</b> and <b>added back to the source factory warehouse</b>.</li>
+                  : <li>Stock will be <b>added back to the source factory warehouse</b> (it was deducted on confirm).</li>}
+                <li>The shipment is kept and marked <b>Reversed</b> for audit.</li>
+              </ul>
+              <p className="mt-2 font-medium">This cannot be undone.</p>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Reason (optional)</Label>
+              <Input
+                value={reverseShipmentReason}
+                onChange={(e) => setReverseShipmentReason(e.target.value)}
+                placeholder="e.g. Entered by mistake / shipment did not arrive"
+                className="mt-1"
+                data-testid="reverse-shipment-reason"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Type <span className="font-mono font-bold text-rose-700">REVERSE</span> to confirm</Label>
+              <Input
+                value={reverseShipmentConfirmText}
+                onChange={(e) => setReverseShipmentConfirmText(e.target.value)}
+                placeholder="REVERSE"
+                className="mt-1"
+                data-testid="reverse-shipment-confirm-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setReverseShipmentDialog({ open: false, shipment: null }); setReverseShipmentConfirmText(''); setReverseShipmentReason(''); }} data-testid="reverse-shipment-cancel">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={reverseShipmentConfirmText.trim().toUpperCase() !== 'REVERSE'}
+              onClick={() => doReverseShipment(reverseShipmentDialog.shipment.id, { acknowledge: true, reason: reverseShipmentReason.trim() || null })}
+              data-testid="reverse-shipment-confirm-btn"
+            >
+              <RotateCcw className="h-4 w-4 mr-1.5" /> Reverse stock-in
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Delivery Detail Dialog */}
       <Dialog open={showDeliveryDetail} onOpenChange={setShowDeliveryDetail}>

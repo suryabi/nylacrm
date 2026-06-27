@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Factory } from 'lucide-react';
+import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Factory, RotateCcw } from 'lucide-react';
 import BatchPickerCards from './BatchPickerCards';
 
 export default function ShipmentsTab({
@@ -36,6 +36,7 @@ export default function ShipmentsTab({
   savingShipment,
   viewShipmentDetail,
   setDeleteTarget,
+  handleReverseShipment,
   getShipmentStatusBadge,
   // Phase 2 batch tracking — optional batch list keyed by sku_id for the
   // Phase 2 batch tracking — optional batch list keyed by sku_id for the
@@ -494,6 +495,18 @@ export default function ShipmentsTab({
                           >
                             <FileText className="h-4 w-4 text-emerald-700" />
                           </Button>
+                          {canManage && !['draft', 'cancelled', 'reversed'].includes(shipment.status) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-50"
+                              onClick={(e) => { e.stopPropagation(); handleReverseShipment && handleReverseShipment(shipment); }}
+                              data-testid={`reverse-shipment-${shipment.id}`}
+                              title="Reverse this stock-in (restores warehouse stock)"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          )}
                           {(canDelete || (canManage && shipment.status === 'draft')) && (
                             <Button
                               variant="ghost"

@@ -1,0 +1,43 @@
+{
+  "summary": "Backend-only testing of Distributor Stock-In shipment REVERSE and CANCEL flows. Verified real MongoDB stock deltas (factory_warehouse_stock & distributor_stock) via public APIs after every transition. All 8 pytest cases passed against the live preview URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_shipment_reverse_cancel.py",
+    "/app/test_reports/pytest/iteration_244.xml"
+  ],
+  "tests_executed": [
+    "TestReverseShipment::test_reverse_delivered_restores_source_and_decrements_dest -> PASS (src restored AND dest decremented; status=reversed; flags source_stock_restored=true & destination_stock_removed=true; reversed_from_status=delivered)",
+    "TestReverseShipment::test_reverse_confirmed_restores_source_only -> PASS (src restored, dest untouched; flags correctly set)",
+    "TestReverseShipment::test_reverse_non_draft_without_acknowledge_returns_400 -> PASS (HTTP 400 when acknowledge=false on confirmed shipment; stock & status unchanged)",
+    "TestReverseShipment::test_reverse_draft_allowed_with_no_acknowledge_and_no_stock_change -> PASS (draft reverse with acknowledge=false succeeds, status=reversed, no stock movement)",
+    "TestReverseShipment::test_double_reverse_returns_400 -> PASS (second reverse on already-reversed shipment rejected with 400)",
+    "TestCancelShipment::test_cancel_confirmed_restores_source -> PASS (regression fix verified: cancelling a confirmed shipment ADDS BACK factory_warehouse_stock; source_stock_restored=true; cancelled_from_status=confirmed)",
+    "TestCancelShipment::test_cancel_draft_does_not_touch_stock -> PASS (cancel on draft is a no-op for stock; source_stock_restored=false)",
+    "TestCancelShipment::test_reverse_after_cancel_returns_400 -> PASS (already-cancelled shipment cannot be reversed)"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "distributors.py is ~9457 lines — well over the 700-line guideline. Should be split per-feature (shipments, stock, deliveries, etc.) for maintainability.",
+    "reverse_shipment swallows exceptions from _readd_shipment_source_stock / _remove_shipment_destination_stock with bare try/except + logger.exception, then still marks the shipment as 'reversed' with source_stock_restored/destination_stock_removed=true. If a stock helper raises mid-loop the flags become misleading — consider failing the request (or recording a partial-restore flag) rather than logging-and-continuing.",
+    "_remove_shipment_destination_stock can drive distributor_stock.quantity negative (no floor / no check) if the reverse is called after manual stock adjustments downstream. Worth clamping at 0 or surfacing an alert.",
+    "cancel_shipment supports only draft/confirmed; in_transit / discrepancy_pending shipments must be reversed instead — this is fine but the UI should clearly route those statuses to the reverse action.",
+    "reverse_shipment uses query/body params (`reason`, `acknowledge`) instead of a Pydantic model — acceptable but inconsistent with the rest of the module's POST endpoints."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_shipment_reverse_cancel.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Tenant: nyla-air-water). Distributor Brian id bb12d90e-4d33-4890-ac5f-17573c551b5c, dest Delhi loc aa2eda05-1902-4a17-92bb-d33533535297 (no batch tracking), source factory warehouse 6eb87219-5585-4d73-8bc4-3c563da62233 (Default master, tracks batches). Used SKU 49e14d21-7f9a-4ed2-ad4c-3b69cadb4252 + batch 63e5d415-d2c1-4251-93b3-37a6628f568a (~12000 on hand).",
+  "seed_data_creation": "No seed required. Tests create their own shipments using existing factory stock. Each shipment uses qty=4 so the source pool (~12000) is effectively untouched at net zero (reverse/cancel restore). Some shipments are left in status='reversed' or 'cancelled' as expected audit records.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_shipment_reverse_cancel.py for regression. It is self-contained, idempotent, and validates real stock deltas (not just status). If the stock dataset is reset, just point SKU_ID/BATCH_ID/SOURCE_WAREHOUSE_ID at any factory warehouse row with qty > 4*~10. Test data left behind: a handful of TEST-REV-* shipments in cancelled/reversed status on distributor Brian (intentional audit records)."
+}

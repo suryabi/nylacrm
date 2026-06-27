@@ -258,6 +258,18 @@ const marketingNavigationGroups = [
 
 // Admin Context Navigation (Fleet, Masters, Settings, Integrations)
 const ADMIN_ONLY_ROLES = ['CEO', 'Director', 'Admin', 'System Admin'];
+
+// Accounting Context Navigation (top-level module)
+const ACCOUNTING_ROLES = ['CEO', 'Director', 'Admin', 'System Admin'];
+const accountingNavigationGroups = [
+  {
+    title: 'Accounting',
+    items: [
+      { name: 'Accounting Masters', href: '/accounting/masters', icon: Calculator, roles: ACCOUNTING_ROLES },
+    ],
+  },
+];
+
 const adminNavigationGroups = [
   {
     title: 'Fleet',
@@ -291,7 +303,6 @@ const adminNavigationGroups = [
   {
     title: 'Finance & Audit',
     items: [
-      { name: 'Accounting Masters', href: '/accounting/masters', icon: Calculator, roles: ['CEO', 'Director', 'System Admin', 'Admin', 'Vice President', 'Head of Business'] },
       { name: 'Reversals Log', href: '/admin/reversals', icon: RotateCcw, roles: ADMIN_ONLY_ROLES },
     ],
   },
@@ -322,7 +333,7 @@ export default function DashboardLayout({ children }) {
   // Get branding values with fallbacks
   const logoUrl = branding?.logo_url || null;
   const appName = branding?.app_name || 'Sales CRM';
-  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : currentContext === 'marketing' ? 'Marketing' : currentContext === 'admin' ? 'Admin' : 'Sales CRM');
+  const tagline = branding?.tagline || (currentContext === 'production' ? 'Production' : currentContext === 'distribution' ? 'Distribution' : currentContext === 'marketing' ? 'Marketing' : currentContext === 'accounting' ? 'Accounting' : currentContext === 'admin' ? 'Admin' : 'Sales CRM');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Desktop / iPad: user can collapse the sidebar to gain horizontal room.
   // Persisted so the choice survives reloads.
@@ -403,6 +414,8 @@ export default function DashboardLayout({ children }) {
         return distributionNavigationGroups;
       case 'marketing':
         return marketingNavigationGroups;
+      case 'accounting':
+        return accountingNavigationGroups;
       case 'admin':
         return adminNavigationGroups;
       default:
@@ -525,6 +538,7 @@ export default function DashboardLayout({ children }) {
                 {currentContext === 'production' && <Factory className="w-4 h-4 text-primary" />}
                 {currentContext === 'distribution' && <Truck className="w-4 h-4 text-primary" />}
                 {currentContext === 'marketing' && <Megaphone className="w-4 h-4 text-primary" />}
+                {currentContext === 'accounting' && <Calculator className="w-4 h-4 text-primary" />}
                 {currentContext === 'admin' && <ShieldCheck className="w-4 h-4 text-primary" />}
                 <span className="text-xs text-primary font-medium">
                   {modules[currentContext]?.label || 'Sales'} Module Active

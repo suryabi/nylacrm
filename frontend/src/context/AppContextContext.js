@@ -15,6 +15,7 @@ const MODULES = {
   production: { id: 'production', label: 'Production', icon: 'Factory', defaultRoute: '/production-dashboard' },
   distribution: { id: 'distribution', label: 'Distribution', icon: 'Truck', defaultRoute: '/distributors' },
   marketing: { id: 'marketing', label: 'Marketing', icon: 'Megaphone', defaultRoute: '/marketing-calendar' },
+  accounting: { id: 'accounting', label: 'Accounting', icon: 'Calculator', defaultRoute: '/accounting/masters' },
   admin: { id: 'admin', label: 'Admin', icon: 'ShieldCheck', defaultRoute: '/admin/vehicles' },
 };
 
@@ -34,6 +35,13 @@ export function AppContextProvider({ children }) {
     // Admin context is restricted to a fixed set of admin-capable roles
     if (moduleId === 'admin') {
       return ADMIN_CONTEXT_ROLES.includes(user.role);
+    }
+
+    // Accounting context: admin-capable roles OR users in the accounting department
+    if (moduleId === 'accounting') {
+      if (ADMIN_CONTEXT_ROLES.includes(user.role)) return true;
+      const depts = Array.isArray(user.department) ? user.department.map(d => d?.toLowerCase()) : [(user.department || '').toLowerCase()];
+      return depts.includes('accounting') || depts.includes('both') || depts.includes('all');
     }
 
     // Admin roles can always access all modules

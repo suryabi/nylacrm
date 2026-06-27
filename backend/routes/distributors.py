@@ -3262,10 +3262,23 @@ async def cancel_shipment(
     if not shipment:
         raise HTTPException(status_code=404, detail="Shipment not found")
     
-    if shipment.get('status') not in ['draft', 'confirmed']:
+    prior_status = shipment.get('status')
+    if prior_status not in ['draft', 'confirmed']:
         raise HTTPException(status_code=400, detail="Only draft or confirmed shipments can be cancelled")
     
     now = datetime.now(timezone.utc).isoformat()
+    
+    # When a CONFIRMED shipment is cancelled, the source factory warehouse stock
+    # was already deducted at confirm time — add it back so units are not left
+    # stuck/"reserved". A DRAFT shipment never deducted anything, so this is a
+    # no-op for drafts.
+    source_restored = False
+    if prior_status == 'confirmed':
+        try:
+            await _readd_shipment_source_stock(tenant_id, shipment)
+            source_restored = True
+        except Exception:
+            logger.exception(f"Failed to restore source stock while cancelling shipment {shipment_id}")
     
     remarks = shipment.get('remarks', '') or ''
     if reason:
@@ -3276,13 +3289,166 @@ async def cancel_shipment(
         {"$set": {
             "status": "cancelled",
             "remarks": remarks,
+            "cancelled_at": now,
+            "cancelled_by": current_user.get('id'),
+            "cancelled_from_status": prior_status,
+            "source_stock_restored": source_restored,
             "updated_at": now
         }}
     )
     
-    logger.info(f"Shipment {shipment['shipment_number']} cancelled by {current_user['email']}")
+    logger.info(f"Shipment {shipment['shipment_number']} cancelled by {current_user['email']} (source_restored={source_restored})")
     
     return {"message": f"Shipment {shipment['shipment_number']} cancelled", "status": "cancelled"}
+
+
+async def _readd_shipment_source_stock(tenant_id: str, shipment: dict) -> None:
+    """Inverse of confirm's deduction: add a shipment's quantities back to the
+    SOURCE factory warehouse (`factory_warehouse_stock`). Batch-aware when the
+    source warehouse tracks batches; otherwise keyed on the per-SKU row."""
+    source_warehouse_id = shipment.get('source_warehouse_id')
+    if not source_warehouse_id:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    src_loc = await db.distributor_locations.find_one(
+        {"id": source_warehouse_id, "tenant_id": tenant_id},
+        {"_id": 0, "track_batches": 1},
+    )
+    src_tracks_batches = bool(src_loc and src_loc.get("track_batches"))
+    items = await db.distributor_shipment_items.find(
+        {"shipment_id": shipment.get("id"), "tenant_id": tenant_id}, {"_id": 0},
+    ).to_list(500)
+    for item in items:
+        qty = int(item.get("quantity", 0) or 0)
+        if not qty:
+            continue
+        stock_query = {
+            "tenant_id": tenant_id,
+            "warehouse_location_id": source_warehouse_id,
+            "sku_id": item.get("sku_id"),
+        }
+        if src_tracks_batches and item.get("batch_id"):
+            stock_query["batch_id"] = item.get("batch_id")
+        await db.factory_warehouse_stock.update_one(
+            stock_query,
+            {"$inc": {"quantity": qty}, "$set": {"updated_at": now}},
+            upsert=True,
+        )
+
+
+async def _remove_shipment_destination_stock(tenant_id: str, distributor_id: str, shipment: dict) -> None:
+    """Inverse of deliver's addition: subtract a delivered shipment's quantities
+    from the DESTINATION `distributor_stock`. Batch-aware, matching the same
+    key convention used when the stock was added on delivery."""
+    now = datetime.now(timezone.utc).isoformat()
+    items = await db.distributor_shipment_items.find(
+        {"shipment_id": shipment.get("id"), "tenant_id": tenant_id}, {"_id": 0},
+    ).to_list(500)
+    for item in items:
+        qty = int(item.get("quantity", 0) or 0)
+        if not qty:
+            continue
+        batch_id = item.get("batch_id")
+        stock_key = {
+            "tenant_id": tenant_id,
+            "distributor_id": distributor_id,
+            "distributor_location_id": shipment.get("distributor_location_id"),
+            "sku_id": item.get("sku_id"),
+        }
+        stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+        await db.distributor_stock.update_one(
+            stock_key,
+            {"$inc": {"quantity": -qty}, "$set": {"updated_at": now}},
+        )
+
+
+@router.post("/{distributor_id}/shipments/{shipment_id}/reverse")
+async def reverse_shipment(
+    distributor_id: str,
+    shipment_id: str,
+    reason: Optional[str] = None,
+    acknowledge: bool = False,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reverse a Stock In (factory → distributor) shipment at ANY stage and undo
+    all of its stock effects, keeping the record for audit (status 'reversed'):
+      • draft: nothing was committed → just mark reversed.
+      • confirmed / in_transit / discrepancy_pending: source factory stock was
+        deducted at confirm → ADD it back.
+      • delivered / partially_delivered: source stock was deducted AND
+        destination distributor stock was added → restore source AND remove the
+        destination units.
+    Non-draft reversals require `acknowledge=true` (server-side double-confirm)."""
+    if not is_distributor_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    tenant_id = get_current_tenant_id()
+    shipment = await db.distributor_shipments.find_one(
+        {"id": shipment_id, "tenant_id": tenant_id, "distributor_id": distributor_id}
+    )
+    if not shipment:
+        raise HTTPException(status_code=404, detail="Shipment not found")
+
+    status = (shipment.get("status") or "").lower()
+    if status in {"cancelled", "reversed"}:
+        raise HTTPException(status_code=400, detail="This shipment is already cancelled or reversed.")
+
+    is_draft = status == "draft"
+    if not is_draft and not acknowledge:
+        raise HTTPException(
+            status_code=400,
+            detail="This shipment is past draft. Confirm the reversal explicitly (acknowledge=true).",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    source_deducted = status in {"confirmed", "in_transit", "discrepancy_pending", "delivered", "partially_delivered"}
+    dest_added = status in {"delivered", "partially_delivered"}
+
+    # 1) Remove destination units first (only if they were added on delivery).
+    if dest_added:
+        try:
+            await _remove_shipment_destination_stock(tenant_id, distributor_id, shipment)
+        except Exception:
+            logger.exception(f"Failed to remove destination stock during reverse for shipment {shipment_id}")
+
+    # 2) Restore source factory warehouse stock (deducted at confirm).
+    if source_deducted:
+        try:
+            await _readd_shipment_source_stock(tenant_id, shipment)
+        except Exception:
+            logger.exception(f"Failed to restore source stock during reverse for shipment {shipment_id}")
+
+    remarks = shipment.get("remarks", "") or ""
+    if reason:
+        remarks = f"{remarks}\nReversed: {reason}".strip()
+
+    await db.distributor_shipments.update_one(
+        {"id": shipment_id, "tenant_id": tenant_id},
+        {"$set": {
+            "status": "reversed",
+            "remarks": remarks,
+            "reversed_at": now,
+            "reversed_by": current_user.get("id"),
+            "reversed_by_name": current_user.get("name"),
+            "reversed_from_status": status,
+            "source_stock_restored": source_deducted,
+            "destination_stock_removed": dest_added,
+            "updated_at": now,
+        }}
+    )
+
+    if dest_added:
+        stock_msg = "destination stock removed and source warehouse stock restored"
+    elif source_deducted:
+        stock_msg = "source warehouse stock restored"
+    else:
+        stock_msg = "no stock was committed"
+    logger.info(f"Shipment {shipment['shipment_number']} reversed by {current_user['email']} — {stock_msg}")
+
+    return {
+        "message": f"Shipment {shipment['shipment_number']} reversed — {stock_msg}",
+        "status": "reversed",
+    }
 
 
 # ============ Shipment Items Management ============
