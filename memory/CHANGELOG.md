@@ -1,6 +1,20 @@
 # Changelog
 
 
+## 2026-06-27 — Accounting Transactions: per-root category filter + summary chip strip ✅ (self-verified backend + UI)
+- **Backend (`accounting_transactions.py`)**:
+  - New helper `_expense_category_descendants(tenant_id, root_id)` BFS-walks the master tree.
+  - `GET /api/accounting/transactions` accepts a new `category_root` query param — filters to txns whose `tags.expense_category` is the root OR any descendant.
+  - `GET /api/accounting/transactions/export` also honors `category_root` so downloads match the on-screen view.
+  - New `GET /api/accounting/transactions/category-summary` aggregates per-root spend (`{root_id, name, count, total}`, sorted by total desc) for the same status/direction/date/search filters.
+- **Frontend (`AccountingTransactions.js`)**:
+  - New "All categories" filter dropdown (`data-testid="filter-category-root"`) populated from `expense_category` masters where `parent_id` is null.
+  - New chip strip under the filter row: top-8 root categories, each chip shows name + total spend + txn count, click to filter (toggle on/off), turns indigo when active. `× Clear filter` chip appears whenever a root is selected.
+  - `data-testids`: `category-chip-strip`, `chip-cat-{root_id}`, `chip-cat-clear`.
+- Verified live: `category-summary` returned `[Sales ₹12,500 (1), Marketing ₹8,200 (1)]`; clicking the Sales chip filtered the table to TXN-000004 only and updated the filter dropdown.
+
+
+
 ## 2026-06-27 — Accounting Transactions: cascading Expense Category dropdowns + slash-path export ✅ (self-verified: live UI + CSV)
 - **Frontend (`AccountingTransactions.js`)**: replaced the single 138-row indented `expense_category` Select with a new `CategoryCascader` that renders dropdowns level-by-level (Category → Sub-category → Level 3 → …). Subsequent dropdowns appear only after the parent is picked; selecting `— None —` collapses back to the parent. Final selected node id (leaf OR intermediate) is stored in `tags.expense_category`; a breadcrumb `Selected: A / B / C` shows the full path under the controls.
 - **Backend (`accounting_transactions.py` export)**: built a `parent_map` once per request; new `_path(mid)` walks parent_id up the tree to render the full hierarchy as `"Parent / Child / Leaf"` into the single existing `Expense Category` CSV/XLSX/PDF column (no schema change — only the rendering changed).

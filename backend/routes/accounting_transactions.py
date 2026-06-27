@@ -193,6 +193,7 @@ async def list_transactions(
     date_start: Optional[str] = Query(None),
     date_end: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    category_root: Optional[str] = Query(None),
     page: int = Query(1),
     limit: int = Query(50),
     current_user: dict = Depends(get_current_user),
@@ -218,6 +219,9 @@ async def list_transactions(
             {"description": {"$regex": search, "$options": "i"}},
             {"reference_number": {"$regex": search, "$options": "i"}},
         ]
+    if category_root:
+        ids = await _expense_category_descendants(tenant_id, category_root)
+        q["tags.expense_category"] = {"$in": list(ids)}
     total = await db[COLL].count_documents(q)
     rows = await db[COLL].find(q, {"_id": 0, "raw": 0}).sort("date", -1).skip((page - 1) * limit).limit(limit).to_list(limit)
     # summary counts for the tabs
@@ -226,6 +230,90 @@ async def list_transactions(
         summary[r["_id"]] = r["n"]
         summary["all"] += r["n"]
     return {"items": rows, "total": total, "page": page, "limit": limit, "summary": summary}
+
+
+async def _expense_category_descendants(tenant_id: str, root_id: str) -> set:
+    """Return {root_id, *descendant_ids} by walking the parent_id tree (BFS)."""
+    out = {root_id}
+    frontier = {root_id}
+    while frontier:
+        nxt = set()
+        async for m in db["accounting_masters"].find(
+            {"tenant_id": tenant_id, "master_type": "expense_category", "parent_id": {"$in": list(frontier)}},
+            {"_id": 0, "id": 1},
+        ):
+            mid = m["id"]
+            if mid not in out:
+                out.add(mid)
+                nxt.add(mid)
+        frontier = nxt
+    return out
+
+
+@router.get("/category-summary")
+async def category_summary(
+    status: Optional[str] = Query(None),
+    direction: Optional[str] = Query(None),
+    bank_account_id: Optional[str] = Query(None),
+    date_start: Optional[str] = Query(None),
+    date_end: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Per-root expense-category spend summary for the current filtered view.
+    Aggregates each transaction's tagged expense_category to its root and returns
+    {root_id, name, count, total} entries sorted by total desc."""
+    tenant_id = get_current_tenant_id()
+    q = {"tenant_id": tenant_id, "tags.expense_category": {"$ne": None}}
+    if status:
+        q["status"] = status
+    if direction:
+        q["direction"] = direction
+    if bank_account_id:
+        q["zoho_account_id"] = bank_account_id
+    if date_start or date_end:
+        q["date"] = {}
+        if date_start:
+            q["date"]["$gte"] = date_start
+        if date_end:
+            q["date"]["$lte"] = date_end
+    if search:
+        q["$or"] = [
+            {"payee": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"reference_number": {"$regex": search, "$options": "i"}},
+        ]
+
+    # Build parent map once for expense_category masters.
+    parent_map = {}
+    name_map = {}
+    async for m in db["accounting_masters"].find(
+        {"tenant_id": tenant_id, "master_type": "expense_category"},
+        {"_id": 0, "id": 1, "name": 1, "parent_id": 1, "level": 1},
+    ):
+        name_map[m["id"]] = m["name"]
+        if m.get("parent_id"):
+            parent_map[m["id"]] = m["parent_id"]
+
+    def root_of(mid: str) -> str:
+        cur = mid
+        seen = set()
+        while cur in parent_map and cur not in seen:
+            seen.add(cur)
+            cur = parent_map[cur]
+        return cur
+
+    buckets: dict = {}
+    async for t in db[COLL].find(q, {"_id": 0, "tags.expense_category": 1, "amount": 1, "direction": 1}):
+        leaf = (t.get("tags") or {}).get("expense_category")
+        if not leaf:
+            continue
+        root = root_of(leaf)
+        b = buckets.setdefault(root, {"root_id": root, "name": name_map.get(root, ""), "count": 0, "total": 0.0})
+        b["count"] += 1
+        b["total"] += float(t.get("amount") or 0)
+    items = sorted(buckets.values(), key=lambda x: -x["total"])
+    return {"items": items}
 
 
 @router.get("/export")
@@ -237,6 +325,7 @@ async def export_transactions(
     date_start: Optional[str] = Query(None),
     date_end: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
+    category_root: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
     """Export the filtered transactions to CSV / XLSX / PDF. No upload/proof
@@ -263,6 +352,9 @@ async def export_transactions(
             {"description": {"$regex": search, "$options": "i"}},
             {"reference_number": {"$regex": search, "$options": "i"}},
         ]
+    if category_root:
+        ids = await _expense_category_descendants(tenant_id, category_root)
+        q["tags.expense_category"] = {"$in": list(ids)}
     rows = await db[COLL].find(q, {"_id": 0, "raw": 0, "proofs": 0}).sort("date", -1).to_list(20000)
 
     # id -> name maps for master tags + vendors

@@ -76,6 +76,8 @@ export default function AccountingTransactions() {
   const [search, setSearch] = useState('');
   const [direction, setDirection] = useState('all');
   const [timeFilter, setTimeFilter] = useState('lifetime');
+  const [categoryRoot, setCategoryRoot] = useState('all');
+  const [categorySummary, setCategorySummary] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [masters, setMasters] = useState({});
@@ -102,6 +104,7 @@ export default function AccountingTransactions() {
       if (tab !== 'all') params.set('status', tab);
       if (direction !== 'all') params.set('direction', direction);
       if (search) params.set('search', search);
+      if (categoryRoot !== 'all') params.set('category_root', categoryRoot);
       const range = presetRange(timeFilter);
       if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
       params.set('page', page);
@@ -111,10 +114,24 @@ export default function AccountingTransactions() {
       setTotal(data.total || 0);
       setSummary(data.summary || { untagged: 0, tagged: 0, all: 0 });
     } catch (e) { toast.error('Failed to load transactions'); } finally { setLoading(false); }
-  }, [tab, direction, search, timeFilter, page]);
+  }, [tab, direction, search, timeFilter, categoryRoot, page]);
+
+  const loadCategorySummary = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (tab !== 'all') params.set('status', tab);
+      if (direction !== 'all') params.set('direction', direction);
+      if (search) params.set('search', search);
+      const range = presetRange(timeFilter);
+      if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
+      const { data } = await axios.get(`${API}/api/accounting/transactions/category-summary?${params}`, auth());
+      setCategorySummary(data.items || []);
+    } catch { /* non-blocking */ }
+  }, [tab, direction, search, timeFilter]);
 
   useEffect(() => { loadMasters(); }, [loadMasters]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadCategorySummary(); }, [loadCategorySummary]);
 
   const sync = async () => {
     setSyncing(true);
@@ -137,6 +154,7 @@ export default function AccountingTransactions() {
       if (tab !== 'all') params.set('status', tab);
       if (direction !== 'all') params.set('direction', direction);
       if (search) params.set('search', search);
+      if (categoryRoot !== 'all') params.set('category_root', categoryRoot);
       const range = presetRange(timeFilter);
       if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
       params.set('format', format);
@@ -205,11 +223,52 @@ export default function AccountingTransactions() {
             {TIME_FILTERS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
+        <Select value={categoryRoot} onValueChange={(v) => { setCategoryRoot(v); setExpandedId(null); setPage(1); }}>
+          <SelectTrigger className="h-9 w-52" data-testid="filter-category-root">
+            <Tag className="mr-1 h-4 w-4 text-slate-400" /><SelectValue />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            <SelectItem value="all">All categories</SelectItem>
+            {(masters.expense_category || []).filter((x) => !x.parent_id).map((r) => (
+              <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
           <Input placeholder="Search payee / ref…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="h-9 w-56 pl-8" data-testid="txn-search" />
         </div>
       </div>
+
+      {categorySummary.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2" data-testid="category-chip-strip">
+          {categorySummary.slice(0, 8).map((c) => {
+            const active = categoryRoot === c.root_id;
+            return (
+              <button key={c.root_id} type="button"
+                onClick={() => { setCategoryRoot(active ? 'all' : c.root_id); setExpandedId(null); setPage(1); }}
+                data-testid={`chip-cat-${c.root_id}`}
+                className={`group flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                  active
+                    ? 'border-indigo-500 bg-indigo-600 text-white shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50'
+                }`}>
+                <span>{c.name}</span>
+                <span className={active ? 'text-indigo-100' : 'text-slate-400 group-hover:text-indigo-500'}>·</span>
+                <span className={active ? 'tabular-nums' : 'tabular-nums text-rose-600'}>{fmt(c.total)}</span>
+                <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{c.count}</span>
+              </button>
+            );
+          })}
+          {categoryRoot !== 'all' && (
+            <button type="button" onClick={() => { setCategoryRoot('all'); setExpandedId(null); setPage(1); }}
+              data-testid="chip-cat-clear"
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500 hover:bg-slate-100">
+              × Clear filter
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
