@@ -664,8 +664,9 @@ function Row({ it, masters, vendors, expanded, selected, onSelectToggle, onToggl
   const proofs = (it.proofs || []).filter((p) => !p.is_deleted);
   const copyZoho = (e) => {
     e.stopPropagation();
-    navigator.clipboard?.writeText(it.zoho_transaction_id || '');
-    toast.success('Zoho transaction ID copied');
+    Promise.resolve(navigator.clipboard?.writeText(it.zoho_transaction_id || ''))
+      .then(() => toast.success('Zoho transaction ID copied'))
+      .catch(() => toast.error('Could not copy to clipboard'));
   };
   const baseBg = expanded ? 'bg-indigo-50/60' : (selected ? 'bg-indigo-50/40' : (zebra ? 'bg-slate-50/40 hover:bg-slate-100/70' : 'bg-white hover:bg-slate-50'));
   return (

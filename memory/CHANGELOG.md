@@ -883,3 +883,11 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Subtle Zoho correlation: bank description/narration shown prominently + click-to-copy monospace Zoho transaction-ID chip.
 - Frontend-only (AccountingTransactions.js); backend list already supported page/limit/date_start/date_end/total. Verified via live screenshot.
 - Date groups now collapsible (click header); each header shows total count + amber "N to tag" (untagged) badge / green "All tagged".
+
+## 2026-06-28 — Hierarchical Income Category replaces flat Revenue Stream
+- Removed the flat `revenue_stream` income master; added hierarchical `income_category` (group=income) mirroring Expense Category.
+- Seeded 5 authoritative roots (Operating Income, Non-Operating Income, Financial Receipts, Investing Receipts, Other Income) with multi-level subcategories via a generic, idempotent `_seed_category_tree()` (marker `income_category_v1`).
+- Backend: models/accounting_master.py (MASTER_TYPES + INCOME_CATEGORY_TREE), routes/accounting_masters.py (generic seeder + _seed_income_categories), routes/accounting_transactions.py export header/row now `Income Category` via _path(tags.income_category).
+- Frontend: AccountingTransactions.js — Money-IN tagger uses the multi-level `CategoryCascader` (generalized with `testIdKey` prop; selectors tag-income_category / income_category-level-N). AccountingMasters.js icon mapping updated.
+- Hardened Zoho-ref clipboard copy to catch rejection (no more error-boundary overlay).
+- Verified iteration_255: backend 100% (5 pytest checks incl. revenue_stream→404, export header, sub-category CRUD), frontend 100% (income masters hierarchy + cascader drill-down).
