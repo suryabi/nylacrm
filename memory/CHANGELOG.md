@@ -891,3 +891,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Frontend: AccountingTransactions.js — Money-IN tagger uses the multi-level `CategoryCascader` (generalized with `testIdKey` prop; selectors tag-income_category / income_category-level-N). AccountingMasters.js icon mapping updated.
 - Hardened Zoho-ref clipboard copy to catch rejection (no more error-boundary overlay).
 - Verified iteration_255: backend 100% (5 pytest checks incl. revenue_stream→404, export header, sub-category CRUD), frontend 100% (income masters hierarchy + cascader drill-down).
+
+## 2026-06-28 — Zoho bank sync now fetches ALL transactions (filter_by=Status.All)
+- Bug: only ~53 Zoho bank transactions synced; categorized/matched/other-status lines were excluded because GET /books/v3/banktransactions was called with no status filter (Zoho returns a default subset).
+- Fix: services/zoho_service.fetch_bank_transactions() now defaults filter_by="Status.All" and injects it into the request params, so every status (uncategorized, categorized, matched, manually added, excluded) is pulled. Overridable per call.
+- Could NOT reproduce/validate live in preview (Zoho not connected there). Unit-checked that params now include filter_by='Status.All'. Verified regression-free via iteration_256 (sync start/poll, list, flow-summary, CSV export all green).
+- ACTION: requires production redeploy, then re-run the Zoho sync to pull the full set.
