@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 2026-06-28 — Zoho consent missing the Banking permission → scope added ✅ (testing_agent 34/34 pass)
+- **Reported**: On production Zoho consent screen, the "Banking" permission was not listed at all — only contacts/invoices/credit notes/delivery challans/items/settings.
+- **Root cause**: The OAuth scopes array in `services/zoho_service.py::get_zoho_config()` did not include `ZohoBooks.banking.READ`, so `build_authorize_url()` never asked Zoho to display / grant that permission.
+- **Fix**: appended `ZohoBooks.banking.READ` to the scopes list.
+- Verified by testing_agent iteration 250: `/api/zoho/oauth/initiate` now returns an authorize_url whose `scope` query param contains `ZohoBooks.banking.READ`; all previously-listed scopes remain present; all iteration 248+249 regression tests still pass (12 new + 22 regression = 34/34).
+- **NOTE for user**: Every existing tenant that connected Zoho before this scope addition still has a token *without* banking.READ. After redeploy, you must click **Reconnect Zoho** under Settings → Integrations → Zoho Books — the consent screen will now show the Banking permission alongside the rest.
+
+
+
 ## 2026-06-28 — Zoho 401 "code:57" friendlier failure UX ✅ (testing_agent 14/14 pass)
 - **Reported (production)**: Sync toast showed raw JSON: `Sync failed: Zoho API 401: {"code":57,"message":"You are not authorized to perform this operation"}`. Root cause is at the OAuth scope level — the production Zoho connection is missing `ZohoBooks.banking.READ`. **User action**: reconnect Zoho in production under Settings → Integrations → Zoho Books with the Banking permission.
 - **UX fix (code)** — make the failure clear and actionable:
