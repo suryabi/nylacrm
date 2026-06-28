@@ -34,7 +34,8 @@ const EXPENSE_MASTERS = [
   { key: 'payment_source', label: 'Payment Source' },
 ];
 const INCOME_MASTERS = [{ key: 'revenue_stream', label: 'Revenue Stream' }];
-const PER_PAGE = 25;
+const PAGE_SIZES = [25, 50, 75, 100];
+const DEFAULT_PAGE_SIZE = 25;
 
 const TIME_FILTERS = [
   { value: 'lifetime', label: 'Lifetime' },
@@ -81,6 +82,10 @@ export default function AccountingTransactions() {
   const [categoryRoot, setCategoryRoot] = useState('all');
   const [categorySummary, setCategorySummary] = useState([]);
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(() => {
+    const stored = Number(localStorage.getItem('acc_txn_page_size'));
+    return PAGE_SIZES.includes(stored) ? stored : DEFAULT_PAGE_SIZE;
+  });
   const [total, setTotal] = useState(0);
   const [masters, setMasters] = useState({});
   const [vendors, setVendors] = useState([]);
@@ -110,13 +115,13 @@ export default function AccountingTransactions() {
       const range = presetRange(timeFilter);
       if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
       params.set('page', page);
-      params.set('limit', PER_PAGE);
+      params.set('limit', perPage);
       const { data } = await axios.get(`${API}/api/accounting/transactions?${params}`, auth());
       setItems(data.items || []);
       setTotal(data.total || 0);
       setSummary(data.summary || { untagged: 0, tagged: 0, all: 0 });
     } catch (e) { toast.error('Failed to load transactions'); } finally { setLoading(false); }
-  }, [tab, direction, search, timeFilter, categoryRoot, page]);
+  }, [tab, direction, search, timeFilter, categoryRoot, page, perPage]);
 
   const loadCategorySummary = useCallback(async () => {
     try {
@@ -417,16 +422,31 @@ export default function AccountingTransactions() {
       </div>
 
       {!loading && total > 0 && (
-        <div className="mt-3 flex items-center justify-between text-sm text-slate-500" data-testid="txn-pagination">
+        <div className="mt-3 flex flex-col items-start justify-between gap-2 text-sm text-slate-500 sm:flex-row sm:items-center" data-testid="txn-pagination">
           <span>
-            Showing {(page - 1) * PER_PAGE + 1}–{Math.min(page * PER_PAGE, total)} of {total}
+            Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Label className="text-xs text-slate-500" htmlFor="txn-page-size">Per page</Label>
+            <Select value={String(perPage)} onValueChange={(v) => {
+              const n = Number(v);
+              setPerPage(n);
+              setPage(1);
+              setExpandedId(null);
+              try { localStorage.setItem('acc_txn_page_size', String(n)); } catch { /* ignore */ }
+            }}>
+              <SelectTrigger id="txn-page-size" className="h-8 w-20" data-testid="txn-page-size">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZES.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => { setPage((p) => p - 1); setExpandedId(null); }} data-testid="page-prev">
               <ChevronLeft className="h-4 w-4" /> Prev
             </Button>
-            <span className="px-1">Page {page} / {Math.max(1, Math.ceil(total / PER_PAGE))}</span>
-            <Button variant="outline" size="sm" disabled={page >= Math.ceil(total / PER_PAGE)} onClick={() => { setPage((p) => p + 1); setExpandedId(null); }} data-testid="page-next">
+            <span className="px-1">Page {page} / {Math.max(1, Math.ceil(total / perPage))}</span>
+            <Button variant="outline" size="sm" disabled={page >= Math.ceil(total / perPage)} onClick={() => { setPage((p) => p + 1); setExpandedId(null); }} data-testid="page-next">
               Next <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

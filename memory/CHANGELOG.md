@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 2026-06-28 — Accounting Transactions: per-page size selector (25/50/75/100) ✅ (self-verified UI + curl)
+- **Frontend (`AccountingTransactions.js`)**:
+  - Replaced the hard-coded `PER_PAGE = 25` with `PAGE_SIZES = [25, 50, 75, 100]` and a `perPage` state (initialised from `localStorage['acc_txn_page_size']`, falls back to 25).
+  - The pagination footer now renders a "Per page" shadcn `Select` between the row counter and the Prev/Next controls. Changing it resets `page` to 1, collapses any expanded row, and persists the choice to `localStorage` so it sticks across reloads.
+  - Pagination row is also responsive — stacks on small screens (`flex-col sm:flex-row`).
+  - data-testid: `txn-page-size`.
+- **Backend**: unchanged — `GET /api/accounting/transactions` already accepted `limit` as a query param.
+- Verified: curl with `limit=25/50/75/100` echoes the requested limit in the response; UI dropdown opens correctly with the current selection ticked.
+
+
+
 ## 2026-06-28 — Zoho consent missing the Banking permission → scope added ✅ (testing_agent 34/34 pass)
 - **Reported**: On production Zoho consent screen, the "Banking" permission was not listed at all — only contacts/invoices/credit notes/delivery challans/items/settings.
 - **Root cause**: The OAuth scopes array in `services/zoho_service.py::get_zoho_config()` did not include `ZohoBooks.banking.READ`, so `build_authorize_url()` never asked Zoho to display / grant that permission.
