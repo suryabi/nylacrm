@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 255 — Verified replacement of flat 'revenue_stream' with hierarchical 'income_category' master. Backend: all 5 pytest checks pass (group filter excludes revenue_stream, 5-root hierarchical tree with level/has_children/parent_id, /masters/revenue_stream returns 404, POST sub-category under root works, export CSV header reads 'Income Category'). Frontend: /accounting/income-masters renders 5 seeded roots with drill-down (Operating Income → Product Sales → Bottled Water Sales etc. visible). Money-IN tagger: expanding a credit transaction shows 'Income Categorisation' section with multi-level CategoryCascader; data-testid tag-income_category and income_category-level-0 are present; selecting Operating Income at L0 reveals income_category-level-1, confirming cascading hierarchy works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AccountingTransactions row controls", "issues": ["Copy-Zoho-ref button (data-testid zoho-ref-*) sits next to the row's expand chevron and triggers a clipboard write that surfaces a full-screen 'Uncaught runtime errors: NotAllowedError writeText permission denied' overlay when clipboard permission is absent (e.g., in headless test contexts or restrictive browsers). Recommend swallowing the rejection from navigator.clipboard.writeText and showing a toast instead of letting it bubble to the React error boundary."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_255_income_category.py",
+    "/app/test_reports/pytest/iteration_255.xml"
+  ],
+  "action_items": [
+    "Optional: harden the Zoho-ref copy handler in AccountingTransactions to catch clipboard rejections so a denied clipboard permission no longer triggers an uncaught runtime error overlay."
+  ],
+  "critical_code_review_comments": [
+    "accounting_masters.py: hierarchical seeder is idempotent and duplicate-aware (case-insensitive name+parent match) and gated by accounting_seed_markers; clean implementation that merges with existing data instead of duplicating.",
+    "Income Category seed has exactly the 5 requested roots (Operating Income, Non-Operating Income, Financial Receipts, Investing Receipts, Other Income) — verified count 33 nodes total.",
+    "AccountingTransactions.js: CategoryCascader generalisation via testIdKey prop is clean and produces stable selectors (tag-<key>, <key>-level-<depth>) usable by both expense and income tagging.",
+    "Export CSV header now reads 'Income Category' and rows use tags.income_category via _path() — verified through CSV header inspection. 'Revenue Stream' column fully removed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_255_income_category.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (session_token returned in login response under 'session_token' → send as Authorization: Bearer <token>)",
+  "seed_data_creation": "No new seed data. The pytest 'test_create_income_subcategory_under_root' creates 'TEST_Subcat_255' under Operating Income and deletes it in teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Income Category master is now hierarchical and replaces the old flat Revenue Stream. Endpoint /api/accounting/masters/revenue_stream returns 404. Frontend cascader on Money-IN transactions uses data-testid tag-income_category and income_category-level-{0..N}. To reach it: login → /accounting/transactions → click 'MONEY IN' filter chip → click on the row body (NOT the chevron-shaped icons, those are SVGs; clicking the row's open area expands it). The first button-like element in a row (testid zoho-ref-<id>) is the Zoho-ref copy and will fire a clipboard write — grant clipboard-write permission in Playwright (await context.grant_permissions(['clipboard-read','clipboard-write'])) to avoid an error-boundary overlay. The Money-IN filter chip is the green 'MONEY IN' summary tile at the top.",
+  "rca of the issue": "N/A — no defects observed. Only minor UX nit: clipboard write rejection escapes to the error boundary; documented as an optional hardening."
+}

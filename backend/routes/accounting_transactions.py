@@ -763,7 +763,7 @@ async def export_transactions(
     headers = ["Transaction ID", "Date", "Direction", "Amount", "Currency", "Bank Account",
                "Payee", "Description", "Reference", "Zoho Transaction ID", "Status",
                "Expense Type", "Expense Category", "Cost Center", "Business Unit",
-               "Payment Source", "Vendor", "Revenue Stream", "Linked Account", "Notes"]
+               "Payment Source", "Vendor", "Income Category", "Linked Account", "Notes"]
 
     def row_values(t):
         tags = t.get("tags") or {}
@@ -776,7 +776,7 @@ async def export_transactions(
             name_map.get(tags.get("expense_type"), ""), _path(tags.get("expense_category")),
             name_map.get(tags.get("cost_center"), ""), name_map.get(tags.get("project_business_unit"), ""),
             name_map.get(tags.get("payment_source"), ""), vendor_map.get(t.get("vendor_id"), t.get("vendor_name") or ""),
-            name_map.get(tags.get("revenue_stream"), ""), t.get("account_name") or "", t.get("notes") or "",
+            _path(tags.get("income_category")), t.get("account_name") or "", t.get("notes") or "",
         ]
 
     fname = f"transactions_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}"
@@ -824,7 +824,7 @@ async def export_transactions(
         elems = [Paragraph("Accounting Transactions", styles["Title"]), Spacer(1, 6)]
         # compact column subset for PDF readability
         pdf_cols = ["Transaction ID", "Date", "Direction", "Amount", "Bank Account", "Payee",
-                    "Status", "Expense Category", "Cost Center", "Vendor", "Revenue Stream", "Linked Account"]
+                    "Status", "Expense Category", "Cost Center", "Vendor", "Income Category", "Linked Account"]
         idx = [headers.index(c) for c in pdf_cols]
         data = [pdf_cols]
         for t in rows:

@@ -19,7 +19,7 @@ MASTER_TYPES = {
     "payment_source": {"label": "Payment Source", "hierarchical": False, "group": "expense"},
     "budget_head": {"label": "Budget Head", "hierarchical": False, "group": "expense"},
     "approval_category": {"label": "Approval Category", "hierarchical": False, "group": "expense"},
-    "revenue_stream": {"label": "Revenue Stream", "hierarchical": False, "group": "income"},
+    "income_category": {"label": "Income Category", "hierarchical": True, "group": "income"},
 }
 
 HIERARCHICAL_TYPES = {k for k, v in MASTER_TYPES.items() if v["hierarchical"]}
@@ -64,18 +64,12 @@ DEFAULT_COST_CENTERS = [
     "R&D Center", "Distribution Network",
 ]
 
-DEFAULT_REVENUE_STREAMS = [
-    "Product Sales", "Services", "Subscription", "Licensing", "Distribution",
-    "Consulting", "Franchise", "Advertising", "Partnerships",
-]
-
 # master_type -> list of default values seeded once per tenant on first access.
 DEFAULT_SEEDS = {
     "expense_type": DEFAULT_EXPENSE_TYPES,
     "payment_source": DEFAULT_PAYMENT_SOURCES,
     "project_business_unit": DEFAULT_PROJECT_BUSINESS_UNITS,
     "cost_center": DEFAULT_COST_CENTERS,
-    "revenue_stream": DEFAULT_REVENUE_STREAMS,
 }
 
 # Hierarchical Expense Category seed: top category -> { sub-category -> [items] }.
@@ -128,6 +122,31 @@ EXPENSE_CATEGORY_TREE = {
     },
     "Taxes": {
         "GST": [], "Customs Duty": [], "Import Duty": [], "TDS": [], "Professional Tax": [], "Stamp Duty": [],
+    },
+}
+
+
+# Hierarchical Income Category seed: top category -> { sub-category -> [items] }.
+# Five authoritative roots requested by the business; seeded once per tenant.
+INCOME_CATEGORY_TREE = {
+    "Operating Income": {
+        "Product Sales": ["Bottled Water Sales", "AWG Unit Sales", "Accessories & Spares"],
+        "Service Income": ["Installation Charges", "Maintenance Contracts", "AMC Income"],
+        "Subscription Revenue": [],
+        "Distribution Income": ["Distributor Margins", "Franchise Fees"],
+    },
+    "Non-Operating Income": {
+        "Rental Income": [], "Scrap Sales": [], "Commission Received": [], "Miscellaneous Income": [],
+    },
+    "Financial Receipts": {
+        "Interest Income": ["Bank Interest", "Loan Interest"],
+        "Dividend Income": [], "Forex Gains": [],
+    },
+    "Investing Receipts": {
+        "Asset Sale Proceeds": [], "Investment Maturity": [], "Capital Gains": [],
+    },
+    "Other Income": {
+        "Grants & Subsidies": [], "Refunds & Reimbursements": [], "Insurance Claims": [], "Liabilities Written Back": [],
     },
 }
 

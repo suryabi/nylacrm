@@ -26,7 +26,7 @@ const authHeaders = () => ({ headers: { Authorization: `Bearer ${localStorage.ge
 const ICONS = {
   expense_type: Wallet, expense_category: FolderTree, department: Building2,
   cost_center: Target, project_business_unit: Briefcase, payment_source: CreditCard,
-  budget_head: BookMarked, approval_category: CheckCircle2, revenue_stream: TrendingUp,
+  budget_head: BookMarked, approval_category: CheckCircle2, income_category: TrendingUp,
 };
 
 export default function AccountingMasters({ group = 'expense', title, subtitle }) {

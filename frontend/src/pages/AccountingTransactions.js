@@ -33,7 +33,7 @@ const EXPENSE_MASTERS = [
   { key: 'project_business_unit', label: 'Business Unit' },
   { key: 'payment_source', label: 'Payment Source' },
 ];
-const INCOME_MASTERS = [{ key: 'revenue_stream', label: 'Revenue Stream' }];
+const INCOME_MASTERS = [{ key: 'income_category', label: 'Income Category' }];
 const PAGE_SIZES = [25, 50, 75, 100];
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -97,7 +97,7 @@ export default function AccountingTransactions() {
   const toggleDate = (d) => setCollapsedDates((p) => ({ ...p, [d]: !p[d] }));
 
   const loadMasters = useCallback(async () => {
-    const keys = ['expense_type', 'expense_category', 'cost_center', 'project_business_unit', 'payment_source', 'revenue_stream'];
+    const keys = ['expense_type', 'expense_category', 'cost_center', 'project_business_unit', 'payment_source', 'income_category'];
     const out = {};
     await Promise.all(keys.map(async (k) => {
       try { const { data } = await axios.get(`${API}/api/accounting/masters/${k}`, auth()); out[k] = data.items || []; }
@@ -752,7 +752,7 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
 
   const masterGroups = credit ? INCOME_MASTERS : EXPENSE_MASTERS;
   const setTag = (k, v) => setTags((p) => ({ ...p, [k]: v === '__none__' ? undefined : v }));
-  const setExpenseCategoryId = (id) => setTags((p) => ({ ...p, expense_category: id || undefined }));
+  const setCategoryId = (key) => (id) => setTags((p) => ({ ...p, [key]: id || undefined }));
 
   const saveTags = async () => {
     setSaving(true);
@@ -876,13 +876,14 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
       <SectionCard icon={Tag} title={credit ? 'Income Categorisation' : 'Expense Categorisation'}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {masterGroups.map((m) => (
-            m.key === 'expense_category' ? (
+            (m.key === 'expense_category' || m.key === 'income_category') ? (
               <div key={m.key} className="sm:col-span-2">
                 <Label className="text-xs text-slate-600">{m.label}</Label>
                 <CategoryCascader
-                  items={masters.expense_category || []}
-                  value={tags.expense_category || ''}
-                  onChange={setExpenseCategoryId}
+                  testIdKey={m.key}
+                  items={masters[m.key] || []}
+                  value={tags[m.key] || ''}
+                  onChange={setCategoryId(m.key)}
                 />
               </div>
             ) : (
@@ -1033,7 +1034,7 @@ function ProofThumb({ proof, txnId, onPreview }) {
 }
 
 
-function CategoryCascader({ items, value, onChange }) {
+function CategoryCascader({ items, value, onChange, testIdKey = 'expense_category' }) {
   // Build lookup maps once per `items` change.
   const byId = React.useMemo(() => {
     const m = {}; (items || []).forEach((x) => { m[x.id] = x; }); return m;
@@ -1079,7 +1080,7 @@ function CategoryCascader({ items, value, onChange }) {
   const path = chain.map((c) => c.name).join(' / ');
 
   return (
-    <div className="mt-1 space-y-2" data-testid="tag-expense_category">
+    <div className="mt-1 space-y-2" data-testid={`tag-${testIdKey}`}>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {levels.map((lvl, idx) => {
           const opts = childrenOf[lvl.parentId] || [];
@@ -1088,7 +1089,7 @@ function CategoryCascader({ items, value, onChange }) {
             <div key={`${lvl.parentId}-${idx}`}>
               <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{labelFor(lvl.depth)}</span>
               <Select value={lvl.selectedId || undefined} onValueChange={(v) => pickAtLevel(lvl.depth, lvl.parentId, v)}>
-                <SelectTrigger className="mt-0.5 h-9" data-testid={`expense-cat-level-${lvl.depth}`}>
+                <SelectTrigger className="mt-0.5 h-9" data-testid={`${testIdKey}-level-${lvl.depth}`}>
                   <SelectValue placeholder={lvl.depth === 0 ? 'Select category' : 'Select…'} />
                 </SelectTrigger>
                 <SelectContent className="max-h-72">
