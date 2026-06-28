@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Search, Loader2, Building2 } from 'lucide-react';
+import {
+  Plus, Pencil, Trash2, Search, Loader2, Building2, MapPin, Landmark, Users,
+  IdCard, Star, StarOff,
+} from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -18,6 +21,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../components/ui/alert-dialog';
+import GooglePlacesAddressSearch from '../components/GooglePlacesAddressSearch';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const auth = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, withCredentials: true });
@@ -137,8 +141,31 @@ export default function VendorsAccounting() {
   );
 }
 
-function Field({ label, children }) {
-  return <div><Label className="text-xs text-slate-600">{label}</Label>{children}</div>;
+function Field({ label, children, className = '' }) {
+  return <div className={className}><Label className="text-xs text-slate-600">{label}</Label>{children}</div>;
+}
+
+function SectionCard({ icon: Icon, title, subtitle, accent = 'indigo', children }) {
+  const ring = {
+    indigo: 'from-indigo-50 to-white border-indigo-100 text-indigo-700',
+    emerald: 'from-emerald-50 to-white border-emerald-100 text-emerald-700',
+    amber: 'from-amber-50 to-white border-amber-100 text-amber-700',
+    rose: 'from-rose-50 to-white border-rose-100 text-rose-700',
+  }[accent];
+  return (
+    <section className={`rounded-xl border bg-gradient-to-b shadow-sm ${ring} p-4`}>
+      <header className="mb-3 flex items-start gap-2">
+        <span className="rounded-lg bg-white p-1.5 shadow-sm"><Icon className="h-4 w-4" /></span>
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold leading-none">{title}</h4>
+          {subtitle && <p className="mt-0.5 text-[11px] text-slate-500">{subtitle}</p>}
+        </div>
+      </header>
+      <div className="rounded-lg bg-white/70 p-3 ring-1 ring-slate-100">
+        {children}
+      </div>
+    </section>
+  );
 }
 
 function VendorForm({ dialog, vendorTypes, cities, onClose, onSaved }) {
@@ -146,61 +173,188 @@ function VendorForm({ dialog, vendorTypes, cities, onClose, onSaved }) {
   const it = dialog.item || {};
   const [f, setF] = useState({
     name: it.name || '', vendor_code: it.vendor_code || '', vendor_type: it.vendor_type || '',
-    gstin: it.gstin || '', pan: it.pan || '', contact_person: it.contact_person || '',
-    email: it.email || '', phone: it.phone || '', billing_address: it.billing_address || '',
-    city: it.city || '', state: it.state || '', payment_terms: it.payment_terms || '',
-    bank_account_no: it.bank_account_no || '', bank_ifsc: it.bank_ifsc || '', bank_name: it.bank_name || '',
-    msme_no: it.msme_no || '', tds_applicable: !!it.tds_applicable, is_active: it.is_active !== false, notes: it.notes || '',
+    gstin: it.gstin || '', pan: it.pan || '', msme_no: it.msme_no || '',
+    payment_terms: it.payment_terms || '', notes: it.notes || '',
+    tds_applicable: !!it.tds_applicable, is_active: it.is_active !== false,
+    // structured address (preferred). Hydrate from legacy if missing.
+    address: it.address || {
+      address_line_1: '', address_line_2: '', city: it.city || '', state: it.state || '',
+      pincode: '', country: 'India', formatted_address: it.billing_address || '', lat: null, lng: null,
+    },
+    billing_address: it.billing_address || '',
+    city: it.city || '', state: it.state || '',
+    // bank
+    bank_name: it.bank_name || '', bank_branch: it.bank_branch || '',
+    bank_account_holder: it.bank_account_holder || '', bank_account_no: it.bank_account_no || '',
+    bank_ifsc: it.bank_ifsc || '', upi_id: it.upi_id || '',
+    // contacts (hydrate legacy single-contact into the list if needed)
+    contacts: (it.contacts && it.contacts.length)
+      ? it.contacts.map((c) => ({ ...c }))
+      : (it.contact_person || it.email || it.phone
+        ? [{ id: 'legacy', name: it.contact_person || '', designation: '', email: it.email || '', phone: it.phone || '', is_primary: true }]
+        : []),
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const setAddr = (patch) => setF((p) => ({ ...p, address: { ...p.address, ...patch } }));
+
+  const addContact = () => set('contacts', [...f.contacts, { id: `new-${Date.now()}`, name: '', designation: '', email: '', phone: '', is_primary: f.contacts.length === 0 }]);
+  const updContact = (i, patch) => set('contacts', f.contacts.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  const delContact = (i) => set('contacts', f.contacts.filter((_, idx) => idx !== i));
+  const makePrimary = (i) => set('contacts', f.contacts.map((c, idx) => ({ ...c, is_primary: idx === i })));
 
   const submit = async () => {
     if (!f.name.trim()) { toast.error('Vendor name is required'); return; }
+    // sanitize contacts (drop empties)
+    const cleanContacts = f.contacts
+      .map((c) => ({ ...c, id: c.id && c.id !== 'legacy' ? c.id : undefined }))
+      .filter((c) => (c.name || c.email || c.phone));
+    const payload = { ...f, contacts: cleanContacts };
     setSaving(true);
     try {
-      if (editing) await axios.patch(`${API}/api/accounting/vendors/${it.id}`, f, auth());
-      else await axios.post(`${API}/api/accounting/vendors`, f, auth());
+      if (editing) await axios.patch(`${API}/api/accounting/vendors/${it.id}`, payload, auth());
+      else await axios.post(`${API}/api/accounting/vendors`, payload, auth());
       toast.success(editing ? 'Updated' : 'Created'); onSaved();
     } catch (e) { toast.error(e.response?.data?.detail || 'Save failed'); } finally { setSaving(false); }
   };
 
+  const addr = f.address || {};
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto" data-testid="vendor-form-dialog">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="vendor-form-dialog">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Edit' : 'Add'} Vendor</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-indigo-600" />{editing ? 'Edit' : 'Add'} Vendor</DialogTitle>
           <DialogDescription>Capture full vendor details for accounting &amp; procurement.</DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Name *"><Input value={f.name} onChange={(e) => set('name', e.target.value)} data-testid="vendor-form-name" /></Field>
-          <Field label="Vendor Code"><Input value={f.vendor_code} onChange={(e) => set('vendor_code', e.target.value)} data-testid="vendor-form-code" /></Field>
-          <Field label="Vendor Type">
-            <Select value={f.vendor_type || undefined} onValueChange={(v) => set('vendor_type', v)}>
-              <SelectTrigger data-testid="vendor-form-type"><SelectValue placeholder="Select type" /></SelectTrigger>
-              <SelectContent>{vendorTypes.map((t) => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </Field>
-          <Field label="Payment Terms"><Input value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} placeholder="e.g. Net 30" data-testid="vendor-form-terms" /></Field>
-          <Field label="GSTIN"><Input value={f.gstin} onChange={(e) => set('gstin', e.target.value)} data-testid="vendor-form-gstin" /></Field>
-          <Field label="PAN"><Input value={f.pan} onChange={(e) => set('pan', e.target.value)} data-testid="vendor-form-pan" /></Field>
-          <Field label="Contact Person"><Input value={f.contact_person} onChange={(e) => set('contact_person', e.target.value)} /></Field>
-          <Field label="Email"><Input value={f.email} onChange={(e) => set('email', e.target.value)} /></Field>
-          <Field label="Phone"><Input value={f.phone} onChange={(e) => set('phone', e.target.value)} /></Field>
-          <Field label="City (from Admin Locations)">
-            <Input list="vendor-cities" value={f.city} onChange={(e) => set('city', e.target.value)} placeholder="Type to search" data-testid="vendor-form-city" />
-            <datalist id="vendor-cities">{cities.map((c) => <option key={c.id} value={c.name} />)}</datalist>
-          </Field>
-          <Field label="State"><Input value={f.state} onChange={(e) => set('state', e.target.value)} /></Field>
-          <Field label="MSME / Udyam No."><Input value={f.msme_no} onChange={(e) => set('msme_no', e.target.value)} /></Field>
-          <Field label="Bank A/c No."><Input value={f.bank_account_no} onChange={(e) => set('bank_account_no', e.target.value)} /></Field>
-          <Field label="IFSC"><Input value={f.bank_ifsc} onChange={(e) => set('bank_ifsc', e.target.value)} /></Field>
-          <Field label="Bank Name"><Input value={f.bank_name} onChange={(e) => set('bank_name', e.target.value)} /></Field>
-          <div className="col-span-2"><Field label="Billing Address"><Textarea rows={2} value={f.billing_address} onChange={(e) => set('billing_address', e.target.value)} /></Field></div>
-          <div className="col-span-2"><Field label="Notes"><Textarea rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></Field></div>
-          <div className="flex items-center gap-2"><Switch checked={f.tds_applicable} onCheckedChange={(v) => set('tds_applicable', v)} data-testid="vendor-form-tds" /><Label className="text-xs">TDS Applicable</Label></div>
-          <div className="flex items-center gap-2"><Switch checked={f.is_active} onCheckedChange={(v) => set('is_active', v)} data-testid="vendor-form-active" /><Label className="text-xs">Active</Label></div>
+
+        <div className="space-y-4">
+          <SectionCard icon={IdCard} title="Identification & Tax" subtitle="Legal name, registration & payment terms" accent="indigo">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Name *"><Input value={f.name} onChange={(e) => set('name', e.target.value)} data-testid="vendor-form-name" /></Field>
+              <Field label="Vendor Code"><Input value={f.vendor_code} onChange={(e) => set('vendor_code', e.target.value)} data-testid="vendor-form-code" /></Field>
+              <Field label="Vendor Type">
+                <Select value={f.vendor_type || undefined} onValueChange={(v) => set('vendor_type', v)}>
+                  <SelectTrigger data-testid="vendor-form-type"><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>{vendorTypes.map((t) => <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </Field>
+              <Field label="Payment Terms"><Input value={f.payment_terms} onChange={(e) => set('payment_terms', e.target.value)} placeholder="e.g. Net 30" data-testid="vendor-form-terms" /></Field>
+              <Field label="GSTIN"><Input value={f.gstin} onChange={(e) => set('gstin', e.target.value)} data-testid="vendor-form-gstin" /></Field>
+              <Field label="PAN"><Input value={f.pan} onChange={(e) => set('pan', e.target.value)} data-testid="vendor-form-pan" /></Field>
+              <Field label="MSME / Udyam No."><Input value={f.msme_no} onChange={(e) => set('msme_no', e.target.value)} /></Field>
+              <div className="flex items-end gap-4 pb-2">
+                <label className="flex items-center gap-2"><Switch checked={f.tds_applicable} onCheckedChange={(v) => set('tds_applicable', v)} data-testid="vendor-form-tds" /><span className="text-xs">TDS Applicable</span></label>
+                <label className="flex items-center gap-2"><Switch checked={f.is_active} onCheckedChange={(v) => set('is_active', v)} data-testid="vendor-form-active" /><span className="text-xs">Active</span></label>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard icon={MapPin} title="Billing Address" subtitle="Search via Google Places, then refine inline" accent="amber">
+            <div className="space-y-3">
+              <GooglePlacesAddressSearch
+                placeholder="Search vendor address (3+ chars)…"
+                cityHint={addr.city || f.city || ''}
+                testId="vendor-places"
+                onPick={(p) => {
+                  setAddr({
+                    address_line_1: p.address_line_1 || '',
+                    address_line_2: p.address_line_2 || '',
+                    city: p.city || addr.city || '',
+                    state: p.state || addr.state || '',
+                    pincode: p.pincode || '',
+                    formatted_address: p.formatted_address || '',
+                    lat: p.lat ?? null, lng: p.lng ?? null,
+                  });
+                  if (p.city) setF((prev) => ({ ...prev, city: p.city, state: p.state || prev.state }));
+                  toast.success('Address captured');
+                }}
+              />
+              {addr.formatted_address && (
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 text-xs text-amber-900" data-testid="vendor-address-pill">
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                  <span className="leading-relaxed">{addr.formatted_address}</span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Address line 1"><Input value={addr.address_line_1 || ''} onChange={(e) => setAddr({ address_line_1: e.target.value })} data-testid="vendor-addr1" /></Field>
+                <Field label="Address line 2"><Input value={addr.address_line_2 || ''} onChange={(e) => setAddr({ address_line_2: e.target.value })} data-testid="vendor-addr2" /></Field>
+                <Field label="City">
+                  <Input list="vendor-cities" value={addr.city || ''} onChange={(e) => { setAddr({ city: e.target.value }); set('city', e.target.value); }} placeholder="Type to search" data-testid="vendor-form-city" />
+                  <datalist id="vendor-cities">{cities.map((c) => <option key={c.id} value={c.name} />)}</datalist>
+                </Field>
+                <Field label="State"><Input value={addr.state || ''} onChange={(e) => { setAddr({ state: e.target.value }); set('state', e.target.value); }} /></Field>
+                <Field label="Pincode"><Input value={addr.pincode || ''} onChange={(e) => setAddr({ pincode: e.target.value })} /></Field>
+                <Field label="Country"><Input value={addr.country || 'India'} onChange={(e) => setAddr({ country: e.target.value })} /></Field>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard icon={Landmark} title="Bank Account" subtitle="Used for payments, NEFT / RTGS / UPI" accent="emerald">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Bank Name"><Input value={f.bank_name} onChange={(e) => set('bank_name', e.target.value)} placeholder="e.g. HDFC Bank" data-testid="vendor-bank-name" /></Field>
+              <Field label="Branch"><Input value={f.bank_branch} onChange={(e) => set('bank_branch', e.target.value)} placeholder="e.g. Banjara Hills" data-testid="vendor-bank-branch" /></Field>
+              <Field label="Account Holder"><Input value={f.bank_account_holder} onChange={(e) => set('bank_account_holder', e.target.value)} placeholder="Name on the account" data-testid="vendor-bank-holder" /></Field>
+              <Field label="Account No."><Input value={f.bank_account_no} onChange={(e) => set('bank_account_no', e.target.value)} className="font-mono" data-testid="vendor-bank-acno" /></Field>
+              <Field label="IFSC"><Input value={f.bank_ifsc} onChange={(e) => set('bank_ifsc', e.target.value.toUpperCase())} placeholder="HDFC0001234" className="font-mono uppercase" data-testid="vendor-bank-ifsc" /></Field>
+              <Field label="UPI ID"><Input value={f.upi_id} onChange={(e) => set('upi_id', e.target.value)} placeholder="vendor@upi" data-testid="vendor-upi" /></Field>
+            </div>
+            {(f.bank_name || f.bank_account_no || f.upi_id) && (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 p-3 text-white shadow-inner" data-testid="vendor-bank-pill">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-widest text-emerald-100">{f.bank_name || 'Bank'}{f.bank_branch ? ` · ${f.bank_branch}` : ''}</p>
+                  <p className="mt-1 truncate font-mono text-sm tracking-wider">{f.bank_account_no || '— — — — — — — —'}</p>
+                  <p className="mt-0.5 text-xs text-emerald-100">{f.bank_account_holder || '—'} {f.bank_ifsc ? ` · ${f.bank_ifsc}` : ''}{f.upi_id ? ` · ${f.upi_id}` : ''}</p>
+                </div>
+                <Landmark className="h-8 w-8 text-emerald-200/80" />
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard icon={Users} title="Contacts" subtitle="Add multiple points of contact. Star the primary one." accent="rose">
+            <div className="overflow-hidden rounded-lg border border-slate-200">
+              <table className="w-full text-sm" data-testid="vendor-contacts-table">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="p-2 text-center w-10"></th>
+                    <th className="p-2 text-left font-medium">Name</th>
+                    <th className="p-2 text-left font-medium">Designation</th>
+                    <th className="p-2 text-left font-medium">Email</th>
+                    <th className="p-2 text-left font-medium">Phone</th>
+                    <th className="p-2 text-center w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {f.contacts.length === 0 && (
+                    <tr><td colSpan={6} className="p-4 text-center text-xs text-slate-400">No contacts yet — click &ldquo;Add contact&rdquo;.</td></tr>
+                  )}
+                  {f.contacts.map((c, i) => (
+                    <tr key={c.id || i} className="border-t border-slate-100" data-testid={`vendor-contact-row-${i}`}>
+                      <td className="p-1 text-center">
+                        <button type="button" onClick={() => makePrimary(i)} title={c.is_primary ? 'Primary' : 'Mark as primary'} className="rounded p-1 hover:bg-amber-50" data-testid={`vendor-contact-primary-${i}`}>
+                          {c.is_primary ? <Star className="h-4 w-4 fill-amber-400 text-amber-500" /> : <StarOff className="h-4 w-4 text-slate-300" />}
+                        </button>
+                      </td>
+                      <td className="p-1"><Input value={c.name || ''} placeholder="Name" onChange={(e) => updContact(i, { name: e.target.value })} className="h-8" data-testid={`vendor-contact-name-${i}`} /></td>
+                      <td className="p-1"><Input value={c.designation || ''} placeholder="Role" onChange={(e) => updContact(i, { designation: e.target.value })} className="h-8" data-testid={`vendor-contact-role-${i}`} /></td>
+                      <td className="p-1"><Input value={c.email || ''} placeholder="email@vendor.com" onChange={(e) => updContact(i, { email: e.target.value })} className="h-8" data-testid={`vendor-contact-email-${i}`} /></td>
+                      <td className="p-1"><Input value={c.phone || ''} placeholder="+91…" onChange={(e) => updContact(i, { phone: e.target.value })} className="h-8" data-testid={`vendor-contact-phone-${i}`} /></td>
+                      <td className="p-1 text-center">
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={() => delContact(i)} data-testid={`vendor-contact-delete-${i}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Button type="button" variant="outline" size="sm" className="mt-3" onClick={addContact} data-testid="vendor-contact-add"><Plus className="mr-1 h-3.5 w-3.5" /> Add contact</Button>
+          </SectionCard>
+
+          <div>
+            <Field label="Notes"><Textarea rows={2} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></Field>
+          </div>
         </div>
+
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
           <Button onClick={submit} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700" data-testid="vendor-form-save-btn">{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}{editing ? 'Save' : 'Create'}</Button>

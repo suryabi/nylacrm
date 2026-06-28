@@ -1,6 +1,22 @@
 # Changelog
 
 
+## 2026-06-27 — Vendor form redesign: sectioned cards, Google Address search, multi-contact table ✅ (self-verified UI + curl)
+- **Backend (`accounting_entities.py`)**:
+  - `VendorIn` extended with structured `address: VendorAddress` (line_1/line_2/city/state/pincode/country/formatted_address/lat/lng), multi-contact `contacts: VendorContact[]` (id/name/designation/email/phone/is_primary), and additional bank fields `bank_account_holder`, `bank_branch`, `upi_id`. Legacy `billing_address`/`contact_person`/`email`/`phone` fields retained for back-compat.
+  - New `_normalize_vendor_payload()` helper auto-assigns UUIDs to new contacts, picks/normalizes the primary, and mirrors the primary contact + structured address into the legacy flat fields so downstream consumers (transactions inbox, search) keep working unchanged.
+  - Create + update endpoints both route through the normalizer.
+- **Frontend (`VendorsAccounting.js`)**:
+  - New `SectionCard` shell — gradient background, accent ring per section, icon header, subtitle.
+  - **Identification & Tax** (indigo): name, code, type, payment terms, GSTIN, PAN, MSME, TDS/Active toggles.
+  - **Billing Address** (amber): integrated existing `GooglePlacesAddressSearch` — picking a suggestion fills address line 1/2, city, state, pincode, formatted address, lat/lng; an amber pill shows the resolved `formatted_address`.
+  - **Bank Account** (emerald): Bank name, Branch, Account Holder, Account No., IFSC, UPI ID with a beautiful **gradient "bank card" preview** rendered live as the user types.
+  - **Contacts** (rose): inline editable table — primary-star toggle (left), name/designation/email/phone columns, delete (right). "Add contact" button below; first contact auto-primary.
+  - data-testids: `vendor-bank-{name,branch,holder,acno,ifsc}`, `vendor-upi`, `vendor-bank-pill`, `vendor-places-{input,results,option-N}`, `vendor-address-pill`, `vendor-addr1/2`, `vendor-contacts-table`, `vendor-contact-{name,role,email,phone,primary,delete}-{i}`, `vendor-contact-add`.
+- Verified live: created `QA Test Vendor` via curl → response shows auto-IDed contacts, primary mirrored into `contact_person/email/phone`, structured address kept + flat city/state/billing_address derived. Frontend screenshots show all four sections, the live bank card pill, and a 2-row contact table.
+
+
+
 ## 2026-06-27 — Accounting Transactions: month-scoped Zoho sync dialog ✅ (self-verified UI + backend curl)
 - **Frontend (`AccountingTransactions.js`)**: clicking "Sync from Zoho" now opens a modal (`data-testid="sync-dialog"`) with Month + Year selects (`sync-month`, `sync-year`), defaulting to the current month/year. "Sync this month" computes `start = YYYY-MM-01`, `end = last day of month` and posts to `/api/accounting/transactions/sync?date_start=…&date_end=…`. Toast shows the synced window. Cancel + Confirm buttons (`sync-cancel`, `sync-confirm`).
 - **Backend (`accounting_transactions.py`)**: `sync_transactions` now skips advancing `last_synced_date` whenever the caller passes an explicit range — explicit per-month syncs no longer rewind / interfere with the cumulative cursor.
