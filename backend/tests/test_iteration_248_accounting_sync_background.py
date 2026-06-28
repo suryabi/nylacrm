@@ -8,7 +8,7 @@ import pytest
 import requests
 from datetime import datetime, timezone
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://accounting-inbox.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://category-unify.preview.emergentagent.com").rstrip("/")
 API = f"{BASE_URL}/api"
 TENANT = "nyla-air-water"
 EMAIL = "surya.yadavalli@nylaairwater.earth"
