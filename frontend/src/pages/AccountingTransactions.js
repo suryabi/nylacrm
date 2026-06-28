@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
-  RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, Paperclip, Upload,
+  RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Paperclip, Upload,
   Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
   Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Hash,
 } from 'lucide-react';
@@ -141,9 +141,22 @@ export default function AccountingTransactions() {
   useEffect(() => { loadCategorySummary(); }, [loadCategorySummary]);
 
   const [syncOpen, setSyncOpen] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
   const now = new Date();
   const [syncYear, setSyncYear] = useState(now.getFullYear());
   const [syncMonth, setSyncMonth] = useState(now.getMonth() + 1); // 1-12
+
+  const reclassifyDirections = async () => {
+    if (!window.confirm('Re-evaluate money-in vs money-out for every existing transaction? This walks all rows using Zoho\'s debit_or_credit field and is safe to re-run.')) return;
+    setReclassifying(true);
+    try {
+      const { data } = await axios.post(`${API}/api/accounting/transactions/reclassify-direction`, {}, auth());
+      toast.success(`Reclassified ${data.checked} rows · ${data.flipped} corrected`);
+      load();
+      loadCategorySummary();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Reclassify failed'); }
+    finally { setReclassifying(false); }
+  };
 
   const sync = async () => {
     setSyncing(true);
@@ -272,6 +285,10 @@ export default function AccountingTransactions() {
               <DropdownMenuItem onClick={() => exportData('pdf')} data-testid="download-pdf"><FileText className="mr-2 h-4 w-4 text-rose-600" /> PDF</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button variant="outline" onClick={reclassifyDirections} disabled={reclassifying} data-testid="reclassify-btn"
+            title="Re-evaluate money-in vs money-out for every existing transaction using Zoho's debit_or_credit field.">
+            {reclassifying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowLeftRight className="mr-2 h-4 w-4" />} Fix directions
+          </Button>
           <Button onClick={() => setSyncOpen(true)} className="bg-indigo-600 hover:bg-indigo-700" data-testid="sync-zoho-btn">
             <RefreshCw className="mr-2 h-4 w-4" /> Sync from Zoho
           </Button>

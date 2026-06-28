@@ -90,14 +90,28 @@ async def _ensure_txn_codes(tenant_id: str):
 
 
 def _direction_of(txn: dict) -> str:
+    """Return 'credit' (money IN) or 'debit' (money OUT) for a Zoho bank-feed line.
+
+    Priority (most authoritative first):
+      1. `debit_or_credit` field — Zoho's explicit signal for which side of the
+         ledger the entry posts to. This is the truth for bank feeds.
+      2. `transaction_type` against our curated allowlists.
+      3. amount sign (Zoho usually returns positive amounts; this is a last resort).
+
+    We previously checked transaction_type FIRST, which mis-classified incoming
+    RTGS credits (real-world example: customer transfers tagged by Zoho as
+    `vendor_payment` or `transfer_fund` would show as money-out even though
+    `debit_or_credit` was 'credit')."""
+    dc = (txn.get("debit_or_credit") or "").lower()
+    if dc.startswith("c"):
+        return "credit"
+    if dc.startswith("d"):
+        return "debit"
     ttype = (txn.get("transaction_type") or "").lower()
     if ttype in _CREDIT_TYPES:
         return "credit"
     if ttype in _DEBIT_TYPES:
         return "debit"
-    # fall back to debit/credit flags or amount
-    if txn.get("debit_or_credit"):
-        return "credit" if str(txn["debit_or_credit"]).lower().startswith("c") else "debit"
     amt = float(txn.get("amount") or 0)
     return "credit" if amt >= 0 else "debit"
 
@@ -178,7 +192,7 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
                     if d["zoho_transaction_id"] in existing:
                         # refresh only Zoho-side fields; preserve user tags/proofs/links
                         ops.append(UpdateOne(key, {"$set": {
-                            **{k: d[k] for k in ("amount", "currency", "date", "zoho_status",
+                            **{k: d[k] for k in ("direction", "amount", "currency", "date", "zoho_status",
                                                  "zoho_transaction_type", "payee", "reference_number",
                                                  "description", "bank_account_name", "zoho_account_id", "raw")},
                             "updated_at": now,
@@ -300,6 +314,38 @@ async def sync_status(job_id: str, current_user: dict = Depends(get_current_user
     if not job:
         raise HTTPException(status_code=404, detail="Sync job not found")
     return job
+
+
+@router.post("/reclassify-direction")
+async def reclassify_direction(current_user: dict = Depends(get_current_user)):
+    """One-shot maintenance: walk every transaction for this tenant, re-run
+    `_direction_of` against its stored Zoho `raw` payload, and update the
+    persisted `direction` if it changed. Use this once after upgrading the
+    classifier (e.g. when historic credits were stored as debits)."""
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    ops = []
+    checked = 0
+    flipped = 0
+    async for row in db[COLL].find(
+        {"tenant_id": tenant_id, "raw": {"$exists": True, "$ne": None}},
+        {"_id": 0, "id": 1, "direction": 1, "raw": 1},
+    ):
+        checked += 1
+        new_dir = _direction_of(row.get("raw") or {})
+        if new_dir != row.get("direction"):
+            ops.append(UpdateOne(
+                {"id": row["id"], "tenant_id": tenant_id},
+                {"$set": {"direction": new_dir, "updated_at": _now()}},
+            ))
+            flipped += 1
+        if len(ops) >= 500:
+            await db[COLL].bulk_write(ops, ordered=False)
+            ops = []
+    if ops:
+        await db[COLL].bulk_write(ops, ordered=False)
+    return {"ok": True, "checked": checked, "flipped": flipped}
+
 
 
 # ----------------------- List / filters -----------------------
