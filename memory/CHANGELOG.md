@@ -1,6 +1,20 @@
 # Changelog
 
 
+## 2026-06-28 — Vendor / Employee forms: mobile & iPad responsive ✅ (verified at 820×1180 iPad portrait)
+- Fix: previously the `Add Vendor` / `Add Employee` dialogs used `max-w-3xl` / `max-w-4xl` which exceeded iPad-portrait viewport (768–820 px) and overflowed off-screen.
+- **DialogContent** now uses `w-[95vw] max-w-3xl|4xl … p-4 sm:p-6` so the modal is always clamped to 95% of viewport width while retaining its desktop size.
+- All multi-column grids reflow from 2/3 cols → 1 col on mobile:
+  - Vendor Identification, Address, Bank: `grid-cols-1 sm:grid-cols-2`.
+  - Employee Identification, Address, Bank: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`.
+  - Salary `SalaryGrid`: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`.
+- Active switch row now spans the full row on mobile (`sm:col-span-2 lg:col-span-3`).
+- Contacts / Family / Emergency tables wrapped in `overflow-x-auto` with `min-w-[640px]` on the table — column widths stay legible, user just swipes horizontally on tiny screens.
+- Gradient bank-card pill now stacks vertically on mobile (`flex-col … sm:flex-row sm:items-center sm:justify-between`).
+- Verified live in iPad-portrait (820×1180): dialog fits without horizontal overflow; identification grid is 3-col, address/bank/salary collapse appropriately.
+
+
+
 ## 2026-06-27 — Employee form redesign: identification + address + bank + full CTC + family / emergency contacts ✅ (self-verified UI + curl)
 - **Backend (`accounting_entities.py`)**:
   - `EmployeeIn` extended with:

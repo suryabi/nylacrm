@@ -222,7 +222,7 @@ function VendorForm({ dialog, vendorTypes, cities, onClose, onSaved }) {
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="vendor-form-dialog">
+      <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6" data-testid="vendor-form-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5 text-indigo-600" />{editing ? 'Edit' : 'Add'} Vendor</DialogTitle>
           <DialogDescription>Capture full vendor details for accounting &amp; procurement.</DialogDescription>
@@ -230,7 +230,7 @@ function VendorForm({ dialog, vendorTypes, cities, onClose, onSaved }) {
 
         <div className="space-y-4">
           <SectionCard icon={IdCard} title="Identification & Tax" subtitle="Legal name, registration & payment terms" accent="indigo">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Name *"><Input value={f.name} onChange={(e) => set('name', e.target.value)} data-testid="vendor-form-name" /></Field>
               <Field label="Vendor Code"><Input value={f.vendor_code} onChange={(e) => set('vendor_code', e.target.value)} data-testid="vendor-form-code" /></Field>
               <Field label="Vendor Type">
@@ -276,7 +276,7 @@ function VendorForm({ dialog, vendorTypes, cities, onClose, onSaved }) {
                   <span className="leading-relaxed">{addr.formatted_address}</span>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Address line 1"><Input value={addr.address_line_1 || ''} onChange={(e) => setAddr({ address_line_1: e.target.value })} data-testid="vendor-addr1" /></Field>
                 <Field label="Address line 2"><Input value={addr.address_line_2 || ''} onChange={(e) => setAddr({ address_line_2: e.target.value })} data-testid="vendor-addr2" /></Field>
                 <Field label="City">
@@ -291,7 +291,7 @@ function VendorForm({ dialog, vendorTypes, cities, onClose, onSaved }) {
           </SectionCard>
 
           <SectionCard icon={Landmark} title="Bank Account" subtitle="Used for payments, NEFT / RTGS / UPI" accent="emerald">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label="Bank Name"><Input value={f.bank_name} onChange={(e) => set('bank_name', e.target.value)} placeholder="e.g. HDFC Bank" data-testid="vendor-bank-name" /></Field>
               <Field label="Branch"><Input value={f.bank_branch} onChange={(e) => set('bank_branch', e.target.value)} placeholder="e.g. Banjara Hills" data-testid="vendor-bank-branch" /></Field>
               <Field label="Account Holder"><Input value={f.bank_account_holder} onChange={(e) => set('bank_account_holder', e.target.value)} placeholder="Name on the account" data-testid="vendor-bank-holder" /></Field>
@@ -300,7 +300,7 @@ function VendorForm({ dialog, vendorTypes, cities, onClose, onSaved }) {
               <Field label="UPI ID"><Input value={f.upi_id} onChange={(e) => set('upi_id', e.target.value)} placeholder="vendor@upi" data-testid="vendor-upi" /></Field>
             </div>
             {(f.bank_name || f.bank_account_no || f.upi_id) && (
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 p-3 text-white shadow-inner" data-testid="vendor-bank-pill">
+              <div className="mt-3 flex flex-col items-start gap-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 p-3 text-white shadow-inner sm:flex-row sm:items-center sm:justify-between" data-testid="vendor-bank-pill">
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-widest text-emerald-100">{f.bank_name || 'Bank'}{f.bank_branch ? ` · ${f.bank_branch}` : ''}</p>
                   <p className="mt-1 truncate font-mono text-sm tracking-wider">{f.bank_account_no || '— — — — — — — —'}</p>
@@ -312,8 +312,8 @@ function VendorForm({ dialog, vendorTypes, cities, onClose, onSaved }) {
           </SectionCard>
 
           <SectionCard icon={Users} title="Contacts" subtitle="Add multiple points of contact. Star the primary one." accent="rose">
-            <div className="overflow-hidden rounded-lg border border-slate-200">
-              <table className="w-full text-sm" data-testid="vendor-contacts-table">
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full min-w-[640px] text-sm" data-testid="vendor-contacts-table">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="p-2 text-center w-10"></th>

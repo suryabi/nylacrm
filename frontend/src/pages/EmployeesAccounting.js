@@ -213,8 +213,8 @@ function ContactsTable({ rows, onChange, primaryLabel = 'Primary', testIdPrefix,
   const add = () => onChange([...rows, { id: `new-${Date.now()}`, name: '', relationship: '', phone: '', email: '', date_of_birth: '', is_dependent: false, is_primary: rows.length === 0 }]);
   return (
     <>
-      <div className="overflow-hidden rounded-lg border border-slate-200">
-        <table className="w-full text-sm" data-testid={`${testIdPrefix}-table`}>
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full min-w-[640px] text-sm" data-testid={`${testIdPrefix}-table`}>
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
               <th className="p-2 text-center w-10"></th>
@@ -272,7 +272,7 @@ function SalaryGrid({ label, accent, rows, salary, onChange }) {
   return (
     <div className={`rounded-lg border ${palette} bg-white p-3`}>
       <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map(([k, lbl]) => (
           <div key={k}>
             <Label className="text-[11px] text-slate-500">{lbl}</Label>
@@ -350,7 +350,7 @@ function EmployeeForm({ dialog, users, departments, cities, onClose, onSaved }) 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto" data-testid="employee-form-dialog">
+      <DialogContent className="w-[95vw] max-w-4xl max-h-[92vh] overflow-y-auto p-4 sm:p-6" data-testid="employee-form-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-indigo-600" />{editing ? 'Edit' : 'Add'} Employee</DialogTitle>
           <DialogDescription>Capture identification, address, bank, full CTC breakdown, and family / emergency contacts.</DialogDescription>
@@ -358,7 +358,7 @@ function EmployeeForm({ dialog, users, departments, cities, onClose, onSaved }) 
 
         <div className="space-y-4">
           <SectionCard icon={IdCard} title="Identification" subtitle="Personal & employment details" accent="indigo">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Full Name *" className="sm:col-span-2"><Input value={f.full_name} onChange={(e) => set('full_name', e.target.value)} data-testid="employee-form-name" /></Field>
               <Field label="Employee Code"><Input value={f.employee_code} onChange={(e) => set('employee_code', e.target.value)} data-testid="employee-form-code" /></Field>
               <Field label="Department">
@@ -416,7 +416,7 @@ function EmployeeForm({ dialog, users, departments, cities, onClose, onSaved }) 
               <Field label="UAN"><Input value={f.uan} onChange={(e) => set('uan', e.target.value)} className="font-mono" /></Field>
               <Field label="PF Number"><Input value={f.pf_number} onChange={(e) => set('pf_number', e.target.value)} className="font-mono" /></Field>
               <Field label="ESI Number"><Input value={f.esi_number} onChange={(e) => set('esi_number', e.target.value)} className="font-mono" /></Field>
-              <div className="col-span-2 flex items-center gap-2 sm:col-span-3">
+              <div className="col-span-1 flex items-center gap-2 sm:col-span-2 lg:col-span-3">
                 <Switch checked={f.is_active} onCheckedChange={(v) => set('is_active', v)} data-testid="employee-form-active" />
                 <Label className="text-xs">Active</Label>
               </div>
@@ -449,7 +449,7 @@ function EmployeeForm({ dialog, users, departments, cities, onClose, onSaved }) 
                   <span className="leading-relaxed">{addr.formatted_address}</span>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <Field label="Address line 1" className="sm:col-span-2"><Input value={addr.address_line_1 || ''} onChange={(e) => setAddr({ address_line_1: e.target.value })} data-testid="employee-addr1" /></Field>
                 <Field label="Address line 2"><Input value={addr.address_line_2 || ''} onChange={(e) => setAddr({ address_line_2: e.target.value })} data-testid="employee-addr2" /></Field>
                 <Field label="City">
@@ -464,7 +464,7 @@ function EmployeeForm({ dialog, users, departments, cities, onClose, onSaved }) 
           </SectionCard>
 
           <SectionCard icon={Landmark} title="Bank Account" subtitle="Salary credit & reimbursements" accent="emerald">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Field label="Bank Name"><Input value={f.bank_name} onChange={(e) => set('bank_name', e.target.value)} placeholder="e.g. HDFC Bank" data-testid="employee-bank-name" /></Field>
               <Field label="Branch"><Input value={f.bank_branch} onChange={(e) => set('bank_branch', e.target.value)} placeholder="e.g. Banjara Hills" data-testid="employee-bank-branch" /></Field>
               <Field label="Account Holder"><Input value={f.bank_account_holder} onChange={(e) => set('bank_account_holder', e.target.value)} placeholder="Name on the account" data-testid="employee-bank-holder" /></Field>
@@ -473,7 +473,7 @@ function EmployeeForm({ dialog, users, departments, cities, onClose, onSaved }) 
               <Field label="UPI ID"><Input value={f.upi_id} onChange={(e) => set('upi_id', e.target.value)} placeholder="employee@upi" data-testid="employee-upi" /></Field>
             </div>
             {(f.bank_name || f.bank_account_no || f.upi_id) && (
-              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 p-3 text-white shadow-inner" data-testid="employee-bank-pill">
+              <div className="mt-3 flex flex-col items-start gap-3 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 p-3 text-white shadow-inner sm:flex-row sm:items-center sm:justify-between" data-testid="employee-bank-pill">
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-widest text-emerald-100">{f.bank_name || 'Bank'}{f.bank_branch ? ` · ${f.bank_branch}` : ''}</p>
                   <p className="mt-1 truncate font-mono text-sm tracking-wider">{f.bank_account_no || '— — — — — — — —'}</p>
