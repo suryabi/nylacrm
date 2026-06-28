@@ -4,7 +4,8 @@ old single-field accounting_masters entries). Tenant-scoped. Cities are NOT
 stored as a separate master; the frontend sources them from Admin → Locations
 (/api/master-locations/flat) and stores the chosen city name here.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -14,6 +15,10 @@ import logging
 from database import db
 from deps import get_current_user
 from core.tenant import get_current_tenant_id
+from services.object_storage import put_object, get_object, build_path, guess_content_type
+
+ALLOWED_EMPLOYEE_DOC_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "application/pdf"}
+EMPLOYEE_DOC_KINDS = {"pan", "aadhaar"}
 
 router = APIRouter(prefix="/accounting", tags=["Accounting Entities"])
 logger = logging.getLogger(__name__)
@@ -232,6 +237,17 @@ class EmployeeSalary(BaseModel):
     annual_ctc: float = 0.0      # monthly_ctc * 12 + annual_*
 
 
+class EmployeeDocument(BaseModel):
+    storage_path: Optional[str] = None
+    original_filename: Optional[str] = None
+    display_name: Optional[str] = None
+    content_type: Optional[str] = None
+    size: Optional[int] = None
+    is_image: bool = False
+    uploaded_at: Optional[str] = None
+    uploaded_by: Optional[str] = None
+
+
 class EmployeeIn(BaseModel):
     full_name: str
     employee_code: Optional[str] = None
@@ -252,6 +268,8 @@ class EmployeeIn(BaseModel):
     uan: Optional[str] = None
     pf_number: Optional[str] = None
     esi_number: Optional[str] = None
+    pan_document: Optional[EmployeeDocument] = None
+    aadhaar_document: Optional[EmployeeDocument] = None
     # bank
     bank_account_no: Optional[str] = None
     bank_ifsc: Optional[str] = None
@@ -380,3 +398,93 @@ async def delete_employee(item_id: str, current_user: dict = Depends(get_current
         raise HTTPException(status_code=404, detail="Employee not found")
     await db[EMPLOYEE_COLL].delete_one({"id": item_id, "tenant_id": tenant_id})
     return {"ok": True, "deleted": item_id}
+
+
+
+# ---------------- Employee ID-proof documents (PAN / Aadhaar) ----------------
+
+@router.post("/employees/{item_id}/documents/{kind}")
+async def upload_employee_document(
+    item_id: str,
+    kind: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Attach (or replace) a PAN/Aadhaar scan on an employee record. Accepts
+    images (png/jpg/webp/gif) and PDFs only. Stored via object storage; the
+    employee doc keeps a `pan_document` / `aadhaar_document` reference."""
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    if kind not in EMPLOYEE_DOC_KINDS:
+        raise HTTPException(status_code=400, detail=f"Unknown document kind '{kind}'. Use one of: {sorted(EMPLOYEE_DOC_KINDS)}")
+    emp = await db[EMPLOYEE_COLL].find_one({"id": item_id, "tenant_id": tenant_id})
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    content_type = (file.content_type or guess_content_type(file.filename) or "").lower()
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+    if content_type not in ALLOWED_EMPLOYEE_DOC_TYPES and ext not in {"png", "jpg", "jpeg", "webp", "gif", "pdf"}:
+        raise HTTPException(status_code=400, detail="Only image or PDF files are allowed")
+    data = await file.read()
+    is_image = content_type.startswith("image/") or ext in {"png", "jpg", "jpeg", "webp", "gif"}
+    code = emp.get("employee_code") or emp.get("id")[:8].upper()
+    display_name = f"{code}-{kind.upper()}.{ext or ('pdf' if content_type == 'application/pdf' else 'bin')}"
+    path = build_path(tenant_id, "employee-id-proofs", display_name)
+    result = await put_object(path, data, content_type or "application/octet-stream")
+
+    proof = {
+        "storage_path": result.get("path", path),
+        "original_filename": file.filename,
+        "display_name": display_name,
+        "content_type": content_type,
+        "size": result.get("size", len(data)),
+        "is_image": is_image,
+        "uploaded_at": _now(),
+        "uploaded_by": current_user.get("id"),
+    }
+    field = f"{kind}_document"
+    await db[EMPLOYEE_COLL].update_one(
+        {"id": item_id, "tenant_id": tenant_id},
+        {"$set": {field: proof, "updated_at": _now()}},
+    )
+    return proof
+
+
+@router.get("/employees/{item_id}/documents/{kind}/download")
+async def download_employee_document(
+    item_id: str,
+    kind: str,
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    if kind not in EMPLOYEE_DOC_KINDS:
+        raise HTTPException(status_code=400, detail="Unknown document kind")
+    emp = await db[EMPLOYEE_COLL].find_one({"id": item_id, "tenant_id": tenant_id})
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    proof = (emp or {}).get(f"{kind}_document") or {}
+    if not proof.get("storage_path"):
+        raise HTTPException(status_code=404, detail="Document not uploaded yet")
+    data, ctype = await get_object(proof["storage_path"])
+    return Response(
+        content=data,
+        media_type=proof.get("content_type") or ctype,
+        headers={"Content-Disposition": f'inline; filename="{proof.get("display_name", "document")}"'},
+    )
+
+
+@router.delete("/employees/{item_id}/documents/{kind}")
+async def delete_employee_document(
+    item_id: str,
+    kind: str,
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    if kind not in EMPLOYEE_DOC_KINDS:
+        raise HTTPException(status_code=400, detail="Unknown document kind")
+    await db[EMPLOYEE_COLL].update_one(
+        {"id": item_id, "tenant_id": tenant_id},
+        {"$unset": {f"{kind}_document": ""}, "$set": {"updated_at": _now()}},
+    )
+    return {"ok": True}

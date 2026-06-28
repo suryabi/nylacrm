@@ -3,7 +3,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import {
   Plus, Pencil, Trash2, Search, Loader2, Users, IdCard, MapPin, Landmark,
-  Wallet, HeartPulse, Star, StarOff,
+  Wallet, HeartPulse, Star, StarOff, Upload, FileText, Eye, X,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -284,6 +284,99 @@ function SalaryGrid({ label, accent, rows, salary, onChange }) {
   );
 }
 
+
+function IdProofField({ label, value, onChange, className, employeeId, kind, initial }) {
+  const [proof, setProof] = useState(initial || null);
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState(null); // blob URL string
+  const fileRef = React.useRef(null);
+
+  const upload = async (file) => {
+    if (!file) return;
+    if (!employeeId) {
+      toast.error('Save the employee first, then upload the document.');
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data } = await axios.post(`${API}/api/accounting/employees/${employeeId}/documents/${kind}`, fd, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'multipart/form-data' },
+        withCredentials: true,
+      });
+      setProof(data);
+      toast.success(`${label} document uploaded`);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Upload failed'); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
+  };
+
+  const openPreview = async () => {
+    if (!proof || !employeeId) return;
+    try {
+      const res = await axios.get(`${API}/api/accounting/employees/${employeeId}/documents/${kind}/download`, { ...auth(), responseType: 'blob' });
+      setPreview(URL.createObjectURL(res.data));
+    } catch { toast.error('Could not open document'); }
+  };
+
+  const remove = async () => {
+    if (!proof || !employeeId) { setProof(null); return; }
+    if (!window.confirm(`Remove ${label} document?`)) return;
+    try {
+      await axios.delete(`${API}/api/accounting/employees/${employeeId}/documents/${kind}`, auth());
+      setProof(null);
+      toast.success(`${label} document removed`);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Remove failed'); }
+  };
+
+  return (
+    <div>
+      <Label className="text-xs text-slate-600">{label}</Label>
+      <div className="mt-1 flex items-stretch gap-1.5">
+        <Input value={value || ''} onChange={(e) => onChange(e.target.value)} className={`${className || ''} flex-1`} data-testid={`employee-${kind}-input`} />
+        {proof ? (
+          <div className="flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5" data-testid={`employee-${kind}-doc`}>
+            <button type="button" onClick={openPreview} title={proof.display_name || 'Preview'} className="flex h-7 w-7 items-center justify-center rounded text-emerald-700 hover:bg-emerald-100" data-testid={`employee-${kind}-preview`}>
+              <Eye className="h-3.5 w-3.5" />
+            </button>
+            <button type="button" onClick={remove} title="Remove" className="flex h-7 w-7 items-center justify-center rounded text-rose-600 hover:bg-rose-100" data-testid={`employee-${kind}-remove`}>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" disabled={uploading || !employeeId}
+            title={employeeId ? `Upload ${label} card` : 'Save the employee first to upload documents'}
+            onClick={() => fileRef.current?.click()} data-testid={`employee-${kind}-upload`}>
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+          </Button>
+        )}
+        <input ref={fileRef} type="file" className="hidden" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+          onChange={(e) => upload(e.target.files?.[0])} />
+      </div>
+      {proof && (
+        <p className="mt-1 truncate text-[11px] text-emerald-700" data-testid={`employee-${kind}-name`}>
+          <FileText className="mr-1 inline-block h-3 w-3" />{proof.display_name || proof.original_filename}
+        </p>
+      )}
+      {preview && (
+        <Dialog open onOpenChange={(o) => { if (!o) { URL.revokeObjectURL(preview); setPreview(null); } }}>
+          <DialogContent className="w-[95vw] max-w-2xl" data-testid={`employee-${kind}-preview-dialog`}>
+            <DialogHeader>
+              <DialogTitle className="truncate text-sm">{proof.display_name || label}</DialogTitle>
+            </DialogHeader>
+            <div className="max-h-[70vh] overflow-auto rounded-lg bg-slate-50 p-2">
+              {proof.is_image
+                ? <img src={preview} alt={label} className="mx-auto max-h-[65vh] rounded" />
+                : <iframe title={label} src={preview} className="h-[65vh] w-full rounded" />}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+
 function EmployeeForm({ dialog, users, departments, cities, onClose, onSaved }) {
   const editing = dialog.mode === 'edit';
   const it = dialog.item || {};
@@ -411,8 +504,8 @@ function EmployeeForm({ dialog, users, departments, cities, onClose, onSaved }) 
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="PAN"><Input value={f.pan} onChange={(e) => set('pan', e.target.value.toUpperCase())} className="font-mono uppercase" /></Field>
-              <Field label="Aadhaar"><Input value={f.aadhaar} onChange={(e) => set('aadhaar', e.target.value)} className="font-mono" /></Field>
+              <IdProofField label="PAN" value={f.pan} onChange={(v) => set('pan', v.toUpperCase())} className="font-mono uppercase" employeeId={editing ? it.id : null} kind="pan" initial={it.pan_document} />
+              <IdProofField label="Aadhaar" value={f.aadhaar} onChange={(v) => set('aadhaar', v)} className="font-mono" employeeId={editing ? it.id : null} kind="aadhaar" initial={it.aadhaar_document} />
               <Field label="UAN"><Input value={f.uan} onChange={(e) => set('uan', e.target.value)} className="font-mono" /></Field>
               <Field label="PF Number"><Input value={f.pf_number} onChange={(e) => set('pf_number', e.target.value)} className="font-mono" /></Field>
               <Field label="ESI Number"><Input value={f.esi_number} onChange={(e) => set('esi_number', e.target.value)} className="font-mono" /></Field>

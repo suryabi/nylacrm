@@ -1,6 +1,20 @@
 # Changelog
 
 
+## 2026-06-28 — Employee form: PAN & Aadhaar card uploads ✅ (verified backend curl + UI)
+- **Backend (`accounting_entities.py`)**:
+  - `EmployeeIn` now carries optional `pan_document` / `aadhaar_document` (each: `EmployeeDocument` with storage_path / original_filename / display_name / content_type / size / is_image / uploaded_at / uploaded_by).
+  - Three new endpoints (admin-only): `POST /api/accounting/employees/{id}/documents/{kind}`, `GET .../download`, `DELETE`, where `kind ∈ {pan, aadhaar}`. Images (png/jpg/webp/gif) + PDF only. Files stored via the same `object_storage.put_object` used for accounting proofs and auto-named `{employee_code}-{KIND}.{ext}`.
+- **Frontend (`EmployeesAccounting.js`)**:
+  - New `IdProofField` component — keeps the existing text input but adds:
+    - Upload button (disabled in create mode with tooltip "Save the employee first to upload documents").
+    - Once uploaded, the button is replaced with an emerald pill containing Preview (eye) + Remove (×) actions; the filename appears under the field.
+    - Click Preview opens a Dialog rendering `<img>` for images and `<iframe>` for PDFs.
+  - Wired into both PAN and Aadhaar fields. data-testids: `employee-{pan|aadhaar}-{input,upload,doc,preview,remove,name,preview-dialog}`.
+- Verified: curl upload → auto-named `DEMO-1-PAN.png`, persisted on the employee doc, download 200/68 B, delete OK. UI: upload disabled during create, toast on success after edit-mode upload, filename pill + preview dialog render correctly.
+
+
+
 ## 2026-06-28 — Vendor / Employee forms: mobile & iPad responsive ✅ (verified at 820×1180 iPad portrait)
 - Fix: previously the `Add Vendor` / `Add Employee` dialogs used `max-w-3xl` / `max-w-4xl` which exceeded iPad-portrait viewport (768–820 px) and overflowed off-screen.
 - **DialogContent** now uses `w-[95vw] max-w-3xl|4xl … p-4 sm:p-6` so the modal is always clamped to 95% of viewport width while retaining its desktop size.
