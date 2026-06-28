@@ -1,6 +1,18 @@
 # Changelog
 
 
+## 2026-06-28 — Production bug: money-IN shown as money-OUT (RTGS credits mis-classified) ✅ (testing_agent 48/48 pass)
+- **Reported (production)**: RTGS-CR credits from "Vamshi Krishna Bommena" and "Surya Prakasa Rao Yadavalli" (incoming bank transfers into the Jaitra Wellness HDFC account) were displayed with the red ↗ "money-out" arrow.
+- **Root cause** (`accounting_transactions._direction_of`): the classifier checked `transaction_type` against our curated allowlists **before** consulting Zoho's authoritative `debit_or_credit` field. Some Zoho bank-feed lines land with a `transaction_type` like `vendor_payment` or `transfer_fund` (which we'd whitelisted as DEBIT) even when `debit_or_credit` clearly says `credit`. We were overriding the truth signal with the heuristic.
+- **Fix**:
+  - Reordered `_direction_of` to consult `debit_or_credit` FIRST (case-insensitive), then transaction_type allowlists, then amount sign as a last resort. Updated docstring to call out the bug context.
+  - `_run_sync` UpdateOne `$set` now includes `direction` — every re-sync of an existing row re-classifies it under the new rules.
+  - **New `POST /api/accounting/transactions/reclassify-direction`** (admin-only): walks every existing tenant transaction, re-runs `_direction_of` against the stored Zoho `raw` payload, and updates `direction` in batched `bulk_write` of 500 ops. Returns `{ok, checked, flipped}`. Idempotent.
+  - **Frontend (`AccountingTransactions.js`)**: new **"Fix directions"** outline button next to "Sync from Zoho" (with `ArrowLeftRight` icon) that prompts for confirm, calls the endpoint, and toasts the result. `data-testid="reclassify-btn"`.
+- **Verified** by `testing_agent_v3_fork` iteration 251: 14 new tests + 34 regression = **48/48 PASS**. The exact bug case (`debit_or_credit='credit' + transaction_type='vendor_payment'`) is now `'credit'` (was `'debit'`). Seeded misclassified doc was flipped end-to-end via the endpoint; idempotent on 2nd call. All prior iterations 248/249/250 regress green.
+
+
+
 ## 2026-06-28 — Accounting Transactions: per-page size selector (25/50/75/100) ✅ (self-verified UI + curl)
 - **Frontend (`AccountingTransactions.js`)**:
   - Replaced the hard-coded `PER_PAGE = 25` with `PAGE_SIZES = [25, 50, 75, 100]` and a `perPage` state (initialised from `localStorage['acc_txn_page_size']`, falls back to 25).
