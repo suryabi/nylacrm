@@ -1,6 +1,19 @@
 # Changelog
 
 
+## 2026-06-28 — Transfer-fund direction + per-row manual override ✅ (testing_agent 91/91 pass)
+- **Reported (production)**: Zoho-categorised transactions with `transaction_type = "transfer_fund"` (a transfer from "Director loan Vamshi Krishna Bommena" INTO "Madapur Warehouse") were rendered money-OUT in our inbox even though for Madapur Warehouse this is money-IN. User also asked for an in-app way to manually categorise such rows.
+- **RCA**: `_DEBIT_TYPES` contained `transfer_fund` and `intra_account_transfer`, hard-coding both to money-out. A Zoho transfer is **inherently directional per account** — money-IN for the destination, money-OUT for the source — and cannot be classified by transaction_type alone.
+- **Fix**:
+  - Removed `transfer_fund` and `intra_account_transfer` from `_DEBIT_TYPES`. They now fall through to `debit_or_credit` (statement convention) which Zoho returns from the queried bank account's perspective. Verified: `{transfer_fund, debit_or_credit='credit'}` → `'credit'` (Madapur POV); `{transfer_fund, debit_or_credit='debit'}` → `'debit'` (source POV).
+  - **New field `direction_override`** on each transaction (admin-only).
+  - **New PATCH `/api/accounting/transactions/{id}/direction-override`** accepting `{direction: 'credit' | 'debit' | 'auto'}`. 'credit' / 'debit' set the override + force the displayed direction. 'auto' `$unset`s the field and reverts to automatic classification.
+  - **Override is respected** by BOTH `/reclassify-direction` (uses override as desired direction) AND the background sync (sync pre-fetches `direction_override` per existing row and skips overwriting `direction` when set). Result: user never has to fix the same row twice.
+- **Frontend (`AccountingTransactions.js`)**: New direction-control bar at the top of every expanded row — shows current direction chip, a "manual override" badge if locked, a **"Flip to money-IN/OUT"** button (`data-testid="flip-direction-btn"`) and a "Clear override" link (`data-testid="clear-direction-override"`) that appears once locked. Confirm dialog before saving.
+- Verified by `testing_agent_v3_fork` iteration 253 — **91/91 backend pass** (25 new + 66 regression).
+
+
+
 ## 2026-06-28 — Direction classifier REVERTED + diagnostic endpoint ✅ (testing_agent 66/66 pass)
 - **Reported**: After clicking "Fix directions" on production, a large set of incoming UPI/NEFT credits (Aparna Infrahousing, 17 Degree North Club, Mr. Kashi, Hiro Pan, Anaia Cafe, FAT CITY HOSPITALITY, Avasa) flipped from money-IN to money-OUT.
 - **RCA**: Iteration 251 had reordered `_direction_of()` to consult `debit_or_credit` BEFORE `transaction_type`. For Zoho bank-feed lines, `debit_or_credit` follows **accounting** convention (bank asset debited when money comes in → 'debit'), but the prior code interpreted it as **statement** convention (credit = money in). So all `customer_payment` credits with `debit_or_credit='debit'` flipped wrongly to money-out.
