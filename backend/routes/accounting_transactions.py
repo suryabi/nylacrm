@@ -128,6 +128,18 @@ def _direction_of(txn: dict) -> str:
     return "credit" if amt >= 0 else "debit"
 
 
+def _date_in_range(d: str, start: str, end: str) -> bool:
+    """Client-side date-window check (YYYY-MM-DD strings compare lexically).
+    A missing date is treated as out-of-range when a window is enforced."""
+    if not d:
+        return False
+    if start and d < start:
+        return False
+    if end and d > end:
+        return False
+    return True
+
+
 def _normalize(txn: dict, tenant_id: str, org_id: str) -> dict:
     """Map a raw Zoho bank transaction to the Zoho-side fields we store."""
     txn_id = txn.get("bank_transaction_id") or txn.get("transaction_id")
@@ -183,8 +195,14 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
             page_docs = []
             for raw in txns:
                 d = _normalize(raw, tenant_id, org_id)
-                if d["zoho_transaction_id"]:
-                    page_docs.append(d)
+                if not d["zoho_transaction_id"]:
+                    continue
+                # Zoho often IGNORES date_start/date_end on /banktransactions, so
+                # enforce the requested window client-side. Skip out-of-range rows
+                # (drop rows with no date when a range is requested).
+                if (date_start or date_end) and not _date_in_range(d.get("date"), date_start, date_end):
+                    continue
+                page_docs.append(d)
             if page_docs:
                 ids = [d["zoho_transaction_id"] for d in page_docs]
                 existing = {}  # zoho_id -> {direction_override: ...}
@@ -269,8 +287,10 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
                 "and reconnect Zoho with the 'Banking' permission, then try again."
             )
         else:
-            # Don't leak stack-trace text to the UI. Full detail is in server logs.
-            friendly = "Sync failed unexpectedly. Please retry; if it persists check the server logs."
+            # Don't leak stack-trace text to the UI, but include a short, sanitized
+            # hint (admin-only) so production failures are actionable.
+            hint = err_text.replace("\n", " ")[:200]
+            friendly = f"Sync failed unexpectedly. Please retry; if it persists check server logs. Detail: {hint}"
         await db[SYNC_JOB_COLL].update_one(
             {"id": job_id},
             {"$set": {"status": "failed", "error": friendly,
