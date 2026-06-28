@@ -1,0 +1,80 @@
+{
+  "summary": "Iteration 253 — verified (1) transfer_fund / intra_account_transfer now fall through _direction_of to debit_or_credit (the prod Madapur Warehouse case), (2) new PATCH /api/accounting/transactions/{id}/direction-override with credit/debit/auto + 400/404/auth validation, (3) override is RESPECTED by /reclassify-direction and survives. 25 new tests pass + 66 prior regression tests (iter 248/249/250/251/252) still pass = 91/91 PASS.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_253_transfer_fund_direction_override.py",
+    "/app/test_reports/pytest/iteration_253.xml"
+  ],
+  "tests_executed": {
+    "unit_tests_direction_of": [
+      "transfer_fund + debit_or_credit='credit' -> 'credit' (THE PROD MADAPUR CASE — was 'debit' before)",
+      "transfer_fund + debit_or_credit='debit' -> 'debit' (source side of same transfer)",
+      "intra_account_transfer + debit_or_credit='credit' -> 'credit'",
+      "intra_account_transfer + debit_or_credit='debit' -> 'debit'",
+      "customer_payment -> 'credit' (still works)",
+      "vendor_payment -> 'debit' (still works)",
+      "deposit -> 'credit'",
+      "expense -> 'debit'",
+      "unknown_xyz + amount=100 -> 'credit'",
+      "only debit_or_credit='debit' -> 'debit'"
+    ],
+    "direction_override_endpoint": [
+      "PATCH {direction:'credit'} -> 200 {ok,direction:'credit',override:'credit'}; DB row has direction='credit' AND direction_override='credit'",
+      "PATCH {direction:'auto'} -> 200 {override:None}; DB row direction recomputed from raw, direction_override field UNSET ($exists false)",
+      "PATCH {direction:'debit'} -> 200; DB row direction_override='debit'",
+      "PATCH {direction:'sideways'} -> 400 with detail mentioning 'credit', 'debit', 'auto'",
+      "PATCH on unknown id -> 404",
+      "PATCH without bearer -> 401/403"
+    ],
+    "override_survives_resync": [
+      "Seed raw={expense,debit_or_credit:debit,amount:500} direction=debit, override to 'credit', call /reclassify-direction, verify direction still 'credit' and direction_override still 'credit' (NOT flipped back to 'debit')"
+    ],
+    "diagnostic_regression": [
+      "GET /accounting/transactions/{id}/diagnostic -> 200 with raw/diagnosis/stored_direction",
+      "GET /accounting/transactions/{txn_code}/diagnostic -> 200",
+      "GET /accounting/transactions/{unknown}/diagnostic -> 404"
+    ],
+    "regression": [
+      "GET /accounting/transactions -> 200 items+summary",
+      "GET /accounting/transactions/category-summary -> 200",
+      "GET /accounting/transactions/flow-summary -> 200",
+      "GET /accounting/transactions/export -> 200",
+      "GET /accounting/transactions/sync/status/{unknown} -> 404",
+      "POST /accounting/transactions/sync responds <8s (200 with job_id, or 400 fast)",
+      "POST /accounting/transactions/reclassify-direction -> 200 {ok,checked,flipped}",
+      "All 8 iter-248 + 14 iter-249 + 12 iter-250 + 11 iter-251 + 21 iter-252 prior tests still PASS"
+    ]
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_CREDIT_TYPES / _DEBIT_TYPES (lines 46-47 of routes/accounting_transactions.py) correctly OMIT 'transfer_fund' and 'intra_account_transfer'. Comment at lines 40-45 documents the rationale (inherently directional per account). Clean.",
+    "_direction_of docstring (lines 99-118) documents both the iter-251 mistake AND the new override workflow — excellent breadcrumb for future maintainers.",
+    "_run_sync (lines 188-216) now pre-fetches `direction_override` for existing rows and ONLY writes `direction` into update_set when override is NOT set (line 213). Override-protection is enforced at sync time. ✓",
+    "/reclassify-direction (lines 370-407) projects `direction_override` and, if set, uses it as the desired direction (lines 386-393) instead of running _direction_of. Override is honoured here too. ✓",
+    "PATCH /{item_id}/direction-override (lines 415-453) — Pydantic body validation, lowercase+strip normalisation, 400 on invalid value (line 433-434), 404 on missing row (lines 436-438), admin gate via _require_admin (line 430), tenant-scoped query, and the 'auto' branch correctly uses $unset to remove the field entirely (line 445). Atomic single update_one. Returns {ok, direction, override} consistently. Clean implementation.",
+    "MINOR (carried from prior iterations): /app/backend/routes/accounting_transactions.py is now 972 lines — well past the 700-line guideline. A future refactor splitting into sync / list / tagging / proofs / diagnostic / override sub-modules would help. Non-blocking.",
+    "MINOR: PATCH endpoint accepts request body without explicit role mention — _require_admin gates it. Frontend integration should expose the override action only to admin/CEO/CFO roles to avoid 403s for ordinary staff."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_253_transfer_fund_direction_override.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (91/91 tests passing — 25 new iter-253 + 21 iter-252 + 11 iter-251 + 12 iter-250 + 14 iter-249 + 8 iter-248)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water). X-Tenant-ID header required.",
+  "seed_data_creation": "Per-class autouse fixtures seed TEST-ITER253-* docs into accounting_transactions and clean them up. Used pymongo (sync) for direct DB seed/read to avoid motor event-loop binding issues. No persistent test data left in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 253 removes 'transfer_fund' and 'intra_account_transfer' from _DEBIT_TYPES (they now fall through to debit_or_credit), and adds PATCH /api/accounting/transactions/{id}/direction-override (credit/debit/auto). Override is a row-level field (direction_override) honoured by BOTH the background sync (_run_sync skips overwriting `direction` when override is set) AND the /reclassify-direction maintenance endpoint. 'auto' uses $unset to remove the field. The diagnostic endpoint and all iter-248..252 regressions still pass. When writing new tests, prefer pymongo (sync) for direct DB seeding (the project's motor instance is single-event-loop bound and will hang when reused across pytest's loop boundary).",
+  "rca_of_the_issue": "Prod reported a Zoho transfer (transaction_type='transfer_fund') from 'Director-loan Vamshi Krishna Bommena' INTO 'Madapur Warehouse' showing as money-OUT for Madapur. RCA: _DEBIT_TYPES included 'transfer_fund' (and 'intra_account_transfer'), but a Zoho transfer is inherently DIRECTIONAL per account — money-in for the destination, money-out for the source. The single transaction_type cannot encode this; Zoho's per-account debit_or_credit must. Fix: removed those two values from both allowlists so _direction_of falls through to debit_or_credit (statement convention: 'credit'=money in). Verified by unit test: {transaction_type:'transfer_fund', debit_or_credit:'credit'} -> 'credit' (Madapur's POV), and {…, debit_or_credit:'debit'} -> 'debit' (loan account's POV). Companion feature: PATCH /direction-override lets the CEO/admin permanently fix any one row that still mis-classifies (e.g. when Zoho's debit_or_credit is itself wrong). Override is persisted as direction_override on the row and respected by both /reclassify-direction (line 386-393) and _run_sync (line 213), so the user never has to fix the same row twice."
+}

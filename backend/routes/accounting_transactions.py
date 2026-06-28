@@ -37,8 +37,14 @@ SYNC_JOB_COLL = "accounting_txn_sync_jobs"
 ADMIN_ROLES = {"CEO", "Director", "System Admin", "Admin", "Vice President", "Head of Business"}
 
 # Zoho transaction_type -> our direction. Anything else is inferred from amount sign.
+# NOTE: `transfer_fund` and `intra_account_transfer` are INTENTIONALLY excluded
+# from both allowlists — they are inherently directional from the bank
+# account's perspective (a transfer is money-in for the destination account
+# and money-out for the source account). Letting them fall through to the
+# `debit_or_credit` field (statement convention) lets us classify them
+# correctly per account.
 _CREDIT_TYPES = {"deposit", "sales_without_invoices", "interest_income", "owner_contribution", "other_income", "customer_payment", "vendor_payment_refund"}
-_DEBIT_TYPES = {"expense", "withdrawal", "transfer_fund", "card_payment", "owner_drawings", "supplier_payment", "vendor_payment"}
+_DEBIT_TYPES = {"expense", "withdrawal", "card_payment", "owner_drawings", "supplier_payment", "vendor_payment"}
 
 
 def _require_admin(user: dict):
@@ -97,13 +103,19 @@ def _direction_of(txn: dict) -> str:
     Only if it's not in our curated allowlists do we fall back to the
     `debit_or_credit` field and finally the (already abs'd) amount sign.
 
+    Inherently-directional types (`transfer_fund`, `intra_account_transfer`)
+    are intentionally NOT in the allowlists — they MUST be classified per
+    account via `debit_or_credit`. See the prod 28-Jun-2026 report (transfer
+    from Director-loan Vamshi Krishna Bommena to Madapur Warehouse — money-IN
+    for Madapur, money-OUT for the loan account).
+
     NOTE: An earlier version of this function (iteration 251) prioritised
     `debit_or_credit` over `transaction_type`. That over-corrected a small
     population of mis-categorised rows but broke the much larger population
-    of correctly categorised NEFT/UPI bank-feed credits — see screenshots
-    from prod 28-Jun-2026. Restored to the original priority. If you need to
-    fix individual transactions whose Zoho category is wrong, fix them in
-    Zoho Books directly (they will re-classify on the next sync)."""
+    of correctly categorised NEFT/UPI bank-feed credits. If you need to
+    fix individual transactions whose Zoho category is wrong, use the
+    POST /api/accounting/transactions/{id}/direction-override endpoint —
+    the override is persisted on the row and respected on every re-sync."""
     ttype = (txn.get("transaction_type") or "").lower()
     if ttype in _CREDIT_TYPES:
         return "credit"
@@ -175,12 +187,12 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
                     page_docs.append(d)
             if page_docs:
                 ids = [d["zoho_transaction_id"] for d in page_docs]
-                existing = set()
+                existing = {}  # zoho_id -> {direction_override: ...}
                 async for ex in db[COLL].find(
                     {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": {"$in": ids}},
-                    {"_id": 0, "zoho_transaction_id": 1},
+                    {"_id": 0, "zoho_transaction_id": 1, "direction_override": 1},
                 ):
-                    existing.add(ex["zoho_transaction_id"])
+                    existing[ex["zoho_transaction_id"]] = ex
 
                 new_docs = [d for d in page_docs if d["zoho_transaction_id"] not in existing]
                 codes = await _allocate_txn_codes(tenant_id, len(new_docs))
@@ -190,13 +202,18 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
                 for d in page_docs:
                     key = {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": d["zoho_transaction_id"]}
                     if d["zoho_transaction_id"] in existing:
-                        # refresh only Zoho-side fields; preserve user tags/proofs/links
-                        ops.append(UpdateOne(key, {"$set": {
-                            **{k: d[k] for k in ("direction", "amount", "currency", "date", "zoho_status",
-                                                 "zoho_transaction_type", "payee", "reference_number",
-                                                 "description", "bank_account_name", "zoho_account_id", "raw")},
-                            "updated_at": now,
-                        }}))
+                        # refresh Zoho-side fields. Preserve user tags/proofs/links.
+                        # If the user has manually overridden the direction, keep
+                        # the override and don't touch `direction`.
+                        ex = existing[d["zoho_transaction_id"]]
+                        refresh_keys = ("amount", "currency", "date", "zoho_status",
+                                        "zoho_transaction_type", "payee", "reference_number",
+                                        "description", "bank_account_name", "zoho_account_id", "raw")
+                        update_set = {k: d[k] for k in refresh_keys}
+                        if not ex.get("direction_override"):
+                            update_set["direction"] = d["direction"]
+                        update_set["updated_at"] = now
+                        ops.append(UpdateOne(key, {"$set": update_set}))
                         updated_count += 1
                 for d, code in zip(new_docs, codes):
                     d.update({
@@ -363,22 +380,77 @@ async def reclassify_direction(current_user: dict = Depends(get_current_user)):
     flipped = 0
     async for row in db[COLL].find(
         {"tenant_id": tenant_id, "raw": {"$exists": True, "$ne": None}},
-        {"_id": 0, "id": 1, "direction": 1, "raw": 1},
+        {"_id": 0, "id": 1, "direction": 1, "direction_override": 1, "raw": 1},
     ):
         checked += 1
-        new_dir = _direction_of(row.get("raw") or {})
-        if new_dir != row.get("direction"):
-            ops.append(UpdateOne(
-                {"id": row["id"], "tenant_id": tenant_id},
-                {"$set": {"direction": new_dir, "updated_at": _now()}},
-            ))
-            flipped += 1
+        # If the row has a manual direction_override, honor it (keep that value).
+        if row.get("direction_override") in ("credit", "debit"):
+            if row["direction_override"] != row.get("direction"):
+                ops.append(UpdateOne(
+                    {"id": row["id"], "tenant_id": tenant_id},
+                    {"$set": {"direction": row["direction_override"], "updated_at": _now()}},
+                ))
+                flipped += 1
+        else:
+            new_dir = _direction_of(row.get("raw") or {})
+            if new_dir != row.get("direction"):
+                ops.append(UpdateOne(
+                    {"id": row["id"], "tenant_id": tenant_id},
+                    {"$set": {"direction": new_dir, "updated_at": _now()}},
+                ))
+                flipped += 1
         if len(ops) >= 500:
             await db[COLL].bulk_write(ops, ordered=False)
             ops = []
     if ops:
         await db[COLL].bulk_write(ops, ordered=False)
     return {"ok": True, "checked": checked, "flipped": flipped}
+
+
+
+class DirectionOverrideIn(BaseModel):
+    direction: str  # 'credit' or 'debit' or 'auto' to clear the override
+
+
+@router.patch("/{item_id}/direction-override")
+async def set_direction_override(
+    item_id: str,
+    payload: DirectionOverrideIn,
+    current_user: dict = Depends(get_current_user),
+):
+    """Manually flip / set the money-in vs money-out direction of one row.
+
+    - `direction: 'credit'`  -> force this row to render as money-IN
+    - `direction: 'debit'`   -> force this row to render as money-OUT
+    - `direction: 'auto'`    -> clear any previous override and revert to the
+      automatic classification (transaction_type / debit_or_credit / amount sign)
+
+    The override is PERSISTED on the row and respected on every future Zoho
+    re-sync, so the user never has to fix the same row twice."""
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    desired = (payload.direction or "").lower().strip()
+    if desired not in {"credit", "debit", "auto"}:
+        raise HTTPException(status_code=400, detail="direction must be one of: credit, debit, auto")
+
+    row = await db[COLL].find_one({"id": item_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "raw": 1})
+    if not row:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    if desired == "auto":
+        new_dir = _direction_of(row.get("raw") or {})
+        await db[COLL].update_one(
+            {"id": item_id, "tenant_id": tenant_id},
+            {"$set": {"direction": new_dir, "updated_at": _now()},
+             "$unset": {"direction_override": ""}},
+        )
+        return {"ok": True, "direction": new_dir, "override": None}
+
+    await db[COLL].update_one(
+        {"id": item_id, "tenant_id": tenant_id},
+        {"$set": {"direction": desired, "direction_override": desired, "updated_at": _now()}},
+    )
+    return {"ok": True, "direction": desired, "override": desired}
 
 
 

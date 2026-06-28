@@ -759,8 +759,44 @@ function ExpandedEditor({ it, credit, masters, vendors, onChange }) {
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
 
+  const flipDirection = async () => {
+    const target = it.direction === 'credit' ? 'debit' : 'credit';
+    const label = target === 'credit' ? 'money-IN (received)' : 'money-OUT (paid)';
+    if (!window.confirm(`Mark this transaction as ${label}? The override is saved on the row and survives future syncs.`)) return;
+    try {
+      const { data } = await axios.patch(`${API}/api/accounting/transactions/${it.id}/direction-override`, { direction: target }, auth());
+      toast.success(`Flipped to ${data.direction === 'credit' ? 'money-IN' : 'money-OUT'} (override locked)`);
+      onChange({ ...it, direction: data.direction, direction_override: data.override });
+    } catch (e) { toast.error(e.response?.data?.detail || 'Flip failed'); }
+  };
+
+  const clearOverride = async () => {
+    try {
+      const { data } = await axios.patch(`${API}/api/accounting/transactions/${it.id}/direction-override`, { direction: 'auto' }, auth());
+      toast.success(`Cleared override → auto-classified as ${data.direction === 'credit' ? 'money-IN' : 'money-OUT'}`);
+      onChange({ ...it, direction: data.direction, direction_override: null });
+    } catch (e) { toast.error(e.response?.data?.detail || 'Clear failed'); }
+  };
+
   return (
     <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-2">
+      <div className="lg:col-span-2 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs" data-testid="direction-controls">
+        <span className="font-medium text-slate-600">Direction:</span>
+        <span className={`rounded-full px-2 py-0.5 font-semibold ${credit ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+          {credit ? 'Money IN' : 'Money OUT'}
+        </span>
+        {it.direction_override && (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-700" title="Manually set; survives re-syncs">manual override</span>
+        )}
+        <Button type="button" size="sm" variant="outline" onClick={flipDirection} className="ml-auto h-7 text-xs" data-testid="flip-direction-btn">
+          <ArrowLeftRight className="mr-1 h-3 w-3" /> Flip to {credit ? 'money-OUT' : 'money-IN'}
+        </Button>
+        {it.direction_override && (
+          <Button type="button" size="sm" variant="ghost" onClick={clearOverride} className="h-7 text-xs text-slate-500" data-testid="clear-direction-override">
+            Clear override
+          </Button>
+        )}
+      </div>
       {/* Categorisation */}
       <SectionCard icon={Tag} title={credit ? 'Income Categorisation' : 'Expense Categorisation'}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
