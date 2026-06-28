@@ -3100,14 +3100,19 @@ async def sync_shipment_to_zoho(tenant_id: str, distributor_id: str, shipment_id
 
 async def fetch_bank_transactions(
     tenant_id: str, date_start: str = None, date_end: str = None,
-    page: int = 1, per_page: int = 200,
+    page: int = 1, per_page: int = 200, filter_by: str = "Status.All",
 ) -> dict:
     """Fetch a page of Zoho Books bank transactions (the bank-feed lines).
     Requires the ZohoBooks.banking.READ scope on the connected account.
+    `filter_by` defaults to `Status.All` so we pull EVERY transaction
+    regardless of state (uncategorized, categorized, matched, manually added,
+    excluded) — without it Zoho returns only a default subset.
     Returns {"transactions": [...], "has_more": bool, "page": n}."""
     if not is_zoho_configured():
         raise RuntimeError("Zoho Books integration is not configured.")
     params = {"page": page, "per_page": per_page}
+    if filter_by:
+        params["filter_by"] = filter_by
     if date_start:
         params["date_start"] = date_start
     if date_end:
