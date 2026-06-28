@@ -1,6 +1,30 @@
 # Changelog
 
 
+## 2026-06-27 — Employee form redesign: identification + address + bank + full CTC + family / emergency contacts ✅ (self-verified UI + curl)
+- **Backend (`accounting_entities.py`)**:
+  - `EmployeeIn` extended with:
+    - Personal: `date_of_birth`, `gender`, `marital_status`, `blood_group`, `alternate_phone`.
+    - Statutory IDs: `aadhaar`, `uan`, `pf_number`, `esi_number` (in addition to existing `pan`).
+    - Bank: `bank_branch`, `bank_account_holder`, `upi_id`.
+    - Structured `address: EmployeeAddress` (line_1/line_2/city/state/pincode/country/formatted_address/lat/lng).
+    - `salary: EmployeeSalary` — India CTC breakdown: monthly earnings (basic, hra, conveyance, medical, special, lta, other, monthly bonus), employer contributions (PF, ESI, gratuity), employee deductions (PF, ESI, professional tax), and annual components (bonus, variable pay, LTA & medical reimbursements). Computed `monthly_gross`, `monthly_ctc`, `annual_ctc` filled server-side.
+    - `family_contacts: EmployeeContact[]` and `emergency_contacts: EmployeeContact[]` (each carries id, name, relationship, phone, email, date_of_birth, is_dependent, is_primary).
+  - New `_normalize_employee_payload()` auto-assigns UUIDs to new contacts, picks a primary per list, derives flat `city`/`state` from structured address, and recomputes salary totals on every write.
+- **Frontend (`EmployeesAccounting.js`)**:
+  - Six sectioned cards mirroring Vendor design:
+    1. **Identification** (indigo): name/code/department/designation/manager + DOB/DOJ + gender/marital status/blood group + email/phone/alt phone + linked CRM user + PAN/Aadhaar/UAN/PF/ESI + Active toggle.
+    2. **Residential Address** (amber): integrated `GooglePlacesAddressSearch` with formatted-address pill + editable address lines + city/state/pincode/country.
+    3. **Bank Account** (emerald): bank name/branch/account holder/account no./IFSC/UPI + live gradient bank-card preview.
+    4. **Salary Structure — CTC Breakdown** (violet): four mini-grids (Monthly Earnings · Employer Contributions · Employee Deductions · Annual / Variable) + a violet/fuchsia summary strip showing **Monthly Gross**, **Take-home (est.)**, **Monthly CTC**, **Annual CTC** that recompute as you type.
+    5. **Family Members** (rose): editable table with name/relationship/phone/email/DOB + dependent switch + primary-star.
+    6. **Emergency Contacts** (rose): editable table with name/relationship/phone/email + primary-star.
+  - New shared helpers: `SectionCard`, `ContactsTable` (parametrised w/ optional DOB & dependent columns), `SalaryGrid`, `SummaryStat`.
+  - data-testids: `employee-form-{dob,doj,gender}`, `employee-bank-{name,branch,holder,acno,ifsc}`, `employee-upi`, `employee-bank-pill`, `employee-places-input`, `employee-address-pill`, `employee-addr1/2`, `salary-{key}`, `salary-summary`, `emp-family-{name,rel,phone,email,dob,dep,primary,delete,add}-{i}`, `emp-emergency-{...}-{i}`.
+- Verified live: curl create returned `monthly_gross=76600, monthly_ctc=83325, annual_ctc=1169900`; contacts auto-IDed; primary auto-set when first one isn't flagged; address city auto-derived. Frontend screenshot confirms all six sections render and the gradient salary summary matches the backend.
+
+
+
 ## 2026-06-27 — Vendor form redesign: sectioned cards, Google Address search, multi-contact table ✅ (self-verified UI + curl)
 - **Backend (`accounting_entities.py`)**:
   - `VendorIn` extended with structured `address: VendorAddress` (line_1/line_2/city/state/pincode/country/formatted_address/lat/lng), multi-contact `contacts: VendorContact[]` (id/name/designation/email/phone/is_primary), and additional bank fields `bank_account_holder`, `bank_branch`, `upi_id`. Legacy `billing_address`/`contact_person`/`email`/`phone` fields retained for back-compat.

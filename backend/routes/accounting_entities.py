@@ -180,6 +180,58 @@ async def delete_vendor(item_id: str, current_user: dict = Depends(get_current_u
 
 # ---------------- Employees ----------------
 
+class EmployeeContact(BaseModel):
+    id: Optional[str] = None
+    name: Optional[str] = None
+    relationship: Optional[str] = None   # e.g. Spouse, Father, Friend
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    date_of_birth: Optional[str] = None  # ISO yyyy-mm-dd (family members)
+    is_dependent: bool = False
+    is_primary: bool = False
+
+
+class EmployeeAddress(BaseModel):
+    address_line_1: Optional[str] = None
+    address_line_2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+    country: Optional[str] = None
+    formatted_address: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
+class EmployeeSalary(BaseModel):
+    """India-flavoured CTC breakdown. All values are *monthly* amounts in INR
+    unless tagged annual_*. Sums are recomputed server-side and exposed as
+    `monthly_gross`, `monthly_ctc`, `annual_ctc` so downstream payroll can rely
+    on them without re-doing the math."""
+    basic: float = 0.0
+    hra: float = 0.0
+    conveyance_allowance: float = 0.0
+    medical_allowance: float = 0.0
+    special_allowance: float = 0.0
+    lta: float = 0.0
+    other_allowances: float = 0.0
+    employer_pf: float = 0.0
+    employer_esi: float = 0.0
+    gratuity: float = 0.0
+    bonus_monthly: float = 0.0
+    employee_pf: float = 0.0
+    employee_esi: float = 0.0
+    professional_tax: float = 0.0
+    annual_bonus: float = 0.0
+    annual_variable_pay: float = 0.0
+    annual_lta_reimbursement: float = 0.0
+    annual_medical_reimbursement: float = 0.0
+    # computed (server-side):
+    monthly_gross: float = 0.0   # earnings part of CTC, monthly
+    monthly_ctc: float = 0.0     # earnings + employer contributions, monthly
+    annual_ctc: float = 0.0      # monthly_ctc * 12 + annual_*
+
+
 class EmployeeIn(BaseModel):
     full_name: str
     employee_code: Optional[str] = None
@@ -188,15 +240,77 @@ class EmployeeIn(BaseModel):
     designation: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    alternate_phone: Optional[str] = None
+    date_of_birth: Optional[str] = None
     date_of_joining: Optional[str] = None
+    gender: Optional[str] = None
+    marital_status: Optional[str] = None
+    blood_group: Optional[str] = None
+    # statutory ids
     pan: Optional[str] = None
+    aadhaar: Optional[str] = None
+    uan: Optional[str] = None
+    pf_number: Optional[str] = None
+    esi_number: Optional[str] = None
+    # bank
     bank_account_no: Optional[str] = None
     bank_ifsc: Optional[str] = None
     bank_name: Optional[str] = None
-    reporting_manager: Optional[str] = None
+    bank_branch: Optional[str] = None
+    bank_account_holder: Optional[str] = None
+    upi_id: Optional[str] = None
+    # address
+    address: Optional[EmployeeAddress] = None
     city: Optional[str] = None
+    state: Optional[str] = None
+    # comp
+    salary: Optional[EmployeeSalary] = None
+    # contacts
+    family_contacts: List[EmployeeContact] = []
+    emergency_contacts: List[EmployeeContact] = []
+    reporting_manager: Optional[str] = None
     is_active: bool = True
     notes: Optional[str] = None
+
+
+def _normalize_employee_payload(payload: "EmployeeIn") -> dict:
+    """Assign IDs to new contacts, ensure one primary per list, derive flat
+    legacy city/state from structured address, and recompute salary totals."""
+    doc = payload.model_dump()
+
+    def _norm_list(key: str):
+        items = doc.get(key) or []
+        for c in items:
+            if not c.get("id"):
+                c["id"] = str(uuid.uuid4())
+        prim = [c for c in items if c.get("is_primary")]
+        if items and not prim:
+            items[0]["is_primary"] = True
+        doc[key] = items
+    _norm_list("family_contacts")
+    _norm_list("emergency_contacts")
+
+    addr = doc.get("address") or {}
+    if addr.get("city") and not doc.get("city"):
+        doc["city"] = addr.get("city")
+    if addr.get("state") and not doc.get("state"):
+        doc["state"] = addr.get("state")
+
+    sal = doc.get("salary")
+    if sal:
+        earn_keys = ["basic", "hra", "conveyance_allowance", "medical_allowance",
+                     "special_allowance", "lta", "other_allowances", "bonus_monthly"]
+        employer_keys = ["employer_pf", "employer_esi", "gratuity"]
+        annual_keys = ["annual_bonus", "annual_variable_pay",
+                       "annual_lta_reimbursement", "annual_medical_reimbursement"]
+        monthly_gross = sum(float(sal.get(k) or 0) for k in earn_keys)
+        monthly_ctc = monthly_gross + sum(float(sal.get(k) or 0) for k in employer_keys)
+        annual_ctc = monthly_ctc * 12 + sum(float(sal.get(k) or 0) for k in annual_keys)
+        sal["monthly_gross"] = round(monthly_gross, 2)
+        sal["monthly_ctc"] = round(monthly_ctc, 2)
+        sal["annual_ctc"] = round(annual_ctc, 2)
+        doc["salary"] = sal
+    return doc
 
 
 @router.get("/employees")
@@ -223,7 +337,7 @@ async def create_employee(payload: EmployeeIn, current_user: dict = Depends(get_
         })
         if dup:
             raise HTTPException(status_code=400, detail=f"Employee code '{payload.employee_code}' already exists")
-    doc = payload.model_dump()
+    doc = _normalize_employee_payload(payload)
     doc.update({
         "id": str(uuid.uuid4()), "tenant_id": tenant_id, "full_name": name,
         "created_at": _now(), "updated_at": _now(), "created_by": current_user.get("id"),
@@ -250,7 +364,7 @@ async def update_employee(item_id: str, payload: EmployeeIn, current_user: dict 
         })
         if dup:
             raise HTTPException(status_code=400, detail=f"Employee code '{payload.employee_code}' already exists")
-    updates = payload.model_dump()
+    updates = _normalize_employee_payload(payload)
     updates["full_name"] = name
     updates["updated_at"] = _now()
     await db[EMPLOYEE_COLL].update_one({"id": item_id, "tenant_id": tenant_id}, {"$set": updates})
