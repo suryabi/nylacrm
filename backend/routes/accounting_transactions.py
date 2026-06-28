@@ -415,6 +415,59 @@ async def _expense_category_descendants(tenant_id: str, root_id: str) -> set:
     return out
 
 
+
+@router.get("/flow-summary")
+async def flow_summary(
+    status: Optional[str] = Query(None),
+    direction: Optional[str] = Query(None),
+    bank_account_id: Optional[str] = Query(None),
+    date_start: Optional[str] = Query(None),
+    date_end: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    category_root: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    """Aggregate money-in / money-out totals + counts for the current view.
+    Honours the same filters as the list endpoint so the chips always match
+    what the user is looking at. Returns {credit:{total,count}, debit:{total,count}, net}."""
+    tenant_id = get_current_tenant_id()
+    q = {"tenant_id": tenant_id}
+    if status:
+        q["status"] = status
+    if direction:
+        q["direction"] = direction
+    if bank_account_id:
+        q["zoho_account_id"] = bank_account_id
+    if date_start or date_end:
+        q["date"] = {}
+        if date_start:
+            q["date"]["$gte"] = date_start
+        if date_end:
+            q["date"]["$lte"] = date_end
+    if search:
+        q["$or"] = [
+            {"payee": {"$regex": search, "$options": "i"}},
+            {"description": {"$regex": search, "$options": "i"}},
+            {"reference_number": {"$regex": search, "$options": "i"}},
+        ]
+    if category_root:
+        ids = await _expense_category_descendants(tenant_id, category_root)
+        q["tags.expense_category"] = {"$in": list(ids)}
+
+    credit = {"total": 0.0, "count": 0}
+    debit = {"total": 0.0, "count": 0}
+    pipeline = [
+        {"$match": q},
+        {"$group": {"_id": "$direction", "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+    ]
+    async for row in db[COLL].aggregate(pipeline):
+        bucket = credit if row["_id"] == "credit" else debit
+        bucket["total"] = float(row.get("total") or 0)
+        bucket["count"] = int(row.get("count") or 0)
+    return {"credit": credit, "debit": debit, "net": credit["total"] - debit["total"]}
+
+
+
 @router.get("/category-summary")
 async def category_summary(
     status: Optional[str] = Query(None),

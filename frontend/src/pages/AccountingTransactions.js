@@ -81,6 +81,7 @@ export default function AccountingTransactions() {
   const [timeFilter, setTimeFilter] = useState('lifetime');
   const [categoryRoot, setCategoryRoot] = useState('all');
   const [categorySummary, setCategorySummary] = useState([]);
+  const [flow, setFlow] = useState({ credit: { total: 0, count: 0 }, debit: { total: 0, count: 0 }, net: 0 });
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(() => {
     const stored = Number(localStorage.getItem('acc_txn_page_size'));
@@ -136,9 +137,24 @@ export default function AccountingTransactions() {
     } catch { /* non-blocking */ }
   }, [tab, direction, search, timeFilter]);
 
+  const loadFlowSummary = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (tab !== 'all') params.set('status', tab);
+      if (direction !== 'all') params.set('direction', direction);
+      if (search) params.set('search', search);
+      if (categoryRoot !== 'all') params.set('category_root', categoryRoot);
+      const range = presetRange(timeFilter);
+      if (range) { params.set('date_start', range.start); params.set('date_end', range.end); }
+      const { data } = await axios.get(`${API}/api/accounting/transactions/flow-summary?${params}`, auth());
+      setFlow(data);
+    } catch { /* non-blocking */ }
+  }, [tab, direction, search, timeFilter, categoryRoot]);
+
   useEffect(() => { loadMasters(); }, [loadMasters]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadCategorySummary(); }, [loadCategorySummary]);
+  useEffect(() => { loadFlowSummary(); }, [loadFlowSummary]);
 
   const [syncOpen, setSyncOpen] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
@@ -188,7 +204,7 @@ export default function AccountingTransactions() {
           const { data: job } = await axios.get(`${API}/api/accounting/transactions/sync/status/${jobId}`, auth());
           if (job.status === 'completed') {
             toast.success(`Sync complete · ${job.new || 0} new, ${job.updated || 0} updated`);
-            load(); loadCategorySummary();
+            load(); loadCategorySummary(); loadFlowSummary();
             return true;
           }
           if (job.status === 'failed') {
@@ -336,6 +352,61 @@ export default function AccountingTransactions() {
           <Input placeholder="Search payee / ref…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="h-9 w-56 pl-8" data-testid="txn-search" />
         </div>
       </div>
+
+      {(flow.credit.count + flow.debit.count) > 0 && (
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid="flow-summary">
+          <button type="button"
+            onClick={() => { setDirection(direction === 'credit' ? 'all' : 'credit'); setExpandedId(null); setPage(1); }}
+            className={`group relative overflow-hidden rounded-xl border bg-gradient-to-br p-3 text-left shadow-sm transition-all ${
+              direction === 'credit'
+                ? 'border-emerald-500 from-emerald-50 to-emerald-100 ring-2 ring-emerald-300'
+                : 'border-emerald-100 from-emerald-50 to-white hover:border-emerald-300 hover:shadow-md'}`}
+            data-testid="flow-credit-card">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
+                <ArrowDownLeft className="h-3.5 w-3.5" /> Money In
+              </span>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">{flow.credit.count}</span>
+            </div>
+            <p className="mt-1.5 truncate text-2xl font-bold tabular-nums text-emerald-700">{fmt(flow.credit.total)}</p>
+            <span className="absolute right-2 bottom-1 text-[9px] text-emerald-500/70">click to filter</span>
+          </button>
+
+          <button type="button"
+            onClick={() => { setDirection(direction === 'debit' ? 'all' : 'debit'); setExpandedId(null); setPage(1); }}
+            className={`group relative overflow-hidden rounded-xl border bg-gradient-to-br p-3 text-left shadow-sm transition-all ${
+              direction === 'debit'
+                ? 'border-rose-500 from-rose-50 to-rose-100 ring-2 ring-rose-300'
+                : 'border-rose-100 from-rose-50 to-white hover:border-rose-300 hover:shadow-md'}`}
+            data-testid="flow-debit-card">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-rose-700">
+                <ArrowUpRight className="h-3.5 w-3.5" /> Money Out
+              </span>
+              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">{flow.debit.count}</span>
+            </div>
+            <p className="mt-1.5 truncate text-2xl font-bold tabular-nums text-rose-700">{fmt(flow.debit.total)}</p>
+            <span className="absolute right-2 bottom-1 text-[9px] text-rose-500/70">click to filter</span>
+          </button>
+
+          <div className={`relative overflow-hidden rounded-xl border bg-gradient-to-br p-3 shadow-sm ${
+            flow.net >= 0 ? 'border-indigo-100 from-indigo-50 to-white' : 'border-amber-100 from-amber-50 to-white'}`}
+            data-testid="flow-net-card">
+            <div className="flex items-center justify-between">
+              <span className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider ${flow.net >= 0 ? 'text-indigo-700' : 'text-amber-700'}`}>
+                <ArrowLeftRight className="h-3.5 w-3.5" /> Net Flow
+              </span>
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${flow.net >= 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
+                {flow.net >= 0 ? 'surplus' : 'deficit'}
+              </span>
+            </div>
+            <p className={`mt-1.5 truncate text-2xl font-bold tabular-nums ${flow.net >= 0 ? 'text-indigo-700' : 'text-amber-700'}`}>
+              {flow.net >= 0 ? '+' : '−'}{fmt(Math.abs(flow.net))}
+            </p>
+            <span className="absolute right-2 bottom-1 text-[9px] text-slate-400">in − out</span>
+          </div>
+        </div>
+      )}
 
       {categorySummary.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2" data-testid="category-chip-strip">

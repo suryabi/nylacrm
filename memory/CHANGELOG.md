@@ -1,6 +1,21 @@
 # Changelog
 
 
+## 2026-06-28 — Accounting Transactions: Money In / Money Out / Net Flow chips ✅ (self-verified curl + UI)
+- **Backend (`accounting_transactions.py`)**: new `GET /api/accounting/transactions/flow-summary` — aggregates `{credit:{total,count}, debit:{total,count}, net}` honoring the same filters as the list endpoint (status / direction / date / search / category_root). Single Mongo `$group` aggregation.
+- **Frontend (`AccountingTransactions.js`)**:
+  - New three-up chip strip directly under the filter row.
+  - **Money In** (emerald gradient, `ArrowDownLeft` icon, count badge, total in tabular-nums). Click to toggle the `direction='credit'` filter — chip gains a thicker ring + filled bg when active.
+  - **Money Out** (rose gradient, `ArrowUpRight`). Same click-to-filter behaviour with `direction='debit'`.
+  - **Net Flow** (indigo when ≥0 "surplus", amber when <0 "deficit", `ArrowLeftRight` icon) — read-only summary, prefixed with + / −.
+  - Hidden when there are no transactions in the current filter.
+  - Chips reload automatically when filters change AND after sync completion / reclassify-direction (added `loadFlowSummary()` to the relevant callbacks).
+  - data-testids: `flow-summary`, `flow-credit-card`, `flow-debit-card`, `flow-net-card`.
+- Also fixed a pre-existing JSX duplication at the end of `AccountingTransactions.js` (orphan `CategoryCascader` fragment introduced by an older edit) that was breaking the lint parse.
+- Verified live: curl returned `{credit:{total:235000, count:3}, debit:{total:81450, count:4}, net:153550}`; UI chips render and clicking Money In filters the table to the 3 credit rows.
+
+
+
 ## 2026-06-28 — Production bug: money-IN shown as money-OUT (RTGS credits mis-classified) ✅ (testing_agent 48/48 pass)
 - **Reported (production)**: RTGS-CR credits from "Vamshi Krishna Bommena" and "Surya Prakasa Rao Yadavalli" (incoming bank transfers into the Jaitra Wellness HDFC account) were displayed with the red ↗ "money-out" arrow.
 - **Root cause** (`accounting_transactions._direction_of`): the classifier checked `transaction_type` against our curated allowlists **before** consulting Zoho's authoritative `debit_or_credit` field. Some Zoho bank-feed lines land with a `transaction_type` like `vendor_payment` or `transfer_fund` (which we'd whitelisted as DEBIT) even when `debit_or_credit` clearly says `credit`. We were overriding the truth signal with the heuristic.
