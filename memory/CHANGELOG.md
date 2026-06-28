@@ -1,6 +1,18 @@
 # Changelog
 
 
+## 2026-06-28 — Direction classifier REVERTED + diagnostic endpoint ✅ (testing_agent 66/66 pass)
+- **Reported**: After clicking "Fix directions" on production, a large set of incoming UPI/NEFT credits (Aparna Infrahousing, 17 Degree North Club, Mr. Kashi, Hiro Pan, Anaia Cafe, FAT CITY HOSPITALITY, Avasa) flipped from money-IN to money-OUT.
+- **RCA**: Iteration 251 had reordered `_direction_of()` to consult `debit_or_credit` BEFORE `transaction_type`. For Zoho bank-feed lines, `debit_or_credit` follows **accounting** convention (bank asset debited when money comes in → 'debit'), but the prior code interpreted it as **statement** convention (credit = money in). So all `customer_payment` credits with `debit_or_credit='debit'` flipped wrongly to money-out.
+- **Fix** (`_direction_of`):
+  - **Reverted** priority: `transaction_type` checked FIRST against curated `_CREDIT_TYPES`/`_DEBIT_TYPES` allowlists (these correctly classify the bulk of Zoho-categorised txns); fall back to `debit_or_credit` with statement convention only when `transaction_type` isn't in either allowlist; amount sign as final fallback.
+  - Updated docstring to record the iter-251 mis-step so this doesn't get re-broken.
+- **New `GET /api/accounting/transactions/{item_id}/diagnostic`** (admin-only): accepts either UUID id OR txn_code. Returns `{txn_code, stored_direction, classified_now, diagnosis:{zoho_transaction_type, zoho_debit_or_credit, raw_amount, raw_amount_sign, bank_account_name, description, reference_number}, raw}`. Lets us triage edge cases without blind iteration.
+- **Verified** by `testing_agent_v3_fork` iteration 252: 21 new tests + 45 regression = **66/66 PASS**. Iter-251's two over-broad assertions were inverted to match the revert; reclassify-direction + sync + list + flow-summary + category-summary + sync-status all regress green.
+- **User action**: redeploy → click **Fix directions** once more — the incoming credits in your screenshot will flip back to money-IN (green ↙). If any specific row is still wrong after that, hit `GET /api/accounting/transactions/{txn_code}/diagnostic` (or share the txn_code with the next iteration) so we can see what Zoho actually returned for it.
+
+
+
 ## 2026-06-28 — Accounting Transactions: Money In / Money Out / Net Flow chips ✅ (self-verified curl + UI)
 - **Backend (`accounting_transactions.py`)**: new `GET /api/accounting/transactions/flow-summary` — aggregates `{credit:{total,count}, debit:{total,count}, net}` honoring the same filters as the list endpoint (status / direction / date / search / category_root). Single Mongo `$group` aggregation.
 - **Frontend (`AccountingTransactions.js`)**:
