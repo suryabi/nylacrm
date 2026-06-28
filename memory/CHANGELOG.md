@@ -897,3 +897,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Fix: services/zoho_service.fetch_bank_transactions() now defaults filter_by="Status.All" and injects it into the request params, so every status (uncategorized, categorized, matched, manually added, excluded) is pulled. Overridable per call.
 - Could NOT reproduce/validate live in preview (Zoho not connected there). Unit-checked that params now include filter_by='Status.All'. Verified regression-free via iteration_256 (sync start/poll, list, flow-summary, CSV export all green).
 - ACTION: requires production redeploy, then re-run the Zoho sync to pull the full set.
+
+## 2026-06-28 (fix) — Zoho sync 400 + month filter not honored
+- Regression root cause: the earlier `filter_by=Status.All` param is INVALID for Zoho /banktransactions and returns HTTP 400 → "Sync failed unexpectedly". The correct param is `status` (values: All, uncategorized, categorized, matched, manually_added, excluded).
+- Fix #1: zoho_service.fetch_bank_transactions() now sends `status=All` (no filter_by) → pulls every status without the 400.
+- Fix #2: Zoho frequently IGNORES date_start/date_end on /banktransactions, so the chosen month was never honored. _run_sync now enforces the window client-side via new _date_in_range() helper (inclusive lexicographic YYYY-MM-DD compare), dropping out-of-month rows before upsert.
+- Sync error message now appends a sanitized detail for easier prod debugging.
+- Verified iteration_257 (12/12 pytest): status=All sent / filter_by removed, date-window filtering drops out-of-range rows, regression endpoints green. Zoho not connected in preview → live validation requires prod redeploy + re-sync.
