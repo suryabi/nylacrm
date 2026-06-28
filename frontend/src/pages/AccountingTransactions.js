@@ -148,11 +148,58 @@ export default function AccountingTransactions() {
       const end = `${y}-${String(m).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
       const params = new URLSearchParams({ date_start: start, date_end: end });
       const { data } = await axios.post(`${API}/api/accounting/transactions/sync?${params}`, {}, auth());
-      toast.success(`Synced ${start} → ${end} · ${data.new} new, ${data.updated} updated`);
+      const jobId = data.job_id;
+      if (!jobId) {
+        // legacy synchronous response (older backend)
+        toast.success(`Synced ${start} → ${end} · ${data.new || 0} new, ${data.updated || 0} updated`);
+        setSyncOpen(false);
+        load(); loadCategorySummary();
+        return;
+      }
+      toast.info(`Sync started for ${start} → ${end}. Fetching pages…`);
       setSyncOpen(false);
-      load();
-      loadCategorySummary();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Sync failed'); } finally { setSyncing(false); }
+
+      // Poll job status up to 5 minutes (every 3s)
+      let elapsed = 0;
+      const maxMs = 5 * 60 * 1000;
+      const intervalMs = 3000;
+      const poll = async () => {
+        try {
+          const { data: job } = await axios.get(`${API}/api/accounting/transactions/sync/status/${jobId}`, auth());
+          if (job.status === 'completed') {
+            toast.success(`Sync complete · ${job.new || 0} new, ${job.updated || 0} updated`);
+            load(); loadCategorySummary();
+            return true;
+          }
+          if (job.status === 'failed') {
+            toast.error(`Sync failed: ${job.error || 'unknown error'}`);
+            return true;
+          }
+          // still running — keep the user informed of progress
+          const p = job.progress || {};
+          if (p.page) {
+            toast.info(`Syncing… page ${p.page} · ${p.new || 0} new so far`, { id: `sync-${jobId}` });
+          }
+          return false;
+        } catch (err) {
+          // network blip — retry next tick
+          return false;
+        }
+      };
+      const tick = async () => {
+        const done = await poll();
+        if (done) { setSyncing(false); return; }
+        elapsed += intervalMs;
+        if (elapsed >= maxMs) {
+          toast.warning('Sync is taking longer than expected. Refresh in a moment.');
+          load();
+          setSyncing(false);
+          return;
+        }
+        setTimeout(tick, intervalMs);
+      };
+      setTimeout(tick, 1500);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Sync failed'); setSyncing(false); }
   };
 
   // Update a single row in place (so expand state + counts stay smooth after edits)

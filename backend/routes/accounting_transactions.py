@@ -8,12 +8,13 @@ De-dup: one doc per Zoho `bank_transaction_id`, enforced by a unique index on
 (tenant_id, zoho_org_id, zoho_transaction_id). Sync upserts: new -> 'untagged';
 existing -> only Zoho-side fields refresh, user tags/proofs/links preserved.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Header, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Header, Response, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
-from pymongo import ReturnDocument
+from pymongo import ReturnDocument, UpdateOne, InsertOne
+import asyncio
 import uuid
 import io
 import csv
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 COLL = "accounting_transactions"
 SYNC_COLL = "accounting_txn_sync_state"
+SYNC_JOB_COLL = "accounting_txn_sync_jobs"
 ADMIN_ROLES = {"CEO", "Director", "System Admin", "Admin", "Vice President", "Head of Business"}
 
 # Zoho transaction_type -> our direction. Anything else is inferred from amount sign.
@@ -113,14 +115,121 @@ def _normalize(txn: dict, tenant_id: str, org_id: str) -> dict:
 
 # ----------------------- Sync -----------------------
 
+async def _allocate_txn_codes(tenant_id: str, n: int) -> list:
+    """Atomically reserve `n` consecutive txn codes from the per-tenant counter
+    in ONE round-trip (vs N round-trips when called individually)."""
+    if n <= 0:
+        return []
+    doc = await db["counters"].find_one_and_update(
+        {"_id": f"{tenant_id}:accounting_txn"},
+        {"$inc": {"seq": n}}, upsert=True, return_document=ReturnDocument.AFTER,
+    )
+    end = int(doc["seq"])
+    start = end - n + 1
+    return [f"TXN-{str(i).zfill(6)}" for i in range(start, end + 1)]
+
+
+async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str,
+                    explicit_range: bool, job_id: str) -> None:
+    """Background worker — pulls Zoho pages, batches the upserts via bulk_write,
+    and updates the job doc with progress / final state."""
+    org_id = None
+    try:
+        creds = await zoho_service.get_credentials(tenant_id)
+        org_id = (creds or {}).get("organization_id")
+        new_count, updated_count, page = 0, 0, 1
+        while page <= 50:
+            res = await zoho_service.fetch_bank_transactions(tenant_id, date_start, date_end, page=page)
+            txns = res.get("transactions") or []
+            # Build (zoho_txn_id -> normalised doc) map, drop any without an id.
+            page_docs = []
+            for raw in txns:
+                d = _normalize(raw, tenant_id, org_id)
+                if d["zoho_transaction_id"]:
+                    page_docs.append(d)
+            if page_docs:
+                ids = [d["zoho_transaction_id"] for d in page_docs]
+                existing = set()
+                async for ex in db[COLL].find(
+                    {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": {"$in": ids}},
+                    {"_id": 0, "zoho_transaction_id": 1},
+                ):
+                    existing.add(ex["zoho_transaction_id"])
+
+                new_docs = [d for d in page_docs if d["zoho_transaction_id"] not in existing]
+                codes = await _allocate_txn_codes(tenant_id, len(new_docs))
+
+                ops = []
+                now = _now()
+                for d in page_docs:
+                    key = {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": d["zoho_transaction_id"]}
+                    if d["zoho_transaction_id"] in existing:
+                        # refresh only Zoho-side fields; preserve user tags/proofs/links
+                        ops.append(UpdateOne(key, {"$set": {
+                            **{k: d[k] for k in ("amount", "currency", "date", "zoho_status",
+                                                 "zoho_transaction_type", "payee", "reference_number",
+                                                 "description", "bank_account_name", "zoho_account_id", "raw")},
+                            "updated_at": now,
+                        }}))
+                        updated_count += 1
+                for d, code in zip(new_docs, codes):
+                    d.update({
+                        "id": str(uuid.uuid4()), "status": "untagged", "txn_code": code,
+                        "tags": {}, "vendor_id": None, "vendor_name": None,
+                        "account_id": None, "account_name": None,
+                        "account_adjustment": None, "proofs": [], "notes": None,
+                        "tagged_by": None, "tagged_at": None,
+                        "created_at": now, "updated_at": now,
+                    })
+                    ops.append(InsertOne(d))
+                    new_count += 1
+
+                if ops:
+                    await db[COLL].bulk_write(ops, ordered=False)
+
+            # update progress on the job doc so the UI can show progress
+            await db[SYNC_JOB_COLL].update_one(
+                {"id": job_id},
+                {"$set": {"progress": {"page": page, "new": new_count, "updated": updated_count},
+                          "updated_at": _now()}},
+            )
+
+            if not res.get("has_more"):
+                break
+            page += 1
+
+        if not explicit_range:
+            await db[SYNC_COLL].update_one(
+                {"tenant_id": tenant_id},
+                {"$set": {"tenant_id": tenant_id, "last_synced_date": date_end,
+                          "last_synced_at": _now(), "last_synced_by": user_id}},
+                upsert=True,
+            )
+
+        await db[SYNC_JOB_COLL].update_one(
+            {"id": job_id},
+            {"$set": {"status": "completed", "new": new_count, "updated": updated_count,
+                      "finished_at": _now(), "updated_at": _now()}},
+        )
+    except Exception as e:
+        logger.exception("Zoho bank transaction sync failed (job %s)", job_id)
+        await db[SYNC_JOB_COLL].update_one(
+            {"id": job_id},
+            {"$set": {"status": "failed", "error": str(e)[:500],
+                      "finished_at": _now(), "updated_at": _now()}},
+        )
+
+
 @router.post("/sync")
 async def sync_transactions(
+    background_tasks: BackgroundTasks,
     date_start: Optional[str] = Query(None),
     date_end: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
-    """Pull bank transactions from Zoho and upsert (de-duped). New rows land as
-    'untagged'; existing rows refresh Zoho-side fields only."""
+    """Kick off a Zoho bank-transactions sync in the background and return a
+    job id immediately (avoids ingress / proxy timeouts on long syncs). New
+    rows land as 'untagged'; existing rows refresh Zoho-side fields only."""
     _require_admin(current_user)
     tenant_id = get_current_tenant_id()
     await ensure_indexes()
@@ -128,63 +237,42 @@ async def sync_transactions(
     creds = await zoho_service.get_credentials(tenant_id)
     if not zoho_service.is_zoho_configured() or not creds:
         raise HTTPException(status_code=400, detail="Zoho Books is not connected for this tenant. Connect it under Settings → Integrations → Zoho Books (with banking access).")
-    org_id = creds.get("organization_id")
 
     explicit_range = bool(date_start or date_end)
-    # Incremental window: from last sync (minus a 5-day overlap) unless caller overrides.
     state = await db[SYNC_COLL].find_one({"tenant_id": tenant_id}, {"_id": 0})
     if not date_start and state and state.get("last_synced_date"):
         date_start = state["last_synced_date"]
     if not date_end:
         date_end = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    new_count, updated_count, page = 0, 0, 1
-    try:
-        while page <= 50:  # safety cap (50 * 200 = 10k txns/sync)
-            res = await zoho_service.fetch_bank_transactions(tenant_id, date_start, date_end, page=page)
-            for txn in res["transactions"]:
-                doc = _normalize(txn, tenant_id, org_id)
-                if not doc["zoho_transaction_id"]:
-                    continue
-                key = {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": doc["zoho_transaction_id"]}
-                existing = await db[COLL].find_one(key, {"_id": 0, "id": 1})
-                if existing:
-                    # refresh only Zoho-side fields; preserve user tags/proofs/links
-                    await db[COLL].update_one(key, {"$set": {
-                        **{k: doc[k] for k in ("amount", "currency", "date", "zoho_status",
-                                               "zoho_transaction_type", "payee", "reference_number",
-                                               "description", "bank_account_name", "zoho_account_id", "raw")},
-                        "updated_at": _now(),
-                    }})
-                    updated_count += 1
-                else:
-                    doc.update({
-                        "id": str(uuid.uuid4()), "status": "untagged", "txn_code": await _next_txn_code(tenant_id),
-                        "tags": {}, "vendor_id": None, "vendor_name": None,
-                        "account_id": None, "account_name": None,
-                        "account_adjustment": None, "proofs": [], "notes": None,
-                        "tagged_by": None, "tagged_at": None,
-                        "created_at": _now(), "updated_at": _now(),
-                    })
-                    await db[COLL].insert_one(doc)
-                    new_count += 1
-            if not res["has_more"]:
-                break
-            page += 1
-    except Exception as e:
-        logger.exception("Zoho bank transaction sync failed")
-        raise HTTPException(status_code=502, detail=f"Zoho sync failed: {str(e)[:300]}")
+    job_id = str(uuid.uuid4())
+    job_doc = {
+        "id": job_id, "tenant_id": tenant_id, "status": "running",
+        "from": date_start, "to": date_end, "new": 0, "updated": 0,
+        "progress": {"page": 0, "new": 0, "updated": 0},
+        "started_at": _now(), "started_by": current_user.get("id"),
+        "created_at": _now(), "updated_at": _now(),
+    }
+    await db[SYNC_JOB_COLL].insert_one(job_doc)
 
-    # Only advance the incremental cursor when the caller didn't supply an
-    # explicit range — explicit per-month syncs should never rewind it.
-    if not explicit_range:
-        await db[SYNC_COLL].update_one(
-            {"tenant_id": tenant_id},
-            {"$set": {"tenant_id": tenant_id, "last_synced_date": date_end, "last_synced_at": _now(),
-                      "last_synced_by": current_user.get("id")}},
-            upsert=True,
-        )
-    return {"new": new_count, "updated": updated_count, "from": date_start, "to": date_end}
+    # Fire-and-forget background task. We use both BackgroundTasks (for proper
+    # FastAPI lifecycle) and create_task as a safety net for some deployments
+    # where BackgroundTasks may not run reliably.
+    async def _runner():
+        await _run_sync(tenant_id, current_user.get("id"), date_start, date_end, explicit_range, job_id)
+    background_tasks.add_task(_runner)
+
+    job_doc.pop("_id", None)
+    return {"job_id": job_id, "status": "started", "from": date_start, "to": date_end}
+
+
+@router.get("/sync/status/{job_id}")
+async def sync_status(job_id: str, current_user: dict = Depends(get_current_user)):
+    tenant_id = get_current_tenant_id()
+    job = await db[SYNC_JOB_COLL].find_one({"id": job_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Sync job not found")
+    return job
 
 
 # ----------------------- List / filters -----------------------
