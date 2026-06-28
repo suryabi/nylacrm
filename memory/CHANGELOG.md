@@ -1,6 +1,21 @@
 # Changelog
 
 
+## 2026-06-28 — Bulk-flip action for direction overrides ✅ (testing_agent 108/108 pass)
+- **Backend (`accounting_transactions.py`)**: new `POST /api/accounting/transactions/bulk/direction-override` admin endpoint accepting `{ids: List[str], direction: 'credit'|'debit'|'auto'}`:
+  - `'credit'` / `'debit'` → single `update_many` `$set direction + direction_override`. Tenant-scoped.
+  - `'auto'` → per-row recompute via `_direction_of` against stored Zoho `raw`; `$set direction + $unset direction_override`. Done in a single `bulk_write`.
+  - Capped at 500 ids/call. Returns `{ok, updated, direction}`.
+- **Frontend (`AccountingTransactions.js`)**:
+  - Added a checkbox column to the transactions table: header "select all (visible)", per-date-group "select group", per-row select.
+  - New sticky **bulk-action toolbar** (`data-testid="bulk-action-bar"`) appears whenever `selectedIds.size > 0`: indigo background, counter, **"Flip to Money IN"** (emerald), **"Flip to Money OUT"** (rose), **"Clear override (auto)"**, and a close button. Each triggers a confirm dialog explaining the override is persisted.
+  - data-testids: `select-all`, `select-date-{date}`, `select-row-{id}`, `bulk-flip-credit`, `bulk-flip-debit`, `bulk-clear-override`, `bulk-cancel`.
+  - Also fixed another orphan `CategoryCascader` fragment at the end of the file that broke the JSX parse.
+- Verified by `testing_agent_v3_fork` iteration 254 — **108/108 backend pass** (17 new + 91 regression). Tenant isolation tested with a deliberately-foreign seed row (correctly skipped). 'auto' branch verified to recompute via `_direction_of` and `$unset` the override field.
+- **Notes**: `accounting_transactions.py` is now 1,027 lines — flagged as a P1 refactor candidate by the testing agent.
+
+
+
 ## 2026-06-28 — Transfer-fund direction + per-row manual override ✅ (testing_agent 91/91 pass)
 - **Reported (production)**: Zoho-categorised transactions with `transaction_type = "transfer_fund"` (a transfer from "Director loan Vamshi Krishna Bommena" INTO "Madapur Warehouse") were rendered money-OUT in our inbox even though for Madapur Warehouse this is money-IN. User also asked for an in-app way to manually categorise such rows.
 - **RCA**: `_DEBIT_TYPES` contained `transfer_fund` and `intra_account_transfer`, hard-coding both to money-out. A Zoho transfer is **inherently directional per account** — money-IN for the destination, money-OUT for the source — and cannot be classified by transaction_type alone.
