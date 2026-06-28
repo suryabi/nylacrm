@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 250 — Verified the one-line fix: 'ZohoBooks.banking.READ' has been added to the Zoho OAuth scopes list in /app/backend/services/zoho_service.py (line 78). The live /api/zoho/oauth/initiate endpoint on the preview URL now returns an authorize_url whose URL-decoded 'scope' query param contains 'ZohoBooks.banking.READ' alongside all pre-existing scopes — none were dropped. 12/12 new tests pass and all 22 iteration 248+249 regression tests still pass (34/34 total).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_250_zoho_banking_scope.py",
+    "/app/test_reports/pytest/iteration_250.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "services/zoho_service.py:52 — the scopes list is hardcoded in code. Consider moving to an env-driven allow-list or a constants module so future scope additions don't require a code deploy + manual user reconnect for every tenant. At minimum, surface the current scope set in /api/zoho/config-status so admins can diff what's in the running code vs what their connected token was granted (currently they only learn via 401 code:57).",
+    "services/zoho_service.py:140 — scopes are joined with ',' and placed in the query string via urlencode. Zoho documents both ',' (comma) and ' ' (space) as valid separators; relying on comma is fine but worth a brief comment so a future engineer doesn't 'helpfully' switch to space-separated and break things.",
+    "Operational followup (not code): every existing tenant that connected Zoho before this scope addition still has a token without banking.READ. The accounting sync will keep failing for them until each tenant clicks 'Reconnect Zoho' from /settings/integrations/zoho. Consider a one-shot admin notification or a config-status flag like 'scope_drift_detected: true' to nudge them.",
+    "routes/zoho_books.py:75-101 — /zoho/oauth/initiate inserts a state doc but does not TTL/clean up old state docs other than expires_at field. If callbacks are never received (user closes Zoho tab), state docs accumulate. Add a Mongo TTL index on expires_at or sweep them in a background task.",
+    "Iteration 249 already flagged the substring 'code:57' matching in the 401 translator; the same fragility still applies and isn't touched by this iteration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_250_zoho_banking_scope.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 new + 22/22 regression = 34/34)",
+    "frontend": "skipped per request"
+  },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (X-Tenant-ID: nyla-air-water). Login returns 'session_token' used as Bearer.",
+  "seed_data_creation": "None this iteration. The /oauth/initiate endpoint creates a row in zoho_oauth_state per call (3 rows from this test) with a 15-minute expiry — they will be naturally consumed/expired and were not cleaned by the test. Acceptable as they auto-expire and don't affect any user-facing data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The fix is verified end-to-end on the preview env (Zoho client creds ARE configured on preview, so the live /oauth/initiate test did not need to skip). The unit-level test against zoho_service.build_authorize_url() also confirms the scope regardless of env. Note: this code fix alone does NOT fix the production user's sync — every tenant that previously connected Zoho must click 'Reconnect Zoho' to grant the new banking.READ scope. The frontend Reconnect CTA (in /settings/integrations/zoho) was explicitly out of scope here.",
+  "rca of the issue": "User on production saw the Zoho consent screen missing the 'Banking' permission entry while reconnecting Zoho. Cause: the backend OAuth scopes array in services/zoho_service.py:get_zoho_config() did not list 'ZohoBooks.banking.READ', so build_authorize_url's comma-joined 'scope' query param never asked Zoho to display/grant that permission. Fix: appended 'ZohoBooks.banking.READ' at line 78 of the scopes list. Verified: (a) /api/zoho/oauth/initiate now returns an authorize_url whose decoded scope param contains 'ZohoBooks.banking.READ'; (b) all previously-listed scopes remain present; (c) all pre-existing Zoho and accounting-sync endpoints are unaffected. Mitigation for already-connected tenants: each tenant must reconnect Zoho from /settings/integrations/zoho to be re-granted a token with the new scope."
+}

@@ -72,6 +72,10 @@ def get_zoho_config() -> dict:
             # mapped Zoho Branch so the printed challan/invoice header (the
             # "From" address) shows the dispatching warehouse, not just the state.
             "ZohoBooks.settings.UPDATE",
+            # Banking — used by the Accounting Transactions inbox to pull the
+            # connected bank-feed lines for tagging. Without this scope Zoho
+            # returns 401 code 57 ("not authorized") on /banktransactions.
+            "ZohoBooks.banking.READ",
         ],
     }
 
