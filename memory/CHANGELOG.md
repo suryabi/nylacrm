@@ -1,6 +1,15 @@
 # Changelog
 
 
+## 2026-06-28 — Zoho 401 "code:57" friendlier failure UX ✅ (testing_agent 14/14 pass)
+- **Reported (production)**: Sync toast showed raw JSON: `Sync failed: Zoho API 401: {"code":57,"message":"You are not authorized to perform this operation"}`. Root cause is at the OAuth scope level — the production Zoho connection is missing `ZohoBooks.banking.READ`. **User action**: reconnect Zoho in production under Settings → Integrations → Zoho Books with the Banking permission.
+- **UX fix (code)** — make the failure clear and actionable:
+  - Backend (`accounting_transactions.py` `_run_sync`): detect `401 + "code":57` (or "not authorized") in the Zoho exception, persist a friendly message + `error_kind: "zoho_banking_scope"` into the sync-job doc. Generic failures now persist a safe `"Sync failed unexpectedly. Please retry…"` (raw stack traces stay in server logs).
+  - Frontend (`AccountingTransactions.js`): polled status `failed` with `error_kind === "zoho_banking_scope"` now triggers a sonner toast with a description and a **"Reconnect Zoho"** action button that navigates to `/settings/integrations/zoho`.
+- Verified via `testing_agent_v3_fork` iteration 249 — **14/14 backend tests pass**, /sync/status contract validated by seeding fake job docs; all pre-existing endpoints regress green; tenant isolation on /sync/status confirmed.
+
+
+
 ## 2026-06-28 — Production bug: Zoho sync 502 Bad Gateway → background-task pattern ✅ (testing_agent 8/8 pass, RT ~100ms)
 - **Reported**: On `https://crm.nylaairwater.earth`, `POST /api/accounting/transactions/sync?date_start=2026-06-01&date_end=2026-06-30` returned `502 net::ERR_FAILED` from the ingress.
 - **RCA**: The previous synchronous endpoint walked Zoho pages and did per-transaction `find_one + insert/update` round-trips inside the HTTP request. On months with many bank transactions this exceeded the Emergent ingress 60 s timeout → 502.

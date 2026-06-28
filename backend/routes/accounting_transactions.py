@@ -238,7 +238,8 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
                 "and reconnect Zoho with the 'Banking' permission, then try again."
             )
         else:
-            friendly = err_text[:500]
+            # Don't leak stack-trace text to the UI. Full detail is in server logs.
+            friendly = "Sync failed unexpectedly. Please retry; if it persists check the server logs."
         await db[SYNC_JOB_COLL].update_one(
             {"id": job_id},
             {"$set": {"status": "failed", "error": friendly,
