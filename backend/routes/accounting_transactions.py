@@ -412,6 +412,61 @@ class DirectionOverrideIn(BaseModel):
     direction: str  # 'credit' or 'debit' or 'auto' to clear the override
 
 
+class BulkDirectionOverrideIn(BaseModel):
+    ids: List[str]
+    direction: str  # 'credit', 'debit', or 'auto'
+
+
+@router.post("/bulk/direction-override")
+async def bulk_direction_override(
+    payload: BulkDirectionOverrideIn,
+    current_user: dict = Depends(get_current_user),
+):
+    """Flip / clear the direction override for many rows at once.
+
+    Accepts up to 500 transaction ids per call. 'auto' clears the override on
+    each row and reverts to automatic classification (re-runs _direction_of
+    against the stored Zoho raw payload)."""
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    desired = (payload.direction or "").lower().strip()
+    if desired not in {"credit", "debit", "auto"}:
+        raise HTTPException(status_code=400, detail="direction must be one of: credit, debit, auto")
+    ids = [i for i in (payload.ids or []) if i]
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids list is empty")
+    if len(ids) > 500:
+        raise HTTPException(status_code=400, detail="Maximum 500 transactions per bulk call")
+
+    if desired == "auto":
+        # We need each row's raw payload to recompute its direction — do this in a
+        # single pass with bulk_write.
+        ops = []
+        async for row in db[COLL].find(
+            {"id": {"$in": ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "raw": 1},
+        ):
+            new_dir = _direction_of(row.get("raw") or {})
+            ops.append(UpdateOne(
+                {"id": row["id"], "tenant_id": tenant_id},
+                {"$set": {"direction": new_dir, "updated_at": _now()},
+                 "$unset": {"direction_override": ""}},
+            ))
+        if ops:
+            res = await db[COLL].bulk_write(ops, ordered=False)
+            updated = res.modified_count
+        else:
+            updated = 0
+        return {"ok": True, "updated": updated, "direction": "auto"}
+
+    # Force a single direction for all matched rows.
+    res = await db[COLL].update_many(
+        {"id": {"$in": ids}, "tenant_id": tenant_id},
+        {"$set": {"direction": desired, "direction_override": desired, "updated_at": _now()}},
+    )
+    return {"ok": True, "updated": res.modified_count, "direction": desired}
+
+
 @router.patch("/{item_id}/direction-override")
 async def set_direction_override(
     item_id: str,

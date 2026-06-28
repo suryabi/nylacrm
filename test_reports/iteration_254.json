@@ -1,0 +1,70 @@
+{
+  "summary": "Iteration 254 — verified the NEW POST /api/accounting/transactions/bulk/direction-override endpoint. 17 new tests across 5 phases (bulk credit/debit flip, bulk 'auto' clear-override+recompute, validation 400s + auth 401/403, tenant isolation, regression of single PATCH/reclassify/list/flow-summary/category-summary/export/diagnostic/sync). All 17 NEW iter-254 tests PASS + all 91 prior iter-248..253 regression tests still PASS = 108/108 PASS.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_254_bulk_direction_override.py",
+    "/app/test_reports/pytest/iteration_254.xml"
+  ],
+  "tests_executed": {
+    "bulk_credit_debit": [
+      "POST /bulk/direction-override {ids:[3 seeded ids], direction:'credit'} -> 200 {ok:true, updated:3, direction:'credit'}; all 3 docs have direction='credit' AND direction_override='credit'.",
+      "Repeat with 'debit' on the same rows -> updated:3; both fields flip to 'debit' on every row."
+    ],
+    "bulk_auto_clears_override": [
+      "Seed: direction='debit', direction_override='credit', raw={transaction_type:'expense', amount:500}. POST {ids:[id], direction:'auto'} -> 200 {ok, direction:'auto'}. Re-fetch shows direction='debit' (recomputed via _direction_of since expense ∈ _DEBIT_TYPES) AND direction_override is GONE (field $unset, not present in returned doc)."
+    ],
+    "validation": [
+      "{ids:[], direction:'credit'} -> 400 'ids list is empty'",
+      "{ids:['x'], direction:'sideways'} -> 400 detail mentions credit/debit/auto",
+      "501 ids, direction='credit' -> 400 'Maximum 500 transactions per bulk call'",
+      "No bearer token -> 401/403"
+    ],
+    "tenant_isolation": [
+      "Seed row under tenant_id='OTHER-TENANT'. POST from nyla-air-water admin with that id -> 200 {updated:0}. Foreign row's direction is unchanged AND no direction_override was added — proves the tenant_id filter is enforced in update_many."
+    ],
+    "regression": [
+      "Single PATCH /{id}/direction-override still returns {direction,override} correctly.",
+      "Set override='credit' via BULK endpoint, then POST /reclassify-direction -> override is RESPECTED (row stays 'credit', not flipped to 'debit').",
+      "GET /accounting/transactions -> 200",
+      "GET /accounting/transactions/flow-summary -> 200",
+      "GET /accounting/transactions/category-summary -> 200",
+      "GET /accounting/transactions/export -> 200",
+      "GET /accounting/transactions/{id}/diagnostic -> 200",
+      "GET /accounting/transactions/sync/status/{unknown} -> 404",
+      "POST /accounting/transactions/sync responds in <10s",
+      "All 8 iter-248 + 14 iter-249 + 12 iter-250 + 11 iter-251 + 21 iter-252 + 25 iter-253 prior tests still PASS (91/91)."
+    ]
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BulkDirectionOverrideIn (lines 415-417 of routes/accounting_transactions.py) — minimal Pydantic body, ids:List[str] + direction:str. Clean.",
+    "bulk_direction_override (lines 420-467) — _require_admin gate, lowercase+strip normalisation, 400s for invalid direction / empty ids / >500 ids in the correct order. Tenant scoping is correctly applied to BOTH the find() (auto branch) and the update_many() (credit/debit branch) via {tenant_id: tenant_id} — verified by the OTHER-TENANT isolation test. ✓",
+    "'auto' branch uses bulk_write of UpdateOne with $set new direction + $unset direction_override per-row after reading raw — correct because each row needs its own recomputed direction. Returns res.modified_count which can legitimately be 0 if only the $unset took effect with no actual direction change; the endpoint documents this implicitly via the re-fetch-to-verify pattern used in the test. ✓",
+    "'credit'/'debit' branch is a single update_many — efficient and atomic. Returns modified_count. ✓",
+    "MINOR (carried from prior iterations): /app/backend/routes/accounting_transactions.py is now 1027 lines — well past the 700-line guideline. Future refactor candidate (sync / list / tagging / proofs / diagnostic / override sub-modules).",
+    "MINOR: The 500-id cap is hard-coded in the endpoint. If frontend ever needs >500, it must page in batches client-side. The error message is explicit so this is fine for now.",
+    "OBSERVATION: The 'auto' branch's response.updated reports MongoDB's modified_count, which (per the request notes) can be 0 even when $unset succeeded if the direction value did not change. Test validates persistence by re-fetching the doc — same pattern the frontend should adopt rather than trusting `updated` alone for the auto case."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_254_bulk_direction_override.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (108/108 — 17 new iter-254 + 25 iter-253 + 21 iter-252 + 11 iter-251 + 12 iter-250 + 14 iter-249 + 8 iter-248)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water). X-Tenant-ID header required.",
+  "seed_data_creation": "Per-class autouse fixtures seed TEST-ITER254-* docs into accounting_transactions (via pymongo sync client) and clean them up between classes. The tenant-isolation test seeds a row under tenant_id='OTHER-TENANT' to prove the update_many's tenant filter is enforced. All test data deleted on teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 254 adds POST /api/accounting/transactions/bulk/direction-override with body {ids:List[str], direction:'credit'|'debit'|'auto'}. Admin-gated. Caps at 500 ids/call. 'credit'/'debit' uses update_many; 'auto' uses bulk_write of UpdateOne per-row with $set direction + $unset direction_override (because each row's recomputed direction depends on its stored raw payload). Tenant isolation is enforced via {tenant_id} filter on BOTH branches. modified_count can be 0 on the 'auto' branch when only the $unset happened — verify by re-fetch instead of trusting the response counter. The override field (direction_override) is RESPECTED by /reclassify-direction and the background /sync — set by either the single PATCH endpoint (iter 253) or the new bulk endpoint (iter 254). When writing new tests, keep using pymongo sync for direct DB seed/read — the project's motor instance is single-event-loop bound and hangs across pytest's loop boundary.",
+  "rca_of_the_issue": "Not a bug — feature addition. The bulk endpoint was added because the iter-253 single-PATCH workflow forced users to click each row individually in the Accounting Transactions inbox to fix mis-classified Zoho transfers. The new endpoint lets the admin tick N rows + click one of 3 toolbar buttons (Flip to Money IN / Money OUT / Clear override) and update all of them in a single API call. Implementation is clean, tenant-scoped, admin-gated, and validated; no defects found in 17 targeted tests + 91 regression tests."
+}

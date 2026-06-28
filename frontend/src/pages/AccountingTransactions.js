@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
-  RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Paperclip, Upload,
+  RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Paperclip, Upload, X,
   Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
   Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Hash,
 } from 'lucide-react';
@@ -82,6 +82,8 @@ export default function AccountingTransactions() {
   const [categoryRoot, setCategoryRoot] = useState('all');
   const [categorySummary, setCategorySummary] = useState([]);
   const [flow, setFlow] = useState({ credit: { total: 0, count: 0 }, debit: { total: 0, count: 0 }, net: 0 });
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulking, setBulking] = useState(false);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(() => {
     const stored = Number(localStorage.getItem('acc_txn_page_size'));
@@ -161,6 +163,41 @@ export default function AccountingTransactions() {
   const now = new Date();
   const [syncYear, setSyncYear] = useState(now.getFullYear());
   const [syncMonth, setSyncMonth] = useState(now.getMonth() + 1); // 1-12
+
+  const toggleSelectIds = (ids, force) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.every((id) => next.has(id));
+      const shouldAdd = typeof force === 'boolean' ? force : !allSelected;
+      ids.forEach((id) => { if (shouldAdd) next.add(id); else next.delete(id); });
+      return next;
+    });
+  };
+  const toggleSelectAll = (checked) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      items.forEach((r) => { if (checked) next.add(r.id); else next.delete(r.id); });
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const bulkSetDirection = async (direction) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    const label = direction === 'auto' ? 'auto-classified' : (direction === 'credit' ? 'money-IN' : 'money-OUT');
+    if (!window.confirm(`Mark ${ids.length} transaction${ids.length === 1 ? '' : 's'} as ${label}? ${direction === 'auto' ? 'This clears any manual override and reverts to the automatic rule.' : 'The override is saved on each row and survives future Zoho syncs.'}`)) return;
+    setBulking(true);
+    try {
+      const { data } = await axios.post(`${API}/api/accounting/transactions/bulk/direction-override`, { ids, direction }, auth());
+      toast.success(`Updated ${data.updated} row${data.updated === 1 ? '' : 's'}`);
+      clearSelection();
+      load();
+      loadFlowSummary();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Bulk flip failed'); }
+    finally { setBulking(false); }
+  };
+
 
   const reclassifyDirections = async () => {
     if (!window.confirm('Re-evaluate money-in vs money-out for every existing transaction? This walks all rows using Zoho\'s debit_or_credit field and is safe to re-run.')) return;
@@ -438,6 +475,29 @@ export default function AccountingTransactions() {
         </div>
       )}
 
+      {selectedIds.size > 0 && (
+        <div className="sticky top-0 z-20 mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-indigo-300 bg-indigo-600 px-3 py-2 text-white shadow-lg" data-testid="bulk-action-bar">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <span className="opacity-30">|</span>
+          <Button size="sm" variant="secondary" disabled={bulking} onClick={() => bulkSetDirection('credit')}
+            className="h-7 bg-emerald-500 text-white hover:bg-emerald-600" data-testid="bulk-flip-credit">
+            <ArrowDownLeft className="mr-1 h-3 w-3" /> Flip to Money IN
+          </Button>
+          <Button size="sm" variant="secondary" disabled={bulking} onClick={() => bulkSetDirection('debit')}
+            className="h-7 bg-rose-500 text-white hover:bg-rose-600" data-testid="bulk-flip-debit">
+            <ArrowUpRight className="mr-1 h-3 w-3" /> Flip to Money OUT
+          </Button>
+          <Button size="sm" variant="ghost" disabled={bulking} onClick={() => bulkSetDirection('auto')}
+            className="h-7 text-white hover:bg-indigo-500" data-testid="bulk-clear-override">
+            Clear override (auto)
+          </Button>
+          <Button size="sm" variant="ghost" disabled={bulking} onClick={clearSelection}
+            className="ml-auto h-7 text-white hover:bg-indigo-500" data-testid="bulk-cancel">
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="flex justify-center py-16 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -449,7 +509,14 @@ export default function AccountingTransactions() {
           <table className="w-full text-sm" data-testid="txn-table">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/80 text-[11px] uppercase tracking-wide text-slate-500">
-                <th className="w-10 p-3"></th>
+                <th className="w-10 p-3 text-center">
+                  <input type="checkbox" className="h-3.5 w-3.5 cursor-pointer accent-indigo-600"
+                    checked={items.length > 0 && items.every((r) => selectedIds.has(r.id))}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    data-testid="select-all" />
+                </th>
+                <th className="w-8 p-3"></th>
                 <th className="p-3 text-left font-medium">Description</th>
                 <th className="p-3 text-left font-medium">Bank</th>
                 <th className="p-3 text-right font-medium">Amount</th>
@@ -496,6 +563,8 @@ export default function AccountingTransactions() {
                         return (
                           <Row key={it.id} it={it} masters={masters} vendors={vendors} zebra={z}
                             expanded={expandedId === it.id}
+                            selected={selectedIds.has(it.id)}
+                            onSelectToggle={() => toggleSelectIds([it.id])}
                             onToggle={() => setExpandedId(expandedId === it.id ? null : it.id)}
                             onChange={patchRow} />
                         );
@@ -590,7 +659,7 @@ function masterLabel(item) {
   return `${indent}${item.name}`;
 }
 
-function Row({ it, masters, vendors, expanded, onToggle, onChange, zebra }) {
+function Row({ it, masters, vendors, expanded, selected, onSelectToggle, onToggle, onChange, zebra }) {
   const credit = it.direction === 'credit';
   const proofs = (it.proofs || []).filter((p) => !p.is_deleted);
   const copyZoho = (e) => {
@@ -598,11 +667,17 @@ function Row({ it, masters, vendors, expanded, onToggle, onChange, zebra }) {
     navigator.clipboard?.writeText(it.zoho_transaction_id || '');
     toast.success('Zoho transaction ID copied');
   };
-  const baseBg = expanded ? 'bg-indigo-50/60' : (zebra ? 'bg-slate-50/40 hover:bg-slate-100/70' : 'bg-white hover:bg-slate-50');
+  const baseBg = expanded ? 'bg-indigo-50/60' : (selected ? 'bg-indigo-50/40' : (zebra ? 'bg-slate-50/40 hover:bg-slate-100/70' : 'bg-white hover:bg-slate-50'));
   return (
     <>
       <tr className={`cursor-pointer border-b border-slate-100 transition-colors ${baseBg}`}
         onClick={onToggle} data-testid={`txn-row-${it.id}`}>
+        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" className="h-3.5 w-3.5 cursor-pointer accent-indigo-600"
+            checked={!!selected}
+            onChange={onSelectToggle}
+            data-testid={`select-row-${it.id}`} />
+        </td>
         <td className="p-3 text-slate-400">
           <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? 'rotate-90 text-indigo-600' : ''}`} />
         </td>
@@ -640,7 +715,7 @@ function Row({ it, masters, vendors, expanded, onToggle, onChange, zebra }) {
       </tr>
       {expanded && (
         <tr className="border-b-2 border-indigo-100 bg-gradient-to-b from-indigo-50/40 to-white" data-testid={`txn-expanded-${it.id}`}>
-          <td colSpan={6} className="p-0">
+          <td colSpan={7} className="p-0">
             <ExpandedEditor it={it} credit={credit} masters={masters} vendors={vendors} onChange={onChange} />
           </td>
         </tr>
