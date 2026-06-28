@@ -74,17 +74,24 @@ def auth_headers():
 class TestDirectionClassifier:
     """Direct function tests — no HTTP / no DB."""
 
-    def test_quirky_case_credit_field_wins_over_vendor_payment_type(self):
-        # The actual production bug: vendor_payment was in _DEBIT_TYPES but
-        # Zoho's authoritative signal said credit.
+    def test_transaction_type_wins_over_credit_field_for_vendor_payment(self):
+        # REVERTED in iteration 252: transaction_type is now checked FIRST.
+        # vendor_payment is a _DEBIT_TYPE, so result is 'debit' regardless of
+        # the debit_or_credit field. (Original iter-251 priority was reverted
+        # because it broke the much larger population of correctly-categorised
+        # NEFT/UPI bank-feed credits.)
         txn = {"debit_or_credit": "credit", "transaction_type": "vendor_payment",
                "amount": 50000}
-        assert _direction_of(txn) == "credit"
+        assert _direction_of(txn) == "debit"
 
-    def test_debit_field_wins_over_customer_payment_type(self):
+    def test_transaction_type_wins_over_debit_field_for_customer_payment(self):
+        # customer_payment is in _CREDIT_TYPES, so result is 'credit' even when
+        # debit_or_credit says 'debit'. This is the case the iteration-252 revert
+        # restores — Zoho's debit_or_credit follows accounting (bank-ledger)
+        # convention, transaction_type carries the semantic categorisation.
         txn = {"debit_or_credit": "debit", "transaction_type": "customer_payment",
                "amount": 1000}
-        assert _direction_of(txn) == "debit"
+        assert _direction_of(txn) == "credit"
 
     def test_only_customer_payment_type_yields_credit(self):
         assert _direction_of({"transaction_type": "customer_payment",
@@ -141,8 +148,8 @@ class TestReclassifyEndpoint:
             "txn_code": f"{TEST_PREFIX}-CODE-1",
             "raw": {
                 "bank_transaction_id": misclassified_id,
-                "debit_or_credit": "credit",
-                "transaction_type": "vendor_payment",
+                "debit_or_credit": "debit",
+                "transaction_type": "customer_payment",
                 "amount": 50000,
             },
             "tags": {}, "proofs": [],

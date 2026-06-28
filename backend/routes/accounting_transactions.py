@@ -92,26 +92,26 @@ async def _ensure_txn_codes(tenant_id: str):
 def _direction_of(txn: dict) -> str:
     """Return 'credit' (money IN) or 'debit' (money OUT) for a Zoho bank-feed line.
 
-    Priority (most authoritative first):
-      1. `debit_or_credit` field — Zoho's explicit signal for which side of the
-         ledger the entry posts to. This is the truth for bank feeds.
-      2. `transaction_type` against our curated allowlists.
-      3. amount sign (Zoho usually returns positive amounts; this is a last resort).
+    Strategy: `transaction_type` is checked FIRST because it carries Zoho's
+    semantic categorisation (e.g. 'deposit' / 'expense' / 'customer_payment').
+    Only if it's not in our curated allowlists do we fall back to the
+    `debit_or_credit` field and finally the (already abs'd) amount sign.
 
-    We previously checked transaction_type FIRST, which mis-classified incoming
-    RTGS credits (real-world example: customer transfers tagged by Zoho as
-    `vendor_payment` or `transfer_fund` would show as money-out even though
-    `debit_or_credit` was 'credit')."""
-    dc = (txn.get("debit_or_credit") or "").lower()
-    if dc.startswith("c"):
-        return "credit"
-    if dc.startswith("d"):
-        return "debit"
+    NOTE: An earlier version of this function (iteration 251) prioritised
+    `debit_or_credit` over `transaction_type`. That over-corrected a small
+    population of mis-categorised rows but broke the much larger population
+    of correctly categorised NEFT/UPI bank-feed credits — see screenshots
+    from prod 28-Jun-2026. Restored to the original priority. If you need to
+    fix individual transactions whose Zoho category is wrong, fix them in
+    Zoho Books directly (they will re-classify on the next sync)."""
     ttype = (txn.get("transaction_type") or "").lower()
     if ttype in _CREDIT_TYPES:
         return "credit"
     if ttype in _DEBIT_TYPES:
         return "debit"
+    # fall back to debit/credit flags or amount
+    if txn.get("debit_or_credit"):
+        return "credit" if str(txn["debit_or_credit"]).lower().startswith("c") else "debit"
     amt = float(txn.get("amount") or 0)
     return "credit" if amt >= 0 else "debit"
 
@@ -314,6 +314,40 @@ async def sync_status(job_id: str, current_user: dict = Depends(get_current_user
     if not job:
         raise HTTPException(status_code=404, detail="Sync job not found")
     return job
+
+
+
+
+@router.get("/{item_id}/diagnostic")
+async def transaction_diagnostic(item_id: str, current_user: dict = Depends(get_current_user)):
+    """Admin-only — return the key fields used by the direction classifier so a
+    misclassified row can be debugged. Includes the stored `raw` payload from
+    Zoho so we can verify which fields are present and what values they hold."""
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    doc = await db[COLL].find_one(
+        {"$or": [{"id": item_id}, {"txn_code": item_id}], "tenant_id": tenant_id},
+        {"_id": 0},
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    raw = doc.get("raw") or {}
+    classified = _direction_of(raw)
+    return {
+        "txn_code": doc.get("txn_code"),
+        "stored_direction": doc.get("direction"),
+        "classified_now": classified,
+        "diagnosis": {
+            "zoho_transaction_type": raw.get("transaction_type"),
+            "zoho_debit_or_credit": raw.get("debit_or_credit"),
+            "raw_amount": raw.get("amount"),
+            "raw_amount_sign": "positive" if (raw.get("amount") or 0) > 0 else ("negative" if (raw.get("amount") or 0) < 0 else "zero"),
+            "bank_account_name": raw.get("bank_account_name") or raw.get("account_name"),
+            "description": raw.get("description"),
+            "reference_number": raw.get("reference_number"),
+        },
+        "raw": raw,
+    }
 
 
 @router.post("/reclassify-direction")

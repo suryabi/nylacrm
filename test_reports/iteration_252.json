@@ -1,0 +1,69 @@
+{
+  "summary": "Iteration 252 — verified the REVERT of iteration-251 classifier change (transaction_type FIRST, debit_or_credit SECOND with statement convention, amount-sign last) and the new admin-only GET /api/accounting/transactions/{item_id}/diagnostic endpoint. 21 new tests pass + all 45 prior regression tests (iter 248/249/250/251) still pass = 66/66 PASS.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_252_classifier_revert_and_diagnostic.py",
+    "/app/test_reports/pytest/iteration_252.xml"
+  ],
+  "tests_executed": {
+    "unit_tests_direction_of_reverted": [
+      "customer_payment + debit_or_credit='debit' -> 'credit' (THE PROD-REPORTED BUG, now fixed by revert)",
+      "vendor_payment + debit_or_credit='credit' -> 'debit'",
+      "transaction_type='deposit' only -> 'credit'",
+      "transaction_type='expense' only -> 'debit'",
+      "unknown_xyz + debit_or_credit='credit' -> 'credit' (fallback to debit_or_credit)",
+      "unknown_xyz + debit_or_credit='debit' -> 'debit'",
+      "no signal + amount=100 -> 'credit'",
+      "no signal + amount=-100 -> 'debit'"
+    ],
+    "diagnostic_endpoint_tests": [
+      "GET /accounting/transactions/{id}/diagnostic by id -> 200 with expected shape (txn_code, stored_direction='debit', classified_now='credit', diagnosis.{zoho_transaction_type, zoho_debit_or_credit, raw_amount_sign='positive'}, raw object)",
+      "GET /accounting/transactions/{txn_code}/diagnostic by txn_code -> same expected shape",
+      "GET /accounting/transactions/{unknown}/diagnostic -> 404 with detail containing 'not found'",
+      "GET /accounting/transactions/{id}/diagnostic without auth -> 401/403"
+    ],
+    "regression_tests": [
+      "POST /reclassify-direction returns {ok,checked,flipped}; 2nd call flipped<=first (idempotency confirmed)",
+      "GET /accounting/transactions list -> 200 with items+summary",
+      "GET /accounting/transactions/flow-summary -> 200 with credit/debit/net",
+      "GET /accounting/transactions/category-summary -> 200",
+      "GET /accounting/transactions/sync/status/{unknown} -> 404",
+      "POST /accounting/transactions/sync responds in <8s (400 fast on preview without Zoho creds)",
+      "All 8 iteration_248 tests (sync background) pass",
+      "All 14 iteration_249 tests (zoho scope error translation) pass",
+      "All 12 iteration_250 tests (zoho banking scope) pass",
+      "All 13 iteration_251 tests pass after updating the 2 cases impacted by the revert (vendor_payment+credit→debit; customer_payment+debit→credit; and seed in reclassify test updated to use customer_payment+stored=debit so the flip still occurs under the reverted priority)"
+    ]
+  },
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_direction_of (routes/accounting_transactions.py:92-116) now correctly prioritises transaction_type (curated allowlists _CREDIT_TYPES/_DEBIT_TYPES), then debit_or_credit with statement convention ('credit' -> money in), then amount sign. The docstring clearly records the iteration-251 mis-step and the rationale for the revert — excellent for future maintainers.",
+    "New /{item_id}/diagnostic endpoint (lines 321-350) accepts EITHER UUID id OR txn_code via $or match — convenient for triage. Tenant-scoped, admin-gated via _require_admin, no _id leakage (projection {'_id': 0}), returns stored direction AND re-classified-now value so prod can spot drift. Good shape.",
+    "Endpoint placement matters: /{item_id}/diagnostic is declared BEFORE the catch-all /{txn_id}/tags PATCH etc., and AFTER /reclassify-direction and /sync/status/{job_id}, so static routes still win — verified by 404 test passing for unknown ids and the regression /sync/status/{unknown} test returning 404 (not falling through to diagnostic).",
+    "MINOR: raw_amount_sign uses 'positive' if (raw.amount or 0) > 0 — treats zero amount as 'zero' (correct), negative as 'negative'. OK.",
+    "MINOR (carried from prior): file is now 900 lines — still well past the 700-line guideline. Consider splitting into sync/list/tagging/proofs/diagnostic sub-modules in a future refactor (non-blocking)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_252_classifier_revert_and_diagnostic.py (new)",
+    "/app/backend/tests/test_iteration_251_direction_classifier.py (2 unit-test assertions inverted + 1 seed payload updated to reflect the revert; same overall test count)"
+  ],
+  "success_rate": {
+    "backend": "100% (66/66 tests passing — 21 new iter-252 + 13 iter-251 updated + 12 iter-250 + 14 iter-249 + 8 iter-248)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "Per-class fixtures seed/cleanup. iter-252 seeds DIAG-TEST-1 (id) + TXN-DIAG-1 (txn_code) into accounting_transactions for the diagnostic tests, deleted at fixture teardown. iter-251 seeds TEST-RECLASSIFY-* docs (also self-cleaning). No persistent test data left in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 252 reverts the iter-251 classifier priority (transaction_type FIRST again) AND adds a new admin GET /api/accounting/transactions/{item_id}/diagnostic endpoint (accepts UUID id OR txn_code). The reclassify-direction endpoint is UNCHANGED. Two iter-251 unit-test assertions had to be inverted (vendor_payment+credit→debit, customer_payment+debit→credit) and one seed payload in the reclassify fixture was updated to ensure the flip still occurs under the reverted classifier. All other iter-248/249/250/251 regression tests pass unchanged. When testing future iterations, use pymongo (sync) for direct DB seed/read in tests — NOT motor — to avoid event-loop binding issues.",
+  "rca_of_the_issue": "Prod reported many correctly-classified incoming UPI/NEFT credits (customer payments from Aparna Infrahousing, 17 Degree North Club, etc.) suddenly shown as money-OUT after iter-251. RCA: iter-251 had reordered _direction_of to check Zoho's debit_or_credit field BEFORE transaction_type. For Zoho bank-feed lines, debit_or_credit follows ACCOUNTING (bank-ledger) convention: money IN → bank asset debited → 'debit'; money OUT → asset credited → 'credit'. But the prior code interpreted it as STATEMENT convention (debit=money out). So all customer-payment credits were flipped wrongly. Fix: revert priority to transaction_type FIRST (curated _CREDIT_TYPES/_DEBIT_TYPES correctly classify the bulk of Zoho-categorised txns); fall back to debit_or_credit (statement convention) only when transaction_type isn't in either allowlist; amount sign as final fallback. Verified by unit test {transaction_type:customer_payment, debit_or_credit:debit} → 'credit' (was wrongly 'debit' under iter-251). The new diagnostic endpoint exposes the raw Zoho payload + the classifier's current verdict for any one row, so future edge cases can be triaged without blind iteration."
+}
