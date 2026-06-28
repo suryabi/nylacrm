@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 249 — Validated the Zoho-401 'banking scope missing' error-translator contract on /api/accounting/transactions/sync/status. 14/14 backend tests pass on the public preview URL. Pre-flight gate still returns 400 in ~0.1s on preview (Zoho not connected). The new /sync/status contract (status='failed', error_kind='zoho_banking_scope', friendly message, no raw Zoho JSON) was validated by directly seeding fake job docs into accounting_txn_sync_jobs and asserting the response shape the FE toast depends on. All pre-existing endpoints (list, category-summary, bank-accounts, export-csv, PATCH /tags, masters, vendors, employees) regress green. Tenant isolation on /sync/status confirmed (cross-tenant lookup -> 404).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_249_zoho_scope_error.py",
+    "/app/test_reports/pytest/iteration_249.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/accounting_transactions.py:232-233 — the Zoho-401 detection uses string matching on `'401' in err_text` AND substring `'\"code\":57'`. This is fragile: any future exception text shape change in services.zoho_service (e.g. quoted JSON with spaces, or wrapping the body in another layer) will silently drop the friendly branch. Recommend the upstream zoho_service raise a typed exception (e.g. ZohoUnauthorizedError with .code attribute) and check that here instead of substring matching.",
+    "The translator only handles the missing-banking-scope variant of code:57. Other 401/code:57 sub-cases (e.g. user revoked the integration, refresh token expired) would also surface as 'reconnect with banking permission' — which is misleading. Consider separating 'token revoked / expired' from 'scope missing' for clearer UX. The Zoho API often returns code:57 for ANY unauthorized op, not just scope issues.",
+    "GET /sync/status/{job_id} returns the full job doc including started_by (user id). The FE only needs {status, progress, new, updated, error, error_kind, from, to, finished_at}. Suggest projecting only those fields server-side to avoid leaking internal user IDs to clients.",
+    "Iteration 248 review already flagged the same: no TTL index on accounting_txn_sync_jobs. _purge_old_sync_jobs is called only at sync kickoff. If a tenant never re-syncs (e.g. after a permanent failure like the scope error this fix targets), failed job docs persist indefinitely. Add a Mongo TTL index on created_at as belt-and-braces.",
+    "Translator writes `friendly = err_text[:500]` on the 'other' branch — that may still expose stack-trace fragments or internal paths to end users via the toast. Recommend a generic 'Sync failed unexpectedly, please retry.' and keep the raw text only in server logs."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_249_zoho_scope_error.py"
+  ],
+  "success_rate": { "backend": "100% (14/14)", "frontend": "skipped per request" },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (X-Tenant-ID: nyla-air-water). Login returns 'session_token' used as Bearer.",
+  "seed_data_creation": "Three fake docs were inserted into accounting_txn_sync_jobs during tests and DELETED in the same test's finally block (zoho_banking_scope failure, other failure, cross-tenant). No residual state.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend Zoho-401 translator contract is validated. The actual translator path inside _run_sync (background worker) is NOT exercised in this iteration because preview env has no Zoho creds; the test seeds the job doc directly to validate the /sync/status response shape that the FE toast relies on. To exercise the translator end-to-end you need a tenant where Zoho is connected but without ZohoBooks.banking.READ scope — that requires user action in Zoho. FE side (sonner toast with 'Reconnect Zoho' navigating to /settings/integrations/zoho) was explicitly skipped per request.",
+  "rca of the issue": "Production user saw raw JSON `Sync failed: Zoho API 401: {\"code\":57,\"message\":\"You are not authorized to perform this operation\"}`. Root cause is at the OAuth-scope level — connected Zoho token lacks ZohoBooks.banking.READ. Code fix doesn't fix the auth (that's user action: reconnect Zoho with banking scope in /settings/integrations/zoho), but improves the failure UX: backend _run_sync detects 401 + code:57 and writes a friendly message + error_kind='zoho_banking_scope'; FE polls /sync/status and renders a sonner toast with a 'Reconnect Zoho' CTA. Validated the backend half of the contract: 14/14 pass."
+}

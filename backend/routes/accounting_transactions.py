@@ -225,9 +225,24 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
         )
     except Exception as e:
         logger.exception("Zoho bank transaction sync failed (job %s)", job_id)
+        err_text = str(e)
+        # Translate the common Zoho-side authorisation failure into something
+        # actionable in the UI. Zoho returns 401 + code:57 when the connected
+        # OAuth token is missing the ZohoBooks.banking.READ scope.
+        is_scope_error = ("401" in err_text and '"code":57' in err_text) or \
+                          "not authorized" in err_text.lower()
+        if is_scope_error:
+            friendly = (
+                "Zoho rejected the request: the connected account is missing the "
+                "banking access scope. Open Settings → Integrations → Zoho Books "
+                "and reconnect Zoho with the 'Banking' permission, then try again."
+            )
+        else:
+            friendly = err_text[:500]
         await db[SYNC_JOB_COLL].update_one(
             {"id": job_id},
-            {"$set": {"status": "failed", "error": str(e)[:500],
+            {"$set": {"status": "failed", "error": friendly,
+                      "error_kind": "zoho_banking_scope" if is_scope_error else "other",
                       "finished_at": _now(), "updated_at": _now()}},
         )
 

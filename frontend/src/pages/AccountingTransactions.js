@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import {
@@ -68,6 +69,7 @@ const dateHeading = (d) => {
 };
 
 export default function AccountingTransactions() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('all');
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState({ untagged: 0, tagged: 0, all: 0 });
@@ -172,7 +174,20 @@ export default function AccountingTransactions() {
             return true;
           }
           if (job.status === 'failed') {
-            toast.error(`Sync failed: ${job.error || 'unknown error'}`);
+            if (job.error_kind === 'zoho_banking_scope') {
+              // Render a richer toast with a reconnect CTA. The user has to
+              // re-grant the ZohoBooks.banking.READ scope before sync works.
+              toast.error('Zoho sync blocked: missing banking permission.', {
+                description: job.error,
+                duration: 12000,
+                action: {
+                  label: 'Reconnect Zoho',
+                  onClick: () => navigate('/settings/integrations/zoho'),
+                },
+              });
+            } else {
+              toast.error(`Sync failed: ${job.error || 'unknown error'}`, { duration: 8000 });
+            }
             return true;
           }
           // still running — keep the user informed of progress
