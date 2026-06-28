@@ -1,6 +1,24 @@
 # Changelog
 
 
+## 2026-06-28 — Production bug: Zoho sync 502 Bad Gateway → background-task pattern ✅ (testing_agent 8/8 pass, RT ~100ms)
+- **Reported**: On `https://crm.nylaairwater.earth`, `POST /api/accounting/transactions/sync?date_start=2026-06-01&date_end=2026-06-30` returned `502 net::ERR_FAILED` from the ingress.
+- **RCA**: The previous synchronous endpoint walked Zoho pages and did per-transaction `find_one + insert/update` round-trips inside the HTTP request. On months with many bank transactions this exceeded the Emergent ingress 60 s timeout → 502.
+- **Fix (`accounting_transactions.py`)**:
+  - `POST /sync` now creates an `accounting_txn_sync_jobs` doc, schedules `_run_sync()` via `FastAPI BackgroundTasks`, and returns `{job_id, status:'started', from, to}` **immediately** (~100 ms verified). 
+  - `_run_sync()` runs the Zoho fetch + DB writes off-request, using **`bulk_write`** of `UpdateOne` / `InsertOne` ops per page (1 find + 1 bulk-write per page instead of 2×N round-trips).
+  - `_allocate_txn_codes(tenant_id, n)` — single `$inc: {seq: n}` to reserve N codes at once (was N round-trips).
+  - New `GET /sync/status/{job_id}` returns the live job doc (status / progress / new / updated / error / timestamps).
+  - `_purge_old_sync_jobs()` lazily drops job audit docs older than 30 days at every kickoff so the collection never grows unbounded.
+  - Added `created_at_idx` index on `accounting_txn_sync_jobs`.
+- **Frontend (`AccountingTransactions.js`)**:
+  - `sync()` now expects `{job_id}`, polls `GET /sync/status/{job_id}` every 3 s for up to 5 minutes, shows an info toast `Sync started for YYYY-MM-DD → …`, progress toasts (`Syncing… page N · X new so far`), and a final success/failure toast. Reloads list + category summary on completion.
+  - Backward-compatible: if a future call returns `{new, updated}` synchronously, the old success path still fires.
+- **Verified**: testing_agent iteration 248 — 8/8 backend pass, response 0.10 s (was 60 s+). Login + list + tags + export endpoints unaffected.
+- **NOTE for user**: Preview env has Zoho banking not connected so /sync returns 400 instantly with a helpful message — this is intentional. After redeploying to production and ensuring `ZohoBooks.banking.READ` scope is granted, the sync will run in the background and the UI will poll progress.
+
+
+
 ## 2026-06-28 — Employee form: PAN & Aadhaar card uploads ✅ (verified backend curl + UI)
 - **Backend (`accounting_entities.py`)**:
   - `EmployeeIn` now carries optional `pan_document` / `aadhaar_document` (each: `EmployeeDocument` with storage_path / original_filename / display_name / content_type / size / is_image / uploaded_at / uploaded_by).

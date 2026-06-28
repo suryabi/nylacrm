@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pymongo import ReturnDocument, UpdateOne, InsertOne
 import asyncio
 import uuid
@@ -55,6 +55,18 @@ async def ensure_indexes():
         [("tenant_id", 1), ("zoho_org_id", 1), ("zoho_transaction_id", 1)],
         unique=True, name="uniq_zoho_txn",
     )
+    await db[SYNC_JOB_COLL].create_index("created_at", name="created_at_idx")
+
+
+async def _purge_old_sync_jobs(tenant_id: str, keep_days: int = 30) -> None:
+    """Lazy cleanup — drop sync-job audit docs older than `keep_days`. Called
+    at sync kickoff so the collection never grows unbounded."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=keep_days)).isoformat()
+    try:
+        await db[SYNC_JOB_COLL].delete_many({"tenant_id": tenant_id, "created_at": {"$lt": cutoff}})
+    except Exception:
+        # cleanup is best-effort — never fail a sync because of it
+        pass
 
 
 async def _next_txn_code(tenant_id: str) -> str:
@@ -233,6 +245,7 @@ async def sync_transactions(
     _require_admin(current_user)
     tenant_id = get_current_tenant_id()
     await ensure_indexes()
+    await _purge_old_sync_jobs(tenant_id)
 
     creds = await zoho_service.get_credentials(tenant_id)
     if not zoho_service.is_zoho_configured() or not creds:
@@ -255,9 +268,7 @@ async def sync_transactions(
     }
     await db[SYNC_JOB_COLL].insert_one(job_doc)
 
-    # Fire-and-forget background task. We use both BackgroundTasks (for proper
-    # FastAPI lifecycle) and create_task as a safety net for some deployments
-    # where BackgroundTasks may not run reliably.
+    # Fire-and-forget background task — runs after the HTTP response is sent.
     async def _runner():
         await _run_sync(tenant_id, current_user.get("id"), date_start, date_end, explicit_range, job_id)
     background_tasks.add_task(_runner)
