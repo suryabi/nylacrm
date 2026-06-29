@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Paperclip, Upload, X,
   Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
-  Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Hash,
+  Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Hash, Stethoscope,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -160,6 +160,18 @@ export default function AccountingTransactions() {
 
   const [syncOpen, setSyncOpen] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diag, setDiag] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const runDiagnostics = async () => {
+    setDiagOpen(true); setDiag(null); setDiagLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/api/accounting/transactions/zoho-diagnostics`, auth());
+      setDiag(data);
+    } catch (e) {
+      setDiag({ error: e.response?.data?.detail || 'Diagnostics failed' });
+    } finally { setDiagLoading(false); }
+  };
   const now = new Date();
   const [syncYear, setSyncYear] = useState(now.getFullYear());
   const [syncMonth, setSyncMonth] = useState(now.getMonth() + 1); // 1-12
@@ -240,7 +252,11 @@ export default function AccountingTransactions() {
         try {
           const { data: job } = await axios.get(`${API}/api/accounting/transactions/sync/status/${jobId}`, auth());
           if (job.status === 'completed') {
-            toast.success(`Sync complete · ${job.new || 0} new, ${job.updated || 0} updated`);
+            const warn = (job.warnings || []).length ? ` · ⚠️ ${job.warnings.length} warning(s)` : '';
+            toast.success(`Sync complete · ${job.new || 0} new, ${job.updated || 0} updated${warn}`, {
+              description: (job.warnings || []).length ? job.warnings.join(' | ') : undefined,
+              duration: (job.warnings || []).length ? 12000 : 4000,
+            });
             load(); loadCategorySummary(); loadFlowSummary();
             return true;
           }
@@ -344,6 +360,10 @@ export default function AccountingTransactions() {
           </Button>
           <Button onClick={() => setSyncOpen(true)} className="bg-indigo-600 hover:bg-indigo-700" data-testid="sync-zoho-btn">
             <RefreshCw className="mr-2 h-4 w-4" /> Sync from Zoho
+          </Button>
+          <Button variant="outline" onClick={runDiagnostics} data-testid="zoho-diagnostics-btn"
+            title="Probe the connected Zoho org to see what it returns for register vs uncategorized transactions.">
+            <Stethoscope className="mr-2 h-4 w-4 text-amber-600" /> Diagnose
           </Button>
         </div>
       </div>
@@ -650,6 +670,36 @@ export default function AccountingTransactions() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={diagOpen} onOpenChange={setDiagOpen}>
+        <DialogContent className="max-w-lg" data-testid="zoho-diagnostics-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Stethoscope className="h-4 w-4 text-amber-600" /> Zoho Banking Diagnostics</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-slate-500">
+            This probes the connected Zoho org (read-only) to show what it returns for register vs uncategorized transactions. Copy the result and share it so the sync can be tuned.
+          </p>
+          {diagLoading && (
+            <div className="flex items-center gap-2 py-6 text-sm text-slate-500" data-testid="diag-loading">
+              <Loader2 className="h-4 w-4 animate-spin" /> Probing Zoho…
+            </div>
+          )}
+          {diag && !diagLoading && (
+            <>
+              <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-slate-900 p-3 text-[11px] leading-relaxed text-emerald-300" data-testid="diag-json">
+                {JSON.stringify(diag, null, 2)}
+              </pre>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => { navigator.clipboard?.writeText(JSON.stringify(diag, null, 2)).then(() => toast.success('Copied')).catch(() => toast.error('Copy failed')); }} data-testid="diag-copy">
+                  <Copy className="mr-2 h-4 w-4" /> Copy
+                </Button>
+                <Button onClick={() => setDiagOpen(false)} className="bg-indigo-600 hover:bg-indigo-700" data-testid="diag-close">Close</Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

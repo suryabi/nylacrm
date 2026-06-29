@@ -3140,14 +3140,16 @@ async def fetch_bank_accounts(tenant_id: str) -> list:
 
 async def fetch_uncategorized_bank_transactions(
     tenant_id: str, account_id: str, date_start: str = None, date_end: str = None,
-    page: int = 1, per_page: int = 200,
+    page: int = 1, per_page: int = 200, strategy: str = "endpoint",
 ) -> dict:
     """Fetch a page of UNCATEGORIZED bank-feed statement lines for one account.
 
     These are a SEPARATE Zoho resource from the categorized/matched register
-    transactions returned by /banktransactions — the register endpoint never
-    returns them regardless of `status`. `account_id` is required here.
-    Returns {"transactions": [...], "has_more": bool, "page": n}."""
+    transactions returned by /banktransactions?status=All. Two strategies are
+    supported because Zoho's banking surface is inconsistent across orgs:
+      • strategy="endpoint": GET /banktransactions/uncategorized?account_id=...
+      • strategy="status":   GET /banktransactions?account_id=...&status=uncategorized
+    `account_id` is required for both. Returns {"transactions", "has_more", "page"}."""
     if not is_zoho_configured():
         raise RuntimeError("Zoho Books integration is not configured.")
     params = {"account_id": account_id, "page": page, "per_page": per_page}
@@ -3155,8 +3157,12 @@ async def fetch_uncategorized_bank_transactions(
         params["date_start"] = date_start
     if date_end:
         params["date_end"] = date_end
-    result = await _zoho_request("GET", "/books/v3/banktransactions/uncategorized",
-                                 tenant_id=tenant_id, params=params)
+    if strategy == "status":
+        params["status"] = "uncategorized"
+        path = "/books/v3/banktransactions"
+    else:
+        path = "/books/v3/banktransactions/uncategorized"
+    result = await _zoho_request("GET", path, tenant_id=tenant_id, params=params)
     txns = result.get("banktransactions") or result.get("bank_transactions") or []
     ctx = result.get("page_context") or {}
     return {"transactions": txns, "has_more": bool(ctx.get("has_more_page")), "page": page}

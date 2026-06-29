@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 259 — Verified the Zoho uncategorized fallback strategy + new read-only diagnostics endpoint + Diagnose UI dialog. 11/11 pytest pass. Backend: fetch_uncategorized_bank_transactions(strategy='endpoint') hits /banktransactions/uncategorized (no status param); strategy='status' hits /banktransactions with status=uncategorized; default is 'endpoint'. _run_sync attempts 'endpoint' first per account, and on raw_seen==0 falls back to 'status' — the strategy-B row is persisted alongside the register row and job ends status='completed' new=2. When both strategies raise, sync still completes with the register row and two human-readable warnings are recorded. GET /api/accounting/transactions/zoho-diagnostics returns 400 'Zoho Books is not connected for this tenant.' for admin in preview, and 401/403 unauthenticated. Frontend: /accounting/transactions exposes the 'Diagnose' button (data-testid zoho-diagnostics-btn) next to 'Sync from Zoho'; clicking opens the Zoho Banking Diagnostics dialog (zoho-diagnostics-dialog), the API 400 is rendered gracefully inside diag-json as {\"error\":\"Zoho Books is not connected for this tenant.\"}, and both diag-copy and diag-close work (Close removes the dialog). Regression: POST /sync still 400, GET list/flow-summary/export?format=csv all 2xx.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Zoho Banking Diagnostics dialog", "issues": ["Radix DialogContent warning: Missing `Description` or `aria-describedby={undefined}`. Non-blocking accessibility nit — add <DialogDescription> or aria-describedby to silence it."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_259_zoho_fallback_and_diagnostics.py",
+    "/app/test_reports/pytest/iteration_259.xml"
+  ],
+  "action_items": [
+    "Optional accessibility polish: add <DialogDescription> (or aria-describedby) to the Zoho Banking Diagnostics DialogContent in /app/frontend/src/pages/AccountingTransactions.js to silence the Radix warning.",
+    "Post-deploy verification (live Zoho): trigger /sync and call /zoho-diagnostics for the affected org+account. Confirm (a) probes.A_uncategorized_endpoint.count and probes.B_register_status_uncategorized.count, (b) job.new now exceeds 53, (c) job.warnings contains either nothing or only non-fatal notes."
+  ],
+  "critical_code_review_comments": [
+    "routes/accounting_transactions.py:313-328 — fallback is gated on seen==0 from the 'endpoint' strategy. If 'endpoint' raises, `seen` stays 0 and the 'status' fallback IS attempted (verified by the both-raise warnings test). Good.",
+    "routes/accounting_transactions.py:317-318 — when 'endpoint' raises we log the warning but still proceed to fallback. Correct behaviour for prod tuning.",
+    "routes/accounting_transactions.py:319 — `if seen == 0` is the right trigger: if the dedicated endpoint legitimately returns 0 rows for an org/account (which we now know happens on prod), Strategy B will try the register endpoint with status=uncategorized to recover them. Risk: if both strategies return real rows we double-count — but the upsert is keyed on zoho_transaction_id, so a true duplicate would be caught as 'updated' rather than 'new'. Acceptable.",
+    "routes/accounting_transactions.py:424-490 — /zoho-diagnostics is admin-gated via _require_admin(current_user) and read-only (no DB writes). It probes register + bankaccounts + both uncategorized strategies on the FIRST bank/credit_card account. Wraps every Zoho call in try/except so a partial 401/403 from Zoho still returns a useful diagnostic body. Good design.",
+    "services/zoho_service.py:3160-3164 — strategy switch is clean; 'status' path adds status=uncategorized on /banktransactions, 'endpoint' path hits /banktransactions/uncategorized. Verified via monkeypatch of _zoho_request.",
+    "frontend/src/pages/AccountingTransactions.js:166-174 — runDiagnostics() correctly normalizes a thrown error into { error: detail } so the dialog never blanks on a 4xx. The dialog body always renders the JSON via diag-json — confirmed visually with the 400 response.",
+    "Non-blocking nit: AccountingTransactions.js dialog is missing DialogDescription, producing a Radix a11y warning. Cosmetic."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_259_zoho_fallback_and_diagnostics.py"
+  ],
+  "success_rate": { "backend": "100% (11/11 pytest)", "frontend": "100% (Diagnose flow verified end-to-end)" },
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (login returns session_token; X-Tenant-ID: nyla-air-water).",
+  "seed_data_creation": "Two integration tests each insert ≤2 docs into accounting_transactions + 1 doc into accounting_txn_sync_jobs + 1 counter, all under uuid-suffixed TEST_tenant_* tenants. Each test deletes its own docs in finally (counters included). Real inbox not polluted.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Zoho is NOT connected in preview — every Zoho call (fetch_bank_transactions, fetch_bank_accounts, fetch_uncategorized_bank_transactions, get_credentials, _zoho_request) must be monkeypatched for any _run_sync integration test. ALL async tests in this file use @pytest.mark.asyncio(loop_scope='module') because motor binds to the first event loop it sees — removing the module scope will cause 'Event loop is closed' on the 2nd async test. Diagnostics 400 in preview is EXPECTED (Zoho not connected) — that is a pass, not a bug. After redeploy with real Zoho, the same pytest still runs (Zoho calls are mocked), and the diagnostics endpoint will then return the real probe payload — main agent should run that manually with the auth Bearer token to confirm probe.A and probe.B counts on the affected org.",
+  "rca of the issue": "Production previously imported only 53 transactions because (a) the original sync ignored the dedicated /banktransactions/uncategorized resource, and (b) some Zoho orgs return 0 rows from that dedicated endpoint even when uncategorized statement lines exist — they only surface those rows via /banktransactions?status=uncategorized. Iter 258 fixed (a). Iter 259 fixes (b) by adding a per-account 'endpoint→status' fallback in _run_sync (raw_seen==0 from strategy='endpoint' triggers strategy='status') AND by adding a read-only /zoho-diagnostics endpoint + Diagnose UI button so we can confirm against the live org which of the two strategies actually returns the missing rows. Both code paths are exercised in this iteration's pytest; the UI Diagnose dialog is verified to render the 400 'Zoho Books is not connected' body gracefully via Playwright."
+}

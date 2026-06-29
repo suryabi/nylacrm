@@ -264,13 +264,16 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
 
         async def _drain(fetch_page, acct=None, label="register"):
             """Page through one Zoho source, normalise + window-filter, upsert,
-            and push job progress. Mutates new_count / updated_count."""
+            and push job progress. Mutates new_count / updated_count. Returns the
+            total number of RAW rows Zoho returned for this source (pre-filter)."""
             nonlocal new_count, updated_count
             page = 1
+            raw_seen = 0
             while page <= 50:
                 res = await fetch_page(page)
-                docs = _norm_filter(res.get("transactions") or [], tenant_id, org_id,
-                                    date_start, date_end, acct)
+                raw = res.get("transactions") or []
+                raw_seen += len(raw)
+                docs = _norm_filter(raw, tenant_id, org_id, date_start, date_end, acct)
                 n, u = await _persist_page(tenant_id, org_id, docs)
                 new_count += n
                 updated_count += u
@@ -283,14 +286,17 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
                 if not res.get("has_more"):
                     break
                 page += 1
+            return raw_seen
 
         # 1) Register transactions (categorized / matched / manually-added).
         await _drain(lambda p: zoho_service.fetch_bank_transactions(
             tenant_id, date_start, date_end, page=p), label="register")
 
         # 2) Uncategorized statement lines — a SEPARATE Zoho resource the
-        #    register endpoint never returns. Pulled per bank account and wrapped
-        #    defensively so any failure here never aborts the register sync.
+        #    register endpoint never returns. Pulled per bank account. Two Zoho
+        #    strategies are tried (the dedicated /uncategorized endpoint first,
+        #    then account-scoped status=uncategorized) because banking behaviour
+        #    varies by org. Wrapped defensively so failures never abort the sync.
         try:
             accounts = await zoho_service.fetch_bank_accounts(tenant_id)
         except Exception as ae:
@@ -301,13 +307,25 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
             atype = (acct.get("account_type") or "").lower()
             if not aid or (atype and atype not in ("bank", "credit_card")):
                 continue
+            label = f"uncategorized:{acct.get('account_name') or aid}"
+            seen = 0
             try:
-                await _drain(
+                seen = await _drain(
                     lambda p, _aid=aid: zoho_service.fetch_uncategorized_bank_transactions(
-                        tenant_id, _aid, date_start, date_end, page=p),
-                    acct=acct, label="uncategorized")
+                        tenant_id, _aid, date_start, date_end, page=p, strategy="endpoint"),
+                    acct=acct, label=label)
             except Exception as ue:
-                warnings.append(f"Uncategorized pull failed for {acct.get('account_name') or aid}: {str(ue)[:160]}")
+                warnings.append(f"Uncategorized (endpoint) failed for {acct.get('account_name') or aid}: {str(ue)[:140]}")
+            if seen == 0:
+                # Fallback strategy: account-scoped status=uncategorized on the
+                # main /banktransactions endpoint.
+                try:
+                    await _drain(
+                        lambda p, _aid=aid: zoho_service.fetch_uncategorized_bank_transactions(
+                            tenant_id, _aid, date_start, date_end, page=p, strategy="status"),
+                        acct=acct, label=label)
+                except Exception as ue:
+                    warnings.append(f"Uncategorized (status) failed for {acct.get('account_name') or aid}: {str(ue)[:140]}")
 
         if not explicit_range:
             await db[SYNC_COLL].update_one(
@@ -401,6 +419,76 @@ async def sync_status(job_id: str, current_user: dict = Depends(get_current_user
     if not job:
         raise HTTPException(status_code=404, detail="Sync job not found")
     return job
+
+
+@router.get("/zoho-diagnostics")
+async def zoho_diagnostics(current_user: dict = Depends(get_current_user)):
+    """Admin-only Zoho banking probe — surfaces exactly what the live Zoho org
+    returns for register + uncategorized transactions so we can pinpoint why a
+    sync under-imports. Read-only; makes no changes."""
+    _require_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    creds = await zoho_service.get_credentials(tenant_id)
+    if not zoho_service.is_zoho_configured() or not creds:
+        raise HTTPException(status_code=400, detail="Zoho Books is not connected for this tenant.")
+    org_id = (creds or {}).get("organization_id")
+    out = {"org_id": org_id, "register": {}, "bank_accounts": [], "probes": {}}
+
+    # Register source (what the normal sync pulls today).
+    try:
+        r = await zoho_service._zoho_request(
+            "GET", "/books/v3/banktransactions", tenant_id=tenant_id,
+            params={"status": "All", "page": 1, "per_page": 200})
+        txns = r.get("banktransactions") or r.get("bank_transactions") or []
+        out["register"] = {
+            "page1_count": len(txns), "page_context": r.get("page_context"),
+            "sample_statuses": list({t.get("status") for t in txns})[:12],
+            "sample_keys": list(txns[0].keys()) if txns else [],
+        }
+    except Exception as e:
+        out["register"] = {"error": str(e)[:400]}
+
+    # Enumerate bank/credit-card accounts.
+    accounts = []
+    try:
+        accounts = await zoho_service.fetch_bank_accounts(tenant_id)
+        out["bank_accounts"] = [
+            {"account_id": a.get("account_id"), "account_name": a.get("account_name"),
+             "account_type": a.get("account_type")} for a in accounts]
+    except Exception as e:
+        out["bank_accounts_error"] = str(e)[:400]
+
+    first = next((a for a in accounts if (a.get("account_type") or "").lower() in ("bank", "credit_card")),
+                 accounts[0] if accounts else None)
+    if first:
+        aid = first.get("account_id")
+        out["probed_account"] = {"account_id": aid, "account_name": first.get("account_name"),
+                                 "account_type": first.get("account_type")}
+        # Strategy A: dedicated /uncategorized endpoint.
+        try:
+            r = await zoho_service._zoho_request(
+                "GET", "/books/v3/banktransactions/uncategorized", tenant_id=tenant_id,
+                params={"account_id": aid, "page": 1, "per_page": 200})
+            txns = r.get("banktransactions") or r.get("bank_transactions") or []
+            out["probes"]["A_uncategorized_endpoint"] = {
+                "ok": True, "count": len(txns), "page_context": r.get("page_context"),
+                "sample_keys": list(txns[0].keys()) if txns else [],
+                "sample_statuses": list({t.get("status") for t in txns})[:12]}
+        except Exception as e:
+            out["probes"]["A_uncategorized_endpoint"] = {"ok": False, "error": str(e)[:400]}
+        # Strategy B: account-scoped status=uncategorized on the register endpoint.
+        try:
+            r = await zoho_service._zoho_request(
+                "GET", "/books/v3/banktransactions", tenant_id=tenant_id,
+                params={"account_id": aid, "status": "uncategorized", "page": 1, "per_page": 200})
+            txns = r.get("banktransactions") or r.get("bank_transactions") or []
+            out["probes"]["B_register_status_uncategorized"] = {
+                "ok": True, "count": len(txns), "page_context": r.get("page_context"),
+                "sample_statuses": list({t.get("status") for t in txns})[:12]}
+        except Exception as e:
+            out["probes"]["B_register_status_uncategorized"] = {"ok": False, "error": str(e)[:400]}
+    return out
+
 
 
 
