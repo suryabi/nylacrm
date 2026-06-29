@@ -1261,6 +1261,64 @@ async def _ensure_mirror_invoice(
         logger.warning(f"Failed to mirror Zoho invoice into invoices collection: {e}")
 
 
+async def _base_uom_map(tenant_id: str, items: list[dict]) -> dict:
+    """sku_id → base_uom (defaults to 'Bottle') for the SKUs on these lines."""
+    sku_ids = list({it.get("sku_id") for it in items if it.get("sku_id")})
+    out: dict = {}
+    if sku_ids:
+        async for s in db.master_skus.find({"id": {"$in": sku_ids}}, {"_id": 0, "id": 1, "base_uom": 1}):
+            out[s["id"]] = s.get("base_uom") or "Bottle"
+    return out
+
+
+def _pluralize_uom(uom: str, count) -> str:
+    u = (uom or "Bottle").strip()
+    try:
+        if int(float(count)) == 1:
+            return u
+    except (TypeError, ValueError):
+        pass
+    return u if u.lower().endswith("s") else f"{u}s"
+
+
+def _pack_clause(packages, units, name, base_qty, base_uom: str = "Bottle") -> str:
+    """Packaging clause for challan/invoice line NAMES, e.g.
+    "5 × Crate-12 (60 Bottles)". Empty when not a multi-unit pack."""
+    try:
+        packages = int(packages or 0)
+        units = int(units or 0)
+        base_qty = int(float(base_qty or 0))
+    except (TypeError, ValueError):
+        return ""
+    if packages > 0 and units > 1:
+        nm = (name or f"Pack-{units}").strip()
+        return f"{packages} × {nm} ({base_qty} {_pluralize_uom(base_uom, base_qty)})"
+    return ""
+
+
+def _line_description(it: dict, base_uom: str = "Bottle", *, prefix: str = "") -> str:
+    """Compose a Zoho line `description`: packaging breakdown + batch.
+    e.g. "5 × Crate-12 (60 Bottles) | Batch: B-2026-01". `quantity` is in
+    base units; packages × packaging_units == quantity."""
+    parts: list[str] = []
+    if prefix:
+        parts.append(prefix)
+    try:
+        packages = int(it.get("packages") or 0)
+        units = int(it.get("packaging_units") or 0)
+        qty = int(float(it.get("quantity") or 0))
+    except (TypeError, ValueError):
+        packages = units = qty = 0
+    if packages > 0 and units > 1:
+        name = (it.get("packaging_type_name") or f"Pack-{units}").strip()
+        parts.append(f"{packages} × {name} ({qty} {_pluralize_uom(base_uom, qty)})")
+    batch_code = (it.get("batch_code") or "").strip()
+    if batch_code:
+        parts.append(f"Batch: {batch_code}")
+    return " | ".join(parts)
+
+
+
 async def create_invoice_for_delivery(
     *, tenant_id: str, delivery: dict, items: list[dict], account: dict, force: bool = False
 ) -> dict:
@@ -1323,6 +1381,7 @@ async def create_invoice_for_delivery(
     # 3. Build line items using ONLY the account-agreed price
     missing_skus: list[str] = []
     line_items: list[dict] = []
+    uom_map = await _base_uom_map(tenant_id, items)
     for it in items:
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
         sku_name = (it.get("sku_name") or it.get("sku_code") or "").strip()
@@ -1333,11 +1392,10 @@ async def create_invoice_for_delivery(
                 missing_skus.append(sku_name)
             continue
         qty = float(it.get("quantity", 0) or 0)
-        # Surface the production batch on the printed Zoho invoice/challan so
-        # customers + FSSAI auditors can trace what was delivered. Zoho prints
-        # `description` directly under the item name on the invoice template.
-        batch_code = (it.get("batch_code") or "").strip()
-        description = f"Batch: {batch_code}" if batch_code else ""
+        # Surface the production batch + packaging breakdown on the printed Zoho
+        # invoice/challan so customers + FSSAI auditors can trace what was
+        # delivered. Zoho prints `description` directly under the item name.
+        description = _line_description(it, uom_map.get(it.get("sku_id"), "Bottle"))
         line_items.append({
             "item_id": zoho_item_id,
             "name": sku_name,
@@ -2147,14 +2205,20 @@ async def create_delivery_challan_for_stock_transfer(
     # NOT raw units. The packaging_type_name is appended to the line name so the
     # challan is unambiguous (e.g. "Nyla 600ml · Crate - 12").
     line_items: list[dict] = []
+    uom_map = await _base_uom_map(tenant_id, transfer.get("items") or [])
     for it in transfer.get("items") or []:
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
         base_name = (it.get("sku_name") or "").strip() or "Item"
         pkg = (it.get("packaging_type_name") or "").strip()
         # Embed batch in line description so the printed Challan carries traceability.
         batch_code = (it.get("batch_code") or "").strip()
+        pkgs = int(it.get("quantity") or 0)             # transfer qty is in PACKAGES
+        units = int(it.get("units_per_package") or 0)
+        clause = _pack_clause(pkgs, units, pkg, pkgs * units, uom_map.get(it.get("sku_id"), "Bottle"))
         parts = [base_name]
-        if pkg:
+        if clause:
+            parts.append(clause)
+        elif pkg:
             parts.append(pkg)
         if batch_code:
             parts.append(f"Batch {batch_code}")
@@ -2299,25 +2363,25 @@ async def create_delivery_challan_for_promo_dispatch(
     # line for record-keeping (asset valuation) — we pass it as `rate` but the
     # document is marked out-of-scope so Zoho will NOT compute or charge tax.
     line_items: list[dict] = []
+    uom_map = await _base_uom_map(tenant_id, items)
     for it in items:
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
         base_name = (it.get("sku_name") or "").strip() or "Item"
         batch_code = (it.get("batch_code") or "").strip()
         qty_bottles = float(it.get("quantity", 0) or 0)
         upp = int(it.get("packaging_units") or it.get("units_per_package") or 0)
+        base_uom = uom_map.get(it.get("sku_id"), "Bottle")
         parts = [base_name]
         if batch_code:
             parts.append(f"Batch {batch_code}")
         # Packaging breakdown so the delivery team sees BOTH the pack count and
-        # the total bottles, e.g. "2 × Crate-12 = 24 bottles".
-        if upp and upp > 1:
-            pkgs = it.get("packages")
-            if not pkgs:
-                pkgs = int(qty_bottles // upp) if upp else 0
-            unit_word = (it.get("packaging_type_name") or "").strip() or f"{upp}-bottle pack"
-            parts.append(f"{pkgs} × {unit_word} = {int(qty_bottles)} bottles")
+        # the total base units, e.g. "2 × Crate-12 (24 Bottles)".
+        pkgs = it.get("packages") or (int(qty_bottles // upp) if upp else 0)
+        clause = _pack_clause(pkgs, upp, it.get("packaging_type_name"), qty_bottles, base_uom)
+        if clause:
+            parts.append(clause)
         else:
-            parts.append(f"{int(qty_bottles)} bottles")
+            parts.append(f"{int(qty_bottles)} {_pluralize_uom(base_uom, qty_bottles)}")
         display_name = " · ".join(parts) + "  — Sample / Promotional (Not for Sale)"
         line_items.append({
             "item_id": zoho_item_id,
@@ -2513,14 +2577,20 @@ async def create_invoice_for_stock_transfer(
     # Build line items — quantity in PACKAGES (crates/cartons), rate per package
     # (already = master_skus.base_price × units_per_package from create_stock_transfer).
     line_items: list[dict] = []
+    uom_map = await _base_uom_map(tenant_id, transfer.get("items") or [])
     for it in transfer.get("items") or []:
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
         base_name = (it.get("sku_name") or "").strip() or "Item"
         pkg = (it.get("packaging_type_name") or "").strip()
         # Embed batch in line description so the printed PDF carries traceability.
         batch_code = (it.get("batch_code") or "").strip()
+        pkgs = int(it.get("quantity") or 0)             # transfer qty is in PACKAGES
+        units = int(it.get("units_per_package") or 0)
+        clause = _pack_clause(pkgs, units, pkg, pkgs * units, uom_map.get(it.get("sku_id"), "Bottle"))
         parts = [base_name]
-        if pkg:
+        if clause:
+            parts.append(clause)
+        elif pkg:
             parts.append(pkg)
         if batch_code:
             parts.append(f"Batch {batch_code}")
@@ -2836,6 +2906,7 @@ async def build_delivery_invoice_preview(tenant_id: str, distributor_id: str, de
                 agreed[key] = 0.0
     lines, subtotal, total_discount = [], 0.0, 0.0
     missing = []
+    uom_map = await _base_uom_map(tenant_id, items)
     for it in items:
         name = (it.get("sku_name") or it.get("sku_code") or "").strip()
         rate = agreed.get(name.lower())
@@ -2855,6 +2926,10 @@ async def build_delivery_invoice_preview(tenant_id: str, distributor_id: str, de
             "discount_percent": disc_pct, "gross_amount": gross,
             "discount_amount": disc_amt, "net_amount": net,
             "batch_code": it.get("batch_code"),
+            "packaging_type_name": it.get("packaging_type_name"),
+            "packaging_units": it.get("packaging_units"),
+            "packages": it.get("packages"),
+            "base_uom": uom_map.get(it.get("sku_id"), "Bottle"),
         })
     subtotal = round(subtotal, 2)
     total_discount = round(total_discount, 2)
@@ -3055,11 +3130,11 @@ async def create_invoice_for_shipment(
     # Build line items — rate = the shipment item's stored unit_price (already
     # base-vs-transfer correct), GST applied via each SKU's Zoho item tax mapping.
     line_items: list[dict] = []
+    uom_map = await _base_uom_map(tenant_id, items)
     for it in items:
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
         sku_name = (it.get("sku_name") or it.get("sku_code") or "Item").strip()
-        batch_code = (it.get("batch_code") or "").strip()
-        description = f"Batch: {batch_code}" if batch_code else ""
+        description = _line_description(it, uom_map.get(it.get("sku_id"), "Bottle"))
         line_items.append({
             "item_id": zoho_item_id,
             "name": sku_name,

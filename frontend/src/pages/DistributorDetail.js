@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { ShareButton } from '../components/share/ShareButton';
 import { useTenantConfig } from '../context/TenantConfigContext';
 import useMasterLocations from '../hooks/useMasterLocations';
+import { packagingBreakdown } from '../utils/packaging';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -1390,6 +1391,7 @@ export default function DistributorDetail() {
             quantity: totalUnits,
             packaging_units: pkgUnits,
             packages: parseInt(item.quantity) || 0,
+            packaging_type_name: item.packaging_type_name || null,
             base_price: item.base_price ? parseFloat(item.base_price) : null,
             distributor_margin: item.distributor_margin ? parseFloat(item.distributor_margin) : null,
             unit_price: parseFloat(item.unit_price),
@@ -1511,10 +1513,11 @@ export default function DistributorDetail() {
     const stockInPkg = selectedSku?.packaging_config?.stock_in || [];
     const defaultPkg = stockInPkg.find(p => p.is_default) || stockInPkg[0];
     const pkgUnits = defaultPkg?.units_per_package || '';
+    const pkgName = defaultPkg?.packaging_type_name || '';
 
     // First update the SKU info + packaging immediately
     setShipmentItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName, packaging_units: pkgUnits ? String(pkgUnits) : '' } : item
+      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName, packaging_units: pkgUnits ? String(pkgUnits) : '', packaging_type_name: pkgName } : item
     ));
     
     // Then look up the transfer price if we have a location selected
@@ -3125,6 +3128,10 @@ export default function DistributorDetail() {
                         <td className="p-2.5">{item.sku_name || item.sku_id}</td>
                         <td className="p-2.5 text-right tabular-nums">
                           {item.quantity}
+                          {(() => {
+                            const bd = packagingBreakdown(item, (skus.find(s => s.id === item.sku_id)?.base_uom) || 'Bottle');
+                            return bd ? <div className="text-[10px] font-normal text-muted-foreground" data-testid={`shipment-detail-item-packaging-${idx}`}>{bd}</div> : null;
+                          })()}
                           {showReceived && (
                             <div className={`text-[11px] mt-0.5 ${hasDelta ? 'text-amber-700 font-semibold' : 'text-emerald-700'}`}>
                               Recv: {item.received_quantity}
@@ -3707,11 +3714,10 @@ export default function DistributorDetail() {
                           </td>
                           <td className="p-2 text-right font-medium">
                             <div>{qty}</div>
-                            {item.packages > 0 && item.packaging_units > 1 && (
-                              <div className="text-[10px] font-normal text-muted-foreground" data-testid={`delivery-detail-item-packaging-${idx}`}>
-                                {item.packages} × {item.packaging_type_name || `Crate-${item.packaging_units}`} ({qty} bottles)
-                              </div>
-                            )}
+                            {(() => {
+                              const bd = packagingBreakdown(item, (skus.find(s => s.id === item.sku_id)?.base_uom) || 'Bottle');
+                              return bd ? <div className="text-[10px] font-normal text-muted-foreground" data-testid={`delivery-detail-item-packaging-${idx}`}>{bd}</div> : null;
+                            })()}
                           </td>
                           <td className="p-2 text-right text-blue-700">₹{basePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2 text-right text-blue-800 font-medium">₹{billedToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -4153,7 +4159,13 @@ export default function DistributorDetail() {
                     {invoicePreview.lines?.map((l, i) => (
                       <tr key={i} className="border-t" data-testid={`invoice-preview-row-${i}`}>
                         <td className="px-3 py-2">{l.sku_name}{l.batch_code ? <span className="ml-1 text-xs text-slate-400">({l.batch_code})</span> : null}</td>
-                        <td className="px-3 py-2 text-right">{l.quantity}</td>
+                        <td className="px-3 py-2 text-right">
+                          <div>{l.quantity}</div>
+                          {(() => {
+                            const bd = packagingBreakdown(l, l.base_uom || 'Bottle');
+                            return bd ? <div className="text-[10px] font-normal text-slate-400" data-testid={`invoice-preview-packaging-${i}`}>{bd}</div> : null;
+                          })()}
+                        </td>
                         <td className="px-3 py-2 text-right">₹{Number(l.rate).toLocaleString('en-IN')}</td>
                         <td className="px-3 py-2 text-right">{l.discount_percent}%</td>
                         <td className="px-3 py-2 text-right text-amber-700">{l.discount_amount ? `−₹${Number(l.discount_amount).toLocaleString('en-IN')}` : '—'}</td>

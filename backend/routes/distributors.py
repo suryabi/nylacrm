@@ -2460,6 +2460,10 @@ async def create_shipment(
             # rely on the field existing — None when source doesn't track batches.
             'batch_id': item_data.batch_id,
             'batch_code': item_data.batch_code,
+            # Packaging breakdown for stock-in detail view + invoice description.
+            'packaging_type_name': item_data.packaging_type_name,
+            'packaging_units': item_data.packaging_units,
+            'packages': item_data.packages,
         }
         
         # Calculate amounts

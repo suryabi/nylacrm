@@ -238,7 +238,11 @@ export default function ShipmentsTab({
                               {stockInPkg.length > 0 ? (
                                 <select className="w-full h-10 px-3 border rounded-md text-sm bg-background"
                                   value={item.packaging_units || ''}
-                                  onChange={e => updateShipmentItem(item.id, 'packaging_units', e.target.value)}
+                                  onChange={e => {
+                                    const sel = stockInPkg.find(p => String(p.units_per_package) === e.target.value);
+                                    updateShipmentItem(item.id, 'packaging_units', e.target.value);
+                                    updateShipmentItem(item.id, 'packaging_type_name', sel?.packaging_type_name || '');
+                                  }}
                                   data-testid={`shipment-pkg-${index}`}>
                                   {stockInPkg.map((pkg, pi) => (
                                     <option key={pi} value={pkg.units_per_package}>{pkg.packaging_type_name} ({pkg.units_per_package})</option>

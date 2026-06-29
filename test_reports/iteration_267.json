@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 267 — Stock-In (shipment) packaging breakdown + Zoho line builder helpers verified. 14/14 backend pytest checks pass: (a) POST/GET /api/distributors/{id}/shipments persists packaging_type_name, packaging_units, packages on items with quantity == packages * packaging_units; (b) delivery invoice-preview endpoint returns per-line packaging_type_name, packaging_units, packages, base_uom; (c) pure helpers _pack_clause / _line_description / _pluralize_uom in services/zoho_service.py match the spec exactly (e.g. '5 × Crate-12 (60 Bottles)' and '5 × Crate-12 (60 Bottles) | Batch: B1'). UI: distributor /distributors/{id} page loads, Stock In tab opens shipment dialog. Test shipment created via API for the persistence test was cleaned up; legacy shipments correctly render no breakdown line (packagingBreakdown helper returns null when packages=0/units<=1).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_267_shipment_packaging_breakdown.py",
+    "/app/test_reports/pytest/iteration_267.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ShipmentItemCreate / ShipmentItem in /app/backend/models/distributor.py both expose packaging_type_name, packaging_units, packages as Optional — backwards compatible with legacy items (good).",
+    "create_shipment route persists the three new fields verbatim at /app/backend/routes/distributors.py:2463-2466 — no defensive coercion; relies on Pydantic Optional[int] which is fine.",
+    "build_delivery_invoice_preview emits base_uom via _base_uom_map (defaulting to 'Bottle' when SKU lacks base_uom) which matches the per-line behaviour the frontend Invoice Preview modal expects.",
+    "_pack_clause and _line_description correctly return '' for the single-unit pack and zero-package edge cases, so Zoho line names don't get polluted with empty parentheses.",
+    "Pluralisation handles `Bottles` (already plural) without doubling the trailing 's'.",
+    "/app/frontend/src/pages/DistributorDetail.js is now 4970 lines — exceeds 700-line guideline. Same comment as iteration 265 — consider splitting the three detail dialogs (Shipment / Delivery / Invoice Preview) into subcomponents. Non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_267_shipment_packaging_breakdown.py"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "Stock-In dialog opens correctly; no packaged seed shipment to render the new line — verified rendering code path identical to iteration-265 delivery flow that DID render."},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Created a Stock-In shipment for distributor Brian (bb12d90e-4d33-4890-ac5f-17573c551b5c), destination 'Delhi' (aa2eda05-1902-4a17-92bb-d33533535297), Nyla 600 ml / Silver, 5 × Crate-12 = 60 bottles. Successfully DELETED at end of test (test_cleanup_shipment passed). Catalog clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test file is idempotent and cleans up its own shipment. Run with REACT_APP_BACKEND_URL exported. Notes: (1) The distributor detail UI is mounted at /distributors/:id (NOT /distributor-detail/:id — the iteration 266 report mentioned blank screenshots; root cause was that wrong path was used). (2) Tab triggers are plain <button> elements (not role='tab'), so use page.locator('button', has_text='Stock In'). (3) shipment-detail-item-packaging-<idx> only renders when packages>0 AND packaging_units>1 — legacy seeded shipments don't satisfy this and that's by design. (4) The pure Zoho helpers are imported via `sys.path.insert(0,'/app/backend')` + `from services.zoho_service import ...` — they make no Zoho HTTP calls, so they are safe to test without triggering pushes.",
+  "rca of the issue": "N/A — feature verification only. All 5 acceptance criteria in the review request satisfied: (1) POST persistence verified via API create→GET round-trip with quantity == packages * packaging_units (60 == 5×12). (2) Frontend popup wiring confirmed via code review at DistributorDetail.js:3127-3134 (shipment-detail-item-packaging-<idx>); legacy-only seed data hides the line correctly. (3) Delivery popup regression — same shared packagingBreakdown helper at line 3719 (delivery-detail-item-packaging-<idx>) verified by iteration 265. (4) Invoice preview backend returns packaging+base_uom per line via build_delivery_invoice_preview (zoho_service.py:2924-2932) — pytest TestDeliveryInvoicePreviewPackaging::test_invoice_preview_returns_packaging_and_base_uom PASSED. (5) Zoho helpers _pack_clause(5,12,'Crate-12',60,'Bottle')=='5 × Crate-12 (60 Bottles)', _pack_clause(0,1,'',3,'Bottle')=='', _line_description with batch=='5 × Crate-12 (60 Bottles) | Batch: B1', _pluralize_uom('Bottle',1)=='Bottle', _pluralize_uom('Bottle',60)=='Bottles' — all PASSED. No real Zoho calls made."
+}

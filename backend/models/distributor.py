@@ -378,6 +378,11 @@ class ShipmentItemCreate(BaseModel):
     # callers / warehouses that don't track batches.
     batch_id: Optional[str] = None
     batch_code: Optional[str] = None
+    # Packaging breakdown so stock-in detail views / invoices can show
+    # "5 × Crate-12 (60 bottles)". `quantity` is always in base units.
+    packaging_type_name: Optional[str] = None
+    packaging_units: Optional[int] = None
+    packages: Optional[int] = None
 
 
 class ShipmentItemUpdate(BaseModel):
@@ -409,6 +414,9 @@ class ShipmentItem(BaseModel):
     tax_amount: float  # taxable_amount * tax_percent / 100
     net_amount: float  # taxable_amount + tax_amount
     remarks: Optional[str] = None
+    packaging_type_name: Optional[str] = None
+    packaging_units: Optional[int] = None
+    packages: Optional[int] = None
 
 
 class PrimaryShipmentCreate(BaseModel):
