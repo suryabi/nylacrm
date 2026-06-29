@@ -904,3 +904,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Fix #2: Zoho frequently IGNORES date_start/date_end on /banktransactions, so the chosen month was never honored. _run_sync now enforces the window client-side via new _date_in_range() helper (inclusive lexicographic YYYY-MM-DD compare), dropping out-of-month rows before upsert.
 - Sync error message now appends a sanitized detail for easier prod debugging.
 - Verified iteration_257 (12/12 pytest): status=All sent / filter_by removed, date-window filtering drops out-of-range rows, regression endpoints green. Zoho not connected in preview → live validation requires prod redeploy + re-sync.
+
+## 2026-06-28 (fix) — Import UNCATEGORIZED Zoho bank lines (the real "only 53" cause)
+- RCA: Zoho Books separates 'register transactions' (GET /banktransactions = categorized/matched/manually-added → the 53) from 'uncategorized statement lines' (a SEPARATE resource GET /banktransactions/uncategorized?account_id=...). The register endpoint NEVER returns uncategorized lines regardless of status. So uncategorized feed lines were never imported.
+- Fix: _run_sync now pulls BOTH sources — register transactions, then per-bank-account uncategorized lines (via new zoho_service.fetch_bank_accounts + fetch_uncategorized_bank_transactions) — merged + deduped by zoho id, with client-side date-window filtering. Non-bank/credit_card accounts skipped; uncategorized lines enriched with their account name. Defensive: any uncategorized/account-list failure is recorded in job.warnings and never aborts the register pull. Refactored shared page logic into _norm_filter/_persist_page.
+- Verified iteration_258 (10/10 pytest, mocked Zoho). Live validation needs prod redeploy + re-sync.
