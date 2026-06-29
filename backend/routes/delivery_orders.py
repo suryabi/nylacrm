@@ -153,7 +153,7 @@ async def _create_approval_task(tenant_id: str, order: dict, requester: dict):
         if mgr_id:
             approver = await tdb_users.find_one({"id": mgr_id, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "name": 1})
         if not approver:
-            return
+            return None
         now = datetime.now(timezone.utc).isoformat()
         await db.tasks.insert_one({
             "id": str(uuid.uuid4()),
@@ -173,8 +173,10 @@ async def _create_approval_task(tenant_id: str, order: dict, requester: dict):
             "created_at": now,
             "updated_at": now,
         })
+        return approver
     except Exception:
         logger.exception("Failed to create delivery-order approval task")
+        return None
 
 
 async def _resolve_distributor_for_city(tenant_id: str, city: Optional[str]):
@@ -563,11 +565,19 @@ async def trigger_transition(order_id: str, payload: TransitionRequest, current_
         {"id": order_id, "tenant_id": tenant_id},
         {"$set": set_doc, "$push": {"status_history": history}})
 
-    # Approval-by-manager task on submit (the 'both' model).
+    # Approval-by-manager task on submit (the 'both' model). Persist the approver
+    # so the UI can show a "Pending approval from <name>" banner.
     if target["key"] == "pending_approval":
         requester = await db.users.find_one({"id": order.get("created_by"), "tenant_id": tenant_id}, {"_id": 0})
+        approver = None
         if requester:
-            await _create_approval_task(tenant_id, {**order, **set_doc}, requester)
+            approver = await _create_approval_task(tenant_id, {**order, **set_doc}, requester)
+        await db.delivery_orders.update_one(
+            {"id": order_id, "tenant_id": tenant_id},
+            {"$set": {
+                "pending_approver_id": (approver or {}).get("id"),
+                "pending_approver_name": (approver or {}).get("name"),
+            }})
 
     # Placing the order auto-creates a DRAFT promotional stock-out at the
     # servicing distributor (account assignment first, else delivery-city coverage).

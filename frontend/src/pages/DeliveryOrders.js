@@ -543,6 +543,23 @@ function DetailDialog({ orderId, open, onClose, onChanged }) {
               <DialogDescription>{order.recipient_type?.toUpperCase()} · {order.recipient_name || '—'}</DialogDescription>
             </DialogHeader>
 
+            {order.current_state_key === 'pending_approval' && (
+              <div
+                className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3"
+                data-testid="do-pending-approval-banner"
+              >
+                <Clock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                <div className="text-sm">
+                  <p className="font-semibold text-amber-900">Pending approval</p>
+                  <p className="text-amber-700" data-testid="do-pending-approver-name">
+                    {order.pending_approver_name
+                      ? <>Awaiting approval from <span className="font-medium">{order.pending_approver_name}</span>.</>
+                      : 'Awaiting approval from the reporting manager.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-3">
                 <Info label="Recipient" value={order.recipient_name} />

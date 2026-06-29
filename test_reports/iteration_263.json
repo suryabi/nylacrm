@@ -1,0 +1,26 @@
+{
+  "summary": "Pending-approval banner feature for Delivery Orders verified end-to-end. Backend: 3/3 pytest tests pass — submit→pending_approval persists pending_approver_id/pending_approver_name from the requester's reporting_manager and surfaces them on both the transition response and GET; null-manager path persists both as null without crashing; create/list regression still works. Frontend: 3/3 Playwright cases pass — banner [data-testid=do-pending-approval-banner] renders with 'Awaiting approval from <name>' when pending_approver_name is set, falls back to 'Awaiting approval from the reporting manager.' when null, and is absent for non pending_approval states.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_do_pending_approver.py",
+    "/app/test_reports/pytest/do_pending_approver.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/delivery_orders.py: _create_approval_task now returns the approver dict so the transition handler can persist pending_approver_id/name — clean, low-blast-radius change.",
+    "Transition handler (~line 570): the persistence write is a second update_one AFTER the main state transition. If the second update fails, the order is in pending_approval but the approver fields are missing — best-effort, acceptable but worth merging into a single $set to keep them atomic.",
+    "Frontend DeliveryOrders.js (~line 546): banner gated on order.current_state_key === 'pending_approval' and has a clean fallback string when pending_approver_name is null — matches the spec exactly.",
+    "Minor UX: the banner does not render the approver's role/email, only the name. For users with duplicate names this could be ambiguous but is per spec."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_do_pending_approver.py"
+  ],
+  "success_rate": {"backend": "100% (3/3)", "frontend": "100% (3/3)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123",
+  "seed_data_creation": "Created a single seeded delivery order DO-UI-TEST-c29540 (id ecdacddd-589d-409b-9177-dc2d83ffe6a0) in tenant nyla-air-water for the frontend visual checks. DELETED at end of run. Backend tests use the real /api/delivery-orders create flow and clean up after themselves. CEO.reporting_manager_id is temporarily set to System Admin during the with-manager test and restored to original (None) via module-scoped fixture.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Banner feature behaves per spec. test_do_pending_approver.py is the canonical regression: temporarily flips CEO.reporting_manager_id, exercises submit transition twice (with/without manager), and restores state. Frontend banner selectors: do-pending-approval-banner (container) and do-pending-approver-name (inner <p>). To re-exercise the UI without re-running the backend flow, seed a delivery_orders doc with current_state_key='pending_approval' and pending_approver_name='<name>' and open it from /delivery-orders.",
+  "rca of the issue": "N/A — feature add, not a bug. Backend now persists pending_approver_{id,name} when transitioning to pending_approval (delivery_orders.py:570-580). Frontend reads order.pending_approver_name and renders the amber banner with a graceful null fallback (DeliveryOrders.js:546-561). Both sides verified."
+}
