@@ -587,8 +587,35 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     # deduction / dashboard logic treats promo identically: `quantity` in BOTTLES,
     # `packaging_units` = bottles-per-package, `packages` = crates entered, and a
     # per-BOTTLE unit_price (so quantity × unit_price keeps the same value).
+    #
+    # Safety net: if a line names a packaging type but the unit count didn't come
+    # through (older clients / auto-created from a Delivery Order), resolve units
+    # from the SKU's packaging config so a crate never silently collapses to 1.
+    _sku_ids = list({it.sku_id for it in data.items if it.sku_id})
+    _pc_map: dict = {}
+    if _sku_ids:
+        async for _s in db.master_skus.find({"id": {"$in": _sku_ids}}, {"_id": 0, "id": 1, "packaging_config": 1}):
+            _pc_map[_s["id"]] = _s.get("packaging_config") or {}
+
+    def _resolve_units(it):
+        """Returns (units_per_package, packaging_type_name, packaging_type_id)."""
+        upp = int(it.units_per_package or 0)
+        if upp > 1:
+            return upp, it.packaging_type_name, it.packaging_type_id
+        pc = _pc_map.get(it.sku_id) or {}
+        pools = (pc.get("promo_stock_out") or []) + (pc.get("stock_out") or []) + (pc.get("master") or [])
+        match = None
+        if it.packaging_type_id:
+            match = next((p for p in pools if p.get("packaging_type_id") == it.packaging_type_id), None)
+        if not match and it.packaging_type_name:
+            tgt = it.packaging_type_name.strip().lower()
+            match = next((p for p in pools if (p.get("packaging_type_name") or "").strip().lower() == tgt), None)
+        if match and int(match.get("units_per_package") or 0) > 1:
+            return int(match["units_per_package"]), match.get("packaging_type_name") or it.packaging_type_name, match.get("packaging_type_id") or it.packaging_type_id
+        return (upp or 1), it.packaging_type_name, it.packaging_type_id
+
     for it in data.items:
-        upp = int(it.units_per_package or 1) or 1
+        upp, pkg_name, pkg_id = _resolve_units(it)
         crates = int(it.quantity)
         bottles = crates * upp
         per_bottle = round(float(it.unit_price or 0) / upp, 4) if upp else float(it.unit_price or 0)
@@ -607,8 +634,8 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             "net_amount": 0,
             "batch_id": it.batch_id,
             "batch_code": it.batch_code,
-            "packaging_type_id": it.packaging_type_id,
-            "packaging_type_name": it.packaging_type_name,
+            "packaging_type_id": pkg_id,
+            "packaging_type_name": pkg_name,
             "units_per_package": upp,
             "remarks": it.remarks,
             "created_at": now,

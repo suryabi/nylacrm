@@ -219,8 +219,12 @@ export function CreateOrderDialog({ open, onClose, skus, reasons, cities, onCrea
     }));
   }, [selected]);
 
-  const pkgsFor = (sku) => (sku?.packaging_config?.promo_stock_out?.length
-    ? sku.packaging_config.promo_stock_out : (sku?.packaging_config?.stock_out || []));
+  const pkgsFor = (sku) => {
+    const pc = sku?.packaging_config || {};
+    if ((pc.promo_stock_out || []).length) return pc.promo_stock_out;
+    if ((pc.stock_out || []).length) return pc.stock_out;
+    return pc.master || [];
+  };
 
   const addItem = () => setItems((p) => [...p, { sku_id: '', sku_name: '', packaging_type_id: '', packaging_type_name: '', units_per_package: null, quantity: 1, unit_price: 0 }]);
   const removeItem = (i) => setItems((p) => p.filter((_, idx) => idx !== i));
