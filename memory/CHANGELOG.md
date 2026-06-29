@@ -943,3 +943,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - The Zoho Delivery Challan for promotional stock-out now prints each line as "<SKU> · <packages> × <packaging_type_name> = <bottles> bottles" (e.g. "660ml Sparkling · 2 × Crate-12 = 24 bottles"), or "<n> bottles" when there's no multi-bottle pack. The QTY column is in bottles. So the delivery team sees both packs and total bottles.
 - zoho_service.create_delivery_challan_for_promo_dispatch line-name builder; promo_dispatch._push_promo_dispatch_to_zoho now forwards packages + packaging_units to the builder.
 - Verified iteration_264 (6/6 backend unit tests, mocked Zoho). 3 unrelated regression failures are pre-existing test-script issues (iteration_262 field-name + 1 brittle capture test).
+
+## 2026-06-29 — In-app Delivery popup shows UOM + bottle count under Quantity
+- Stock-out Delivery detail popup now renders the packaging breakdown beneath the plain bottle quantity, e.g. "5 × Crate-12 (60 bottles)" (DistributorDetail.js Qty cell, data-testid delivery-detail-item-packaging-<idx>). Hidden for legacy items (no packages) and single-bottle packs (packaging_units=1).
+- Backend: DeliveryItemCreate + DeliveryItem models now carry packaging_type_name (str), packaging_units (int), packages (int); create_delivery persists them in distributor_delivery_items; get_delivery returns items raw so they flow through.
+- Frontend: DeliveriesTab packaging <select> onChange + SKU/account auto-defaults now also capture packaging_type_name into item state; DistributorDetail delivery payload forwards packaging_type_name (packaging_units/packages were already sent).
+- Verified iteration_265 (backend 100% create→GET round-trip, quantity == packages × packaging_units; frontend popup shows "1 × Crate-12 (12 bottles)").
