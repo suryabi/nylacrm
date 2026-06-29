@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 260 — Verified the Zoho percentage-discount fix for line items in both stock-out (create_invoice_for_delivery) and stock-in (create_invoice_for_shipment) flows. 7/7 pytest pass. The outgoing POST /books/v3/invoices payload was captured via monkeypatched _zoho_request (sentinel exception short-circuits downstream DB writes). Confirmed: (a) invoice-level discount_type=='item_level', (b) is_discount_before_tax==True, (c) each line_item's 'discount' is a percentage STRING — '100%' for discount_percent=100, '0%' for discount_percent=0, '12.5%' for fractional, and '0%' when discount_percent is missing. Regression test confirmed that the appended 'Missing Bottle Recovery' debit-note line carries NO 'discount' field (so it defaults to 0 under item_level — no risk of being read as a flat ₹). Backend smoke: /api/ returns 200, /api/accounting/transactions returns 401 (auth-required, not a 500) — server import is clean.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_260_zoho_invoice_percent_discount.py",
+    "/app/test_reports/pytest/iteration_260.xml"
+  ],
+  "action_items": [
+    "Post-deploy verification (live Zoho): push one real distributor delivery with a >0% line discount and confirm in Zoho Books UI that (i) the line shows 'X%' under the Discount column and (ii) the invoice total reflects the percentage applied BEFORE GST, not a flat rupee deduction."
+  ],
+  "critical_code_review_comments": [
+    "services/zoho_service.py:1339-1342 (delivery) and :2926-2928 (shipment) — both line-item builders now serialize discount via f\"{float(it.get('discount_percent', 0) or 0):g}%\". The :g formatter is correct: 100→'100%', 0→'0%', 12.5→'12.5%' (no trailing zeros). None→0→'0%' due to the `or 0` guard.",
+    "services/zoho_service.py:1409-1417 (delivery invoice_payload) and :2933-2941 (shipment invoice_payload) — both add discount_type='item_level' + is_discount_before_tax=True. Without item_level, a per-line 'discount':'100%' string would still be misread by Zoho (entity_level expects a single header-level number). Both knobs are required together; verified together.",
+    "services/zoho_service.py:1384-1407 — Missing Bottle Recovery debit-note lines DO NOT carry a 'discount' field. Under discount_type='item_level' Zoho treats absent line discount as 0, so this is safe. If a future refactor copies the line-item template and accidentally inherits the 'discount':'0%' default, it stays neutral — but it would be defensible to explicitly set 'discount':'0%' on recovery lines for symmetry. Non-blocking.",
+    "services/zoho_service.py:1500 and :3000-ish — both code paths flip the invoice to 'sent' after creation via a second POST. Our mock short-circuits the FIRST POST with a sentinel, so the status-flip path is not exercised here. That is fine for testing the payload mapping; the status-flip is independently logged + try/except guarded.",
+    "Test cleanliness: no DB writes performed — every test stubs zoho_service.db so motor never touches the real Mongo. Safe to run on shared preview env."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_260_zoho_invoice_percent_discount.py"
+  ],
+  "success_rate": { "backend": "100% (7/7 pytest)", "frontend": "n/a (backend only)" },
+  "test_credentials": "Not used — pure payload-capture unit tests with mocked Zoho.",
+  "seed_data_creation": "None — every collection (zoho_invoice_mappings, distributor_locations, debit_notes) is replaced with an in-memory _FakeDB for the duration of each test. No real DB writes.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Zoho is NOT connected in preview — any test that touches create_invoice_for_{delivery,shipment} must monkeypatch zoho_service._zoho_request, is_zoho_configured, upsert_contact, get_zoho_item_id, get_credentials AND zoho_service.db (with at least zoho_invoice_mappings.find_one→None and distributor_locations.find_one→{'zoho_branch_id':'BR1','location_name':'WH'}) — otherwise the branch-mapping guard raises ZohoBranchNotMappedError before the payload is built. Use the _Sentinel exception pattern in this file to capture the payload then short-circuit the downstream status-flip + mirror-invoice writes. The percentage-discount fix lives in TWO mirrored places (lines ~1339 and ~2926 in zoho_service.py) — if you change one, change the other.",
+  "rca of the issue": "Before this fix, line items were sent as `discount: <bare-number>` (e.g. discount: 100) with the invoice carrying discount_type='entity_level'. Zoho Books interprets a bare-number line discount under entity_level as a FLAT RUPEE deduction — so a user's 100% intent on a 180 × ₹66 = ₹11,880 line became ₹11,880 − ₹100 = ₹11,780 instead of ₹0. Fix mirrored in both stock-out (create_invoice_for_delivery) and stock-in (create_invoice_for_shipment): (1) serialize each line's discount as a percentage STRING via f\"{pct:g}%\" so Zoho parses the '%' sign as percent semantics; (2) set the invoice-level discount_type to 'item_level' so per-line discounts are honoured at all (the default entity_level expects a single header discount, not per-line); (3) set is_discount_before_tax=True so GST is computed on the discounted base — matching Indian invoice convention. Regression-safe for debit-note 'Missing Bottle Recovery' lines: they omit the discount field, which under item_level defaults to 0%, neutral. Test asserts directly on the captured POST /books/v3/invoices JSON; no live Zoho call required."
+}

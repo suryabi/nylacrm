@@ -1336,8 +1336,9 @@ async def create_invoice_for_delivery(
             "description": description,
             "quantity": qty,
             "rate": agreed,
-            "discount": float(it.get("discount_percent", 0) or 0),
-            "discount_type": "entity_level",
+            # Per-line PERCENTAGE discount — Zoho needs the "%" suffix + invoice
+            # discount_type=item_level, else a bare number is read as a flat ₹ amount.
+            "discount": f"{float(it.get('discount_percent', 0) or 0):g}%",
         })
 
     if missing_skus:
@@ -1410,6 +1411,8 @@ async def create_invoice_for_delivery(
         "reference_number": delivery.get("delivery_number"),
         "date": (delivery.get("delivery_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
         "line_items": line_items,
+        "discount_type": "item_level",
+        "is_discount_before_tax": True,
         "notes": f"Generated from Nyla CRM delivery {delivery.get('delivery_number')}",
     }
 
@@ -2920,8 +2923,8 @@ async def create_invoice_for_shipment(
             "description": description,
             "quantity": float(it.get("quantity", 0) or 0),
             "rate": float(it.get("unit_price", 0) or 0),
-            "discount": float(it.get("discount_percent", 0) or 0),
-            "discount_type": "entity_level",
+            # Per-line PERCENTAGE discount (see delivery invoice note above).
+            "discount": f"{float(it.get('discount_percent', 0) or 0):g}%",
         })
 
     if not line_items:
@@ -2932,6 +2935,8 @@ async def create_invoice_for_shipment(
         "reference_number": shipment.get("shipment_number"),
         "date": (shipment.get("shipment_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10],
         "line_items": line_items,
+        "discount_type": "item_level",
+        "is_discount_before_tax": True,
         "notes": f"Generated from Nyla CRM Stock In {shipment.get('shipment_number')}",
     }
 
