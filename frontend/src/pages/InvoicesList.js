@@ -18,7 +18,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { 
   Search, Trash2, ChevronLeft, ChevronRight, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Package,
   LayoutGrid, List, Filter, Loader2, RotateCcw, FileText, DollarSign, 
-  Building2, Calendar, CheckCircle, XCircle, Check, X, Download
+  Building2, Calendar, CheckCircle, XCircle, Check, X, Download, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -314,6 +314,28 @@ export default function InvoicesList() {
   const canDelete = user && ['ceo', 'system admin', 'admin'].some(
     role => user.role?.toLowerCase().includes(role)
   );
+
+  // Regenerate (re-push) invoices — management roles only.
+  const canRegenerate = user && ['ceo', 'admin', 'system admin', 'director', 'vice president', 'head of business', 'national sales head', 'regional sales manager'].some(
+    role => user.role?.toLowerCase().includes(role)
+  );
+  const [regeneratingId, setRegeneratingId] = useState(null);
+  const handleRegenerateInvoice = async (invoice) => {
+    const idOrNo = invoice.id || invoice.invoice_no || invoice.invoice_number;
+    if (!window.confirm(`Regenerate invoice ${invoice.invoice_no || invoice.invoice_number || ''}?\n\nIt will be updated in place with the latest discounts (same number). If Zoho can't edit it (already paid / has credits), it will be voided and a new invoice created.`)) return;
+    setRegeneratingId(idOrNo);
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/invoices/${encodeURIComponent(idOrNo)}/regenerate`, {},
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      toast.success(data.message || 'Invoice regenerated.');
+      fetchInvoices();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Invoice regeneration failed');
+    } finally {
+      setRegeneratingId(null);
+    }
+  };
 
   // Fetch invoices
   const fetchInvoices = useCallback(async () => {
@@ -1056,6 +1078,22 @@ export default function InvoicesList() {
                       <TableCell className="text-sm text-slate-500 dark:text-slate-400">
                         <div className="flex items-center justify-between gap-2">
                           <span>{[invoice.account_city, invoice.account_state].filter(Boolean).join(', ') || '-'}</span>
+                          <div className="flex items-center gap-1 shrink-0">
+                          {canRegenerate && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-slate-400 hover:text-amber-600"
+                              onClick={(e) => { e.stopPropagation(); handleRegenerateInvoice(invoice); }}
+                              data-testid={`regenerate-invoice-${invoice.id || invoice.invoice_no}`}
+                              title="Regenerate invoice (apply latest discounts)"
+                              disabled={regeneratingId === (invoice.id || invoice.invoice_no || invoice.invoice_number)}
+                            >
+                              {regeneratingId === (invoice.id || invoice.invoice_no || invoice.invoice_number)
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <RefreshCw className="h-4 w-4" />}
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1069,6 +1107,7 @@ export default function InvoicesList() {
                               ? <Loader2 className="h-4 w-4 animate-spin" />
                               : <Download className="h-4 w-4" />}
                           </Button>
+                          </div>
                         </div>
                       </TableCell>
                     </TableRow>

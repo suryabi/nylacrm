@@ -1,0 +1,35 @@
+{
+  "summary": "Comprehensive backend + frontend tests of the Regenerate Invoice and Invoice Preview features. 11/11 backend pytest cases pass (preview math, force-regen update/recreate/InvoiceNotRegenerableError flow, role gating, invoices-list regen 400-not-linked). Frontend Invoices list correctly renders per-row regenerate-invoice-{id} icon buttons (4 found, e.g. cbb2c578-3c75-460d-9083-117adc1f43a9). The Distributor-detail Preview & Generate / Regenerate buttons could not be exercised end-to-end for the supplied delivery 3c714fda-021f-4c8d-8d92-dc03f04b5b08 because that delivery is in REVERSED state in the seed db — the panel intentionally hides retry-zoho-push-btn / regenerate-invoice-btn for reversed rows. The handlers, dialogs (invoice-preview-dialog, invoice-preview-table, preview-confirm-push-btn, regenerate-confirm-dialog) and canRegenerate guard are present and correctly wired in source.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_invoice_regen_preview.py",
+    "/app/test_reports/pytest/iteration_invoice_regen_preview.xml"
+  ],
+  "action_items": [
+    "(Optional) Seed a NON-invoiced, NON-reversed distributor delivery in nyla-air-water tenant so the Preview & Generate dialog can be exercised end-to-end in UI tests. The reference delivery (3c714fda...) is REVERSED so the panel correctly hides retry-zoho-push-btn — not a regression."
+  ],
+  "critical_code_review_comments": [
+    "zoho_service.create_invoice_for_delivery's PUT-then-void-then-POST regen branch correctly preserves regen_mode in the mapping doc and only POSTs on the recreate fallback (verified by call-capture).",
+    "Both regenerate routes (distributors.py:5232 and invoices.py:825) share an _INVOICE_REGEN_ROLES set — consider extracting to a single core/auth module to avoid drift between the two endpoints.",
+    "DistributorDetail.js logs a Radix `Missing Description or aria-describedby for DialogContent` warning when opening the delivery detail dialog. Not blocking but accessibility nit — add a DialogDescription to silence it.",
+    "Frontend preview dialog disables Confirm & Push only when missing_agreed_price_skus is non-empty — confirmed via source. Recommend also disabling when net_taxable_amount <= 0 to avoid pushing a zero-value invoice.",
+    "InvoicesList resolve uses zoho_invoice_number OR zoho_invoice_id only; an invoice whose mapping has been deleted (orphan) will hit the 400 'not linked' path — friendly message present, OK."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_invoice_regen_preview.py"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "Invoices list regenerate button verified; DistributorDetail preview dialog could not be exercised because the supplied delivery is REVERSED."},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (login returns session_token, used as Bearer).",
+  "seed_data_creation": "None — service-level tests use monkeypatched zoho_service.db; HTTP tests use the real CEO session against the live nyla-air-water tenant and only read.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_iteration_invoice_regen_preview.py covers the new regenerate + preview features. The HTTP tests auto-read REACT_APP_BACKEND_URL from /app/frontend/.env. To exercise the DistributorDetail preview & regenerate dialogs in Playwright, you need a Stock-Out delivery whose state is NOT 'reversed' and (for Regenerate) one that already has a synced Zoho mapping. The supplied delivery 3c714fda-021f-4c8d-8d92-dc03f04b5b08 is reversed in seed data so its row hides those buttons by design."
+}

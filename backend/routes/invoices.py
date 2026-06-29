@@ -816,6 +816,63 @@ async def download_invoice_pdf(
     )
 
 
+_INVOICE_REGEN_ROLES = {
+    "ceo", "admin", "system admin", "director", "vice president",
+    "head of business", "national sales head", "regional sales manager",
+}
+
+
+@router.post("/{invoice_id}/regenerate")
+async def regenerate_invoice(
+    invoice_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Regenerate the Zoho invoice behind a listed invoice (resolves it back to
+    its originating distributor delivery). Updates in place when possible, else
+    voids + recreates. Management roles only; only delivery-sourced invoices."""
+    if (current_user.get("role") or "").lower() not in _INVOICE_REGEN_ROLES:
+        raise HTTPException(status_code=403, detail="Only management roles can regenerate invoices.")
+    from core.tenant import get_current_tenant_id
+    tenant_id = get_current_tenant_id()
+    tdb = get_tdb()
+    inv = await tdb.invoices.find_one(
+        {'$or': [{'id': invoice_id}, {'invoice_no': invoice_id}, {'invoice_number': invoice_id}]},
+        {'_id': 0, 'invoice_no': 1, 'invoice_number': 1, 'zoho_invoice_number': 1},
+    )
+    inv_no = (inv or {}).get('zoho_invoice_number') or (inv or {}).get('invoice_no') or (inv or {}).get('invoice_number') or invoice_id
+    mapping = await tdb.zoho_invoice_mappings.find_one(
+        {'source_type': 'distributor_delivery', 'status': 'synced',
+         '$or': [{'zoho_invoice_number': inv_no}, {'zoho_invoice_id': invoice_id}]},
+        {'_id': 0, 'source_id': 1, 'distributor_id': 1, 'zoho_invoice_number': 1},
+    )
+    if not mapping or not mapping.get('source_id') or not mapping.get('distributor_id'):
+        raise HTTPException(
+            status_code=400,
+            detail="This invoice can't be regenerated here — it isn't linked to a distributor delivery. Regenerate it from the delivery instead.",
+        )
+    from services.zoho_service import (
+        regenerate_delivery_invoice, ZohoPushSkippedError,
+        InvoiceNotRegenerableError, MissingAgreedPriceError, ZohoBranchNotMappedError,
+    )
+    try:
+        m = await regenerate_delivery_invoice(tenant_id, mapping['distributor_id'], mapping['source_id'])
+    except (ZohoPushSkippedError, InvoiceNotRegenerableError, MissingAgreedPriceError, ZohoBranchNotMappedError) as known:
+        raise HTTPException(status_code=400, detail=str(known))
+    except Exception as e:
+        logger.exception(f"Invoice regeneration failed for {invoice_id}")
+        raise HTTPException(status_code=400, detail=f"Invoice regeneration failed: {e}")
+    mode = m.get("regen_mode") or "updated"
+    verb = {"updated": "updated in place", "recreated": "voided and recreated", "created": "created"}.get(mode, mode)
+    return {
+        "message": f"Invoice {verb}.",
+        "regen_mode": mode,
+        "zoho_invoice_url": m.get("zoho_invoice_url"),
+        "zoho_invoice_number": m.get("zoho_invoice_number"),
+        "zoho_invoice_id": m.get("zoho_invoice_id"),
+    }
+
+
+
 @router.delete("/{invoice_id}")
 async def delete_invoice(
     invoice_id: str,

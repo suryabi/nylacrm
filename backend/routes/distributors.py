@@ -5204,6 +5204,66 @@ async def retry_delivery_zoho_push(
     }
 
 
+_INVOICE_REGEN_ROLES = {
+    "ceo", "admin", "system admin", "director", "vice president",
+    "head of business", "national sales head", "regional sales manager",
+}
+
+
+@router.get("/{distributor_id}/deliveries/{delivery_id}/invoice-preview")
+async def delivery_invoice_preview(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Pre-push preview of the delivery's Zoho invoice (line items, per-line %
+    discount, subtotal, total discount, net taxable). GST is computed by Zoho at
+    push time. Lets reps verify discounts/quantities before generating."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to manage this distributor's deliveries")
+    tenant_id = get_current_tenant_id()
+    from services.zoho_service import build_delivery_invoice_preview, ZohoPushSkippedError
+    try:
+        return await build_delivery_invoice_preview(tenant_id, distributor_id, delivery_id)
+    except ZohoPushSkippedError as skip:
+        raise HTTPException(status_code=400, detail=str(skip))
+
+
+@router.post("/{distributor_id}/deliveries/{delivery_id}/regenerate-invoice")
+async def regenerate_delivery_invoice_endpoint(
+    distributor_id: str,
+    delivery_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Regenerate the Zoho invoice for a delivery (e.g. after a discount fix).
+    Updates the existing invoice in place when possible (same number); otherwise
+    voids it and creates a fresh one. Restricted to management roles."""
+    if (current_user.get("role") or "").lower() not in _INVOICE_REGEN_ROLES:
+        raise HTTPException(status_code=403, detail="Only management roles can regenerate invoices.")
+    tenant_id = get_current_tenant_id()
+    from services.zoho_service import (
+        regenerate_delivery_invoice, ZohoPushSkippedError,
+        InvoiceNotRegenerableError, MissingAgreedPriceError, ZohoBranchNotMappedError,
+    )
+    try:
+        mapping = await regenerate_delivery_invoice(tenant_id, distributor_id, delivery_id)
+    except (ZohoPushSkippedError, InvoiceNotRegenerableError, MissingAgreedPriceError, ZohoBranchNotMappedError) as known:
+        raise HTTPException(status_code=400, detail=str(known))
+    except Exception as e:
+        logger.exception(f"Invoice regeneration failed for delivery {delivery_id}")
+        raise HTTPException(status_code=400, detail=f"Invoice regeneration failed: {e}")
+    mode = mapping.get("regen_mode") or "updated"
+    verb = {"updated": "updated in place", "recreated": "voided and recreated", "created": "created"}.get(mode, mode)
+    return {
+        "message": f"Invoice {verb}.",
+        "regen_mode": mode,
+        "zoho_invoice_url": mapping.get("zoho_invoice_url"),
+        "zoho_invoice_number": mapping.get("zoho_invoice_number"),
+        "zoho_invoice_id": mapping.get("zoho_invoice_id"),
+    }
+
+
+
 @router.get("/{distributor_id}/deliveries/{delivery_id}/invoice-pdf")
 async def download_delivery_invoice_pdf(
     distributor_id: str,

@@ -243,6 +243,12 @@ export default function DistributorDetail() {
   const [deliveryItems, setDeliveryItems] = useState([]);
   const [savingDelivery, setSavingDelivery] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
+  const [invoicePreview, setInvoicePreview] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [invPreviewLoading, setInvPreviewLoading] = useState(false);
+  const [previewDeliveryId, setPreviewDeliveryId] = useState(null);
+  const [regenConfirm, setRegenConfirm] = useState(null);
+  const [regenLoading, setRegenLoading] = useState(false);
   const [showDeliveryDetail, setShowDeliveryDetail] = useState(false);
   const [reverseDialog, setReverseDialog] = useState({ open: false, delivery: null });
   const [reverseConfirmText, setReverseConfirmText] = useState('');
@@ -320,6 +326,7 @@ export default function DistributorDetail() {
     (isDistributorRole && distributorWritableTab)
   );
   const canDelete = user && ['CEO', 'Admin', 'System Admin'].includes(user.role);
+  const canRegenerate = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'].includes(user.role);
   const canApprove = user && ['CEO', 'Director', 'Vice President'].includes(user.role);
   const canUpdateProfile = user && (
     ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head'].includes(user.role) ||
@@ -1935,6 +1942,42 @@ export default function DistributorDetail() {
     } finally {
       setDownloadingInvoice(false);
     }
+  };
+
+  const handleOpenInvoicePreview = async (deliveryId) => {
+    setPreviewOpen(true); setInvoicePreview(null); setInvPreviewLoading(true); setPreviewDeliveryId(deliveryId);
+    try {
+      const { data } = await axios.get(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/invoice-preview`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true });
+      setInvoicePreview(data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not load invoice preview');
+      setPreviewOpen(false);
+    } finally { setInvPreviewLoading(false); }
+  };
+
+  const handleConfirmPushFromPreview = async () => {
+    const did = previewDeliveryId;
+    setPreviewOpen(false);
+    if (did) await handleRetryZohoPush(did);
+  };
+
+  const handleRegenerateInvoice = async (deliveryId) => {
+    setRegenLoading(true);
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/distributors/${id}/deliveries/${deliveryId}/regenerate-invoice`,
+        {}, { headers: { Authorization: `Bearer ${token}` }, withCredentials: true });
+      toast.success(data.message || 'Invoice regenerated.');
+      setSelectedDelivery(prev => prev && prev.id === deliveryId
+        ? { ...prev, zoho_invoice_url: data.zoho_invoice_url, zoho_invoice_number: data.zoho_invoice_number, zoho_invoice_id: data.zoho_invoice_id }
+        : prev);
+      fetchDeliveries();
+      setRegenConfirm(null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Invoice regeneration failed');
+    } finally { setRegenLoading(false); }
   };
 
   // Downloads the Zoho invoice PDF via our server-side proxy so the saved file
@@ -4016,6 +4059,17 @@ export default function DistributorDetail() {
                             View in Zoho
                           </Button>
                         </a>
+                        {canRegenerate && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRegenConfirm(selectedDelivery)}
+                            className="text-amber-700 hover:bg-amber-50"
+                            data-testid="regenerate-invoice-btn"
+                          >
+                            <RefreshCw className="h-4 w-4 mr-1.5" /> Regenerate
+                          </Button>
+                        )}
                       </>
                     ) : (
                       <div className="flex items-center gap-2">
@@ -4028,7 +4082,7 @@ export default function DistributorDetail() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleRetryZohoPush(selectedDelivery.id)}
+                          onClick={() => handleOpenInvoicePreview(selectedDelivery.id)}
                           disabled={downloadingInvoice}
                           className="text-violet-700 border-violet-300 hover:bg-violet-50"
                           data-testid="retry-zoho-push-btn"
@@ -4036,7 +4090,7 @@ export default function DistributorDetail() {
                           {downloadingInvoice ? (
                             <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Pushing…</>
                           ) : (
-                            <><RefreshCw className="h-4 w-4 mr-2" /> Generate Now</>
+                            <><RefreshCw className="h-4 w-4 mr-2" /> Preview &amp; Generate</>
                           )}
                         </Button>
                       </div>
@@ -4053,6 +4107,112 @@ export default function DistributorDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Invoice pre-push preview */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-2xl" data-testid="invoice-preview-dialog">
+          <DialogHeader>
+            <DialogTitle>Invoice Preview{invoicePreview?.delivery_number ? ` · ${invoicePreview.delivery_number}` : ''}</DialogTitle>
+          </DialogHeader>
+          {invPreviewLoading && (
+            <div className="flex items-center gap-2 py-8 text-sm text-slate-500" data-testid="invoice-preview-loading">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading preview…
+            </div>
+          )}
+          {invoicePreview && !invPreviewLoading && (
+            <div className="space-y-3">
+              <div className="text-sm text-slate-600">
+                Customer: <span className="font-medium text-slate-900">{invoicePreview.account_name}</span>
+              </div>
+              {invoicePreview.missing_agreed_price_skus?.length > 0 && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700" data-testid="preview-missing-price-warning">
+                  No agreed price for: {invoicePreview.missing_agreed_price_skus.join(', ')}. These will fail on push — set pricing on the account first.
+                </div>
+              )}
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm" data-testid="invoice-preview-table">
+                  <thead className="bg-slate-50 text-xs text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Item</th>
+                      <th className="px-3 py-2 text-right">Qty</th>
+                      <th className="px-3 py-2 text-right">Rate</th>
+                      <th className="px-3 py-2 text-right">Disc %</th>
+                      <th className="px-3 py-2 text-right">Discount</th>
+                      <th className="px-3 py-2 text-right">Net</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoicePreview.lines?.map((l, i) => (
+                      <tr key={i} className="border-t" data-testid={`invoice-preview-row-${i}`}>
+                        <td className="px-3 py-2">{l.sku_name}{l.batch_code ? <span className="ml-1 text-xs text-slate-400">({l.batch_code})</span> : null}</td>
+                        <td className="px-3 py-2 text-right">{l.quantity}</td>
+                        <td className="px-3 py-2 text-right">₹{Number(l.rate).toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-2 text-right">{l.discount_percent}%</td>
+                        <td className="px-3 py-2 text-right text-amber-700">{l.discount_amount ? `−₹${Number(l.discount_amount).toLocaleString('en-IN')}` : '—'}</td>
+                        <td className="px-3 py-2 text-right font-medium">₹{Number(l.net_amount).toLocaleString('en-IN')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="ml-auto w-full max-w-xs space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span data-testid="preview-subtotal">₹{Number(invoicePreview.subtotal).toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Total discount</span><span className="text-amber-700" data-testid="preview-total-discount">−₹{Number(invoicePreview.total_discount).toLocaleString('en-IN')}</span></div>
+                <div className="flex justify-between border-t pt-1 font-semibold"><span>Net taxable</span><span data-testid="preview-net-taxable">₹{Number(invoicePreview.net_taxable_amount).toLocaleString('en-IN')}</span></div>
+                <div className="text-xs text-slate-400">{invoicePreview.gst_note}</div>
+              </div>
+              {invoicePreview.already_invoiced && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-700">
+                  This delivery is already invoiced ({invoicePreview.existing_invoice_number}). Use “Regenerate” instead to update it.
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewOpen(false)} data-testid="preview-cancel-btn">Cancel</Button>
+            {invoicePreview && !invoicePreview.already_invoiced && (
+              <Button
+                onClick={handleConfirmPushFromPreview}
+                disabled={invPreviewLoading || invoicePreview.missing_agreed_price_skus?.length > 0}
+                className="bg-violet-600 hover:bg-violet-700"
+                data-testid="preview-confirm-push-btn"
+              >
+                Confirm &amp; Push to Zoho
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Regenerate invoice confirmation */}
+      <Dialog open={!!regenConfirm} onOpenChange={(o) => !o && setRegenConfirm(null)}>
+        <DialogContent className="max-w-md" data-testid="regenerate-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle>Regenerate invoice?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 text-sm text-slate-600">
+            <p>
+              Invoice <span className="font-mono font-medium text-slate-900">{regenConfirm?.zoho_invoice_number || '—'}</span> for delivery{' '}
+              <span className="font-medium text-slate-900">{regenConfirm?.delivery_number}</span> will be updated in place with the latest line items and discounts (same invoice number).
+            </p>
+            <p className="text-xs text-slate-500">
+              If Zoho can’t edit it (already paid / partially paid / has credit notes), it will be voided and a new invoice created instead.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRegenConfirm(null)} disabled={regenLoading} data-testid="regenerate-cancel-btn">Cancel</Button>
+            <Button
+              onClick={() => handleRegenerateInvoice(regenConfirm.id)}
+              disabled={regenLoading}
+              className="bg-amber-600 hover:bg-amber-700"
+              data-testid="regenerate-confirm-btn"
+            >
+              {regenLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Regenerating…</> : 'Regenerate'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Settlement Detail Dialog */}
       <Dialog open={showSettlementDetail} onOpenChange={setShowSettlementDetail}>

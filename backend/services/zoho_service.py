@@ -860,6 +860,13 @@ class ZohoBranchNotMappedError(RuntimeError):
     — so we block the push rather than emit a wrong-GST invoice."""
 
 
+class InvoiceNotRegenerableError(RuntimeError):
+    """Raised during invoice regeneration when Zoho rejects BOTH an in-place
+    update AND a void of the existing invoice — typically because it's already
+    paid / partially paid or has credit notes applied. The user must resolve it
+    in Zoho (issue a credit note / remove the payment) before regenerating."""
+
+
 def _account_has_zoho_link(account: dict) -> bool:
     """True only when the account has a non-empty `zoho_contact_id`."""
     if not account:
@@ -1255,7 +1262,7 @@ async def _ensure_mirror_invoice(
 
 
 async def create_invoice_for_delivery(
-    *, tenant_id: str, delivery: dict, items: list[dict], account: dict
+    *, tenant_id: str, delivery: dict, items: list[dict], account: dict, force: bool = False
 ) -> dict:
     """Push a Nyla distributor delivery as a Zoho Books invoice using the
     customer-agreed prices from `account.sku_pricing`. Fails fast (no push)
@@ -1282,7 +1289,8 @@ async def create_invoice_for_delivery(
          "source_id": delivery.get("id"), "status": "synced"},
         {"_id": 0},
     )
-    if existing_mapping and existing_mapping.get("zoho_invoice_id"):
+    existing_invoice_id = (existing_mapping or {}).get("zoho_invoice_id")
+    if existing_invoice_id and not force:
         logger.info(
             f"Zoho mapping already synced for delivery {delivery.get('delivery_number')}; "
             f"skipping Zoho create and ensuring mirror invoice exists."
@@ -1497,7 +1505,35 @@ async def create_invoice_for_delivery(
     if invoice_tmpl:
         invoice_payload["template_id"] = invoice_tmpl
 
-    result = await _zoho_request("POST", "/books/v3/invoices", tenant_id=tenant_id, json=invoice_payload)
+    regen_mode = "created"
+    if force and existing_invoice_id:
+        # ── Regeneration ────────────────────────────────────────────────────
+        # Prefer UPDATE-IN-PLACE (keeps the same invoice number). If Zoho rejects
+        # the edit (invoice paid / partially paid / has credits applied), fall
+        # back to void + recreate. If even the void is rejected, surface a clear
+        # error so the user resolves it in Zoho.
+        try:
+            result = await _zoho_request(
+                "PUT", f"/books/v3/invoices/{existing_invoice_id}",
+                tenant_id=tenant_id, json=invoice_payload)
+            regen_mode = "updated"
+            logger.info(f"[zoho] Invoice {existing_invoice_id} updated in place for delivery {delivery.get('delivery_number')}")
+        except Exception as e:
+            logger.warning(
+                f"[zoho] In-place update failed for invoice {existing_invoice_id}: {e}. "
+                f"Falling back to void + recreate.")
+            try:
+                await void_invoice(tenant_id, existing_invoice_id)
+            except Exception as ve:
+                raise InvoiceNotRegenerableError(
+                    f"Invoice {existing_mapping.get('zoho_invoice_number') or existing_invoice_id} "
+                    f"can't be edited or voided in Zoho (it's likely paid, partially paid, or has "
+                    f"credit notes applied). Issue a credit note in Zoho or remove the payment, then retry."
+                ) from ve
+            result = await _zoho_request("POST", "/books/v3/invoices", tenant_id=tenant_id, json=invoice_payload)
+            regen_mode = "recreated"
+    else:
+        result = await _zoho_request("POST", "/books/v3/invoices", tenant_id=tenant_id, json=invoice_payload)
     invoice = result.get("invoice") or {}
 
     zoho_invoice_id = invoice.get("invoice_id")
@@ -1571,6 +1607,7 @@ async def create_invoice_for_delivery(
         "synced_at": now,
         "error": None,
         "attempts": 1,
+        "regen_mode": regen_mode,
     }
     await db.zoho_invoice_mappings.update_one(
         {"tenant_id": tenant_id, "source_type": "distributor_delivery", "source_id": delivery.get("id")},
@@ -2733,6 +2770,100 @@ async def sync_delivery_to_zoho(tenant_id: str, distributor_id: str, delivery_id
         error=last_error or "Unknown error",
         attempts=len(backoff_seconds),
     )
+
+
+async def _load_delivery_context(tenant_id: str, distributor_id: str, delivery_id: str, require_zoho: bool = True):
+    """Load (delivery, items, account) for a delivery, raising friendly errors.
+    `require_zoho=False` skips the connectivity guards (used by the local preview,
+    which performs no Zoho calls)."""
+    if require_zoho:
+        if not is_zoho_configured():
+            raise ZohoPushSkippedError("Zoho Books integration is not configured on this tenant.")
+        if not await get_credentials(tenant_id):
+            raise ZohoPushSkippedError("Zoho Books is not connected for this tenant.")
+    delivery = await db.distributor_deliveries.find_one(
+        {"id": delivery_id, "tenant_id": tenant_id, "distributor_id": distributor_id}, {"_id": 0})
+    if not delivery:
+        raise ZohoPushSkippedError("Delivery not found.")
+    items = await db.distributor_delivery_items.find(
+        {"delivery_id": delivery_id, "tenant_id": tenant_id}, {"_id": 0}).to_list(500)
+    if not items:
+        raise ZohoPushSkippedError("This delivery has no line items to invoice.")
+    account = await db.accounts.find_one(
+        {"id": delivery.get("account_id"), "tenant_id": tenant_id}, {"_id": 0}
+    ) or {"account_name": delivery.get("account_name") or "Customer"}
+    return delivery, items, account
+
+
+async def regenerate_delivery_invoice(tenant_id: str, distributor_id: str, delivery_id: str) -> dict:
+    """Regenerate the Zoho invoice for a delivery (e.g. after a discount fix).
+
+    Tries an in-place update of the existing invoice first (same number); on a
+    Zoho rejection it voids + recreates. Raises InvoiceNotRegenerableError if the
+    invoice is paid/has credits and can be neither edited nor voided. Returns the
+    mapping doc (incl. `regen_mode` = updated | recreated | created)."""
+    delivery, items, account = await _load_delivery_context(tenant_id, distributor_id, delivery_id)
+    return await create_invoice_for_delivery(
+        tenant_id=tenant_id, delivery=delivery, items=items, account=account, force=True)
+
+
+async def build_delivery_invoice_preview(tenant_id: str, distributor_id: str, delivery_id: str) -> dict:
+    """Compute a pre-push preview of the delivery invoice (line items at the
+    account-agreed price, per-line % discount, subtotal, total discount and net
+    taxable amount). GST is applied by Zoho per each SKU's tax mapping, so it is
+    not estimated here — the preview lets reps verify quantities/rates/discounts
+    BEFORE the invoice is generated."""
+    delivery, items, account = await _load_delivery_context(tenant_id, distributor_id, delivery_id, require_zoho=False)
+    agreed: dict[str, float] = {}
+    for p in (account.get("sku_pricing") or []):
+        key = (p.get("sku") or p.get("sku_name") or "").strip().lower()
+        if key:
+            try:
+                agreed[key] = float(p.get("price_per_unit") or p.get("agreed_price") or 0)
+            except (TypeError, ValueError):
+                agreed[key] = 0.0
+    lines, subtotal, total_discount = [], 0.0, 0.0
+    missing = []
+    for it in items:
+        name = (it.get("sku_name") or it.get("sku_code") or "").strip()
+        rate = agreed.get(name.lower())
+        if rate is None or rate <= 0:
+            if name and name not in missing:
+                missing.append(name)
+            rate = 0.0
+        qty = float(it.get("quantity", 0) or 0)
+        disc_pct = float(it.get("discount_percent", 0) or 0)
+        gross = round(qty * rate, 2)
+        disc_amt = round(gross * disc_pct / 100.0, 2)
+        net = round(gross - disc_amt, 2)
+        subtotal += gross
+        total_discount += disc_amt
+        lines.append({
+            "sku_name": name or "(unnamed)", "quantity": qty, "rate": rate,
+            "discount_percent": disc_pct, "gross_amount": gross,
+            "discount_amount": disc_amt, "net_amount": net,
+            "batch_code": it.get("batch_code"),
+        })
+    subtotal = round(subtotal, 2)
+    total_discount = round(total_discount, 2)
+    existing = await db.zoho_invoice_mappings.find_one(
+        {"tenant_id": tenant_id, "source_type": "distributor_delivery",
+         "source_id": delivery_id, "status": "synced"},
+        {"_id": 0, "zoho_invoice_id": 1, "zoho_invoice_number": 1})
+    return {
+        "delivery_number": delivery.get("delivery_number"),
+        "account_name": account.get("account_name"),
+        "currency": "INR",
+        "lines": lines,
+        "subtotal": subtotal,
+        "total_discount": total_discount,
+        "net_taxable_amount": round(subtotal - total_discount, 2),
+        "gst_note": "GST is added by Zoho per each SKU's tax mapping at push time.",
+        "missing_agreed_price_skus": missing,
+        "already_invoiced": bool(existing and existing.get("zoho_invoice_id")),
+        "existing_invoice_number": (existing or {}).get("zoho_invoice_number"),
+    }
+
 
 
 # ── Warehouse → Zoho Branch sync ──────────────────────────────────────────
