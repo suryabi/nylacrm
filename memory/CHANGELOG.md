@@ -958,3 +958,12 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Audit script `/app/scripts/audit_sku_uom.py` confirms no name-vs-units mismatch and no cross/intra-SKU pack-id drift.
 - Verified iteration_266 (backend 5/5: GET base_uom + master, PUT round-trip, POST+DELETE; frontend: add pack → tick flows → set ★ default → save → reopen persists). Catalog restored clean.
 - NOTE: the 4 configured Nyla SKUs still need Promo ticked per-pack by the user (master now contains the packs, so it's one click). Empty SKUs now default to Bottle=1 — refine pack sizes as needed.
+
+## 2026-06-29 — Base-UOM packaging breakdown applied across all flows
+- Universal display format "{packages} × {pack} ({base_qty} Bottles)" now shown consistently. Shared helpers: frontend /app/frontend/src/utils/packaging.js (packagingBreakdown, pluralizeUom); backend services/zoho_service.py (_base_uom_map, _pluralize_uom, _pack_clause, _line_description).
+- Stock-In (shipment): ShipmentItemCreate/ShipmentItem now persist packaging_type_name/packaging_units/packages; create_shipment route stores them; shipment detail popup shows breakdown; ShipmentsTab captures packaging_type_name (select + SKU default).
+- Stock-Out delivery popup refactored to use the shared helper (identical format).
+- Zoho line items: delivery & shipment INVOICES now put the packaging breakdown + batch in the line description (qty stays in base units, rate per base unit). Promo challan + stock-transfer challan/invoice line NAMES unified to "{packages} × {pack} ({base_qty} Bottles)".
+- In-app delivery invoice PREVIEW: build_delivery_invoice_preview returns per-line packaging fields + base_uom; preview modal renders the breakdown.
+- Stock Transfer: math is already at base-UOM (rate derived from per-bottle master_skus.base_price), so this was a DISPLAY-only enhancement (challan/invoice show base units; create form already showed "= X bottles"). Stored quantity semantics (packages) left UNCHANGED to avoid risk to reservation/deduction/e-way valuation — storage normalization deferred pending user confirmation.
+- Verified iteration_267 (backend 14/14: shipment persistence round-trip, invoice-preview packaging fields, and pure Zoho line-builder helpers; no real Zoho pushes). base_uom defaults to 'Bottle'.
