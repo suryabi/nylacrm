@@ -614,13 +614,14 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             return int(match["units_per_package"]), match.get("packaging_type_name") or it.packaging_type_name, match.get("packaging_type_id") or it.packaging_type_id
         return (upp or 1), it.packaging_type_name, it.packaging_type_id
 
+    inserted_items: list[dict] = []
     for it in data.items:
         upp, pkg_name, pkg_id = _resolve_units(it)
         crates = int(it.quantity)
         bottles = crates * upp
         per_bottle = round(float(it.unit_price or 0) / upp, 4) if upp else float(it.unit_price or 0)
         line_value = bottles * per_bottle
-        await db.distributor_delivery_items.insert_one({
+        line_doc = {
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
             "delivery_id": dispatch_id,
@@ -639,7 +640,9 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
             "units_per_package": upp,
             "remarks": it.remarks,
             "created_at": now,
-        })
+        }
+        await db.distributor_delivery_items.insert_one(dict(line_doc))
+        inserted_items.append(line_doc)
 
     logger.info(f"Promo stock-out {challan_number} created by {current_user.get('email')} "
                 f"(status={dispatch['status']}, stock reserved, no invoice).")
@@ -658,12 +661,15 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     zoho_sync_status = "not_attempted"
     zoho_sync_error = None
     if is_zoho_configured():
+        # Push the SAME normalized lines we stored (quantity in BOTTLES, per-bottle
+        # rate, resolved packaging) — NOT the raw request payload — so the printed
+        # challan matches the stock-out record (e.g. 1 crate → "1 × Crate-24 (24 Bottles)").
         items_for_zoho = [{
-            "sku_id": it.sku_id, "sku_name": it.sku_name, "quantity": it.quantity,
-            "unit_price": float(it.unit_price or 0), "batch_code": it.batch_code,
-            "packaging_type_id": it.packaging_type_id, "packaging_type_name": it.packaging_type_name,
-            "units_per_package": it.units_per_package,
-        } for it in data.items]
+            "sku_id": d["sku_id"], "sku_name": d["sku_name"], "quantity": d["quantity"],
+            "unit_price": d["unit_price"], "batch_code": d.get("batch_code"),
+            "packaging_type_id": d.get("packaging_type_id"), "packaging_type_name": d.get("packaging_type_name"),
+            "units_per_package": d.get("units_per_package"), "packages": d.get("packages"),
+        } for d in inserted_items]
         zres = await _push_promo_dispatch_to_zoho(
             tenant_id, dispatch_id, dispatch, items_for_zoho, distributor, coll=db.distributor_deliveries)
         zoho_sync_status = zres.get("status")
