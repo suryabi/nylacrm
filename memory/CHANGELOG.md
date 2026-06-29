@@ -979,3 +979,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - DeliveryOrders.js pkgsFor() fallback extended to promo_stock_out → stock_out → master (matches PromoDispatchSection).
 - Verified iteration_269 (3/3 backend; DO form dropdown populated; 1 Crate-12 → qty=12/packages=1/units=12 via both auto-promo-from-DO and the safety net; negative case stays 1). No real Zoho push.
 - ROOT BLOCKER FOR PRODUCTION CHALLAN DC-2606-0011: (1) requires REDEPLOY; (2) the SKU "Nyla – 660 ml / Silver" must have Crate-24 & Crate-12 packaging configured in SKU Management — if it has NO crate packaging anywhere, nothing can infer the bottle count; (3) the existing challan won't auto-fix — recreate it (or run a future data-repair script).
+
+## 2026-06-30 — ROOT-CAUSE FIX: Promo challan "1 Bottle" vs correct stock-out record
+- THE actual root cause (distinct from the earlier 3 form/storage fixes): create_promo_dispatch stored line items NORMALIZED (quantity in bottles, per-bottle unit_price) but, for a CONFIRMED (non-draft) promo, built the Zoho challan push from the RAW request payload (data.items: quantity=crates=1, per-crate price). So the in-app stock-out record was correct (24 bottles) while the printed challan showed Qty 1 / Rate ₹2,688 / "1 Bottle".
+- Fix: items are now collected into `inserted_items` during the DB write and the confirmed-create Zoho push builds items_for_zoho from `inserted_items` (single source of truth). Draft→confirm path already used stored items (correct) and is untouched.
+- Verified iteration_270 (7/7 new + 3/3 regression; monkeypatched Zoho push captured items[0] quantity=12, unit_price=112/bottle, packages=1, packaging_units=12 — matching the stock-out record). No real Zoho push.
+- PRODUCTION: existing challan DC-2606-0011 is idempotent/frozen in Zoho (pushed with old code) — it will NOT auto-update. Redeploy + create a NEW promo dispatch to get a correct challan.
