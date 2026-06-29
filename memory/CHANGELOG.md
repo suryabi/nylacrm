@@ -915,3 +915,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Fix: per-account uncategorized pull now tries strategy 'endpoint' first, and on 0 rows (or error) falls back to strategy 'status'. Sync still completes on failure with notes in job.warnings (now shown in the completion toast).
 - Added read-only admin diagnostics: GET /api/accounting/transactions/zoho-diagnostics + a 'Diagnose' button/dialog that probes the live org (register count, bank accounts, both uncategorized strategies) so the exact working path can be confirmed without log access.
 - Verified iteration_259 (11/11 pytest + Playwright Diagnose flow). Live validation needs prod redeploy.
+
+## 2026-06-28 (fix) — Stock-out/Stock-in invoice discount not honored
+- Bug: a 100% line discount on a distributor delivery invoice was applied as a flat ₹100 (180×66=11,880 − 100), not 100% (→ ₹0).
+- RCA: Zoho line discount was sent as a bare number with invoice discount_type='entity_level' → Zoho reads it as a FLAT ₹ deduction.
+- Fix (both create_invoice_for_delivery & create_invoice_for_shipment in zoho_service.py): line discount now sent as a percentage STRING f"{pct:g}%" (e.g. '100%','0%','12.5%'); invoice payload sets discount_type='item_level' + is_discount_before_tax=True (GST on discounted base). Debit-note recovery lines omit discount → default 0%, neutral.
+- Verified iteration_260 (7/7 pytest, payload-capture with mocked Zoho). Live confirmation needs prod redeploy + one real delivery push.
