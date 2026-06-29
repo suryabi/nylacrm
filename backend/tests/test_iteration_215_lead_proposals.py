@@ -8,7 +8,7 @@ import base64
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://category-unify.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://beverage-fmcg-ops.preview.emergentagent.com").rstrip("/")
 EMAIL = "surya.yadavalli@nylaairwater.earth"
 PASSWORD = "test123"
 
