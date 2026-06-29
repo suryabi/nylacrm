@@ -27,6 +27,17 @@ let _rowSeq = 0;
 const newItem = () => ({ id: `pi-${++_rowSeq}`, sku_id: '', sku_name: '', quantity: 1, unit_price: 0, batch_id: '', batch_code: '', packaging_type_id: '', packaging_type_name: '', units_per_package: null });
 const fmtINR = (n) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Packaging options for a promo line, with a fallback chain so a crate/carton
+// is always available even when the SKU has no dedicated promo packaging:
+//   promo_stock_out → stock_out → packaging master.
+const promoPacksFor = (sku) => {
+  const pc = sku?.packaging_config || {};
+  if ((pc.promo_stock_out || []).length) return pc.promo_stock_out;
+  if ((pc.stock_out || []).length) return pc.stock_out;
+  return pc.master || [];
+};
+
+
 export default function PromoDispatchSection({
   distributor,
   canManage,
@@ -272,10 +283,12 @@ export default function PromoDispatchSection({
 
   const onSelectSku = (id, skuId) => {
     const master = skus.find(s => s.id === skuId);
-    // Use the SKU's `packaging_config.promo_stock_out` to pre-select the
-    // default packaging (e.g. "Crate - 12"). Falls back to nothing — the
-    // dropdown then guides the rep to pick one explicitly.
-    const pkgs = master?.packaging_config?.promo_stock_out || [];
+    // Resolve the packaging list with a fallback chain so a crate is ALWAYS
+    // selectable even when the SKU has no dedicated promo packaging set up:
+    //   promo_stock_out → stock_out → packaging master.
+    // Without this, SKUs with empty promo_stock_out silently defaulted to
+    // units_per_package=1, so a crate got stored (and printed) as 1 bottle.
+    const pkgs = promoPacksFor(master);
     const defPkg = pkgs.find(p => p.is_default) || pkgs[0] || null;
     const upp = defPkg?.units_per_package || 1;
     setItems(prev => prev.map(it => {
@@ -1108,7 +1121,7 @@ export default function PromoDispatchSection({
                     const lineValue = (parseInt(item.quantity) || 0) * (parseFloat(item.unit_price) || 0);
                     const batches = batchMap[item.sku_id] || [];
                     const masterSku = skus.find(s => s.id === item.sku_id);
-                    const promoPkgs = masterSku?.packaging_config?.promo_stock_out || [];
+                    const promoPkgs = promoPacksFor(masterSku);
                     // Friendly unit label derived from the packaging name's
                     // last word — "24 Bottle Crate" → "crate", "12 Bottle
                     // Carton" → "carton", "Bottle (1)" → "bottle". Falls back

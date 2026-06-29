@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 268 — Promo Delivery Challan packaging fallback fix verified end-to-end. The reported production bug ('crate printed as 1 Bottle') is FIXED. All 6 backend pytest checks pass and the frontend dropdown is now populated via the stock_out fallback. The Zoho push was NOT triggered (only the pure _pack_clause / _pluralize_uom helpers were unit-tested; the create_promo_dispatch call was made with as_draft=true).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_268_promo_packaging_fallback.py",
+    "/app/test_reports/pytest/iteration_268.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "promoPacksFor() in /app/frontend/src/components/distributor/PromoDispatchSection.jsx (lines 30-38) correctly implements the fallback chain promo_stock_out → stock_out → master. Returns [] only when no packaging is configured anywhere.",
+    "create_promo_dispatch in /app/backend/routes/promo_dispatch.py:590-615 normalizes correctly: int(it.units_per_package or 1) defaults to 1 (safe baseline equal to legacy behaviour for SKUs with no packaging at all) and stores quantity=crates*upp, packages=crates, packaging_units=upp, unit_price=per_bottle. quantity*unit_price preserves the line value.",
+    "_pack_clause / _pluralize_uom are pure functions in /app/backend/services/zoho_service.py:1274-1296 (no Zoho HTTP). The 4 helper assertions in this iteration's test suite cover the bug examples in the brief.",
+    "Per-bottle unit_price is rounded to 4 decimals (line 594) — acceptable but be aware that very small per-bottle prices (e.g. ₹0.0001 below) could round to zero. Non-blocking for the current SKU set.",
+    "Frontend dialog uses Qty label 'Qty (12s)' and 'Indicative Value/12 (₹)' once a 12-pack is chosen — strong UX confirmation that units_per_package is captured before submit."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_268_promo_packaging_fallback.py"
+  ],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% — packaging dropdown populated with [Carton - 6 (6), Crate - 12 (12)]; no 'No promo packaging configured' hint; Crate-12 selectable"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Test created+deleted a DRAFT promo delivery (challan) under distributor Brian (bb12d90e-4d33-4890-ac5f-17573c551b5c), recipient 'Promo Test Contact', 1 × Crate-12 of Nyla 600 ml / Silver, reason 'Sampling'. Cleanup via DELETE /api/distributors/{id}/promo-deliveries/{dispatch_id} succeeded (status 200). No residual test data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend route is /api/distributors/{id}/promo-deliveries (NOT promo-dispatches). Login token field is `session_token` (not `token`/`access_token`). SKU list endpoint is /api/master-skus and returns {'skus': [...]} where each item exposes `sku` / `sku_name` (NOT `name`). The frontend dialog is opened via the 'Promo Stock-Out' button (data-testid not on the trigger), then promo-sku-select-0 / promo-pkg-select-0 / promo-qty-0 / promo-price-0 testids become available inside the modal. The 'Nyla – 600 ml / Silver' SKU has promo_stock_out=None and stock_out=[Carton-6, Crate-12 (default)] — perfect repro target for the fallback fix.",
+  "rca of the issue": "ROOT CAUSE (production bug): For SKUs whose packaging_config.promo_stock_out was empty/None (e.g. 'Nyla – 600 ml / Silver'), the promo dispatch dialog rendered an empty packaging dropdown with the hint 'No promo packaging configured for this SKU'. Users still proceeded; with no crate selectable, the line carried units_per_package=null. Backend create_promo_dispatch defaulted upp to 1 → quantity stored as 1 (the entered crate count, treated as bottles) and unit_price kept as the per-CRATE value. The Zoho delivery challan therefore printed '1 × 1 Bottle' for the crate line. FIX (verified): promoPacksFor(sku) in PromoDispatchSection.jsx implements the chain promo_stock_out → stock_out → master, so the dropdown is always populated when ANY packaging exists, units_per_package is captured at submit, and backend normalization (quantity=crates*upp, unit_price=per_bottle) produces correct Zoho line items. UI screenshot confirms 'Crate - 12 (12)' and 'Carton - 6 (6)' are listed for the bug-trigger SKU; backend round-trip confirms 1 crate → quantity=12, packages=1, packaging_units=12, unit_price × 12 = original crate price."
+}
