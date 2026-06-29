@@ -1822,6 +1822,7 @@ export default function DistributorDetail() {
             quantity: totalUnits,
             packaging_units: pkgUnits,
             packages: parseInt(item.quantity) || 0,
+            packaging_type_name: item.packaging_type_name || null,
             unit_price: parseFloat(item.unit_price),
             customer_selling_price: parseFloat(item.unit_price),
             discount_percent: parseFloat(item.discount_percent) || 0,
@@ -3704,7 +3705,14 @@ export default function DistributorDetail() {
                               </div>
                             )}
                           </td>
-                          <td className="p-2 text-right font-medium">{qty}</td>
+                          <td className="p-2 text-right font-medium">
+                            <div>{qty}</div>
+                            {item.packages > 0 && item.packaging_units > 1 && (
+                              <div className="text-[10px] font-normal text-muted-foreground" data-testid={`delivery-detail-item-packaging-${idx}`}>
+                                {item.packages} × {item.packaging_type_name || `Crate-${item.packaging_units}`} ({qty} bottles)
+                              </div>
+                            )}
+                          </td>
                           <td className="p-2 text-right text-blue-700">₹{basePrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2 text-right text-blue-800 font-medium">₹{billedToDist.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                           <td className="p-2 text-right text-emerald-700">₹{customerPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>

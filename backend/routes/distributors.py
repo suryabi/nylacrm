@@ -4804,6 +4804,10 @@ async def create_delivery(
             # on the field existing.
             'batch_id': item_data.batch_id,
             'batch_code': item_data.batch_code,
+            # Packaging breakdown for the delivery detail popup.
+            'packaging_type_name': item_data.packaging_type_name,
+            'packaging_units': item_data.packaging_units,
+            'packages': item_data.packages,
         }
         
         # Calculate amounts with margin and transfer price

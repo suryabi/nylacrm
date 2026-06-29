@@ -319,7 +319,10 @@ export default function DeliveriesTab({
       updateDeliveryItem(i.id, 'sku_id', matched.id);
       updateDeliveryItem(i.id, 'sku_name', matched.sku_name || matched.sku || '');
       updateDeliveryItem(i.id, 'unit_price', parseFloat(only.price_per_unit) || 0);
-      if (defPkg) updateDeliveryItem(i.id, 'packaging_units', String(defPkg.units_per_package));
+      if (defPkg) {
+        updateDeliveryItem(i.id, 'packaging_units', String(defPkg.units_per_package));
+        updateDeliveryItem(i.id, 'packaging_type_name', defPkg.packaging_type_name || '');
+      }
     });
   }, [deliveryItems.length, selectedDeliveryAccount, skus]);  // eslint-disable-line react-hooks/exhaustive-deps
   
@@ -1077,7 +1080,10 @@ export default function DeliveriesTab({
                                     const fullSku = skus.find(s => s.id === v);
                                     const soPkg = fullSku?.packaging_config?.stock_out || [];
                                     const defPkg = soPkg.find(p => p.is_default) || soPkg[0];
-                                    if (defPkg) updateDeliveryItem(item.id, 'packaging_units', String(defPkg.units_per_package));
+                                    if (defPkg) {
+                                      updateDeliveryItem(item.id, 'packaging_units', String(defPkg.units_per_package));
+                                      updateDeliveryItem(item.id, 'packaging_type_name', defPkg.packaging_type_name || '');
+                                    }
                                   }
                                 }}
                               >
@@ -1106,7 +1112,11 @@ export default function DeliveriesTab({
                               {stockOutPkg.length > 0 ? (
                                 <select className="w-full h-10 px-3 border rounded-md text-sm bg-background"
                                   value={item.packaging_units || ''}
-                                  onChange={e => updateDeliveryItem(item.id, 'packaging_units', e.target.value)}
+                                  onChange={e => {
+                                    const sel = stockOutPkg.find(p => String(p.units_per_package) === e.target.value);
+                                    updateDeliveryItem(item.id, 'packaging_units', e.target.value);
+                                    updateDeliveryItem(item.id, 'packaging_type_name', sel?.packaging_type_name || '');
+                                  }}
                                   data-testid={`delivery-pkg-${index}`}>
                                   {stockOutPkg.map((pkg, pi) => (
                                     <option key={pi} value={pkg.units_per_package}>{pkg.packaging_type_name} ({pkg.units_per_package})</option>

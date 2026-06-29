@@ -503,6 +503,12 @@ class DeliveryItemCreate(BaseModel):
     # surface batch lineage on customer invoices.
     batch_id: Optional[str] = None
     batch_code: Optional[str] = None
+    # Packaging breakdown captured from the stock-out form so the delivery
+    # detail popup can show "5 × Crate-12 (60 bottles)". `quantity` above is
+    # always in bottles; `packages` × `packaging_units` == quantity.
+    packaging_type_name: Optional[str] = None
+    packaging_units: Optional[int] = None
+    packages: Optional[int] = None
 
 
 class DeliveryItemUpdate(BaseModel):
@@ -540,6 +546,9 @@ class DeliveryItem(BaseModel):
     margin_value: Optional[float] = None
     margin_amount: Optional[float] = None  # Calculated earning for this item
     remarks: Optional[str] = None
+    packaging_type_name: Optional[str] = None
+    packaging_units: Optional[int] = None
+    packages: Optional[int] = None
 
 
 class CreditNoteApplicationCreate(BaseModel):

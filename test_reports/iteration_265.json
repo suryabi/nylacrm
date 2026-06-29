@@ -1,0 +1,32 @@
+{
+  "summary": "Verified backend persistence + GET round-trip and frontend popup rendering for delivery item packaging breakdown (UOM + bottle count). All 4 pytest checks pass; UI popup shows '1 × Crate-12 (12 bottles)' under the Qty column with the expected data-testid.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_265_delivery_packaging_breakdown.py",
+    "/app/test_reports/pytest/iteration_265.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Frontend conditional `item.packages > 0 && item.packaging_units > 1` (DistributorDetail.js:3710) correctly hides the breakdown for legacy items (no packages) and for single-bottle packs (packaging_units=1) — matches the spec.",
+    "DeliveryItem pydantic model exposes the three new fields as Optional, so legacy records without those keys deserialize without errors. Good defensive shape.",
+    "DistributorDetail.js is 4958 lines — exceeds the 700-line guideline. Consider splitting the delivery-detail dialog into its own component for maintainability (not blocking for this iteration)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_265_delivery_packaging_breakdown.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Created and (best-effort) deleted draft delivery DEL-2026-0030 against distributor Brian (bb12d90e-4d33-4890-ac5f-17573c551b5c), Empire Restaurant account, Delhi warehouse, SKU 'Nyla – 330 ml / Silver', 1 × Crate-12 = 12 bottles. Pytest cleanup also runs DELETE; UI test left the draft in place for human re-verification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend test file `test_iteration_265_delivery_packaging_breakdown.py` is idempotent: it reads distributor stock to size the bottle quantity, falling back to packaging_units=2 when stock <12. Brian has 2 active locations (one batch-tracked, one not); test picks the non-batch one. Required env: REACT_APP_BACKEND_URL must be exported when running pytest from /app (root .env isn't auto-loaded).",
+  "rca of the issue": "N/A — this was a feature verification, not a bug. Verified: (a) DeliveryItemCreate / DeliveryItem models carry packaging_type_name/packaging_units/packages (backend/models/distributor.py:509-511, 549-551); (b) create_delivery route persists those fields in distributor_delivery_items (routes/distributors.py:4808-4810); (c) get_delivery returns items raw including the new fields (line 4306-4311); (d) frontend payload sends packaging_type_name (DistributorDetail.js:1825); (e) popup renders the breakdown line at DistributorDetail.js:3710-3714 with data-testid='delivery-detail-item-packaging-0'. Confirmed end-to-end via API create→GET (quantity=12=1×12, packaging_type_name='Crate-12') and UI popup screenshot showing '1 × Crate-12 (12 bottles)'."
+}
