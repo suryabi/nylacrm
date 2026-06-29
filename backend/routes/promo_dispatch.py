@@ -461,7 +461,10 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
                 raise HTTPException(status_code=400, detail=f"Batch is required for SKU {it.sku_name or it.sku_id}.")
             bkey = it.batch_id if src_tracks_batches else None
             k = (it.sku_id, bkey, it.sku_name)
-            demand_map[k] = demand_map.get(k, 0) + it.quantity
+            # Demand is in BOTTLES — the user enters crates (packages), so multiply
+            # by units-per-package. on_hand / reserved are bottle-level.
+            upp = int(it.units_per_package or 1) or 1
+            demand_map[k] = demand_map.get(k, 0) + (it.quantity * upp)
         derived = {}
         if not src_is_factory and not src_tracks_batches:
             derived = await _derived_on_hand_by_sku(
@@ -515,7 +518,7 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
         "maps_link": maps_link,
     }
 
-    total_qty = sum(it.quantity for it in data.items)
+    total_qty = sum(it.quantity * (int(it.units_per_package or 1) or 1) for it in data.items)
     total_value = sum(it.quantity * float(it.unit_price or 0) for it in data.items)
 
     # Promo stock-out persisted as an is_promo DELIVERY so it shares the
@@ -578,23 +581,33 @@ async def create_promo_dispatch(distributor_id: str, data: PromoDeliveryCreate, 
     await db.distributor_deliveries.insert_one(dispatch)
 
     # ── Create line items (reserved while the delivery is open; deducted at Complete) ──
+    # Stored in the REGULAR Stock-Out convention so the shared reservation /
+    # deduction / dashboard logic treats promo identically: `quantity` in BOTTLES,
+    # `packaging_units` = bottles-per-package, `packages` = crates entered, and a
+    # per-BOTTLE unit_price (so quantity × unit_price keeps the same value).
     for it in data.items:
-        line_value = it.quantity * float(it.unit_price or 0)
+        upp = int(it.units_per_package or 1) or 1
+        crates = int(it.quantity)
+        bottles = crates * upp
+        per_bottle = round(float(it.unit_price or 0) / upp, 4) if upp else float(it.unit_price or 0)
+        line_value = bottles * per_bottle
         await db.distributor_delivery_items.insert_one({
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
             "delivery_id": dispatch_id,
             "sku_id": it.sku_id,
             "sku_name": it.sku_name,
-            "quantity": it.quantity,
-            "unit_price": float(it.unit_price or 0),
+            "quantity": bottles,
+            "packages": crates,
+            "packaging_units": upp,
+            "unit_price": per_bottle,
             "line_value": round(line_value, 2),
             "net_amount": 0,
             "batch_id": it.batch_id,
             "batch_code": it.batch_code,
             "packaging_type_id": it.packaging_type_id,
             "packaging_type_name": it.packaging_type_name,
-            "units_per_package": it.units_per_package,
+            "units_per_package": upp,
             "remarks": it.remarks,
             "created_at": now,
         })
