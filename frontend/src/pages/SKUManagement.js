@@ -40,6 +40,37 @@ const categoryColors = {
   'White Label': 'bg-orange-100 text-orange-800',
 };
 
+// Packaging is now defined ONCE per SKU in a "Packaging Master". Each flow is
+// just an allow-list (with one default) that references master packs — units
+// always come from the master so they can never drift across flows.
+const PKG_FLOWS = [
+  { key: 'production', label: 'Production' },
+  { key: 'stock_in', label: 'Stock In' },
+  { key: 'stock_out', label: 'Stock Out' },
+  { key: 'promo_stock_out', label: 'Promo' },
+];
+
+// Union of all packs referenced anywhere → the canonical SKU packaging master.
+const derivePkgMaster = (pc) => {
+  const seen = new Map();
+  (pc?.master || []).forEach((m) => {
+    if (m.packaging_type_id && !seen.has(m.packaging_type_id))
+      seen.set(m.packaging_type_id, { packaging_type_id: m.packaging_type_id, packaging_type_name: m.packaging_type_name, units_per_package: m.units_per_package });
+  });
+  PKG_FLOWS.forEach(({ key }) => (pc?.[key] || []).forEach((it) => {
+    if (it.packaging_type_id && !seen.has(it.packaging_type_id))
+      seen.set(it.packaging_type_id, { packaging_type_id: it.packaging_type_id, packaging_type_name: it.packaging_type_name, units_per_package: it.units_per_package });
+  }));
+  return Array.from(seen.values());
+};
+
+const normalizePkgConfig = (raw) => {
+  const pc = raw || {};
+  const out = { master: derivePkgMaster(pc) };
+  PKG_FLOWS.forEach(({ key }) => { out[key] = (pc[key] || []).map((it) => ({ ...it })); });
+  return out;
+};
+
 export default function SKUManagement() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -64,6 +95,7 @@ export default function SKUManagement() {
     external_sku_id: '',
     category: '',
     unit: '',
+    base_uom: 'Bottle',
     description: '',
     hsn_code: '',
     base_price: '',
@@ -73,7 +105,7 @@ export default function SKUManagement() {
     allow_custom_mrp: false,
     is_active: true,
     sort_order: 0,
-    packaging_config: { production: [], stock_in: [], stock_out: [] },
+    packaging_config: { master: [], production: [], stock_in: [], stock_out: [], promo_stock_out: [] },
     cogs_components_values: {},
   });
 
@@ -147,7 +179,7 @@ export default function SKUManagement() {
   const handleOpenCreate = () => {
     setEditingSku(null);
     setFormData({
-      sku_name: '', external_sku_id: '', category: '', unit: '', description: '',
+      sku_name: '', external_sku_id: '', category: '', unit: '', base_uom: 'Bottle', description: '',
       hsn_code: '',
       base_price: '',
       mrp: '',
@@ -155,7 +187,7 @@ export default function SKUManagement() {
       return_bottle_credit: '',
       allow_custom_mrp: false,
       is_active: true, sort_order: skus.length + 1,
-      packaging_config: { production: [], stock_in: [], stock_out: [] },
+      packaging_config: { master: [], production: [], stock_in: [], stock_out: [], promo_stock_out: [] },
       cogs_components_values: {},
     });
     setShowModal(true);
@@ -168,6 +200,7 @@ export default function SKUManagement() {
       external_sku_id: sku.external_sku_id || '',
       category: sku.category || '',
       unit: sku.unit || '',
+      base_uom: sku.base_uom || 'Bottle',
       description: sku.description || '',
       hsn_code: sku.hsn_code || '',
       base_price: sku.base_price != null ? String(sku.base_price) : '',
@@ -177,10 +210,61 @@ export default function SKUManagement() {
       allow_custom_mrp: !!sku.allow_custom_mrp,
       is_active: sku.is_active !== false,
       sort_order: sku.sort_order || 0,
-      packaging_config: sku.packaging_config || { production: [], stock_in: [], stock_out: [] },
+      packaging_config: normalizePkgConfig(sku.packaging_config),
       cogs_components_values: sku.cogs_components_values || {},
     });
     setShowModal(true);
+  };
+
+  // ── Packaging Master helpers ──────────────────────────────────────────
+  const addPackToMaster = (ptId) => {
+    setFormData((prev) => {
+      const pc = prev.packaging_config;
+      if ((pc.master || []).find((m) => m.packaging_type_id === ptId)) return prev;
+      const pt = packagingTypes.find((p) => p.id === ptId);
+      if (!pt) return prev;
+      const entry = { packaging_type_id: pt.id, packaging_type_name: pt.name, units_per_package: pt.units_per_package };
+      return { ...prev, packaging_config: { ...pc, master: [...(pc.master || []), entry] } };
+    });
+  };
+
+  const removePackFromMaster = (packId) => {
+    setFormData((prev) => {
+      const pc = prev.packaging_config;
+      const next = { ...pc, master: (pc.master || []).filter((m) => m.packaging_type_id !== packId) };
+      PKG_FLOWS.forEach(({ key }) => {
+        let arr = (pc[key] || []).filter((i) => i.packaging_type_id !== packId);
+        if (arr.length > 0 && !arr.find((i) => i.is_default)) arr = arr.map((i, idx) => ({ ...i, is_default: idx === 0 }));
+        next[key] = arr;
+      });
+      return { ...prev, packaging_config: next };
+    });
+  };
+
+  const togglePackInFlow = (packId, flowKey) => {
+    setFormData((prev) => {
+      const pc = prev.packaging_config;
+      const masterEntry = (pc.master || []).find((m) => m.packaging_type_id === packId);
+      if (!masterEntry) return prev;
+      let arr = [...(pc[flowKey] || [])];
+      const existing = arr.find((i) => i.packaging_type_id === packId);
+      if (existing) {
+        const wasDefault = existing.is_default;
+        arr = arr.filter((i) => i.packaging_type_id !== packId);
+        if (wasDefault && arr.length > 0) arr = arr.map((i, idx) => ({ ...i, is_default: idx === 0 }));
+      } else {
+        arr.push({ ...masterEntry, is_default: arr.length === 0 });
+      }
+      return { ...prev, packaging_config: { ...pc, [flowKey]: arr } };
+    });
+  };
+
+  const setFlowDefault = (packId, flowKey) => {
+    setFormData((prev) => {
+      const pc = prev.packaging_config;
+      const arr = (pc[flowKey] || []).map((i) => ({ ...i, is_default: i.packaging_type_id === packId }));
+      return { ...prev, packaging_config: { ...pc, [flowKey]: arr } };
+    });
   };
 
   const handleSave = async () => {
@@ -207,6 +291,8 @@ export default function SKUManagement() {
         if (!isNaN(num)) cleanedCogs[k] = num;
       });
       const payload = { ...formData, cogs_components_values: cleanedCogs };
+      // Base UOM defaults to "Bottle" when left blank.
+      payload.base_uom = (payload.base_uom || '').trim() || 'Bottle';
       // Coerce hsn_code: trim, store empty string as null so backend doesn't keep stale value
       if (typeof payload.hsn_code === 'string') {
         const trimmed = payload.hsn_code.trim();
@@ -488,6 +574,7 @@ export default function SKUManagement() {
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                         <span>Unit: {sku.unit}</span>
+                        <span>Base UOM: {sku.base_uom || 'Bottle'}</span>
                         {sku.packaging_config && (() => {
                           const prod = (sku.packaging_config.production || []).find(p => p.is_default);
                           return prod ? <span>Prod: {prod.packaging_type_name} ({prod.units_per_package})</span> : null;
@@ -629,6 +716,17 @@ export default function SKUManagement() {
                   data-testid="sku-unit-input"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="base_uom">Base Unit of Measure *</Label>
+                <Input
+                  id="base_uom"
+                  value={formData.base_uom}
+                  onChange={(e) => setFormData({ ...formData, base_uom: e.target.value })}
+                  placeholder="e.g., Bottle"
+                  data-testid="sku-base-uom-input"
+                />
+                <p className="text-[10px] text-muted-foreground">Inventory is counted in this unit. All packaging sizes below are expressed in {formData.base_uom || 'this unit'}.</p>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -726,80 +824,92 @@ export default function SKUManagement() {
               </div>
             </div>
 
-            {/* Packaging Configuration — 3 contexts */}
-            <div className="space-y-3 pt-2 border-t">
-              <Label className="text-sm font-semibold">Packaging Configuration</Label>
-              {[
-                { key: 'production', label: 'Production', desc: 'Packaging used during production batches' },
-                { key: 'stock_in', label: 'Stock In (Distributor Delivery)', desc: 'Packaging for shipments to distributors' },
-                { key: 'stock_out', label: 'Stock Out (Customer Delivery)', desc: 'Packaging for customer deliveries' },
-                { key: 'promo_stock_out', label: 'Promotional Stock Out', desc: 'Packaging for non-sale dispatches (sampling, networking, brand visibility)' },
-              ].map(ctx => {
-                const items = formData.packaging_config?.[ctx.key] || [];
-                return (
-                  <div key={ctx.key} className="border rounded-lg p-3 space-y-2" data-testid={`pkg-config-${ctx.key}`}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-700">{ctx.label}</p>
-                        <p className="text-[10px] text-slate-400">{ctx.desc}</p>
-                      </div>
-                      <Select
-                        value=""
-                        onValueChange={(ptId) => {
-                          if (items.find(i => i.packaging_type_id === ptId)) return;
-                          const pt = packagingTypes.find(p => p.id === ptId);
-                          if (!pt) return;
-                          const newItem = { packaging_type_id: pt.id, packaging_type_name: pt.name, units_per_package: pt.units_per_package, is_default: items.length === 0 };
-                          setFormData(prev => ({
-                            ...prev,
-                            packaging_config: { ...prev.packaging_config, [ctx.key]: [...items, newItem] }
-                          }));
-                        }}
-                      >
-                        <SelectTrigger className="h-7 w-40 text-[10px]" data-testid={`pkg-add-${ctx.key}`}>
-                          <SelectValue placeholder="+ Add packaging" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {packagingTypes.filter(pt => !items.find(i => i.packaging_type_id === pt.id)).map(pt => (
-                            <SelectItem key={pt.id} value={pt.id}>{pt.name} ({pt.units_per_package})</SelectItem>
+            {/* Packaging Master + per-flow allow-list matrix */}
+            <div className="space-y-3 pt-2 border-t" data-testid="packaging-master-section">
+              <div>
+                <Label className="text-sm font-semibold">Packaging</Label>
+                <p className="text-[10px] text-slate-400">Define each pack once below (in {formData.base_uom || 'base units'}). Then tick which flows it applies to; ★ marks the default for that flow. Units are shared across all flows so counts stay consistent.</p>
+              </div>
+
+              {/* Master pack list */}
+              <div className="border rounded-lg p-3 space-y-2 bg-slate-50/50" data-testid="pkg-master-list">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-slate-700">Packaging Master</p>
+                  <Select
+                    value=""
+                    onValueChange={addPackToMaster}
+                  >
+                    <SelectTrigger className="h-7 w-44 text-[10px]" data-testid="pkg-master-add">
+                      <SelectValue placeholder="+ Add packaging type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {packagingTypes.filter((pt) => !(formData.packaging_config?.master || []).find((m) => m.packaging_type_id === pt.id)).map((pt) => (
+                        <SelectItem key={pt.id} value={pt.id}>{pt.name} ({pt.units_per_package} {formData.base_uom || 'units'})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(formData.packaging_config?.master || []).length === 0 ? (
+                  <p className="text-[10px] text-slate-400 italic">No packaging defined. Add at least one pack — otherwise stock-out / promo fall back to 1 {formData.base_uom || 'unit'}.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs" data-testid="pkg-matrix-table">
+                      <thead>
+                        <tr className="text-[10px] text-slate-500 border-b">
+                          <th className="text-left py-1.5 pr-2 font-medium">Pack</th>
+                          <th className="text-center px-1 font-medium">Units</th>
+                          {PKG_FLOWS.map((f) => (
+                            <th key={f.key} className="text-center px-1 font-medium">{f.label}</th>
                           ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {items.length === 0 && <p className="text-[10px] text-slate-300 italic">No packaging types assigned</p>}
-                    {items.map((item, idx) => (
-                      <div key={item.packaging_type_id} className="flex items-center gap-2 bg-slate-50 rounded px-2.5 py-1.5" data-testid={`pkg-item-${ctx.key}-${idx}`}>
-                        <span className="text-xs font-medium text-slate-700 flex-1">{item.packaging_type_name}</span>
-                        <span className="text-[10px] text-blue-600 font-bold">{item.units_per_package} units</span>
-                        <button type="button"
-                          className={`px-2 py-0.5 text-[9px] font-semibold rounded ${item.is_default ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              packaging_config: {
-                                ...prev.packaging_config,
-                                [ctx.key]: items.map((it, i) => ({ ...it, is_default: i === idx }))
-                              }
-                            }));
-                          }}
-                          data-testid={`pkg-default-${ctx.key}-${idx}`}>
-                          {item.is_default ? 'Default' : 'Set Default'}
-                        </button>
-                        <button type="button" onClick={() => {
-                          const updated = items.filter((_, i) => i !== idx);
-                          if (item.is_default && updated.length > 0) updated[0].is_default = true;
-                          setFormData(prev => ({
-                            ...prev,
-                            packaging_config: { ...prev.packaging_config, [ctx.key]: updated }
-                          }));
-                        }} className="p-0.5 text-slate-400 hover:text-red-500" data-testid={`pkg-remove-${ctx.key}-${idx}`}>
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
+                          <th className="w-6"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(formData.packaging_config?.master || []).map((pack, idx) => (
+                          <tr key={pack.packaging_type_id} className="border-b last:border-0" data-testid={`pkg-master-row-${idx}`}>
+                            <td className="py-1.5 pr-2 font-medium text-slate-700">{pack.packaging_type_name}</td>
+                            <td className="text-center px-1 text-blue-600 font-bold whitespace-nowrap">{pack.units_per_package}</td>
+                            {PKG_FLOWS.map((f) => {
+                              const inFlow = !!(formData.packaging_config?.[f.key] || []).find((i) => i.packaging_type_id === pack.packaging_type_id);
+                              const isDefault = !!(formData.packaging_config?.[f.key] || []).find((i) => i.packaging_type_id === pack.packaging_type_id && i.is_default);
+                              return (
+                                <td key={f.key} className="text-center px-1">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={inFlow}
+                                      onChange={() => togglePackInFlow(pack.packaging_type_id, f.key)}
+                                      className="h-3.5 w-3.5 accent-emerald-600 cursor-pointer"
+                                      data-testid={`pkg-flow-${f.key}-${idx}`}
+                                    />
+                                    {inFlow && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setFlowDefault(pack.packaging_type_id, f.key)}
+                                        className={`text-xs leading-none ${isDefault ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}`}
+                                        title={isDefault ? 'Default for this flow' : 'Set as default'}
+                                        data-testid={`pkg-default-${f.key}-${idx}`}
+                                      >
+                                        {isDefault ? '★' : '☆'}
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                            <td className="text-center">
+                              <button type="button" onClick={() => removePackFromMaster(pack.packaging_type_id)} className="p-0.5 text-slate-400 hover:text-red-500" data-testid={`pkg-master-remove-${idx}`}>
+                                <X size={12} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                );
-              })}
+                )}
+              </div>
             </div>
 
             {/* COGS Costs — values for each active master COGS component (₹) */}

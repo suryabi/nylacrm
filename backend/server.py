@@ -1970,6 +1970,7 @@ class SKUModel(BaseModel):
     external_sku_id: Optional[str] = None  # Identifier used by external systems / integrations
     category: str  # e.g., "Jar", "Bottle", "Premium", "Sparkling", "White Label"
     unit: str  # e.g., "20L", "600ml", "1L x 12"
+    base_uom: str = "Bottle"  # Canonical countable base unit (inventory is tracked in this). All packaging units_per_package are expressed in this UOM.
     description: Optional[str] = None
     # When True, accounts can/must set a per-row MRP for this SKU on the
     # Account Detail page; activation will then enforce that MRP > 0. When
@@ -1987,6 +1988,7 @@ class SKUCreate(BaseModel):
     external_sku_id: Optional[str] = None
     category: str
     unit: str
+    base_uom: Optional[str] = "Bottle"
     description: Optional[str] = None
     hsn_code: Optional[str] = None  # 4-8 digit HSN code for GST returns + E-way Bill JSON.
     base_price: Optional[float] = None  # ₹ per bottle. Used for Stock Transfer Schedule-I invoicing & E-way Bill valuation.
@@ -2004,6 +2006,7 @@ class SKUUpdate(BaseModel):
     external_sku_id: Optional[str] = None
     category: Optional[str] = None
     unit: Optional[str] = None
+    base_uom: Optional[str] = None
     description: Optional[str] = None
     hsn_code: Optional[str] = None  # set to "" to clear effectively
     base_price: Optional[float] = None  # ₹ per bottle (no margin); set to 0 to clear effectively
@@ -2068,6 +2071,7 @@ async def get_master_skus(
             'external_sku_id': sku.get('external_sku_id'),
             'category': sku.get('category'),
             'unit': sku.get('unit'),
+            'base_uom': sku.get('base_uom') or 'Bottle',
             'description': sku.get('description'),
             'hsn_code': sku.get('hsn_code'),
             'base_price': sku.get('base_price'),
@@ -2117,6 +2121,7 @@ async def create_sku(
         'external_sku_id': sku.external_sku_id,
         'category': sku.category,
         'unit': sku.unit,
+        'base_uom': doc.get('base_uom') or 'Bottle',
         'description': sku.description,
         'hsn_code': doc.get('hsn_code'),
         'base_price': doc.get('base_price'),
@@ -2217,6 +2222,7 @@ async def update_sku(
         'external_sku_id': updated.get('external_sku_id'),
         'category': updated.get('category'),
         'unit': updated.get('unit'),
+        'base_uom': updated.get('base_uom') or 'Bottle',
         'description': updated.get('description'),
         'hsn_code': updated.get('hsn_code'),
         'base_price': updated.get('base_price'),
