@@ -179,6 +179,78 @@ async def _allocate_txn_codes(tenant_id: str, n: int) -> list:
     return [f"TXN-{str(i).zfill(6)}" for i in range(start, end + 1)]
 
 
+def _norm_filter(txns: list, tenant_id: str, org_id: str,
+                 date_start: str, date_end: str, acct: dict = None) -> list:
+    """Normalise raw Zoho rows, enrich with account context (uncategorized lines
+    often omit account fields), drop rows without an id, and enforce the date
+    window client-side (Zoho frequently ignores date_start/date_end here)."""
+    docs = []
+    for raw in txns:
+        if acct:
+            raw.setdefault("account_id", acct.get("account_id"))
+            raw.setdefault("account_name", acct.get("account_name"))
+        d = _normalize(raw, tenant_id, org_id)
+        if not d["zoho_transaction_id"]:
+            continue
+        if (date_start or date_end) and not _date_in_range(d.get("date"), date_start, date_end):
+            continue
+        docs.append(d)
+    return docs
+
+
+async def _persist_page(tenant_id: str, org_id: str, page_docs: list):
+    """Upsert one batch of normalised Zoho docs. New rows get a txn_code and land
+    as 'untagged'; existing rows refresh Zoho-side fields only (user tags/proofs/
+    links and any direction_override are preserved). Returns (new, updated)."""
+    if not page_docs:
+        return 0, 0
+    # de-dupe within the batch by Zoho id (avoids duplicate-key churn)
+    uniq = {d["zoho_transaction_id"]: d for d in page_docs}
+    page_docs = list(uniq.values())
+    ids = list(uniq.keys())
+    existing = {}
+    async for ex in db[COLL].find(
+        {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": {"$in": ids}},
+        {"_id": 0, "zoho_transaction_id": 1, "direction_override": 1},
+    ):
+        existing[ex["zoho_transaction_id"]] = ex
+
+    new_docs = [d for d in page_docs if d["zoho_transaction_id"] not in existing]
+    codes = await _allocate_txn_codes(tenant_id, len(new_docs))
+
+    ops = []
+    now = _now()
+    for d in page_docs:
+        if d["zoho_transaction_id"] not in existing:
+            continue
+        # refresh Zoho-side fields; preserve user tags/proofs/links and any
+        # manual direction override.
+        key = {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": d["zoho_transaction_id"]}
+        ex = existing[d["zoho_transaction_id"]]
+        refresh_keys = ("amount", "currency", "date", "zoho_status",
+                        "zoho_transaction_type", "payee", "reference_number",
+                        "description", "bank_account_name", "zoho_account_id", "raw")
+        update_set = {k: d[k] for k in refresh_keys}
+        if not ex.get("direction_override"):
+            update_set["direction"] = d["direction"]
+        update_set["updated_at"] = now
+        ops.append(UpdateOne(key, {"$set": update_set}))
+    for d, code in zip(new_docs, codes):
+        d.update({
+            "id": str(uuid.uuid4()), "status": "untagged", "txn_code": code,
+            "tags": {}, "vendor_id": None, "vendor_name": None,
+            "account_id": None, "account_name": None,
+            "account_adjustment": None, "proofs": [], "notes": None,
+            "tagged_by": None, "tagged_at": None,
+            "created_at": now, "updated_at": now,
+        })
+        ops.append(InsertOne(d))
+
+    if ops:
+        await db[COLL].bulk_write(ops, ordered=False)
+    return len(new_docs), len(page_docs) - len(new_docs)
+
+
 async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str,
                     explicit_range: bool, job_id: str) -> None:
     """Background worker — pulls Zoho pages, batches the upserts via bulk_write,
@@ -187,77 +259,55 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
     try:
         creds = await zoho_service.get_credentials(tenant_id)
         org_id = (creds or {}).get("organization_id")
-        new_count, updated_count, page = 0, 0, 1
-        while page <= 50:
-            res = await zoho_service.fetch_bank_transactions(tenant_id, date_start, date_end, page=page)
-            txns = res.get("transactions") or []
-            # Build (zoho_txn_id -> normalised doc) map, drop any without an id.
-            page_docs = []
-            for raw in txns:
-                d = _normalize(raw, tenant_id, org_id)
-                if not d["zoho_transaction_id"]:
-                    continue
-                # Zoho often IGNORES date_start/date_end on /banktransactions, so
-                # enforce the requested window client-side. Skip out-of-range rows
-                # (drop rows with no date when a range is requested).
-                if (date_start or date_end) and not _date_in_range(d.get("date"), date_start, date_end):
-                    continue
-                page_docs.append(d)
-            if page_docs:
-                ids = [d["zoho_transaction_id"] for d in page_docs]
-                existing = {}  # zoho_id -> {direction_override: ...}
-                async for ex in db[COLL].find(
-                    {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": {"$in": ids}},
-                    {"_id": 0, "zoho_transaction_id": 1, "direction_override": 1},
-                ):
-                    existing[ex["zoho_transaction_id"]] = ex
+        new_count = updated_count = 0
+        warnings = []
 
-                new_docs = [d for d in page_docs if d["zoho_transaction_id"] not in existing]
-                codes = await _allocate_txn_codes(tenant_id, len(new_docs))
+        async def _drain(fetch_page, acct=None, label="register"):
+            """Page through one Zoho source, normalise + window-filter, upsert,
+            and push job progress. Mutates new_count / updated_count."""
+            nonlocal new_count, updated_count
+            page = 1
+            while page <= 50:
+                res = await fetch_page(page)
+                docs = _norm_filter(res.get("transactions") or [], tenant_id, org_id,
+                                    date_start, date_end, acct)
+                n, u = await _persist_page(tenant_id, org_id, docs)
+                new_count += n
+                updated_count += u
+                await db[SYNC_JOB_COLL].update_one(
+                    {"id": job_id},
+                    {"$set": {"progress": {"source": label, "page": page,
+                                           "new": new_count, "updated": updated_count},
+                              "updated_at": _now()}},
+                )
+                if not res.get("has_more"):
+                    break
+                page += 1
 
-                ops = []
-                now = _now()
-                for d in page_docs:
-                    key = {"tenant_id": tenant_id, "zoho_org_id": org_id, "zoho_transaction_id": d["zoho_transaction_id"]}
-                    if d["zoho_transaction_id"] in existing:
-                        # refresh Zoho-side fields. Preserve user tags/proofs/links.
-                        # If the user has manually overridden the direction, keep
-                        # the override and don't touch `direction`.
-                        ex = existing[d["zoho_transaction_id"]]
-                        refresh_keys = ("amount", "currency", "date", "zoho_status",
-                                        "zoho_transaction_type", "payee", "reference_number",
-                                        "description", "bank_account_name", "zoho_account_id", "raw")
-                        update_set = {k: d[k] for k in refresh_keys}
-                        if not ex.get("direction_override"):
-                            update_set["direction"] = d["direction"]
-                        update_set["updated_at"] = now
-                        ops.append(UpdateOne(key, {"$set": update_set}))
-                        updated_count += 1
-                for d, code in zip(new_docs, codes):
-                    d.update({
-                        "id": str(uuid.uuid4()), "status": "untagged", "txn_code": code,
-                        "tags": {}, "vendor_id": None, "vendor_name": None,
-                        "account_id": None, "account_name": None,
-                        "account_adjustment": None, "proofs": [], "notes": None,
-                        "tagged_by": None, "tagged_at": None,
-                        "created_at": now, "updated_at": now,
-                    })
-                    ops.append(InsertOne(d))
-                    new_count += 1
+        # 1) Register transactions (categorized / matched / manually-added).
+        await _drain(lambda p: zoho_service.fetch_bank_transactions(
+            tenant_id, date_start, date_end, page=p), label="register")
 
-                if ops:
-                    await db[COLL].bulk_write(ops, ordered=False)
-
-            # update progress on the job doc so the UI can show progress
-            await db[SYNC_JOB_COLL].update_one(
-                {"id": job_id},
-                {"$set": {"progress": {"page": page, "new": new_count, "updated": updated_count},
-                          "updated_at": _now()}},
-            )
-
-            if not res.get("has_more"):
-                break
-            page += 1
+        # 2) Uncategorized statement lines — a SEPARATE Zoho resource the
+        #    register endpoint never returns. Pulled per bank account and wrapped
+        #    defensively so any failure here never aborts the register sync.
+        try:
+            accounts = await zoho_service.fetch_bank_accounts(tenant_id)
+        except Exception as ae:
+            accounts = []
+            warnings.append(f"Could not list bank accounts for uncategorized pull: {str(ae)[:160]}")
+        for acct in accounts:
+            aid = acct.get("account_id")
+            atype = (acct.get("account_type") or "").lower()
+            if not aid or (atype and atype not in ("bank", "credit_card")):
+                continue
+            try:
+                await _drain(
+                    lambda p, _aid=aid: zoho_service.fetch_uncategorized_bank_transactions(
+                        tenant_id, _aid, date_start, date_end, page=p),
+                    acct=acct, label="uncategorized")
+            except Exception as ue:
+                warnings.append(f"Uncategorized pull failed for {acct.get('account_name') or aid}: {str(ue)[:160]}")
 
         if not explicit_range:
             await db[SYNC_COLL].update_one(
@@ -270,7 +320,7 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
         await db[SYNC_JOB_COLL].update_one(
             {"id": job_id},
             {"$set": {"status": "completed", "new": new_count, "updated": updated_count,
-                      "finished_at": _now(), "updated_at": _now()}},
+                      "warnings": warnings, "finished_at": _now(), "updated_at": _now()}},
         )
     except Exception as e:
         logger.exception("Zoho bank transaction sync failed (job %s)", job_id)
