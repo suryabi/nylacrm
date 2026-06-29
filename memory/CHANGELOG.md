@@ -933,3 +933,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Verified iteration_262 (create normalization, availability-in-bottles, upp=1 regression all green; reserved math proven via _reserved_qty_map summing stored 12).
 - KNOWN SEPARATE ISSUE (pre-existing, not this bug): Brian/Bangalore distributor_stock rows have batch_id on a non-batch-tracked location, so _adjust_stock_for_dispatch's null-batch filter misses the row at Complete → deduction no-ops. Flagged for a follow-up.
 - NOTE: only affects NEW promo dispatches; pre-fix promo records still hold crate quantities.
+
+## 2026-06-28 — Pending-approval banner on Stock Delivery Request (Delivery Orders)
+- When a delivery order enters 'pending_approval', the transition now persists pending_approver_id/pending_approver_name (the requester's reporting manager) atomically in the main $set.
+- DeliveryOrders.js DetailDialog shows an amber banner (data-testid do-pending-approval-banner) with "Awaiting approval from <name>" (do-pending-approver-name), falling back to "...from the reporting manager." when no manager; hidden for other states.
+- Verified iteration_263 (backend 3/3, frontend 3/3). Then refactored the persistence into a single atomic write per reviewer note.

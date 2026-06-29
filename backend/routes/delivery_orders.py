@@ -561,23 +561,18 @@ async def trigger_transition(order_id: str, payload: TransitionRequest, current_
         "by_user_id": current_user.get("id"), "by_user_name": current_user.get("name"),
         "comment": payload.comment,
     }
+    # Approval-by-manager task on submit (the 'both' model). Compute the approver
+    # BEFORE the main write so the approver fields persist atomically with the
+    # state change (UI shows a "Pending approval from <name>" banner).
+    if target["key"] == "pending_approval":
+        requester = await db.users.find_one({"id": order.get("created_by"), "tenant_id": tenant_id}, {"_id": 0})
+        approver = await _create_approval_task(tenant_id, {**order, **set_doc}, requester) if requester else None
+        set_doc["pending_approver_id"] = (approver or {}).get("id")
+        set_doc["pending_approver_name"] = (approver or {}).get("name")
+
     await db.delivery_orders.update_one(
         {"id": order_id, "tenant_id": tenant_id},
         {"$set": set_doc, "$push": {"status_history": history}})
-
-    # Approval-by-manager task on submit (the 'both' model). Persist the approver
-    # so the UI can show a "Pending approval from <name>" banner.
-    if target["key"] == "pending_approval":
-        requester = await db.users.find_one({"id": order.get("created_by"), "tenant_id": tenant_id}, {"_id": 0})
-        approver = None
-        if requester:
-            approver = await _create_approval_task(tenant_id, {**order, **set_doc}, requester)
-        await db.delivery_orders.update_one(
-            {"id": order_id, "tenant_id": tenant_id},
-            {"$set": {
-                "pending_approver_id": (approver or {}).get("id"),
-                "pending_approver_name": (approver or {}).get("name"),
-            }})
 
     # Placing the order auto-creates a DRAFT promotional stock-out at the
     # servicing distributor (account assignment first, else delivery-city coverage).
