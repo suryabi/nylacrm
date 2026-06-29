@@ -949,3 +949,12 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Backend: DeliveryItemCreate + DeliveryItem models now carry packaging_type_name (str), packaging_units (int), packages (int); create_delivery persists them in distributor_delivery_items; get_delivery returns items raw so they flow through.
 - Frontend: DeliveriesTab packaging <select> onChange + SKU/account auto-defaults now also capture packaging_type_name into item state; DistributorDetail delivery payload forwards packaging_type_name (packaging_units/packages were already sent).
 - Verified iteration_265 (backend 100% create→GET round-trip, quantity == packages × packaging_units; frontend popup shows "1 × Crate-12 (12 bottles)").
+
+## 2026-06-29 — SKU Unit-of-Measure + canonical Packaging Master
+- Root cause of wrong counts in stock-out/promo/challans: packaging config was missing entirely on 11 SKUs and promo_stock_out flow was absent on all configured SKUs → flows silently fell back to 1:1 (a crate counted as 1). Where configured, data was clean.
+- Added `base_uom` per SKU (default "Bottle"; SKUModel/SKUCreate/SKUUpdate + create/update/get responses in server.py). Inventory base unit is declared & validated.
+- SKU Management editor redesigned: define packs ONCE in a "Packaging Master" (packaging_config.master), then a matrix of checkboxes per flow (Production/Stock-In/Stock-Out/Promo) with a ★ default each. Units are shared from the master so per-flow counts can never drift. Per-flow arrays are regenerated (denormalized) on toggle, so all downstream readers (DeliveriesTab, promo, challans) are unchanged.
+- Migration `/app/scripts/migrate_sku_uom_packaging.py` (idempotent): set base_uom="Bottle" on all 45 SKUs, built master = union of existing flow packs, seeded a single "Bottle = 1" default pack into the 11 previously-empty SKUs across all flows.
+- Audit script `/app/scripts/audit_sku_uom.py` confirms no name-vs-units mismatch and no cross/intra-SKU pack-id drift.
+- Verified iteration_266 (backend 5/5: GET base_uom + master, PUT round-trip, POST+DELETE; frontend: add pack → tick flows → set ★ default → save → reopen persists). Catalog restored clean.
+- NOTE: the 4 configured Nyla SKUs still need Promo ticked per-pack by the user (master now contains the packs, so it's one click). Empty SKUs now default to Bottle=1 — refine pack sizes as needed.
