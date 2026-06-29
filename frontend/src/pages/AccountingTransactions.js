@@ -19,7 +19,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '../components/ui/dialog';
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -676,9 +676,9 @@ export default function AccountingTransactions() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Stethoscope className="h-4 w-4 text-amber-600" /> Zoho Banking Diagnostics</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-slate-500">
+          <DialogDescription className="text-xs text-slate-500">
             This probes the connected Zoho org (read-only) to show what it returns for register vs uncategorized transactions. Copy the result and share it so the sync can be tuned.
-          </p>
+          </DialogDescription>
           {diagLoading && (
             <div className="flex items-center gap-2 py-6 text-sm text-slate-500" data-testid="diag-loading">
               <Loader2 className="h-4 w-4 animate-spin" /> Probing Zoho…
