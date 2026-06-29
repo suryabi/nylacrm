@@ -4173,7 +4173,7 @@ export default function DistributorDetail() {
             {invoicePreview && !invoicePreview.already_invoiced && (
               <Button
                 onClick={handleConfirmPushFromPreview}
-                disabled={invPreviewLoading || invoicePreview.missing_agreed_price_skus?.length > 0}
+                disabled={invPreviewLoading || invoicePreview.missing_agreed_price_skus?.length > 0 || Number(invoicePreview.net_taxable_amount) <= 0}
                 className="bg-violet-600 hover:bg-violet-700"
                 data-testid="preview-confirm-push-btn"
               >
