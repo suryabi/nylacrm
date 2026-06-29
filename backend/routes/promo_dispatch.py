@@ -345,6 +345,8 @@ async def _push_promo_dispatch_to_zoho(tenant_id: str, dispatch_id: str, dispatc
         "batch_code": it.get("batch_code"),
         "packaging_type_id": it.get("packaging_type_id"),
         "packaging_type_name": it.get("packaging_type_name"),
+        "packaging_units": it.get("packaging_units") or it.get("units_per_package"),
+        "packages": it.get("packages"),
         "units_per_package": it.get("units_per_package"),
     } for it in items]
     try:

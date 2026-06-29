@@ -2303,14 +2303,26 @@ async def create_delivery_challan_for_promo_dispatch(
         zoho_item_id = await get_zoho_item_id(tenant_id, it.get("sku_id"))
         base_name = (it.get("sku_name") or "").strip() or "Item"
         batch_code = (it.get("batch_code") or "").strip()
+        qty_bottles = float(it.get("quantity", 0) or 0)
+        upp = int(it.get("packaging_units") or it.get("units_per_package") or 0)
         parts = [base_name]
         if batch_code:
             parts.append(f"Batch {batch_code}")
+        # Packaging breakdown so the delivery team sees BOTH the pack count and
+        # the total bottles, e.g. "2 × Crate-12 = 24 bottles".
+        if upp and upp > 1:
+            pkgs = it.get("packages")
+            if not pkgs:
+                pkgs = int(qty_bottles // upp) if upp else 0
+            unit_word = (it.get("packaging_type_name") or "").strip() or f"{upp}-bottle pack"
+            parts.append(f"{pkgs} × {unit_word} = {int(qty_bottles)} bottles")
+        else:
+            parts.append(f"{int(qty_bottles)} bottles")
         display_name = " · ".join(parts) + "  — Sample / Promotional (Not for Sale)"
         line_items.append({
             "item_id": zoho_item_id,
             "name": display_name,
-            "quantity": float(it.get("quantity", 0) or 0),
+            "quantity": qty_bottles,
             "rate": float(it.get("unit_price", 0) or 0),
             "tax_id": "",
             "tax_name": "",

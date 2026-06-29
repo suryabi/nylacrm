@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="8" time="3.973" timestamp="2026-06-29T15:28:54.345728+00:00" hostname="agent-env-abf13854-541c-4979-8340-fb7cdf6ec6da"><testcase classname="tests.test_promo_bottle_normalization" name="test_promo_create_normalizes_to_bottles" time="1.014" /><testcase classname="tests.test_promo_bottle_normalization" name="test_promo_reserves_one_crate" time="0.294"><failure message="AssertionError: reserved should increase by 12 bottles (1 crate), got delta=0 (before=0, after=0)&#10;assert 0 == 12">tests/test_promo_bottle_normalization.py:141: in test_promo_reserves_one_crate
+    assert delta == 12, f"reserved should increase by 12 bottles (1 crate), got delta={delta} (before={before_reserved}, after={after_reserved})"
+E   AssertionError: reserved should increase by 12 bottles (1 crate), got delta=0 (before=0, after=0)
+E   assert 0 == 12</failure></testcase><testcase classname="tests.test_promo_bottle_normalization" name="test_promo_availability_error_in_bottles" time="0.110" /><testcase classname="tests.test_promo_bottle_normalization" name="test_promo_complete_deducts_bottles" time="0.212"><failure message="AssertionError: complete should deduct 12 bottles, got delta=0 (before=24, after=24)&#10;assert 0 == 12">tests/test_promo_bottle_normalization.py:169: in test_promo_complete_deducts_bottles
+    assert delta == 12, f"complete should deduct 12 bottles, got delta={delta} (before={on_hand_before}, after={on_hand_after})"
+E   AssertionError: complete should deduct 12 bottles, got delta=0 (before=24, after=24)
+E   assert 0 == 12</failure></testcase><testcase classname="tests.test_promo_bottle_normalization" name="test_promo_no_packaging_unaffected" time="0.159" /><testcase classname="tests.test_promo_dispatch_zoho_sync" name="test_zoho_promo_function_importable" time="1.527" /><testcase classname="tests.test_promo_dispatch_zoho_sync" name="test_zoho_promo_payload_shape" time="0.003"><failure message="AssertionError: assert False&#10; +  where False = &lt;built-in method endswith of str object at 0xf9b4014c9450&gt;('/deliverychallans')&#10; +    where &lt;built-in method endswith of str object at 0xf9b4014c9450&gt; = '/books/v3/deliverychallans/ZD-TEST-1/address/shipping'.endswith">tests/test_promo_dispatch_zoho_sync.py:116: in test_zoho_promo_payload_shape
+    asyncio.run(_runner())
+/usr/local/lib/python3.11/asyncio/runners.py:190: in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/asyncio/base_events.py:654: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+tests/test_promo_dispatch_zoho_sync.py:99: in _runner
+    assert captured["path"].endswith("/deliverychallans")
+E   AssertionError: assert False
+E    +  where False = &lt;built-in method endswith of str object at 0xf9b4014c9450&gt;('/deliverychallans')
+E    +    where &lt;built-in method endswith of str object at 0xf9b4014c9450&gt; = '/books/v3/deliverychallans/ZD-TEST-1/address/shipping'.endswith</failure></testcase><testcase classname="tests.test_promo_dispatch_zoho_sync" name="test_retry_endpoint_404_on_unknown" time="0.483" /></testsuite></testsuites>

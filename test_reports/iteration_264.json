@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 264 — Promo Stock-Out Zoho Delivery Challan now prints a packaging+bottles breakdown on every line. New backend test file added (6/6 pass) verifying both the zoho_service line-item builder and the routes/promo_dispatch.py field forwarding. Scope was backend-only with mocked Zoho (sentinel/capture pattern); no live Zoho push possible in preview.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "services/zoho_service.create_delivery_challan_for_promo_dispatch",
+        "issue": "Pre-existing brittleness in tests/test_promo_dispatch_zoho_sync.py::test_zoho_promo_payload_shape — its fake _zoho_request does NOT sentinel-raise, so when the function later issues a PUT to /deliverychallans/{id}/address/shipping the captured dict is overwritten, breaking the `endswith('/deliverychallans')` assertion. Test-side issue only; product code is correct. Recommend switching that older test to the sentinel/capture pattern used in test_iteration_264 (i.e., raise after first /deliverychallans POST)."
+      },
+      {
+        "endpoint": "routes/promo_dispatch (regression context)",
+        "issue": "Pre-existing failures in tests/test_promo_bottle_normalization.py::{test_promo_reserves_one_crate, test_promo_complete_deducts_bottles} — documented in iteration_262 as test-script field-name errors against /api/distributors/{id}/stock, not product bugs. Unaffected by iteration_264."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_264_promo_challan_packaging_breakdown.py",
+    "/app/test_reports/pytest/iteration_264.xml",
+    "/app/test_reports/pytest/iteration_264_regression.xml"
+  ],
+  "action_items": [
+    "[Optional] Refactor tests/test_promo_dispatch_zoho_sync.py::test_zoho_promo_payload_shape to use a sentinel-raise after capturing the first /deliverychallans POST (so the shipping-address PUT doesn't clobber the captured payload). Mirror the pattern in test_iteration_264_promo_challan_packaging_breakdown.py."
+  ],
+  "critical_code_review_comments": [
+    "zoho_service.py:2298-2332 — builder now appends '{packages} × {packaging_type_name} = {bottles} bottles' when upp>1 and '{bottles} bottles' otherwise. quantity column is bottles. Clean and matches the delivery-team requirement.",
+    "zoho_service.py:2314-2318 — `packages` is derived as `qty_bottles // upp` when callers don't pass it; good defensive fallback. Edge case: if qty_bottles is not an exact multiple of upp (e.g., 25 bottles in a 12-pack), the printed crate count under-counts (2 × Crate-12 = 25 bottles). Realistically OK for promo but worth flagging.",
+    "zoho_service.py:2317 — fallback label '{upp}-bottle pack' when packaging_type_name is empty. Reasonable.",
+    "zoho_service.py:2306 — qty cast as float then int() for display ('{int(qty_bottles)} bottles'). Fine for whole-bottle counts; would truncate 2.5 → 2 if ever sent fractional, but promos are integer bottles in practice.",
+    "promo_dispatch.py:340-351 — items_for_zoho now carries packages, packaging_units (with fallback to units_per_package), and packaging_type_name. units_per_package is also forwarded as a separate key (the builder also reads it). Clean forwarding.",
+    "Note: name template ends with '  — Sample / Promotional (Not for Sale)' (two leading spaces). Cosmetic only — Zoho will likely collapse to one space — but if a future test ever asserts that suffix, watch for that gotcha."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_264_promo_challan_packaging_breakdown.py"
+  ],
+  "success_rate": {
+    "backend": "100% on the in-scope iteration_264 suite (6/6). Regression suite: 5/8 pass; the 3 failures are all PRE-EXISTING test-side issues (2 documented in iteration_262, 1 brittle capture in test_zoho_promo_payload_shape) unrelated to this change.",
+    "frontend": "n/a (backend-only run)"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (not actually exercised — all 6 tests are pure unit-level monkeypatch tests, no HTTP calls).",
+  "seed_data_creation": "None. All tests mock Zoho HTTP, upsert_contact, get_zoho_item_id, is_zoho_configured, get_credentials, and the zoho_invoice_mappings / distributor_locations collections. No DB writes.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration_264 feature (promo challan packaging breakdown in line-item name + bottle quantity column) is implemented in zoho_service.py:2298-2332 and forwarded by promo_dispatch.py:340-351. Canonical regression: /app/backend/tests/test_iteration_264_promo_challan_packaging_breakdown.py — 6 tests covering multi-pack name format, singleton-pack plain '<n> bottles', missing packaging_type_name fallback, packages derivation from bottles/upp, packages+packaging_units forwarding, and legacy units_per_package fallback. Uses sentinel-raise + AsyncMock for `db` collections so it runs without any DB or Zoho. The older test_promo_dispatch_zoho_sync.py::test_zoho_promo_payload_shape is brittle (captured dict overwritten by shipping-address PUT) — refactor to sentinel-raise if you touch it.",
+  "rca of the issue": "N/A — this is a feature add, not a bug fix. zoho_service.create_delivery_challan_for_promo_dispatch now constructs each line item's display name as '<SKU> · Batch <code> · {packages} × {packaging_type_name} = {bottles} bottles  — Sample / Promotional (Not for Sale)' (or '<n> bottles' when packaging_units<=1), and the challan QTY column stores bottles (qty_bottles). routes/promo_dispatch.py:_push_promo_dispatch_to_zoho was updated in parallel to forward `packages` and `packaging_units` (with `units_per_package` fallback) into items_for_zoho so the builder has the data it needs. Both halves verified by mocked capture."
+}
