@@ -938,3 +938,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - When a delivery order enters 'pending_approval', the transition now persists pending_approver_id/pending_approver_name (the requester's reporting manager) atomically in the main $set.
 - DeliveryOrders.js DetailDialog shows an amber banner (data-testid do-pending-approval-banner) with "Awaiting approval from <name>" (do-pending-approver-name), falling back to "...from the reporting manager." when no manager; hidden for other states.
 - Verified iteration_263 (backend 3/3, frontend 3/3). Then refactored the persistence into a single atomic write per reviewer note.
+
+## 2026-06-28 — Promo delivery challan shows packaging + bottle count
+- The Zoho Delivery Challan for promotional stock-out now prints each line as "<SKU> · <packages> × <packaging_type_name> = <bottles> bottles" (e.g. "660ml Sparkling · 2 × Crate-12 = 24 bottles"), or "<n> bottles" when there's no multi-bottle pack. The QTY column is in bottles. So the delivery team sees both packs and total bottles.
+- zoho_service.create_delivery_challan_for_promo_dispatch line-name builder; promo_dispatch._push_promo_dispatch_to_zoho now forwards packages + packaging_units to the builder.
+- Verified iteration_264 (6/6 backend unit tests, mocked Zoho). 3 unrelated regression failures are pre-existing test-script issues (iteration_262 field-name + 1 brittle capture test).
