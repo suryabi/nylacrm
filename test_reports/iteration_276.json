@@ -1,0 +1,41 @@
+{
+  "summary": "Backend-only testing of new POST /api/invoices/{invoice_id}/void endpoint (invoice-level Void action). All 8 tests passed (8/8 = 100%). Zoho was fully mocked via monkeypatch on services.zoho_service.void_invoice — NO live Zoho calls made. Synthetic invoice docs were inserted directly into Mongo (tenant nyla-air-water) using a deterministic 'synthetic_test_marker' field and cleaned up after every test. Empire Restaurant (seed account d4e2187a-...) outstanding_balance was snapshotted and restored after each mutating test; 0 synthetic invoices remain post-run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/invoices/{id}/void", "issue": "Pydantic field validation for confirmation='' missing-body returns 422 (FastAPI default) instead of the custom 400 'Type VOID to confirm.' — acceptable; the explicit guard fires correctly for any non-'VOID' value. Test accepts 400 or 422."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_276_invoice_void.py",
+    "/app/test_reports/pytest/iteration_276.xml"
+  ],
+  "tests_executed": [
+    "TestConfirmationGuard::test_wrong_confirmation_returns_400 — PASSED (confirmation='void' lowercase → 400 'Type VOID to confirm.' and invoice NOT deleted)",
+    "TestConfirmationGuard::test_missing_confirmation_returns_422_or_400 — PASSED (missing body field accepted as 400 or 422)",
+    "TestNotFound::test_unknown_invoice_id_returns_404 — PASSED (detail='Invoice not found')",
+    "TestRoleGate::test_ceo_not_blocked_by_role_check — PASSED (CEO does NOT get 403, reaches 404 branch)",
+    "TestRoleGate::test_role_gate_string_present_in_source — PASSED (static check: 403 'Only CEO and Admin can void invoices' branch exists in routes/invoices.py)",
+    "TestHappyPath::test_happy_path_deletes_invoice_and_decrements_outstanding — PASSED (mocked zoho void called once; response success=true & zoho_voided=true; invoice doc deleted; outstanding_balance decremented by gross=5000.0; total_* aggregates recalculated)",
+    "TestZohoFailurePath::test_zoho_failure_leaves_local_invoice_intact — PASSED (mocked zoho raises → response 502 with 'left intact' in detail; invoice doc still present; outstanding_balance unchanged)",
+    "TestNoZohoId::test_no_zoho_id_skips_zoho_call — PASSED (invoice with no zoho_invoice_id → mocked zoho NOT called; response success=true & zoho_voided=false; invoice deleted; outstanding decremented by gross=999.0)"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/invoices.py void_invoice_endpoint: role gate uses substring match on user_role for 'ceo'/'system admin'/'admin'. Substring matching is permissive — e.g. a role string containing 'admin' anywhere (like 'subadmin') would pass. Consider exact-match against a whitelist for clarity, but this matches the pattern already used by bulk_delete_invoices so it's consistent.",
+    "routes/invoices.py void_invoice_endpoint line 1016: deletes only by `id` (`tdb.invoices.delete_one({'id': invoice.get('id')})`), unlike find on line 986 which accepts id OR invoice_no. This is correct (we already have the resolved doc) but adds asymmetry — fine, just noting.",
+    "Local import of services.zoho_service.void_invoice inside the function body works (and is what enables monkeypatching to take effect on the route at call time), but is non-idiomatic. Hoisting it to the top of routes/invoices.py would also have worked because the route does `from services.zoho_service import void_invoice` — keep as-is; no fix needed.",
+    "VoidInvoiceRequest.confirmation has no default; Pydantic returns 422 when the body omits the field rather than the route's 400 'Type VOID to confirm.' Cosmetic only — frontend always sends it."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_276_invoice_void.py (new — 8 tests, mocks Zoho, synthetic invoice setup/cleanup)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). Login returns 'session_token'.",
+  "seed_data_creation": "None persistent. All synthetic invoices were tagged synthetic_test_marker='iteration_276', inserted only for the duration of each test, and removed in finally blocks. Verified 0 leftovers post-run. Empire Restaurant outstanding_balance restored to its pre-test value (0) after each mutating test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file lives at /app/backend/tests/test_iteration_276_invoice_void.py and uses the in-process FastAPI ASGITransport pattern (same as iteration 270) so that monkeypatch on services.zoho_service.void_invoice actually takes effect on the route handler. Tests load both /app/backend/.env (for MONGO_URL/DB_NAME/JWT_SECRET) and /app/frontend/.env (for REACT_APP_BACKEND_URL used by the login call). Role-gate lower-priv (non-CEO/non-Admin) branch was NOT exercised because no low-priv test account exists for tenant nyla-air-water — verified via static source assertion instead, as suggested in the review request. Revenue analytics from iteration_275 was NOT regressed: the route's account total_* recalc only re-runs the same aggregation logic that delete_invoice already uses.",
+  "mocked_apis_used": ["services.zoho_service.void_invoice (monkeypatched, no live Zoho Books call)"]
+}

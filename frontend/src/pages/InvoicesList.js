@@ -512,6 +512,34 @@ export default function InvoicesList() {
     }
   };
 
+  // Void invoice (orphaned / cancel in Zoho)
+  const [voidTarget, setVoidTarget] = useState(null);
+  const [voidConfirmText, setVoidConfirmText] = useState('');
+  const [voidReason, setVoidReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
+
+  const handleVoidInvoice = async () => {
+    if (!voidTarget) return;
+    const idOrNo = voidTarget.id || voidTarget.invoice_no || voidTarget.invoice_number;
+    setVoiding(true);
+    try {
+      const { data } = await axios.post(
+        `${API_URL}/api/invoices/${idOrNo}/void`,
+        { confirmation: voidConfirmText.trim(), reason: voidReason.trim() || null },
+        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+      );
+      toast.success(data?.message || 'Invoice voided');
+      setVoidTarget(null);
+      setVoidConfirmText('');
+      setVoidReason('');
+      fetchInvoices();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to void invoice');
+    } finally {
+      setVoiding(false);
+    }
+  };
+
   // Handle delete
   const handleDelete = async () => {
     if (selectedInvoices.length === 0) return;
@@ -1107,6 +1135,18 @@ export default function InvoicesList() {
                               ? <Loader2 className="h-4 w-4 animate-spin" />
                               : <Download className="h-4 w-4" />}
                           </Button>
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 shrink-0 text-slate-400 hover:text-rose-600"
+                              onClick={(e) => { e.stopPropagation(); setVoidConfirmText(''); setVoidReason(''); setVoidTarget(invoice); }}
+                              data-testid={`void-invoice-${invoice.id || invoice.invoice_no}`}
+                              title="Void invoice (cancel in Zoho & invalidate)"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          )}
                           </div>
                         </div>
                       </TableCell>
@@ -1241,11 +1281,22 @@ export default function InvoicesList() {
                       </p>
                     </div>
                     {canDelete && (
-                      <Checkbox
-                        checked={selectedInvoices.includes(invoice.id || invoice.invoice_no || invoice.invoice_number)}
-                        onCheckedChange={(checked) => handleSelectInvoice(invoice.id || invoice.invoice_no || invoice.invoice_number, checked)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedInvoices.includes(invoice.id || invoice.invoice_no || invoice.invoice_number)}
+                          onCheckedChange={(checked) => handleSelectInvoice(invoice.id || invoice.invoice_no || invoice.invoice_number, checked)}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-slate-400 hover:text-rose-600"
+                          onClick={() => { setVoidConfirmText(''); setVoidReason(''); setVoidTarget(invoice); }}
+                          data-testid={`void-invoice-card-${invoice.id || invoice.invoice_no}`}
+                          title="Void invoice (cancel in Zoho & invalidate)"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      </div>
                     )}
                   </div>
                   
@@ -1356,6 +1407,56 @@ export default function InvoicesList() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Void Invoice Confirmation Dialog (double-confirm: type VOID) */}
+      <AlertDialog open={!!voidTarget} onOpenChange={(o) => { if (!o) { setVoidTarget(null); setVoidConfirmText(''); setVoidReason(''); } }}>
+        <AlertDialogContent data-testid="void-invoice-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-rose-700">
+              <RotateCcw className="h-5 w-5" /> Void invoice {voidTarget?.invoice_no || voidTarget?.invoice_number}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm">
+                <p>
+                  This will <strong>void the invoice in Zoho Books</strong> (the number is kept and marked VOID for audit)
+                  and <strong>invalidate the local copy</strong> — it will be removed from Revenue Analytics, the Invoices
+                  list and the account's outstanding balance{voidTarget?.account_name ? ` for ${voidTarget.account_name}` : ''}.
+                </p>
+                <p className="text-rose-600 font-medium">This cannot be undone. If the Zoho void fails, nothing is changed locally.</p>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600">Reason (optional)</label>
+                  <Input
+                    value={voidReason}
+                    onChange={(e) => setVoidReason(e.target.value)}
+                    placeholder="e.g. Stock-out delivery was deleted"
+                    data-testid="void-invoice-reason"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-600">Type <span className="font-mono font-bold">VOID</span> to confirm</label>
+                  <Input
+                    value={voidConfirmText}
+                    onChange={(e) => setVoidConfirmText(e.target.value)}
+                    placeholder="VOID"
+                    data-testid="void-invoice-confirm-input"
+                  />
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="void-invoice-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleVoidInvoice(); }}
+              disabled={voidConfirmText.trim() !== 'VOID' || voiding}
+              className="bg-rose-600 hover:bg-rose-700"
+              data-testid="void-invoice-confirm-btn"
+            >
+              {voiding ? 'Voiding…' : 'Void invoice'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

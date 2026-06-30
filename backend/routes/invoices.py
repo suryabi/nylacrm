@@ -945,6 +945,110 @@ async def delete_invoice(
     }
 
 
+from pydantic import BaseModel
+from core.tenant import get_current_tenant_id
+
+
+class VoidInvoiceRequest(BaseModel):
+    confirmation: str
+    reason: Optional[str] = None
+
+
+@router.post("/{invoice_id}/void")
+async def void_invoice_endpoint(
+    invoice_id: str,
+    body: VoidInvoiceRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Void an invoice in Zoho Books and invalidate the local copy.
+
+    Use this when an invoice is orphaned (e.g. its stock-out delivery was
+    deleted) and must be cancelled. Voids the invoice in Zoho (number kept,
+    marked VOID for audit), decrements the account's running outstanding by the
+    invoice value, then removes the local invoice doc so it no longer counts in
+    Revenue Analytics / the Invoices list / account totals.
+
+    CEO/Admin only. Requires `confirmation == 'VOID'`. If the Zoho void fails,
+    the local invoice is LEFT INTACT and an error is returned so the user can
+    fix Zoho and retry.
+    """
+    user_role = (current_user.get('role') or '').lower()
+    if not any(r in user_role for r in ['ceo', 'system admin', 'admin']):
+        raise HTTPException(status_code=403, detail='Only CEO and Admin can void invoices')
+
+    if (body.confirmation or '').strip() != 'VOID':
+        raise HTTPException(status_code=400, detail="Type VOID to confirm.")
+
+    tdb = get_tdb()
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+
+    invoice = await tdb.invoices.find_one({'$or': [{'id': invoice_id}, {'invoice_no': invoice_id}]})
+    if not invoice:
+        raise HTTPException(status_code=404, detail='Invoice not found')
+
+    # 1) Void in Zoho first — if it fails, abort WITHOUT touching the local copy.
+    zoho_invoice_id = invoice.get('zoho_invoice_id')
+    if zoho_invoice_id:
+        from services.zoho_service import void_invoice
+        try:
+            await void_invoice(tenant_id, zoho_invoice_id)
+        except Exception as exc:
+            logger.exception(f"[INVOICES] Zoho void failed for {invoice.get('invoice_no')}")
+            raise HTTPException(
+                status_code=502,
+                detail=f"Could not void this invoice in Zoho ({str(exc)[:300]}). "
+                       f"The local invoice was left intact — fix Zoho and retry.",
+            )
+
+    # 2) Decrement the account's running outstanding balance if this invoice's
+    #    value was previously added to it (Zoho mirror with outstanding_counted).
+    acct_key = invoice.get('account_uuid') or invoice.get('account_id')
+    if invoice.get('outstanding_counted') and acct_key:
+        gross = float(invoice.get('gross_invoice_value') or invoice.get('net_invoice_value') or 0)
+        if gross:
+            await tdb.accounts.update_one(
+                {'$or': [{'id': acct_key}, {'account_id': acct_key}]},
+                {'$inc': {'outstanding_balance': round(-gross, 2)}, '$set': {'updated_at': now}},
+            )
+
+    # 3) Remove the local invoice doc.
+    await tdb.invoices.delete_one({'id': invoice.get('id')})
+
+    # 4) Recalculate the account's aggregate invoice totals (matches delete_invoice).
+    if acct_key:
+        remaining = await tdb.invoices.find(
+            {'$or': [{'account_uuid': acct_key}, {'account_id': acct_key}], 'status': 'matched'}
+        ).to_list(10000)
+        await tdb.accounts.update_one(
+            {'$or': [{'id': acct_key}, {'account_id': acct_key}]},
+            {'$set': {
+                'total_gross_invoice_value': sum(i.get('gross_invoice_value', 0) or 0 for i in remaining),
+                'total_net_invoice_value': sum(i.get('net_invoice_value', 0) or 0 for i in remaining),
+                'total_credit_note_value': sum(i.get('credit_note_value', 0) or 0 for i in remaining),
+                'total_outstanding': sum(i.get('outstanding', 0) or 0 for i in remaining),
+                'invoice_count': len(remaining),
+                'updated_at': now,
+            }},
+        )
+
+    logger.info(
+        f"[INVOICES] Invoice {invoice.get('invoice_no', invoice_id)} voided"
+        f"{' in Zoho' if zoho_invoice_id else ''} & invalidated by {current_user.get('email')}"
+        + (f" — reason: {body.reason}" if body.reason else "")
+    )
+    return {
+        'success': True,
+        'zoho_voided': bool(zoho_invoice_id),
+        'message': (
+            f"Invoice {invoice.get('invoice_no', invoice_id)} voided"
+            + (" in Zoho and " if zoho_invoice_id else " and ")
+            + "invalidated."
+        ),
+    }
+
+
+
 @router.delete("")
 async def bulk_delete_invoices(
     invoice_ids: List[str],
