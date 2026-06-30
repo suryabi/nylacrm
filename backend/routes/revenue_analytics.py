@@ -675,18 +675,28 @@ async def revenue_state_diagnostic(
     time_filter: str = "this_month",
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
+    only_target: bool = False,
     _user: dict = Depends(get_current_user),
 ):
     """Reconcile a single state's revenue. Returns each invoice with its
     resolved account, attributed state, net value, and whether the account
     match succeeded. `target_state_net` is the sum the analytics chart shows
     for `state`; `missed_*` surfaces invoices that *look* like they belong to
-    the state but couldn't be matched (would previously be 'Uncategorised')."""
+    the state but couldn't be matched (would previously be 'Uncategorised').
+
+    `only_target=true` trims the `invoices` list to rows for the target state
+    plus any unmatched rows — keeps the payload small on large prod tenants
+    while still surfacing the totals from every invoice in the window."""
     fd, td = _window(time_filter, from_date, to_date)
     tdb = get_tdb()
     invoices = await tdb.invoices.find(
-        {"invoice_date": {"$gte": fd, "$lte": td}}, {"_id": 0}
-    ).to_list(20000)
+        {"invoice_date": {"$gte": fd, "$lte": td}},
+        {"_id": 0, "invoice_no": 1, "invoice_number": 1, "invoice_date": 1,
+         "account_name": 1, "customer_name": 1, "account_id": 1, "account_uuid": 1,
+         "status": 1, "source": 1, "gross_invoice_value": 1, "gross_amount": 1,
+         "grand_total": 1, "total_amount": 1, "net_invoice_value": 1,
+         "net_amount": 1, "credit_note_value": 1, "credit_note": 1},
+    ).to_list(50000)
     accounts = await tdb.accounts.find(
         {}, {"_id": 0, "id": 1, "account_id": 1, "account_name": 1,
              "city": 1, "state": 1, "territory": 1},
@@ -710,6 +720,8 @@ async def revenue_state_diagnostic(
             unmatched_count += 1
         if acc_state.strip().lower() == target:
             target_net += net
+        if only_target and matched and acc_state.strip().lower() != target:
+            continue
         rows.append({
             "invoice_no": inv.get("invoice_no") or inv.get("invoice_number"),
             "invoice_date": inv.get("invoice_date"),
