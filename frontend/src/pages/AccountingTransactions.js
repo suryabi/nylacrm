@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import {
   RefreshCw, Search, Loader2, ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Paperclip, Upload, X,
   Trash2, FileText, Link2, Banknote, CheckCircle2, ChevronRight, Tag, Building2,
-  Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Hash, Stethoscope,
+  Copy, ChevronLeft, CalendarRange, Download, FileSpreadsheet, FileDown, Hash, Stethoscope, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -172,6 +172,26 @@ export default function AccountingTransactions() {
       setDiag({ error: e.response?.data?.detail || 'Diagnostics failed' });
     } finally { setDiagLoading(false); }
   };
+  // Purge — admin-only hard delete of all Zoho-imported accounting data.
+  const [purgeOpen, setPurgeOpen] = useState(false);
+  const [purgeText, setPurgeText] = useState('');
+  const [purging, setPurging] = useState(false);
+  const purgeImported = async () => {
+    if (purgeText.trim() !== 'DELETE') return;
+    setPurging(true);
+    try {
+      const { data } = await axios.post(`${API}/api/accounting/transactions/purge`, { confirmation: 'DELETE' }, auth());
+      toast.success(`Deleted ${data.deleted_transactions || 0} transactions. Run a fresh sync to re-import.`, { duration: 7000 });
+      setPurgeOpen(false);
+      setPurgeText('');
+      load();
+      loadFlowSummary();
+      loadCategorySummary();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Purge failed');
+    } finally { setPurging(false); }
+  };
+
   const now = new Date();
   const [syncYear, setSyncYear] = useState(now.getFullYear());
   const [syncMonth, setSyncMonth] = useState(now.getMonth() + 1); // 1-12
@@ -364,6 +384,11 @@ export default function AccountingTransactions() {
           <Button variant="outline" onClick={runDiagnostics} data-testid="zoho-diagnostics-btn"
             title="Probe the connected Zoho org to see what it returns for register vs uncategorized transactions.">
             <Stethoscope className="mr-2 h-4 w-4 text-amber-600" /> Diagnose
+          </Button>
+          <Button variant="outline" onClick={() => { setPurgeText(''); setPurgeOpen(true); }} data-testid="purge-accounting-btn"
+            className="border-rose-200 text-rose-700 hover:bg-rose-50 hover:text-rose-800"
+            title="Admin: delete ALL imported accounting data and reset the sync so you can re-import month by month.">
+            <Trash2 className="mr-2 h-4 w-4" /> Purge Data
           </Button>
         </div>
       </div>
@@ -629,6 +654,33 @@ export default function AccountingTransactions() {
           </div>
         </div>
       )}
+
+      {/* Purge — destructive, admin-only, double-confirm (warning + type DELETE) */}
+      <Dialog open={purgeOpen} onOpenChange={(o) => { if (!purging) { setPurgeOpen(o); if (!o) setPurgeText(''); } }}>
+        <DialogContent className="max-w-md" data-testid="purge-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700"><AlertTriangle className="h-5 w-5" /> Delete all imported accounting data</DialogTitle>
+            <DialogDescription className="pt-1">
+              This permanently deletes <b>every Zoho-imported transaction</b> for this organisation (including any tags, vendor links and uploaded proofs) and resets the sync so you can re-import month by month.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            This action is <b>irreversible</b>. You will need to run a fresh sync afterwards to bring transactions back.
+          </div>
+          <div className="space-y-1.5 pt-1">
+            <Label className="text-xs text-slate-600">Type <span className="font-mono font-semibold">DELETE</span> to confirm</Label>
+            <Input value={purgeText} onChange={(e) => setPurgeText(e.target.value)} placeholder="DELETE" autoComplete="off" data-testid="purge-confirm-input" />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setPurgeOpen(false); setPurgeText(''); }} disabled={purging} data-testid="purge-cancel-btn">Cancel</Button>
+            <Button onClick={purgeImported} disabled={purging || purgeText.trim() !== 'DELETE'}
+              className="bg-rose-600 hover:bg-rose-700" data-testid="purge-confirm-btn">
+              {purging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete everything
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
 
       <Dialog open={syncOpen} onOpenChange={(o) => { if (!syncing) setSyncOpen(o); }}>
         <DialogContent className="max-w-md" data-testid="sync-dialog">

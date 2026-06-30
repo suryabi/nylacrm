@@ -421,6 +421,44 @@ async def sync_transactions(
     return {"job_id": job_id, "status": "started", "from": date_start, "to": date_end}
 
 
+class PurgePayload(BaseModel):
+    confirmation: str  # must equal "DELETE" (server-side double-confirm guard)
+
+
+@router.post("/purge")
+async def purge_imported_transactions(
+    payload: PurgePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    """ADMIN ONLY — hard-delete ALL Zoho-imported accounting transactions for the
+    tenant and reset the sync state so the next sync re-pulls from scratch
+    (month-by-month). Destructive + irreversible; requires confirmation='DELETE'.
+    Also clears sync-job history and resets the transaction-code counter."""
+    _require_admin(current_user)
+    if (payload.confirmation or "").strip() != "DELETE":
+        raise HTTPException(status_code=400, detail="Type DELETE to confirm purging all imported accounting data.")
+    tenant_id = get_current_tenant_id()
+
+    txn_res = await db[COLL].delete_many({"tenant_id": tenant_id})
+    jobs_res = await db[SYNC_JOB_COLL].delete_many({"tenant_id": tenant_id})
+    state_res = await db[SYNC_COLL].delete_many({"tenant_id": tenant_id})
+    # Reset the per-tenant transaction-code counter so codes restart cleanly.
+    await db["counters"].delete_many({"_id": f"{tenant_id}:accounting_txn"})
+
+    logger.warning(
+        "Accounting purge by %s (tenant=%s): %s transactions, %s jobs, %s sync-state deleted",
+        current_user.get("id"), tenant_id, txn_res.deleted_count, jobs_res.deleted_count, state_res.deleted_count,
+    )
+    return {
+        "ok": True,
+        "deleted_transactions": txn_res.deleted_count,
+        "deleted_sync_jobs": jobs_res.deleted_count,
+        "reset_sync_state": state_res.deleted_count,
+        "message": "All imported accounting data deleted. Run a fresh sync to re-import.",
+    }
+
+
+
 @router.get("/sync/status/{job_id}")
 async def sync_status(job_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
