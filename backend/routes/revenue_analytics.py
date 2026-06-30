@@ -113,6 +113,28 @@ def _month_window(year: int, month: int) -> tuple[str, str]:
     return f"{year:04d}-{month:02d}-01", f"{year:04d}-{month:02d}-{last:02d}"
 
 
+def _match_account(inv: dict, by_code: dict, by_uuid: dict, by_name: dict) -> Optional[dict]:
+    """Resolve an invoice to its account using EVERY available identifier.
+
+    Invoices carry BOTH an `account_id` (human code e.g. 'TOOP-HYD-A26-001')
+    AND an `account_uuid`. The previous logic only tried the FIRST truthy of
+    the two against both maps, so an invoice whose code didn't resolve but
+    whose UUID did was dropped into 'Uncategorised' — under-counting that
+    account's state (the GOA mismatch). We now try each identifier against
+    both the code-keyed and uuid-keyed maps, then fall back to account name.
+    """
+    for ident in (inv.get("account_id"), inv.get("account_uuid")):
+        if not ident:
+            continue
+        acc = by_code.get(ident) or by_uuid.get(ident)
+        if acc:
+            return acc
+    nm = (inv.get("account_name") or inv.get("customer_name") or "").strip().lower()
+    if nm:
+        return by_name.get(nm)
+    return None
+
+
 def _group_label(account: dict, group_by: str) -> str:
     # Empty / null group values bucket under "Uncategorised" so the chart
     # remains accurate. We never silently drop revenue.
@@ -190,14 +212,7 @@ async def _aggregate(
 
     groups: dict[str, dict] = {}
     for inv in invoices:
-        acc = None
-        acc_field = inv.get("account_id") or inv.get("account_uuid")
-        if acc_field:
-            acc = by_code.get(acc_field) or by_uuid.get(acc_field)
-        if not acc:
-            nm = (inv.get("account_name") or inv.get("customer_name") or "").strip().lower()
-            if nm:
-                acc = by_name.get(nm)
+        acc = _match_account(inv, by_code, by_uuid, by_name)
         label = _group_label(acc or {}, group_by)
         net = _net(inv)
         gross = _gross(inv)
@@ -643,4 +658,79 @@ async def revenue_reconciliation(
         "unidentified_line_revenue": round(unidentified, 2),
         "unmapped_line_revenue": round(unmapped_rev, 2),
         "unmapped_identifier_count": len(unmapped_keys),
+    }
+
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# State reconciliation diagnostic — for a chosen state (e.g. "Goa"), list every
+# invoice in the window and show whether it was attributed to that state, and
+# WHY any invoice failed to match its account (the cause of undercounts). Use
+# this to confirm on production that the Revenue-Analytics state total now
+# equals the true sum of that state's invoices.
+# ──────────────────────────────────────────────────────────────────────────
+@router.get("/reports/revenue-state-diagnostic")
+async def revenue_state_diagnostic(
+    state: str,
+    time_filter: str = "this_month",
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    _user: dict = Depends(get_current_user),
+):
+    """Reconcile a single state's revenue. Returns each invoice with its
+    resolved account, attributed state, net value, and whether the account
+    match succeeded. `target_state_net` is the sum the analytics chart shows
+    for `state`; `missed_*` surfaces invoices that *look* like they belong to
+    the state but couldn't be matched (would previously be 'Uncategorised')."""
+    fd, td = _window(time_filter, from_date, to_date)
+    tdb = get_tdb()
+    invoices = await tdb.invoices.find(
+        {"invoice_date": {"$gte": fd, "$lte": td}}, {"_id": 0}
+    ).to_list(20000)
+    accounts = await tdb.accounts.find(
+        {}, {"_id": 0, "id": 1, "account_id": 1, "account_name": 1,
+             "city": 1, "state": 1, "territory": 1},
+    ).to_list(5000)
+    by_code = {a.get("account_id"): a for a in accounts if a.get("account_id")}
+    by_uuid = {a.get("id"): a for a in accounts if a.get("id")}
+    by_name = {(a.get("account_name") or "").strip().lower(): a for a in accounts if a.get("account_name")}
+
+    target = (state or "").strip().lower()
+    rows = []
+    target_net = 0.0
+    unmatched_net = 0.0
+    unmatched_count = 0
+    for inv in invoices:
+        acc = _match_account(inv, by_code, by_uuid, by_name)
+        acc_state = (acc or {}).get("state") or "Uncategorised"
+        net = _net(inv)
+        matched = acc is not None
+        if not matched:
+            unmatched_net += net
+            unmatched_count += 1
+        if acc_state.strip().lower() == target:
+            target_net += net
+        rows.append({
+            "invoice_no": inv.get("invoice_no") or inv.get("invoice_number"),
+            "invoice_date": inv.get("invoice_date"),
+            "account_name": inv.get("account_name") or inv.get("customer_name"),
+            "account_id": inv.get("account_id"),
+            "account_uuid": inv.get("account_uuid"),
+            "matched": matched,
+            "attributed_state": acc_state,
+            "net": round(net, 2),
+            "status": inv.get("status"),
+            "source": inv.get("source"),
+        })
+    rows.sort(key=lambda r: r["net"], reverse=True)
+    return {
+        "from": fd,
+        "to": td,
+        "time_filter": time_filter,
+        "state": state,
+        "invoice_count": len(invoices),
+        "target_state_net": round(target_net, 2),
+        "unmatched_invoice_count": unmatched_count,
+        "unmatched_net": round(unmatched_net, 2),
+        "invoices": rows,
     }
