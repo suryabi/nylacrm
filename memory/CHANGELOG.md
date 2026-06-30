@@ -997,3 +997,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - New admin-only endpoint POST /api/accounting/transactions/purge (body {confirmation:'DELETE'}): hard-deletes all accounting_transactions for the tenant, clears sync jobs + sync state, and resets the txn-code counter — so the next sync re-imports cleanly month by month. Tenant-scoped (no cross-tenant risk); 400 on wrong/empty confirmation, 403 for non-admins.
 - Frontend (AccountingTransactions.js): "Purge Data" button opens a destructive double-confirm dialog (warning + must type DELETE; confirm enabled only on exact 'DELETE'). testids: purge-accounting-btn, purge-dialog, purge-confirm-input, purge-confirm-btn, purge-cancel-btn.
 - Verified iteration_272 (backend happy path deletes 3 + clears jobs/state/counter on synthetic tenant; guards 400/400/403; frontend gating verified without touching real data).
+
+## 2026-06-30 — Admin purge: month-wise scope added
+- POST /api/accounting/transactions/purge now accepts optional {year, month}: deletes ONLY that calendar month's transactions (date 'YYYY-MM-DD', range $gte first-of-month / $lt next-month-01), leaving other months + sync state + counter intact. No year/month => full purge (unchanged). month must be 1-12 (else 400).
+- Frontend purge dialog: scope toggle "A specific month" (Month/Year selects) vs "All data"; still requires typing DELETE. testids: purge-scope-month, purge-scope-all, purge-month, purge-year.
+- Verified iteration_273 (backend 4/4: month isolation + boundaries + Dec year-rollover + full-purge regression on synthetic tenant; frontend 8/8 toggle/gating). curl: 2099-01 deletes 0, month=13 -> 400, wrong confirmation -> 400.
