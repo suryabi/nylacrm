@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 273 — Admin month-scoped purge for /api/accounting/transactions/purge. Validated month-purge ISOLATION + boundary semantics ($gte first-of-month, $lt next-month-01) on a SYNTHETIC tenant (real nyla tenant never touched). Also verified December year-rollover, month=13->400, and that the full-purge regression (no month/year) still clears txns + sync_state + counter. Frontend dialog toggle (purge-scope-month / purge-scope-all) tested end-to-end up to Cancel — confirm was NEVER clicked.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_273_purge_month.py",
+    "/app/test_reports/pytest/iteration_273.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "purge_imported_transactions correctly truthy-checks `payload.year and payload.month` — so year=0 or month=0 silently fall through to FULL purge. Not exploitable today (Pydantic accepts 0; UI sends 1-12 / valid year), but a stricter `is not None` check would be safer.",
+    "Month-scoped purge intentionally leaves SYNC_COLL.last_synced_date untouched. If a user purges a month older than last_synced_date and then runs the default (incremental) sync, those rows will NOT be re-imported until they explicitly pick that month in the Sync dialog. Worth a tooltip/doc note on the dialog.",
+    "PurgePayload has no upper bound on `year` — accepts e.g. 9999 silently. Low priority since route is admin-only and worst case deletes nothing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_273_purge_month.py"
+  ],
+  "success_rate": {"backend": "100% (4/4)", "frontend": "100% (8/8 assertions)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (used only to load the page; no real data mutated).",
+  "seed_data_creation": "Synthetic tenant `test-purge-iter273-<uuid8>` — seeded 5 txns (2025-03-05, -20, -31, 2025-04-01, 2025-02-28) + sync_state + counter, plus 3 txns (2025-12-15, -31, 2026-01-01) for Dec boundary, plus 2 txns + sync_state + counter for full-purge. All cleaned up via autouse fixture.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_iteration_273_purge_month.py uses in-process pattern (sys.path.insert + monkeypatch get_current_tenant_id) per iteration_271/272 convention. Tests: (1) March 2025 purge with Feb/April boundary docs proves $gte/$lt isolation, sync_state + counter untouched; April follow-up deletes remaining 1 doc. (2) Dec 2025 -> rolls year to 2026-01-01. (3) month=13 raises HTTPException 400. (4) Full purge (no month/year) clears txns + SYNC_COLL + counters. Frontend dialog testids confirmed working: purge-accounting-btn, purge-dialog, purge-scope-month, purge-scope-all, purge-month, purge-year, purge-confirm-input, purge-confirm-btn, purge-cancel-btn. Real nyla tenant txn list was empty on page load (0 total) — independent of these tests.",
+  "rca of the issue": "N/A — no defects found. Feature behaves exactly per spec."
+}

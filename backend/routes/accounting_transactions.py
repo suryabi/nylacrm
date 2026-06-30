@@ -423,6 +423,8 @@ async def sync_transactions(
 
 class PurgePayload(BaseModel):
     confirmation: str  # must equal "DELETE" (server-side double-confirm guard)
+    year: Optional[int] = None   # when set with month -> delete only that month
+    month: Optional[int] = None  # 1-12
 
 
 @router.post("/purge")
@@ -430,15 +432,37 @@ async def purge_imported_transactions(
     payload: PurgePayload,
     current_user: dict = Depends(get_current_user),
 ):
-    """ADMIN ONLY — hard-delete ALL Zoho-imported accounting transactions for the
-    tenant and reset the sync state so the next sync re-pulls from scratch
-    (month-by-month). Destructive + irreversible; requires confirmation='DELETE'.
-    Also clears sync-job history and resets the transaction-code counter."""
+    """ADMIN ONLY — hard-delete imported accounting transactions for the tenant.
+    Destructive + irreversible; requires confirmation='DELETE'.
+      • No month/year  -> purge EVERYTHING and reset the sync state + txn counter
+        (clean full re-import).
+      • year + month   -> delete ONLY that calendar month's transactions
+        (re-import just that month afterwards); sync state/counter untouched."""
     _require_admin(current_user)
     if (payload.confirmation or "").strip() != "DELETE":
-        raise HTTPException(status_code=400, detail="Type DELETE to confirm purging all imported accounting data.")
+        raise HTTPException(status_code=400, detail="Type DELETE to confirm purging accounting data.")
     tenant_id = get_current_tenant_id()
 
+    # ── Month-scoped purge ──────────────────────────────────────────────
+    if payload.year and payload.month:
+        if not (1 <= payload.month <= 12):
+            raise HTTPException(status_code=400, detail="month must be between 1 and 12.")
+        y, m = payload.year, payload.month
+        start = f"{y:04d}-{m:02d}-01"
+        end = f"{y + 1:04d}-01-01" if m == 12 else f"{y:04d}-{m + 1:02d}-01"
+        res = await db[COLL].delete_many({"tenant_id": tenant_id, "date": {"$gte": start, "$lt": end}})
+        label = f"{y}-{m:02d}"
+        logger.warning("Accounting month-purge by %s (tenant=%s, %s): %s transactions",
+                       current_user.get("id"), tenant_id, label, res.deleted_count)
+        return {
+            "ok": True,
+            "scope": "month",
+            "period": label,
+            "deleted_transactions": res.deleted_count,
+            "message": f"Deleted {res.deleted_count} transaction(s) for {label}. Re-sync that month to re-import.",
+        }
+
+    # ── Full purge ──────────────────────────────────────────────────────
     txn_res = await db[COLL].delete_many({"tenant_id": tenant_id})
     jobs_res = await db[SYNC_JOB_COLL].delete_many({"tenant_id": tenant_id})
     state_res = await db[SYNC_COLL].delete_many({"tenant_id": tenant_id})
@@ -446,11 +470,12 @@ async def purge_imported_transactions(
     await db["counters"].delete_many({"_id": f"{tenant_id}:accounting_txn"})
 
     logger.warning(
-        "Accounting purge by %s (tenant=%s): %s transactions, %s jobs, %s sync-state deleted",
+        "Accounting FULL purge by %s (tenant=%s): %s transactions, %s jobs, %s sync-state deleted",
         current_user.get("id"), tenant_id, txn_res.deleted_count, jobs_res.deleted_count, state_res.deleted_count,
     )
     return {
         "ok": True,
+        "scope": "all",
         "deleted_transactions": txn_res.deleted_count,
         "deleted_sync_jobs": jobs_res.deleted_count,
         "reset_sync_state": state_res.deleted_count,

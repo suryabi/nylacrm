@@ -172,16 +172,23 @@ export default function AccountingTransactions() {
       setDiag({ error: e.response?.data?.detail || 'Diagnostics failed' });
     } finally { setDiagLoading(false); }
   };
-  // Purge — admin-only hard delete of all Zoho-imported accounting data.
+  // Purge — admin-only hard delete of Zoho-imported accounting data (all or one month).
   const [purgeOpen, setPurgeOpen] = useState(false);
   const [purgeText, setPurgeText] = useState('');
   const [purging, setPurging] = useState(false);
+  const [purgeScope, setPurgeScope] = useState('month'); // 'month' | 'all'
+  const [purgeYear, setPurgeYear] = useState(new Date().getFullYear());
+  const [purgeMonth, setPurgeMonth] = useState(new Date().getMonth() + 1);
   const purgeImported = async () => {
     if (purgeText.trim() !== 'DELETE') return;
     setPurging(true);
     try {
-      const { data } = await axios.post(`${API}/api/accounting/transactions/purge`, { confirmation: 'DELETE' }, auth());
-      toast.success(`Deleted ${data.deleted_transactions || 0} transactions. Run a fresh sync to re-import.`, { duration: 7000 });
+      const body = purgeScope === 'month'
+        ? { confirmation: 'DELETE', year: purgeYear, month: purgeMonth }
+        : { confirmation: 'DELETE' };
+      const { data } = await axios.post(`${API}/api/accounting/transactions/purge`, body, auth());
+      const scopeMsg = data.scope === 'month' ? ` for ${data.period}` : '';
+      toast.success(`Deleted ${data.deleted_transactions || 0} transaction(s)${scopeMsg}. Re-sync to re-import.`, { duration: 7000 });
       setPurgeOpen(false);
       setPurgeText('');
       load();
@@ -659,13 +666,51 @@ export default function AccountingTransactions() {
       <Dialog open={purgeOpen} onOpenChange={(o) => { if (!purging) { setPurgeOpen(o); if (!o) setPurgeText(''); } }}>
         <DialogContent className="max-w-md" data-testid="purge-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-rose-700"><AlertTriangle className="h-5 w-5" /> Delete all imported accounting data</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-rose-700"><AlertTriangle className="h-5 w-5" /> Delete imported accounting data</DialogTitle>
             <DialogDescription className="pt-1">
-              This permanently deletes <b>every Zoho-imported transaction</b> for this organisation (including any tags, vendor links and uploaded proofs) and resets the sync so you can re-import month by month.
+              Permanently delete Zoho-imported transactions (including tags, vendor links and uploaded proofs). Choose a single month, or wipe everything for a clean re-import.
             </DialogDescription>
           </DialogHeader>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <button type="button" onClick={() => setPurgeScope('month')} data-testid="purge-scope-month"
+              className={`rounded-md border p-2 text-xs font-medium ${purgeScope === 'month' ? 'border-rose-400 bg-rose-50 text-rose-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              A specific month
+            </button>
+            <button type="button" onClick={() => setPurgeScope('all')} data-testid="purge-scope-all"
+              className={`rounded-md border p-2 text-xs font-medium ${purgeScope === 'all' ? 'border-rose-400 bg-rose-50 text-rose-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+              All data
+            </button>
+          </div>
+          {purgeScope === 'month' ? (
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <Label className="text-xs text-slate-600">Month</Label>
+                <Select value={String(purgeMonth)} onValueChange={(v) => setPurgeMonth(Number(v))}>
+                  <SelectTrigger className="mt-1" data-testid="purge-month"><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {['January','February','March','April','May','June','July','August','September','October','November','December'].map((n, i) => (
+                      <SelectItem key={n} value={String(i + 1)}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-slate-600">Year</Label>
+                <Select value={String(purgeYear)} onValueChange={(v) => setPurgeYear(Number(v))}>
+                  <SelectTrigger className="mt-1" data-testid="purge-year"><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {Array.from({ length: 8 }, (_, i) => now.getFullYear() - i).map((y) => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : null}
           <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-            This action is <b>irreversible</b>. You will need to run a fresh sync afterwards to bring transactions back.
+            {purgeScope === 'month'
+              ? <>This deletes all imported transactions dated in the selected month. <b>Irreversible</b> — re-sync that month to bring them back.</>
+              : <>This deletes <b>every</b> imported transaction and resets the sync. <b>Irreversible</b> — you'll re-import from scratch.</>}
           </div>
           <div className="space-y-1.5 pt-1">
             <Label className="text-xs text-slate-600">Type <span className="font-mono font-semibold">DELETE</span> to confirm</Label>
@@ -675,7 +720,8 @@ export default function AccountingTransactions() {
             <Button variant="outline" onClick={() => { setPurgeOpen(false); setPurgeText(''); }} disabled={purging} data-testid="purge-cancel-btn">Cancel</Button>
             <Button onClick={purgeImported} disabled={purging || purgeText.trim() !== 'DELETE'}
               className="bg-rose-600 hover:bg-rose-700" data-testid="purge-confirm-btn">
-              {purging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />} Delete everything
+              {purging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              {purgeScope === 'month' ? 'Delete this month' : 'Delete everything'}
             </Button>
           </div>
         </DialogContent>
