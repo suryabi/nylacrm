@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 275 — Verified the revenue-analytics state-attribution fix and the new revenue-state-diagnostic endpoint. All 11 backend tests pass (pytest). The reconciliation invariant holds: revenue-analytics(group_by=state) total for state X equals revenue-state-diagnostic(state=X).target_state_net.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_275_revenue_state_diagnostic.py",
+    "/app/test_reports/pytest/iteration_275.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_match_account ordering looks correct: tries account_id then account_uuid, each against BOTH by_code and by_uuid, then name fallback — fully addresses the original GOA undercount.",
+    "Diagnostic and _aggregate now share _match_account, guaranteeing the two endpoints can never disagree by construction (good).",
+    "Minor: revenue_state_diagnostic loads invoices with no projection ({_id:0}) — fine for current preview volume but could be heavy on production tenants with 50k+ invoices; consider projecting only fields used by the response.",
+    "Minor: diagnostic returns ALL invoices (not just the target state's) — useful for debugging but the response could be very large on prod; consider an optional ?only_target=true filter or pagination."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_275_revenue_state_diagnostic.py"],
+  "success_rate": {"backend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). Login response uses 'session_token' key.",
+  "seed_data_creation": "None. Preview tenant has 4 invoices, all in Telangana (matched, net=64427.5). Diagnostic for Goa/Karnataka correctly returns target_state_net=0.0 with 0 unmatched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Tests live at /app/backend/tests/test_iteration_275_revenue_state_diagnostic.py. Run with REACT_APP_BACKEND_URL env var set. The reconciliation assertion (test_diagnostic_reconciles_with_analytics_state_total) iterates up to 3 non-uncategorised states with revenue>0 and asserts diagnostic.target_state_net == analytics group revenue within 0.5. Preview seed has only Telangana invoices so only that state exercises the equality; on production with multi-state invoices the same test will validate the same invariant across all states.",
+  "rca of the issue": "Original bug: _aggregate() previously tried only `inv.account_id or inv.account_uuid` (first truthy) against BOTH lookup maps. If an invoice's account_id (human code) did not exist as a key in by_code or by_uuid but the account_uuid did exist in by_uuid, the short-circuit returned None and the invoice was bucketed as 'Uncategorised' — under-counting the true state (GOA). Fix introduces _match_account() which iterates both identifiers, each tried against both code-keyed and uuid-keyed maps, then falls back to name. Diagnostic endpoint exposes per-invoice matching to verify on production. Verified: target_state_net from diagnostic equals the analytics state total exactly (Telangana = 64427.5 in preview seed, 4/4 matched, 0 unmatched)."
+}
