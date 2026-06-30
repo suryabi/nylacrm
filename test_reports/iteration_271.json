@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 271 — FIX VERIFIED. The Zoho bank-transaction sync now correctly surfaces uncategorized statement lines that are dated OUTSIDE the incremental [date_start, date_end] window, and the broken endpoint-strategy (empty rows + has_more_page=true) no longer spins to the 50-page cap. Verified via 5 deterministic tests (3 pure-function + 2 monkeypatched _run_sync end-to-end), all 5 passing.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_271_uncategorized_sync.py",
+    "/app/test_reports/pytest/iteration_271.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix at routes/accounting_transactions.py::_norm_filter (~line 195) is correct: the window check is now gated on `(date_start or date_end)`, so passing None,None deliberately disables the window filter for the uncategorized 'pending inbox' — verified by test_norm_filter_keeps_row_when_window_is_none.",
+    "Fix at _run_sync._drain (~line 265) is correct: (a) `ignore_window=True` propagates None,None into _norm_filter so out-of-window uncategorized rows are kept, and (b) the `not raw` early-break protects against the dedicated /banktransactions/uncategorized endpoint returning has_more_page=true with 0 rows. Both confirmed by the deterministic _run_sync test (endpoint_call_count == 1 even though the stub keeps returning has_more=true).",
+    "Both uncategorized _drain calls (~line 320, ~line 332) now call zoho_service.fetch_uncategorized_bank_transactions(tenant, aid, None, None, ...) — confirmed by the test recording every call's date_start/date_end as None.",
+    "Status-strategy fallback runs when endpoint-strategy returns 0 raw rows (verified). Behaviour preserves the per-account try/except so a single account's failure cannot abort the whole sync.",
+    "Register pull (line ~299) still applies the date window — verified by test_run_sync_register_out_of_window_dropped (an old register row dated 2019-06-30 is correctly dropped under a recent window).",
+    "Code-quality nit (not a bug): _drain captures `aid` via the lambda's default-arg `_aid=aid` idiom (correct — avoids the classic Python late-binding bug). Good. (Lines 321 + 333.)",
+    "Code-quality observation: the route module's `acct_type not in ('bank','credit_card')` filter is correct, but lower-casing happens once per account on every sync — negligible cost; flagging only as info, no action needed."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_271_uncategorized_sync.py"],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "n/a (backend-only)"},
+  "test_credentials": "n/a — tests bypass HTTP and call routes.accounting_transactions._run_sync directly with a synthetic tenant_id (test-tenant-iter271-<rand>) and zoho_org_id='TESTORG'; all zoho_service fetch functions are monkeypatched.",
+  "seed_data_creation": "Each test pre-purges and post-purges accounting_transactions / accounting_txn_sync_jobs / accounting_txn_sync_state / counters for the synthetic tenant + TESTORG. Verified post-run: 0 residue (`zoho_org_id=TESTORG` -> 0; `tenant_id ^test-tenant-iter271-` sync_jobs -> 0).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Pattern that works for in-process async tests against this codebase: add `sys.path.insert(0, '/app/backend')` BEFORE importing routes, set `pytestmark = pytest.mark.asyncio(loop_scope='module')`, and import the route module (`from routes import accounting_transactions as at_mod`). Monkeypatch the Zoho fetch funcs on `at_mod.zoho_service` (the route module's bound reference). Call `await at_mod._run_sync(...)` directly — cleaner than POSTing /api/accounting/transactions/sync (which is fire-and-forget background and harder to assert deterministically). Cleanup: delete by `zoho_org_id='TESTORG'` and the synthetic tenant_id prefix.",
+  "rca of the issue": "Bug surface: a real, uncategorized bank-feed txn (returned by Zoho /banktransactions?account_id&status=uncategorized) did not appear in the in-app uncategorized list after a sync, even though a live probe confirmed it existed. Two stacked root causes in routes/accounting_transactions.py: (1) the uncategorized fetch was issued WITH the incremental date_start/date_end window — so an uncategorized statement line dated before the window was excluded by Zoho server-side; (2) even when Zoho returned it, the client-side _norm_filter additionally dropped any row outside the window. Compounding issue: the dedicated /banktransactions/uncategorized endpoint returns has_more_page=true with 0 rows for some orgs, which caused _drain to loop all 50 pages instead of breaking. Fix (deployed): (a) _norm_filter now skips the date check unless date_start or date_end is provided; (b) _run_sync._drain accepts `ignore_window=True` (used for the uncategorized branch) and propagates None,None into _norm_filter; (c) _drain also breaks pagination when the page is empty regardless of has_more. Verification: deterministic monkeypatched _run_sync test now persists the out-of-window uncategorized txn with zoho_status='uncategorized' / status='untagged' and endpoint_call_count is exactly 1 (no 50-page spin). Regression test confirms the register pull still enforces the window. Mitigation: deployed; the live tenant should now see all uncategorized lines on the next sync."
+}

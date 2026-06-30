@@ -262,18 +262,22 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
         new_count = updated_count = 0
         warnings = []
 
-        async def _drain(fetch_page, acct=None, label="register"):
+        async def _drain(fetch_page, acct=None, label="register", ignore_window=False):
             """Page through one Zoho source, normalise + window-filter, upsert,
             and push job progress. Mutates new_count / updated_count. Returns the
-            total number of RAW rows Zoho returned for this source (pre-filter)."""
+            total number of RAW rows Zoho returned for this source (pre-filter).
+            `ignore_window=True` skips the date-window filter (used for the
+            uncategorized 'pending inbox', which must be surfaced in full
+            regardless of the incremental sync date range)."""
             nonlocal new_count, updated_count
             page = 1
             raw_seen = 0
+            ws, we = (None, None) if ignore_window else (date_start, date_end)
             while page <= 50:
                 res = await fetch_page(page)
                 raw = res.get("transactions") or []
                 raw_seen += len(raw)
-                docs = _norm_filter(raw, tenant_id, org_id, date_start, date_end, acct)
+                docs = _norm_filter(raw, tenant_id, org_id, ws, we, acct)
                 n, u = await _persist_page(tenant_id, org_id, docs)
                 new_count += n
                 updated_count += u
@@ -283,7 +287,10 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
                                            "new": new_count, "updated": updated_count},
                               "updated_at": _now()}},
                 )
-                if not res.get("has_more"):
+                # Stop on the last page OR on an empty page (some Zoho banking
+                # endpoints report has_more_page=true while returning 0 rows,
+                # which would otherwise spin for the full 50-page cap).
+                if not res.get("has_more") or not raw:
                     break
                 page += 1
             return raw_seen
@@ -312,18 +319,20 @@ async def _run_sync(tenant_id: str, user_id: str, date_start: str, date_end: str
             try:
                 seen = await _drain(
                     lambda p, _aid=aid: zoho_service.fetch_uncategorized_bank_transactions(
-                        tenant_id, _aid, date_start, date_end, page=p, strategy="endpoint"),
-                    acct=acct, label=label)
+                        tenant_id, _aid, None, None, page=p, strategy="endpoint"),
+                    acct=acct, label=label, ignore_window=True)
             except Exception as ue:
                 warnings.append(f"Uncategorized (endpoint) failed for {acct.get('account_name') or aid}: {str(ue)[:140]}")
             if seen == 0:
                 # Fallback strategy: account-scoped status=uncategorized on the
-                # main /banktransactions endpoint.
+                # main /banktransactions endpoint. No date window — uncategorized
+                # bank-feed lines are a pending inbox and must all be surfaced
+                # regardless of when the statement line is dated.
                 try:
                     await _drain(
                         lambda p, _aid=aid: zoho_service.fetch_uncategorized_bank_transactions(
-                            tenant_id, _aid, date_start, date_end, page=p, strategy="status"),
-                        acct=acct, label=label)
+                            tenant_id, _aid, None, None, page=p, strategy="status"),
+                        acct=acct, label=label, ignore_window=True)
                 except Exception as ue:
                     warnings.append(f"Uncategorized (status) failed for {acct.get('account_name') or aid}: {str(ue)[:140]}")
 
