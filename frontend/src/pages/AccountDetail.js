@@ -1010,6 +1010,11 @@ ${googleMapsLink}`;
   };
 
   const canApproveContract = user && CONTRACT_APPROVER_ROLES.includes(user.role);
+  // Mirror the Lead proposal flow: a new/revised contract can be uploaded at any
+  // stage — including after approval (uploading a new one resets the review cycle).
+  const canUploadNewContract = !contract
+    || ['changes_requested', 'rejected', 'approved'].includes(contract?.status)
+    || contract?.uploaded_by === user?.id;
 
   const handleSave = async () => {
     setSaving(true);
@@ -3073,10 +3078,13 @@ ${googleMapsLink}`;
                     )}
                   </div>
 
-                  {/* Replace Contract Button - visible when changes requested */}
-                  {contract.status === 'changes_requested' && (
+                  {/* Upload New/Revised Contract — available at any stage,
+                      including after approval (mirrors the Lead proposal flow). */}
+                  {canUploadNewContract && (
                     <div className="border-t pt-4">
-                      <p className="text-sm text-orange-600 mb-2">Changes were requested. Upload a revised contract:</p>
+                      {contract.status === 'changes_requested' && (
+                        <p className="text-sm text-orange-600 mb-2">Changes were requested. Upload a revised contract:</p>
+                      )}
                       <label className="w-full">
                         <input
                           ref={contractInputRef}
@@ -3091,11 +3099,20 @@ ${googleMapsLink}`;
                             {uploadingContract ? (
                               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Uploading...</>
                             ) : (
-                              <><Upload className="h-4 w-4 mr-2" /> Upload Revised Contract</>
+                              <><Upload className="h-4 w-4 mr-2" /> {
+                                contract.status === 'changes_requested' ? 'Upload Revised Contract'
+                                  : contract.status === 'approved' ? 'Upload New Contract'
+                                  : 'Replace Contract'
+                              }</>
                             )}
                           </span>
                         </Button>
                       </label>
+                      {contract.status === 'approved' && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Uploading a new contract will reset the approval status and require a new review cycle.
+                        </p>
+                      )}
                     </div>
                   )}
 

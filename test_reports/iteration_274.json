@@ -1,0 +1,22 @@
+{
+  "summary": "Verified Account contract re-upload after approval (iteration 274). Backend correctly accepts re-upload at any status (approved/changes_requested/pending_review/rejected), bumps version, and resets status to pending_review (or 'revised' when prior was changes_requested). Frontend AccountDetail exposes the upload control across all statuses with correct dynamic labels and the approved reset-warning note. End-to-end UI re-upload of an approved contract worked: v1 approved -> UI upload -> v2 pending_review.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_274_contract_reupload.py",
+    "/app/test_reports/pytest/iteration_274.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "review_account_contract accepts action values 'approved'/'rejected'/'changes_requested' (past tense). The review request mentioned action='approve' which would 400 — minor wording mismatch only.",
+    "Backend hard-deletes prior contract on re-upload (no version history stored); consider archiving prior versions for audit if business requires."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_274_contract_reupload.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Used existing account (account_id THER-HYD-A26-001 / internal id b529f00e-54b3-4709-92c1-db08137ef0b3 - 'The Rameshwaram Cafe'). Contract created and cleaned up after each test run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest at /app/backend/tests/test_iteration_274_contract_reupload.py (set REACT_APP_BACKEND_URL env). It auto-picks an account without a contract or wipes contract of the first one. CEO has no reports_to so the approval-task-notification check is skipped; to verify task creation, run as a user with reports_to set.",
+  "rca of the issue": "N/A — feature works end-to-end. The frontend canUploadNewContract flag (AccountDetail.js ~line 1015) correctly mirrors LeadDetail.canUploadNewProposal, and the generalized upload block (~line 3083) replaces the previous changes_requested-only condition. data-testid='replace-contract-input' is present and enabled; label is dynamic (Upload New Contract / Upload Revised Contract / Replace Contract); reset warning shown when status='approved'."
+}
