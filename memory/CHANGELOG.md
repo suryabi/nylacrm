@@ -985,3 +985,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Fix: items are now collected into `inserted_items` during the DB write and the confirmed-create Zoho push builds items_for_zoho from `inserted_items` (single source of truth). Draft→confirm path already used stored items (correct) and is untouched.
 - Verified iteration_270 (7/7 new + 3/3 regression; monkeypatched Zoho push captured items[0] quantity=12, unit_price=112/bottle, packages=1, packaging_units=12 — matching the stock-out record). No real Zoho push.
 - PRODUCTION: existing challan DC-2606-0011 is idempotent/frozen in Zoho (pushed with old code) — it will NOT auto-update. Redeploy + create a NEW promo dispatch to get a correct challan.
+
+## 2026-06-30 — BUGFIX: Accounting — uncategorized Zoho transactions never synced
+- Probe proved an uncategorized txn exists (register endpoint with account_id + status=uncategorized, NO date filter) while the dedicated /banktransactions/uncategorized endpoint returns 0 for this org.
+- Two stacked root causes in routes/accounting_transactions.py: (1) uncategorized was fetched WITH the incremental date window so old statement lines were excluded; (2) client-side _norm_filter additionally dropped out-of-window rows. Plus the dedicated endpoint returns has_more_page=true with 0 rows → _drain spun the full 50-page cap.
+- Fix: _drain gained ignore_window=True (passes None,None to _norm_filter) used for the uncategorized branch; uncategorized fetched with NO date params (matches the working probe); _norm_filter skips the window check when date_start/date_end are None; _drain breaks on an empty page.
+- Verified iteration_271 (5/5: out-of-window uncategorized now persists with zoho_status='uncategorized'; endpoint empty-page no longer loops; register still windowed). Monkeypatched — no live Zoho calls.
+- PRODUCTION: redeploy, then run an Accounting sync — uncategorized lines will now appear.
