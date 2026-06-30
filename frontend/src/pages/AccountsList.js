@@ -303,6 +303,30 @@ export default function AccountsList() {
           ))}
         </div>
 
+        {/* Accounts by SKU category (from configured SKU pricing; an account
+            associated with multiple categories is counted in each) */}
+        {stats.by_sku_category && Object.keys(stats.by_sku_category).length > 0 && (
+          <div className="mb-6" data-testid="accounts-by-sku-category">
+            <div className="flex items-center gap-2 mb-2">
+              <Package className="h-4 w-4 text-slate-400" />
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Accounts by SKU category</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(stats.by_sku_category).map(([cat, count]) => (
+                <Badge
+                  key={cat}
+                  variant="secondary"
+                  className="px-3 py-1.5 text-sm rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm"
+                  data-testid={`sku-category-chip-${cat}`}
+                >
+                  <span className="font-medium text-slate-700 dark:text-slate-200">{cat}</span>
+                  <span className="ml-2 font-bold text-amber-600 dark:text-amber-400">{count}</span>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* View Toggle */}
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-slate-600 dark:text-slate-400">

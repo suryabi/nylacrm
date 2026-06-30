@@ -6584,10 +6584,37 @@ async def get_accounts_stats(
             lead_category_results = await get_tdb().leads.aggregate(lead_category_pipeline).to_list(20)
             by_category = {r['_id']: r['count'] for r in lead_category_results if r['_id']}
     
+    # Accounts by SKU category (via the account's configured sku_pricing list).
+    # An account is counted once in EACH SKU category it is associated with.
+    accounts_sku = await get_tdb().accounts.find(
+        query, {'_id': 0, 'id': 1, 'sku_pricing': 1}
+    ).to_list(10000)
+    referenced_sku_ids = set()
+    for a in accounts_sku:
+        for sp in (a.get('sku_pricing') or []):
+            if isinstance(sp, dict) and sp.get('sku_id'):
+                referenced_sku_ids.add(sp['sku_id'])
+    sku_category_by_id = {}
+    if referenced_sku_ids:
+        sku_docs = await get_tdb().master_skus.find(
+            {'id': {'$in': list(referenced_sku_ids)}}, {'_id': 0, 'id': 1, 'category': 1}
+        ).to_list(10000)
+        sku_category_by_id = {s['id']: (s.get('category') or 'Uncategorised') for s in sku_docs}
+    by_sku_category = {}
+    for a in accounts_sku:
+        cats = set()
+        for sp in (a.get('sku_pricing') or []):
+            if isinstance(sp, dict) and sp.get('sku_id') in sku_category_by_id:
+                cats.add(sku_category_by_id[sp['sku_id']])
+        for c in cats:
+            by_sku_category[c] = by_sku_category.get(c, 0) + 1
+    by_sku_category = dict(sorted(by_sku_category.items(), key=lambda x: -x[1]))
+
     return {
         'total_accounts': total_accounts,
         'by_lead_type': by_lead_type,
-        'by_category': by_category
+        'by_category': by_category,
+        'by_sku_category': by_sku_category,
     }
 
 
