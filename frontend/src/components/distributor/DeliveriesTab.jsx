@@ -11,7 +11,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check, Pencil } from 'lucide-react';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check, Pencil, RotateCcw } from 'lucide-react';
 import PromoDispatchSection from './PromoDispatchSection';
 import { groupByDateDesc } from '../../utils/dateGrouping';
 import { Calendar as DatePicker } from '../ui/calendar';
@@ -113,6 +113,7 @@ export default function DeliveriesTab({
   savingDelivery,
   viewDeliveryDetail,
   setDeleteTarget,
+  onReverseDelivery,
   getDeliveryStatusBadge,
   // Excel download
   API_URL,
@@ -2138,6 +2139,18 @@ export default function DeliveriesTab({
                           >
                             <FileText className="h-4 w-4 text-emerald-700" />
                           </Button>
+                          {canManage && onReverseDelivery && !['cancelled', 'reversed'].includes(delivery.status) && !delivery.settlement_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-rose-50"
+                              onClick={(e) => { e.stopPropagation(); onReverseDelivery(delivery); }}
+                              data-testid={`reverse-delivery-row-${delivery.id}`}
+                              title="Reverse delivery (re-adds stock)"
+                            >
+                              <RotateCcw className="h-4 w-4 text-rose-600" />
+                            </Button>
+                          )}
                           {(canDelete || (canManage && delivery.status === 'draft')) && (
                             <Button
                               variant="ghost"

@@ -2967,6 +2967,7 @@ export default function DistributorDetail() {
             savingDelivery={savingDelivery}
             viewDeliveryDetail={viewDeliveryDetail}
             setDeleteTarget={setDeleteTarget}
+            onReverseDelivery={handleReverseDelivery}
             getDeliveryStatusBadge={getDeliveryStatusBadge}
             API_URL={API_URL}
             token={token}
