@@ -518,6 +518,41 @@ export default function InvoicesList() {
   const [voidReason, setVoidReason] = useState('');
   const [voiding, setVoiding] = useState(false);
 
+  // Grouping: 'none' | 'customer' | 'date'. Client-side over the loaded page;
+  // all server-side filters are already applied to `invoices`.
+  const [groupBy, setGroupBy] = useState('none');
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const toggleGroup = (key) => setCollapsedGroups(prev => {
+    const next = new Set(prev);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  const invoiceGroups = (() => {
+    if (groupBy === 'none') return null;
+    const map = new Map();
+    for (const inv of invoices) {
+      let key, label;
+      if (groupBy === 'customer') {
+        key = inv.account_name || inv.account_id || 'Unknown';
+        label = key;
+      } else {
+        key = inv.invoice_date || 'no-date';
+        label = inv.invoice_date ? format(new Date(inv.invoice_date), 'dd MMM yyyy') : 'No date';
+      }
+      if (!map.has(key)) map.set(key, { key, label, items: [], gross: 0, net: 0, outstanding: 0 });
+      const g = map.get(key);
+      g.items.push(inv);
+      g.gross += inv.gross_invoice_value || 0;
+      g.net += inv.net_invoice_value || 0;
+      g.outstanding += inv.outstanding || 0;
+    }
+    const arr = Array.from(map.values());
+    if (groupBy === 'date') arr.sort((a, b) => (a.key < b.key ? 1 : -1));
+    else arr.sort((a, b) => String(a.label).localeCompare(String(b.label)));
+    return arr;
+  })();
+
   const handleVoidInvoice = async () => {
     if (!voidTarget) return;
     const idOrNo = voidTarget.id || voidTarget.invoice_no || voidTarget.invoice_number;
@@ -846,6 +881,17 @@ export default function InvoicesList() {
                 </Select>
               </div>
               <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Group by</label>
+                <Select value={groupBy} onValueChange={setGroupBy}>
+                  <SelectTrigger className="h-9 text-sm" data-testid="group-by-filter-mobile"><SelectValue placeholder="No grouping" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No grouping</SelectItem>
+                    <SelectItem value="customer">Group by customer</SelectItem>
+                    <SelectItem value="date">Group by date</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
                 <label className="text-xs text-muted-foreground mb-1 block">Account Name</label>
                 <AccountMultiSelect
                   testid="account-name-filter-mobile"
@@ -924,6 +970,14 @@ export default function InvoicesList() {
                 <SelectTrigger className="h-9" data-testid="status-filter"><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
                   {STATUS_OPTIONS.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={groupBy} onValueChange={setGroupBy}>
+                <SelectTrigger className="h-9" data-testid="group-by-filter"><SelectValue placeholder="Group by" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No grouping</SelectItem>
+                  <SelectItem value="customer">Group by customer</SelectItem>
+                  <SelectItem value="date">Group by date</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1015,7 +1069,28 @@ export default function InvoicesList() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => {
+                  {(invoiceGroups || [{ key: '__all__', items: invoices, __flat: true }]).map((__group) => (
+                    <React.Fragment key={`grp-${__group.key}`}>
+                      {!__group.__flat && (
+                        <TableRow
+                          className="bg-slate-100/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          onClick={() => toggleGroup(__group.key)}
+                          data-testid={`invoice-group-row-${__group.key}`}
+                        >
+                          <TableCell colSpan={canDelete ? 11 : 10} className="py-2.5">
+                            <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200">
+                              {collapsedGroups.has(__group.key) ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                              {groupBy === 'customer' ? <Building2 className="h-4 w-4 text-slate-400" /> : <Calendar className="h-4 w-4 text-slate-400" />}
+                              <span>{__group.label}</span>
+                              <Badge variant="secondary" className="ml-1">{__group.items.length}</Badge>
+                              <span className="ml-auto text-xs font-normal text-slate-500 dark:text-slate-400">
+                                Gross {formatCurrency(__group.gross)} · Net {formatCurrency(__group.net)} · Outstanding {formatCurrency(__group.outstanding)}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {(__group.__flat || !collapsedGroups.has(__group.key)) && __group.items.map((invoice) => {
                     const rowKey = invoice.id || invoice.invoice_no;
                     const items = Array.isArray(invoice.items) ? invoice.items : [];
                     const hasLineItems = items.length > 0;
@@ -1214,6 +1289,8 @@ export default function InvoicesList() {
                       </React.Fragment>
                     );
                   })}
+                    </React.Fragment>
+                  ))}
                 </TableBody>
               </Table>
             </div>
@@ -1262,8 +1339,28 @@ export default function InvoicesList() {
         ) : (
           /* Card View */
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {invoices.map((invoice) => (
+            <div className="space-y-4">
+              {(invoiceGroups || [{ key: '__all__', items: invoices, __flat: true }]).map((__group) => (
+                <div key={`cardgrp-${__group.key}`}>
+                  {!__group.__flat && (
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(__group.key)}
+                      className="w-full flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-slate-100/80 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200"
+                      data-testid={`invoice-group-card-${__group.key}`}
+                    >
+                      {collapsedGroups.has(__group.key) ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {groupBy === 'customer' ? <Building2 className="h-4 w-4 text-slate-400" /> : <Calendar className="h-4 w-4 text-slate-400" />}
+                      <span className="font-semibold">{__group.label}</span>
+                      <Badge variant="secondary" className="ml-1">{__group.items.length}</Badge>
+                      <span className="ml-auto text-xs font-normal text-slate-500 dark:text-slate-400">
+                        Gross {formatCurrency(__group.gross)} · Net {formatCurrency(__group.net)}
+                      </span>
+                    </button>
+                  )}
+                  {(__group.__flat || !collapsedGroups.has(__group.key)) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {__group.items.map((invoice) => (
                 <Card 
                   key={invoice.id || invoice.invoice_no}
                   className="p-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-lg hover:shadow-xl transition-all cursor-pointer"
@@ -1334,6 +1431,10 @@ export default function InvoicesList() {
                     </span>
                   </div>
                 </Card>
+              ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
             
