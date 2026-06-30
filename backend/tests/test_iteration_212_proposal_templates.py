@@ -22,7 +22,7 @@ import uuid as _uuid
 import pytest
 import requests
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://beverage-fmcg-ops.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://crm-accounting-fix.preview.emergentagent.com').rstrip('/')
 ADMIN_EMAIL = 'surya.yadavalli@nylaairwater.earth'
 ADMIN_PASSWORD = 'test123'
 TEST_LEAD_ID = '08c93122-99fc-4587-b31c-559649f29c17'
