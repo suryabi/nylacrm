@@ -992,3 +992,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Fix: _drain gained ignore_window=True (passes None,None to _norm_filter) used for the uncategorized branch; uncategorized fetched with NO date params (matches the working probe); _norm_filter skips the window check when date_start/date_end are None; _drain breaks on an empty page.
 - Verified iteration_271 (5/5: out-of-window uncategorized now persists with zoho_status='uncategorized'; endpoint empty-page no longer loops; register still windowed). Monkeypatched — no live Zoho calls.
 - PRODUCTION: redeploy, then run an Accounting sync — uncategorized lines will now appear.
+
+## 2026-06-30 — Admin: Purge all imported accounting data (clean re-sync)
+- New admin-only endpoint POST /api/accounting/transactions/purge (body {confirmation:'DELETE'}): hard-deletes all accounting_transactions for the tenant, clears sync jobs + sync state, and resets the txn-code counter — so the next sync re-imports cleanly month by month. Tenant-scoped (no cross-tenant risk); 400 on wrong/empty confirmation, 403 for non-admins.
+- Frontend (AccountingTransactions.js): "Purge Data" button opens a destructive double-confirm dialog (warning + must type DELETE; confirm enabled only on exact 'DELETE'). testids: purge-accounting-btn, purge-dialog, purge-confirm-input, purge-confirm-btn, purge-cancel-btn.
+- Verified iteration_272 (backend happy path deletes 3 + clears jobs/state/counter on synthetic tenant; guards 400/400/403; frontend gating verified without touching real data).
