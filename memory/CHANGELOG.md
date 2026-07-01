@@ -1022,3 +1022,7 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 ## 2026-06-30 — Accounts list: accounts-per-SKU-category breakdown
 - GET /api/accounts/stats/summary (server.py) now returns by_sku_category: counts of accounts per SKU category, derived from each account's configured sku_pricing (sku_id -> master_skus.category). An account associated with multiple categories is counted once in EACH category. Honors the existing territory/state/city filters. Categories sorted desc by count.
 - AccountsList.js: renders an "Accounts by SKU category" chip row (e.g. Premium 12 · Sparkling 1) below the stat cards. Verified via screenshot.
+
+## 2026-06-30 — Accounts list: clickable SKU-category filter
+- GET /api/accounts now accepts sku_category param — filters accounts whose configured sku_pricing includes a SKU of that master-SKU category (query on sku_pricing.sku_id $in master_skus of category).
+- AccountsList.js: the SKU-category chips are now clickable toggles (active chip highlighted amber) that filter the accounts table; a "Clear filter" link resets it; also cleared by Reset Filters. Verified via screenshot (Sparkling -> 1 of 1).

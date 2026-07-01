@@ -6451,6 +6451,7 @@ async def get_accounts(
     account_type: Optional[str] = None,
     lead_type: Optional[str] = None,
     category: Optional[str] = None,
+    sku_category: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     """Get paginated accounts list with enhanced filters"""
@@ -6481,6 +6482,13 @@ async def get_accounts(
             lead_type_clause = {'lead_type': lead_type}
     if category:
         query['category'] = category
+    # Filter by SKU category: accounts whose configured sku_pricing includes a
+    # SKU belonging to the given master-SKU category.
+    if sku_category:
+        cat_sku_docs = await get_tdb().master_skus.find(
+            {'category': sku_category}, {'_id': 0, 'id': 1}
+        ).to_list(10000)
+        query['sku_pricing.sku_id'] = {'$in': [s['id'] for s in cat_sku_docs]}
     if search:
         query['$or'] = [
             {'account_name': {'$regex': search, '$options': 'i'}},

@@ -88,6 +88,7 @@ export default function AccountsList() {
   const [stateFilter, setStateFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
   const [accountTypeFilter, setAccountTypeFilter] = useState('all');
+  const [skuCategoryFilter, setSkuCategoryFilter] = useState('');
   
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -150,12 +151,13 @@ export default function AccountsList() {
       if (stateFilter !== 'all') params.append('state', stateFilter);
       if (cityFilter !== 'all') params.append('city', cityFilter);
       if (accountTypeFilter !== 'all') params.append('lead_type', accountTypeFilter);
+      if (skuCategoryFilter) params.append('sku_category', skuCategoryFilter);
       
       const response = await axios.get(`${API_URL}/accounts?${params}`, { headers: { Authorization: `Bearer ${token}` }, withCredentials: true });
       setAccounts(response.data.data || []); setTotalCount(response.data.total || 0); setTotalPages(response.data.total_pages || 1);
     } catch { toast.error('Failed to load accounts'); setAccounts([]); }
     finally { setLoading(false); }
-  }, [currentPage, searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter]);
+  }, [currentPage, searchTerm, territoryFilter, stateFilter, cityFilter, accountTypeFilter, skuCategoryFilter]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -172,7 +174,7 @@ export default function AccountsList() {
   useEffect(() => { const t = setTimeout(() => fetchAccounts(), 300); return () => clearTimeout(t); }, [fetchAccounts]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
-  const handleResetFilters = () => { setTerritoryFilter('all'); setStateFilter('all'); setCityFilter('all'); setAccountTypeFilter('all'); setSearchTerm(''); setCurrentPage(1); };
+  const handleResetFilters = () => { setTerritoryFilter('all'); setStateFilter('all'); setCityFilter('all'); setAccountTypeFilter('all'); setSkuCategoryFilter(''); setSearchTerm(''); setCurrentPage(1); };
 
   const allTerritoryNames = masterTerritories.map(t => t.name);
   const availableTerritories = user?.territory === 'All India' || ['ceo', 'director', 'vp', 'admin', 'CEO', 'Director', 'Vice President', 'National Sales Head'].includes(user?.role) ? ['All Territories', ...allTerritoryNames] : user?.territory ? ['All Territories', user.territory] : ['All Territories'];
@@ -310,19 +312,35 @@ export default function AccountsList() {
             <div className="flex items-center gap-2 mb-2">
               <Package className="h-4 w-4 text-slate-400" />
               <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Accounts by SKU category</span>
+              {skuCategoryFilter && (
+                <button
+                  onClick={() => { setSkuCategoryFilter(''); setCurrentPage(1); }}
+                  className="ml-1 text-xs text-amber-600 dark:text-amber-400 hover:underline"
+                  data-testid="clear-sku-category-filter"
+                >
+                  Clear filter
+                </button>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
-              {Object.entries(stats.by_sku_category).map(([cat, count]) => (
-                <Badge
-                  key={cat}
-                  variant="secondary"
-                  className="px-3 py-1.5 text-sm rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm"
-                  data-testid={`sku-category-chip-${cat}`}
-                >
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{cat}</span>
-                  <span className="ml-2 font-bold text-amber-600 dark:text-amber-400">{count}</span>
-                </Badge>
-              ))}
+              {Object.entries(stats.by_sku_category).map(([cat, count]) => {
+                const active = skuCategoryFilter === cat;
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => { setSkuCategoryFilter(active ? '' : cat); setCurrentPage(1); }}
+                    data-testid={`sku-category-chip-${cat}`}
+                    className={`px-3 py-1.5 text-sm rounded-full border shadow-sm transition-colors ${
+                      active
+                        ? 'bg-amber-500 border-amber-500 text-white'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-amber-400 dark:hover:border-amber-500'
+                    }`}
+                  >
+                    <span className={`font-medium ${active ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>{cat}</span>
+                    <span className={`ml-2 font-bold ${active ? 'text-white' : 'text-amber-600 dark:text-amber-400'}`}>{count}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
