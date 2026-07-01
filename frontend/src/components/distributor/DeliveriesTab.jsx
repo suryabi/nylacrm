@@ -869,7 +869,7 @@ export default function DeliveriesTab({
                     <History className="h-5 w-5 text-rose-600" /> Deleted deliveries — audit trail
                   </DialogTitle>
                   <DialogDescription>
-                    Who deleted a delivery, when, and its details at the time. Recorded for deletions going forward.
+                    Who deleted a delivery, when, and its details at the time. Restore recreates the delivery record &amp; its items — it does not re-run stock or Zoho changes, so re-check reconciliation if the original deletion had reversed stock elsewhere.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex-1 overflow-y-auto -mx-1 px-1">

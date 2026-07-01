@@ -1042,3 +1042,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Endpoints: GET /api/distributors/{distributor_id}/deletion-audit (manager-gated) and GET /api/distributors/deletion-audit/all (CEO/Admin, global). Route ordering locked with a comment.
 - UI: "Deletion history" button + dialog in the Deliveries tab lists deleted deliveries with who/when/status/item-count.
 - NOTE: only covers deletions AFTER this deploy — past production deletions were never audited (only in rotated server logs). Verified iteration_278 (backend 6/6, 100%).
+
+## 2026-06-30 — Deletion audit extended (shipment + invoice void) + delivery Restore
+- Shipment delete now writes a deletion_audit row (entity_type='shipment', item_count, items_snapshot).
+- Invoice void now writes a deletion_audit row (entity_type='invoice_void', zoho_voided, reason). Best-effort try/except.
+- NEW POST /api/distributors/{distributor_id}/deletion-audit/{audit_id}/restore (CEO/Admin) — recreates a deleted DELIVERY + items from the snapshot, marks audit + delivery restored_at/restored_by. Does NOT re-run stock/Zoho side-effects (delete didn't reverse them). Guards: already-restored 400, non-delivery 400, non-CEO/admin 403, bad id 404, id-exists 400.
+- UI: "Deletion history" dialog now shows a Restore button per deleted delivery (or a "Restored by … on …" badge), with a note that restore doesn't reconstruct stock/Zoho.
+- Verified iteration_279 (backend 8/8, 100%).
