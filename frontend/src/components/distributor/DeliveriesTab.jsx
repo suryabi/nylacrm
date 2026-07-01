@@ -144,6 +144,24 @@ export default function DeliveriesTab({
       setDeletionAuditLoading(false);
     }
   };
+  const [restoringId, setRestoringId] = useState(null);
+  const restoreDeletedDelivery = async (auditId) => {
+    setRestoringId(auditId);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/deletion-audit/${auditId}/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data?.detail || 'Restore failed'); return; }
+      openDeletionHistory();
+      fetchDeliveries?.();
+    } catch (e) {
+      alert(`Restore failed: ${e?.message || e}`);
+    } finally {
+      setRestoringId(null);
+    }
+  };
 
   // Per-date-group open/close state. Default (when a key is absent) is driven
   // by `isToday` so only Today's group is expanded on first render.
@@ -881,6 +899,25 @@ export default function DeliveriesTab({
                             {r.deleted_by_role && <span className="text-muted-foreground"> ({r.deleted_by_role})</span>}
                             {typeof r.item_count === 'number' && <span className="text-muted-foreground"> · {r.item_count} line item{r.item_count === 1 ? '' : 's'}</span>}
                           </div>
+                          {r.restored_at ? (
+                            <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                              <RotateCcw className="h-3.5 w-3.5" /> Restored by {r.restored_by} on {new Date(r.restored_at).toLocaleString()}
+                            </div>
+                          ) : (
+                            <div className="mt-2 flex justify-end">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => restoreDeletedDelivery(r.id)}
+                                disabled={restoringId === r.id}
+                                data-testid={`restore-delivery-${r.id}`}
+                                className="h-8 text-emerald-700 border-emerald-200 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-900/50"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                                {restoringId === r.id ? 'Restoring…' : 'Restore'}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

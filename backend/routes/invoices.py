@@ -1012,10 +1012,32 @@ async def void_invoice_endpoint(
                 {'$inc': {'outstanding_balance': round(-gross, 2)}, '$set': {'updated_at': now}},
             )
 
-    # 3) Remove the local invoice doc.
+    # 3) Record deletion audit (who/when/what) before removing the local doc.
+    try:
+        await tdb.deletion_audit.insert_one({
+            'id': str(__import__('uuid').uuid4()),
+            'entity_type': 'invoice_void',
+            'entity_id': invoice.get('id'),
+            'entity_number': invoice.get('invoice_no') or invoice.get('invoice_number'),
+            'distributor_id': None,
+            'account_id': acct_key,
+            'status_at_deletion': invoice.get('status'),
+            'zoho_voided': bool(zoho_invoice_id),
+            'reason': body.reason,
+            'deleted_by': current_user.get('id'),
+            'deleted_by_email': current_user.get('email'),
+            'deleted_by_name': current_user.get('name') or current_user.get('full_name'),
+            'deleted_by_role': current_user.get('role'),
+            'deleted_at': now,
+            'snapshot': {k: v for k, v in invoice.items() if k != '_id'},
+        })
+    except Exception as _e:
+        logger.error(f"[INVOICES] Failed to write void audit for {invoice.get('invoice_no')}: {_e}")
+
+    # 4) Remove the local invoice doc.
     await tdb.invoices.delete_one({'id': invoice.get('id')})
 
-    # 4) Recalculate the account's aggregate invoice totals (matches delete_invoice).
+    # 5) Recalculate the account's aggregate invoice totals (matches delete_invoice).
     if acct_key:
         remaining = await tdb.invoices.find(
             {'$or': [{'account_uuid': acct_key}, {'account_id': acct_key}], 'status': 'matched'}

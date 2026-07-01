@@ -3286,7 +3286,15 @@ async def delete_shipment(
         raise HTTPException(status_code=400, detail="Only draft shipments can be deleted")
     
     # Delete items first
+    ship_items = await db.distributor_shipment_items.find({"shipment_id": shipment_id, "tenant_id": tenant_id}).to_list(1000)
     await db.distributor_shipment_items.delete_many({"shipment_id": shipment_id, "tenant_id": tenant_id})
+    
+    # Record deletion audit BEFORE removing the shipment
+    await _record_deletion_audit(
+        tenant_id, 'shipment', shipment, distributor_id, current_user,
+        entity_number=shipment.get('shipment_number'),
+        extra={'item_count': len(ship_items), 'items_snapshot': [{k: v for k, v in i.items() if k != '_id'} for i in ship_items]},
+    )
     
     # Delete shipment
     await db.distributor_shipments.delete_one({"id": shipment_id, "tenant_id": tenant_id})
@@ -5597,6 +5605,67 @@ async def get_deletion_audit(
         q['entity_type'] = entity_type
     records = await db.deletion_audit.find(q, {'_id': 0}).sort('deleted_at', -1).limit(1000).to_list(1000)
     return {'total': len(records), 'records': records}
+
+
+@router.post("/{distributor_id}/deletion-audit/{audit_id}/restore")
+async def restore_deleted_delivery(
+    distributor_id: str,
+    audit_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Restore a deleted delivery from its audit snapshot (CEO/Admin only).
+
+    Re-inserts the delivery + its line items exactly as captured at deletion.
+    Does NOT re-run stock deduction or Zoho pushes — deletion never reversed
+    those, so the restored record is consistent with the current DB state.
+    """
+    user_role = (current_user.get('role') or '').lower()
+    if not any(r in user_role for r in ['ceo', 'admin', 'system admin']):
+        raise HTTPException(status_code=403, detail="Only CEO/Admin can restore deleted records")
+    tenant_id = get_current_tenant_id()
+
+    audit = await db.deletion_audit.find_one({'id': audit_id, 'tenant_id': tenant_id})
+    if not audit:
+        raise HTTPException(status_code=404, detail="Audit record not found")
+    if audit.get('entity_type') != 'delivery':
+        raise HTTPException(status_code=400, detail="Only deleted deliveries can be restored")
+    if audit.get('restored_at'):
+        raise HTTPException(status_code=400, detail="This delivery has already been restored")
+
+    snapshot = audit.get('snapshot') or {}
+    del_id = snapshot.get('id')
+    if not del_id:
+        raise HTTPException(status_code=400, detail="Snapshot is missing the delivery id")
+
+    existing = await db.distributor_deliveries.find_one({'id': del_id, 'tenant_id': tenant_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="A delivery with this id already exists — nothing to restore")
+
+    # Re-insert delivery + items from the snapshot
+    doc = {k: v for k, v in snapshot.items() if k != '_id'}
+    doc['tenant_id'] = tenant_id
+    doc['restored_at'] = datetime.now(timezone.utc).isoformat()
+    doc['restored_by'] = current_user.get('email')
+    await db.distributor_deliveries.insert_one(doc)
+
+    items = audit.get('items_snapshot') or []
+    if items:
+        clean_items = []
+        for it in items:
+            ci = {k: v for k, v in it.items() if k != '_id'}
+            ci['tenant_id'] = tenant_id
+            clean_items.append(ci)
+        await db.distributor_delivery_items.insert_many(clean_items)
+
+    # Mark the audit record as restored (keep the row for history)
+    await db.deletion_audit.update_one(
+        {'id': audit_id, 'tenant_id': tenant_id},
+        {'$set': {'restored_at': doc['restored_at'], 'restored_by': current_user.get('email')}}
+    )
+
+    logger.info(f"Delivery {snapshot.get('delivery_number')} restored by {current_user['email']} from audit {audit_id}")
+    return {'success': True, 'message': f"Delivery {snapshot.get('delivery_number') or del_id} restored", 'delivery_id': del_id}
+
 
 
 
