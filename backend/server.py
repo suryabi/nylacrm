@@ -6792,6 +6792,181 @@ async def _build_cogs_by_sku(tdb, accounts):
     }
 
 
+_COGS_CITY_ALIASES = {
+    'bangalore': 'bengaluru',
+    'gurgaon': 'gurugram',
+    'panjim': 'panaji',
+}
+
+
+def _norm_city(city):
+    c = (city or '').strip().lower()
+    return _COGS_CITY_ALIASES.get(c, c)
+
+
+@api_router.get("/accounts/sku-realized-margin")
+async def get_sku_realized_margin(
+    time_filter: str = 'this_month',
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    territory: Optional[str] = None,
+    state: Optional[str] = None,
+    city: Optional[str] = None,
+    assigned_to: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Volume-weighted (realized) gross margin per SKU from actual invoices.
+
+    For each invoice line item in the period: revenue = net/gross line amount,
+    COGS = quantity x per-unit COGS for that SKU in the account's city. Aggregated
+    per SKU so margin is naturally weighted by ordered volume. Returns raw sums so
+    the client can toggle Net/Gross revenue basis and Include/Exclude FOC instantly.
+    Only GOP-eligible accounts (include_in_gop_metrics) are counted.
+    """
+    from routes.revenue_analytics import _window
+    tdb = get_tdb()
+    fd, td = _window(time_filter, from_date, to_date)
+
+    # 1) Account scope (same visibility + filters as the pricing grid)
+    account_filter = {}
+    if current_user.get('role') == 'sales_rep':
+        account_filter['assigned_to'] = current_user['id']
+    if territory and territory != 'all':
+        account_filter['territory'] = territory
+    if state and state != 'all':
+        account_filter['state'] = state
+    if city and city != 'all':
+        account_filter['city'] = city
+    if assigned_to and assigned_to != 'all':
+        alist = [a.strip() for a in assigned_to.split(',') if a.strip()]
+        if len(alist) == 1:
+            account_filter['assigned_to'] = alist[0]
+        elif len(alist) > 1:
+            account_filter['assigned_to'] = {'$in': alist}
+
+    accounts = await tdb.accounts.find(
+        account_filter,
+        {'_id': 0, 'id': 1, 'account_id': 1, 'city': 1, 'lead_type': 1, 'include_in_gop_metrics': 1}
+    ).to_list(5000)
+
+    def _is_eligible(a):
+        v = a.get('include_in_gop_metrics')
+        if v is None:
+            return (a.get('lead_type', 'B2B') or 'B2B').lower() != 'retail'
+        return v is not False
+
+    eligible = [a for a in accounts if _is_eligible(a)]
+    elig_by_uuid = {a['id']: a for a in eligible if a.get('id')}
+    elig_by_code = {a['account_id']: a for a in eligible if a.get('account_id')}
+    total_scope_accounts = len({a.get('id') for a in accounts})
+
+    def _match(inv):
+        for ident in (inv.get('account_uuid'), inv.get('account_id')):
+            if not ident:
+                continue
+            a = elig_by_uuid.get(ident) or elig_by_code.get(ident)
+            if a:
+                return a
+        return None
+
+    # 2) COGS map: (sku_name_lower, city_norm) -> per-unit total_cogs
+    cities_in_scope = sorted({a.get('city') for a in eligible if a.get('city')})
+    cogs_map = {}
+    if cities_in_scope:
+        cogs_docs = await tdb.cogs_data.find(
+            {'city': {'$in': cities_in_scope}},
+            {'_id': 0, 'sku_name': 1, 'city': 1, 'total_cogs': 1,
+             'primary_packaging_cost': 1, 'secondary_packaging_cost': 1, 'manufacturing_variable_cost': 1}
+        ).to_list(5000)
+        for c in cogs_docs:
+            nm = (c.get('sku_name') or '').strip().lower()
+            if not nm:
+                continue
+            tc = c.get('total_cogs')
+            if not tc:
+                tc = (c.get('primary_packaging_cost') or 0) + (c.get('secondary_packaging_cost') or 0) + (c.get('manufacturing_variable_cost') or 0)
+            if tc and tc > 0:
+                cogs_map[(nm, _norm_city(c.get('city')))] = tc
+
+    # 3) SKU id lookup
+    sku_docs = await tdb.master_skus.find({}, {'_id': 0, 'id': 1, 'name': 1, 'category': 1}).to_list(2000)
+    sku_meta_by_name = {(s.get('name') or '').strip().lower(): s for s in sku_docs if s.get('name')}
+
+    # 4) Invoices in window
+    invoices = await tdb.invoices.find(
+        {'invoice_date': {'$gte': fd, '$lte': td}}, {'_id': 0}
+    ).to_list(50000)
+
+    agg = {}
+    ordering_accounts = set()
+    for inv in invoices:
+        acc = _match(inv)
+        if not acc:
+            continue
+        city_norm = _norm_city(acc.get('city'))
+        counted_account = False
+        for it in (inv.get('items') or []):
+            nm = (it.get('sku_name') or '').strip()
+            if not nm:
+                continue
+            qty = float(it.get('quantity') or 0)
+            if qty <= 0:
+                continue
+            net = float(it.get('net_amount') if it.get('net_amount') is not None else (it.get('line_total') or 0))
+            gross = it.get('gross_amount')
+            gross = float(gross) if gross is not None else float((it.get('rate') or 0) * qty or net)
+            is_foc = net <= 0
+            cpu = cogs_map.get((nm.lower(), city_norm))
+            line_cogs = qty * cpu if cpu is not None else 0.0
+            has_cogs = cpu is not None
+
+            g = agg.get(nm)
+            if not g:
+                meta = sku_meta_by_name.get(nm.lower(), {})
+                g = agg[nm] = {
+                    'sku_name': nm, 'sku_id': meta.get('id'), 'category': meta.get('category'),
+                    'units_total': 0.0, 'units_foc': 0.0,
+                    'revenue_net_total': 0.0, 'revenue_net_foc': 0.0,
+                    'revenue_gross_total': 0.0, 'revenue_gross_foc': 0.0,
+                    'cogs_total': 0.0, 'cogs_foc': 0.0,
+                    'units_cogs': 0.0, 'units_cogs_foc': 0.0,
+                    '_accounts': set(),
+                }
+            g['units_total'] += qty
+            g['revenue_net_total'] += max(net, 0.0)
+            g['revenue_gross_total'] += max(gross, 0.0)
+            if has_cogs:
+                g['cogs_total'] += line_cogs
+                g['units_cogs'] += qty
+            if is_foc:
+                g['units_foc'] += qty
+                g['revenue_net_foc'] += max(net, 0.0)
+                g['revenue_gross_foc'] += max(gross, 0.0)
+                if has_cogs:
+                    g['cogs_foc'] += line_cogs
+                    g['units_cogs_foc'] += qty
+            g['_accounts'].add(acc.get('id'))
+            counted_account = True
+        if counted_account:
+            ordering_accounts.add(acc.get('id'))
+
+    skus = []
+    for nm, g in agg.items():
+        g['ordering_accounts'] = len(g.pop('_accounts'))
+        g = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in g.items()}
+        skus.append(g)
+    skus.sort(key=lambda s: s['revenue_net_total'], reverse=True)
+
+    return {
+        'from': fd, 'to': td, 'time_filter': time_filter,
+        'ordering_accounts': len(ordering_accounts),
+        'total_scope_accounts': total_scope_accounts,
+        'coverage_pct': round(len(ordering_accounts) / total_scope_accounts * 100) if total_scope_accounts else 0,
+        'skus': skus,
+    }
+
+
+
 @api_router.get("/accounts/{account_id}")
 async def get_account(account_id: str, current_user: dict = Depends(get_current_user)):
     """Get single account by ID or account_id"""

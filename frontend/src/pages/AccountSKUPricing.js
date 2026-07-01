@@ -25,6 +25,14 @@ export default function AccountSKUPricing() {
   const [cogsBySku, setCogsBySku] = useState({});
   const [exporting, setExporting] = useState(false);
 
+  // GOP margin view: 'configured' (list price) vs 'realized' (from invoices)
+  const [viewMode, setViewMode] = useState('configured');
+  const [timeFilter, setTimeFilter] = useState('this_month');
+  const [revenueBasis, setRevenueBasis] = useState('net'); // 'net' | 'gross'
+  const [includeFoc, setIncludeFoc] = useState(true);
+  const [realized, setRealized] = useState(null);
+  const [realizedLoading, setRealizedLoading] = useState(false);
+
   // Client-side pagination — paginate by ACCOUNT (each page = N accounts with all their SKU rows)
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -86,6 +94,35 @@ export default function AccountSKUPricing() {
       setUsers(data || []);
     } catch {
       // non-blocking
+    }
+  };
+
+  useEffect(() => {
+    if (viewMode !== 'realized') return;
+    fetchRealized();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, timeFilter, territoryFilter, stateFilter, cityFilter, assignedToFilter]);
+
+  const fetchRealized = async () => {
+    try {
+      setRealizedLoading(true);
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      params.append('time_filter', timeFilter);
+      if (territoryFilter !== 'all') params.append('territory', territoryFilter);
+      if (stateFilter !== 'all') params.append('state', stateFilter);
+      if (cityFilter !== 'all') params.append('city', cityFilter);
+      if (assignedToFilter.length > 0) params.append('assigned_to', assignedToFilter.join(','));
+      const { data } = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}/api/accounts/sku-realized-margin?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      setRealized(data);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load realized margin');
+    } finally {
+      setRealizedLoading(false);
     }
   };
 
@@ -231,6 +268,38 @@ export default function AccountSKUPricing() {
     };
   }, [gopRows, filteredRows]);
 
+  // Realized (invoice-based) per-SKU cards, derived from raw sums per the
+  // Net/Gross + Include/Exclude-FOC toggles (no refetch needed on toggle).
+  const realizedCards = useMemo(() => {
+    const skus = realized?.skus || [];
+    return skus
+      .map((s) => {
+        const rev = (revenueBasis === 'net' ? s.revenue_net_total : s.revenue_gross_total)
+          - (includeFoc ? 0 : (revenueBasis === 'net' ? s.revenue_net_foc : s.revenue_gross_foc));
+        const cogs = s.cogs_total - (includeFoc ? 0 : s.cogs_foc);
+        const units = s.units_total - (includeFoc ? 0 : s.units_foc);
+        const unitsCogs = s.units_cogs - (includeFoc ? 0 : s.units_cogs_foc);
+        const marginRs = rev - cogs;
+        const marginPct = rev > 0 ? (marginRs / rev) * 100 : null;
+        const avgPrice = units > 0 ? rev / units : 0;
+        const avgCogs = unitsCogs > 0 ? cogs / unitsCogs : 0;
+        return {
+          name: s.sku_name, units, rev, cogs, marginRs, marginPct,
+          avgPrice, avgCogs, hasCogs: cogs > 0, accounts: s.ordering_accounts,
+        };
+      })
+      .filter((c) => c.units > 0)
+      .sort((a, b) => b.rev - a.rev);
+  }, [realized, revenueBasis, includeFoc]);
+
+  const TIME_FILTERS = [
+    { value: 'this_month', label: 'This month' },
+    { value: 'last_month', label: 'Last month' },
+    { value: 'this_quarter', label: 'This quarter' },
+    { value: 'this_year', label: 'This year' },
+    { value: 'all_time', label: 'All time' },
+  ];
+
   const handleExport = () => {
     try {
       setExporting(true);
@@ -307,16 +376,77 @@ export default function AccountSKUPricing() {
         </Button>
       </div>
 
+      {/* GOP margin view toggle + realized controls */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1" data-testid="gop-view-toggle">
+          <button
+            onClick={() => setViewMode('configured')}
+            data-testid="gop-view-configured"
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${viewMode === 'configured' ? 'bg-amber-500 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+          >
+            Configured price
+          </button>
+          <button
+            onClick={() => setViewMode('realized')}
+            data-testid="gop-view-realized"
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${viewMode === 'realized' ? 'bg-amber-500 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+          >
+            Realized (from invoices)
+          </button>
+        </div>
+
+        {viewMode === 'realized' && (
+          <>
+            <Select value={timeFilter} onValueChange={setTimeFilter}>
+              <SelectTrigger className="h-9 w-[150px]" data-testid="realized-time-filter"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TIME_FILTERS.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5" data-testid="revenue-basis-toggle">
+              {['net', 'gross'].map((b) => (
+                <button
+                  key={b}
+                  onClick={() => setRevenueBasis(b)}
+                  data-testid={`revenue-basis-${b}`}
+                  className={`px-2.5 py-1 text-xs rounded-md capitalize transition-colors ${revenueBasis === b ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                >
+                  {b}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setIncludeFoc((v) => !v)}
+              data-testid="foc-toggle"
+              className={`px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${includeFoc ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+            >
+              {includeFoc ? 'Including FOC' : 'Excluding FOC'}
+            </button>
+            {realized && (
+              <span className="text-xs text-muted-foreground">{realized.from} → {realized.to}</span>
+            )}
+          </>
+        )}
+      </div>
+
       {/* GOP Coverage — compact, elegant */}
-      {summary.allAccounts > 0 && (() => {
+      {(viewMode === 'realized' ? (realized?.total_scope_accounts || 0) : summary.allAccounts) > 0 && (() => {
+        const cov = viewMode === 'realized'
+          ? {
+              coveragePct: realized?.coverage_pct || 0,
+              uniqueAccounts: realized?.ordering_accounts || 0,
+              allAccounts: realized?.total_scope_accounts || 0,
+              excludedAccounts: 0,
+            }
+          : summary;
         const tone =
-          summary.coveragePct >= 80 ? 'emerald' :
-          summary.coveragePct >= 50 ? 'amber' : 'rose';
+          cov.coveragePct >= 80 ? 'emerald' :
+          cov.coveragePct >= 50 ? 'amber' : 'rose';
         const ringSize = 56;
         const stroke = 5;
         const radius = (ringSize - stroke) / 2;
         const circ = 2 * Math.PI * radius;
-        const dash = (summary.coveragePct / 100) * circ;
+        const dash = (cov.coveragePct / 100) * circ;
         const ringColor = {
           emerald: 'stroke-emerald-500',
           amber: 'stroke-amber-500',
@@ -360,7 +490,7 @@ export default function AccountSKUPricing() {
                   className={`text-[11px] font-semibold tabular-nums ${textColor}`}
                   data-testid="gop-coverage-pct"
                 >
-                  {summary.coveragePct}%
+                  {cov.coveragePct}%
                 </span>
               </div>
             </div>
@@ -368,33 +498,33 @@ export default function AccountSKUPricing() {
             {/* Body */}
             <div className="flex-1 min-w-0 leading-tight">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                GOP Coverage
+                {viewMode === 'realized' ? 'GOP Coverage (ordering)' : 'GOP Coverage'}
               </p>
               <p className="text-sm text-slate-700 dark:text-slate-200 mt-0.5">
                 <span className="font-semibold tabular-nums text-slate-900 dark:text-white" data-testid="gop-coverage-included">
-                  {summary.uniqueAccounts}
+                  {cov.uniqueAccounts}
                 </span>
                 <span className="text-muted-foreground"> of </span>
                 <span className="font-semibold tabular-nums text-slate-900 dark:text-white" data-testid="gop-coverage-total">
-                  {summary.allAccounts}
+                  {cov.allAccounts}
                 </span>
-                <span className="text-muted-foreground"> accounts in GOP</span>
+                <span className="text-muted-foreground"> {viewMode === 'realized' ? 'accounts ordered' : 'accounts in GOP'}</span>
               </p>
             </div>
 
             {/* Excluded chip */}
-            {summary.excludedAccounts > 0 && (
+            {cov.excludedAccounts > 0 && (
               <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200/70 dark:border-amber-800/40">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                {summary.excludedAccounts} excluded
+                {cov.excludedAccounts} excluded
               </span>
             )}
           </div>
         );
       })()}
 
-      {/* Per-SKU average price tiles */}
-      {skuAverages.length > 0 && (
+      {/* Per-SKU average price tiles (Configured price view) */}
+      {viewMode === 'configured' && skuAverages.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.12em]">
@@ -520,6 +650,94 @@ export default function AccountSKUPricing() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* Per-SKU realized margin tiles (from invoices) */}
+      {viewMode === 'realized' && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-[0.12em]">
+              Realized gross margin per SKU
+            </p>
+            <span className="text-[11px] text-muted-foreground">
+              {realizedLoading ? 'Loading…' : `${realizedCards.length} ${realizedCards.length === 1 ? 'SKU' : 'SKUs'}`}
+            </span>
+          </div>
+          {!realizedLoading && realizedCards.length === 0 ? (
+            <Card className="p-8 text-center text-sm text-muted-foreground" data-testid="realized-empty">
+              No invoiced sales in this period for the selected filters.
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" data-testid="sku-realized-tiles">
+              {realizedCards.map((c, idx) => {
+                const marginColor = c.marginPct == null
+                  ? 'text-muted-foreground'
+                  : c.marginPct >= 40 ? 'text-emerald-600 dark:text-emerald-400'
+                    : c.marginPct >= 20 ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-rose-600 dark:text-rose-400';
+                return (
+                  <div
+                    key={c.name}
+                    className="relative group rounded-2xl border border-slate-200/70 dark:border-slate-700/60 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-950 p-4 overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                    data-testid={`sku-realized-tile-${idx}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">SKU</p>
+                        <p className="text-sm font-semibold text-slate-800 dark:text-white mt-0.5 truncate" title={c.name}>{c.name}</p>
+                      </div>
+                      <div className="shrink-0 h-9 w-9 rounded-xl flex items-center justify-center text-sky-600 dark:text-sky-400 bg-sky-500/10">
+                        <Package className="h-4 w-4" />
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-[13px] text-muted-foreground">₹</span>
+                        <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                          {c.rev.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">{revenueBasis} revenue</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {c.units.toLocaleString('en-IN')} units · {c.accounts} {c.accounts === 1 ? 'account' : 'accounts'} · ₹{c.avgPrice.toFixed(2)}/unit
+                      </p>
+                    </div>
+
+                    <div className="mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/50">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Gross Margin</p>
+                          {c.hasCogs ? (
+                            <div className="flex items-baseline gap-1.5 mt-0.5">
+                              <span className={`text-lg font-bold tabular-nums ${marginColor}`}>
+                                ₹{c.marginRs.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                              </span>
+                              {c.marginPct != null && (
+                                <span className={`text-xs font-semibold tabular-nums ${marginColor}`}>({c.marginPct.toFixed(1)}%)</span>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic mt-0.5">COGS not set</p>
+                          )}
+                        </div>
+                        {c.hasCogs && (
+                          <div className="text-right">
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">COGS</p>
+                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 tabular-nums mt-0.5">
+                              ₹{c.cogs.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">₹{c.avgCogs.toFixed(2)}/unit</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
