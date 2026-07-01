@@ -6858,7 +6858,8 @@ async def get_sku_realized_margin(
     eligible = [a for a in accounts if _is_eligible(a)]
     elig_by_uuid = {a['id']: a for a in eligible if a.get('id')}
     elig_by_code = {a['account_id']: a for a in eligible if a.get('account_id')}
-    total_scope_accounts = len({a.get('id') for a in accounts})
+    # Coverage denominator uses the SAME population as the numerator (GOP-eligible)
+    total_scope_accounts = len({a.get('id') for a in eligible})
 
     def _match(inv):
         for ident in (inv.get('account_uuid'), inv.get('account_id')):

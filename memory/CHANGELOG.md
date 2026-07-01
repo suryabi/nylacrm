@@ -1026,3 +1026,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 ## 2026-06-30 — Accounts list: clickable SKU-category filter
 - GET /api/accounts now accepts sku_category param — filters accounts whose configured sku_pricing includes a SKU of that master-SKU category (query on sku_pricing.sku_id $in master_skus of category).
 - AccountsList.js: the SKU-category chips are now clickable toggles (active chip highlighted amber) that filter the accounts table; a "Clear filter" link resets it; also cleared by Reset Filters. Verified via screenshot (Sparkling -> 1 of 1).
+
+## 2026-06-30 — Account GOP Metrics: invoice-based (volume-weighted) realized margin
+- Business change: the "Configured price" cards were unweighted (avg list price − avg city COGS). Added a "Realized (from invoices)" view where margin is weighted by actual invoiced volume.
+- New endpoint GET /api/accounts/sku-realized-margin?time_filter&from_date&to_date&territory&state&city&assigned_to. Per invoice line: revenue = net/gross line amount, COGS = quantity(bottles) × per-unit total_cogs for the SKU in the account's city (city aliases bangalore↔bengaluru, gurgaon↔gurugram). Returns raw sums per SKU (units_total/foc, revenue_net/gross_total/foc, cogs_total/foc, units_cogs/foc, ordering_accounts) so the client toggles Net/Gross + Include/Exclude FOC with no refetch. Coverage = distinct GOP-eligible accounts that ordered ÷ GOP-eligible in-scope accounts. Only include_in_gop_metrics accounts counted (Retail excluded).
+- AccountSKUPricing.js: view toggle (Configured price / Realized), time filter (this_month/last_month/this_quarter/this_year/all_time), Net/Gross toggle, Include/Exclude FOC toggle. Realized SKU cards show revenue, units, ordering accounts, ₹/unit, weighted gross margin ₹/% and COGS.
+- Verified iteration_277 (backend 14/14, 100%; COGS math replayed against DB). Fixed coverage denominator to use GOP-eligible population (was all accounts).
