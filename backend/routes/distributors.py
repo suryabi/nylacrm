@@ -41,6 +41,37 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
+async def _record_deletion_audit(tenant_id: str, entity_type: str, entity: dict,
+                                 distributor_id: str, current_user: dict,
+                                 entity_number: str = None, extra: dict = None):
+    """Persist a deletion audit record so who/when/what is queryable later.
+
+    Stores a snapshot of the deleted document. Best-effort: never blocks the
+    delete if the audit write fails.
+    """
+    try:
+        rec = {
+            'id': str(uuid.uuid4()),
+            'tenant_id': tenant_id,
+            'entity_type': entity_type,
+            'entity_id': entity.get('id'),
+            'entity_number': entity_number or entity.get('delivery_number') or entity.get('shipment_number'),
+            'distributor_id': distributor_id,
+            'status_at_deletion': entity.get('status'),
+            'deleted_by': current_user.get('id'),
+            'deleted_by_email': current_user.get('email'),
+            'deleted_by_name': current_user.get('name') or current_user.get('full_name'),
+            'deleted_by_role': current_user.get('role'),
+            'deleted_at': datetime.now(timezone.utc).isoformat(),
+            'snapshot': {k: v for k, v in entity.items() if k != '_id'},
+        }
+        if extra:
+            rec.update(extra)
+        await db.deletion_audit.insert_one(rec)
+    except Exception as e:
+        logger.error(f"Failed to write deletion audit for {entity_type} {entity.get('id')}: {e}")
+
+
 def is_distributor_admin(user: dict) -> bool:
     """Check if user can manage distributors"""
     return user.get('role') in ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head']
@@ -5510,7 +5541,15 @@ async def delete_delivery(
         raise HTTPException(status_code=400, detail="Cannot delete delivery that is part of a settlement")
     
     # Delete items first
+    del_items = await db.distributor_delivery_items.find({"delivery_id": delivery_id, "tenant_id": tenant_id}).to_list(1000)
     await db.distributor_delivery_items.delete_many({"delivery_id": delivery_id, "tenant_id": tenant_id})
+    
+    # Record deletion audit (who/when/what) BEFORE removing the delivery
+    await _record_deletion_audit(
+        tenant_id, 'delivery', delivery, distributor_id, current_user,
+        entity_number=delivery.get('delivery_number'),
+        extra={'item_count': len(del_items), 'items_snapshot': [{k: v for k, v in i.items() if k != '_id'} for i in del_items]},
+    )
     
     # Delete delivery
     await db.distributor_deliveries.delete_one({"id": delivery_id, "tenant_id": tenant_id})
@@ -5518,6 +5557,45 @@ async def delete_delivery(
     logger.info(f"Delivery {delivery['delivery_number']} (status: {delivery.get('status')}) deleted by {current_user['email']} (role: {user_role})")
     
     return {"message": f"Delivery {delivery['delivery_number']} deleted"}
+
+
+@router.get("/deletion-audit/all")
+async def get_deletion_audit_all(
+    entity_type: Optional[str] = None,
+    distributor_id: Optional[str] = None,
+    limit: int = 500,
+    current_user: dict = Depends(get_current_user)
+):
+    """Global deletion audit history (CEO/Admin only). Who deleted what & when."""
+    user_role = (current_user.get('role') or '').lower()
+    if not any(r in user_role for r in ['ceo', 'admin', 'system admin']):
+        raise HTTPException(status_code=403, detail="Only CEO/Admin can view the deletion audit")
+    tenant_id = get_current_tenant_id()
+    q = {'tenant_id': tenant_id}
+    if entity_type:
+        q['entity_type'] = entity_type
+    if distributor_id:
+        q['distributor_id'] = distributor_id
+    records = await db.deletion_audit.find(q, {'_id': 0}).sort('deleted_at', -1).limit(min(max(1, limit), 2000)).to_list(2000)
+    return {'total': len(records), 'records': records}
+
+
+@router.get("/{distributor_id}/deletion-audit")
+async def get_deletion_audit(
+    distributor_id: str,
+    entity_type: Optional[str] = 'delivery',
+    current_user: dict = Depends(get_current_user)
+):
+    """Deletion history for a distributor's deliveries/shipments (who/when/what)."""
+    if not can_manage_distributor_data(current_user, distributor_id):
+        raise HTTPException(status_code=403, detail="Not authorised to view this distributor's audit")
+    tenant_id = get_current_tenant_id()
+    q = {'tenant_id': tenant_id, 'distributor_id': distributor_id}
+    if entity_type and entity_type != 'all':
+        q['entity_type'] = entity_type
+    records = await db.deletion_audit.find(q, {'_id': 0}).sort('deleted_at', -1).limit(1000).to_list(1000)
+    return {'total': len(records), 'records': records}
+
 
 
 @router.post("/{distributor_id}/deliveries/{delivery_id}/cancel")
