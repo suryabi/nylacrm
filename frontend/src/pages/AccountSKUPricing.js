@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
 import { MultiSelect } from '../components/ui/multi-select';
-import { Building2, Search, Download, Loader2, Package, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Building2, Search, Download, Loader2, Package, ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { useMasterLocations } from '../hooks/useMasterLocations';
@@ -342,6 +342,32 @@ export default function AccountSKUPricing() {
     () => (users || []).map((u) => ({ value: u.id, label: u.name || u.email })),
     [users]
   );
+
+  // Grade chip (Gold / Silver / PET) parsed from SKU name; cohesive with app palette
+  const gradeChip = (skuName = '') => {
+    const n = skuName.toLowerCase();
+    if (n.includes('gold')) return { label: 'Gold', cls: 'bg-amber-50 text-amber-700 border-amber-200/70 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800/50', dot: 'bg-amber-400' };
+    if (n.includes('silver')) return { label: 'Silver', cls: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700', dot: 'bg-slate-400' };
+    if (n.includes('pet')) return { label: 'PET', cls: 'bg-sky-50 text-sky-700 border-sky-200/70 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800/50', dot: 'bg-sky-400' };
+    return null;
+  };
+  const initials = (name = '') => name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase() || '?';
+
+  // Group the paginated (account-windowed) rows into per-account cards
+  const groupedAccounts = (() => {
+    const map = new Map();
+    for (const r of paginatedRows) {
+      if (!map.has(r.account_id)) {
+        map.set(r.account_id, {
+          account_id: r.account_id, account_name: r.account_name, account_code: r.account_code,
+          city: r.city, territory: r.territory, include_in_gop_metrics: r.include_in_gop_metrics,
+          skus: [],
+        });
+      }
+      map.get(r.account_id).skus.push(r);
+    }
+    return Array.from(map.values());
+  })();
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6" data-testid="account-sku-pricing-page">
@@ -799,101 +825,126 @@ export default function AccountSKUPricing() {
         </div>
       </Card>
 
-      {/* Grid */}
-      <Card className="overflow-hidden">
+      {/* Grid — Account Group Cards */}
+      <div className="overflow-hidden">
+        <style>{`
+          @keyframes gopCardRise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+          .gop-card-rise { animation: gopCardRise .45s cubic-bezier(.16,1,.3,1) both; }
+        `}</style>
         {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
           </div>
         ) : filteredRows.length === 0 ? (
-          <div className="p-10 text-center text-muted-foreground">
-            <Building2 className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            No rows match the current filters.
+          <div className="flex flex-col items-center justify-center py-24 px-4 text-center bg-white dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+            <div className="h-14 w-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+              <Building2 className="h-7 w-7 text-slate-300 dark:text-slate-600" />
+            </div>
+            <p className="text-base font-medium text-slate-600 dark:text-slate-300">No accounts match the current filters</p>
+            <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters above.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[220px]">Account</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead className="min-w-[220px]">SKU</TableHead>
-                  <TableHead className="text-right">Price / Unit (₹)</TableHead>
-                  <TableHead className="text-right">Return Credit (₹)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedRows.map((r, idx) => {
-                  const isOdd = r._accountIndex % 2 === 1;
-                  const zebra = isOdd
-                    ? 'bg-amber-50/40 dark:bg-amber-950/10 hover:bg-amber-100/60 dark:hover:bg-amber-900/20'
-                    : 'bg-white dark:bg-slate-900/30 hover:bg-slate-50 dark:hover:bg-slate-800/40';
-                  return (
-                  <TableRow
-                    key={`${r.account_id}-${r.sku_id || r.sku_name || idx}`}
-                    className={`cursor-pointer transition-colors ${zebra} ${
-                      r._showAccount && idx > 0 ? 'border-t-2 border-t-amber-200/60 dark:border-t-amber-800/30' : ''
-                    }`}
-                    onClick={() => navigate(`/accounts/${r.account_id}`)}
-                    data-testid={`pricing-row-${idx}`}
-                    data-account-index={r._accountIndex}
+          <>
+            <div className="space-y-4">
+              {groupedAccounts.map((acc, aIdx) => (
+                <div
+                  key={acc.account_id}
+                  className="gop-card-rise bg-white dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group/card"
+                  style={{ animationDelay: `${Math.min(aIdx * 40, 320)}ms` }}
+                  data-testid={`account-card-${acc.account_id}`}
+                >
+                  {/* Account header */}
+                  <div
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 bg-gradient-to-r from-slate-50/80 to-white dark:from-slate-800/50 dark:to-slate-900/40 border-b border-slate-100 dark:border-slate-800 cursor-pointer"
+                    onClick={() => navigate(`/accounts/${acc.account_id}`)}
+                    data-testid={`account-header-${acc.account_id}`}
                   >
-                    <TableCell className="font-medium align-top">
-                      {r._showAccount ? (
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-800 dark:text-white">{r.account_name}</span>
-                            {r.include_in_gop_metrics === false && (
-                              <span
-                                className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                                title="Excluded from GOP top-tile metrics"
-                                data-testid={`row-not-in-gop-${idx}`}
-                              >
-                                Not in GOP
-                              </span>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-11 w-11 shrink-0 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white flex items-center justify-center font-semibold text-sm shadow-sm ring-2 ring-white dark:ring-slate-900">
+                        {initials(acc.account_name)}
+                      </div>
+                      <div className="min-w-0 flex flex-col gap-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white truncate">{acc.account_name}</span>
+                          {acc.account_code && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium uppercase tracking-wider bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 shadow-sm">
+                              {acc.account_code}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span>{acc.city || '—'}</span>
+                          {acc.territory && <span className="text-slate-300 dark:text-slate-600">·</span>}
+                          {acc.territory && <span>{acc.territory}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-start sm:self-center pl-14 sm:pl-0">
+                      <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500">{acc.skus.filter(s => s.sku_name).length} SKU{acc.skus.filter(s => s.sku_name).length === 1 ? '' : 's'}</span>
+                      {acc.include_in_gop_metrics === false && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200/60 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800/50 shadow-sm" data-testid="not-in-gop-badge">
+                          Not in GOP
+                        </span>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-slate-400 group-hover/card:text-violet-500 group-hover/card:translate-x-1 transition-all duration-300 hidden sm:block" />
+                    </div>
+                  </div>
+
+                  {/* SKU rows */}
+                  <div className="flex flex-col">
+                    {acc.skus.map((r, sIdx) => {
+                      const g = r.sku_name ? gradeChip(r.sku_name) : null;
+                      const hasCredit = r.return_bottle_credit != null && Number(r.return_bottle_credit) > 0;
+                      return (
+                        <div
+                          key={`${r.account_id}-${r.sku_id || r.sku_name || sIdx}`}
+                          className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 items-center px-4 sm:px-5 py-3 border-b border-slate-50 dark:border-slate-800/60 last:border-0 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                          data-testid={`sku-row-${r.sku_id || sIdx}`}
+                        >
+                          {/* SKU */}
+                          <div className="sm:col-span-6 flex flex-col gap-1 sm:pr-4">
+                            {r.sku_name ? (
+                              <>
+                                <div className="flex items-center flex-wrap gap-2">
+                                  <span className="text-sm font-medium text-slate-900 dark:text-white">{r.sku_name}</span>
+                                  {g && (
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border shadow-sm ${g.cls}`} data-testid={`sku-grade-chip-${r.sku_id || sIdx}`}>
+                                      <span className={`h-1.5 w-1.5 rounded-full ${g.dot}`} />{g.label}
+                                    </span>
+                                  )}
+                                </div>
+                                {r.sku_category && <span className="text-xs text-slate-500 dark:text-slate-400">{r.sku_category}</span>}
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">No SKU pricing set</span>
                             )}
                           </div>
-                          {r.account_code && (
-                            <span className="text-xs text-muted-foreground font-mono">{r.account_code}</span>
-                          )}
+                          {/* Price / Unit */}
+                          <div className="sm:col-span-3 flex justify-between sm:block sm:text-right">
+                            <span className="text-[11px] uppercase tracking-wider text-slate-400 sm:hidden font-medium">Price / Unit</span>
+                            <span className="text-sm font-semibold tabular-nums text-slate-900 dark:text-white" data-testid={`sku-price-${r.sku_id || sIdx}`}>
+                              {r.price_per_unit != null ? `₹${Number(r.price_per_unit).toFixed(2)}` : '—'}
+                            </span>
+                          </div>
+                          {/* Return Credit */}
+                          <div className="sm:col-span-3 flex justify-between sm:block sm:text-right">
+                            <span className="text-[11px] uppercase tracking-wider text-slate-400 sm:hidden font-medium">Return Credit</span>
+                            <span className={`text-sm font-medium tabular-nums ${hasCredit ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-300 dark:text-slate-600'}`}>
+                              {hasCredit ? `₹${Number(r.return_bottle_credit).toFixed(2)}` : '—'}
+                            </span>
+                          </div>
                         </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="align-top">
-                      {r._showAccount ? (
-                        <div className="text-sm">
-                          <div>{r.city || '—'}</div>
-                          <div className="text-xs text-muted-foreground">{r.territory || ''}</div>
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>
-                      {r.sku_name ? (
-                        <div>
-                          <div className="font-medium text-slate-800 dark:text-white">{r.sku_name}</div>
-                          {r.sku_category && (
-                            <div className="text-xs text-muted-foreground">{r.sku_category}</div>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground italic">No SKU pricing set</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {r.price_per_unit != null ? `₹${Number(r.price_per_unit).toFixed(2)}` : '—'}
-                    </TableCell>
-                    <TableCell className="text-right text-emerald-700 dark:text-emerald-400">
-                      {r.return_bottle_credit != null ? `₹${Number(r.return_bottle_credit).toFixed(2)}` : '—'}
-                    </TableCell>
-                  </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
 
             {/* Pagination */}
             {totalAccountsInView > 0 && (
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 py-3 border-t border-slate-200/70 dark:border-slate-700/60" data-testid="pricing-pagination">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-5 px-4 py-3 rounded-xl bg-white dark:bg-slate-900/40 border border-slate-200/70 dark:border-slate-700/60" data-testid="pricing-pagination">
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span>
                     Showing accounts <span className="font-semibold text-slate-700 dark:text-slate-200 tabular-nums">{(currentPage - 1) * pageSize + 1}</span>
@@ -920,10 +971,10 @@ export default function AccountSKUPricing() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 rounded-lg"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    data-testid="pricing-prev-page"
+                    data-testid="pagination-prev"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -933,19 +984,19 @@ export default function AccountSKUPricing() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 rounded-lg"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
-                    data-testid="pricing-next-page"
+                    data-testid="pagination-next"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             )}
-          </div>
+          </>
         )}
-      </Card>
+      </div>
     </div>
   );
 }
