@@ -5559,6 +5559,8 @@ async def delete_delivery(
     return {"message": f"Delivery {delivery['delivery_number']} deleted"}
 
 
+# IMPORTANT: keep this static route BEFORE '/{distributor_id}/deletion-audit'
+# below — otherwise FastAPI captures 'deletion-audit' as distributor_id.
 @router.get("/deletion-audit/all")
 async def get_deletion_audit_all(
     entity_type: Optional[str] = None,

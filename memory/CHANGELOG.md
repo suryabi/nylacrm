@@ -1035,3 +1035,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 
 ## 2026-06-30 — SKU Performance page visual redesign
 - Redesigned /sku-performance (SKUPerformance.js): gradient header + live period pill, refined filter bar (styled selects w/ chevrons), 4 premium gradient stat cards (Total Achieved, Units Sold, Active SKUs, Top SKU), and a "SKU Leaderboard" replacing the plain table — rank medals (crown top-3), variant chips (Gold/Silver/Sparkling), revenue-share progress bars, contribution %, Achieved/Units/Accounts, hover + staggered entrance animations. Logic/data/filters unchanged. Frontend-only; verified via screenshot.
+
+## 2026-06-30 — Delivery deletion audit trail (who/when/what)
+- Problem: deleting a delivery (stock-out) was a hard delete logging only a stdout line; no queryable history of who deleted it & when.
+- Fix: _record_deletion_audit() writes a persistent row to db.deletion_audit on delivery delete (entity snapshot + items_snapshot + item_count + deleted_by/email/name/role + deleted_at ISO + status_at_deletion). Best-effort (never blocks delete).
+- Endpoints: GET /api/distributors/{distributor_id}/deletion-audit (manager-gated) and GET /api/distributors/deletion-audit/all (CEO/Admin, global). Route ordering locked with a comment.
+- UI: "Deletion history" button + dialog in the Deliveries tab lists deleted deliveries with who/when/status/item-count.
+- NOTE: only covers deletions AFTER this deploy — past production deletions were never audited (only in rotated server logs). Verified iteration_278 (backend 6/6, 100%).
