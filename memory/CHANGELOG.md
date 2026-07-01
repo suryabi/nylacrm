@@ -1049,3 +1049,6 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - NEW POST /api/distributors/{distributor_id}/deletion-audit/{audit_id}/restore (CEO/Admin) — recreates a deleted DELIVERY + items from the snapshot, marks audit + delivery restored_at/restored_by. Does NOT re-run stock/Zoho side-effects (delete didn't reverse them). Guards: already-restored 400, non-delivery 400, non-CEO/admin 403, bad id 404, id-exists 400.
 - UI: "Deletion history" dialog now shows a Restore button per deleted delivery (or a "Restored by … on …" badge), with a note that restore doesn't reconstruct stock/Zoho.
 - Verified iteration_279 (backend 8/8, 100%).
+
+## 2026-06-30 — Resource Performance page visual redesign
+- Redesigned /resource-performance (ResourcePerformance.js) to match the SKU Performance makeover: gradient indigo header + live period pill, refined filter bar (styled selects w/ chevrons), 4 premium gradient stat cards (Total Achieved, Total Leads, Won Deals, Avg Achievement w/ top-resource), and a "Resource Leaderboard" replacing the table — rank crowns (top 3), avatar initials, role + territory chips, target-achievement progress bars w/ color tiers, and Achieved/Leads/Won/Visits/Calls metrics; hover + staggered entrance animations. Logic/data/filters unchanged. Frontend-only; verified via screenshot (24 rows).
