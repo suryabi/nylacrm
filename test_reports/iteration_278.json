@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 278 — Verified new deletion-audit trail for delivery (stock-out) records. 6/6 pytest cases passed. Confirmed: (a) DELETE /api/distributors/{did}/deliveries/{delId} now writes exactly one deletion_audit row with all required fields (tenant_id, entity_type=delivery, entity_id, entity_number, distributor_id, status_at_deletion, deleted_by/email/name/role, deleted_at ISO, snapshot without _id, item_count=2, items_snapshot without _id) while removing the delivery + its items; (b) GET /{did}/deletion-audit returns {total, records[]} sorted desc by deleted_at and contains the just-deleted record; (c) GET /distributors/deletion-audit/all resolves to the GLOBAL handler (not shadowed) — returns tenant-scoped list including the new record; (d) role gate confirmed — distributor role gets 403 'Only CEO/Admin can view the deletion audit'; (e) regression — settled delivery (settlement_id set) still 400s with 'Cannot delete delivery that is part of a settlement' and writes no audit row. Synthetic docs and audit rows cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_278_deletion_audit.py",
+    "/app/test_reports/pytest/iteration_278.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "distributors.py L5562 GET /deletion-audit/all is registered BEFORE the /{distributor_id}/deletion-audit route in the same file — good; route ordering is what makes the global endpoint resolvable. If a future refactor moves the parameterised route above, /deletion-audit/all will silently be captured as distributor_id='deletion-audit' → 403/404. Consider a comment or a router-level assertion to lock this ordering.",
+    "distributors.py _record_deletion_audit is best-effort (try/except → logger.error) — good design (never blocks delete). Consider also emitting a metric/alert so silent audit-write failures don't hide who deleted what.",
+    "Hard delete is still hard delete for db.distributor_deliveries — restoration is only possible via the snapshot in deletion_audit. If product intent is 'recoverable delete', a soft-delete flag would be preferable. Currently the audit is retrieval-only, not restore-capable.",
+    "Only 'delivery' entity_type is being written today. If shipments/other resources also need who-deleted-when tracking, apply the same _record_deletion_audit call before their delete_one() paths for consistency."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_278_deletion_audit.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "n/a (skipped per request)"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water); Distributor low-priv: john.distributor@test.com / nyladist## (used for 403 check)",
+  "seed_data_creation": "Synthetic delivery (TEST-<uuid>) + 2 items inserted directly into distributor_deliveries and distributor_delivery_items collections; a second synthetic 'delivered + settlement_id' delivery for the regression test. All cleaned up post-test along with any leftover TEST-* rows in deletion_audit.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Deletion audit lives in db.deletion_audit; writer is _record_deletion_audit() in routes/distributors.py L44. Readers: GET /api/distributors/deletion-audit/all (global, CEO/Admin only, L5562) and GET /api/distributors/{distributor_id}/deletion-audit (L5583). Ordering of the two routes is what keeps the global one from being shadowed — keep the global one first. Test file /app/backend/tests/test_iteration_278_deletion_audit.py can be reused; it cleans up TEST-* audit rows automatically.",
+  "rca of the issue": "Reproduced original complaint that deletions were untraceable: prior to fix, delete_delivery only emitted logger.info, so 'who/when' was only in server stdout logs (rotated/lost). The new persistent deletion_audit collection + two GET endpoints solves it. Verified end-to-end that after DELETE, the row exists with correct actor (deleted_by_email = CEO), correct target (entity_number matches delivery_number), non-null ISO deleted_at, and a full snapshot + item_count/items_snapshot for post-mortem/restore-by-hand. Regression paths (settlement lock, message shape) intact."
+}

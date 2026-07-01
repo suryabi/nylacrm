@@ -11,7 +11,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
 import { Checkbox } from '../ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
-import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check, Pencil, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Building2, X, Download, ChevronLeft, ChevronRight, Filter, CreditCard, Receipt, CheckCircle2, ChevronDown, AlertTriangle, AlertCircle, Factory, ExternalLink, Check, Pencil, RotateCcw, History } from 'lucide-react';
 import PromoDispatchSection from './PromoDispatchSection';
 import { groupByDateDesc } from '../../utils/dateGrouping';
 import { Calendar as DatePicker } from '../ui/calendar';
@@ -124,6 +124,26 @@ export default function DeliveriesTab({
   batchesBySku = {},
 }) {
   const [downloading, setDownloading] = useState(false);
+
+  // Deletion history (audit) viewer
+  const [showDeletionHistory, setShowDeletionHistory] = useState(false);
+  const [deletionAudit, setDeletionAudit] = useState([]);
+  const [deletionAuditLoading, setDeletionAuditLoading] = useState(false);
+  const openDeletionHistory = async () => {
+    setShowDeletionHistory(true);
+    setDeletionAuditLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/distributors/${distributor.id}/deletion-audit?entity_type=delivery`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setDeletionAudit(data?.records || []);
+    } catch (e) {
+      setDeletionAudit([]);
+    } finally {
+      setDeletionAuditLoading(false);
+    }
+  };
 
   // Per-date-group open/close state. Default (when a key is absent) is driven
   // by `isToday` so only Today's group is expanded on first render.
@@ -810,6 +830,64 @@ export default function DeliveriesTab({
               <Download className="h-4 w-4 mr-2" />
               {downloading ? 'Downloading...' : 'Download Excel'}
             </Button>
+
+            {canManage && (
+              <Button
+                variant="outline"
+                onClick={openDeletionHistory}
+                data-testid="deletion-history-btn"
+                className="text-rose-700 border-rose-200 hover:bg-rose-50 dark:text-rose-400 dark:border-rose-900/50"
+              >
+                <History className="h-4 w-4 mr-2" />
+                Deletion history
+              </Button>
+            )}
+
+            {/* Deletion history dialog */}
+            <Dialog open={showDeletionHistory} onOpenChange={setShowDeletionHistory}>
+              <DialogContent className="max-w-3xl w-[95vw] max-h-[85vh] flex flex-col" data-testid="deletion-history-dialog">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <History className="h-5 w-5 text-rose-600" /> Deleted deliveries — audit trail
+                  </DialogTitle>
+                  <DialogDescription>
+                    Who deleted a delivery, when, and its details at the time. Recorded for deletions going forward.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex-1 overflow-y-auto -mx-1 px-1">
+                  {deletionAuditLoading ? (
+                    <div className="py-12 text-center text-sm text-muted-foreground">Loading…</div>
+                  ) : deletionAudit.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <History className="h-10 w-10 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+                      <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No deletions recorded</p>
+                      <p className="text-xs text-muted-foreground mt-1">Deletions made from now on will appear here with who &amp; when.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {deletionAudit.map((r) => (
+                        <div key={r.id} className="rounded-xl border border-slate-200 dark:border-slate-700 p-3" data-testid={`deletion-audit-${r.id}`}>
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-800 dark:text-white">{r.entity_number || r.entity_id}</span>
+                              {r.status_at_deletion && (
+                                <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500">{r.status_at_deletion}</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{r.deleted_at ? new Date(r.deleted_at).toLocaleString() : '—'}</span>
+                          </div>
+                          <div className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">
+                            Deleted by <span className="font-medium text-slate-800 dark:text-white">{r.deleted_by_name || r.deleted_by_email || 'Unknown'}</span>
+                            {r.deleted_by_role && <span className="text-muted-foreground"> ({r.deleted_by_role})</span>}
+                            {typeof r.item_count === 'number' && <span className="text-muted-foreground"> · {r.item_count} line item{r.item_count === 1 ? '' : 's'}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
             
             {canManage && (
               <Dialog open={showDeliveryDialog} onOpenChange={(open) => {
