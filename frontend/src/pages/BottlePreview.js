@@ -6,11 +6,12 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Slider } from '../components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { 
   Upload, Download, RotateCcw, Loader2, Sparkles, 
   Crop, Circle, Square, Eraser, ZoomIn, Check, X, Move, RotateCw, RectangleHorizontal,
-  Pipette
+  Pipette, Crosshair, AlertTriangle
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -37,6 +38,9 @@ const BOTTLE_TEMPLATES = [
 const LOGO_SIZE_OPTIONS = [35, 40, 45, 50];
 const LOGO_MM_BASE = 45;
 const mmToScale = (mm) => Math.round((mm / LOGO_MM_BASE) * 100);
+// Per-size logo printing price (INR per bottle)
+const LOGO_SIZE_PRICES = { 35: 2.5, 40: 3.5, 45: 4.5, 50: 5.5 };
+const DEFAULT_LOGO_MM = 35;
 
 // Helper function to create cropped image
 const createCroppedImage = async (imageSrc, pixelCrop, shape = 'rectangle') => {
@@ -267,8 +271,10 @@ export default function BottlePreview() {
 
   // Logo style state
   const [logoShape, setLogoShape] = useState('original'); // 'original', 'circle', 'square', 'rounded-square'
-  const [logoScale, setLogoScale] = useState(mmToScale(45)); // derived from fixed mm size
-  const [logoSizeMm, setLogoSizeMm] = useState(45); // fixed logo size in mm (35/40/45/50)
+  const [logoScale, setLogoScale] = useState(mmToScale(DEFAULT_LOGO_MM)); // derived from fixed mm size
+  const [logoSizeMm, setLogoSizeMm] = useState(DEFAULT_LOGO_MM); // fixed logo size in mm (35/40/45/50)
+  const [showGuides, setShowGuides] = useState(true); // center crosshair guide lines
+  const [sizeWarning, setSizeWarning] = useState(null); // {mm, price} when upsizing above 35mm
 
   // Logo position state (for dragging)
   const [logoPosition, setLogoPosition] = useState({ x: 50, y: 50 }); // percentage from center
@@ -321,8 +327,8 @@ export default function BottlePreview() {
       setOriginalLogo(response.data.logo_data);
       setLogoFile(file);
       setLogoShape('original');
-      setLogoSizeMm(45);
-      setLogoScale(mmToScale(45));
+      setLogoSizeMm(DEFAULT_LOGO_MM);
+      setLogoScale(mmToScale(DEFAULT_LOGO_MM));
       setLogoPosition({ x: 50, y: 50 });
       toast.success('Logo uploaded! You can now edit it.');
     } catch (error) {
@@ -340,8 +346,8 @@ export default function BottlePreview() {
     setOriginalLogo('');
     setCustomerName('');
     setLogoShape('original');
-    setLogoSizeMm(45);
-    setLogoScale(mmToScale(45));
+    setLogoSizeMm(DEFAULT_LOGO_MM);
+    setLogoScale(mmToScale(DEFAULT_LOGO_MM));
     setLogoPosition({ x: 50, y: 50 });
     setShowCropper(false);
     setIsColorPickerMode(false);
@@ -356,8 +362,8 @@ export default function BottlePreview() {
     if (originalLogo) {
       setLogoPreview(originalLogo);
       setLogoShape('original');
-      setLogoSizeMm(45);
-      setLogoScale(mmToScale(45));
+      setLogoSizeMm(DEFAULT_LOGO_MM);
+      setLogoScale(mmToScale(DEFAULT_LOGO_MM));
       setLogoPosition({ x: 50, y: 50 });
       setSelectedBgColor(null);
       toast.success('Edits reset to original');
@@ -594,6 +600,9 @@ export default function BottlePreview() {
   const handleSizeSelect = (mm) => {
     setLogoSizeMm(mm);
     setLogoScale(mmToScale(mm));
+    if (mm > DEFAULT_LOGO_MM) {
+      setSizeWarning({ mm, price: LOGO_SIZE_PRICES[mm] });
+    }
   };
 
   const handleSave = async () => {
@@ -1036,14 +1045,15 @@ export default function BottlePreview() {
                         type="button"
                         variant={logoSizeMm === mm ? 'default' : 'outline'}
                         onClick={() => handleSizeSelect(mm)}
-                        className="h-11 rounded-lg text-sm font-medium flex flex-col items-center justify-center leading-tight"
+                        className="h-auto py-2 rounded-lg text-sm font-medium flex flex-col items-center justify-center leading-tight gap-0.5"
                         data-testid={`logo-size-${mm}`}
                       >
-                        <span>{mm}×{mm}</span>
-                        <span className="text-[10px] opacity-70">mm</span>
+                        <span>{mm}×{mm} mm</span>
+                        <span className={`text-[11px] font-semibold ${logoSizeMm === mm ? 'text-white/90' : 'text-emerald-600 dark:text-emerald-400'}`}>₹{LOGO_SIZE_PRICES[mm].toFixed(2)}</span>
                       </Button>
                     ))}
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">Price shown is the logo printing cost per bottle.</p>
                 </div>
 
                 {/* Position Controls */}
@@ -1154,6 +1164,20 @@ export default function BottlePreview() {
               </TabsList>
             </Tabs>
             
+            <div className="flex justify-end mb-2">
+              <Button
+                type="button"
+                variant={showGuides ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowGuides((v) => !v)}
+                className="rounded-full h-8 text-xs gap-1.5"
+                data-testid="toggle-center-guides"
+              >
+                <Crosshair className="h-3.5 w-3.5" />
+                Center guides {showGuides ? 'on' : 'off'}
+              </Button>
+            </div>
+            
             <div 
               ref={bottleContainerRef}
               className={`relative rounded-xl min-h-[550px] flex items-center justify-center select-none ${logoPreview && !isColorPickerMode ? 'cursor-move' : ''}`}
@@ -1174,6 +1198,15 @@ export default function BottlePreview() {
                 className="max-h-[520px] w-auto object-contain pointer-events-none rounded-lg"
                 data-testid="bottle-image"
               />
+
+              {/* Center guide lines (crosshair) — visual aid, not included in download */}
+              {showGuides && (
+                <div className="absolute inset-0 pointer-events-none z-10" data-testid="center-guides">
+                  <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 border-l border-dashed border-violet-400/60" />
+                  <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 border-t border-dashed border-violet-400/60" />
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-violet-500/70 ring-2 ring-white/70" />
+                </div>
+              )}
               
               {/* Logo Overlay - Only show if logo is uploaded */}
               {logoPreview && (
@@ -1303,6 +1336,37 @@ export default function BottlePreview() {
           </p>
         </div>
       </Card>
+
+      {/* Soft warning when upsizing above the default 35×35 mm */}
+      <Dialog open={!!sizeWarning} onOpenChange={(o) => { if (!o) setSizeWarning(null); }}>
+        <DialogContent className="max-w-md" data-testid="size-warning-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <AlertTriangle className="h-5 w-5" /> Larger logo — higher print cost
+            </DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 text-sm pt-1">
+                <p>
+                  You selected a <strong>{sizeWarning?.mm}×{sizeWarning?.mm} mm</strong> logo, which prints at{' '}
+                  <strong className="text-emerald-600 dark:text-emerald-400">₹{sizeWarning?.price?.toFixed(2)}</strong> per bottle
+                  {' '}— higher than <strong>₹{LOGO_SIZE_PRICES[DEFAULT_LOGO_MM].toFixed(2)}</strong> for the default 35×35 mm.
+                </p>
+                <p className="text-muted-foreground">
+                  Please propose the price to the customer accordingly so the higher printing cost is covered.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { handleSizeSelect(DEFAULT_LOGO_MM); setSizeWarning(null); }} data-testid="size-warning-revert">
+              Keep 35×35 mm
+            </Button>
+            <Button onClick={() => setSizeWarning(null)} data-testid="size-warning-ok">
+              Got it, proceed
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

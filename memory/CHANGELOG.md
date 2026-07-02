@@ -1059,3 +1059,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 ## 2026-06-30 — Bottle Preview: fixed logo sizes + default centering
 - BottlePreview.js: replaced the free logo-size slider with 4 fixed options (35×35, 40×40, 45×45, 50×50 mm). New logoSizeMm state; scale derived via mmToScale (45mm=100% base). Buttons testid logo-size-{mm}; container logo-size-options. Badge now shows "Size: N×N mm".
 - Logo now auto-centers by default ({x:50,y:50}) and re-centers on every new upload / reset-edits / reset-all (still draggable + "Reset to Center"). Default size 45mm. Frontend-only; verified via screenshot (upload + select 50mm).
+
+## 2026-06-30 — Bottle Preview: center guides, default 35mm, per-size pricing + upsize warning
+- Center crosshair guides (dashed violet X+Y axes + center dot) over the bottle, toggle on/off (default ON, testid toggle-center-guides / center-guides). Visual aid only, not in download.
+- Default logo size now 35×35 mm (DEFAULT_LOGO_MM) on upload/reset/reset-edits.
+- Each size button shows printing price per bottle: 35→₹2.5, 40→₹3.5, 45→₹4.5, 50→₹5.5 (LOGO_SIZE_PRICES).
+- Selecting a size > 35mm opens a soft warning Dialog (size-warning-dialog) showing new price vs ₹2.5 base and advising to propose price accordingly; actions: Keep 35×35 mm / Got it proceed. Frontend-only; verified via screenshot.
