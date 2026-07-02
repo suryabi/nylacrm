@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, TrendingDown, Minus, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt, Eye
 } from 'lucide-react';
 import { format } from 'date-fns';
 import TaxBillingCard from '../components/TaxBillingCard';
@@ -296,6 +296,34 @@ export default function AccountDetail() {
 
   // Fullscreen preview for the read-only logo thumbnail.
   const [logoPreviewOpen, setLogoPreviewOpen] = useState(false);
+
+  // Resolve the account logo source, supporting both the stored path (logo_url)
+  // and any legacy inline base64 (logo).
+  const getAccountLogoSrc = () => {
+    if (!account) return null;
+    if (account.logo_url) return `${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`;
+    if (account.logo) return account.logo;
+    return null;
+  };
+
+  const handleDownloadLogo = async () => {
+    const src = getAccountLogoSrc();
+    if (!src) return;
+    try {
+      const resp = await fetch(src);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(account.account_name || 'account').replace(/\s+/g, '-')}-logo.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error('Failed to download logo');
+    }
+  };
   
   // Delivery Address state
   const [deliveryAddress, setDeliveryAddress] = useState({
@@ -1748,7 +1776,7 @@ ${googleMapsLink}`;
                   <LogoUploader
                     entityType="accounts"
                     entityId={account.id || account.account_id}
-                    currentLogo={account.logo_url ? `${process.env.REACT_APP_BACKEND_URL}${account.logo_url}` : null}
+                    currentLogo={getAccountLogoSrc()}
                     onLogoUpdate={(newLogoUrl) => {
                       fetchAccount();
                     }}
@@ -1800,27 +1828,49 @@ ${googleMapsLink}`;
                       : '-'}
                   </p>
                 </div>
-                {account.logo_url && (
+                {getAccountLogoSrc() && (
                   <div className="md:col-span-2 pt-4 border-t">
                     <p className="text-sm text-muted-foreground mb-2">Account Logo</p>
-                    <button
-                      type="button"
-                      onClick={() => setLogoPreviewOpen(true)}
-                      className="w-24 h-24 border rounded-lg overflow-hidden bg-gray-50 cursor-zoom-in hover:border-blue-400 hover:shadow-md transition-all"
-                      data-testid="account-logo-thumbnail"
-                      title="Click to preview"
-                    >
-                      <img
-                        src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`}
-                        alt="Account logo"
-                        className="w-full h-full object-contain"
-                      />
-                    </button>
-                    {account.logo_width_mm && account.logo_height_mm && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Dimensions: {account.logo_width_mm}mm x {account.logo_height_mm}mm
-                      </p>
-                    )}
+                    <div className="flex items-start gap-4 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setLogoPreviewOpen(true)}
+                        className="w-44 h-44 border rounded-xl overflow-hidden bg-gray-50 cursor-zoom-in hover:border-blue-400 hover:shadow-md transition-all p-2"
+                        data-testid="account-logo-thumbnail"
+                        title="Click to preview"
+                      >
+                        <img
+                          src={getAccountLogoSrc()}
+                          alt="Account logo"
+                          className="w-full h-full object-contain"
+                        />
+                      </button>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLogoPreviewOpen(true)}
+                          data-testid="account-logo-preview-btn"
+                        >
+                          <Eye className="h-4 w-4 mr-2" /> Preview
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleDownloadLogo}
+                          data-testid="account-logo-download-btn"
+                        >
+                          <Download className="h-4 w-4 mr-2" /> Download
+                        </Button>
+                        {account.logo_width_mm && account.logo_height_mm && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Dimensions: {account.logo_width_mm}mm x {account.logo_height_mm}mm
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -3633,21 +3683,30 @@ ${googleMapsLink}`;
       </Dialog>
 
       {/* Account logo fullscreen preview — opened from the read-only logo
-          thumbnail. View only (no download), mirroring Files & Documents. */}
+          thumbnail. Includes a download action. */}
       <Dialog open={logoPreviewOpen} onOpenChange={setLogoPreviewOpen}>
         <DialogContent className="max-w-3xl" data-testid="account-logo-preview-dialog">
           <DialogHeader>
             <DialogTitle>Account Logo</DialogTitle>
           </DialogHeader>
           <div className="flex justify-center items-center bg-slate-50 rounded-lg p-4 min-h-[260px]">
-            {account?.logo_url && (
+            {getAccountLogoSrc() && (
               <img
-                src={`${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`}
+                src={getAccountLogoSrc()}
                 alt="Account logo"
                 className="max-h-[60vh] max-w-full object-contain"
               />
             )}
           </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleDownloadLogo}
+              data-testid="account-logo-preview-download-btn"
+            >
+              <Download className="h-4 w-4 mr-2" /> Download
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
