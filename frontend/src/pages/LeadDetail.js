@@ -144,7 +144,11 @@ export default function LeadDetail() {
   
   // Logo upload state
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);
   const logoInputRef = React.useRef(null);
+
+  // Reset the broken-logo flag whenever the logo URL changes (e.g. after re-upload)
+  useEffect(() => { setLogoBroken(false); }, [lead?.logo_url]);
   
   // Proposal state
   const [proposal, setProposal] = useState(null);
@@ -999,12 +1003,13 @@ ${userEmail}`;
             className="cursor-pointer block"
             title="Click to upload/change logo"
           >
-            {lead.logo_url ? (
+            {lead.logo_url && !logoBroken ? (
               <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg border-2 border-primary/20 overflow-hidden bg-white shadow-sm relative group-hover:border-primary/50 transition-all">
                 <img 
                   src={`${process.env.REACT_APP_BACKEND_URL}${lead.logo_url}`}
                   alt={`${lead.company} logo`}
                   className="w-full h-full object-contain"
+                  onError={() => setLogoBroken(true)}
                 />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <Camera className="h-4 w-4 sm:h-5 sm:w-5 text-white" />

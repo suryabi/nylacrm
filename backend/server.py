@@ -7561,81 +7561,81 @@ class LogoUploadRequest(BaseModel):
 
 @api_router.post("/accounts/{account_id}/logo")
 async def upload_account_logo(account_id: str, request: LogoUploadRequest, current_user: dict = Depends(get_current_user)):
-    """Upload and save account logo"""
+    """Upload and save account logo (durable object storage)."""
     import base64
-    import os
-    
+    import time
+    from object_storage import store_image
+
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
     )
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
-    
+
     try:
-        # Extract base64 data
         logo_data = request.logo
         if ',' in logo_data:
             logo_data = logo_data.split(',')[1]
-        
-        # Decode base64
         image_bytes = base64.b64decode(logo_data)
-        
-        # Create logos directory if not exists
-        logos_dir = '/app/backend/static/logos'
-        os.makedirs(logos_dir, exist_ok=True)
-        
-        # Save file with account ID
-        file_name = f"{account.get('id', account_id)}.png"
-        file_path = os.path.join(logos_dir, file_name)
-        
-        with open(file_path, 'wb') as f:
-            f.write(image_bytes)
-        
-        # Update account with logo info
-        logo_url = f"/api/static/logos/{file_name}"
+        if not image_bytes:
+            raise ValueError('empty image')
+
+        acc_id = account.get('id', account_id)
+        storage_path = store_image(f"accounts/{acc_id}", image_bytes, 'image/png', 'png')
+        logo_url = f"/api/accounts/{acc_id}/logo-image?v={int(time.time())}"
+
         await get_tdb().accounts.update_one(
             {'$or': [{'id': account_id}, {'account_id': account_id}]},
             {'$set': {
                 'logo_url': logo_url,
+                'logo_storage_path': storage_path,
+                'logo_content_type': 'image/png',
                 'logo_width_mm': request.width_mm,
                 'logo_height_mm': request.height_mm,
                 'updated_at': datetime.now(timezone.utc).isoformat()
             }}
         )
-        
+
         return {'logo_url': logo_url, 'message': 'Logo uploaded successfully'}
-        
+
     except Exception as e:
         logger.error(f"Error uploading logo: {str(e)}")
         raise HTTPException(status_code=500, detail=f'Failed to upload logo: {str(e)}')
 
+
+@api_router.get("/accounts/{account_id}/logo-image")
+async def get_account_logo_image(account_id: str):
+    """Public: stream an account's logo bytes from object storage (used by <img src>)."""
+    from object_storage import get_object
+
+    account = await get_tdb().accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0, 'logo_storage_path': 1, 'logo_content_type': 1}
+    )
+    if not account or not account.get('logo_storage_path'):
+        raise HTTPException(status_code=404, detail='Logo not found')
+    data, ct = get_object(account['logo_storage_path'])
+    return Response(content=data, media_type=account.get('logo_content_type') or ct or 'image/png')
+
+
 @api_router.delete("/accounts/{account_id}/logo")
 async def delete_account_logo(account_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete account logo"""
-    import os
-    
+    """Delete account logo (object storage has no delete — drop the reference)."""
     account = await get_tdb().accounts.find_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
         {'_id': 0}
     )
     if not account:
         raise HTTPException(status_code=404, detail='Account not found')
-    
-    # Remove file if exists
-    logo_url = account.get('logo_url', '')
-    if logo_url:
-        file_name = logo_url.split('/')[-1]
-        file_path = f'/app/backend/static/logos/{file_name}'
-        if os.path.exists(file_path):
-            os.remove(file_path)
-    
-    # Update account to remove logo
+
     await get_tdb().accounts.update_one(
         {'$or': [{'id': account_id}, {'account_id': account_id}]},
-        {'$unset': {'logo_url': '', 'logo_width_mm': '', 'logo_height_mm': ''}}
+        {'$unset': {'logo_url': '', 'logo_storage_path': '', 'logo_content_type': '',
+                    'logo_width_mm': '', 'logo_height_mm': ''},
+         '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     return {'message': 'Logo deleted successfully'}
 
 # NOTE: Lead logo routes are now in routes/leads.py to support FormData uploads
@@ -10894,7 +10894,7 @@ else:
 # Regex to allow any subdomain under our known production/preview domains.
 # This covers:
 #   - https://*.emergent.host (Emergent native deployment URLs)
-#   - https://*.emergentagent.com and https://logo-dimension-sync.preview.emergentagent.com (preview URLs)
+#   - https://*.emergentagent.com and https://fmcg-ops.preview.emergentagent.com (preview URLs)
 #   - https://*.nylaairwater.earth (custom tenant domains)
 #   - https://*.briefingiq.com (external integration partner)
 cors_origin_regex = (

@@ -303,8 +303,10 @@ export default function AccountDetail() {
     if (!account) return null;
     if (account.logo_url) {
       const base = `${process.env.REACT_APP_BACKEND_URL}${account.logo_url}`;
-      // Cache-bust so a re-uploaded logo (same {id}.png URL) refreshes immediately.
-      return account.updated_at ? `${base}?v=${encodeURIComponent(account.updated_at)}` : base;
+      if (!account.updated_at) return base;
+      // Cache-bust so a re-uploaded logo refreshes immediately (logo_url may already carry a query).
+      const sep = account.logo_url.includes('?') ? '&' : '?';
+      return `${base}${sep}v=${encodeURIComponent(account.updated_at)}`;
     }
     if (account.logo) return account.logo;
     return null;

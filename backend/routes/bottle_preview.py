@@ -155,26 +155,36 @@ async def get_lead_logo_for_preview(lead_id: str, current_user: dict = Depends(g
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
 
-    logo_url = lead.get('logo_url') or ''
-    if not logo_url:
-        return {'has_logo': False, 'logo_data': None, 'company': lead.get('company')}
+    company = lead.get('company')
+    contents = None
 
-    file_name = logo_url.rstrip('/').split('/')[-1]
-    file_path = os.path.join('/app/backend/static/logos/leads', file_name)
-    if not file_name or not os.path.exists(file_path):
-        return {'has_logo': False, 'logo_data': None, 'company': lead.get('company')}
+    # Preferred: durable object storage
+    storage_path = lead.get('logo_storage_path')
+    if storage_path:
+        try:
+            from object_storage import get_object
+            contents, _ct = get_object(storage_path)
+        except Exception:
+            contents = None
 
-    with open(file_path, 'rb') as f:
-        contents = f.read()
+    # Fallback: legacy on-disk logo (pre object-storage uploads)
     if not contents:
-        return {'has_logo': False, 'logo_data': None, 'company': lead.get('company')}
+        logo_url = lead.get('logo_url') or ''
+        if logo_url and '/static/logos/leads/' in logo_url:
+            file_name = logo_url.rstrip('/').split('/')[-1].split('?')[0]
+            file_path = os.path.join('/app/backend/static/logos/leads', file_name)
+            if file_name and os.path.exists(file_path):
+                with open(file_path, 'rb') as f:
+                    contents = f.read()
 
-    result = _image_bytes_to_png_dataurl(contents, file_name)
+    if not contents:
+        return {'has_logo': False, 'logo_data': None, 'company': company}
+
+    result = _image_bytes_to_png_dataurl(contents, 'lead-logo.png')
     return {
         'has_logo': True,
         'logo_data': result['logo_data'],
-        'file_name': file_name,
-        'company': lead.get('company'),
+        'company': company,
     }
 
 

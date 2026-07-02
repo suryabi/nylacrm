@@ -2,7 +2,7 @@
 Leads routes - Lead CRUD, activities, comments, follow-ups, proposals
 Multi-tenant aware - all queries automatically filter by tenant_id
 """
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, Response
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, Field, EmailStr
@@ -884,69 +884,76 @@ async def upload_lead_logo(
     logo: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Upload a logo for a lead"""
-    import os
-    
+    """Upload a logo for a lead (stored in durable object storage)."""
+    import time
+    from object_storage import store_image
+
     tdb = get_tdb()
     lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
-    
+
     # Read and validate file
     content = await logo.read()
+    if not content:
+        raise HTTPException(status_code=400, detail='Uploaded file is empty')
     if len(content) > 5 * 1024 * 1024:  # 5MB limit
         raise HTTPException(status_code=400, detail='File too large (max 5MB)')
-    
-    # Create logos directory if not exists
-    logos_dir = '/app/backend/static/logos/leads'
-    os.makedirs(logos_dir, exist_ok=True)
-    
-    # Get file extension
-    ext = logo.filename.split('.')[-1] if '.' in logo.filename else 'png'
-    file_name = f"{lead_id}.{ext}"
-    file_path = os.path.join(logos_dir, file_name)
-    
-    # Save file
-    with open(file_path, 'wb') as f:
-        f.write(content)
-    
-    # Update lead with logo URL
-    logo_url = f"/api/static/logos/leads/{file_name}"
+
+    ext = (logo.filename.split('.')[-1].lower() if logo.filename and '.' in logo.filename else 'png')
+    if ext not in ('png', 'jpg', 'jpeg', 'webp', 'gif'):
+        ext = 'png'
+    content_type = logo.content_type or ('image/jpeg' if ext == 'jpg' else f'image/{ext}')
+
+    # Upload to durable object storage
+    storage_path = store_image(f"leads/{lead_id}", content, content_type, ext)
+
+    # Serve through our API; cache-bust with a version so re-uploads refresh immediately
+    logo_url = f"/api/leads/{lead_id}/logo-image?v={int(time.time())}"
     await tdb.leads.update_one(
         {'id': lead_id},
         {'$set': {
             'logo_url': logo_url,
+            'logo_storage_path': storage_path,
+            'logo_content_type': content_type,
             'updated_at': datetime.now(timezone.utc).isoformat()
         }}
     )
-    
+
     return {'message': 'Logo uploaded successfully', 'logo_url': logo_url}
+
+
+@router.get("/{lead_id}/logo-image")
+async def get_lead_logo_image(lead_id: str):
+    """Public: stream a lead's logo bytes from object storage (used by <img src>)."""
+    from object_storage import get_object
+
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one(
+        {'id': lead_id},
+        {'_id': 0, 'logo_storage_path': 1, 'logo_content_type': 1}
+    )
+    if not lead or not lead.get('logo_storage_path'):
+        raise HTTPException(status_code=404, detail='Logo not found')
+    data, ct = get_object(lead['logo_storage_path'])
+    return Response(content=data, media_type=lead.get('logo_content_type') or ct or 'image/png')
 
 
 @router.delete("/{lead_id}/logo")
 async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a lead's logo"""
-    import os
-    
     tdb = get_tdb()
     lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
-    
-    # Remove file if exists
-    logo_url = lead.get('logo_url', '')
-    if logo_url:
-        file_name = logo_url.split('/')[-1]
-        file_path = f'/app/backend/static/logos/leads/{file_name}'
-        if os.path.exists(file_path):
-            os.remove(file_path)
-    
-    # Update lead to remove logo
+
+    # Object storage has no delete API — drop the reference (soft delete).
     await tdb.leads.update_one(
         {'id': lead_id},
-        {'$unset': {'logo_url': '', 'logo': ''}, '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
+        {'$unset': {'logo_url': '', 'logo': '', 'logo_storage_path': '', 'logo_content_type': ''},
+         '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
     )
-    
+
     return {'message': 'Logo deleted successfully'}
 
 
@@ -997,7 +1004,8 @@ class BottleDesignCreate(BaseModel):
 @router.post("/{lead_id}/bottle-designs")
 async def save_lead_bottle_design(lead_id: str, payload: BottleDesignCreate, current_user: dict = Depends(get_current_user)):
     """Save (or replace) an approved bottle-preview design on a lead. Supports multiple designs."""
-    import os
+    import time
+    from object_storage import store_image
 
     tdb = get_tdb()
     lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
@@ -1005,28 +1013,27 @@ async def save_lead_bottle_design(lead_id: str, payload: BottleDesignCreate, cur
         raise HTTPException(status_code=404, detail='Lead not found')
 
     designs = lead.get('bottle_designs') or []
-    lead_dir = os.path.join(DESIGNS_DIR, lead_id)
-    os.makedirs(lead_dir, exist_ok=True)
-
     replace_id = payload.replace_design_id
     design_id = replace_id if (replace_id and any(d.get('id') == replace_id for d in designs)) else str(uuid.uuid4())
+    ver = int(time.time())
 
-    # Write the composite (with quote strip)
-    with open(os.path.join(lead_dir, f'{design_id}.png'), 'wb') as f:
-        f.write(_decode_data_url(payload.image_data))
-    image_url = f'/api/static/logos/leads/designs/{lead_id}/{design_id}.png'
+    # Store the composite (with quote strip) in durable object storage
+    image_path = store_image(f"leads/{lead_id}/designs", _decode_data_url(payload.image_data), 'image/png', 'png')
+    image_url = f'/api/leads/{lead_id}/bottle-designs/{design_id}/image?v={ver}'
 
-    # Optionally write the clean (bottle + logo, no strip) variant
+    # Optionally store the clean (bottle + logo, no strip) variant
+    clean_path = None
     clean_url = None
     if payload.clean_data:
-        with open(os.path.join(lead_dir, f'{design_id}_clean.png'), 'wb') as f:
-            f.write(_decode_data_url(payload.clean_data))
-        clean_url = f'/api/static/logos/leads/designs/{lead_id}/{design_id}_clean.png'
+        clean_path = store_image(f"leads/{lead_id}/designs", _decode_data_url(payload.clean_data), 'image/png', 'png')
+        clean_url = f'/api/leads/{lead_id}/bottle-designs/{design_id}/clean?v={ver}'
 
     entry = {
         'id': design_id,
         'image_url': image_url,
         'clean_url': clean_url,
+        'image_storage_path': image_path,
+        'clean_storage_path': clean_path,
         'customer_name': payload.customer_name,
         'bottle_template': payload.bottle_template,
         'bottle_template_name': payload.bottle_template_name,
@@ -1050,11 +1057,34 @@ async def save_lead_bottle_design(lead_id: str, payload: BottleDesignCreate, cur
     return {'message': message, 'design': entry, 'count': len(designs)}
 
 
+async def _serve_design_image(lead_id: str, design_id: str, field: str):
+    from object_storage import get_object
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0, 'bottle_designs': 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    design = next((d for d in (lead.get('bottle_designs') or []) if d.get('id') == design_id), None)
+    if not design or not design.get(field):
+        raise HTTPException(status_code=404, detail='Design image not found')
+    data, ct = get_object(design[field])
+    return Response(content=data, media_type=ct or 'image/png')
+
+
+@router.get("/{lead_id}/bottle-designs/{design_id}/image")
+async def get_lead_bottle_design_image(lead_id: str, design_id: str):
+    """Public: stream a saved design's composite (with quote strip) from object storage."""
+    return await _serve_design_image(lead_id, design_id, 'image_storage_path')
+
+
+@router.get("/{lead_id}/bottle-designs/{design_id}/clean")
+async def get_lead_bottle_design_clean(lead_id: str, design_id: str):
+    """Public: stream a saved design's clean (no-strip) image from object storage."""
+    return await _serve_design_image(lead_id, design_id, 'clean_storage_path')
+
+
 @router.delete("/{lead_id}/bottle-designs/{design_id}")
 async def delete_lead_bottle_design(lead_id: str, design_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete a saved bottle-preview design from a lead."""
-    import os
-
+    """Delete a saved bottle-preview design from a lead (object storage has no delete — drop the reference)."""
     tdb = get_tdb()
     lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
@@ -1064,12 +1094,6 @@ async def delete_lead_bottle_design(lead_id: str, design_id: str, current_user: 
     remaining = [d for d in designs if d.get('id') != design_id]
     if len(remaining) == len(designs):
         raise HTTPException(status_code=404, detail='Design not found')
-
-    lead_dir = os.path.join(DESIGNS_DIR, lead_id)
-    for suffix in ('.png', '_clean.png'):
-        fp = os.path.join(lead_dir, f'{design_id}{suffix}')
-        if os.path.exists(fp):
-            os.remove(fp)
 
     await tdb.leads.update_one(
         {'id': lead_id},
