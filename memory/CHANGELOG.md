@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 2026-07-02 — Bottle Preview: size selector moved to top + active view highlight ✅ (self-tested via screenshot)
+- Moved the **Logo Size on Bottle** selector out of the (lower) Logo Editing Tools card into its own card as the FIRST item in the right controls column (shown once a logo is uploaded) — reps can change size without scrolling.
+- **Active bottle view tab** now clearly highlighted: `data-[state=active]:bg-primary` (brand green) + white text + shadow; subtitle uses `group-data-[state=active]:text-primary-foreground/80` for readability. Verified both Duo and Single active states.
+
+
 ## 2026-07-02 — Bottle Preview: snap-to-center + quote-sheet export ✅ (self-verified: screenshot + downloaded-file OCR)
 - **Snap to Center Guides** (`BottlePreview.js`): new button (`data-testid="snap-to-guides-btn"`) sets `logoPosition = centerFor(selectedBottle)` so the logo center lands exactly on the crosshair (verified: position → 36%,47% on Duo). Existing button relabeled "Reset to Label Position".
 - **Quote-sheet export**: `handleDownloadComposite` now expands the canvas (+`stripH = 0.155×width`) and draws a premium slate strip (`drawQuoteStrip`) with customer name, product (template name), "Nyla Air & Water" brand mark, and right-aligned specs: SKU (24 Brand · Clear Glass), Logo size (e.g. 35×35 mm), Print price (₹2.50/bottle, emerald). Verified via downloaded 1600×1609 PNG — all text legible, no overlap/cutoff.

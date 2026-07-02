@@ -921,6 +921,29 @@ export default function BottlePreview() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="space-y-6 lg:col-span-4 lg:order-2">
+          {/* Logo Size — first, so reps can change size without scrolling */}
+          {logoPreview && (
+            <Card className="p-6 bg-card border border-border rounded-2xl">
+              <h2 className="text-lg font-semibold mb-4">Logo Size on Bottle</h2>
+              <div className="grid grid-cols-4 gap-2" data-testid="logo-size-options">
+                {LOGO_SIZE_OPTIONS.map((mm) => (
+                  <Button
+                    key={mm}
+                    type="button"
+                    variant={logoSizeMm === mm ? 'default' : 'outline'}
+                    onClick={() => handleSizeSelect(mm)}
+                    className="h-auto py-2 rounded-lg text-sm font-medium flex flex-col items-center justify-center leading-tight gap-0.5"
+                    data-testid={`logo-size-${mm}`}
+                  >
+                    <span>{mm}×{mm} mm</span>
+                    <span className={`text-[11px] font-semibold ${logoSizeMm === mm ? 'text-white/90' : 'text-emerald-600 dark:text-emerald-400'}`}>₹{LOGO_SIZE_PRICES[mm].toFixed(2)}</span>
+                  </Button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">Price shown is the logo printing cost per bottle.</p>
+            </Card>
+          )}
+
           {/* Upload Section */}
           <Card className="p-8 bg-card border border-border rounded-2xl">
             <h2 className="text-lg font-semibold mb-6">Customer Logo</h2>
@@ -1128,29 +1151,6 @@ export default function BottlePreview() {
                   </div>
                 </div>
 
-                {/* Fixed Logo Size Options */}
-                <div>
-                  <Label className="text-sm text-muted-foreground mb-2 block">
-                    Logo Size on Bottle
-                  </Label>
-                  <div className="grid grid-cols-4 gap-2" data-testid="logo-size-options">
-                    {LOGO_SIZE_OPTIONS.map((mm) => (
-                      <Button
-                        key={mm}
-                        type="button"
-                        variant={logoSizeMm === mm ? 'default' : 'outline'}
-                        onClick={() => handleSizeSelect(mm)}
-                        className="h-auto py-2 rounded-lg text-sm font-medium flex flex-col items-center justify-center leading-tight gap-0.5"
-                        data-testid={`logo-size-${mm}`}
-                      >
-                        <span>{mm}×{mm} mm</span>
-                        <span className={`text-[11px] font-semibold ${logoSizeMm === mm ? 'text-white/90' : 'text-emerald-600 dark:text-emerald-400'}`}>₹{LOGO_SIZE_PRICES[mm].toFixed(2)}</span>
-                      </Button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">Price shown is the logo printing cost per bottle.</p>
-                </div>
-
                 {/* Position Controls */}
                 <div>
                   <Label className="text-sm text-muted-foreground mb-2 block">
@@ -1257,12 +1257,12 @@ export default function BottlePreview() {
                   <TabsTrigger 
                     key={bottle.id} 
                     value={bottle.id}
-                    className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                    className="group h-auto py-2 rounded-lg transition-colors data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
                     data-testid={`bottle-tab-${bottle.id}`}
                   >
                     <div className="text-center">
                       <span className="font-medium text-sm">{bottle.name}</span>
-                      <span className="block text-xs text-muted-foreground">{bottle.description}</span>
+                      <span className="block text-xs text-muted-foreground group-data-[state=active]:text-primary-foreground/80">{bottle.description}</span>
                     </div>
                   </TabsTrigger>
                 ))}
