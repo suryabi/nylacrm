@@ -1,0 +1,96 @@
+{
+  "summary": "Verified NEW 'Approve & Save to Lead' feature on /bottle-preview end-to-end. Backend endpoints (list/add/replace/delete) and frontend flows (approve-with-no-lead hint, direct save when empty, dialog for existing designs with Add-new/Replace/Cancel, replace-in-place preserves count, delete + empty state, regression: download + logo-size + snap-to-guides) all pass. Test lead was left clean (0 designs).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/leads/{lead_id}/bottle-designs", "issue": "Invalid image_data (non-base64 payload without 'data:' prefix) is silently accepted with status 200 because base64.b64decode is lenient. Not user-facing but a small validation gap — could add regex check for a valid data URL / stricter b64 validation."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_behaviors": {
+    "approve_without_lead": {
+      "approve_design_btn_present": true,
+      "approve_no_lead_hint_text": "Select a lead at the top to approve & save this design.",
+      "gallery_hidden_before_lead_selection": true
+    },
+    "select_lead_test_multi_brand_co": {
+      "customer_name_autofilled": "Test Multi Brand Co",
+      "selected_label": "Selected: Test Multi Brand Co",
+      "logo_auto_loaded": true,
+      "gallery_visible_with_empty_state": "Saved designs for Test Multi Brand Co (0) — No approved designs yet."
+    },
+    "approve_1_direct_save": {
+      "dialog_opened": false,
+      "designs_after": 1,
+      "thumbnail_src_prefix": "/api/static/logos/leads/designs/2c609055-1413-4311-be67-6b0ef1b564e8/",
+      "view_link_present": true,
+      "delete_link_present": true,
+      "approve_button_text_updates_to": "Approve & Save to Test Multi Brand Co"
+    },
+    "approve_2_dialog": {
+      "dialog_opened": true,
+      "add_new_btn_present": true,
+      "cancel_btn_present": true,
+      "replace_tiles_count": 1,
+      "add_as_new_result_count": 2
+    },
+    "approve_3_replace_in_place": {
+      "dialog_replace_tiles_count": 2,
+      "replaced_first_tile_by_id": "e6169c02-6c76-429a-beb3-b3f170ad11e1",
+      "designs_count_after_replace": 2,
+      "count_preserved": true
+    },
+    "delete_all": {
+      "designs_removed_one_by_one": true,
+      "final_count": 0,
+      "gallery_empty_state_shown": true
+    },
+    "regression": {
+      "download_composite_btn": true,
+      "logo_size_35_40_45_50_buttons": true,
+      "snap_to_guides_btn": true
+    }
+  },
+  "backend_tests": {
+    "file": "/app/backend/tests/test_iteration_282_bottle_designs.py",
+    "junit_xml": "/app/test_reports/pytest/iteration_282.xml",
+    "results": "8 passed / 1 failed (minor validation edge case)",
+    "cases": [
+      "test_list_initially_empty — 200 + empty list + company",
+      "test_list_requires_auth — 401/403 without token",
+      "test_list_lead_not_found — 404 for bad lead id",
+      "test_add_first_design — 200, count=1, image_url + clean_url served, GET persists",
+      "test_add_second_design — count increments to 2",
+      "test_replace_in_place — replace_design_id keeps count, message='Design replaced'",
+      "test_delete_design — 200, count decrements, design gone from list",
+      "test_delete_nonexistent_design — 404",
+      "test_add_invalid_image_data — FAIL (returned 200 instead of 400 for garbage payload; minor validation gap)"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_282_bottle_designs.py",
+    "/app/test_reports/pytest/iteration_282.xml"
+  ],
+  "action_items": [
+    "Optional (minor): tighten input validation on POST /api/leads/{lead_id}/bottle-designs so obviously non-base64 image_data returns 400 (currently base64.b64decode is lenient and accepts almost any string)."
+  ],
+  "critical_code_review_comments": [
+    "BottlePreview.js is now ~1830 lines — continue to grow. Recommend extracting LeadSelector, LivePreview, LogoEditingTools, ApproveDialog, DesignsGallery into sub-components (flagged in prior iterations 280/281 too).",
+    "handleApproveClick fires two silent successes without a loading indicator on the Approve button between clicks. Consider disabling the button while `approving` is true (currently only the dialog buttons show `disabled={approving}`; the main approve-design-btn does not).",
+    "doApproveSave builds the composite from the live DOM. If the user clicks Approve while the DOM is not yet fully painted (e.g., just after selecting a lead), the PNG may be blank. A brief `awaitPaint` / requestAnimationFrame delay could harden this."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_282_bottle_designs.py (new)"
+  ],
+  "success_rate": {"backend": "89% (8/9) — 1 minor validation edge case", "frontend": "100% (all flows verified)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 — login token key is `session_token`.",
+  "seed_data_creation": "None. Used seeded lead Test Multi Brand Co (2c609055-1413-4311-be67-6b0ef1b564e8) which already has a logo on file. All designs created during testing were deleted; lead ends with 0 saved designs (confirmed via GET /api/leads/{id}/bottle-designs → designs=[]).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Approve & Save to Lead feature is fully wired on /bottle-preview. Endpoints: GET/POST /api/leads/{lead_id}/bottle-designs, DELETE /api/leads/{lead_id}/bottle-designs/{design_id}. POST payload accepts image_data (with strip) + clean_data (without), plus metadata + optional replace_design_id (replace-in-place vs append). Frontend testids verified: approve-design-btn, approve-no-lead-hint, approve-dialog, approve-add-new-btn, approve-replace-{id}, approve-cancel-btn, lead-designs-gallery, lead-designs-grid, lead-design-{id}, view-design-{id}, delete-design-{id}. Approve button label dynamically updates to 'Approve & Save to {company}' when a lead is selected. Test lead was cleaned back to 0 designs at teardown.",
+  "rca_of_the_issue": "N/A — no bugs found. One minor validation gap noted (see backend minor issue)."
+}

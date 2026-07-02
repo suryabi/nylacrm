@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { 
   Upload, Download, RotateCcw, Loader2, Sparkles, 
   Crop, Circle, Square, Eraser, ZoomIn, Check, X, Move, RotateCw, RectangleHorizontal,
-  Pipette, Crosshair, AlertTriangle, Search, Briefcase
+  Pipette, Crosshair, AlertTriangle, Search, Briefcase, CheckCircle2, Trash2, Plus, ExternalLink, Images
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -368,6 +368,12 @@ export default function BottlePreview() {
   const [loadingLeadLogo, setLoadingLeadLogo] = useState(false);
   const leadSearchTimer = useRef(null);
 
+  // Approved bottle-design gallery state
+  const [leadDesigns, setLeadDesigns] = useState([]);
+  const [loadingDesigns, setLoadingDesigns] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
@@ -436,6 +442,7 @@ export default function BottlePreview() {
     setLeadQuery('');
     setLeadResults([]);
     setShowLeadDropdown(false);
+    setLeadDesigns([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -476,6 +483,7 @@ export default function BottlePreview() {
     setLeadQuery('');
     setLeadResults([]);
     setShowLeadDropdown(false);
+    setLeadDesigns([]);
   };
 
   const handleSelectLead = async (lead) => {
@@ -484,6 +492,7 @@ export default function BottlePreview() {
     setShowLeadDropdown(false);
     setLeadResults([]);
     setCustomerName(lead.company || '');
+    fetchLeadDesigns(lead.id);
 
     setLoadingLeadLogo(true);
     try {
@@ -787,105 +796,168 @@ export default function BottlePreview() {
     }
   };
 
-  // Download composite image (bottle + logo)
-  // Fix: Measure actual rendered logo-to-container ratio from DOM so download matches preview exactly
+  // Build the composite PNG (bottle + placed logo, optionally with the quote strip).
+  // Measures the actual rendered logo/bottle rects so the export matches the preview.
+  const buildCompositeDataUrl = async (withStrip = true) => {
+    const currentBottle = BOTTLE_TEMPLATES.find(b => b.id === selectedBottle);
+
+    const container = bottleContainerRef.current;
+    const logoEl = container.querySelector('[data-testid="preview-logo-img"]');
+    const bottleEl = container.querySelector('[data-testid="bottle-image"]');
+    const logoRect = logoEl.getBoundingClientRect();
+    const bottleRect = bottleEl.getBoundingClientRect();
+
+    const widthRatio = logoRect.width / bottleRect.width;
+    const heightRatio = logoRect.height / bottleRect.height;
+    const logoCenterX = (logoRect.left + logoRect.width / 2) - bottleRect.left;
+    const logoCenterY = (logoRect.top + logoRect.height / 2) - bottleRect.top;
+    const posXRatio = logoCenterX / bottleRect.width;
+    const posYRatio = logoCenterY / bottleRect.height;
+
+    let bottleBlobUrl = null;
+    try {
+      bottleBlobUrl = await fetchImageAsBlob(currentBottle.image);
+      const bottleImage = await createImageFromBlob(bottleBlobUrl);
+      const logoImage = await createImage(logoPreview);
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const stripH = withStrip ? Math.round(bottleImage.width * 0.155) : 0;
+      canvas.width = bottleImage.width;
+      canvas.height = bottleImage.height + stripH;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bottleImage, 0, 0);
+
+      const finalLogoWidth = widthRatio * bottleImage.width;
+      const finalLogoHeight = heightRatio * bottleImage.height;
+      const logoX = posXRatio * bottleImage.width - (finalLogoWidth / 2);
+      const logoY = posYRatio * bottleImage.height - (finalLogoHeight / 2);
+      ctx.drawImage(logoImage, logoX, logoY, finalLogoWidth, finalLogoHeight);
+
+      if (withStrip) {
+        drawQuoteStrip(ctx, {
+          x: 0,
+          y: bottleImage.height,
+          w: bottleImage.width,
+          h: stripH,
+          customerName,
+          product: currentBottle.name,
+          sku: '24 Brand · Clear Glass',
+          logoSizeMm,
+          price: LOGO_SIZE_PRICES[logoSizeMm],
+        });
+      }
+
+      return canvas.toDataURL('image/png');
+    } finally {
+      if (bottleBlobUrl) URL.revokeObjectURL(bottleBlobUrl);
+    }
+  };
+
+  // Download composite image (bottle + logo + quote strip)
   const handleDownloadComposite = async () => {
     if (!logoPreview) {
       toast.error('Please upload a logo first');
       return;
     }
-
     setProcessing(true);
-    let bottleBlobUrl = null;
-    
     try {
-      // Get current bottle template
       const currentBottle = BOTTLE_TEMPLATES.find(b => b.id === selectedBottle);
-      
-      // Measure the actual rendered sizes from the DOM before any async work
-      const container = bottleContainerRef.current;
-      const containerRect = container.getBoundingClientRect();
-      const logoEl = container.querySelector('[data-testid="preview-logo-img"]');
-      const bottleEl = container.querySelector('[data-testid="bottle-image"]');
-      
-      // getBoundingClientRect gives the ACTUAL rendered size including CSS transforms (scale)
-      const logoRect = logoEl.getBoundingClientRect();
-      const bottleRect = bottleEl.getBoundingClientRect();
-      
-      // Ratio of logo size to the displayed bottle image size — this is what the user sees
-      const widthRatio = logoRect.width / bottleRect.width;
-      const heightRatio = logoRect.height / bottleRect.height;
-      
-      // Logo center position relative to the bottle image element
-      const logoCenterX = (logoRect.left + logoRect.width / 2) - bottleRect.left;
-      const logoCenterY = (logoRect.top + logoRect.height / 2) - bottleRect.top;
-      const posXRatio = logoCenterX / bottleRect.width;
-      const posYRatio = logoCenterY / bottleRect.height;
-      
-      // Fetch bottle image as blob to bypass CORS restrictions
-      bottleBlobUrl = await fetchImageAsBlob(currentBottle.image);
-      const bottleImage = await createImageFromBlob(bottleBlobUrl);
-      
-      // Logo is already a data URL, so it can be loaded directly
-      const logoImage = await createImage(logoPreview);
-      
-      // Create canvas for composite (bottle image + a quote strip below it)
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      // Reserve a strip below the bottle for the quote/spec sheet
-      const stripH = Math.round(bottleImage.width * 0.155);
-      canvas.width = bottleImage.width;
-      canvas.height = bottleImage.height + stripH;
-
-      // Clean white base (covers the strip area and any transparency)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Draw bottle image
-      ctx.drawImage(bottleImage, 0, 0);
-      
-      // Apply the exact same ratio from preview to the full-res bottle
-      const finalLogoWidth = widthRatio * bottleImage.width;
-      const finalLogoHeight = heightRatio * bottleImage.height;
-      
-      // Position using the measured center position ratio
-      const logoX = posXRatio * bottleImage.width - (finalLogoWidth / 2);
-      const logoY = posYRatio * bottleImage.height - (finalLogoHeight / 2);
-      
-      // Draw logo on bottle
-      ctx.drawImage(logoImage, logoX, logoY, finalLogoWidth, finalLogoHeight);
-
-      // Quote strip — turns the mockup into a shareable mini quote sheet
-      drawQuoteStrip(ctx, {
-        x: 0,
-        y: bottleImage.height,
-        w: bottleImage.width,
-        h: stripH,
-        customerName,
-        product: currentBottle.name,
-        sku: '24 Brand · Clear Glass',
-        logoSizeMm,
-        price: LOGO_SIZE_PRICES[logoSizeMm],
-      });
-      
-      // Create download link
+      const dataUrl = await buildCompositeDataUrl(true);
       const link = document.createElement('a');
       const bottleName = currentBottle.name.replace(/\s+/g, '-').toLowerCase();
       link.download = `${bottleName}-${customerName || 'custom'}-preview.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = dataUrl;
       link.click();
-      
       toast.success(`${currentBottle.name} preview downloaded!`);
     } catch (error) {
       console.error('Download error:', error);
       toast.error('Failed to download preview');
     } finally {
-      // Clean up blob URL to free memory
-      if (bottleBlobUrl) {
-        URL.revokeObjectURL(bottleBlobUrl);
-      }
       setProcessing(false);
+    }
+  };
+
+  // ---- Approve & save the composed design to the selected lead ----
+  const fetchLeadDesigns = async (leadId) => {
+    if (!leadId) return;
+    setLoadingDesigns(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/leads/${leadId}/bottle-designs`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setLeadDesigns(res.data?.designs || []);
+    } catch (error) {
+      setLeadDesigns([]);
+    } finally {
+      setLoadingDesigns(false);
+    }
+  };
+
+  const handleApproveClick = () => {
+    if (!selectedLead) {
+      toast.error('Select a lead first (search at the top of the page)');
+      return;
+    }
+    if (!logoPreview) {
+      toast.error('Upload or load a logo before approving');
+      return;
+    }
+    if (leadDesigns.length > 0) {
+      setShowApproveDialog(true);
+    } else {
+      doApproveSave(null);
+    }
+  };
+
+  const doApproveSave = async (replaceDesignId) => {
+    if (!selectedLead || !logoPreview) return;
+    setApproving(true);
+    try {
+      const currentBottle = BOTTLE_TEMPLATES.find(b => b.id === selectedBottle);
+      const imageData = await buildCompositeDataUrl(true);
+      const cleanData = await buildCompositeDataUrl(false);
+      const token = localStorage.getItem('token');
+      const res = await axios.post(
+        `${API_URL}/leads/${selectedLead.id}/bottle-designs`,
+        {
+          image_data: imageData,
+          clean_data: cleanData,
+          customer_name: customerName || selectedLead.company,
+          bottle_template: selectedBottle,
+          bottle_template_name: currentBottle.name,
+          logo_size_mm: logoSizeMm,
+          price: LOGO_SIZE_PRICES[logoSizeMm],
+          replace_design_id: replaceDesignId || null,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(res.data?.message === 'Design replaced'
+        ? `Design replaced for ${selectedLead.company}`
+        : `Design approved & saved to ${selectedLead.company}`);
+      setShowApproveDialog(false);
+      await fetchLeadDesigns(selectedLead.id);
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to save design');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleDeleteDesign = async (designId) => {
+    if (!selectedLead) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_URL}/leads/${selectedLead.id}/bottle-designs/${designId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Design deleted');
+      await fetchLeadDesigns(selectedLead.id);
+    } catch (error) {
+      toast.error('Failed to delete design');
     }
   };
 
@@ -1573,11 +1645,30 @@ export default function BottlePreview() {
               </div>
             )}
             
-            {/* Download Button - Below Bottle Preview */}
-            <div className="mt-6">
+            {/* Approve + Download Buttons - Below Bottle Preview */}
+            <div className="mt-6 space-y-3">
+              <Button
+                onClick={handleApproveClick}
+                className="w-full h-14 rounded-full text-base bg-emerald-600 hover:bg-emerald-700 text-white"
+                disabled={!logoPreview || approving}
+                data-testid="approve-design-btn"
+              >
+                {approving ? (
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Saving to lead…</>
+                ) : (
+                  <><CheckCircle2 className="h-5 w-5 mr-2" /> Approve &amp; Save to {selectedLead ? selectedLead.company : 'Lead'}</>
+                )}
+              </Button>
+              {!selectedLead && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 text-center" data-testid="approve-no-lead-hint">
+                  Select a lead at the top to approve &amp; save this design.
+                </p>
+              )}
+
               <Button
                 onClick={handleDownloadComposite}
-                className="w-full h-14 rounded-full text-base bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                variant="outline"
+                className="w-full h-12 rounded-full text-base"
                 disabled={!logoPreview || processing}
                 data-testid="download-composite-btn"
               >
@@ -1590,13 +1681,54 @@ export default function BottlePreview() {
                   </>
                 )}
               </Button>
-              <p className="text-xs text-muted-foreground text-center mt-2">
-                Downloads bottle image with your logo configured
+              <p className="text-xs text-muted-foreground text-center">
+                Approve saves the mockup to the lead's designs. Download saves a copy to your device.
               </p>
             </div>
           </Card>
         </div>
       </div>
+
+      {selectedLead && (
+        <Card className="p-6 bg-card border border-border rounded-2xl" data-testid="lead-designs-gallery">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Images className="h-5 w-5 text-primary" />
+              <h3 className="text-base font-semibold">Saved designs for {selectedLead.company}</h3>
+              <span className="text-xs text-muted-foreground">({leadDesigns.length})</span>
+            </div>
+            {loadingDesigns && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </div>
+
+          {leadDesigns.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No approved designs yet. Configure a logo and click “Approve &amp; Save”.</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" data-testid="lead-designs-grid">
+              {leadDesigns.map((d) => (
+                <div key={d.id} className="group relative border border-border rounded-xl overflow-hidden bg-secondary/30" data-testid={`lead-design-${d.id}`}>
+                  <a href={d.image_url} target="_blank" rel="noreferrer" className="block aspect-[4/5] bg-white">
+                    <img src={d.image_url} alt="Saved design" className="w-full h-full object-contain" />
+                  </a>
+                  <div className="p-2.5 space-y-1">
+                    <p className="text-xs font-medium truncate">{d.bottle_template_name || 'Design'} · {d.logo_size_mm}mm</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {d.created_at ? new Date(d.created_at).toLocaleDateString() : ''}{d.created_by ? ` · ${d.created_by}` : ''}
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <a href={d.image_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline" data-testid={`view-design-${d.id}`}>
+                        <ExternalLink className="h-3 w-3" /> View
+                      </a>
+                      <button type="button" onClick={() => handleDeleteDesign(d.id)} className="inline-flex items-center gap-1 text-[11px] text-rose-600 hover:underline ml-auto" data-testid={`delete-design-${d.id}`}>
+                        <Trash2 className="h-3 w-3" /> Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card className="p-6 bg-accent/10 border border-accent/20 rounded-2xl">
         <div className="text-center">
@@ -1608,6 +1740,60 @@ export default function BottlePreview() {
           </p>
         </div>
       </Card>
+
+      {/* Approve: choose add-new vs replace an existing design */}
+      <Dialog open={showApproveDialog} onOpenChange={(o) => { if (!o) setShowApproveDialog(false); }}>
+        <DialogContent className="max-w-2xl" data-testid="approve-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" /> Save design to {selectedLead?.company}
+            </DialogTitle>
+            <DialogDescription>
+              This lead already has {leadDesigns.length} saved design{leadDesigns.length === 1 ? '' : 's'}. Add this as a new design, or replace one of the existing designs below.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Button
+              onClick={() => doApproveSave(null)}
+              disabled={approving}
+              className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white"
+              data-testid="approve-add-new-btn"
+            >
+              {approving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+              Add as a new design
+            </Button>
+
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Or replace an existing design:</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-72 overflow-y-auto">
+                {leadDesigns.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => doApproveSave(d.id)}
+                    disabled={approving}
+                    className="group border border-border rounded-xl overflow-hidden text-left hover:border-rose-400 transition-colors disabled:opacity-60"
+                    data-testid={`approve-replace-${d.id}`}
+                  >
+                    <div className="aspect-[4/5] bg-white">
+                      <img src={d.image_url} alt="Existing design" className="w-full h-full object-contain" />
+                    </div>
+                    <div className="px-2 py-1.5 flex items-center justify-between">
+                      <span className="text-[11px] truncate">{d.logo_size_mm}mm</span>
+                      <span className="text-[11px] text-rose-600 font-medium inline-flex items-center gap-1"><RotateCw className="h-3 w-3" />Replace</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowApproveDialog(false)} disabled={approving} data-testid="approve-cancel-btn">Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Soft warning when upsizing above the default 35×35 mm */}
       <Dialog open={!!sizeWarning} onOpenChange={(o) => { if (!o) setSizeWarning(null); }}>

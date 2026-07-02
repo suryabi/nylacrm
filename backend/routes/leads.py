@@ -950,6 +950,131 @@ async def delete_lead_logo(lead_id: str, current_user: dict = Depends(get_curren
     return {'message': 'Logo deleted successfully'}
 
 
+# ============= BOTTLE PREVIEW DESIGNS (approved mockups saved to a lead) =============
+
+DESIGNS_DIR = '/app/backend/static/logos/leads/designs'
+
+
+def _decode_data_url(data_url: str) -> bytes:
+    """Decode a 'data:image/...;base64,....' string (or bare base64) to bytes."""
+    if not data_url:
+        raise HTTPException(status_code=400, detail='Missing image data')
+    s = data_url.strip()
+    if s.lower().startswith('data:') and ',' in s:
+        s = s.split(',', 1)[1]
+    try:
+        return base64.b64decode(s)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid image data')
+
+
+@router.get("/{lead_id}/bottle-designs")
+async def get_lead_bottle_designs(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """List approved bottle-preview designs saved on a lead (most recent first)."""
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0, 'bottle_designs': 1, 'company': 1})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+    designs = lead.get('bottle_designs') or []
+    designs = sorted(designs, key=lambda d: d.get('created_at') or '', reverse=True)
+    return {'designs': designs, 'company': lead.get('company')}
+
+
+class BottleDesignCreate(BaseModel):
+    image_data: str                      # composite WITH quote strip (data URL / base64)
+    clean_data: Optional[str] = None     # bottle + logo, no strip (data URL / base64)
+    customer_name: Optional[str] = None
+    bottle_template: Optional[str] = None
+    bottle_template_name: Optional[str] = None
+    logo_size_mm: Optional[int] = None
+    price: Optional[float] = None
+    replace_design_id: Optional[str] = None
+
+
+@router.post("/{lead_id}/bottle-designs")
+async def save_lead_bottle_design(lead_id: str, payload: BottleDesignCreate, current_user: dict = Depends(get_current_user)):
+    """Save (or replace) an approved bottle-preview design on a lead. Supports multiple designs."""
+    import os
+
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+
+    designs = lead.get('bottle_designs') or []
+    lead_dir = os.path.join(DESIGNS_DIR, lead_id)
+    os.makedirs(lead_dir, exist_ok=True)
+
+    replace_id = payload.replace_design_id
+    design_id = replace_id if (replace_id and any(d.get('id') == replace_id for d in designs)) else str(uuid.uuid4())
+
+    # Write the composite (with quote strip)
+    with open(os.path.join(lead_dir, f'{design_id}.png'), 'wb') as f:
+        f.write(_decode_data_url(payload.image_data))
+    image_url = f'/api/static/logos/leads/designs/{lead_id}/{design_id}.png'
+
+    # Optionally write the clean (bottle + logo, no strip) variant
+    clean_url = None
+    if payload.clean_data:
+        with open(os.path.join(lead_dir, f'{design_id}_clean.png'), 'wb') as f:
+            f.write(_decode_data_url(payload.clean_data))
+        clean_url = f'/api/static/logos/leads/designs/{lead_id}/{design_id}_clean.png'
+
+    entry = {
+        'id': design_id,
+        'image_url': image_url,
+        'clean_url': clean_url,
+        'customer_name': payload.customer_name,
+        'bottle_template': payload.bottle_template,
+        'bottle_template_name': payload.bottle_template_name,
+        'logo_size_mm': payload.logo_size_mm,
+        'price': payload.price,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'created_by': current_user.get('name') or current_user.get('email'),
+    }
+
+    if design_id == replace_id:
+        designs = [entry if d.get('id') == replace_id else d for d in designs]
+        message = 'Design replaced'
+    else:
+        designs = designs + [entry]
+        message = 'Design saved'
+
+    await tdb.leads.update_one(
+        {'id': lead_id},
+        {'$set': {'bottle_designs': designs, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    return {'message': message, 'design': entry, 'count': len(designs)}
+
+
+@router.delete("/{lead_id}/bottle-designs/{design_id}")
+async def delete_lead_bottle_design(lead_id: str, design_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a saved bottle-preview design from a lead."""
+    import os
+
+    tdb = get_tdb()
+    lead = await tdb.leads.find_one({'id': lead_id}, {'_id': 0})
+    if not lead:
+        raise HTTPException(status_code=404, detail='Lead not found')
+
+    designs = lead.get('bottle_designs') or []
+    remaining = [d for d in designs if d.get('id') != design_id]
+    if len(remaining) == len(designs):
+        raise HTTPException(status_code=404, detail='Design not found')
+
+    lead_dir = os.path.join(DESIGNS_DIR, lead_id)
+    for suffix in ('.png', '_clean.png'):
+        fp = os.path.join(lead_dir, f'{design_id}{suffix}')
+        if os.path.exists(fp):
+            os.remove(fp)
+
+    await tdb.leads.update_one(
+        {'id': lead_id},
+        {'$set': {'bottle_designs': remaining, 'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    return {'message': 'Design deleted', 'count': len(remaining)}
+
+
 
 # ============= OPPORTUNITY ESTIMATION (Water Brand Industry Feature) =============
 
