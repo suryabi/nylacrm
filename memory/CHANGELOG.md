@@ -1,6 +1,10 @@
 # Changelog
 
 
+## 2026-07-02 — Bottle Preview: moved Logo Position + Reset Edits to the top card ✅ (self-tested via screenshot)
+- Merged the **Logo Position** controls (Snap to Center Guides, Reset to Label Position, X/Y readout) and the **Reset Edits to Original** button into the top card (renamed "Logo Size & Position"), so the frequently-used controls are reachable without scrolling. Removed them from the lower Logo Editing Tools card (which now holds Crop/Shape/Background only). No functional change to the buttons.
+
+
 ## 2026-07-02 — Account details: logo thumbnail bigger + preview + download ✅ (testing_agent 283 — 6/6 backend, 100% frontend)
 - **Bug**: account logo was shown as a tiny (w-24) thumbnail that looked blank; no download; users wanted a bigger, visible thumbnail with preview + download.
 - **Fix (`AccountDetail.js`)**: enlarged the view-mode thumbnail to w-44 (176px); added **Preview** (`account-logo-preview-btn`) and **Download** (`account-logo-download-btn`) buttons beside it; added a **Download** button inside the fullscreen preview dialog (`account-logo-preview-download-btn`). New `getAccountLogoSrc()` resolves `logo_url` (prefixed with backend URL, cache-busted via `?v=updated_at`) or legacy inline `logo`; `handleDownloadLogo()` fetches→blob→downloads PNG.

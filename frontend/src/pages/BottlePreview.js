@@ -1160,7 +1160,7 @@ export default function BottlePreview() {
           {/* Logo Size — first, so reps can change size without scrolling */}
           {logoPreview && (
             <Card className="p-6 bg-card border border-border rounded-2xl">
-              <h2 className="text-lg font-semibold mb-4">Logo Size on Bottle</h2>
+              <h2 className="text-lg font-semibold mb-4">Logo Size &amp; Position</h2>
               <div className="grid grid-cols-4 gap-2" data-testid="logo-size-options">
                 {LOGO_SIZE_OPTIONS.map((mm) => (
                   <Button
@@ -1177,6 +1177,56 @@ export default function BottlePreview() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-1.5">Price shown is the logo printing cost per bottle.</p>
+
+              {/* Position Controls */}
+              <div className="mt-5">
+                <Label className="text-sm text-muted-foreground mb-2 block">
+                  <Move className="h-4 w-4 inline mr-1" />
+                  Logo Position
+                </Label>
+                <div className="bg-secondary/50 rounded-xl p-3 space-y-2">
+                  <p className="text-xs text-muted-foreground text-center">
+                    Drag the logo on the bottle to reposition it
+                  </p>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">X: {Math.round(logoPosition.x)}%</span>
+                    <span className="text-muted-foreground">Y: {Math.round(logoPosition.y)}%</span>
+                  </div>
+                  <Button
+                    onClick={handleSnapToGuides}
+                    variant="default"
+                    size="sm"
+                    className="w-full h-9 rounded-lg text-xs"
+                    data-testid="snap-to-guides-btn"
+                  >
+                    <Crosshair className="h-3 w-3 mr-1" />
+                    Snap to Center Guides
+                  </Button>
+                  <Button
+                    onClick={handleResetPosition}
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-9 rounded-lg text-xs"
+                    disabled={logoPosition.x === 50 && logoPosition.y === 50}
+                    data-testid="reset-position-btn"
+                  >
+                    <RotateCw className="h-3 w-3 mr-1" />
+                    Reset to Label Position
+                  </Button>
+                </div>
+              </div>
+
+              {/* Reset Edits */}
+              <Button
+                onClick={handleResetEdits}
+                variant="ghost"
+                className="w-full h-10 text-sm mt-3"
+                disabled={processing}
+                data-testid="reset-edits-btn"
+              >
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reset Edits to Original
+              </Button>
             </Card>
           )}
 
@@ -1387,55 +1437,7 @@ export default function BottlePreview() {
                   </div>
                 </div>
 
-                {/* Position Controls */}
-                <div>
-                  <Label className="text-sm text-muted-foreground mb-2 block">
-                    <Move className="h-4 w-4 inline mr-1" />
-                    Logo Position
-                  </Label>
-                  <div className="bg-secondary/50 rounded-xl p-3 space-y-2">
-                    <p className="text-xs text-muted-foreground text-center">
-                      Drag the logo on the bottle to reposition it
-                    </p>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">X: {Math.round(logoPosition.x)}%</span>
-                      <span className="text-muted-foreground">Y: {Math.round(logoPosition.y)}%</span>
-                    </div>
-                    <Button
-                      onClick={handleSnapToGuides}
-                      variant="default"
-                      size="sm"
-                      className="w-full h-9 rounded-lg text-xs"
-                      data-testid="snap-to-guides-btn"
-                    >
-                      <Crosshair className="h-3 w-3 mr-1" />
-                      Snap to Center Guides
-                    </Button>
-                    <Button
-                      onClick={handleResetPosition}
-                      variant="outline"
-                      size="sm"
-                      className="w-full h-9 rounded-lg text-xs"
-                      disabled={logoPosition.x === 50 && logoPosition.y === 50}
-                      data-testid="reset-position-btn"
-                    >
-                      <RotateCw className="h-3 w-3 mr-1" />
-                      Reset to Label Position
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Reset Edits */}
-                <Button
-                  onClick={handleResetEdits}
-                  variant="ghost"
-                  className="w-full h-10 text-sm"
-                  disabled={processing}
-                  data-testid="reset-edits-btn"
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reset Edits to Original
-                </Button>
+                {/* Background removal handled above */}
               </div>
             </Card>
           )}
