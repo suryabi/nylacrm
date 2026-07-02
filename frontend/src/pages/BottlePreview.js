@@ -58,6 +58,12 @@ const logoBoxWidthPct = (mm, bottleId) => {
 const LOGO_ANCHORS = { bottle1: { x: 35, y: 60 }, bottle2: { x: 50, y: 55 } };
 const anchorFor = (id) => LOGO_ANCHORS[id] || { x: 50, y: 50 };
 
+// Geometric CENTER of the (front) bottle for the crosshair guides, as % of the BOTTLE IMAGE.
+// Bottle spans ~cap 10.5% → base 80% vertically (reflection below is excluded), so the
+// vertical mid-point sits at ~45%. Front bottle body is centered near x=36% (Duo) / 49% (Single).
+const BOTTLE_CENTERS = { bottle1: { x: 36, y: 47 }, bottle2: { x: 49, y: 47 } };
+const centerFor = (id) => BOTTLE_CENTERS[id] || { x: 50, y: 50 };
+
 // Helper function to create cropped image
 const createCroppedImage = async (imageSrc, pixelCrop, shape = 'rectangle') => {
   const image = await createImage(imageSrc);
@@ -728,6 +734,7 @@ export default function BottlePreview() {
   };
 
   const anchor = anchorFor(selectedBottle);
+  const bottleCenter = centerFor(selectedBottle);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-8">
@@ -1217,9 +1224,9 @@ export default function BottlePreview() {
               {/* Center guide lines (crosshair) on the front-label bottle — visual aid, not in download */}
               {showGuides && (
                 <div className="absolute inset-0 pointer-events-none z-10" data-testid="center-guides">
-                  <div className="absolute top-0 bottom-0 border-l border-dashed border-violet-400/70" style={{ left: `${anchor.x}%` }} />
-                  <div className="absolute left-0 right-0 border-t border-dashed border-violet-400/70" style={{ top: `${anchor.y}%` }} />
-                  <div className="absolute h-2 w-2 rounded-full bg-violet-500/80 ring-2 ring-white/70" style={{ left: `${anchor.x}%`, top: `${anchor.y}%`, transform: 'translate(-50%, -50%)' }} />
+                  <div className="absolute top-0 bottom-0 border-l border-dashed border-violet-400/70" style={{ left: `${bottleCenter.x}%` }} />
+                  <div className="absolute left-0 right-0 border-t border-dashed border-violet-400/70" style={{ top: `${bottleCenter.y}%` }} />
+                  <div className="absolute h-2 w-2 rounded-full bg-violet-500/80 ring-2 ring-white/70" style={{ left: `${bottleCenter.x}%`, top: `${bottleCenter.y}%`, transform: 'translate(-50%, -50%)' }} />
                 </div>
               )}
               

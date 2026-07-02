@@ -1,0 +1,36 @@
+{
+  "summary": "Verified BUG FIX: crosshair 'Center guides' on /bottle-preview are now correctly positioned at the vertical center of the bottle (y=47%) and NOT at the bottom (was previously reusing LOGO_ANCHORS y=60%). Tested both templates, toggle behavior, layout, logo upload regression, and logo-size buttons.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_behaviors": {
+    "toggle_center_guides_default_on": true,
+    "bottle1_dot_position": {"x_pct": "36.00", "y_pct": "47.00", "expected": "x=36, y=47"},
+    "bottle2_dot_position": {"x_pct": "49.00", "y_pct": "47.00", "expected": "x=49, y=47"},
+    "toggle_off_hides_guides": true,
+    "toggle_on_shows_guides": true,
+    "preview_column_class": "space-y-6 lg:col-span-8 lg:order-1 (Live Preview on LEFT, larger)",
+    "logo_file_input_present": true,
+    "logo_upload_and_display": "Logo successfully rendered on front bottle at 35%,60% (LOGO_ANCHORS.bottle1) with proper size scaling",
+    "logo_size_buttons_present_after_upload": {"logo-size-35": 1, "logo-size-40": 1, "logo-size-45": 1, "logo-size-50": 1},
+    "logo_size_45_click_effect": "Larger-logo warning modal appeared; parent style width changed via logoBoxWidthPct()",
+    "crosshair_decoupled_from_logo_anchors": "Confirmed: BOTTLE_CENTERS is separate from LOGO_ANCHORS (still x:35 y:60 for logo). Guides use bottleCenter.x/y."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BottlePreview.js is large (~1400+ lines). Consider splitting into sub-components (LivePreview, LogoControls, EditingTools) for maintainability.",
+    "Numeric anchor constants (BOTTLE_CENTERS, LOGO_ANCHORS) are duplicated shapes; could be a single per-bottle config object {logoAnchor, center} to prevent future drift between the two."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (worked)",
+  "seed_data_creation": "None. Small 32x32 PNG created in /tmp/testlogo/logo.png for upload regression only.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix (crosshair center guides positioning on /bottle-preview) fully verified via Playwright DOM measurement. Dot pixel positions measured programmatically: bottle1 at exactly (36%, 47%) and bottle2 at exactly (49%, 47%) of the preview container. Toggle works. Logo upload and 35/40/45/50 size buttons render only AFTER a logo is uploaded (conditional rendering) — this is expected behavior. LOGO_ANCHORS remains at y=60% for logo placement (front label area), which is correct and unrelated to the crosshair fix.",
+  "rca of the issue": "Previously the crosshair guides re-used LOGO_ANCHORS (bottle1 y=60%, bottle2 y=55%), which anchor the *logo* to the front label area (~60% down = lower body). Fix: introduced separate BOTTLE_CENTERS = {bottle1:{x:36,y:47}, bottle2:{x:49,y:47}} and a centerFor() helper. The JSX crosshair block (data-testid='center-guides') now uses bottleCenter.x/y instead of logoPosition/anchor, placing the vertical dashed line through the front bottle x-center and the horizontal line + dot at the true vertical mid-body of the bottle image."
+}
