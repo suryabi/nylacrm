@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-07-02 — Object Storage migration for logos/designs: verified end-to-end ✅ (self-tested: curl + UI screenshot)
+- Confirmed the durable Emergent Object Storage migration works end-to-end (fix for production ephemeral-disk wiping uploaded images on redeploy).
+- Verified: storage round-trip (`init/put/get` in `object_storage.py`), **Lead logo** (POST `/api/leads/{id}/logo` → serve `/logo-image` → renders in LeadDetail UI, screenshot confirmed naturalWidth=120), **Account logo** (server.py JSON base64 → `/api/accounts/{id}/logo-image`), and **Bottle designs** (POST `/api/leads/{id}/bottle-designs` → serve `/image` & `/clean`). All HTTP 200, correct content-type/bytes.
+- `EMERGENT_LLM_KEY` loads from backend/.env; `init_storage()` succeeds (session key len 35). All transient test logos/designs cleaned up at teardown.
+
+
 ## 2026-07-02 — Bottle Preview: moved Logo Position + Reset Edits to the top card ✅ (self-tested via screenshot)
 - Merged the **Logo Position** controls (Snap to Center Guides, Reset to Label Position, X/Y readout) and the **Reset Edits to Original** button into the top card (renamed "Logo Size & Position"), so the frequently-used controls are reachable without scrolling. Removed them from the lower Logo Editing Tools card (which now holds Crop/Shape/Background only). No functional change to the buttons.
 
