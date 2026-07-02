@@ -271,6 +271,56 @@ const resizeImage = async (imageSrc, scale) => {
   return canvas.toDataURL('image/png');
 };
 
+// Draw a premium "quote strip" below the mockup so each export doubles as a mini quote sheet.
+const drawQuoteStrip = (ctx, o) => {
+  const { x, y, w, h, customerName, product, sku, logoSizeMm, price } = o;
+  const S = w / 1600; // scale fonts relative to the reference image width
+
+  // Background band + emerald accent rule
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#22c55e';
+  ctx.fillRect(x, y, w, Math.max(4, Math.round(h * 0.035)));
+
+  const padX = Math.round(w * 0.05);
+
+  // Left: customer / product / brand
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  const title = customerName && customerName.trim() ? customerName.trim() : 'White-Label Bottle Preview';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `600 ${Math.round(52 * S)}px Inter, Arial, sans-serif`;
+  ctx.fillText(title, x + padX, y + Math.round(h * 0.42));
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = `400 ${Math.round(30 * S)}px Inter, Arial, sans-serif`;
+  ctx.fillText(product, x + padX, y + Math.round(h * 0.42) + Math.round(44 * S));
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.font = `500 ${Math.round(24 * S)}px Inter, Arial, sans-serif`;
+  ctx.fillText('Nyla Air & Water', x + padX, y + h - Math.round(h * 0.12));
+
+  // Right: SKU / logo size / print price (label + value on one right-aligned line each)
+  const rightX = x + w - padX;
+  const rows = [
+    ['SKU', sku],
+    ['Logo size', `${logoSizeMm} × ${logoSizeMm} mm`],
+    ['Print price', `₹${Number(price).toFixed(2)} / bottle`],
+  ];
+  const rowH = Math.round(h * 0.2);
+  const baseY = y + Math.round(h * 0.4);
+  ctx.textAlign = 'left';
+  rows.forEach((row, i) => {
+    const ry = baseY + i * rowH;
+    ctx.font = `600 ${Math.round(34 * S)}px Inter, Arial, sans-serif`;
+    const valW = ctx.measureText(row[1]).width;
+    ctx.fillStyle = i === 2 ? '#4ade80' : '#ffffff';
+    ctx.fillText(row[1], rightX - valW, ry);
+    ctx.font = `400 ${Math.round(26 * S)}px Inter, Arial, sans-serif`;
+    const labW = ctx.measureText(row[0]).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText(row[0], rightX - valW - Math.round(28 * S) - labW, ry);
+  });
+};
+
 export default function BottlePreview() {
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState('');
@@ -447,6 +497,12 @@ export default function BottlePreview() {
   const handleResetPosition = () => {
     setLogoPosition(anchorFor(selectedBottle));
     toast.success('Logo position reset to center');
+  };
+
+  // Snap the logo so its center sits exactly on the bottle's center guides
+  const handleSnapToGuides = () => {
+    setLogoPosition(centerFor(selectedBottle));
+    toast.success('Logo snapped to the bottle center guides');
   };
 
   const handleOpenCropper = () => {
@@ -691,14 +747,19 @@ export default function BottlePreview() {
       // Logo is already a data URL, so it can be loaded directly
       const logoImage = await createImage(logoPreview);
       
-      // Create canvas for composite
+      // Create canvas for composite (bottle image + a quote strip below it)
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      
-      // Set canvas size to bottle image size
+
+      // Reserve a strip below the bottle for the quote/spec sheet
+      const stripH = Math.round(bottleImage.width * 0.155);
       canvas.width = bottleImage.width;
-      canvas.height = bottleImage.height;
-      
+      canvas.height = bottleImage.height + stripH;
+
+      // Clean white base (covers the strip area and any transparency)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
       // Draw bottle image
       ctx.drawImage(bottleImage, 0, 0);
       
@@ -712,6 +773,19 @@ export default function BottlePreview() {
       
       // Draw logo on bottle
       ctx.drawImage(logoImage, logoX, logoY, finalLogoWidth, finalLogoHeight);
+
+      // Quote strip — turns the mockup into a shareable mini quote sheet
+      drawQuoteStrip(ctx, {
+        x: 0,
+        y: bottleImage.height,
+        w: bottleImage.width,
+        h: stripH,
+        customerName,
+        product: currentBottle.name,
+        sku: '24 Brand · Clear Glass',
+        logoSizeMm,
+        price: LOGO_SIZE_PRICES[logoSizeMm],
+      });
       
       // Create download link
       const link = document.createElement('a');
@@ -1092,6 +1166,16 @@ export default function BottlePreview() {
                       <span className="text-muted-foreground">Y: {Math.round(logoPosition.y)}%</span>
                     </div>
                     <Button
+                      onClick={handleSnapToGuides}
+                      variant="default"
+                      size="sm"
+                      className="w-full h-9 rounded-lg text-xs"
+                      data-testid="snap-to-guides-btn"
+                    >
+                      <Crosshair className="h-3 w-3 mr-1" />
+                      Snap to Center Guides
+                    </Button>
+                    <Button
                       onClick={handleResetPosition}
                       variant="outline"
                       size="sm"
@@ -1100,7 +1184,7 @@ export default function BottlePreview() {
                       data-testid="reset-position-btn"
                     >
                       <RotateCw className="h-3 w-3 mr-1" />
-                      Reset to Center
+                      Reset to Label Position
                     </Button>
                   </div>
                 </div>
