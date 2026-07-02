@@ -1,6 +1,17 @@
 # Changelog
 
 
+## 2026-07-02 — Bottle Preview: real-size logo scaling + preview-dominant layout ✅ (self-tested via screenshot)
+- **Frontend (`BottlePreview.js`)**:
+  - **Layout**: switched the grid from equal `lg:grid-cols-2` to `lg:grid-cols-12` — Live Preview now takes `lg:col-span-8` on the LEFT (`order-1`) and the controls sit in a narrower `lg:col-span-4` column on the RIGHT (`order-2`). Page widened to `max-w-7xl`; bottle image enlarged (`lg:max-h-[720px]`, container `lg:min-h-[760px]`).
+  - **Physical logo scaling**: removed the arbitrary `mmToScale` (mm/45) transform. Logo is now sized to the bottle's REAL dimensions — body Ø68.6 mm, total height 286.4 mm. The full bottle occupies ~80% of the 1600×1361 template image height (measured), so `logoBoxWidthPct(mm) = (mm/286.4)*BOTTLE_HEIGHT_FRAC / (1600/1361) * 100`. Result: a 35 mm logo ≈ 8.3% of image width ≈ half the 68.6 mm body width. `BOTTLE_HEIGHT_FRAC = {bottle1:0.805, bottle2:0.8}` (fine-tunable per user request).
+  - Logo overlay is now a square bounding box (`width: logoBoxWidthPct%`, `aspectRatio: 1`) with the `<img>` object-contained inside (aspect preserved). Download compositing unchanged — it measures the rendered `preview-logo-img` rect so it stays in sync.
+  - Duo template: logo scales relative to a single (front) bottle body per user choice.
+- Removed dead state `logoScale`/`setLogoScale`, `LOGO_MM_BASE`, `mmToScale`.
+- Verified in preview with a test logo at 35 mm and 50 mm — sizing realistic, layout preview-dominant on the left.
+
+
+
 ## 2026-06-28 — Bulk-flip action for direction overrides ✅ (testing_agent 108/108 pass)
 - **Backend (`accounting_transactions.py`)**: new `POST /api/accounting/transactions/bulk/direction-override` admin endpoint accepting `{ids: List[str], direction: 'credit'|'debit'|'auto'}`:
   - `'credit'` / `'debit'` → single `update_many` `$set direction + direction_override`. Tenant-scoped.

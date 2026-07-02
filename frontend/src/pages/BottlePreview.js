@@ -34,13 +34,25 @@ const BOTTLE_TEMPLATES = [
   }
 ];
 
-// Fixed logo size options (mm). 45mm renders at 100% of the base logo box.
+// Fixed logo size options (mm).
 const LOGO_SIZE_OPTIONS = [35, 40, 45, 50];
-const LOGO_MM_BASE = 45;
-const mmToScale = (mm) => Math.round((mm / LOGO_MM_BASE) * 100);
 // Per-size logo printing price (INR per bottle)
 const LOGO_SIZE_PRICES = { 35: 2.5, 40: 3.5, 45: 4.5, 50: 5.5 };
 const DEFAULT_LOGO_MM = 35;
+
+// Physical bottle dimensions — used to scale the logo to real-world size.
+// Bottle body Ø68.6 mm width, 286.4 mm total height (cap top → base).
+const BOTTLE_TOTAL_HEIGHT_MM = 286.4;
+const BOTTLE_IMG_ASPECT = 1600 / 1361; // width/height of the template images
+// Fraction of the image HEIGHT the full bottle occupies (cap→base). Fine-tune per template.
+const BOTTLE_HEIGHT_FRAC = { bottle1: 0.805, bottle2: 0.8 };
+// Logo bounding-box width as a % of the bottle IMAGE width for a given physical size (mm).
+// Derived from the bottle's real height so a 35 mm logo ≈ (35/68.6) of the 68.6 mm body width.
+const logoBoxWidthPct = (mm, bottleId) => {
+  const heightFrac = (mm / BOTTLE_TOTAL_HEIGHT_MM) * (BOTTLE_HEIGHT_FRAC[bottleId] || 0.8);
+  return (heightFrac / BOTTLE_IMG_ASPECT) * 100;
+};
+
 // Front (brandable) label center per template, as % of the BOTTLE IMAGE.
 // Duo shows front+back — the front bottle is on the left (~35%, 60%).
 const LOGO_ANCHORS = { bottle1: { x: 35, y: 60 }, bottle2: { x: 50, y: 55 } };
@@ -275,7 +287,6 @@ export default function BottlePreview() {
 
   // Logo style state
   const [logoShape, setLogoShape] = useState('original'); // 'original', 'circle', 'square', 'rounded-square'
-  const [logoScale, setLogoScale] = useState(mmToScale(DEFAULT_LOGO_MM)); // derived from fixed mm size
   const [logoSizeMm, setLogoSizeMm] = useState(DEFAULT_LOGO_MM); // fixed logo size in mm (35/40/45/50)
   const [showGuides, setShowGuides] = useState(true); // center crosshair guide lines
   const [sizeWarning, setSizeWarning] = useState(null); // {mm, price} when upsizing above 35mm
@@ -333,7 +344,6 @@ export default function BottlePreview() {
       setLogoFile(file);
       setLogoShape('original');
       setLogoSizeMm(DEFAULT_LOGO_MM);
-      setLogoScale(mmToScale(DEFAULT_LOGO_MM));
       setLogoPosition(anchorFor(selectedBottle));
       toast.success('Logo uploaded! You can now edit it.');
     } catch (error) {
@@ -352,7 +362,6 @@ export default function BottlePreview() {
     setCustomerName('');
     setLogoShape('original');
     setLogoSizeMm(DEFAULT_LOGO_MM);
-    setLogoScale(mmToScale(DEFAULT_LOGO_MM));
     setLogoPosition(anchorFor(selectedBottle));
     setShowCropper(false);
     setIsColorPickerMode(false);
@@ -368,7 +377,6 @@ export default function BottlePreview() {
       setLogoPreview(originalLogo);
       setLogoShape('original');
       setLogoSizeMm(DEFAULT_LOGO_MM);
-      setLogoScale(mmToScale(DEFAULT_LOGO_MM));
       setLogoPosition(anchorFor(selectedBottle));
       setSelectedBgColor(null);
       toast.success('Edits reset to original');
@@ -604,7 +612,6 @@ export default function BottlePreview() {
 
   const handleSizeSelect = (mm) => {
     setLogoSizeMm(mm);
-    setLogoScale(mmToScale(mm));
     if (mm > DEFAULT_LOGO_MM) {
       setSizeWarning({ mm, price: LOGO_SIZE_PRICES[mm] });
     }
@@ -723,7 +730,7 @@ export default function BottlePreview() {
   const anchor = anchorFor(selectedBottle);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-8">
+    <div className="max-w-7xl mx-auto space-y-6 pb-8">
       <div className="text-center">
         <div className="flex items-center justify-center gap-2 mb-2">
           <Sparkles className="h-8 w-8 text-primary" />
@@ -831,8 +838,8 @@ export default function BottlePreview() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="space-y-6 lg:col-span-4 lg:order-2">
           {/* Upload Section */}
           <Card className="p-8 bg-card border border-border rounded-2xl">
             <h2 className="text-lg font-semibold mb-6">Customer Logo</h2>
@@ -1134,7 +1141,7 @@ export default function BottlePreview() {
         </div>
 
         {/* Live Preview Section */}
-        <div className="space-y-6">
+        <div className="space-y-6 lg:col-span-8 lg:order-1">
           <Card className="p-6 bg-card border border-border rounded-2xl overflow-hidden">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold">Live Preview</h2>
@@ -1187,7 +1194,7 @@ export default function BottlePreview() {
             
             <div 
               ref={bottleContainerRef}
-              className={`relative rounded-xl min-h-[550px] flex items-center justify-center select-none ${logoPreview && !isColorPickerMode ? 'cursor-move' : ''}`}
+              className={`relative rounded-xl min-h-[600px] lg:min-h-[760px] flex items-center justify-center select-none ${logoPreview && !isColorPickerMode ? 'cursor-move' : ''}`}
               style={{
                 background: 'linear-gradient(180deg, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%)'
               }}
@@ -1198,12 +1205,12 @@ export default function BottlePreview() {
               onTouchEnd={handleTouchEnd}
               data-testid="bottle-preview-area"
             >
-              <div ref={imageBoxRef} className="relative inline-block max-h-[520px]">
+              <div ref={imageBoxRef} className="relative inline-block max-h-[560px] lg:max-h-[720px]">
               {/* Bottle Image */}
               <img
                 src={BOTTLE_TEMPLATES.find(b => b.id === selectedBottle)?.image}
                 alt={BOTTLE_TEMPLATES.find(b => b.id === selectedBottle)?.name}
-                className="max-h-[520px] w-auto object-contain pointer-events-none rounded-lg block"
+                className="max-h-[560px] lg:max-h-[720px] w-auto object-contain pointer-events-none rounded-lg block"
                 data-testid="bottle-image"
               />
 
@@ -1219,13 +1226,13 @@ export default function BottlePreview() {
               {/* Logo Overlay - Only show if logo is uploaded */}
               {logoPreview && (
                 <div
-                  className={`absolute transition-all duration-75 ${isDragging ? 'scale-105 z-10' : ''} ${isColorPickerMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+                  className={`absolute flex items-center justify-center transition-all duration-75 ${isDragging ? 'z-10' : ''} ${isColorPickerMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
                   style={{
                     left: `${logoPosition.x}%`,
                     top: `${logoPosition.y}%`,
                     transform: 'translate(-50%, -50%)',
-                    maxWidth: '35%',
-                    maxHeight: '25%'
+                    width: `${logoBoxWidthPct(logoSizeMm, selectedBottle)}%`,
+                    aspectRatio: '1 / 1'
                   }}
                   onMouseDown={isColorPickerMode ? undefined : handleMouseDown}
                   onTouchStart={isColorPickerMode ? undefined : handleTouchStart}
@@ -1236,12 +1243,13 @@ export default function BottlePreview() {
                     ref={logoImageRef}
                     src={logoPreview}
                     alt="Customer Logo"
-                    className={`max-h-full object-contain transition-transform duration-200 ${isColorPickerMode ? '' : 'pointer-events-none'}`}
+                    className={`object-contain ${isColorPickerMode ? '' : 'pointer-events-none'}`}
                     style={{ 
                       filter: `drop-shadow(0 2px 8px rgba(0,0,0,${isDragging ? '0.4' : '0.25'}))`,
-                      transform: `scale(${logoScale / 100})`,
-                      maxWidth: '150px',
-                      maxHeight: '100px',
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      width: 'auto',
+                      height: 'auto',
                       cursor: isColorPickerMode ? 'crosshair' : 'inherit'
                     }}
                     data-testid="preview-logo-img"

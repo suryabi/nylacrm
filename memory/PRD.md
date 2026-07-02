@@ -10,6 +10,11 @@ Production QC tracking, dynamic Distributor & Warehouse configuration, automated
 React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integration. Emergent LLM key for AI features. Zoho Books OAuth integration.
 
 ## Test credentials (see /app/memory/test_credentials.md)
+
+### 2026-07-02 — Bottle Preview: real-size logo scaling + preview-dominant layout ✅ DONE
+- `BottlePreview.js`: preview now occupies the left `lg:col-span-8`; controls on right `lg:col-span-4`; page `max-w-7xl`; bottle enlarged.
+- Logo sized to real bottle dimensions (body Ø68.6 mm, height 286.4 mm ≈ 80% of the 1600×1361 template height) via `logoBoxWidthPct` — a 35 mm logo ≈ half the body width. `BOTTLE_HEIGHT_FRAC` per template is fine-tunable. Self-tested via screenshot at 35/50 mm.
+
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
