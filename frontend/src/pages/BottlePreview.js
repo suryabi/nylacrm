@@ -41,6 +41,10 @@ const mmToScale = (mm) => Math.round((mm / LOGO_MM_BASE) * 100);
 // Per-size logo printing price (INR per bottle)
 const LOGO_SIZE_PRICES = { 35: 2.5, 40: 3.5, 45: 4.5, 50: 5.5 };
 const DEFAULT_LOGO_MM = 35;
+// Front (brandable) label center per template, as % of the BOTTLE IMAGE.
+// Duo shows front+back — the front bottle is on the left (~35%, 60%).
+const LOGO_ANCHORS = { bottle1: { x: 35, y: 60 }, bottle2: { x: 50, y: 55 } };
+const anchorFor = (id) => LOGO_ANCHORS[id] || { x: 50, y: 50 };
 
 // Helper function to create cropped image
 const createCroppedImage = async (imageSrc, pixelCrop, shape = 'rectangle') => {
@@ -277,9 +281,10 @@ export default function BottlePreview() {
   const [sizeWarning, setSizeWarning] = useState(null); // {mm, price} when upsizing above 35mm
 
   // Logo position state (for dragging)
-  const [logoPosition, setLogoPosition] = useState({ x: 50, y: 50 }); // percentage from center
+  const [logoPosition, setLogoPosition] = useState(LOGO_ANCHORS.bottle1); // % over bottle image (front-label center)
   const [isDragging, setIsDragging] = useState(false);
   const bottleContainerRef = useRef(null);
+  const imageBoxRef = useRef(null); // tight wrapper around the bottle image (coord basis for overlays)
   
   // Background removal state
   const [isColorPickerMode, setIsColorPickerMode] = useState(false);
@@ -329,7 +334,7 @@ export default function BottlePreview() {
       setLogoShape('original');
       setLogoSizeMm(DEFAULT_LOGO_MM);
       setLogoScale(mmToScale(DEFAULT_LOGO_MM));
-      setLogoPosition({ x: 50, y: 50 });
+      setLogoPosition(anchorFor(selectedBottle));
       toast.success('Logo uploaded! You can now edit it.');
     } catch (error) {
       // Surface backend message (e.g. "Couldn't read this image…") instead of the generic toast
@@ -348,7 +353,7 @@ export default function BottlePreview() {
     setLogoShape('original');
     setLogoSizeMm(DEFAULT_LOGO_MM);
     setLogoScale(mmToScale(DEFAULT_LOGO_MM));
-    setLogoPosition({ x: 50, y: 50 });
+    setLogoPosition(anchorFor(selectedBottle));
     setShowCropper(false);
     setIsColorPickerMode(false);
     setSelectedBgColor(null);
@@ -364,7 +369,7 @@ export default function BottlePreview() {
       setLogoShape('original');
       setLogoSizeMm(DEFAULT_LOGO_MM);
       setLogoScale(mmToScale(DEFAULT_LOGO_MM));
-      setLogoPosition({ x: 50, y: 50 });
+      setLogoPosition(anchorFor(selectedBottle));
       setSelectedBgColor(null);
       toast.success('Edits reset to original');
     }
@@ -378,9 +383,9 @@ export default function BottlePreview() {
   };
 
   const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !bottleContainerRef.current) return;
+    if (!isDragging || !imageBoxRef.current) return;
     
-    const container = bottleContainerRef.current;
+    const container = imageBoxRef.current;
     const rect = container.getBoundingClientRect();
     
     // Calculate position as percentage
@@ -405,10 +410,10 @@ export default function BottlePreview() {
   };
 
   const handleTouchMove = useCallback((e) => {
-    if (!isDragging || !bottleContainerRef.current) return;
+    if (!isDragging || !imageBoxRef.current) return;
     
     const touch = e.touches[0];
-    const container = bottleContainerRef.current;
+    const container = imageBoxRef.current;
     const rect = container.getBoundingClientRect();
     
     const x = ((touch.clientX - rect.left) / rect.width) * 100;
@@ -426,7 +431,7 @@ export default function BottlePreview() {
 
   // Reset position to center
   const handleResetPosition = () => {
-    setLogoPosition({ x: 50, y: 50 });
+    setLogoPosition(anchorFor(selectedBottle));
     toast.success('Logo position reset to center');
   };
 
@@ -714,6 +719,8 @@ export default function BottlePreview() {
       setProcessing(false);
     }
   };
+
+  const anchor = anchorFor(selectedBottle);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-8">
@@ -1146,7 +1153,7 @@ export default function BottlePreview() {
             </div>
             
             {/* Bottle Tabs */}
-            <Tabs value={selectedBottle} onValueChange={setSelectedBottle} className="mb-4">
+            <Tabs value={selectedBottle} onValueChange={(v) => { setSelectedBottle(v); setLogoPosition(anchorFor(v)); }} className="mb-4">
               <TabsList className="grid w-full grid-cols-2 bg-secondary/50 rounded-xl p-1">
                 {BOTTLE_TEMPLATES.map((bottle) => (
                   <TabsTrigger 
@@ -1191,20 +1198,21 @@ export default function BottlePreview() {
               onTouchEnd={handleTouchEnd}
               data-testid="bottle-preview-area"
             >
+              <div ref={imageBoxRef} className="relative inline-block max-h-[520px]">
               {/* Bottle Image */}
               <img
                 src={BOTTLE_TEMPLATES.find(b => b.id === selectedBottle)?.image}
                 alt={BOTTLE_TEMPLATES.find(b => b.id === selectedBottle)?.name}
-                className="max-h-[520px] w-auto object-contain pointer-events-none rounded-lg"
+                className="max-h-[520px] w-auto object-contain pointer-events-none rounded-lg block"
                 data-testid="bottle-image"
               />
 
-              {/* Center guide lines (crosshair) — visual aid, not included in download */}
+              {/* Center guide lines (crosshair) on the front-label bottle — visual aid, not in download */}
               {showGuides && (
                 <div className="absolute inset-0 pointer-events-none z-10" data-testid="center-guides">
-                  <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 border-l border-dashed border-violet-400/60" />
-                  <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 border-t border-dashed border-violet-400/60" />
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-violet-500/70 ring-2 ring-white/70" />
+                  <div className="absolute top-0 bottom-0 border-l border-dashed border-violet-400/70" style={{ left: `${anchor.x}%` }} />
+                  <div className="absolute left-0 right-0 border-t border-dashed border-violet-400/70" style={{ top: `${anchor.y}%` }} />
+                  <div className="absolute h-2 w-2 rounded-full bg-violet-500/80 ring-2 ring-white/70" style={{ left: `${anchor.x}%`, top: `${anchor.y}%`, transform: 'translate(-50%, -50%)' }} />
                 </div>
               )}
               
@@ -1262,6 +1270,7 @@ export default function BottlePreview() {
                   </div>
                 </div>
               )}
+              </div>
             </div>
 
             {logoPreview && customerName && (
@@ -1284,7 +1293,7 @@ export default function BottlePreview() {
                 <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
                   Size: {logoSizeMm}×{logoSizeMm} mm
                 </span>
-                {(logoPosition.x !== 50 || logoPosition.y !== 50) && (
+                {(Math.round(logoPosition.x) !== anchor.x || Math.round(logoPosition.y) !== anchor.y) && (
                   <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
                     Position: {Math.round(logoPosition.x)}%, {Math.round(logoPosition.y)}%
                   </span>

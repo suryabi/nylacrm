@@ -1065,3 +1065,7 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Default logo size now 35×35 mm (DEFAULT_LOGO_MM) on upload/reset/reset-edits.
 - Each size button shows printing price per bottle: 35→₹2.5, 40→₹3.5, 45→₹4.5, 50→₹5.5 (LOGO_SIZE_PRICES).
 - Selecting a size > 35mm opens a soft warning Dialog (size-warning-dialog) showing new price vs ₹2.5 base and advising to propose price accordingly; actions: Keep 35×35 mm / Got it proceed. Frontend-only; verified via screenshot.
+
+## 2026-06-30 — Bottle Preview: center guides + logo anchored to the front (left) bottle
+- Overlays (guides + logo) were positioned relative to the letterboxed frame → 50% fell between the two bottles. Fixed: wrapped the bottle <img> in a tight imageBoxRef; drag math + overlays are now IMAGE-relative.
+- Added per-template front-label anchor LOGO_ANCHORS (bottle1 Duo left bottle {35,60}, bottle2 Single {50,55}). Guides crosshair + default logo position + all resets + template switch now use anchorFor(selectedBottle). Verified via screenshot (guides + logo land on the left/front bottle).
