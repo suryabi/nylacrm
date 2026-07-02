@@ -1,0 +1,69 @@
+{
+  "summary": "Verified NEW feature on /bottle-preview: 'Working on Lead' selector with autocomplete, auto-load of lead's stored logo, no-logo path, no-results state, clear button, customer name in downloaded PNG, and full regression (manual upload, logo-size buttons, snap-to-guides, Reset All clears lead too). All backend (7/7) and frontend flows pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verified_behaviors": {
+    "lead_selector_card_at_top": true,
+    "autocomplete_dropdown_appears_on_2plus_chars": true,
+    "results_show_company_leadid_city_and_logo_badge": true,
+    "auto_load_logo_test_multi_brand": {
+      "toast": "Loaded Test Multi Brand Co's logo",
+      "customer_name_input": "Test Multi Brand Co",
+      "selected_lead_label": "Selected: Test Multi Brand Co",
+      "preview_logo_img_src_prefix": "data:image/png;base64,iVBORw0KGgo..."
+    },
+    "no_logo_path_taj_sarees": {
+      "toast": "No logo on file for this lead — upload one below",
+      "customer_name_updated": "Taj Sarees",
+      "previous_logo_not_force_cleared": true
+    },
+    "no_results_zzzznomatch": "No leads match “zzzznomatch” shown via data-testid=lead-no-results",
+    "clear_button_resets_query_and_label": true,
+    "download_composite_png": {
+      "suggested_filename": "air-water-duo-Test Multi Brand Co-preview.png",
+      "file_size_bytes": 739598,
+      "ocr_bottom_strip": "Test Multi Brand Co | SKU 24 Brand - Clear Glass | Air Water Duo | Logo size 35x35mm | Print price ₹2.50/ bottle",
+      "customer_name_present_in_exported_image": true
+    },
+    "regression": {
+      "manual_logo_upload_works": true,
+      "logo_size_buttons_35_40_45_50_present": true,
+      "logo_size_40_triggers_larger_logo_warning_modal_and_can_proceed": true,
+      "snap_to_guides_btn_clickable": true,
+      "reset_all_clears_lead_selection_search_customer_name_and_logo": true
+    }
+  },
+  "backend_tests": {
+    "file": "/app/backend/tests/test_iteration_281_bottle_preview_lead_logo.py",
+    "junit_xml": "/app/test_reports/pytest/iteration_281.xml",
+    "results": "7 passed / 0 failed",
+    "cases": [
+      "TestLeadsSearch::test_leads_search_returns_data — 200 + data list",
+      "TestLeadsSearch::test_leads_search_multi_brand — expected lead id present in results",
+      "TestLeadsSearch::test_leads_search_nonsense — empty data for 'zzzznomatch'",
+      "TestBottlePreviewLeadLogo::test_lead_logo_has_logo — has_logo=True + PNG data URL for 2c609055...",
+      "TestBottlePreviewLeadLogo::test_lead_logo_missing — has_logo=False for a Taj lead",
+      "TestBottlePreviewLeadLogo::test_lead_logo_not_found — 404 for random id",
+      "TestBottlePreviewLeadLogo::test_lead_logo_requires_auth — 401/403 without token"
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_281_bottle_preview_lead_logo.py",
+    "/app/test_reports/pytest/iteration_281.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BottlePreview.js is now ~1645 lines — consider extracting LeadSelector, LivePreview, LogoEditingTools, DownloadStrip into sub-components (also flagged in iteration_280).",
+    "handleClearLead does NOT clear customerName / logoPreview. This is intentional per the confirmed spec ('no logo is force-cleared'), but it can feel surprising: after clearing a lead with a loaded logo, the logo/name remain on the preview. A short helper text 'This does not clear the logo/name' next to the Clear button could reduce confusion. Not a bug.",
+    "searchLeads swallows errors silently (empty results, no toast). Consider a subtle inline error state so users know if the /api/leads request failed vs no matches."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_281_bottle_preview_lead_logo.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all flows verified)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (worked). Login response returns session_token (not access_token/token).",
+  "seed_data_creation": "None. Used existing seeded lead 2c609055-1413-4311-be67-6b0ef1b564e8 (Test Multi Brand Co — has logo) and Taj Sarees (no logo). Existing /tmp/testlogo.png used for manual-upload regression.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New Working-on-Lead selector on /bottle-preview is fully wired. Backend GET /api/bottle-preview/lead-logo/{lead_id} returns {has_logo, logo_data(PNG data URL), company, file_name}. Frontend handleSelectLead sets customerName, logoPreview, originalLogo, resets logoShape/size/position, and shows the appropriate toast. Downloaded PNG uses drawQuoteStrip which stamps customerName as the title of the bottom band (verified via tesseract OCR on the exported PNG). Reset All also clears lead state. All data-testids match the spec (lead-selector-card, lead-search-input, lead-results-dropdown, lead-result-{id}, lead-clear-btn, lead-no-results, selected-lead-label, customer-name-input, preview-logo-img, download-composite-btn, logo-file-input, logo-size-35/40/45/50, snap-to-guides-btn, reset-all-btn)."
+}

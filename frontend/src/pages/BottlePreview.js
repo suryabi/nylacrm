@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { 
   Upload, Download, RotateCcw, Loader2, Sparkles, 
   Crop, Circle, Square, Eraser, ZoomIn, Check, X, Move, RotateCw, RectangleHorizontal,
-  Pipette, Crosshair, AlertTriangle
+  Pipette, Crosshair, AlertTriangle, Search, Briefcase
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -359,6 +359,15 @@ export default function BottlePreview() {
   const [bgRemovalTolerance, setBgRemovalTolerance] = useState(30);
   const logoImageRef = useRef(null);
 
+  // Lead selection (autocomplete) state
+  const [leadQuery, setLeadQuery] = useState('');
+  const [leadResults, setLeadResults] = useState([]);
+  const [leadSearching, setLeadSearching] = useState(false);
+  const [showLeadDropdown, setShowLeadDropdown] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [loadingLeadLogo, setLoadingLeadLogo] = useState(false);
+  const leadSearchTimer = useRef(null);
+
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
@@ -423,8 +432,81 @@ export default function BottlePreview() {
     setIsColorPickerMode(false);
     setSelectedBgColor(null);
     setBgRemovalTolerance(30);
+    setSelectedLead(null);
+    setLeadQuery('');
+    setLeadResults([]);
+    setShowLeadDropdown(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  // ---- Lead autocomplete + auto-load lead logo ----
+  const searchLeads = async (q) => {
+    if (!q || q.trim().length < 2) {
+      setLeadResults([]);
+      return;
+    }
+    setLeadSearching(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/leads`, {
+        params: { search: q, page_size: 8, page: 1 },
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setLeadResults(res.data?.data || []);
+      setShowLeadDropdown(true);
+    } catch (error) {
+      setLeadResults([]);
+    } finally {
+      setLeadSearching(false);
+    }
+  };
+
+  const handleLeadQueryChange = (e) => {
+    const v = e.target.value;
+    setLeadQuery(v);
+    setShowLeadDropdown(true);
+    if (leadSearchTimer.current) clearTimeout(leadSearchTimer.current);
+    leadSearchTimer.current = setTimeout(() => searchLeads(v), 300);
+  };
+
+  const handleClearLead = () => {
+    setSelectedLead(null);
+    setLeadQuery('');
+    setLeadResults([]);
+    setShowLeadDropdown(false);
+  };
+
+  const handleSelectLead = async (lead) => {
+    setSelectedLead(lead);
+    setLeadQuery(lead.company || '');
+    setShowLeadDropdown(false);
+    setLeadResults([]);
+    setCustomerName(lead.company || '');
+
+    setLoadingLeadLogo(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/bottle-preview/lead-logo/${lead.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data?.has_logo && res.data?.logo_data) {
+        setLogoPreview(res.data.logo_data);
+        setOriginalLogo(res.data.logo_data);
+        setLogoFile({ name: `${lead.company || 'Lead'} logo` });
+        setLogoShape('original');
+        setLogoSizeMm(DEFAULT_LOGO_MM);
+        setLogoPosition(anchorFor(selectedBottle));
+        setSelectedBgColor(null);
+        toast.success(`Loaded ${lead.company}'s logo`);
+      } else {
+        toast.info('No logo on file for this lead — upload one below');
+      }
+    } catch (error) {
+      toast.error('Failed to load lead logo');
+    } finally {
+      setLoadingLeadLogo(false);
     }
   };
 
@@ -819,6 +901,88 @@ export default function BottlePreview() {
         </div>
         <p className="text-foreground-muted">24 Brand SKU - Clear Glass Bottle with Custom Label</p>
       </div>
+
+      {/* Lead selector — search a lead to auto-load its logo & customer name */}
+      <Card className="p-5 bg-card border border-border rounded-2xl" data-testid="lead-selector-card">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Briefcase className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold leading-tight">Working on Lead</h2>
+              <p className="text-xs text-muted-foreground">Search a lead to auto-load its logo &amp; name</p>
+            </div>
+          </div>
+
+          <div className="relative flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={leadQuery}
+                onChange={handleLeadQueryChange}
+                onFocus={() => { if (leadResults.length) setShowLeadDropdown(true); }}
+                onBlur={() => setTimeout(() => setShowLeadDropdown(false), 200)}
+                placeholder="Search lead by company name…"
+                className="h-11 rounded-xl pl-9 pr-9"
+                data-testid="lead-search-input"
+              />
+              {(leadSearching || loadingLeadLogo) && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+              {!leadSearching && !loadingLeadLogo && (leadQuery || selectedLead) && (
+                <button
+                  type="button"
+                  onClick={handleClearLead}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  data-testid="lead-clear-btn"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {showLeadDropdown && leadResults.length > 0 && (
+              <div className="absolute z-30 mt-1 w-full bg-popover border border-border rounded-xl shadow-lg overflow-hidden max-h-72 overflow-y-auto" data-testid="lead-results-dropdown">
+                {leadResults.map((lead) => (
+                  <button
+                    key={lead.id}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSelectLead(lead)}
+                    className="w-full text-left px-4 py-2.5 hover:bg-secondary/70 transition-colors flex items-center justify-between gap-3"
+                    data-testid={`lead-result-${lead.id}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{lead.company}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {[lead.lead_id, lead.city].filter(Boolean).join(' · ') || 'Lead'}
+                      </p>
+                    </div>
+                    {lead.logo_url ? (
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 shrink-0">Logo on file</span>
+                    ) : (
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-secondary text-muted-foreground shrink-0">No logo</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {showLeadDropdown && !leadSearching && leadQuery.trim().length >= 2 && leadResults.length === 0 && (
+              <div className="absolute z-30 mt-1 w-full bg-popover border border-border rounded-xl shadow-lg px-4 py-3 text-sm text-muted-foreground" data-testid="lead-no-results">
+                No leads match “{leadQuery}”
+              </div>
+            )}
+          </div>
+
+          {selectedLead && (
+            <div className="text-xs text-muted-foreground shrink-0" data-testid="selected-lead-label">
+              Selected: <span className="font-medium text-foreground">{selectedLead.company}</span>
+            </div>
+          )}
+        </div>
+      </Card>
 
       {/* Cropper Modal */}
       {showCropper && originalLogo && (
