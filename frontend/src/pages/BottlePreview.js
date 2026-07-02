@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Cropper from 'react-easy-crop';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -519,8 +519,25 @@ export default function BottlePreview() {
     }
   };
 
-  const handleResetEdits = () => {
-    if (originalLogo) {
+  // Pre-select a lead when arriving via /bottle-preview?lead=<id> (e.g. from the Lead detail page).
+  useEffect(() => {
+    const leadId = new URLSearchParams(window.location.search).get('lead');
+    if (!leadId) return;
+    (async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/leads/${leadId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.data?.id) await handleSelectLead(res.data);
+      } catch (e) {
+        /* ignore — lead not found / not accessible */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleResetEdits = () => {    if (originalLogo) {
       setLogoPreview(originalLogo);
       setLogoShape('original');
       setLogoSizeMm(DEFAULT_LOGO_MM);
@@ -1454,18 +1471,26 @@ export default function BottlePreview() {
               <RotateCcw className="h-5 w-5 mr-2" />
               Reset All
             </Button>
-            <Button
-              onClick={handleSave}
-              className="w-full h-14 rounded-full mt-3 text-base"
-              disabled={!logoPreview || saving}
-              data-testid="save-btn"
-            >
-              {saving ? (
-                <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Saving...</>
-              ) : (
-                'Save to History'
-              )}
-            </Button>
+            {!selectedLead && (
+              <Button
+                onClick={handleSave}
+                className="w-full h-14 rounded-full mt-3 text-base"
+                disabled={!logoPreview || saving}
+                data-testid="save-btn"
+              >
+                {saving ? (
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Saving...</>
+                ) : (
+                  'Save to History'
+                )}
+              </Button>
+            )}
+            {selectedLead && (
+              <p className="text-xs text-muted-foreground text-center mt-3" data-testid="save-lead-hint">
+                This design will be saved to <span className="font-medium text-foreground">{selectedLead.company}</span> via
+                “Approve &amp; Save” below — and shows up on the lead's page.
+              </p>
+            )}
           </Card>
         </div>
 

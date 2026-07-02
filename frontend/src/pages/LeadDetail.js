@@ -53,6 +53,7 @@ import LeadDeliveryAddressCard from '../components/LeadDeliveryAddressCard';
 import ContactEmails from '../components/gmail/ContactEmails';
 import EntityContactsSection from '../components/EntityContactsSection';
 import ProposalCustomizeDialog from '../components/ProposalCustomizeDialog';
+import LeadBottleDesigns from '../components/LeadBottleDesigns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1686,6 +1687,9 @@ ${userEmail}`;
           </Card>
             <DeckSection leadId={id} sourceLabel={lead.company} canReview={canApproveProposal} />
           </div>
+
+          {/* Bottle Designs — approved white-label mockups saved against this lead */}
+          <LeadBottleDesigns leadId={id} company={lead.company} />
 
 
           {/* Contact Information */}

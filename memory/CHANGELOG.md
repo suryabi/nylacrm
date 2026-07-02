@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-07-02 — Approved bottle designs now live on the Lead detail page ✅ (self-tested: curl + UI screenshots)
+- **New `LeadBottleDesigns.js`** card section on the Lead detail page (after Documents): grid of saved designs with thumbnail, customer name, template/logo-size/price badges, date + creator, **view-fullscreen dialog**, **download**, and **delete** (AlertDialog confirm). Empty state + **"Create Design"** button → `/bottle-preview?lead={id}`. Data via `GET /api/leads/{id}/bottle-designs` (durable object storage).
+- **BottlePreview.js**: reads `?lead=<id>` query param → auto-selects the lead, loads its logo + name (via existing `handleSelectLead`). When a lead is selected, the generic **"Save to History"** (bottle-preview module) button is hidden and replaced with a hint — the only save path is **"Approve & Save to {lead}"**, which stores against the lead and shows on the lead's page. "Save to History" is still available for ad-hoc previews with no lead.
+- Verified: designs render on Lead page (thumbnail naturalWidth=240), fullscreen preview + delete-confirm dialogs open, lead auto-select + hidden Save-to-History on `?lead=` deep link. Test data cleaned up.
+
+
 ## 2026-07-02 — Object Storage migration for logos/designs: verified end-to-end ✅ (self-tested: curl + UI screenshot)
 - Confirmed the durable Emergent Object Storage migration works end-to-end (fix for production ephemeral-disk wiping uploaded images on redeploy).
 - Verified: storage round-trip (`init/put/get` in `object_storage.py`), **Lead logo** (POST `/api/leads/{id}/logo` → serve `/logo-image` → renders in LeadDetail UI, screenshot confirmed naturalWidth=120), **Account logo** (server.py JSON base64 → `/api/accounts/{id}/logo-image`), and **Bottle designs** (POST `/api/leads/{id}/bottle-designs` → serve `/image` & `/clean`). All HTTP 200, correct content-type/bytes.
