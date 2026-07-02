@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-07-02 — Bottle Preview: "Working on Lead" selector + auto-load logo ✅ (testing_agent 281 — 7/7 backend, 100% frontend)
+- **Backend (`bottle_preview.py`)**: new `GET /api/bottle-preview/lead-logo/{lead_id}` → reads the lead's stored logo from `/app/backend/static/logos/leads/`, normalizes to a PNG data URL (shared helper `_image_bytes_to_png_dataurl`, also used by upload-logo), returns `{has_logo, logo_data, company, file_name}`. 404 if lead missing; `has_logo:false` if no logo.
+- **Frontend (`BottlePreview.js`)**: added a "Working on Lead" card at the top with a debounced autocomplete (`GET /api/leads?search=`); results show company + lead id/city + "Logo on file"/"No logo" badge. On select → sets customer name to the lead's company and, if a logo exists, auto-loads it into the preview (no re-upload); if none, keeps current logo and toasts to upload. Clear button + no-results state included. `Reset All` also clears lead state.
+- Customer name is stamped on the downloaded PNG (existing quote strip) — verified via OCR on the export.
+- data-testids: lead-selector-card, lead-search-input, lead-results-dropdown, lead-result-{id}, lead-clear-btn, lead-no-results, selected-lead-label.
+- New backend test: `tests/test_iteration_281_bottle_preview_lead_logo.py` (7 cases).
+
+
 ## 2026-07-02 — Bottle Preview: size selector moved to top + active view highlight ✅ (self-tested via screenshot)
 - Moved the **Logo Size on Bottle** selector out of the (lower) Logo Editing Tools card into its own card as the FIRST item in the right controls column (shown once a logo is uploaded) — reps can change size without scrolling.
 - **Active bottle view tab** now clearly highlighted: `data-[state=active]:bg-primary` (brand green) + white text + shadow; subtitle uses `group-data-[state=active]:text-primary-foreground/80` for readability. Verified both Duo and Single active states.
