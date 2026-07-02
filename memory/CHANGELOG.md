@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-07-02 — Bottle Preview: center guides fixed to bottle center ✅ (testing_agent 280 — 100% frontend pass)
+- **Bug**: The violet crosshair "Center guides" appeared near the BOTTOM of the bottle (label area) instead of its center, because they reused `LOGO_ANCHORS` (y=60%).
+- **Fix (`BottlePreview.js`)**: Decoupled guides from the logo anchor — added `BOTTLE_CENTERS = { bottle1:{x:36,y:47}, bottle2:{x:49,y:47} }` + `centerFor()`; the `center-guides` JSX now uses `bottleCenter.x/y`. Vertical line passes through the front/single bottle center; horizontal line + dot at the true vertical mid-body (measured: cap ~10% → base ~84% → center ≈47%). `LOGO_ANCHORS` (logo default placement) left unchanged.
+- Verified via testing_agent (iteration 280): dot measured at exactly (36%,47%)/(49%,47%), toggle on/off works, logo upload + 35/40/45/50 size buttons + preview-left layout all intact.
+
+
 ## 2026-07-02 — Bottle Preview: real-size logo scaling + preview-dominant layout ✅ (self-tested via screenshot)
 - **Frontend (`BottlePreview.js`)**:
   - **Layout**: switched the grid from equal `lg:grid-cols-2` to `lg:grid-cols-12` — Live Preview now takes `lg:col-span-8` on the LEFT (`order-1`) and the controls sit in a narrower `lg:col-span-4` column on the RIGHT (`order-2`). Page widened to `max-w-7xl`; bottle image enlarged (`lg:max-h-[720px]`, container `lg:min-h-[760px]`).
