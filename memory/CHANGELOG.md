@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-07-02 — Account details: logo thumbnail bigger + preview + download ✅ (testing_agent 283 — 6/6 backend, 100% frontend)
+- **Bug**: account logo was shown as a tiny (w-24) thumbnail that looked blank; no download; users wanted a bigger, visible thumbnail with preview + download.
+- **Fix (`AccountDetail.js`)**: enlarged the view-mode thumbnail to w-44 (176px); added **Preview** (`account-logo-preview-btn`) and **Download** (`account-logo-download-btn`) buttons beside it; added a **Download** button inside the fullscreen preview dialog (`account-logo-preview-download-btn`). New `getAccountLogoSrc()` resolves `logo_url` (prefixed with backend URL, cache-busted via `?v=updated_at`) or legacy inline `logo`; `handleDownloadLogo()` fetches→blob→downloads PNG.
+- Upload/serve pipeline confirmed working: `POST /api/accounts/{id}/logo` (server.py, JSON base64) → saves `/api/static/logos/{id}.png` + `logo_url`/dims; `LogoUploader` accepts JPG/PNG/WebP. (Stale multipart endpoint in routes/accounts.py is shadowed/dead — left as-is.)
+- Verified end-to-end incl. JPG & PNG uploads; test account restored to no-logo at teardown. New test: `tests/test_account_logo.py`.
+
+
 ## 2026-07-02 — Bottle Preview: "Approve & Save to Lead" design gallery ✅ (testing_agent 282 — 100% frontend, 9/9 backend after fix)
 - **Backend (`leads.py`)**: 3 endpoints — `GET/POST /api/leads/{lead_id}/bottle-designs` and `DELETE .../{design_id}`. Designs stored in `lead.bottle_designs[]`; PNGs saved under `/app/backend/static/logos/leads/designs/{lead_id}/` (served at `/api/static/...`). POST accepts `image_data` (composite WITH quote strip) + `clean_data` (bottle+logo, no strip) as base64 data URLs + metadata + optional `replace_design_id` (replace-in-place vs append). Tightened base64 validation (garbage → 400).
 - **Frontend (`BottlePreview.js`)**: extracted reusable `buildCompositeDataUrl(withStrip)`; added **Approve & Save to {lead}** button (requires a selected lead + logo; hint shown if no lead). If the lead has existing designs, an **approve-dialog** offers "Add as a new design" or Replace-a-chosen-design (thumbnail picker). Added a **"Saved designs for {lead}"** gallery (grid of composed mockups with View + Delete). Approve/select/reset all keep design state in sync.
