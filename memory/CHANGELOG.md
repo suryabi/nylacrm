@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-07-02 — Bottle Preview: "Approve & Save to Lead" design gallery ✅ (testing_agent 282 — 100% frontend, 9/9 backend after fix)
+- **Backend (`leads.py`)**: 3 endpoints — `GET/POST /api/leads/{lead_id}/bottle-designs` and `DELETE .../{design_id}`. Designs stored in `lead.bottle_designs[]`; PNGs saved under `/app/backend/static/logos/leads/designs/{lead_id}/` (served at `/api/static/...`). POST accepts `image_data` (composite WITH quote strip) + `clean_data` (bottle+logo, no strip) as base64 data URLs + metadata + optional `replace_design_id` (replace-in-place vs append). Tightened base64 validation (garbage → 400).
+- **Frontend (`BottlePreview.js`)**: extracted reusable `buildCompositeDataUrl(withStrip)`; added **Approve & Save to {lead}** button (requires a selected lead + logo; hint shown if no lead). If the lead has existing designs, an **approve-dialog** offers "Add as a new design" or Replace-a-chosen-design (thumbnail picker). Added a **"Saved designs for {lead}"** gallery (grid of composed mockups with View + Delete). Approve/select/reset all keep design state in sync.
+- Verified: empty→direct save, existing→dialog, add-new (count+1), replace-in-place (count preserved), delete→empty, download/size/snap regressions intact. Test lead left at 0 designs.
+- New backend test: `tests/test_iteration_282_bottle_designs.py`.
+
+
 ## 2026-07-02 — Bottle Preview: "Working on Lead" selector + auto-load logo ✅ (testing_agent 281 — 7/7 backend, 100% frontend)
 - **Backend (`bottle_preview.py`)**: new `GET /api/bottle-preview/lead-logo/{lead_id}` → reads the lead's stored logo from `/app/backend/static/logos/leads/`, normalizes to a PNG data URL (shared helper `_image_bytes_to_png_dataurl`, also used by upload-logo), returns `{has_logo, logo_data, company, file_name}`. 404 if lead missing; `has_logo:false` if no logo.
 - **Frontend (`BottlePreview.js`)**: added a "Working on Lead" card at the top with a debounced autocomplete (`GET /api/leads?search=`); results show company + lead id/city + "Logo on file"/"No logo" badge. On select → sets customer name to the lead's company and, if a logo exists, auto-loads it into the preview (no re-upload); if none, keeps current logo and toasts to upload. Clear button + no-results state included. `Reset All` also clears lead state.

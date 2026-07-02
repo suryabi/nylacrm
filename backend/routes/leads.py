@@ -963,9 +963,12 @@ def _decode_data_url(data_url: str) -> bytes:
     if s.lower().startswith('data:') and ',' in s:
         s = s.split(',', 1)[1]
     try:
-        return base64.b64decode(s)
+        raw = base64.b64decode(s, validate=True)
     except Exception:
         raise HTTPException(status_code=400, detail='Invalid image data')
+    if not raw:
+        raise HTTPException(status_code=400, detail='Invalid image data')
+    return raw
 
 
 @router.get("/{lead_id}/bottle-designs")
