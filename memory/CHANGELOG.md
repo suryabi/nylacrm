@@ -1055,3 +1055,7 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 
 ## 2026-06-30 — Account GOP Metrics pricing grid redesign (design_agent blueprint)
 - Replaced the flat zebra pricing table (Account/Location/SKU/Price/Return Credit) with "Account Group Cards" per design_guidelines.json: each account = rounded card w/ gradient avatar initials, name, mono code chip, MapPin location·territory, SKU count, "Not in GOP" pill, chevron; nested SKU rows with color-coded grade chips (Gold/Silver/PET + dot), Price/Unit, Return Credit (emerald or muted —). Responsive 12-col grid → stacked mobile w/ labels, staggered entrance + hover. Navigation, pagination, per-page selector, filters preserved. New testids: account-card-{id}, account-header-{id}, sku-row-{id}, sku-price-{id}, sku-grade-chip-{id}, not-in-gop-badge, pagination-prev/next. Frontend-only; verified via screenshot.
+
+## 2026-06-30 — Bottle Preview: fixed logo sizes + default centering
+- BottlePreview.js: replaced the free logo-size slider with 4 fixed options (35×35, 40×40, 45×45, 50×50 mm). New logoSizeMm state; scale derived via mmToScale (45mm=100% base). Buttons testid logo-size-{mm}; container logo-size-options. Badge now shows "Size: N×N mm".
+- Logo now auto-centers by default ({x:50,y:50}) and re-centers on every new upload / reset-edits / reset-all (still draggable + "Reset to Center"). Default size 45mm. Frontend-only; verified via screenshot (upload + select 50mm).

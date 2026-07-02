@@ -33,6 +33,11 @@ const BOTTLE_TEMPLATES = [
   }
 ];
 
+// Fixed logo size options (mm). 45mm renders at 100% of the base logo box.
+const LOGO_SIZE_OPTIONS = [35, 40, 45, 50];
+const LOGO_MM_BASE = 45;
+const mmToScale = (mm) => Math.round((mm / LOGO_MM_BASE) * 100);
+
 // Helper function to create cropped image
 const createCroppedImage = async (imageSrc, pixelCrop, shape = 'rectangle') => {
   const image = await createImage(imageSrc);
@@ -262,7 +267,8 @@ export default function BottlePreview() {
 
   // Logo style state
   const [logoShape, setLogoShape] = useState('original'); // 'original', 'circle', 'square', 'rounded-square'
-  const [logoScale, setLogoScale] = useState(100); // percentage
+  const [logoScale, setLogoScale] = useState(mmToScale(45)); // derived from fixed mm size
+  const [logoSizeMm, setLogoSizeMm] = useState(45); // fixed logo size in mm (35/40/45/50)
 
   // Logo position state (for dragging)
   const [logoPosition, setLogoPosition] = useState({ x: 50, y: 50 }); // percentage from center
@@ -315,7 +321,9 @@ export default function BottlePreview() {
       setOriginalLogo(response.data.logo_data);
       setLogoFile(file);
       setLogoShape('original');
-      setLogoScale(100);
+      setLogoSizeMm(45);
+      setLogoScale(mmToScale(45));
+      setLogoPosition({ x: 50, y: 50 });
       toast.success('Logo uploaded! You can now edit it.');
     } catch (error) {
       // Surface backend message (e.g. "Couldn't read this image…") instead of the generic toast
@@ -332,7 +340,8 @@ export default function BottlePreview() {
     setOriginalLogo('');
     setCustomerName('');
     setLogoShape('original');
-    setLogoScale(100);
+    setLogoSizeMm(45);
+    setLogoScale(mmToScale(45));
     setLogoPosition({ x: 50, y: 50 });
     setShowCropper(false);
     setIsColorPickerMode(false);
@@ -347,7 +356,8 @@ export default function BottlePreview() {
     if (originalLogo) {
       setLogoPreview(originalLogo);
       setLogoShape('original');
-      setLogoScale(100);
+      setLogoSizeMm(45);
+      setLogoScale(mmToScale(45));
       setLogoPosition({ x: 50, y: 50 });
       setSelectedBgColor(null);
       toast.success('Edits reset to original');
@@ -581,9 +591,9 @@ export default function BottlePreview() {
     }
   };
 
-  const handleScaleChange = async (value) => {
-    const newScale = value[0];
-    setLogoScale(newScale);
+  const handleSizeSelect = (mm) => {
+    setLogoSizeMm(mm);
+    setLogoScale(mmToScale(mm));
   };
 
   const handleSave = async () => {
@@ -1014,24 +1024,25 @@ export default function BottlePreview() {
                   </div>
                 </div>
 
-                {/* Size Slider */}
+                {/* Fixed Logo Size Options */}
                 <div>
                   <Label className="text-sm text-muted-foreground mb-2 block">
-                    Logo Size on Bottle: {logoScale}%
+                    Logo Size on Bottle
                   </Label>
-                  <Slider
-                    value={[logoScale]}
-                    min={30}
-                    max={150}
-                    step={5}
-                    onValueChange={handleScaleChange}
-                    className="py-2"
-                    data-testid="logo-scale-slider"
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>30%</span>
-                    <span>100%</span>
-                    <span>150%</span>
+                  <div className="grid grid-cols-4 gap-2" data-testid="logo-size-options">
+                    {LOGO_SIZE_OPTIONS.map((mm) => (
+                      <Button
+                        key={mm}
+                        type="button"
+                        variant={logoSizeMm === mm ? 'default' : 'outline'}
+                        onClick={() => handleSizeSelect(mm)}
+                        className="h-11 rounded-lg text-sm font-medium flex flex-col items-center justify-center leading-tight"
+                        data-testid={`logo-size-${mm}`}
+                      >
+                        <span>{mm}×{mm}</span>
+                        <span className="text-[10px] opacity-70">mm</span>
+                      </Button>
+                    ))}
                   </div>
                 </div>
 
@@ -1237,11 +1248,9 @@ export default function BottlePreview() {
                     Shape: {logoShape.replace('-', ' ')}
                   </span>
                 )}
-                {logoScale !== 100 && (
-                  <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                    Size: {logoScale}%
-                  </span>
-                )}
+                <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
+                  Size: {logoSizeMm}×{logoSizeMm} mm
+                </span>
                 {(logoPosition.x !== 50 || logoPosition.y !== 50) && (
                   <span className="px-3 py-1 bg-primary/10 text-primary text-xs rounded-full">
                     Position: {Math.round(logoPosition.x)}%, {Math.round(logoPosition.y)}%
