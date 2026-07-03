@@ -801,6 +801,28 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
         except Exception:
             return fallback
 
+    # Collect the lead's saved bottle designs (clean variant preferred) to append
+    # after the proposal content. Newest first. Failures never break the proposal.
+    _design_imgs = []
+    try:
+        from object_storage import get_object as _os_get
+        _bd = sorted(
+            (lead.get("bottle_designs") or []),
+            key=lambda d: d.get("created_at") or "",
+            reverse=True,
+        )
+        for d in _bd:
+            path = d.get("clean_storage_path") or d.get("image_storage_path")
+            if not path:
+                continue
+            try:
+                _data, _ct = _os_get(path)
+                _design_imgs.append((d, ImageReader(io.BytesIO(_data))))
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     def make_story():
         story = [Paragraph(ctx["date"], date_s), Spacer(1, 2 * mm),
                  Paragraph(title, title_s), Spacer(1, 1 * mm)]
@@ -892,6 +914,35 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
             sa = _num(sec.get("space_after", 8), 8)
             if sa:
                 story.append(Spacer(1, sa))
+
+        # Appendix: proposed bottle design(s) rendered after all content sections.
+        if _design_imgs:
+            story.append(PageBreak())
+            bd_head = ParagraphStyle(
+                "bd_head", parent=styles["Heading2"],
+                fontName=_font(base_font_key, True), fontSize=14,
+                textColor=c_heading, spaceBefore=0, spaceAfter=6,
+            )
+            bd_cap = ParagraphStyle(
+                "bd_cap", parent=styles["BodyText"],
+                fontName=_font(base_font_key), fontSize=9,
+                textColor=c_header_text, spaceAfter=10, alignment=1,
+            )
+            heading = "Proposed Bottle Design" + ("s" if len(_design_imgs) > 1 else "")
+            story.append(Paragraph(heading, bd_head))
+            for i, (d, img) in enumerate(_design_imgs):
+                if i > 0:
+                    story.append(Spacer(1, 6 * mm))
+                try:
+                    story.append(Image(img, width=110 * mm, height=150 * mm,
+                                       kind="proportional", hAlign="CENTER"))
+                except Exception:
+                    continue
+                cap = (d.get("customer_name") or company_name or "").strip()
+                tmpl = (d.get("bottle_template_name") or "").strip()
+                caption = cap + (f" — {tmpl}" if tmpl else "")
+                if caption:
+                    story.append(Paragraph(_esc(caption), bd_cap))
         return story
 
     top_m = 32 * mm if template.get("header", {}).get("enabled", True) else 18 * mm

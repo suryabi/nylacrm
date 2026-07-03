@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { 
   Upload, Download, RotateCcw, Loader2, Sparkles, 
   Crop, Circle, Square, Eraser, ZoomIn, Check, X, Move, RotateCw, RectangleHorizontal,
-  Pipette, Crosshair, AlertTriangle, Search, Briefcase, CheckCircle2, Trash2, Plus, ExternalLink, Images
+  Pipette, Crosshair, AlertTriangle, Search, Briefcase, CheckCircle2, Trash2, Plus, ExternalLink, Images, FlaskConical
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -372,6 +372,7 @@ export default function BottlePreview() {
   const [loadingDesigns, setLoadingDesigns] = useState(false);
   const [approving, setApproving] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [requestingSample, setRequestingSample] = useState(false);
 
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -894,6 +895,40 @@ export default function BottlePreview() {
       setProcessing(false);
     }
   };
+
+  // ---- Request a physical bottle sample → auto-creates a design request with this mockup ----
+  const handleRequestSample = async () => {
+    if (!logoPreview) {
+      toast.error('Please upload a logo first');
+      return;
+    }
+    setRequestingSample(true);
+    try {
+      const currentBottle = BOTTLE_TEMPLATES.find(b => b.id === selectedBottle);
+      const cleanData = await buildCompositeDataUrl(false); // bottle + logo, no quote strip
+      const token = localStorage.getItem('token');
+      const res = await axios.post(
+        `${API_URL}/marketing-requests/from-bottle-design`,
+        {
+          image_data: cleanData,
+          lead_id: selectedLead?.id || null,
+          customer_name: customerName || selectedLead?.company || null,
+          bottle_template_name: currentBottle?.name || null,
+          logo_size_mm: logoSizeMm,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const num = res.data?.request_number;
+      toast.success(
+        `Physical sample request ${num || ''} created${selectedLead ? ' for ' + selectedLead.company : ''}`
+      );
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create sample request');
+    } finally {
+      setRequestingSample(false);
+    }
+  };
+
 
   // ---- Approve & save the composed design to the selected lead ----
   const fetchLeadDesigns = async (leadId) => {
@@ -1706,8 +1741,22 @@ export default function BottlePreview() {
                   </>
                 )}
               </Button>
+              <Button
+                onClick={handleRequestSample}
+                variant="outline"
+                className="w-full h-12 rounded-full text-base border-amber-500/50 text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                disabled={!logoPreview || requestingSample}
+                data-testid="request-sample-btn"
+              >
+                {requestingSample ? (
+                  <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Creating request…</>
+                ) : (
+                  <><FlaskConical className="h-5 w-5 mr-2" /> Request Physical Sample</>
+                )}
+              </Button>
               <p className="text-xs text-muted-foreground text-center">
                 Approve saves the mockup to the lead's designs. Download saves a copy to your device.
+                Request Physical Sample raises a design request with this mockup attached.
               </p>
             </div>
           </Card>

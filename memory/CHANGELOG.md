@@ -1,6 +1,13 @@
 # Changelog
 
 
+## 2026-07-03 — Neck-tag & physical-sample design requests + bottle design in proposal ✅ (self-tested: curl + UI clicks + PDF inspection)
+- **Request Neck Tags (Lead page)**: `POST /api/marketing-requests/from-lead/{lead_id}/neck-tags` auto-creates a "Neck Tags" design request assigned to **Design**, copying the lead's logo into the request (blocks with a clear message if the lead has no logo). Button lives in the **Bottle Designs** card header (`request-neck-tags-btn`). Verified: 400 without logo, success with logo (MR created, logo downloadable), UI toast + "View".
+- **Request Physical Sample (Bottle Preview)**: `POST /api/marketing-requests/from-bottle-design` builds the clean composite, uploads it, and creates a "Bottle Designs - Physical Samples Required" request (assigned **Design**) with the design attached as a reference; links the lead when one is selected (works with/without a lead). Button next to Approve/Download (`request-sample-btn`). Verified via curl + UI (toast MR created).
+- **Proposal PDF**: `build_proposal_pdf` now appends a "Proposed Bottle Design(s)" page after all content with ALL of the lead's saved designs (clean variant preferred), rendered from object storage. Verified: preview grew 2→3 pages, heading + image present on the appendix page.
+- Refactor: extracted `_insert_request_doc` (single source of truth for request creation) + helpers `_resolve_type_by_name`, `_resolve_dept_by_name`, `_ingest_bytes_as_file`; `create_request` now delegates to it (normal create flow re-verified). Added missing `import base64` to `marketing_requests.py`.
+
+
 ## 2026-07-03 — Bottle Preview quote strip: removed price, "Clear Glass" → "Super Flint Glass" ✅ (self-tested: generated composite inspected)
 - `drawQuoteStrip` (BottlePreview.js): dropped the **"Print price / bottle"** row from the downloaded/composite image strip (now shows only SKU + Logo size). Removed the unused `price` param + call-site.
 - SKU text on the strip and the on-page subtitle now say **"Super Flint Glass"** instead of "Clear Glass".

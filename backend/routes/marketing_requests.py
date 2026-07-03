@@ -30,6 +30,7 @@ import uuid
 import csv
 import io
 import re
+import base64
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, Response
 from pydantic import BaseModel
@@ -121,6 +122,156 @@ def _slack_lead_line(doc: dict) -> str:
         return f"\n:bust_in_silhouette: Lead: {company} — {name}"
     label = company or name
     return f"\n:bust_in_silhouette: Lead: {label}" if label else ""
+
+
+async def _resolve_type_by_name(tenant_id: str, name: str) -> Optional[dict]:
+    """Find an (active) request type by name (case-insensitive), seeding defaults first."""
+    from routes.marketing_request_masters import _seed_default_types
+    await _seed_default_types(tenant_id)
+    return await db.marketing_request_types.find_one(
+        {"tenant_id": tenant_id,
+         "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+         "is_active": {"$ne": False}},
+        {"_id": 0},
+    )
+
+
+async def _resolve_dept_by_name(tenant_id: str, name: str, fallback_kind: str = "fulfilment") -> Optional[dict]:
+    """Find an (active) department by name (case-insensitive), seeding defaults first.
+    Falls back to any active department of `fallback_kind`, then any active department."""
+    from routes.marketing_request_masters import _seed_default_departments
+    await _seed_default_departments(tenant_id)
+    dept = await db.master_departments.find_one(
+        {"tenant_id": tenant_id,
+         "name": {"$regex": f"^{re.escape(name)}$", "$options": "i"},
+         "is_active": {"$ne": False}},
+        {"_id": 0},
+    )
+    if not dept:
+        dept = await db.master_departments.find_one(
+            {"tenant_id": tenant_id, "kind": fallback_kind, "is_active": {"$ne": False}}, {"_id": 0}
+        )
+    if not dept:
+        dept = await db.master_departments.find_one(
+            {"tenant_id": tenant_id, "is_active": {"$ne": False}}, {"_id": 0}
+        )
+    return dept
+
+
+async def _ingest_bytes_as_file(tenant_id: str, current_user: dict, filename: str,
+                                data: bytes, content_type: str) -> dict:
+    """Persist raw bytes to object storage + a marketing_request_files record.
+    Mirrors the `/upload` endpoint so the file is downloadable via `/files/{id}`.
+    Returns the file record dict."""
+    file_id = str(uuid.uuid4())
+    safe_name = (filename or "upload.bin").replace("/", "_")
+    path = f"nyla-crm/{tenant_id}/marketing-requests/{file_id}/{safe_name}"
+    meta = await put_object(path, data, content_type or "application/octet-stream")
+    doc = {
+        "id": file_id,
+        "tenant_id": tenant_id,
+        "filename": safe_name,
+        "path": meta.get("path") or path,
+        "size": meta.get("size") or len(data),
+        "content_type": content_type,
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": current_user.get("id"),
+        "uploaded_by_name": current_user.get("name") or current_user.get("email"),
+    }
+    await db.marketing_request_files.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+async def _insert_request_doc(
+    tenant_id: str, current_user: dict, *, type_doc: dict, dept_doc: dict,
+    requested_due_date: str, requirement_details: str, lead: Optional[dict] = None,
+    logo_doc: Optional[dict] = None, ref_docs: Optional[List[dict]] = None,
+    title: Optional[str] = None, additional_comments: Optional[str] = None,
+    is_urgent: bool = False, short_timeline_reason: Optional[str] = None,
+    social_media_links: Optional[List[str]] = None, file_links: Optional[List[str]] = None,
+) -> dict:
+    """Build + insert a marketing request document (single source of truth for creation).
+    Seeds the SM initial state, records status history, posts a Slack notification."""
+    sm = await _resolve_sm(tenant_id)
+    initial = get_initial_state(sm)
+    if not initial:
+        raise HTTPException(500, "Attached state machine has no initial state")
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "request_number": await _next_request_number(tenant_id),
+        "tenant_id": tenant_id,
+        "title": (title or type_doc["name"]),
+        "request_type_id": type_doc["id"],
+        "request_type_name": type_doc["name"],
+        "assigned_department_id": dept_doc["id"],
+        "assigned_department_name": dept_doc["name"],
+        "assigned_user_id": None,
+        "assigned_user_name": None,
+        "assigned_role": None,
+        "lead_id": lead.get("id") if lead else None,
+        "lead_name": (lead.get("contact_person") or lead.get("name") or lead.get("company")) if lead else None,
+        "lead_company": lead.get("company") if lead else None,
+        "requested_due_date": requested_due_date,
+        "requirement_details": requirement_details,
+        "design_lead_time_days": int(type_doc.get("design_lead_time_days") or 0),
+        "production_lead_time_days": int(type_doc.get("production_lead_time_days") or 0),
+        "short_timeline_reason": short_timeline_reason,
+        "is_urgent": bool(is_urgent),
+        "logo": logo_doc,
+        "references": ref_docs or [],
+        "social_media_links": social_media_links or [],
+        "file_links": file_links or [],
+        "additional_comments": additional_comments,
+        "state_machine_id": sm["id"],
+        "state_machine_name": sm.get("name"),
+        "current_state_key": initial["key"],
+        "current_state_label": initial.get("label") or initial["key"],
+        "current_state_color": initial.get("color") or "#94a3b8",
+        "status_key": initial["key"],
+        "status_name": initial.get("label") or initial["key"],
+        "status_history": [{
+            "state_key": initial["key"],
+            "state_label": initial.get("label") or initial["key"],
+            "state_color": initial.get("color") or "#94a3b8",
+            "entered_at": now,
+            "by_user_id": current_user.get("id"),
+            "by_user_name": current_user.get("name") or current_user.get("email"),
+        }],
+        "versions": [],
+        "comments": [],
+        "production": None,
+        "created_by": current_user.get("id"),
+        "created_by_name": current_user.get("name") or current_user.get("email"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    doc["comments"].append(RequestComment(
+        user_id=current_user.get("id"),
+        user_name=current_user.get("name") or "User",
+        text=f"Request {doc['request_number']} created. State: {doc['current_state_label']}.",
+        kind="system",
+    ).model_dump())
+    await db.marketing_requests.insert_one(doc)
+    doc.pop("_id", None)
+
+    try:
+        await slack_post_event(
+            tenant_id=tenant_id,
+            event_type="marketing_request_created",
+            text=(
+                f"{':red_circle: *URGENT* — ' if doc.get('is_urgent') else ''}"
+                f":memo: *New marketing request* `{doc['request_number']}` — {doc['title']}\n"
+                f"Type: {doc['request_type_name']} · Assigned to: {doc['assigned_department_name']}\n"
+                f"Requested due: {doc['requested_due_date']} · Raised by: {doc['created_by_name']}"
+                + _slack_lead_line(doc)
+            ),
+        )
+    except Exception:
+        logger.exception("Slack notification failed for new marketing request")
+    return doc
+
 
 
 async def _can_delete_request(tenant_id: str, user: dict) -> bool:
@@ -384,12 +535,6 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
             f"({required_days} days → earliest {earliest}). Provide a `short_timeline_reason` to proceed.",
         )
 
-    # State machine — seed default if none attached
-    sm = await _resolve_sm(tenant_id)
-    initial = get_initial_state(sm)
-    if not initial:
-        raise HTTPException(500, "Attached state machine has no initial state")
-
     logo_doc = None
     if payload.logo_file_id:
         f = await _get_file(tenant_id, payload.logo_file_id)
@@ -397,83 +542,150 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
             logo_doc = StoredFile(**f).model_dump()
     ref_docs = await _stored_files_from_ids(tenant_id, payload.reference_file_ids or [])
 
-    doc = {
-        "id": str(uuid.uuid4()),
-        "request_number": await _next_request_number(tenant_id),
-        "tenant_id": tenant_id,
-        "title": (payload.title or type_doc["name"]),
-        "request_type_id": type_doc["id"],
-        "request_type_name": type_doc["name"],
-        "assigned_department_id": dept_doc["id"],
-        "assigned_department_name": dept_doc["name"],
-        "assigned_user_id": None,
-        "assigned_user_name": None,
-        "assigned_role": None,
-        "lead_id": payload.lead_id,
-        "lead_name": (lead.get("contact_person") or lead.get("name") or lead.get("company")) if lead else None,
-        "lead_company": lead.get("company") if lead else None,
-        "requested_due_date": payload.requested_due_date,
-        "requirement_details": payload.requirement_details,
-        "design_lead_time_days": int(type_doc.get("design_lead_time_days") or 0),
-        "production_lead_time_days": int(type_doc.get("production_lead_time_days") or 0),
-        "short_timeline_reason": payload.short_timeline_reason,
-        "is_urgent": bool(payload.is_urgent),
-        "logo": logo_doc,
-        "references": ref_docs,
-        "social_media_links": payload.social_media_links or [],
-        "file_links": payload.file_links or [],
-        "additional_comments": payload.additional_comments,
-        # SM-driven state
-        "state_machine_id": sm["id"],
-        "state_machine_name": sm.get("name"),
-        "current_state_key": initial["key"],
-        "current_state_label": initial.get("label") or initial["key"],
-        "current_state_color": initial.get("color") or "#94a3b8",
-        # Legacy aliases for back-compat (frontend may still reference these)
-        "status_key": initial["key"],
-        "status_name": initial.get("label") or initial["key"],
-        # Structured status history for time-in-status auditing
-        "status_history": [{
-            "state_key": initial["key"],
-            "state_label": initial.get("label") or initial["key"],
-            "state_color": initial.get("color") or "#94a3b8",
-            "entered_at": datetime.now(timezone.utc).isoformat(),
-            "by_user_id": current_user.get("id"),
-            "by_user_name": current_user.get("name") or current_user.get("email"),
-        }],
-        "versions": [],
-        "comments": [],
-        "production": None,
-        "created_by": current_user.get("id"),
-        "created_by_name": current_user.get("name") or current_user.get("email"),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    doc["comments"].append(RequestComment(
-        user_id=current_user.get("id"),
-        user_name=current_user.get("name") or "User",
-        text=f"Request {doc['request_number']} created. State: {doc['current_state_label']}.",
-        kind="system",
-    ).model_dump())
-    await db.marketing_requests.insert_one(doc)
-    doc.pop("_id", None)
+    return await _insert_request_doc(
+        tenant_id, current_user,
+        type_doc=type_doc, dept_doc=dept_doc,
+        requested_due_date=payload.requested_due_date,
+        requirement_details=payload.requirement_details,
+        lead=lead, logo_doc=logo_doc, ref_docs=ref_docs,
+        title=payload.title, additional_comments=payload.additional_comments,
+        is_urgent=bool(payload.is_urgent), short_timeline_reason=payload.short_timeline_reason,
+        social_media_links=payload.social_media_links, file_links=payload.file_links,
+    )
 
-    # Slack notification (best-effort)
+
+# ──────────────────────────────────────────────────────────────
+# Convenience creators — auto-create a design request from a Lead / Bottle Preview
+# ──────────────────────────────────────────────────────────────
+NECK_TAGS_TYPE = "Neck Tags"
+BOTTLE_SAMPLE_TYPE = "Bottle Designs - Physical Samples Required"
+DEFAULT_DESIGN_DEPT = "Design"
+
+
+def _min_due_date(type_doc: dict) -> str:
+    """Earliest allowable due date (today + design + production lead time)."""
+    days = int(type_doc.get("design_lead_time_days") or 0) + int(type_doc.get("production_lead_time_days") or 0)
+    return (date.today() + timedelta(days=days)).isoformat()
+
+
+def _decode_data_url(data: str) -> bytes:
+    """Decode a base64 image payload (with or without a `data:` URL prefix)."""
+    if not data:
+        raise HTTPException(400, "Empty image data")
+    if "," in data and data.strip().lower().startswith("data:"):
+        data = data.split(",", 1)[1]
     try:
-        await slack_post_event(
-            tenant_id=tenant_id,
-            event_type="marketing_request_created",
-            text=(
-                f"{':red_circle: *URGENT* — ' if doc.get('is_urgent') else ''}"
-                f":memo: *New marketing request* `{doc['request_number']}` — {doc['title']}\n"
-                f"Type: {doc['request_type_name']} · Assigned to: {doc['assigned_department_name']}\n"
-                f"Requested due: {doc['requested_due_date']} · Raised by: {doc['created_by_name']}"
-                + _slack_lead_line(doc)
-            ),
-        )
+        return base64.b64decode(data)
     except Exception:
-        logger.exception("Slack notification failed for new marketing request")
-    return doc
+        raise HTTPException(400, "Invalid base64 image data")
+
+
+class BottleSampleRequestCreate(BaseModel):
+    image_data: str                       # composite/clean design (data URL or base64 PNG)
+    lead_id: Optional[str] = None
+    customer_name: Optional[str] = None
+    bottle_template_name: Optional[str] = None
+    logo_size_mm: Optional[int] = None
+    additional_comments: Optional[str] = None
+    is_urgent: Optional[bool] = False
+
+
+@router.post("/from-lead/{lead_id}/neck-tags")
+async def create_neck_tag_request(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Auto-create a 'Neck Tags' design request for a lead, attaching the lead's
+    logo (copied from the lead's durable storage into the request's files)."""
+    tenant_id = get_current_tenant_id()
+    lead = await db.leads.find_one({"id": lead_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+
+    storage_path = lead.get("logo_storage_path")
+    if not storage_path:
+        raise HTTPException(400, "This lead has no logo yet. Upload a logo on the lead first, then request neck tags.")
+
+    # Pull the lead's logo bytes from the same (top-level) object storage used to save it.
+    try:
+        from object_storage import get_object as _lead_get
+        logo_bytes, ct = _lead_get(storage_path)
+    except Exception as e:
+        logger.exception("Failed to load lead logo for neck-tag request")
+        raise HTTPException(502, f"Could not load the lead's logo: {e}")
+
+    content_type = lead.get("logo_content_type") or ct or "image/png"
+    company = lead.get("company") or "Lead"
+    file_rec = await _ingest_bytes_as_file(
+        tenant_id, current_user, f"{company}-logo.png", logo_bytes, content_type
+    )
+    logo_doc = StoredFile(**file_rec).model_dump()
+
+    type_doc = await _resolve_type_by_name(tenant_id, NECK_TAGS_TYPE)
+    if not type_doc:
+        raise HTTPException(500, f"'{NECK_TAGS_TYPE}' request type is not configured")
+    dept_doc = await _resolve_dept_by_name(tenant_id, DEFAULT_DESIGN_DEPT)
+    if not dept_doc:
+        raise HTTPException(500, "No design/fulfilment department is configured")
+
+    details = (
+        f"Neck tag design requested for lead “{company}”"
+        f"{(' (' + lead.get('lead_id') + ')') if lead.get('lead_id') else ''}. "
+        "The lead's logo is attached to this request."
+    )
+    return await _insert_request_doc(
+        tenant_id, current_user,
+        type_doc=type_doc, dept_doc=dept_doc,
+        requested_due_date=_min_due_date(type_doc),
+        requirement_details=details,
+        lead=lead, logo_doc=logo_doc,
+        title=f"Neck Tags — {company}",
+    )
+
+
+@router.post("/from-bottle-design")
+async def create_bottle_sample_request(payload: BottleSampleRequestCreate, current_user: dict = Depends(get_current_user)):
+    """Auto-create a 'Bottle Designs - Physical Samples Required' design request from
+    the Bottle Preview, attaching the composed design image as a reference file.
+    Links the lead when one is provided."""
+    tenant_id = get_current_tenant_id()
+
+    lead = None
+    if payload.lead_id:
+        lead = await db.leads.find_one({"id": payload.lead_id, "tenant_id": tenant_id}, {"_id": 0})
+        if not lead:
+            raise HTTPException(400, "Lead not found")
+
+    image_bytes = _decode_data_url(payload.image_data)
+    customer = (payload.customer_name or (lead.get("company") if lead else None) or "Customer").strip()
+    file_rec = await _ingest_bytes_as_file(
+        tenant_id, current_user, f"{customer}-bottle-design.png", image_bytes, "image/png"
+    )
+    ref_doc = StoredFile(**file_rec).model_dump()
+
+    type_doc = await _resolve_type_by_name(tenant_id, BOTTLE_SAMPLE_TYPE)
+    if not type_doc:
+        raise HTTPException(500, f"'{BOTTLE_SAMPLE_TYPE}' request type is not configured")
+    dept_doc = await _resolve_dept_by_name(tenant_id, DEFAULT_DESIGN_DEPT)
+    if not dept_doc:
+        raise HTTPException(500, "No design/fulfilment department is configured")
+
+    parts = [f"Physical bottle sample requested for “{customer}”."]
+    if payload.bottle_template_name:
+        parts.append(f"Bottle: {payload.bottle_template_name}.")
+    if payload.logo_size_mm:
+        parts.append(f"Logo size: {payload.logo_size_mm}×{payload.logo_size_mm} mm.")
+    parts.append("The approved bottle-preview design is attached to this request.")
+    details = " ".join(parts)
+
+    return await _insert_request_doc(
+        tenant_id, current_user,
+        type_doc=type_doc, dept_doc=dept_doc,
+        requested_due_date=_min_due_date(type_doc),
+        requirement_details=details,
+        lead=lead, ref_docs=[ref_doc],
+        title=f"Bottle Sample — {customer}",
+        additional_comments=payload.additional_comments,
+        is_urgent=bool(payload.is_urgent),
+    )
+
 
 
 @router.put("/{request_id}")

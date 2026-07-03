@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { Sparkles, Plus, Download, Trash2, Eye, Loader2 } from 'lucide-react';
+import { Sparkles, Plus, Download, Trash2, Eye, Loader2, Tag } from 'lucide-react';
 import { format } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -31,6 +31,7 @@ export const LeadBottleDesigns = ({ leadId, company }) => {
   const [preview, setPreview] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [requestingNeckTags, setRequestingNeckTags] = useState(false);
 
   const fetchDesigns = async () => {
     try {
@@ -79,22 +80,57 @@ export const LeadBottleDesigns = ({ leadId, company }) => {
     }
   };
 
+  const handleRequestNeckTags = async () => {
+    setRequestingNeckTags(true);
+    try {
+      const res = await axios.post(
+        `${API_URL}/marketing-requests/from-lead/${leadId}/neck-tags`,
+        {},
+        { withCredentials: true }
+      );
+      const num = res.data?.request_number;
+      const rid = res.data?.id;
+      toast.success(`Neck tag design request ${num || ''} created`, {
+        action: rid ? { label: 'View', onClick: () => navigate(`/marketing-requests/${rid}`) } : undefined,
+      });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to create neck tag request');
+    } finally {
+      setRequestingNeckTags(false);
+    }
+  };
+
   return (
     <Card className="p-4 sm:p-6" data-testid="lead-bottle-designs-card">
-      <div className="flex items-center justify-between mb-4 gap-3">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
           <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" /> Bottle Designs
           {designs.length > 0 && (
             <Badge variant="secondary" className="ml-1" data-testid="bottle-designs-count">{designs.length}</Badge>
           )}
         </h2>
-        <Button
-          size="sm"
-          onClick={() => navigate(`/bottle-preview?lead=${leadId}`)}
-          data-testid="add-bottle-design-btn"
-        >
-          <Plus className="h-4 w-4 mr-1.5" /> Create Design
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleRequestNeckTags}
+            disabled={requestingNeckTags}
+            data-testid="request-neck-tags-btn"
+          >
+            {requestingNeckTags ? (
+              <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Requesting…</>
+            ) : (
+              <><Tag className="h-4 w-4 mr-1.5" /> Request Neck Tags</>
+            )}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => navigate(`/bottle-preview?lead=${leadId}`)}
+            data-testid="add-bottle-design-btn"
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> Create Design
+          </Button>
+        </div>
       </div>
 
       {loading ? (
