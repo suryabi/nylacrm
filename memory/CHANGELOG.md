@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-07-03 — Bottle Preview quote strip: removed price, "Clear Glass" → "Super Flint Glass" ✅ (self-tested: generated composite inspected)
+- `drawQuoteStrip` (BottlePreview.js): dropped the **"Print price / bottle"** row from the downloaded/composite image strip (now shows only SKU + Logo size). Removed the unused `price` param + call-site.
+- SKU text on the strip and the on-page subtitle now say **"Super Flint Glass"** instead of "Clear Glass".
+- Verified by capturing the actual generated composite PNG and reading the bottom strip: "24 Brand · Super Flint Glass", "Logo size 35 × 35 mm", no price.
+
+
 ## 2026-07-02 — Approved bottle designs now live on the Lead detail page ✅ (self-tested: curl + UI screenshots)
 - **New `LeadBottleDesigns.js`** card section on the Lead detail page (after Documents): grid of saved designs with thumbnail, customer name, template/logo-size/price badges, date + creator, **view-fullscreen dialog**, **download**, and **delete** (AlertDialog confirm). Empty state + **"Create Design"** button → `/bottle-preview?lead={id}`. Data via `GET /api/leads/{id}/bottle-designs` (durable object storage).
 - **BottlePreview.js**: reads `?lead=<id>` query param → auto-selects the lead, loads its logo + name (via existing `handleSelectLead`). When a lead is selected, the generic **"Save to History"** (bottle-preview module) button is hidden and replaced with a hint — the only save path is **"Approve & Save to {lead}"**, which stores against the lead and shows on the lead's page. "Save to History" is still available for ad-hoc previews with no lead.

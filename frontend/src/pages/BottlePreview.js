@@ -273,7 +273,7 @@ const resizeImage = async (imageSrc, scale) => {
 
 // Draw a premium "quote strip" below the mockup so each export doubles as a mini quote sheet.
 const drawQuoteStrip = (ctx, o) => {
-  const { x, y, w, h, customerName, product, sku, logoSizeMm, price } = o;
+  const { x, y, w, h, customerName, product, sku, logoSizeMm } = o;
   const S = w / 1600; // scale fonts relative to the reference image width
 
   // Background band + emerald accent rule
@@ -298,12 +298,11 @@ const drawQuoteStrip = (ctx, o) => {
   ctx.font = `500 ${Math.round(24 * S)}px Inter, Arial, sans-serif`;
   ctx.fillText('Nyla Air & Water', x + padX, y + h - Math.round(h * 0.12));
 
-  // Right: SKU / logo size / print price (label + value on one right-aligned line each)
+  // Right: SKU / logo size (label + value on one right-aligned line each)
   const rightX = x + w - padX;
   const rows = [
     ['SKU', sku],
     ['Logo size', `${logoSizeMm} × ${logoSizeMm} mm`],
-    ['Print price', `₹${Number(price).toFixed(2)} / bottle`],
   ];
   const rowH = Math.round(h * 0.2);
   const baseY = y + Math.round(h * 0.4);
@@ -312,7 +311,7 @@ const drawQuoteStrip = (ctx, o) => {
     const ry = baseY + i * rowH;
     ctx.font = `600 ${Math.round(34 * S)}px Inter, Arial, sans-serif`;
     const valW = ctx.measureText(row[1]).width;
-    ctx.fillStyle = i === 2 ? '#4ade80' : '#ffffff';
+    ctx.fillStyle = '#ffffff';
     ctx.fillText(row[1], rightX - valW, ry);
     ctx.font = `400 ${Math.round(26 * S)}px Inter, Arial, sans-serif`;
     const labW = ctx.measureText(row[0]).width;
@@ -861,9 +860,8 @@ export default function BottlePreview() {
           h: stripH,
           customerName,
           product: currentBottle.name,
-          sku: '24 Brand · Clear Glass',
+          sku: '24 Brand · Super Flint Glass',
           logoSizeMm,
-          price: LOGO_SIZE_PRICES[logoSizeMm],
         });
       }
 
@@ -988,7 +986,7 @@ export default function BottlePreview() {
           <Sparkles className="h-8 w-8 text-primary" />
           <h1 className="text-4xl font-light text-foreground">White-Label Bottle Preview</h1>
         </div>
-        <p className="text-foreground-muted">24 Brand SKU - Clear Glass Bottle with Custom Label</p>
+        <p className="text-foreground-muted">24 Brand SKU - Super Flint Glass Bottle with Custom Label</p>
       </div>
 
       {/* Lead selector — search a lead to auto-load its logo & customer name */}
