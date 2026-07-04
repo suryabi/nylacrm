@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { Sparkles, Plus, Download, Trash2, Eye, Loader2, Tag } from 'lucide-react';
+import { Sparkles, Download, Trash2, Eye, Loader2, Tag, Wine, FileImage, FlaskConical, UploadCloud } from 'lucide-react';
 import { format } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -24,14 +24,17 @@ const BACKEND = process.env.REACT_APP_BACKEND_URL;
 
 const srcFor = (url) => (url ? `${BACKEND}${url}` : '');
 
-export const LeadBottleDesigns = ({ leadId, company }) => {
+export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   const navigate = useNavigate();
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [requestingNeckTags, setRequestingNeckTags] = useState(false);
+  const [busyAction, setBusyAction] = useState(null); // 'neck-tags' | 'bottle-design'
+  const [sampleOpen, setSampleOpen] = useState(false);
+  const [sampleFile, setSampleFile] = useState(null);
+  const [submittingSample, setSubmittingSample] = useState(false);
 
   const fetchDesigns = async () => {
     try {
@@ -80,57 +83,141 @@ export const LeadBottleDesigns = ({ leadId, company }) => {
     }
   };
 
-  const handleRequestNeckTags = async () => {
-    setRequestingNeckTags(true);
+  const handleCreateDesign = () => {
+    if (!hasLogo) {
+      toast.error('Upload a logo on the lead first, then create a bottle design.');
+      return;
+    }
+    navigate(`/bottle-preview?lead=${leadId}`);
+  };
+
+  // Shared: POST a lead-logo-based design request (neck tags / bottle design).
+  const postLeadLogoRequest = async (action, path, label) => {
+    if (!hasLogo) {
+      toast.error('Upload a logo on the lead first, then raise this request.');
+      return;
+    }
+    setBusyAction(action);
     try {
-      const res = await axios.post(
-        `${API_URL}/marketing-requests/from-lead/${leadId}/neck-tags`,
-        {},
-        { withCredentials: true }
-      );
+      const res = await axios.post(`${API_URL}/marketing-requests/${path}`, {}, { withCredentials: true });
       const num = res.data?.request_number;
       const rid = res.data?.id;
-      toast.success(`Neck tag design request ${num || ''} created`, {
+      toast.success(`${label} request ${num || ''} created`, {
         action: rid ? { label: 'View', onClick: () => navigate(`/marketing-requests/${rid}`) } : undefined,
       });
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to create neck tag request');
+      toast.error(e.response?.data?.detail || `Failed to create ${label.toLowerCase()} request`);
     } finally {
-      setRequestingNeckTags(false);
+      setBusyAction(null);
+    }
+  };
+
+  const handleRequestNeckTags = () =>
+    postLeadLogoRequest('neck-tags', `from-lead/${leadId}/neck-tags`, 'Neck tags');
+  const handleRequestBottleDesign = () =>
+    postLeadLogoRequest('bottle-design', `from-lead/${leadId}/bottle-design`, 'Bottle design');
+
+  const handleSubmitSample = async () => {
+    if (!sampleFile) {
+      toast.error('Please choose the original logo file (PDF or ZIP).');
+      return;
+    }
+    const ext = sampleFile.name.split('.').pop()?.toLowerCase();
+    if (!['pdf', 'zip'].includes(ext)) {
+      toast.error('Only PDF or ZIP files are allowed.');
+      return;
+    }
+    setSubmittingSample(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', sampleFile);
+      const res = await axios.post(
+        `${API_URL}/marketing-requests/from-lead/${leadId}/bottle-sample`,
+        fd,
+        { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+      const num = res.data?.request_number;
+      const rid = res.data?.id;
+      setSampleOpen(false);
+      setSampleFile(null);
+      toast.success(`Bottle sample request ${num || ''} created`, {
+        action: rid ? { label: 'View', onClick: () => navigate(`/marketing-requests/${rid}`) } : undefined,
+      });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to create bottle sample request');
+    } finally {
+      setSubmittingSample(false);
     }
   };
 
   return (
     <Card className="p-4 sm:p-6" data-testid="lead-bottle-designs-card">
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+      <div className="flex items-center gap-2 mb-1">
         <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-          <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" /> Bottle Designs
-          {designs.length > 0 && (
-            <Badge variant="secondary" className="ml-1" data-testid="bottle-designs-count">{designs.length}</Badge>
-          )}
+          <Wine className="h-4 w-4 sm:h-5 sm:w-5 text-primary" /> Customer branding
         </h2>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleRequestNeckTags}
-            disabled={requestingNeckTags}
-            data-testid="request-neck-tags-btn"
-          >
-            {requestingNeckTags ? (
-              <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Requesting…</>
-            ) : (
-              <><Tag className="h-4 w-4 mr-1.5" /> Request Neck Tags</>
-            )}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => navigate(`/bottle-preview?lead=${leadId}`)}
-            data-testid="add-bottle-design-btn"
-          >
-            <Plus className="h-4 w-4 mr-1.5" /> Create Design
-          </Button>
-        </div>
+        {designs.length > 0 && (
+          <Badge variant="secondary" data-testid="bottle-designs-count">{designs.length} saved</Badge>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground mb-4">
+        Design and request branded artwork &amp; physical samples for {company || 'this lead'}.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5" data-testid="customer-branding-actions">
+        <Button
+          variant="outline"
+          className="justify-start h-auto py-2.5"
+          onClick={handleRequestNeckTags}
+          disabled={busyAction === 'neck-tags'}
+          data-testid="request-neck-tags-btn"
+        >
+          {busyAction === 'neck-tags'
+            ? <Loader2 className="h-4 w-4 mr-2 animate-spin shrink-0" />
+            : <Tag className="h-4 w-4 mr-2 shrink-0 text-primary" />}
+          <span className="text-left leading-tight">Design Neck Tags
+            <span className="block text-[11px] font-normal text-muted-foreground">Uses the lead's logo</span>
+          </span>
+        </Button>
+
+        <Button
+          variant="outline"
+          className="justify-start h-auto py-2.5"
+          onClick={handleCreateDesign}
+          data-testid="create-bottle-design-btn"
+        >
+          <Sparkles className="h-4 w-4 mr-2 shrink-0 text-primary" />
+          <span className="text-left leading-tight">Create Bottle Design
+            <span className="block text-[11px] font-normal text-muted-foreground">Open the bottle preview studio</span>
+          </span>
+        </Button>
+
+        <Button
+          variant="outline"
+          className="justify-start h-auto py-2.5"
+          onClick={handleRequestBottleDesign}
+          disabled={busyAction === 'bottle-design'}
+          data-testid="request-bottle-design-btn"
+        >
+          {busyAction === 'bottle-design'
+            ? <Loader2 className="h-4 w-4 mr-2 animate-spin shrink-0" />
+            : <FileImage className="h-4 w-4 mr-2 shrink-0 text-primary" />}
+          <span className="text-left leading-tight">Request Bottle Design
+            <span className="block text-[11px] font-normal text-muted-foreground">Raise a design request (uses the lead's logo)</span>
+          </span>
+        </Button>
+
+        <Button
+          variant="outline"
+          className="justify-start h-auto py-2.5"
+          onClick={() => setSampleOpen(true)}
+          data-testid="request-bottle-sample-btn"
+        >
+          <FlaskConical className="h-4 w-4 mr-2 shrink-0 text-amber-600" />
+          <span className="text-left leading-tight">Request Bottle Sample with Logo
+            <span className="block text-[11px] font-normal text-muted-foreground">Upload the original logo (PDF/ZIP)</span>
+          </span>
+        </Button>
       </div>
 
       {loading ? (
@@ -139,25 +226,16 @@ export const LeadBottleDesigns = ({ leadId, company }) => {
         </div>
       ) : designs.length === 0 ? (
         <div
-          className="flex flex-col items-center justify-center text-center py-10 px-4 rounded-xl border border-dashed border-border bg-muted/30"
+          className="flex flex-col items-center justify-center text-center py-8 px-4 rounded-xl border border-dashed border-border bg-muted/30"
           data-testid="bottle-designs-empty"
         >
-          <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
-            <Sparkles className="h-6 w-6 text-primary" />
+          <div className="h-11 w-11 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
+            <Sparkles className="h-5 w-5 text-primary" />
           </div>
-          <p className="text-sm font-medium text-foreground">No bottle designs yet</p>
+          <p className="text-sm font-medium text-foreground">No saved bottle designs yet</p>
           <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-            Create a white-label bottle mockup for {company || 'this lead'} and approve it to save it here.
+            Use “Create Bottle Design” to build a white-label mockup for {company || 'this lead'} and approve it to save it here.
           </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            onClick={() => navigate(`/bottle-preview?lead=${leadId}`)}
-            data-testid="empty-create-bottle-design-btn"
-          >
-            <Plus className="h-4 w-4 mr-1.5" /> Create the first design
-          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4" data-testid="bottle-designs-grid">
@@ -230,6 +308,55 @@ export const LeadBottleDesigns = ({ leadId, company }) => {
           ))}
         </div>
       )}
+
+      {/* Request bottle sample — upload original logo (PDF/ZIP) */}
+      <Dialog open={sampleOpen} onOpenChange={(o) => { setSampleOpen(o); if (!o) setSampleFile(null); }}>
+        <DialogContent className="max-w-md" data-testid="bottle-sample-dialog">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5 text-amber-600" /> Request Bottle Sample with Logo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Upload the original logo file for {company || 'this lead'}. This creates a physical
+              bottle sample design request with the logo attached.
+            </p>
+            <label
+              htmlFor="bottle-sample-file"
+              className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border hover:border-primary/50 bg-muted/30 px-4 py-6 cursor-pointer transition-colors"
+              data-testid="bottle-sample-dropzone"
+            >
+              <UploadCloud className="h-7 w-7 text-muted-foreground" />
+              {sampleFile ? (
+                <span className="text-sm font-medium text-foreground break-all text-center">{sampleFile.name}</span>
+              ) : (
+                <>
+                  <span className="text-sm font-medium text-foreground">Choose a file</span>
+                  <span className="text-xs text-muted-foreground">PDF or ZIP only</span>
+                </>
+              )}
+              <input
+                id="bottle-sample-file"
+                type="file"
+                accept=".pdf,.zip,application/pdf,application/zip,application/x-zip-compressed"
+                className="hidden"
+                onChange={(e) => setSampleFile(e.target.files?.[0] || null)}
+                data-testid="bottle-sample-file-input"
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSampleOpen(false)} disabled={submittingSample} data-testid="bottle-sample-cancel">
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitSample} disabled={submittingSample || !sampleFile} data-testid="bottle-sample-submit">
+              {submittingSample ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting…</> : 'Create Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Fullscreen preview */}
       <Dialog open={!!preview} onOpenChange={(o) => { if (!o) setPreview(null); }}>

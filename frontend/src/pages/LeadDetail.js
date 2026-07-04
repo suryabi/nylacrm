@@ -1689,7 +1689,7 @@ ${userEmail}`;
           </div>
 
           {/* Bottle Designs — approved white-label mockups saved against this lead */}
-          <LeadBottleDesigns leadId={id} company={lead.company} />
+          <LeadBottleDesigns leadId={id} company={lead.company} hasLogo={!!lead.logo_url} />
 
 
           {/* Contact Information */}

@@ -559,6 +559,7 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
 # ──────────────────────────────────────────────────────────────
 NECK_TAGS_TYPE = "Neck Tags"
 BOTTLE_SAMPLE_TYPE = "Bottle Designs - Physical Samples Required"
+BOTTLE_DESIGN_TYPE = "Bottle Designs - No Samples Required"
 DEFAULT_DESIGN_DEPT = "Design"
 
 
@@ -592,8 +593,31 @@ class BottleSampleRequestCreate(BaseModel):
 
 @router.post("/from-lead/{lead_id}/neck-tags")
 async def create_neck_tag_request(lead_id: str, current_user: dict = Depends(get_current_user)):
-    """Auto-create a 'Neck Tags' design request for a lead, attaching the lead's
-    logo (copied from the lead's durable storage into the request's files)."""
+    """Auto-create a 'Neck Tags' design request for a lead, attaching the lead's logo."""
+    return await _create_lead_logo_request(
+        lead_id, current_user,
+        type_name=NECK_TAGS_TYPE,
+        title_prefix="Neck Tags",
+        action_label="neck tags",
+    )
+
+
+@router.post("/from-lead/{lead_id}/bottle-design")
+async def create_bottle_design_request(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Auto-create a 'Bottle Designs - No Samples Required' design request for a lead,
+    attaching the lead's logo."""
+    return await _create_lead_logo_request(
+        lead_id, current_user,
+        type_name=BOTTLE_DESIGN_TYPE,
+        title_prefix="Bottle Design",
+        action_label="a bottle design",
+    )
+
+
+async def _create_lead_logo_request(lead_id: str, current_user: dict, *,
+                                     type_name: str, title_prefix: str, action_label: str) -> dict:
+    """Shared creator for lead-driven design requests that reuse the lead's saved logo.
+    Blocks when the lead has no logo (logo is mandatory)."""
     tenant_id = get_current_tenant_id()
     lead = await db.leads.find_one({"id": lead_id, "tenant_id": tenant_id}, {"_id": 0})
     if not lead:
@@ -601,14 +625,14 @@ async def create_neck_tag_request(lead_id: str, current_user: dict = Depends(get
 
     storage_path = lead.get("logo_storage_path")
     if not storage_path:
-        raise HTTPException(400, "This lead has no logo yet. Upload a logo on the lead first, then request neck tags.")
+        raise HTTPException(400, f"This lead has no logo yet. Upload a logo on the lead first, then request {action_label}.")
 
     # Pull the lead's logo bytes from the same (top-level) object storage used to save it.
     try:
         from object_storage import get_object as _lead_get
         logo_bytes, ct = _lead_get(storage_path)
     except Exception as e:
-        logger.exception("Failed to load lead logo for neck-tag request")
+        logger.exception("Failed to load lead logo for design request")
         raise HTTPException(502, f"Could not load the lead's logo: {e}")
 
     content_type = lead.get("logo_content_type") or ct or "image/png"
@@ -618,15 +642,15 @@ async def create_neck_tag_request(lead_id: str, current_user: dict = Depends(get
     )
     logo_doc = StoredFile(**file_rec).model_dump()
 
-    type_doc = await _resolve_type_by_name(tenant_id, NECK_TAGS_TYPE)
+    type_doc = await _resolve_type_by_name(tenant_id, type_name)
     if not type_doc:
-        raise HTTPException(500, f"'{NECK_TAGS_TYPE}' request type is not configured")
+        raise HTTPException(500, f"'{type_name}' request type is not configured")
     dept_doc = await _resolve_dept_by_name(tenant_id, DEFAULT_DESIGN_DEPT)
     if not dept_doc:
         raise HTTPException(500, "No design/fulfilment department is configured")
 
     details = (
-        f"Neck tag design requested for lead “{company}”"
+        f"{title_prefix} requested for lead “{company}”"
         f"{(' (' + lead.get('lead_id') + ')') if lead.get('lead_id') else ''}. "
         "The lead's logo is attached to this request."
     )
@@ -636,7 +660,58 @@ async def create_neck_tag_request(lead_id: str, current_user: dict = Depends(get
         requested_due_date=_min_due_date(type_doc),
         requirement_details=details,
         lead=lead, logo_doc=logo_doc,
-        title=f"Neck Tags — {company}",
+        title=f"{title_prefix} — {company}",
+    )
+
+
+@router.post("/from-lead/{lead_id}/bottle-sample")
+async def create_lead_bottle_sample_request(
+    lead_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Create a 'Bottle Designs - Physical Samples Required' request for a lead.
+    The ORIGINAL logo must be uploaded (PDF or ZIP) and is attached to the request."""
+    tenant_id = get_current_tenant_id()
+    lead = await db.leads.find_one({"id": lead_id, "tenant_id": tenant_id}, {"_id": 0})
+    if not lead:
+        raise HTTPException(404, "Lead not found")
+
+    fname = (file.filename or "").strip()
+    ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+    if ext not in ("pdf", "zip"):
+        raise HTTPException(400, "Please upload the original logo as a PDF or ZIP file.")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "The uploaded file is empty.")
+
+    company = lead.get("company") or "Lead"
+    file_rec = await _ingest_bytes_as_file(
+        tenant_id, current_user, fname, data,
+        file.content_type or ("application/pdf" if ext == "pdf" else "application/zip"),
+    )
+    logo_doc = StoredFile(**file_rec).model_dump()
+
+    type_doc = await _resolve_type_by_name(tenant_id, BOTTLE_SAMPLE_TYPE)
+    if not type_doc:
+        raise HTTPException(500, f"'{BOTTLE_SAMPLE_TYPE}' request type is not configured")
+    dept_doc = await _resolve_dept_by_name(tenant_id, DEFAULT_DESIGN_DEPT)
+    if not dept_doc:
+        raise HTTPException(500, "No design/fulfilment department is configured")
+
+    details = (
+        f"Physical bottle sample requested for lead “{company}”"
+        f"{(' (' + lead.get('lead_id') + ')') if lead.get('lead_id') else ''}. "
+        f"The original logo ({ext.upper()}) is attached to this request."
+    )
+    return await _insert_request_doc(
+        tenant_id, current_user,
+        type_doc=type_doc, dept_doc=dept_doc,
+        requested_due_date=_min_due_date(type_doc),
+        requirement_details=details,
+        lead=lead, logo_doc=logo_doc,
+        title=f"Bottle Sample — {company}",
     )
 
 

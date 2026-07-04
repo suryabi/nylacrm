@@ -1,6 +1,16 @@
 # Changelog
 
 
+## 2026-07-04 — "Customer branding" section on Lead page with 4 actions ✅ (self-tested: curl + UI)
+- Renamed the Lead-page "Bottle Designs" section to **"Customer branding"** with four actions (saved-designs grid retained below):
+  1. **Design Neck Tags** — creates a "Neck Tags" request with the lead's logo (logo mandatory).
+  2. **Create Bottle Design** — opens the Bottle Preview studio pre-loaded with the lead (logo mandatory; blocked client-side otherwise).
+  3. **Request Bottle Design** — `POST /marketing-requests/from-lead/{id}/bottle-design` → "Bottle Designs - No Samples Required" with the lead's logo (logo mandatory).
+  4. **Request Bottle Sample with Logo** — opens a pop-up to upload the ORIGINAL logo (**PDF or ZIP only**) → `POST /marketing-requests/from-lead/{id}/bottle-sample` (multipart) → "Bottle Designs - Physical Samples Required" with the uploaded file attached.
+- All lead-logo requests are assigned to **Design**. Refactored options 1 & 3 into a shared `_create_lead_logo_request` helper. Passed `hasLogo` from LeadDetail to gate options 1–3 in the UI.
+- Verified: option 3 (400 without logo / success with logo, correct type+dept+logo), option 4 (txt→400, PDF→success with logo.pdf attached), and the UI (4 buttons render, sample dialog opens). Test data cleaned up.
+
+
 ## 2026-07-03 — Neck-tag & physical-sample design requests + bottle design in proposal ✅ (self-tested: curl + UI clicks + PDF inspection)
 - **Request Neck Tags (Lead page)**: `POST /api/marketing-requests/from-lead/{lead_id}/neck-tags` auto-creates a "Neck Tags" design request assigned to **Design**, copying the lead's logo into the request (blocks with a clear message if the lead has no logo). Button lives in the **Bottle Designs** card header (`request-neck-tags-btn`). Verified: 400 without logo, success with logo (MR created, logo downloadable), UI toast + "View".
 - **Request Physical Sample (Bottle Preview)**: `POST /api/marketing-requests/from-bottle-design` builds the clean composite, uploads it, and creates a "Bottle Designs - Physical Samples Required" request (assigned **Design**) with the design attached as a reference; links the lead when one is selected (works with/without a lead). Button next to Approve/Download (`request-sample-btn`). Verified via curl + UI (toast MR created).
