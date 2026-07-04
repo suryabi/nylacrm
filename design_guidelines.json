@@ -1,103 +1,89 @@
 {
-  "theme": "light",
-  "archetype": "4 (Swiss & High-Contrast / Premium Dashboard Variant)",
-  "design_concept": "Moving from a rudimentary zebra-table to 'Account Group Cards'. Each account is a distinct rounded-2xl card with a highlighted header containing account meta, and nested SKU rows underneath. This improves scannability, handles 1-to-many relationships elegantly, breaks visual monotony, and fully aligns with the sibling 'premium leaderboard' aesthetic.",
-  "colors": {
-    "background": "bg-slate-50 (with subtle radial dot background already present in app)",
-    "surface": "bg-white",
-    "border": "border-slate-200/80",
-    "text": {
-      "primary": "text-slate-900",
-      "secondary": "text-slate-500",
-      "mono": "text-slate-600"
-    },
-    "status": {
-      "gold": "bg-amber-50 text-amber-700 border-amber-200/60",
-      "silver": "bg-slate-50 text-slate-700 border-slate-200",
-      "pet": "bg-sky-50 text-sky-700 border-sky-200/60",
-      "not_in_gop": "bg-rose-50 text-rose-700 border-rose-200/60",
-      "return_credit": "text-emerald-600",
-      "return_credit_empty": "text-slate-300"
-    }
+  "identity": "E1 - The Anti-AI Designer",
+  "theme": "Light",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) + Organic Emerald Accents",
+  "design_strategy": {
+    "overview": "Non-traditional Bento / Control Room Grid. Discard the stack of white cards. The 'Current State + Actions' zone is the absolute hero, visually distinct through stark contrast (dark or high-saturation background) and oversized, brightly colored transition CTAs.",
+    "layout_grid": "12-column bento. Left (lg:col-span-8) for deep content (Brief, Versions, Activity). Right (lg:col-span-4) acts as a sticky 'Command Center' containing the Hero Action Hub, Meta, and Status History.",
+    "spacing": "Generous and asymmetrical. Use p-8 or p-12 for major content zones. Nested elements get tighter p-4 to p-6."
   },
   "typography": {
-    "headings": "font-sans tracking-tight",
-    "mono": "font-mono tracking-tight",
-    "sizes": {
-      "account_name": "text-base sm:text-lg font-semibold text-slate-900",
-      "account_code": "text-[11px] font-mono font-medium uppercase tracking-wider text-slate-500",
-      "sku_name": "text-sm font-medium text-slate-900",
-      "sku_category": "text-xs font-normal text-slate-500",
-      "price": "text-sm font-semibold tabular-nums text-slate-900",
-      "credit": "text-sm font-medium tabular-nums"
+    "strategy": "High contrast, structural.",
+    "font_families": {
+      "headings": "Cabinet Grotesk, Clash Display, or Inter (Bold, tight tracking)",
+      "body": "IBM Plex Sans or Inter (Highly legible)",
+      "mono": "JetBrains Mono (For reference numbers, metadata)"
+    },
+    "scales": {
+      "h1_hero": "text-4xl md:text-5xl tracking-tighter font-black text-stone-900",
+      "h2_section": "text-2xl font-bold tracking-tight text-stone-800",
+      "labels": "text-xs font-bold uppercase tracking-[0.15em] text-stone-500",
+      "body": "text-sm md:text-base leading-relaxed text-stone-700"
     }
   },
-  "layout": {
-    "container": "w-full space-y-4 sm:space-y-6",
-    "account_card": "bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-all duration-300 group/card",
-    "account_header": "flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 bg-gradient-to-r from-slate-50/80 to-white border-b border-slate-100 cursor-pointer relative overflow-hidden",
-    "sku_list_container": "flex flex-col w-full",
-    "sku_row": "grid grid-cols-1 sm:grid-cols-12 gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors items-center cursor-pointer group/row"
-  },
-  "components": {
-    "AccountHeader": {
-      "description": "The clickable header of the account card containing avatar, name, code, location, and optional badge.",
-      "structure": "Left: Avatar/Initials + Col(Name + Code Chip). Middle/Right: Location Pin + Location Text, 'Not in GOP' badge, ChevronRight.",
-      "classes": {
-        "avatar": "h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center font-semibold text-sm sm:text-base shadow-sm ring-2 ring-white",
-        "name_wrapper": "flex flex-col gap-0.5 sm:gap-1",
-        "code_chip": "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-white text-slate-600 border border-slate-200 shadow-sm",
-        "location": "flex items-center gap-1.5 text-xs text-slate-500 mt-2 sm:mt-0",
-        "not_in_gop_badge": "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-50 text-rose-700 border border-rose-200/60 shadow-sm",
-        "chevron": "text-slate-400 group-hover/card:text-slate-900 group-hover/card:translate-x-1 transition-all duration-300 hidden sm:block"
-      }
+  "color_system": {
+    "backgrounds": {
+      "page": "bg-stone-50",
+      "content_surface": "bg-white",
+      "action_hub_surface": "bg-stone-900"
     },
-    "SKURow": {
-      "description": "Individual SKU row inside the account card. Uses CSS grid for perfect alignment across the list. Mobile responsive.",
-      "classes": {
-        "grid_layout": "grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4 items-center w-full",
-        "col_sku": "sm:col-span-6 flex flex-col gap-1 sm:pr-4",
-        "sku_name_wrapper": "flex items-center flex-wrap gap-2",
-        "grade_chip": "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border shadow-sm",
-        "col_price": "sm:col-span-3 flex justify-between sm:block sm:text-right",
-        "col_credit": "sm:col-span-3 flex justify-between sm:block sm:text-right",
-        "mobile_label": "text-[11px] uppercase tracking-wider text-slate-400 sm:hidden font-medium"
-      }
+    "borders": "border-stone-200",
+    "text": {
+      "primary": "text-stone-900",
+      "secondary": "text-stone-600",
+      "inverse": "text-white"
     },
-    "Pagination": {
-      "description": "Standard shadcn/ui pagination at the bottom of the list, styled with pill-shaped buttons to match the premium feel.",
-      "classes": "flex items-center justify-between py-6 px-2"
-    },
-    "EmptyState": {
-      "description": "Empty state when no accounts match the filters.",
-      "classes": "flex flex-col items-center justify-center py-24 px-4 text-center bg-white rounded-2xl border border-slate-200 border-dashed"
+    "dynamic_intents": {
+      "progress_start": "bg-emerald-500 hover:bg-emerald-400 text-stone-900",
+      "review": "bg-indigo-500 hover:bg-indigo-400 text-white",
+      "approve": "bg-emerald-600 hover:bg-emerald-500 text-white",
+      "reject_block": "bg-rose-600 hover:bg-rose-500 text-white",
+      "request_inputs": "bg-amber-500 hover:bg-amber-400 text-stone-900",
+      "neutral_tertiary": "bg-white text-stone-900 border border-stone-300 hover:bg-stone-100"
     }
   },
-  "motion": {
-    "entrance_stagger": "Apply staggered fade-in-up animations to account cards on mount using Framer Motion or CSS animation-delay (e.g., initial opacity 0, translate-y 10px, animate to opacity 1, translate-y 0, stagger 0.05s).",
-    "hover_header": "Chevron nudges right by 4px, entire card gains slight shadow-md.",
-    "hover_row": "Row background shifts to slate-50/50, revealing a subtle right-arrow indicator on the far right for interactivity."
+  "component_blueprints": {
+    "request_header": {
+      "structure": "Fluid header spanning col-span-12. No card wrapper, directly on page background.",
+      "elements": [
+        "Top-right header actions: Grouped as icon buttons (Urgent Flame, Edit, Delete, Print, Back).",
+        "Title row: Request Number in Mono font + Type Title + Icon.",
+        "Corner Ribbon: Absolute positioned top-right for LEAD City (colored based on city code).",
+        "Badges: URGENT (pulsing red flame), Tight Timeline (amber), Age pill.",
+        "Meta Row: Dense flex row. Assigned Dept, User Avatar, Lead, Dates."
+      ]
+    },
+    "action_hub_hero": {
+      "structure": "Sticky lg:top-6 in the right column. Rendered as a dark 'Control Panel' (bg-stone-900 rounded-xl p-8) to violently contrast with the light theme page, forcing user attention.",
+      "current_state": "Massive text (text-3xl text-white) + glowing pulse dot matching the state's color.",
+      "transition_ctas": "Huge block buttons (w-full h-14 md:h-16 text-lg font-bold rounded-lg transition-transform hover:-translate-y-1 shadow-[0_4px_14px_0_rgba(0,0,0,0.1)]). Colors mapped from dynamic_intents.",
+      "blocked_states": "Render as disabled (opacity-50, grayscale) with Shadcn Tooltip explaining why."
+    },
+    "content_zones": {
+      "requirement_brief": "Clean white bento box. Text, comments, and 'Brand Assets' grid (thumbnails with hover overlay for preview/download).",
+      "work_versions": "Vertical timeline of versions. 'Add Version' is a prominent dashed-border dropzone. Each version has an exclusive Approve/Revert button and nested threaded comments with @mentions.",
+      "production_submission": "Conditionally rendered block with high-contrast data pairs (Quantity, Date, Team).",
+      "status_history": "Visual timeline. Include a proportional color bar (h-3 rounded-full flex) where segments represent time spent in each state.",
+      "comments_activity": "Full timeline blending human comments and system events. Include a rich composer at the top or bottom."
+    }
   },
-  "testing": {
-    "attributes": [
-      "data-testid=\"account-card-{account_id}\"",
-      "data-testid=\"account-header-{account_id}\"",
-      "data-testid=\"sku-row-{sku_id}\"",
-      "data-testid=\"sku-price-{sku_id}\"",
-      "data-testid=\"sku-grade-chip-{sku_id}\"",
-      "data-testid=\"not-in-gop-badge\"",
-      "data-testid=\"pagination-next\"",
-      "data-testid=\"pagination-prev\""
-    ]
+  "micro_interactions": {
+    "buttons": "Active scale down (active:scale-95), hover lift.",
+    "dialogs": "Transitions require comments/forms? Open Shadcn Dialogs.",
+    "tooltips": "Fast fade-in for disabled buttons."
+  },
+  "technical_rules": {
+    "file_types": "Use .js files exclusively (React + Tailwind). No .tsx files.",
+    "components": "Use pure HTML + Tailwind for macro layouts. Use customized Shadcn for micro-interactions (Dialogs, Tooltips, Forms).",
+    "testing": "All buttons, inputs, links, and actionable elements MUST include data-testid (e.g. data-testid='cta-start-working')."
   },
   "instructions_to_main_agent": [
-    "Implement the redesign using the 'Account Group Card' layout defined in this JSON. Abandon the previous flat table with zebra stripes.",
-    "Map over the accounts and render an AccountCard container for each.",
-    "Inside each AccountCard, render the AccountHeader (clickable, routing to `/accounts/{account_id}`) and map over its SKUs to render SKURow components.",
-    "Ensure responsive behavior: On mobile, the SKU row should stack its columns (SKU info on top, Price and Credit below with mobile labels). On desktop, it should use the 12-column grid layout.",
-    "Apply the exact color-coded chips for Gold, Silver, and PET grades as specified in `colors.status`.",
-    "Format the 'Return Credit' in emerald-600 if it exists (>0), otherwise render a slate-300 '—'.",
-    "Wrap the list in the main container and integrate the existing shadcn pagination component below it.",
-    "Implement the staggered entrance micro-animations to align with the 'leaderboard' sibling screens."
+    "1. Discard the old white-card stack layout.",
+    "2. Implement the 12-column Control Room grid. Place the Action Hub in a sticky right rail.",
+    "3. Ensure the Action Hub is visually dominant (use a dark container or a highly saturated border/background) so CTAs are impossible to miss.",
+    "4. Bind dynamic colors to workflow transition buttons based on semantic intent (emerald for positive/progress, rose for block/reject, indigo for review).",
+    "5. Maintain all existing functionalities (file uploads, @mentions, proportional timeline, production conditional rendering) as specified.",
+    "6. Do not use teal (#1B93A4). Stick to Emerald/Forest Green for brand accents.",
+    "7. Ensure all interactive components have data-testid attributes."
   ]
 }
