@@ -1,4 +1,4 @@
-"""Marketing Requests — State-Machine-driven lifecycle router.
+"""Design Requests - New — State-Machine-driven lifecycle router.
 
 This module is fully driven by the State Machine attached to the
 "design_requests_new" workflow. The SM defines:
@@ -9,7 +9,7 @@ This module is fully driven by the State Machine attached to the
 
 A default SM is auto-seeded on first access if none is attached.
 
-Endpoints (prefix `/marketing-requests`):
+Endpoints (prefix `/design-requests-new`):
   POST   /upload                          upload a single file → returns file handle
   GET    /files/{file_id}                 download a file
   POST   /                                create a request (initial state from SM)
@@ -165,7 +165,7 @@ async def _ingest_bytes_as_file(tenant_id: str, current_user: dict, filename: st
     Returns the file record dict."""
     file_id = str(uuid.uuid4())
     safe_name = (filename or "upload.bin").replace("/", "_")
-    path = f"nyla-crm/{tenant_id}/marketing-requests/{file_id}/{safe_name}"
+    path = f"nyla-crm/{tenant_id}/design-requests-new/{file_id}/{safe_name}"
     meta = await put_object(path, data, content_type or "application/octet-stream")
     doc = {
         "id": file_id,
@@ -359,9 +359,9 @@ async def upload_file(
             await ensure_lead_folder(tenant_id, lead_id)
         except Exception:
             pass
-        path = f"{lead_id}/marketing-requests/{file_id}/{safe_name}"
+        path = f"{lead_id}/design-requests-new/{file_id}/{safe_name}"
     else:
-        path = f"nyla-crm/{tenant_id}/marketing-requests/{file_id}/{safe_name}"
+        path = f"nyla-crm/{tenant_id}/design-requests-new/{file_id}/{safe_name}"
 
     try:
         meta = await put_object(path, raw, file.content_type or "application/octet-stream")
@@ -1353,7 +1353,7 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
             recipients = [uid for uid in assign["assignee_user_ids"] if uid and uid != actor_id]
             if recipients:
                 base = os.environ.get("APP_BASE_URL", "").rstrip("/")
-                link = f"{base}/marketing-requests/{request_id}"
+                link = f"{base}/design-requests-new/{request_id}"
                 state_label = target_state.get("label") or target_state["key"]
                 actor = current_user.get("name") or current_user.get("email") or "Someone"
                 await notify_users(
@@ -1376,7 +1376,7 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
     try:
         from utils.sm_notify import dispatch_transition_notifications
         base = os.environ.get("APP_BASE_URL", "").rstrip("/")
-        link = f"{base}/marketing-requests/{request_id}"
+        link = f"{base}/design-requests-new/{request_id}"
         from_state = find_state(sm, transition.get("from_state") or "") or {}
         vars_map = {
             "request_number": doc.get("request_number") or "",
@@ -1470,7 +1470,7 @@ async def add_comment(request_id: str, payload: CommentCreate, current_user: dic
                     user_ids=mention_ids,
                     title=f"{event['user_name']} mentioned you",
                     body=f"{parent.get('request_number')} — {parent.get('title','')[:80]}",
-                    link=f"/marketing-requests/{request_id}",
+                    link=f"/design-requests-new/{request_id}",
                     kind="mention",
                     category="mention",
                     entity_type="marketing_request",
@@ -1562,7 +1562,7 @@ async def add_version_comment(request_id: str, version_id: str, payload: Version
                 user_ids=mention_ids,
                 title=f"{comment['user_name']} mentioned you",
                 body=f"{doc.get('request_number')} — {version.get('version_name','')} comment",
-                link=f"/marketing-requests/{request_id}",
+                link=f"/design-requests-new/{request_id}",
                 kind="mention",
                 category="mention",
                 entity_type="marketing_request",

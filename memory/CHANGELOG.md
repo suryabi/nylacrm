@@ -1,6 +1,14 @@
 # Changelog
 
 
+## 2026-07-04 — New module "Design Requests - New" (full-parity clone) ✅ (testing agent: 11/11 backend + all frontend flows)
+- Built a standalone **Design Requests - New** module: own collections (`design_requests_new`, `design_requests_new_files`), own numbering (**DRN-YYYY-NNNN**), own attached state machine via new workflow key **`design_requests_new`** (auto-seeds "Design Requests - New Lifecycle (default)"; attachable to any SM via Admin → State Machines). Reuses the SAME types & departments masters as Design Requests. Full parity: list+filters, Kanban, create, detail, transitions, file/logo uploads, comments, versions, CSV export, lead hooks.
+- Backend: `routes/design_requests_new.py` (registered at `/api/design-requests-new`), `ensure_default_design_requests_new_sm` + `FIELD_REGISTRY['design_requests_new']` in sm_helpers, WORKFLOW_CATALOG entry. Frontend: `DesignRequestsNew.js`, `NewDesignRequestNew.js`, `DesignRequestNewDetail.js`, `components/marketing/RequestKanbanNew.jsx`; App.js routes + DashboardLayout nav ("Design Requests - New", admins-only).
+- RBAC: added to `role.py` MODULE_CATEGORIES['Marketing'] + MODULE_LABELS + DEFAULT/VIEWER permissions (default **Admins only**: CEO/Director/Admin/System Admin). The per-role toggle now appears in tenant settings → Role Management.
+- Post-review polish: notification deep-links + storage paths now use `/design-requests-new`, module docstring updated, FIELD_REGISTRY entry shallow-copied. Data isolation from the old module verified both directions.
+- KNOWN TECH DEBT: `design_requests_new.py` is a ~1500-line near-verbatim clone of `marketing_requests.py` — future fixes must be applied to both (candidate for extracting shared machinery).
+
+
 ## 2026-07-04 — Attach bottle design to sample request + optional design in proposal ✅ (self-tested: curl + UI)
 - **Request Bottle Sample (option 4)**: the pop-up now shows a checkbox "Also attach the saved bottle design(s) (N)" (only when the lead has saved designs) plus a note "the design team will follow the same design pattern as the attached bottle design". Backend `from-lead/{id}/bottle-sample` accepts `attach_bottle_design` (Form) → attaches the lead's saved design image(s) as references and appends the design-pattern note to requirement_details. Verified: without→refs=0, with→refs=1 + note present.
 - **Proposal**: bottle-design attachment is now OPTIONAL (was always-on). `build_proposal_pdf(..., include_bottle_designs=False)`; `preview` & `generate` endpoints read `include_bottle_designs` from the body. ProposalCustomizeDialog footer has an "Attach bottle design(s) (N)" checkbox (shown when designs exist) that feeds both preview and generate. Verified: preview false→2 pages, true→3 pages with "Proposed Bottle Design" appendix; generate true succeeds.

@@ -255,7 +255,7 @@ FIELD_REGISTRY = {
 }
 
 # "Design Requests - New" reuses the same field set as Design Requests (marketing_requests).
-FIELD_REGISTRY["design_requests_new"] = FIELD_REGISTRY["marketing_requests"]
+FIELD_REGISTRY["design_requests_new"] = list(FIELD_REGISTRY["marketing_requests"])
 
 
 # Operators valid for each field type. Each carries `needs_value` so the UI
