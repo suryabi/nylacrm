@@ -4,7 +4,7 @@ import base64
 import pytest
 import requests
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://revenue-sync-pro-1.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://fmcg-command-center.preview.emergentagent.com').rstrip('/')
 LEAD_ID = '2c609055-1413-4311-be67-6b0ef1b564e8'  # Test Multi Brand Co
 
 # 1x1 transparent PNG data URLs (both variants)

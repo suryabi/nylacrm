@@ -24,7 +24,7 @@ import {
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
   Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
-  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy, Printer, Flame,
+  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy, Printer, Flame, Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -105,6 +105,24 @@ const KIND_META = {
   audio: { Icon: Music, cls: 'text-pink-500' },
   archive: { Icon: FileArchive, cls: 'text-amber-600' },
   file: { Icon: File, cls: 'text-slate-400' },
+};
+
+// Map a workflow transition to a semantic intent color + icon for the Action Hub CTAs.
+const actionMeta = (t) => {
+  const k = `${t.action_key || ''} ${t.action_label || ''} ${t.to_state || ''} ${t.to_state_label || ''}`.toLowerCase();
+  if (/(reject|cancel|block|hold|decline|abort|scrap)/.test(k))
+    return { cls: 'bg-rose-500 hover:bg-rose-400 text-white', Icon: AlertTriangle };
+  if (/(approve|final|complete|accept|sign.?off|ready|done)/.test(k))
+    return { cls: 'bg-emerald-500 hover:bg-emerald-400 text-white', Icon: CheckCircle2 };
+  if (/(review|submit)/.test(k))
+    return { cls: 'bg-indigo-500 hover:bg-indigo-400 text-white', Icon: Eye };
+  if (/(input|change|revis|clarif|need|request|rework|redo)/.test(k))
+    return { cls: 'bg-amber-400 hover:bg-amber-300 text-stone-900', Icon: MessageSquare };
+  if (/(production|print|dispatch|ship|manufactur)/.test(k))
+    return { cls: 'bg-violet-500 hover:bg-violet-400 text-white', Icon: Truck };
+  if (/(start|work|progress|begin|pick|assign)/.test(k))
+    return { cls: 'bg-emerald-400 hover:bg-emerald-300 text-stone-900', Icon: ChevronRight };
+  return { cls: 'bg-white hover:bg-stone-100 text-stone-900', Icon: ChevronRight };
 };
 
 const downloadFileBlob = async (f) => {
@@ -567,7 +585,7 @@ export default function DesignRequestNewDetail() {
   const canSendToPrint = ['final_approved', 'production_in_progress', 'production_completed'].includes(req.current_state_key);
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6" data-testid="mr-detail-page">
+    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 bg-stone-50 min-h-screen" data-testid="mr-detail-page">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => navigate('/design-requests-new')} data-testid="mr-back-btn">
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests - New
@@ -625,19 +643,19 @@ export default function DesignRequestNewDetail() {
 
       {/* Hero header — light, contemporary surface with emerald accents */}
       <div className="relative overflow-hidden rounded-3xl bg-white border border-slate-200/70 p-6 md:p-8 shadow-[0_10px_40px_-15px_rgba(6,78,59,0.18)]" data-testid="mr-hero">
-        {req.created_by_city && (
+        {req.lead_city && (
           <div
             className="absolute top-0 left-0 w-28 h-28 overflow-hidden pointer-events-none z-20"
-            title={`Requestor city: ${req.created_by_city}`}
+            title={`Lead city: ${req.lead_city}`}
             data-testid="mr-city-ribbon"
           >
             <div
               className="absolute top-[22px] -left-[34px] w-[150px] -rotate-45 text-white text-[11px] font-bold uppercase tracking-widest text-center py-1 shadow-md"
-              style={req.created_by_city_color
-                ? { backgroundColor: req.created_by_city_color }
+              style={req.lead_city_color
+                ? { backgroundColor: req.lead_city_color }
                 : { backgroundImage: 'linear-gradient(to right, #0d9488, #059669)' }}
             >
-              {req.created_by_city.slice(0, 3).toUpperCase()}
+              {req.lead_city.slice(0, 3).toUpperCase()}
             </div>
           </div>
         )}
@@ -678,7 +696,7 @@ export default function DesignRequestNewDetail() {
               <div className="hidden sm:flex h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
                 <Sparkles className="h-6 w-6" />
               </div>
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-900 leading-tight">
+              <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-slate-900 leading-tight">
                 {req.request_type_name || 'Untyped Request'}
               </h1>
             </div>
