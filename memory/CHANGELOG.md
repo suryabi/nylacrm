@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-04 — Design Requests Kanban card redesign + "Requested By" filter scoping ✅ (self-tested: curl + screenshots)
+- **Kanban cards** (`RequestKanban.jsx` + `RequestKanbanNew.jsx`, applied to BOTH boards for parity):
+  - Wider columns (`w-72` → `w-80`) and roughly double-height cards.
+  - New **logo band** on the top portion of each card showing the request's attached logo (`req.logo.id` served via `/api/marketing-requests|design-requests-new/files/{id}`, cookie-auth `<img>`); graceful "No logo" placeholder + `onError` hide.
+  - **Corner ribbon now shows the LEAD's city** (was the requestor's city) with the city's ribbon colour; falls back to teal gradient.
+  - **Bottom** shows the requestor's 2-letter initials (enlarged to w-6/h-6), `data-testid="kanban-requestor-initials-{id}"`.
+- **Backend** (`marketing_requests.py` + `design_requests_new.py` `_enrich_requestor_city`): now also attaches `lead_city` + `lead_city_color` (looked up from the associated lead, coloured via `master_cities`). Verified MR-2026-0017 → lead_city "Hyderabad" (#7c3aed).
+- **"Requested By" filter** (`MarketingRequests.js` + `DesignRequestsNew.js`): dropdown now lists only users whose `department` is Sales, Marketing, or Design (handles string or array departments). Verified: distributor/driver users excluded.
+- Verified via screenshots on the Design Requests board (logo card renders with HYD ribbon + SY initials; wider/taller). DRN board shares identical code (no DRN data in preview).
+
+
 ## 2026-07-04 — Invoice download now streams the official Zoho PDF (no self-generated PDF) ✅ (self-tested: curl; live Zoho fetch verifiable only on production)
 - **Request**: Downloading an invoice must return the actual **Zoho Books** invoice PDF — the CRM is fully integrated with Zoho and should never generate its own invoice document.
 - **Backend** (`routes/invoices.py` `GET /{invoice_id}/pdf`): removed the ReportLab-generated PDF entirely. It now resolves the Zoho invoice id (stored `zoho_invoice_id` → `zoho_invoice_mappings` by number → live Zoho lookup) and streams Zoho's rendered PDF via `fetch_invoice_pdf`. The resolved id is cached back on the invoice for faster subsequent downloads. Clear errors: 400 when Zoho isn't connected, 404 when the invoice isn't in Zoho, 502 on Zoho API failure.

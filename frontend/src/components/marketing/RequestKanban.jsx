@@ -4,11 +4,12 @@ import { toast } from 'sonner';
 import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
 import {
   GripVertical, ChevronUp, ChevronDown, Calendar, AlertTriangle,
-  Users, Tag, Clock, Flame,
+  Users, Tag, Clock, Flame, Image as ImageIcon,
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const BACKEND = process.env.REACT_APP_BACKEND_URL;
 const HEAD = () => {
   const t = localStorage.getItem('token');
   return t ? { Authorization: `Bearer ${t}` } : {};
@@ -39,31 +40,55 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
   const urgent = !!req.is_urgent;
   const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : null);
   const leadLabel = req.lead_company || req.lead_name;
+  const logoSrc = req.logo?.id ? `${BACKEND}/api/marketing-requests/files/${req.logo.id}` : null;
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, req)}
       onDragOver={(e) => onDragOver(e, req)}
       onDragEnd={onDragEnd}
-      className={`group relative overflow-hidden rounded-lg p-2.5 ${req.created_by_city ? 'pt-7' : ''} mb-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${urgent ? 'bg-amber-50/60 border-2 border-amber-500 ring-1 ring-amber-300' : 'bg-white border border-slate-200 hover:border-slate-300'} ${dragging ? 'opacity-50' : ''}`}
+      className={`group relative overflow-hidden rounded-lg mb-2 shadow-sm hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${urgent ? 'bg-amber-50/60 border-2 border-amber-500 ring-1 ring-amber-300' : 'bg-white border border-slate-200 hover:border-slate-300'} ${dragging ? 'opacity-50' : ''}`}
       data-testid={`kanban-card-${req.id}`}
     >
-      {req.created_by_city && (
+      {req.lead_city && (
         <div
-          className="absolute top-0 left-0 w-[78px] h-[78px] overflow-hidden pointer-events-none z-10"
-          title={`Requestor city: ${req.created_by_city}`}
+          className="absolute top-0 left-0 w-[86px] h-[86px] overflow-hidden pointer-events-none z-20"
+          title={`Lead city: ${req.lead_city}`}
           data-testid={`kanban-city-ribbon-${req.id}`}
         >
           <div
-            className="absolute top-[13px] -left-[24px] w-[104px] -rotate-45 text-white text-[9px] font-bold uppercase tracking-wider text-center py-[2px] shadow-md"
-            style={req.created_by_city_color
-              ? { backgroundColor: req.created_by_city_color }
+            className="absolute top-[15px] -left-[26px] w-[116px] -rotate-45 text-white text-[10px] font-bold uppercase tracking-wider text-center py-[3px] shadow-md"
+            style={req.lead_city_color
+              ? { backgroundColor: req.lead_city_color }
               : { backgroundImage: 'linear-gradient(to right, #0d9488, #059669)' }}
           >
-            {req.created_by_city.slice(0, 3).toUpperCase()}
+            {req.lead_city.slice(0, 3).toUpperCase()}
           </div>
         </div>
       )}
+
+      {/* Logo band — top portion so users can see the branding */}
+      <div
+        className="relative h-28 w-full bg-slate-50 border-b border-slate-100 flex items-center justify-center overflow-hidden"
+        data-testid={`kanban-card-logo-${req.id}`}
+      >
+        {logoSrc ? (
+          <img
+            src={logoSrc}
+            alt={`${req.request_type_name || 'Request'} logo`}
+            className="max-h-full max-w-full object-contain p-3"
+            loading="lazy"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-slate-300">
+            <ImageIcon className="h-7 w-7" />
+            <span className="text-[10px] font-medium">No logo</span>
+          </div>
+        )}
+      </div>
+
+      <div className="p-2.5">
       <div className="flex items-start gap-1.5">
         <span className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-500 shrink-0" title={`Priority #${index + 1}`}>
           {index + 1}
@@ -133,13 +158,17 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
             ) : <span />}
             {req.created_by_name && (
               <span className="flex items-center gap-1 shrink-0" title={`Raised by ${req.created_by_name}`}>
-                <span className="w-4 h-4 rounded-full bg-emerald-100 flex items-center justify-center text-[8px] font-semibold text-emerald-700">
+                <span
+                  className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-[10px] font-semibold text-emerald-700"
+                  data-testid={`kanban-requestor-initials-${req.id}`}
+                >
                   {initials(req.created_by_name)}
                 </span>
               </span>
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -245,7 +274,7 @@ export default function RequestKanban({ rows, states, navigate }) {
         return (
           <div
             key={s.key}
-            className="flex-shrink-0 w-72"
+            className="flex-shrink-0 w-80"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => onColumnDrop(e, s.key)}
             data-testid={`kanban-column-${s.key}`}

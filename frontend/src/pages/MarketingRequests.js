@@ -358,7 +358,13 @@ export default function MarketingRequests() {
         ]);
         setTypes(t.data?.types || (Array.isArray(t.data) ? t.data : []));
         setDepts(d.data?.departments || []);
-        setUsers((Array.isArray(u.data) ? u.data : []).filter(x => x.is_active !== false));
+        const ALLOWED_DEPTS = ['sales', 'marketing', 'design'];
+        const inAllowedDept = (usr) => {
+          const dep = usr.department;
+          const arr = Array.isArray(dep) ? dep : (dep ? [dep] : []);
+          return arr.some((x) => ALLOWED_DEPTS.includes(String(x).trim().toLowerCase()));
+        };
+        setUsers((Array.isArray(u.data) ? u.data : []).filter(x => x.is_active !== false && inAllowedDept(x)));
       } catch { /* ignore */ }
     })();
   }, []);

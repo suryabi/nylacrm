@@ -309,18 +309,11 @@ async def _can_edit_request(tenant_id: str, user: dict, request_doc: dict) -> bo
 
 
 async def _enrich_requestor_city(rows, tenant_id: str):
-    """Attach the requestor's city, a 3-letter code and the city's ribbon colour
-    (configured in Locations Master) to each request row."""
+    """Attach the requestor's city and the associated lead's city (each with a
+    3-letter code and the city's ribbon colour configured in Locations Master)
+    to each request row."""
     if not rows:
         return rows
-    ids = list({r.get("created_by") for r in rows if r.get("created_by")})
-    if not ids:
-        return rows
-    city_by_id = {}
-    async for u in db.users.find(
-        {"id": {"$in": ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "city": 1}
-    ):
-        city_by_id[u["id"]] = u.get("city")
     # Build a name -> {color, code} map from the cities master (case-insensitive).
     # master_cities is a global master collection (not tenant-scoped).
     color_by_city = {}
@@ -330,11 +323,35 @@ async def _enrich_requestor_city(rows, tenant_id: str):
         nm = (c.get("name") or "").strip().lower()
         if nm:
             color_by_city[nm] = {"color": c.get("color"), "code": c.get("code")}
+
+    def _color_for(city):
+        return color_by_city.get((city or "").strip().lower(), {}).get("color")
+
+    # Requestor city (from the user who raised the request).
+    ids = list({r.get("created_by") for r in rows if r.get("created_by")})
+    city_by_id = {}
+    if ids:
+        async for u in db.users.find(
+            {"id": {"$in": ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "city": 1}
+        ):
+            city_by_id[u["id"]] = u.get("city")
+
+    # Associated lead city (shown on the Kanban corner ribbon).
+    lead_ids = list({r.get("lead_id") for r in rows if r.get("lead_id")})
+    city_by_lead = {}
+    if lead_ids:
+        async for l in db.leads.find(
+            {"id": {"$in": lead_ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "city": 1}
+        ):
+            city_by_lead[l["id"]] = l.get("city")
+
     for r in rows:
         city = city_by_id.get(r.get("created_by"))
         r["created_by_city"] = city
-        meta = color_by_city.get((city or "").strip().lower(), {})
-        r["created_by_city_color"] = meta.get("color")
+        r["created_by_city_color"] = _color_for(city)
+        lead_city = city_by_lead.get(r.get("lead_id"))
+        r["lead_city"] = lead_city
+        r["lead_city_color"] = _color_for(lead_city)
     return rows
 
 
