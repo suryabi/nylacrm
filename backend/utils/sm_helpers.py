@@ -254,6 +254,10 @@ FIELD_REGISTRY = {
     ],
 }
 
+# "Design Requests - New" reuses the same field set as Design Requests (marketing_requests).
+FIELD_REGISTRY["design_requests_new"] = FIELD_REGISTRY["marketing_requests"]
+
+
 # Operators valid for each field type. Each carries `needs_value` so the UI
 # knows whether to render a value input.
 OPERATORS_BY_TYPE = {
@@ -497,6 +501,48 @@ async def ensure_default_marketing_request_sm(tenant_id: str) -> dict:
     await db.state_machines.insert_one(doc)
     doc.pop("_id", None)
     return doc
+
+async def ensure_default_design_requests_new_sm(tenant_id: str) -> dict:
+    """If no state machine is attached to `design_requests_new` for this tenant,
+    seed a default one (reuses the Marketing Request lifecycle template). Returns the attached SM."""
+    sm = await get_attached_state_machine(tenant_id, "design_requests_new")
+    if sm:
+        return sm
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": "Design Requests - New Lifecycle (default)",
+        "code": "DRN_DEFAULT_v1",
+        "description": "Auto-seeded default lifecycle for Design Requests - New. Edit or clone in Admin → State Machines.",
+        "states": [dict(s) for s in _DEFAULT_MR_STATES],
+        "actions": [dict(a) for a in _DEFAULT_MR_ACTIONS],
+        "transitions": [
+            {
+                "auto_assign_mode": None,
+                "auto_assign_user_id": None,
+                "auto_assign_department_id": None,
+                "auto_assign_role": None,
+                "notify_all": True,
+                "comment_required": False,
+                "allowed_role_keys": [],
+                "allowed_department_ids": [],
+                "requestor_only": False,
+                **t,
+            }
+            for t in _DEFAULT_MR_TRANSITIONS
+        ],
+        "applied_to": ["design_requests_new"],
+        "created_at": now,
+        "updated_at": now,
+        "created_by": "system",
+        "updated_by": "system",
+    }
+    await db.state_machines.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
 
 
 

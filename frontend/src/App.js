@@ -148,6 +148,9 @@ import MarketingPostDetail from './pages/MarketingPostDetail';
 import MarketingRequests from './pages/MarketingRequests';
 import NewMarketingRequest from './pages/NewMarketingRequest';
 import MarketingRequestDetail from './pages/MarketingRequestDetail';
+import DesignRequestsNew from './pages/DesignRequestsNew';
+import NewDesignRequestNew from './pages/NewDesignRequestNew';
+import DesignRequestNewDetail from './pages/DesignRequestNewDetail';
 import PrintRequests from './pages/PrintRequests';
 import PrintRequestDetail from './pages/PrintRequestDetail';
 import PrintRequestSettings from './pages/PrintRequestSettings';
@@ -420,6 +423,10 @@ function AppRouter() {
           <Route path="/marketing-requests/new" element={<ProtectedRoute><NewMarketingRequest /></ProtectedRoute>} />
           <Route path="/marketing-requests/:id/edit" element={<ProtectedRoute><NewMarketingRequest /></ProtectedRoute>} />
           <Route path="/marketing-requests/:id" element={<ProtectedRoute><MarketingRequestDetail /></ProtectedRoute>} />
+          <Route path="/design-requests-new" element={<ProtectedRoute moduleKey="design_requests_new"><DesignRequestsNew /></ProtectedRoute>} />
+          <Route path="/design-requests-new/new" element={<ProtectedRoute moduleKey="design_requests_new"><NewDesignRequestNew /></ProtectedRoute>} />
+          <Route path="/design-requests-new/:id/edit" element={<ProtectedRoute moduleKey="design_requests_new"><NewDesignRequestNew /></ProtectedRoute>} />
+          <Route path="/design-requests-new/:id" element={<ProtectedRoute moduleKey="design_requests_new"><DesignRequestNewDetail /></ProtectedRoute>} />
           <Route path="/print-requests" element={<ProtectedRoute moduleKey="print_requests"><PrintRequests /></ProtectedRoute>} />
           <Route path="/print-requests/:id" element={<ProtectedRoute moduleKey="print_requests"><PrintRequestDetail /></ProtectedRoute>} />
           <Route path="/admin/print-settings" element={<ProtectedRoute><PrintRequestSettings /></ProtectedRoute>} />

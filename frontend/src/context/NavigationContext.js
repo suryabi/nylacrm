@@ -137,6 +137,10 @@ export const NavigationProvider = ({ children }) => {
     if (path === '/marketing-requests') return 'Design Requests';
     if (path === '/marketing-requests/new') return 'New Design Request';
     if (path.match(/^\/marketing-requests\/[^/]+$/)) return 'Design Request Details';
+    if (path === '/design-requests-new') return 'Design Requests - New';
+    if (path === '/design-requests-new/new') return 'New Design Request';
+    if (path.match(/^\/design-requests-new\/[^/]+\/edit$/)) return 'Edit Design Request';
+    if (path.match(/^\/design-requests-new\/[^/]+$/)) return 'Design Request Details';
     
     // Default: capitalize path segment
     const segments = path.split('/').filter(Boolean);

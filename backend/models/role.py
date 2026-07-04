@@ -61,6 +61,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     "marketing_calendar": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_masters": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_requests": {"view": True, "create": True, "edit": True, "delete": False},
+    "design_requests_new": {"view": False, "create": False, "edit": False, "delete": False},
     "print_requests": {"view": True, "create": True, "edit": True, "delete": False},
     "master_departments": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_request_types": {"view": False, "create": False, "edit": False, "delete": False},
@@ -145,6 +146,7 @@ VIEWER_PERMISSIONS = {
 # Disable admin modules for viewer
 VIEWER_PERMISSIONS["tenant_settings"] = {"view": False, "create": False, "edit": False, "delete": False}
 VIEWER_PERMISSIONS["team"] = {"view": False, "create": False, "edit": False, "delete": False}
+VIEWER_PERMISSIONS["design_requests_new"] = {"view": False, "create": False, "edit": False, "delete": False}
 
 
 class ModulePermission(BaseModel):
@@ -257,7 +259,7 @@ MODULE_CATEGORIES = {
     "Tools": ["cogs_calculator", "transport_calculator", "sku_management", "bottle_preview", "lead_scoring_model", "gamma_generator"],
     "Documents": ["company_documents", "files_documents"],
     "Requests": ["leaves", "travel_requests", "budget_requests"],
-    "Marketing": ["marketing_calendar", "marketing_masters", "marketing_requests", "print_requests"],
+    "Marketing": ["marketing_calendar", "marketing_masters", "marketing_requests", "design_requests_new", "print_requests"],
     "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories", "cogs_components", "master_departments"],
     "Admin": ["tenant_settings", "api_keys", "sku_replace", "marketing_request_types", "print_request_statuses"],
     "Distribution": ["distributors", "stock_dashboard", "cost_cards", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
@@ -305,6 +307,7 @@ MODULE_LABELS = {
     "marketing_calendar": "Content Calendar",
     "marketing_masters": "Marketing Masters",
     "marketing_requests": "Design Requests",
+    "design_requests_new": "Design Requests - New",
     "master_departments": "Departments",
     "marketing_request_types": "Design Request Types",
     "print_requests": "Print Requests",

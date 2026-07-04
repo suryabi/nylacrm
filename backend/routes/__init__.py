@@ -183,12 +183,14 @@ routes_router.include_router(user_preferences_router, tags=["User Preferences"])
 
 # Marketing Requests — independent lifecycle module (Sales → Marketing → Delivery)
 from .marketing_requests import router as marketing_requests_router
+from .design_requests_new import router as design_requests_new_router
 from .marketing_request_masters import (
     departments_router as master_departments_router,
     types_router as marketing_request_types_router,
     statuses_router as marketing_request_statuses_router,
 )
 routes_router.include_router(marketing_requests_router, prefix="/marketing-requests", tags=["Marketing Requests"])
+routes_router.include_router(design_requests_new_router, prefix="/design-requests-new", tags=["Design Requests - New"])
 routes_router.include_router(master_departments_router, prefix="/master-departments", tags=["Master Departments"])
 routes_router.include_router(marketing_request_types_router, prefix="/marketing-request-types", tags=["Marketing Request Types"])
 routes_router.include_router(marketing_request_statuses_router, prefix="/marketing-request-statuses", tags=["Marketing Request Statuses"])

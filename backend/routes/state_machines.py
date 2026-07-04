@@ -61,6 +61,7 @@ ACTION_CATALOG = [
 # Workflows that can attach a state machine (Phase B will start consuming these).
 WORKFLOW_CATALOG = [
     {"key": "marketing_requests", "label": "Marketing Requests"},
+    {"key": "design_requests_new", "label": "Design Requests - New"},
     {"key": "delivery_orders", "label": "Stock Delivery Requests"},
     {"key": "leads", "label": "Leads"},
     {"key": "tasks", "label": "Tasks"},
