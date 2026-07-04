@@ -438,7 +438,18 @@ export default function InvoicesList() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading invoice:', error);
-      toast.error('Failed to download invoice');
+      let msg = 'Failed to download invoice';
+      try {
+        const data = error?.response?.data;
+        if (data instanceof Blob) {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.detail) msg = parsed.detail;
+        } else if (data?.detail) {
+          msg = data.detail;
+        }
+      } catch (_) { /* keep default message */ }
+      toast.error(msg);
     } finally {
       setDownloadingId(null);
     }

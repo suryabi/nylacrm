@@ -985,6 +985,32 @@ async def fetch_invoice_pdf(tenant_id: str, zoho_invoice_id: str) -> tuple[bytes
     return pdf_resp.content, invoice_number
 
 
+async def find_invoice_id_by_number(tenant_id: str, invoice_number: str) -> Optional[str]:
+    """Resolve a Zoho Books invoice_id from its human-readable invoice_number.
+
+    Used for invoices synced into the CRM (source=external_api) that never
+    stored the Zoho id. Returns the exact-match invoice_id, else None.
+    Raises RuntimeError if Zoho is not connected; ZohoApiError on API failure.
+    """
+    if not invoice_number:
+        return None
+    resp = await _zoho_request(
+        "GET", "/books/v3/invoices",
+        tenant_id=tenant_id,
+        params={"invoice_number": invoice_number},
+    )
+    invoices = resp.get("invoices") or []
+    if not invoices:
+        return None
+    target = str(invoice_number).strip().lower()
+    for inv in invoices:
+        if str(inv.get("invoice_number") or "").strip().lower() == target:
+            return inv.get("invoice_id")
+    # Fall back to the first result when Zoho's search matched loosely.
+    return invoices[0].get("invoice_id")
+
+
+
 async def fetch_delivery_challan_pdf(tenant_id: str, zoho_deliverychallan_id: str) -> tuple[bytes, str]:
     """Download the official delivery-challan PDF from Zoho Books.
 

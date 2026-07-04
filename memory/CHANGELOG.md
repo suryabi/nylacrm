@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-04 — Invoice download now streams the official Zoho PDF (no self-generated PDF) ✅ (self-tested: curl; live Zoho fetch verifiable only on production)
+- **Request**: Downloading an invoice must return the actual **Zoho Books** invoice PDF — the CRM is fully integrated with Zoho and should never generate its own invoice document.
+- **Backend** (`routes/invoices.py` `GET /{invoice_id}/pdf`): removed the ReportLab-generated PDF entirely. It now resolves the Zoho invoice id (stored `zoho_invoice_id` → `zoho_invoice_mappings` by number → live Zoho lookup) and streams Zoho's rendered PDF via `fetch_invoice_pdf`. The resolved id is cached back on the invoice for faster subsequent downloads. Clear errors: 400 when Zoho isn't connected, 404 when the invoice isn't in Zoho, 502 on Zoho API failure.
+- **New helper** (`services/zoho_service.py`): `find_invoice_id_by_number()` → `GET /books/v3/invoices?invoice_number=` resolves the Zoho id for `external_api`-synced invoices that never stored one.
+- **Frontend** (`InvoicesList.js`): download handler now parses the error blob and surfaces the real Zoho message (e.g. "Zoho Books is not connected") instead of a generic toast.
+- Verified in preview (Zoho not connected): invoice without a Zoho id → 400 "Zoho Books is not connected"; unknown invoice → 404. **Actual PDF streaming is verifiable only on production where Zoho is connected.**
+
+
 ## 2026-07-04 — Linked design requests shown in "Customer branding" (Lead page) ✅ (self-tested: curl + screenshot)
 - **Backend** (`routes/marketing_requests.py`): added a `lead_id` query param to `GET /api/marketing-requests` (extended `_build_requests_query` + `list_requests`). Verified: filtering by a lead returns only that lead's requests (1 of 18).
 - **Frontend** (`components/LeadBottleDesigns.js`): new "Design requests" list under the Customer-branding actions — fetches `GET /api/marketing-requests?lead_id={leadId}&no_limit=true` and renders each as request # · type · workflow-state badge (colored by `current_state_color`), clickable → `/marketing-requests/{id}`. Auto-refreshes after raising Neck Tags / Bottle Concept / Physical Sample from the same card. Shows ALL requests tied to the lead (per user choice).
