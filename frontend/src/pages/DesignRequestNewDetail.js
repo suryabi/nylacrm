@@ -585,7 +585,7 @@ export default function DesignRequestNewDetail() {
   const canSendToPrint = ['final_approved', 'production_in_progress', 'production_completed'].includes(req.current_state_key);
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 bg-stone-50 min-h-screen" data-testid="mr-detail-page">
+    <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6 bg-stone-50 min-h-screen" data-testid="mr-detail-page">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => navigate('/design-requests-new')} data-testid="mr-back-btn">
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests - New
@@ -781,52 +781,13 @@ export default function DesignRequestNewDetail() {
         </div>
       </div>
 
-      {/* Action bar — driven by /available-transitions */}
-      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
-        <CardContent className="p-4 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500 mr-1">Actions:</span>
-          {allowedTransitions.length === 0 && blockedTransitions.length === 0 && (
-            <span className="text-xs text-slate-500 italic">(terminal state — no transitions defined)</span>
-          )}
-          {allowedTransitions.map((t) => {
-            const guardBlocked = t.guards_ok === false;
-            return (
-              <Button
-                key={`${t.action_key}-${t.to_state}`}
-                variant="outline"
-                size="sm"
-                onClick={() => onActionClick(t)}
-                disabled={savingTxn || guardBlocked}
-                data-testid={`action-${t.action_key}-btn`}
-                title={guardBlocked ? (t.block_reasons || []).join(' ') : `Moves to: ${t.to_state_label}`}
-                className={guardBlocked ? 'opacity-50' : ''}
-              >
-                <ChevronRight className="h-3.5 w-3.5 mr-1" /> {t.action_label}
-                {((t.required_fields || []).length > 0) && (
-                  <span className="ml-1 text-[9px] text-emerald-600" title="Requires additional info">●</span>
-                )}
-              </Button>
-            );
-          })}
-          {blockedTransitions.map((t) => (
-            <Button
-              key={`${t.action_key}-${t.to_state}-blocked`}
-              variant="outline"
-              size="sm"
-              disabled
-              title={t.requestor_only ? 'Only the requestor can do this' : "You don't have permission for this action"}
-              data-testid={`action-${t.action_key}-blocked`}
-              className="opacity-50"
-            >
-              <ChevronRight className="h-3.5 w-3.5 mr-1" /> {t.action_label}
-            </Button>
-          ))}
-        </CardContent>
-      </Card>
+      {/* Action Hub relocated to the Command Center right rail */}
 
-      {/* Body: Requirement + Inputs · Side panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card className="lg:col-span-2 border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+      {/* Bento — deep content · Command Center */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* LEFT — deep content */}
+        <div className="lg:col-span-8 space-y-5">
+        <Card className="border border-emerald-100/60 rounded-2xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
           <CardContent className="p-5 space-y-4">
             <div>
               <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Requirement</span>
@@ -869,37 +830,7 @@ export default function DesignRequestNewDetail() {
           </CardContent>
         </Card>
 
-        <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
-          <CardContent className="p-5 space-y-3 text-sm">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Lifecycle</span>
-              <p className="text-xs text-slate-700 mt-0.5">{req.state_machine_name || '—'}</p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Created</span>
-              <p className="text-xs text-slate-700 mt-0.5">{fmtDate(req.created_at, 'dd MMM yyyy, hh:mm a')}</p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Last Updated</span>
-              <p className="text-xs text-slate-700 mt-0.5">{fmtDate(req.updated_at, 'dd MMM yyyy, hh:mm a')}</p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Versions</span>
-              <p className="text-xs text-slate-700 mt-0.5">{req.versions?.length || 0} uploaded</p>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Comments</span>
-              <p className="text-xs text-slate-700 mt-0.5">{(req.comments || []).filter(c => c.kind === 'comment').length} added</p>
-            </div>
-            {req.short_timeline_reason && (
-              <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold flex items-center gap-1"><Clock className="h-3 w-3" /> Short Timeline</span>
-                <p className="text-xs text-amber-800 mt-0.5">{req.short_timeline_reason}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+        {/* details relocated to Command Center right rail */}
 
       {/* Production submission */}
       {req.production && (
@@ -1158,6 +1089,102 @@ export default function DesignRequestNewDetail() {
           </div>
         </CardContent>
       </Card>
+        </div>
+
+        {/* RIGHT — Command Center (sticky) */}
+        <div className="lg:col-span-4">
+          <div className="lg:sticky lg:top-6 space-y-5">
+            {/* Action Hub — dark control panel, the hero */}
+            <div className="relative overflow-hidden rounded-2xl bg-stone-900 p-6 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.55)]" data-testid="mr-action-hub">
+              <div
+                className="absolute -right-16 -top-16 w-52 h-52 rounded-full blur-3xl pointer-events-none opacity-40"
+                style={{ backgroundColor: req.current_state_color || '#10b981' }}
+              />
+              <div className="relative">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-stone-400 font-bold mb-2.5">Current State</p>
+                <div className="flex items-center gap-3">
+                  <span className="relative flex h-3 w-3 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ backgroundColor: req.current_state_color || '#10b981' }} />
+                    <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: req.current_state_color || '#10b981' }} />
+                  </span>
+                  <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white leading-tight" data-testid="mr-hub-state">
+                    {req.current_state_label || req.current_state_key}
+                  </h2>
+                </div>
+                {overdue && (
+                  <p className="mt-2 inline-flex items-center gap-1 text-xs text-rose-300 font-medium">
+                    <AlertTriangle className="h-3.5 w-3.5" /> Overdue — due {fmtDate(req.requested_due_date)}
+                  </p>
+                )}
+
+                <p className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-bold mt-6 mb-3">Available Actions</p>
+                <div className="space-y-2.5">
+                  {allowedTransitions.length === 0 && blockedTransitions.length === 0 && (
+                    <div className="rounded-xl border border-stone-700 bg-stone-800/60 px-4 py-4 text-center">
+                      <Lock className="h-5 w-5 mx-auto text-stone-500 mb-1.5" />
+                      <p className="text-xs text-stone-400">Terminal state — no transitions available.</p>
+                    </div>
+                  )}
+                  {allowedTransitions.map((t) => {
+                    const guardBlocked = t.guards_ok === false;
+                    const meta = actionMeta(t);
+                    const ActIcon = meta.Icon;
+                    return (
+                      <button
+                        key={`${t.action_key}-${t.to_state}`}
+                        onClick={() => onActionClick(t)}
+                        disabled={savingTxn || guardBlocked}
+                        title={guardBlocked ? (t.block_reasons || []).join(' ') : `Moves to: ${t.to_state_label}`}
+                        className={`group w-full h-14 rounded-xl px-4 flex items-center gap-3 font-bold text-sm shadow-lg transition-transform active:scale-95 hover:-translate-y-0.5 disabled:opacity-40 disabled:hover:translate-y-0 disabled:cursor-not-allowed ${meta.cls}`}
+                        data-testid={`action-${t.action_key}-btn`}
+                      >
+                        <ActIcon className="h-5 w-5 shrink-0" />
+                        <span className="flex-1 text-left leading-tight">{t.action_label}</span>
+                        {(t.required_fields || []).length > 0 && (
+                          <span className="text-[9px] tracking-widest opacity-80" title="Requires additional info">•••</span>
+                        )}
+                        <ChevronRight className="h-4 w-4 shrink-0 opacity-70 group-hover:translate-x-0.5 transition-transform" />
+                      </button>
+                    );
+                  })}
+                  {blockedTransitions.map((t) => (
+                    <button
+                      key={`${t.action_key}-${t.to_state}-blocked`}
+                      disabled
+                      title={t.requestor_only ? 'Only the requestor can do this' : "You don't have permission for this action"}
+                      className="w-full h-11 rounded-xl px-4 flex items-center gap-3 font-semibold text-sm bg-stone-800 text-stone-500 border border-stone-700 opacity-60 cursor-not-allowed"
+                      data-testid={`action-${t.action_key}-blocked`}
+                    >
+                      <Lock className="h-4 w-4 shrink-0" />
+                      <span className="flex-1 text-left truncate">{t.action_label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Details / meta */}
+            <Card className="border border-emerald-100/60 rounded-2xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]" data-testid="mr-meta-card">
+              <CardContent className="p-5 space-y-3 text-sm">
+                <p className="text-[10px] uppercase tracking-[0.15em] text-emerald-700 font-bold">Details</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                  <div><span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Lifecycle</span><p className="text-xs text-slate-700 mt-0.5">{req.state_machine_name || '—'}</p></div>
+                  <div><span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Versions</span><p className="text-xs text-slate-700 mt-0.5">{req.versions?.length || 0} uploaded</p></div>
+                  <div><span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Created</span><p className="text-xs text-slate-700 mt-0.5">{fmtDate(req.created_at, 'dd MMM yyyy, hh:mm a')}</p></div>
+                  <div><span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Updated</span><p className="text-xs text-slate-700 mt-0.5">{fmtDate(req.updated_at, 'dd MMM yyyy, hh:mm a')}</p></div>
+                  <div><span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Comments</span><p className="text-xs text-slate-700 mt-0.5">{(req.comments || []).filter(c => c.kind === 'comment').length} added</p></div>
+                </div>
+                {req.short_timeline_reason && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5">
+                    <span className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold flex items-center gap-1"><Clock className="h-3 w-3" /> Short Timeline</span>
+                    <p className="text-xs text-amber-800 mt-0.5">{req.short_timeline_reason}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
 
       {/* Transition confirm dialog (only for comment_required transitions) */}
       <Dialog open={!!confirmTxn} onOpenChange={(o) => { if (!o) setConfirmTxn(null); }}>
