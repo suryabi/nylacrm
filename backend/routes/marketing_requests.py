@@ -930,9 +930,11 @@ async def set_request_urgent(request_id: str, payload: UrgentUpdate, current_use
         {"id": request_id, "tenant_id": tenant_id}, {"_id": 0}
     )
     return doc
-def _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by):
+def _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by, lead_id=None):
     """Shared Mongo query builder for the list + export endpoints."""
     q: dict = {"tenant_id": tenant_id}
+    if lead_id:
+        q["lead_id"] = lead_id
     if queue == "my_raised":
         q["created_by"] = current_user.get("id")
     elif queue == "my_assigned":
@@ -976,6 +978,7 @@ async def list_requests(
     request_type_id: Optional[str] = None,
     assigned_department_id: Optional[str] = None,
     created_by: Optional[str] = None,
+    lead_id: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     no_limit: bool = False,
@@ -985,7 +988,7 @@ async def list_requests(
     tenant_id = get_current_tenant_id()
     page = max(page, 1)
 
-    q = _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by)
+    q = _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by, lead_id)
 
     total = await db.marketing_requests.count_documents(q)
     sort_field = sort.lstrip("-+")

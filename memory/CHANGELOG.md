@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-04 — Linked design requests shown in "Customer branding" (Lead page) ✅ (self-tested: curl + screenshot)
+- **Backend** (`routes/marketing_requests.py`): added a `lead_id` query param to `GET /api/marketing-requests` (extended `_build_requests_query` + `list_requests`). Verified: filtering by a lead returns only that lead's requests (1 of 18).
+- **Frontend** (`components/LeadBottleDesigns.js`): new "Design requests" list under the Customer-branding actions — fetches `GET /api/marketing-requests?lead_id={leadId}&no_limit=true` and renders each as request # · type · workflow-state badge (colored by `current_state_color`), clickable → `/marketing-requests/{id}`. Auto-refreshes after raising Neck Tags / Bottle Concept / Physical Sample from the same card. Shows ALL requests tied to the lead (per user choice).
+- Verified on lead "The Rameshwaram Cafe": MR-2026-0017 renders with a "Submitted" status badge and navigates on click.
+
+
 
 ## 2026-07-04 — New module "Design Requests - New" (full-parity clone) ✅ (testing agent: 11/11 backend + all frontend flows)
 - Built a standalone **Design Requests - New** module: own collections (`design_requests_new`, `design_requests_new_files`), own numbering (**DRN-YYYY-NNNN**), own attached state machine via new workflow key **`design_requests_new`** (auto-seeds "Design Requests - New Lifecycle (default)"; attachable to any SM via Admin → State Machines). Reuses the SAME types & departments masters as Design Requests. Full parity: list+filters, Kanban, create, detail, transitions, file/logo uploads, comments, versions, CSV export, lead hooks.

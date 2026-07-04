@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { Sparkles, Download, Trash2, Eye, Loader2, Tag, Wine, FileImage, FlaskConical, UploadCloud } from 'lucide-react';
+import { Sparkles, Download, Trash2, Eye, Loader2, Tag, Wine, FileImage, FlaskConical, UploadCloud, ClipboardList, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -37,6 +37,8 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   const [sampleFile, setSampleFile] = useState(null);
   const [attachDesign, setAttachDesign] = useState(false);
   const [submittingSample, setSubmittingSample] = useState(false);
+  const [requests, setRequests] = useState([]);
+  const [requestsLoading, setRequestsLoading] = useState(true);
 
   const fetchDesigns = async () => {
     try {
@@ -49,8 +51,22 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
     }
   };
 
+  const fetchRequests = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/marketing-requests`, {
+        params: { lead_id: leadId, no_limit: true },
+        withCredentials: true,
+      });
+      setRequests(res.data?.items || []);
+    } catch (e) {
+      setRequests([]);
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (leadId) fetchDesigns();
+    if (leadId) { fetchDesigns(); fetchRequests(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]);
 
@@ -107,6 +123,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       toast.success(`${label} request ${num || ''} created`, {
         action: rid ? { label: 'View', onClick: () => navigate(`/marketing-requests/${rid}`) } : undefined,
       });
+      fetchRequests();
     } catch (e) {
       toast.error(e.response?.data?.detail || `Failed to create ${label.toLowerCase()} request`);
     } finally {
@@ -147,6 +164,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       toast.success(`Bottle sample request ${num || ''} created`, {
         action: rid ? { label: 'View', onClick: () => navigate(`/marketing-requests/${rid}`) } : undefined,
       });
+      fetchRequests();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to create bottle sample request');
     } finally {
@@ -223,6 +241,53 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
           </span>
         </Button>
       </div>
+
+      {/* Linked design requests raised for this lead */}
+      {!requestsLoading && requests.length > 0 && (
+        <div className="mb-5" data-testid="lead-design-requests">
+          <div className="flex items-center gap-2 mb-2">
+            <ClipboardList className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">Design requests</h3>
+            <Badge variant="secondary" data-testid="lead-design-requests-count">{requests.length}</Badge>
+          </div>
+          <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
+            {requests.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => navigate(`/marketing-requests/${r.id}`)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
+                data-testid={`lead-design-request-${r.id}`}
+                title="Open request"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-primary truncate">{r.request_number}</span>
+                    {r.is_urgent && (
+                      <Badge className="text-[10px] font-normal bg-red-100 text-red-700 hover:bg-red-100">Urgent</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {r.request_type_name || r.title || 'Design request'}
+                  </p>
+                </div>
+                <Badge
+                  variant="outline"
+                  className="text-[11px] font-medium shrink-0"
+                  style={{
+                    color: r.current_state_color || undefined,
+                    borderColor: r.current_state_color ? `${r.current_state_color}66` : undefined,
+                  }}
+                  data-testid={`lead-design-request-status-${r.id}`}
+                >
+                  {r.current_state_label || r.current_state_key || '—'}
+                </Badge>
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-10 text-muted-foreground" data-testid="bottle-designs-loading">
