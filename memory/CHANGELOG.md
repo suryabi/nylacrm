@@ -1,6 +1,12 @@
 # Changelog
 
 
+## 2026-07-04 — Renamed bottle design-request types + confirmed Customer branding mapping ✅ (self-tested: curl + UI)
+- Renamed two Design Request types (per user): "Bottle Designs - No Samples Required" → **"Request Bottle Design Concept"**, "Bottle Designs - Physical Samples Required" → **"Request Physical Sample"** ("Neck Tags" kept). Updated `DEFAULT_REQUEST_TYPES` seed + backend constants (`BOTTLE_DESIGN_TYPE`, `BOTTLE_SAMPLE_TYPE`).
+- Migration across all tenants: renamed the type master docs (2 tenants each) and updated the denormalized `request_type_name` on 17 existing requests. Verified no duplicate type names remain; `_seed_default_types` won't recreate the old names.
+- Customer branding mapping now: Design Neck Tags → **Neck Tags**; Create Bottle Design → Bottle Preview (no request); Request Bottle Design (Concept) → **Request Bottle Design Concept**; Request Physical Sample → **Request Physical Sample**. All lead requests assigned to **Design**. UI label updated to "Request Bottle Design (Concept)". Verified all 3 endpoints resolve the renamed types; test data cleaned up.
+
+
 ## 2026-07-04 — "Customer branding" section on Lead page with 4 actions ✅ (self-tested: curl + UI)
 - Renamed the Lead-page "Bottle Designs" section to **"Customer branding"** with four actions (saved-designs grid retained below):
   1. **Design Neck Tags** — creates a "Neck Tags" request with the lead's logo (logo mandatory).

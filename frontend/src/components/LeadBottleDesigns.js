@@ -202,7 +202,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
           {busyAction === 'bottle-design'
             ? <Loader2 className="h-4 w-4 mr-2 animate-spin shrink-0" />
             : <FileImage className="h-4 w-4 mr-2 shrink-0 text-primary" />}
-          <span className="text-left leading-tight">Request Bottle Design
+          <span className="text-left leading-tight">Request Bottle Design (Concept)
             <span className="block text-[11px] font-normal text-muted-foreground">Raise a design request (uses the lead's logo)</span>
           </span>
         </Button>

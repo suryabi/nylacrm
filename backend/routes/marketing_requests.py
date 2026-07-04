@@ -558,8 +558,8 @@ async def create_request(payload: MarketingRequestCreate, current_user: dict = D
 # Convenience creators — auto-create a design request from a Lead / Bottle Preview
 # ──────────────────────────────────────────────────────────────
 NECK_TAGS_TYPE = "Neck Tags"
-BOTTLE_SAMPLE_TYPE = "Bottle Designs - Physical Samples Required"
-BOTTLE_DESIGN_TYPE = "Bottle Designs - No Samples Required"
+BOTTLE_SAMPLE_TYPE = "Request Physical Sample"
+BOTTLE_DESIGN_TYPE = "Request Bottle Design Concept"
 DEFAULT_DESIGN_DEPT = "Design"
 
 

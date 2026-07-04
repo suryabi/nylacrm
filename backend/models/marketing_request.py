@@ -275,8 +275,8 @@ LIFECYCLE_STATUSES = [
 
 DEFAULT_REQUEST_TYPES = [
     {"name": "Neck Tags",                                       "design_lead_time_days": 5,  "production_lead_time_days": 10},
-    {"name": "Bottle Designs - Physical Samples Required",      "design_lead_time_days": 10, "production_lead_time_days": 20},
-    {"name": "Bottle Designs - No Samples Required",            "design_lead_time_days": 7,  "production_lead_time_days": 14},
+    {"name": "Request Physical Sample",                         "design_lead_time_days": 10, "production_lead_time_days": 20},
+    {"name": "Request Bottle Design Concept",                   "design_lead_time_days": 7,  "production_lead_time_days": 14},
     {"name": "Presentation",                                    "design_lead_time_days": 3,  "production_lead_time_days": 0},
     {"name": "Standees",                                        "design_lead_time_days": 5,  "production_lead_time_days": 7},
     {"name": "Others",                                          "design_lead_time_days": 5,  "production_lead_time_days": 7},
