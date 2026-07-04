@@ -732,7 +732,7 @@ def _needs_total(tpl) -> bool:
 
 
 
-def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
+def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list, include_bottle_designs: bool = False) -> bytes:
     template = _normalize(template)
     pal = template.get("colors", {})
     c_accent = _color(pal.get("accent"), ACCENT)
@@ -802,26 +802,28 @@ def build_proposal_pdf(lead: dict, template: dict, pricing_rows: list) -> bytes:
             return fallback
 
     # Collect the lead's saved bottle designs (clean variant preferred) to append
-    # after the proposal content. Newest first. Failures never break the proposal.
+    # after the proposal content — only when the user opted in. Newest first.
+    # Failures never break the proposal.
     _design_imgs = []
-    try:
-        from object_storage import get_object as _os_get
-        _bd = sorted(
-            (lead.get("bottle_designs") or []),
-            key=lambda d: d.get("created_at") or "",
-            reverse=True,
-        )
-        for d in _bd:
-            path = d.get("clean_storage_path") or d.get("image_storage_path")
-            if not path:
-                continue
-            try:
-                _data, _ct = _os_get(path)
-                _design_imgs.append((d, ImageReader(io.BytesIO(_data))))
-            except Exception:
-                pass
-    except Exception:
-        pass
+    if include_bottle_designs:
+        try:
+            from object_storage import get_object as _os_get
+            _bd = sorted(
+                (lead.get("bottle_designs") or []),
+                key=lambda d: d.get("created_at") or "",
+                reverse=True,
+            )
+            for d in _bd:
+                path = d.get("clean_storage_path") or d.get("image_storage_path")
+                if not path:
+                    continue
+                try:
+                    _data, _ct = _os_get(path)
+                    _design_imgs.append((d, ImageReader(io.BytesIO(_data))))
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def make_story():
         story = [Paragraph(ctx["date"], date_s), Spacer(1, 2 * mm),

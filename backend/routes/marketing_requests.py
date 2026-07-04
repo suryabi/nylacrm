@@ -32,7 +32,7 @@ import io
 import re
 import base64
 
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Query, Response
 from pydantic import BaseModel
 
 from database import db
@@ -668,10 +668,12 @@ async def _create_lead_logo_request(lead_id: str, current_user: dict, *,
 async def create_lead_bottle_sample_request(
     lead_id: str,
     file: UploadFile = File(...),
+    attach_bottle_design: bool = Form(False),
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a 'Bottle Designs - Physical Samples Required' request for a lead.
-    The ORIGINAL logo must be uploaded (PDF or ZIP) and is attached to the request."""
+    """Create a 'Request Physical Sample' request for a lead. The ORIGINAL logo must be
+    uploaded (PDF or ZIP). Optionally also attach the lead's saved bottle design(s) so the
+    design/production team follows the approved design pattern."""
     tenant_id = get_current_tenant_id()
     lead = await db.leads.find_one({"id": lead_id, "tenant_id": tenant_id}, {"_id": 0})
     if not lead:
@@ -693,6 +695,26 @@ async def create_lead_bottle_sample_request(
     )
     logo_doc = StoredFile(**file_rec).model_dump()
 
+    # Optionally attach the lead's saved bottle design(s) as references.
+    ref_docs = []
+    if attach_bottle_design:
+        designs = lead.get("bottle_designs") or []
+        from object_storage import get_object as _os_get
+        for i, d in enumerate(designs):
+            path = d.get("clean_storage_path") or d.get("image_storage_path")
+            if not path:
+                continue
+            try:
+                img_bytes, ict = _os_get(path)
+            except Exception:
+                logger.warning("Could not load saved bottle design %s for sample request", d.get("id"))
+                continue
+            drec = await _ingest_bytes_as_file(
+                tenant_id, current_user,
+                f"{company}-bottle-design-{i + 1}.png", img_bytes, ict or "image/png",
+            )
+            ref_docs.append(StoredFile(**drec).model_dump())
+
     type_doc = await _resolve_type_by_name(tenant_id, BOTTLE_SAMPLE_TYPE)
     if not type_doc:
         raise HTTPException(500, f"'{BOTTLE_SAMPLE_TYPE}' request type is not configured")
@@ -705,12 +727,17 @@ async def create_lead_bottle_sample_request(
         f"{(' (' + lead.get('lead_id') + ')') if lead.get('lead_id') else ''}. "
         f"The original logo ({ext.upper()}) is attached to this request."
     )
+    if ref_docs:
+        details += (
+            f" The client-approved bottle design is also attached — "
+            f"the design/production team must follow the same design pattern shown in the attached design."
+        )
     return await _insert_request_doc(
         tenant_id, current_user,
         type_doc=type_doc, dept_doc=dept_doc,
         requested_due_date=_min_due_date(type_doc),
         requirement_details=details,
-        lead=lead, logo_doc=logo_doc,
+        lead=lead, logo_doc=logo_doc, ref_docs=ref_docs,
         title=f"Bottle Sample — {company}",
     )
 

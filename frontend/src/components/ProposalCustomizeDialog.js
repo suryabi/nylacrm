@@ -5,6 +5,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from './ui/dialog';
 import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
@@ -40,6 +41,8 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
   const [dirty, setDirty] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [attachDesigns, setAttachDesigns] = useState(false);
+  const [designCount, setDesignCount] = useState(0);
   const templateRef = useRef(null);
   const urlRef = useRef(null);
 
@@ -59,6 +62,12 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
       const ov = res.data.override;
       const tpl = res.data.template;
       seedFrom(ov?.title?.text_template || tpl?.title?.text_template, ov?.sections || tpl?.sections);
+      try {
+        const bd = await axios.get(`${API_URL}/leads/${leadId}/bottle-designs`, { withCredentials: true });
+        setDesignCount((bd.data?.designs || []).length);
+      } catch {
+        setDesignCount(0);
+      }
     } catch (e) {
       toast.error('Failed to load proposal template');
     } finally {
@@ -96,7 +105,7 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
     try {
       const res = await axios.post(
         `${API_URL}/leads/${leadId}/proposal/preview`,
-        { template_id: templateId, override: buildOverride() },
+        { template_id: templateId, override: buildOverride(), include_bottle_designs: attachDesigns },
         { withCredentials: true, responseType: 'blob' }
       );
       const url = URL.createObjectURL(res.data);
@@ -109,7 +118,7 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
     } finally {
       setPreviewLoading(false);
     }
-  }, [leadId, buildOverride, templateId]);
+  }, [leadId, buildOverride, templateId, attachDesigns]);
 
   // initial preview once the dialog finishes loading (no real-time refresh after)
   useEffect(() => {
@@ -141,7 +150,7 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
     setGenerating(true);
     try {
       await axios.put(`${API_URL}/leads/${leadId}/proposal/customization`, { template_id: templateId, override: buildOverride() }, { withCredentials: true });
-      const res = await axios.post(`${API_URL}/leads/${leadId}/proposal/generate`, {}, { withCredentials: true });
+      const res = await axios.post(`${API_URL}/leads/${leadId}/proposal/generate`, { include_bottle_designs: attachDesigns }, { withCredentials: true });
       toast.success(res.data.message || 'Proposal generated');
       onGenerated?.();
       onOpenChange(false);
@@ -319,6 +328,16 @@ export default function ProposalCustomizeDialog({ leadId, open, onOpenChange, ha
           <Button variant="ghost" className="text-muted-foreground" onClick={handleReset} disabled={loading} data-testid="customize-reset-btn">
             <RotateCcw className="h-4 w-4 mr-1.5" /> Reset to company template
           </Button>
+          {designCount > 0 && (
+            <label className="flex items-center gap-2 cursor-pointer text-sm" data-testid="proposal-attach-design-row">
+              <Checkbox
+                checked={attachDesigns}
+                onCheckedChange={(v) => { setAttachDesigns(!!v); setDirty(true); }}
+                data-testid="proposal-attach-design-checkbox"
+              />
+              <span>Attach bottle design{designCount > 1 ? 's' : ''} <span className="text-muted-foreground">({designCount})</span></span>
+            </label>
+          )}
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={handleSaveDraft} disabled={loading || saving} data-testid="customize-save-btn">
               {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />} Save

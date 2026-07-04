@@ -230,16 +230,17 @@ async def preview_lead_proposal(lead_id: str, request: Request, current_user: di
         body = {}
     override = body.get('override', lead.get('proposal_override'))
     template_id = body.get('template_id', lead.get('proposal_template_id'))
+    include_designs = bool(body.get('include_bottle_designs', False))
     template = await resolve_template(get_tdb(), template_id)
     template = merge_override(template, override)
     pricing_rows = await build_pricing_rows(get_tdb(), lead)
-    pdf_bytes = build_proposal_pdf(lead, template, pricing_rows)
+    pdf_bytes = build_proposal_pdf(lead, template, pricing_rows, include_bottle_designs=include_designs)
     return Response(content=pdf_bytes, media_type='application/pdf',
                     headers={'Content-Disposition': 'inline; filename="proposal-preview.pdf"'})
 
 
 @router.post("/leads/{lead_id}/proposal/generate")
-async def generate_lead_proposal(lead_id: str, current_user: dict = Depends(get_current_user)):
+async def generate_lead_proposal(lead_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     """Auto-generate a branded proposal PDF from the lead (company name + proposed
     SKUs/pricing) using the lead's chosen (or default) proposal template + override."""
     from services.proposal_pdf import resolve_template, build_pricing_rows, build_proposal_pdf, merge_override
@@ -249,11 +250,17 @@ async def generate_lead_proposal(lead_id: str, current_user: dict = Depends(get_
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
 
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    include_designs = bool(body.get('include_bottle_designs', False))
+
     template = await resolve_template(get_tdb(), lead.get('proposal_template_id'))
     template_name = template.get('name')
     template = merge_override(template, lead.get('proposal_override'))
     pricing_rows = await build_pricing_rows(get_tdb(), lead)
-    pdf_bytes = build_proposal_pdf(lead, template, pricing_rows)
+    pdf_bytes = build_proposal_pdf(lead, template, pricing_rows, include_bottle_designs=include_designs)
 
     company = (lead.get('company') or 'Proposal').strip().replace('/', '-').replace(' ', '_')
     file_name = f"Nyla_{company}_Proposal.pdf"

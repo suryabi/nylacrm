@@ -1,6 +1,11 @@
 # Changelog
 
 
+## 2026-07-04 — Attach bottle design to sample request + optional design in proposal ✅ (self-tested: curl + UI)
+- **Request Bottle Sample (option 4)**: the pop-up now shows a checkbox "Also attach the saved bottle design(s) (N)" (only when the lead has saved designs) plus a note "the design team will follow the same design pattern as the attached bottle design". Backend `from-lead/{id}/bottle-sample` accepts `attach_bottle_design` (Form) → attaches the lead's saved design image(s) as references and appends the design-pattern note to requirement_details. Verified: without→refs=0, with→refs=1 + note present.
+- **Proposal**: bottle-design attachment is now OPTIONAL (was always-on). `build_proposal_pdf(..., include_bottle_designs=False)`; `preview` & `generate` endpoints read `include_bottle_designs` from the body. ProposalCustomizeDialog footer has an "Attach bottle design(s) (N)" checkbox (shown when designs exist) that feeds both preview and generate. Verified: preview false→2 pages, true→3 pages with "Proposed Bottle Design" appendix; generate true succeeds.
+
+
 ## 2026-07-04 — Renamed bottle design-request types + confirmed Customer branding mapping ✅ (self-tested: curl + UI)
 - Renamed two Design Request types (per user): "Bottle Designs - No Samples Required" → **"Request Bottle Design Concept"**, "Bottle Designs - Physical Samples Required" → **"Request Physical Sample"** ("Neck Tags" kept). Updated `DEFAULT_REQUEST_TYPES` seed + backend constants (`BOTTLE_DESIGN_TYPE`, `BOTTLE_SAMPLE_TYPE`).
 - Migration across all tenants: renamed the type master docs (2 tenants each) and updated the denormalized `request_type_name` on 17 existing requests. Verified no duplicate type names remain; `_seed_default_types` won't recreate the old names.

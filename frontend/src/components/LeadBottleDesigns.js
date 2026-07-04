@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 import {
   AlertDialog,
@@ -34,6 +35,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   const [busyAction, setBusyAction] = useState(null); // 'neck-tags' | 'bottle-design'
   const [sampleOpen, setSampleOpen] = useState(false);
   const [sampleFile, setSampleFile] = useState(null);
+  const [attachDesign, setAttachDesign] = useState(false);
   const [submittingSample, setSubmittingSample] = useState(false);
 
   const fetchDesigns = async () => {
@@ -131,6 +133,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
     try {
       const fd = new FormData();
       fd.append('file', sampleFile);
+      fd.append('attach_bottle_design', attachDesign ? 'true' : 'false');
       const res = await axios.post(
         `${API_URL}/marketing-requests/from-lead/${leadId}/bottle-sample`,
         fd,
@@ -140,6 +143,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       const rid = res.data?.id;
       setSampleOpen(false);
       setSampleFile(null);
+      setAttachDesign(false);
       toast.success(`Bottle sample request ${num || ''} created`, {
         action: rid ? { label: 'View', onClick: () => navigate(`/marketing-requests/${rid}`) } : undefined,
       });
@@ -310,7 +314,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       )}
 
       {/* Request bottle sample — upload original logo (PDF/ZIP) */}
-      <Dialog open={sampleOpen} onOpenChange={(o) => { setSampleOpen(o); if (!o) setSampleFile(null); }}>
+      <Dialog open={sampleOpen} onOpenChange={(o) => { setSampleOpen(o); if (!o) { setSampleFile(null); setAttachDesign(false); } }}>
         <DialogContent className="max-w-md" data-testid="bottle-sample-dialog">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -345,6 +349,31 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
                 data-testid="bottle-sample-file-input"
               />
             </label>
+
+            {designs.length > 0 && (
+              <div className="rounded-xl border border-border bg-muted/20 p-3">
+                <label className="flex items-start gap-2.5 cursor-pointer" data-testid="attach-bottle-design-row">
+                  <Checkbox
+                    checked={attachDesign}
+                    onCheckedChange={(v) => setAttachDesign(!!v)}
+                    className="mt-0.5"
+                    data-testid="attach-bottle-design-checkbox"
+                  />
+                  <span className="text-sm leading-tight">
+                    Also attach the saved bottle design{designs.length > 1 ? 's' : ''}
+                    <span className="text-muted-foreground"> ({designs.length})</span>
+                    <span className="block text-[11px] font-normal text-muted-foreground mt-0.5">
+                      Include the client-approved bottle design with this request.
+                    </span>
+                  </span>
+                </label>
+                {attachDesign && (
+                  <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-md px-2.5 py-1.5" data-testid="attach-bottle-design-note">
+                    Note: the design team will follow the same design pattern as the attached bottle design.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSampleOpen(false)} disabled={submittingSample} data-testid="bottle-sample-cancel">
