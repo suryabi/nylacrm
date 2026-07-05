@@ -385,6 +385,22 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
     const conds = (g.conditions || []).filter((_, i) => i !== ci);
     setGuards(idx, conds.length ? { ...g, conditions: conds } : null);
   };
+
+  // ── "Require a chosen work version" — friendly toggle over the guard engine.
+  // It manages a single guard condition: approved_versions has any (not_empty).
+  const CHOSEN_VER_GUARD = { field: 'approved_versions', op: 'not_empty' };
+  const supportsChosenVersion = fieldCatalog.fields.some((f) => f.key === 'approved_versions');
+  const isChosenVersionCond = (c) => c?.field === 'approved_versions' && c?.op === 'not_empty';
+  const hasChosenVersionGuard = (t) => (t?.guards?.conditions || []).some(isChosenVersionCond);
+  const toggleChosenVersionGuard = (idx, on) => {
+    const g = sm.transitions[idx].guards || { match: 'all', conditions: [] };
+    let conds = (g.conditions || []).filter((c) => !isChosenVersionCond(c));
+    if (on) {
+      conds = [...conds, { ...CHOSEN_VER_GUARD, value: '', message: 'Choose a work version before this action.' }];
+    }
+    setGuards(idx, conds.length ? { ...g, match: g.match || 'all', conditions: conds } : null);
+  };
+
   // Convert an applies_when multiselect (by request type) ↔ stored shape
   const appliesTypes = (rule) => rule?.applies_when?.request_type_name || [];
   const setAppliesTypes = (arr) => (arr && arr.length ? { request_type_name: arr } : null);
@@ -761,6 +777,16 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                       />
                       <span>Notify assignee (in-app + email when this transition assigns someone)</span>
                     </label>
+                    {supportsChosenVersion && (
+                      <label className="flex items-center gap-2">
+                        <Checkbox
+                          checked={hasChosenVersionGuard(t)}
+                          onCheckedChange={(v) => toggleChosenVersionGuard(idx, !!v)}
+                          data-testid={`txn-require-chosen-version-${idx}`}
+                        />
+                        <span>Require a chosen work version (blocks this action until a design is chosen)</span>
+                      </label>
+                    )}
                   </div>
 
                   {/* ── Notifications (channels + template + recipients) ─── */}

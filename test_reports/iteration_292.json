@@ -1,0 +1,58 @@
+{
+  "summary": "Frontend-only validation of the Design Requests 'Choose this design' rename + workflow guard (approved_versions:not_empty) on the nyla-air-water tenant. All three feature checkpoints pass end-to-end: version-card labels, in_review guard enforcement, and the workflow-builder checkbox.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification": {
+    "workflow_builder": {
+      "sm_opened": "Design Requests - New Lifecycle (default)",
+      "internal_approve_row_idx": 5,
+      "final_approve_row_idx": 7,
+      "guard_summary_badge_visible": "Blocked unless: Approved work versions has any (shown on both Internal Approve and Final Approve rows)",
+      "txn-require-chosen-version-5": "data-state=checked (pre-applied)",
+      "txn-require-chosen-version-7": "data-state=checked (pre-applied)",
+      "uncheck_recheck_no_error": true,
+      "save_persistence": "Toast 'Saved ✔' shown; page returned to SM list on save"
+    },
+    "version_card_labels": {
+      "request": "MR-2026-0006 (id 537081ec-e022-4d26-a39c-25045cf2e6ee) — Neck Tags",
+      "before_choose": {
+        "approve_btn_testid": "version-approve-btn-36e81b38-b0b0-4bc2-8f62-4d389ab87bac",
+        "approve_btn_text": "Choose this design",
+        "chosen_badge_present": false,
+        "revert_btn_present": false
+      },
+      "after_choose": {
+        "chosen_badge_testid": "version-approved-badge-36e81b38-b0b0-4bc2-8f62-4d389ab87bac",
+        "chosen_badge_text": "Chosen by Surya Yadavalli",
+        "revert_btn_testid": "version-revert-btn-36e81b38-b0b0-4bc2-8f62-4d389ab87bac",
+        "revert_btn_text": "Unselect"
+      }
+    },
+    "in_review_enforcement": {
+      "state_before_choose": "In Review",
+      "internal_approve_disabled_before_choose": true,
+      "internal_approve_tooltip_before_choose": "Choose a work version before this action.",
+      "state_after_forced_click_without_choose": "In Review (unchanged — guard held server-side and client-side)",
+      "state_after_choose_then_approve": "Approved (Internal)",
+      "internal_approve_after_choose": {"disabled": false, "title": "Moves to: Approved (Internal)"}
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DesignRequestNewDetail render throws a React key warning: 'Each child in a list should have a unique key prop.' This is not a blocker but should be fixed by adding stable keys in one of the .map(...) blocks in DesignRequestNewDetail.js.",
+    "Login response returns 'session_token' (not 'access_token'/'token') — worth noting for the pytest template in guidelines but functionally correct."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% (all 3 feature checkpoints verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, nyla-air-water)",
+  "seed_data_creation": "Used existing In-Progress request MR-2026-0006 (id 537081ec-e022-4d26-a39c-25045cf2e6ee). Added one work version V1 with link 'https://example.com/design-v1' and comment 'v1 test comment'. Drove the state: In Progress -> In Review -> Approved (Internal). The version is currently marked as Chosen (approved_versions=[V1]). State was NOT reverted (no reverse transition exists back to In Progress without changes). If required, a subsequent 'Request Revisions' action can bring it back to In Progress.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "State-machine builder: transitions on 'Design Requests - New Lifecycle (default)' expose expand toggles via data-testid transition-options-<idx>. The require-chosen-version checkbox uses data-testid txn-require-chosen-version-<idx>. For the DRN seed the idx are 5=Internal Approve (approve, in_review->approved_internal) and 7=Final Approve (final_approve, approved_internal->final_approved), both pre-checked. Guard summary chip 'Blocked unless: Approved work versions has any' appears under those two rows via data-testid guard-summary-<idx>. On the request detail page, action buttons use data-testid action-<action_key>-btn; guard-blocked buttons stay in the allowedTransitions list but are disabled with the block reason as tooltip. Toaster is Sonner — toasts are inside .Toaster > *.",
+  "rca of the issue": "N/A — feature works as designed."
+}

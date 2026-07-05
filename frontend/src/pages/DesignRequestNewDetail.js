@@ -879,7 +879,7 @@ export default function DesignRequestNewDetail() {
                       {v.version_name}
                       {v.is_approved && (
                         <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] gap-1" data-testid={`version-approved-badge-${v.id}`}>
-                          <CheckCircle2 className="h-3 w-3" /> Approved{v.approved_by_name ? ` by ${v.approved_by_name}` : ''}
+                          <CheckCircle2 className="h-3 w-3" /> Chosen{v.approved_by_name ? ` by ${v.approved_by_name}` : ''}
                         </Badge>
                       )}
                     </span>
@@ -908,7 +908,7 @@ export default function DesignRequestNewDetail() {
                         disabled={verBusy[v.id]}
                         data-testid={`version-revert-btn-${v.id}`}
                       >
-                        <RotateCcw className="h-3.5 w-3.5 mr-1" /> Revert approval
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" /> Unselect
                       </Button>
                     ) : (
                       <Button
