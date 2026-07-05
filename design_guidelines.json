@@ -1,89 +1,145 @@
 {
-  "identity": "E1 - The Anti-AI Designer",
-  "theme": "Light",
-  "archetype": "Archetype 4 (Swiss & High-Contrast) + Organic Emerald Accents",
-  "design_strategy": {
-    "overview": "Non-traditional Bento / Control Room Grid. Discard the stack of white cards. The 'Current State + Actions' zone is the absolute hero, visually distinct through stark contrast (dark or high-saturation background) and oversized, brightly colored transition CTAs.",
-    "layout_grid": "12-column bento. Left (lg:col-span-8) for deep content (Brief, Versions, Activity). Right (lg:col-span-4) acts as a sticky 'Command Center' containing the Hero Action Hub, Meta, and Status History.",
-    "spacing": "Generous and asymmetrical. Use p-8 or p-12 for major content zones. Nested elements get tighter p-4 to p-6."
+  "project_context": {
+    "domain": "SaaS CRM / Workflow Dashboard",
+    "theme": "Light",
+    "archetype": "Archetype 4 (Swiss & High-Contrast) blended with subtle Archetype 1 (Organic/FMCG context)",
+    "description": "Redesigning the List view of 'Design Requests - New' to reduce cognitive overload, consolidate scattered controls, and create a highly scannable, contemporary data table while preserving the existing Kanban board."
   },
   "typography": {
-    "strategy": "High contrast, structural.",
     "font_families": {
-      "headings": "Cabinet Grotesk, Clash Display, or Inter (Bold, tight tracking)",
-      "body": "IBM Plex Sans or Inter (Highly legible)",
-      "mono": "JetBrains Mono (For reference numbers, metadata)"
+      "heading": "Cabinet Grotesk",
+      "body": "Manrope",
+      "mono": "JetBrains Mono"
     },
-    "scales": {
-      "h1_hero": "text-4xl md:text-5xl tracking-tighter font-black text-stone-900",
-      "h2_section": "text-2xl font-bold tracking-tight text-stone-800",
-      "labels": "text-xs font-bold uppercase tracking-[0.15em] text-stone-500",
-      "body": "text-sm md:text-base leading-relaxed text-stone-700"
+    "hierarchy": {
+      "page_title": "text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900",
+      "section_title": "text-lg font-semibold tracking-tight text-zinc-900",
+      "table_header": "text-xs font-semibold tracking-[0.05em] uppercase text-zinc-500",
+      "body_text": "text-sm font-medium text-zinc-700",
+      "meta_text": "text-xs font-medium text-zinc-500"
     }
   },
-  "color_system": {
+  "color_palette": {
     "backgrounds": {
-      "page": "bg-stone-50",
-      "content_surface": "bg-white",
-      "action_hub_surface": "bg-stone-900"
+      "page": "bg-zinc-50",
+      "surface": "bg-white",
+      "surface_hover": "bg-zinc-50",
+      "subtle": "bg-zinc-100"
     },
-    "borders": "border-stone-200",
     "text": {
-      "primary": "text-stone-900",
-      "secondary": "text-stone-600",
-      "inverse": "text-white"
+      "primary": "text-zinc-900",
+      "secondary": "text-zinc-500",
+      "tertiary": "text-zinc-400"
     },
-    "dynamic_intents": {
-      "progress_start": "bg-emerald-500 hover:bg-emerald-400 text-stone-900",
-      "review": "bg-indigo-500 hover:bg-indigo-400 text-white",
-      "approve": "bg-emerald-600 hover:bg-emerald-500 text-white",
-      "reject_block": "bg-rose-600 hover:bg-rose-500 text-white",
-      "request_inputs": "bg-amber-500 hover:bg-amber-400 text-stone-900",
-      "neutral_tertiary": "bg-white text-stone-900 border border-stone-300 hover:bg-stone-100"
+    "borders": {
+      "default": "border-zinc-200",
+      "focus": "ring-zinc-900",
+      "subtle": "border-zinc-100"
+    },
+    "actions": {
+      "primary": "bg-emerald-700 text-white hover:bg-emerald-800",
+      "secondary": "bg-white border border-zinc-200 text-zinc-900 hover:bg-zinc-50",
+      "ghost": "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
+    },
+    "status_indicators": {
+      "urgent": "text-rose-700 bg-rose-50 border-rose-200",
+      "new": "text-blue-700 bg-blue-50 border-blue-200",
+      "tight_timeline": "text-amber-700 bg-amber-50 border-amber-200",
+      "approved": "text-emerald-700 bg-emerald-50 border-emerald-200",
+      "in_progress": "text-indigo-700 bg-indigo-50 border-indigo-200",
+      "default": "text-zinc-700 bg-zinc-100 border-zinc-200"
     }
   },
-  "component_blueprints": {
-    "request_header": {
-      "structure": "Fluid header spanning col-span-12. No card wrapper, directly on page background.",
-      "elements": [
-        "Top-right header actions: Grouped as icon buttons (Urgent Flame, Edit, Delete, Print, Back).",
-        "Title row: Request Number in Mono font + Type Title + Icon.",
-        "Corner Ribbon: Absolute positioned top-right for LEAD City (colored based on city code).",
-        "Badges: URGENT (pulsing red flame), Tight Timeline (amber), Age pill.",
-        "Meta Row: Dense flex row. Assigned Dept, User Avatar, Lead, Dates."
+  "layout_hierarchy": {
+    "page_container": "min-h-screen bg-zinc-50 p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto",
+    "top_header": {
+      "description": "Consolidates Title, Total Count, and Main Actions into a single crisp row.",
+      "layout": "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4",
+      "left": "H1 Title (Cabinet Grotesk) + subdued text-sm badge showing total count.",
+      "right": "Flex row gap-3: [List/Kanban Toggle] [Export CSV (Ghost)] [New Request (Primary Button)]"
+    },
+    "consolidated_toolbar": {
+      "description": "Replaces 3 separate bands (Tabs, 8 Status Pills, 4 Filter Drops) with a single highly functional 'Command Strip'.",
+      "layout": "flex flex-col lg:flex-row gap-3 p-1.5 bg-white border border-zinc-200 rounded-lg shadow-sm items-center",
+      "components": {
+        "queue_switcher": {
+          "type": "Segmented Control",
+          "layout": "flex p-1 bg-zinc-100 rounded-md shrink-0 w-full lg:w-auto",
+          "items": "All, Raised By Me, Assigned To Me",
+          "style": "Active item gets bg-white, shadow-sm, text-zinc-900. Inactive gets text-zinc-500. Include count badges (text-xs) inside each segment."
+        },
+        "search_bar": {
+          "type": "Input",
+          "layout": "flex-1 relative w-full",
+          "style": "Border-none, focus:ring-0, bg-transparent. Search icon (lucide) left aligned. Minimalist, looks like an OS search bar."
+        },
+        "divider": "w-px h-6 bg-zinc-200 hidden lg:block",
+        "status_filter": {
+          "type": "Popover / Multi-select Dropdown",
+          "description": "Replaces the 8 pills.",
+          "trigger_style": "Ghost button, 'Status: All' or 'Status: 2 Selected'.",
+          "menu_style": "Dropdown with checkboxes for the 8 states, each showing their respective counts right-aligned."
+        },
+        "advanced_filters": {
+          "type": "Popover",
+          "trigger_style": "Ghost button with Lucide Filter icon. If active, show a tiny blue dot indicator.",
+          "menu_style": "A popover card containing the 3 remaining dropdowns: Request Type, Assigned Team, Requested By. Includes a 'Clear All' button."
+        }
+      }
+    }
+  },
+  "list_view_redesign": {
+    "container": "bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden",
+    "table_style": "w-full text-left border-collapse",
+    "header_row": "border-b border-zinc-200 bg-zinc-50/50",
+    "data_row": {
+      "style": "group border-b border-zinc-100 hover:bg-zinc-50/80 transition-colors duration-200",
+      "columns": [
+        {
+          "name": "Request",
+          "composition": "2-line layout. Top: Request Title (text-sm font-semibold text-zinc-900). Bottom: Request Number (Mono text-xs text-zinc-500) + Snippet truncate.",
+          "indicators": "Replace heavy pills with inline icons or micro-badges. 'Urgent' = red flame icon. 'New' = blue dot indicator on the row edge. 'Tight timeline' = amber clock icon."
+        },
+        {
+          "name": "Status",
+          "composition": "Compact badge: border + subtle bg + text. No massive pills. e.g. px-2 py-0.5 rounded-md text-xs font-medium."
+        },
+        {
+          "name": "People (Lead / Assignee / Raised By)",
+          "composition": "Consolidate into Avatar groups or subtle flex rows (Avatar 20px + Name text-sm). Use tooltips for full names if space is tight."
+        },
+        {
+          "name": "Due Date & Age",
+          "composition": "text-sm. If overdue, text-rose-600 font-semibold. Age shown as '• 4d old' in text-zinc-400."
+        }
       ]
     },
-    "action_hub_hero": {
-      "structure": "Sticky lg:top-6 in the right column. Rendered as a dark 'Control Panel' (bg-stone-900 rounded-xl p-8) to violently contrast with the light theme page, forcing user attention.",
-      "current_state": "Massive text (text-3xl text-white) + glowing pulse dot matching the state's color.",
-      "transition_ctas": "Huge block buttons (w-full h-14 md:h-16 text-lg font-bold rounded-lg transition-transform hover:-translate-y-1 shadow-[0_4px_14px_0_rgba(0,0,0,0.1)]). Colors mapped from dynamic_intents.",
-      "blocked_states": "Render as disabled (opacity-50, grayscale) with Shadcn Tooltip explaining why."
-    },
-    "content_zones": {
-      "requirement_brief": "Clean white bento box. Text, comments, and 'Brand Assets' grid (thumbnails with hover overlay for preview/download).",
-      "work_versions": "Vertical timeline of versions. 'Add Version' is a prominent dashed-border dropzone. Each version has an exclusive Approve/Revert button and nested threaded comments with @mentions.",
-      "production_submission": "Conditionally rendered block with high-contrast data pairs (Quantity, Date, Team).",
-      "status_history": "Visual timeline. Include a proportional color bar (h-3 rounded-full flex) where segments represent time spent in each state.",
-      "comments_activity": "Full timeline blending human comments and system events. Include a rich composer at the top or bottom."
-    }
+    "pagination": "flex items-center justify-between p-4 border-t border-zinc-200 bg-white"
+  },
+  "kanban_preservation": {
+    "note": "When the List/Kanban toggle is set to Kanban, hide the `list_view_redesign` table and render the existing Kanban board layout exactly as it is, placing it below the new `consolidated_toolbar`."
   },
   "micro_interactions": {
-    "buttons": "Active scale down (active:scale-95), hover lift.",
-    "dialogs": "Transitions require comments/forms? Open Shadcn Dialogs.",
-    "tooltips": "Fast fade-in for disabled buttons."
+    "hover_states": "All buttons use slight background darkens or text-color shifts. Table rows slightly darken (`hover:bg-zinc-50`).",
+    "focus_states": "Use `focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2` for accessibility.",
+    "transitions": "Use `transition-all duration-200 ease-in-out` on all interactive elements."
   },
-  "technical_rules": {
-    "file_types": "Use .js files exclusively (React + Tailwind). No .tsx files.",
-    "components": "Use pure HTML + Tailwind for macro layouts. Use customized Shadcn for micro-interactions (Dialogs, Tooltips, Forms).",
-    "testing": "All buttons, inputs, links, and actionable elements MUST include data-testid (e.g. data-testid='cta-start-working')."
+  "states": {
+    "empty": "A spacious 400px high flex-col center container inside the table body. Uses a Lucide Inbox icon (stroke-1, text-zinc-300 w-12 h-12), bold text 'No requests found', and subdued text 'Adjust your filters or create a new request'.",
+    "loading": "Replace table rows with Shadcn Skeleton rows. 1 height-10 header skeleton, 5 height-16 row skeletons."
   },
-  "instructions_to_main_agent": [
-    "1. Discard the old white-card stack layout.",
-    "2. Implement the 12-column Control Room grid. Place the Action Hub in a sticky right rail.",
-    "3. Ensure the Action Hub is visually dominant (use a dark container or a highly saturated border/background) so CTAs are impossible to miss.",
-    "4. Bind dynamic colors to workflow transition buttons based on semantic intent (emerald for positive/progress, rose for block/reject, indigo for review).",
-    "5. Maintain all existing functionalities (file uploads, @mentions, proportional timeline, production conditional rendering) as specified.",
-    "6. Do not use teal (#1B93A4). Stick to Emerald/Forest Green for brand accents.",
-    "7. Ensure all interactive components have data-testid attributes."
-  ]
+  "data_testid_conventions": {
+    "page_container": "data-testid='design-requests-page'",
+    "view_toggle": "data-testid='view-toggle-list-kanban'",
+    "queue_switcher": "data-testid='queue-segment-control'",
+    "search_input": "data-testid='request-search-input'",
+    "status_filter_trigger": "data-testid='status-filter-trigger'",
+    "advanced_filters_trigger": "data-testid='advanced-filters-trigger'",
+    "table_row": "data-testid='request-list-row-{id}'",
+    "action_new_request": "data-testid='new-request-btn'"
+  },
+  "iconography": {
+    "library": "lucide-react",
+    "usage": "Use strokeWidth={1.5} for a contemporary, refined aesthetic. Avoid heavy icons."
+  }
 }
