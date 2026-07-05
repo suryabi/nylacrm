@@ -19,6 +19,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-05 — Design Requests rename + RBAC swap + lead routing + per-type icons ✅ DONE
+- OLD `marketing_requests` → "Design Requests - OLD" (admin-only in menu); `design_requests_new` → "Design Requests" (inherits old module's per-role perms via one-time `dr_rename_migrated` migration in routes/roles.py).
+- Lead-initiated requests (LeadBottleDesigns.js, BottlePreview.js) now create in the NEW module; added `lead_id` filter to design_requests_new list.
+- Design Request Types can upload a default icon (`icon_file_id`); request cards fall back own-image → type-icon → placeholder on Kanban + list. Verified by testing_agent iteration_289.
+- Also fixed prod deploy blocker (CI ESLint-as-errors → DISABLE_ESLINT_PLUGIN) and hid Neck Tags / Bottle Design Concept / Physical Sample from the standalone New Design Request form.
+
 ### 2026-06-19 — 📄 Branded Lead Proposal generator ✅ DONE
 - **One-click "Generate Proposal"** on a lead builds a branded 2-page PDF mirroring the Nyla template: header (logo/address/CIN + accent bar), customer-name title, intro, **pricing table** (Format · Standard [struck] · Offer · Return Credit · Landing = Offer−Credit), disclaimer, Reverse Logistics, Commercial Terms, Category Placement, page-2 Listing Format + Brand Onboarding + product image. Uses bundled DejaVuSans for the ₹ glyph.
 - **Saved as the lead's proposal** → existing Preview / Download / Share-via-email / Review (approve/request-changes/reject) all work automatically. Covers all 4 requested outputs.

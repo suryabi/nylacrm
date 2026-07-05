@@ -292,6 +292,26 @@ export default function MarketingRequestTypeMasters() {
               <Label htmlFor="rt-name">Name</Label>
               <Input id="rt-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Bottle Designs" data-testid="mr-type-name-input" />
             </div>
+            <div className="space-y-1.5">
+              <Label>Default icon (optional)</Label>
+              <div className="flex items-center gap-3">
+                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50" data-testid="mr-type-icon-preview">
+                  {form.icon_file_id
+                    ? <img src={`${API}/design-requests-new/files/${form.icon_file_id}`} alt="icon" className="h-full w-full object-contain p-1" />
+                    : <ImageIcon className="h-6 w-6 text-slate-300" />}
+                </div>
+                <div className="flex flex-col items-start gap-1.5">
+                  <input id="rt-icon" type="file" accept="image/*" className="hidden" onChange={onIconChange} data-testid="mr-type-icon-input" />
+                  <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('rt-icon').click()} disabled={uploadingIcon} data-testid="mr-type-icon-upload-btn">
+                    {uploadingIcon ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Uploading…</> : <><UploadCloud className="h-3.5 w-3.5 mr-1.5" /> {form.icon_file_id ? 'Replace icon' : 'Upload icon'}</>}
+                  </Button>
+                  {form.icon_file_id && (
+                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => setForm((f) => ({ ...f, icon_file_id: '' }))} data-testid="mr-type-icon-remove-btn">Remove</Button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400">Shown on request cards when a request has no image of its own. PNG, JPG or SVG, up to 2 MB.</p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="rt-design">Design lead (days)</Label>

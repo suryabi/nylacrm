@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-07-05 — Design Requests module rename + RBAC swap, lead→new-module routing, and per-type default icons ✅ (testing_agent iteration_289: backend 100%, frontend all pass after icon-dialog fix)
+### Task A — Rename & RBAC
+- **Renamed** the OLD module `marketing_requests` → **"Design Requests - OLD"** (route /marketing-requests, hidden from menu except CEO/Admin/System Admin) and `design_requests_new` → **"Design Requests"** (route /design-requests-new). Updated MODULE_LABELS, DashboardLayout nav (3 menus), NavigationContext titles, and page H1s (`DesignRequestsNew.js`, `MarketingRequests.js`, `DesignRequestNewDetail.js`).
+- **RBAC one-time migration** in `routes/roles.py` (guarded by `dr_rename_migrated`): the new module inherits each role's old `marketing_requests` permission; the OLD module becomes admin-only. Verified: Admin sees both; Manager/User/Viewer get the new module, OLD hidden. New-tenant defaults updated in `models/role.py` (default roles pre-marked migrated).
+- **Lead-initiated design requests now target the NEW module**: `LeadBottleDesigns.js` (neck-tags, bottle-design, bottle-sample + list/nav) and `BottlePreview.js` (from-bottle-design) repointed to `/api/design-requests-new/...` and `/design-requests-new/{id}`. Added `lead_id` filter to `design_requests_new` list endpoint + `_build_requests_query`.
+### Task B — Per-type default icons
+- `MarketingRequestType` model gains `icon_file_id`; icons uploaded via the existing `/api/design-requests-new/upload` + served via `/files/{id}` (object storage).
+- **Design Request Types** dialog (`MarketingRequestTypeMasters.js`, route /admin/request-types): upload/replace/remove a default icon; icon thumbnail shown in the types table (`TypeIconThumb`).
+- List endpoint enriches each request with `request_type_icon_url`. Cards fall back **own image → type icon → placeholder** on the Kanban board (`RequestKanbanNew.jsx`) and the list view rows/cards (`ReqThumb` in `DesignRequestsNew.js`).
+- Note: an earlier file-truncation had dropped the icon dialog JSX (caught by testing_agent) — re-added and screenshot-confirmed.
+
+
 ## 2026-07-05 — 🔴 P0 FIX: Production deployment failure (CI build) + hide lead-only request types ✅ (self-verified: CI=true build + screenshot)
 - **Deployment blocker root cause**: `CI=true yarn build` was **failing to compile** — `react-scripts` treats ESLint **warnings as errors when `process.env.CI = true`** (Emergent's prod build sets CI). The frontend has 58 benign warnings (mostly `react-hooks/exhaustive-deps`), so the production build never produced `build/` → deployment timed out on readiness (container had no static build to serve). The `deployment_agent` static scan reported "pass" and missed this; a direct `CI=true yarn build` reproduced `Failed to compile`.
 - **Fix**: added `DISABLE_ESLINT_PLUGIN=true` + `ESLINT_NO_DEV_ERRORS=true` to `frontend/.env` (linting must not gate a production deploy; chose this over churning dependency arrays across 40+ files). Re-ran `CI=true GENERATE_SOURCEMAP=false yarn build` → **`Compiled successfully. The build folder is ready to be deployed.`** Dev server (`yarn start`) still compiles + hot-reloads (craco just logs a harmless "Cannot find ESLint plugin" note). Login page + app render verified in preview.
