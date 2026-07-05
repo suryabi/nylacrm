@@ -356,6 +356,17 @@ async def _enrich_requestor_city(rows, tenant_id: str):
             if t.get("icon_file_id"):
                 icon_by_type[t["id"]] = f"/api/design-requests-new/files/{t['icon_file_id']}"
 
+    # Terminal-state lookup per state machine — {sm_id: {state_key: is_terminal}}.
+    sm_ids = list({r.get("state_machine_id") for r in rows if r.get("state_machine_id")})
+    terminal_by_sm = {}
+    if sm_ids:
+        async for sm in db.state_machines.find(
+            {"id": {"$in": sm_ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "states": 1}
+        ):
+            terminal_by_sm[sm["id"]] = {
+                s.get("key"): bool(s.get("is_terminal")) for s in (sm.get("states") or [])
+            }
+
     for r in rows:
         city = city_by_id.get(r.get("created_by"))
         r["created_by_city"] = city
@@ -364,6 +375,9 @@ async def _enrich_requestor_city(rows, tenant_id: str):
         r["lead_city"] = lead_city
         r["lead_city_color"] = _color_for(lead_city)
         r["request_type_icon_url"] = icon_by_type.get(r.get("request_type_id"))
+        r["current_state_is_terminal"] = terminal_by_sm.get(
+            r.get("state_machine_id"), {}
+        ).get(r.get("current_state_key"), False)
     return rows
 
 

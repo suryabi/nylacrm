@@ -1267,3 +1267,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Backend (print_requests.py create) guards FINAL_APPROVED_STATES (400 otherwise), validates qty>0 and ISO date; PrintRequestCreate model captures total_monthly_volume / starting_monthly_volume / initial_order_quantity / requested_due_date / notes.
 - TESTED: testing_agent iteration_290 — backend 5 passed (+18 existing module tests), frontend 100% (button visibility gating, dialog open, volume prefill, submit → PR created + toast). Test: /app/backend/tests/test_print_request_create_from_branding.py.
 - NOTE: Lead pydantic model treats current_volume as a string; numeric overrides in DB will 500 /leads/{id}. Minor hardening (coerce to str on read) left as optional backlog item.
+
+## 2026-06 — Print Request button: terminal-state + assignment gating
+- REQUIREMENT CHANGE: The "Print Request" button in Customer Branding now shows only when the design request is in a TERMINAL state of its state machine (was: hardcoded final-approved set) AND is assigned to the logged-in user or their department (also matches assigned role) — mirrors backend my_assigned rule.
+- Backend (design_requests_new.py _enrich_requestor_city): list/detail items now include current_state_is_terminal, computed by batch-loading each request's state_machine states (is_terminal flag).
+- Backend (print_requests.py create): guard widened to accept a terminal current state (via state machine) OR the legacy FINAL_APPROVED_STATES — non-breaking.
+- Frontend (LeadBottleDesigns.js): canPrint = r.current_state_is_terminal && isAssignedToMe(r, user); isAssignedToMe checks assigned_user_id==user.id OR user.department (str/list) matches assigned_department_name OR user.role matches assigned_role.
+- Verified via curl: current_state_is_terminal correctly surfaces (production_completed=true; final_approved/production_in_progress=false for default DRN machine).

@@ -22,8 +22,6 @@ import { format } from 'date-fns';
 import CreatePrintRequestDialog from './CreatePrintRequestDialog';
 import { useAuth } from '../context/AuthContext';
 
-const FINAL_APPROVED_STATES = new Set(['final_approved', 'production_in_progress', 'production_completed']);
-
 // A print request can be raised only by the person the design request is assigned to,
 // or by someone in the assigned department (mirrors the backend "my_assigned" rule).
 const isAssignedToMe = (r, user) => {
@@ -284,7 +282,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
           </div>
           <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
             {requests.map((r) => {
-              const canPrint = FINAL_APPROVED_STATES.has(r.current_state_key) && isAssignedToMe(r, user);
+              const canPrint = !!r.current_state_is_terminal && isAssignedToMe(r, user);
               return (
               <div
                 key={r.id}

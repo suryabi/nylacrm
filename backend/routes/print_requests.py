@@ -200,8 +200,20 @@ async def create_print_request(payload: PrintRequestCreate, current_user: dict =
         )
     if not mr:
         raise HTTPException(404, "Design request not found")
-    if mr.get("current_state_key") not in FINAL_APPROVED_STATES:
-        raise HTTPException(400, "Print requests can only be created once the design request is Final Approved.")
+    # A print request can be raised once the design request reaches a terminal
+    # state of its state machine (fallback: the legacy Final-Approved set).
+    cur_key = mr.get("current_state_key")
+    is_terminal = False
+    if mr.get("state_machine_id"):
+        sm = await db.state_machines.find_one(
+            {"id": mr["state_machine_id"], "tenant_id": tenant_id}, {"_id": 0, "states": 1}
+        )
+        if sm:
+            is_terminal = any(
+                s.get("key") == cur_key and s.get("is_terminal") for s in (sm.get("states") or [])
+            )
+    if not is_terminal and cur_key not in FINAL_APPROVED_STATES:
+        raise HTTPException(400, "Print requests can only be created once the design request reaches a terminal (final) state.")
 
     order_qty = payload.initial_order_quantity if payload.initial_order_quantity is not None else payload.quantity
     if order_qty is None or int(order_qty) <= 0:
