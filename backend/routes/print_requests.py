@@ -82,6 +82,31 @@ async def _initial_status(tenant_id: str) -> Optional[dict]:
     return active[0]
 
 
+async def _ensure_submitted_status(tenant_id: str) -> Optional[dict]:
+    """Return the tenant's 'Submitted' print status, creating it if missing.
+    Print Requests raised from Customer Branding start in this status."""
+    await seed_default_statuses(tenant_id)
+    existing = await db.print_request_statuses.find_one(
+        {"tenant_id": tenant_id, "name": "Submitted"}, {"_id": 0}
+    )
+    if existing:
+        return existing
+    doc = {
+        "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
+        "name": "Submitted",
+        "color": "#3b82f6",
+        "order": 0,
+        "is_initial": False,
+        "is_terminal": False,
+        "is_default": False,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.print_request_statuses.insert_one(dict(doc))
+    return doc
+
+
 def _slack_lead_line(doc: dict) -> str:
     name = (doc.get("lead_name") or "").strip()
     company = (doc.get("lead_company") or "").strip()
@@ -166,16 +191,21 @@ async def get_print_request(print_id: str, current_user: dict = Depends(get_curr
 async def create_print_request(payload: PrintRequestCreate, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
 
-    mr = await db.marketing_requests.find_one(
+    mr = await db.design_requests_new.find_one(
         {"id": payload.marketing_request_id, "tenant_id": tenant_id}, {"_id": 0}
     )
+    if not mr:
+        mr = await db.marketing_requests.find_one(
+            {"id": payload.marketing_request_id, "tenant_id": tenant_id}, {"_id": 0}
+        )
     if not mr:
         raise HTTPException(404, "Design request not found")
     if mr.get("current_state_key") not in FINAL_APPROVED_STATES:
         raise HTTPException(400, "Print requests can only be created once the design request is Final Approved.")
 
-    if payload.quantity is None or int(payload.quantity) <= 0:
-        raise HTTPException(400, "Quantity must be a positive number")
+    order_qty = payload.initial_order_quantity if payload.initial_order_quantity is not None else payload.quantity
+    if order_qty is None or int(order_qty) <= 0:
+        raise HTTPException(400, "Initial order quantity must be a positive number")
     try:
         date.fromisoformat(payload.requested_due_date[:10])
     except (ValueError, TypeError):
@@ -213,7 +243,23 @@ async def create_print_request(payload: PrintRequestCreate, current_user: dict =
         if not vendor:
             raise HTTPException(400, "Vendor not found")
 
-    status = await _initial_status(tenant_id)
+    # Account + Customer Branding association (resolved via the source lead)
+    account = None
+    lead_uuid = mr.get("lead_id")
+    if lead_uuid:
+        lead_doc = await db.leads.find_one(
+            {"id": lead_uuid, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "lead_id": 1}
+        )
+        or_ids = [x for x in [lead_uuid, (lead_doc or {}).get("lead_id")] if x]
+        if or_ids:
+            account = await db.accounts.find_one(
+                {"tenant_id": tenant_id, "lead_id": {"$in": or_ids}}, {"_id": 0}
+            )
+    cdr_link = (mr.get("cdr_link") or "").strip() or None
+    if cdr_link and cdr_link not in approved_links:
+        approved_links = approved_links + [cdr_link]
+
+    status = await _ensure_submitted_status(tenant_id)
     now = datetime.now(timezone.utc).isoformat()
     user_name = current_user.get("name") or current_user.get("email") or "User"
 
@@ -235,8 +281,17 @@ async def create_print_request(payload: PrintRequestCreate, current_user: dict =
         "approved_version_no": approved_version_no,
         "approved_design_files": approved_files,
         "approved_design_links": approved_links,
+        # account + customer-branding association
+        "account_id": (account.get("id") if account else None),
+        "account_name": (account.get("account_name") if account else None),
+        "customer_branding_lead_id": lead_uuid,
+        # CDR file link copied from the associated design request
+        "cdr_link": cdr_link,
         # captured inputs
-        "quantity": int(payload.quantity),
+        "quantity": int(order_qty),
+        "initial_order_quantity": int(order_qty),
+        "total_monthly_volume": payload.total_monthly_volume,
+        "starting_monthly_volume": payload.starting_monthly_volume,
         "requested_due_date": payload.requested_due_date[:10],
         "notes": (payload.notes or None),
         # assignment

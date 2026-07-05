@@ -982,12 +982,12 @@ def _decode_data_url(data_url: str) -> bytes:
 async def get_lead_bottle_designs(lead_id: str, current_user: dict = Depends(get_current_user)):
     """List approved bottle-preview designs saved on a lead (most recent first)."""
     tdb = get_tdb()
-    lead = await tdb.leads.find_one({'$or': [{'id': lead_id}, {'lead_id': lead_id}]}, {'_id': 0, 'id': 1, 'bottle_designs': 1, 'company': 1, 'logo_url': 1})
+    lead = await tdb.leads.find_one({'$or': [{'id': lead_id}, {'lead_id': lead_id}]}, {'_id': 0, 'id': 1, 'bottle_designs': 1, 'company': 1, 'logo_url': 1, 'current_volume': 1})
     if not lead:
         raise HTTPException(status_code=404, detail='Lead not found')
     designs = lead.get('bottle_designs') or []
     designs = sorted(designs, key=lambda d: d.get('created_at') or '', reverse=True)
-    return {'designs': designs, 'company': lead.get('company'), 'has_logo': bool(lead.get('logo_url')), 'lead_uuid': lead.get('id')}
+    return {'designs': designs, 'company': lead.get('company'), 'has_logo': bool(lead.get('logo_url')), 'lead_uuid': lead.get('id'), 'current_volume': lead.get('current_volume')}
 
 
 class BottleDesignCreate(BaseModel):

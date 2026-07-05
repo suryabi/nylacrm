@@ -918,6 +918,25 @@ class UrgentUpdate(BaseModel):
     is_urgent: bool
 
 
+class CdrLinkUpdate(BaseModel):
+    cdr_link: Optional[str] = None
+
+
+@router.patch("/{request_id}/cdr-link")
+async def set_request_cdr_link(request_id: str, payload: CdrLinkUpdate, current_user: dict = Depends(get_current_user)):
+    """Set/clear the CorelDRAW (CDR) file link on a design request. This link is
+    copied onto Print Requests created from the (Final Approved) design request."""
+    tenant_id = get_current_tenant_id()
+    link = (payload.cdr_link or "").strip() or None
+    res = await db.design_requests_new.update_one(
+        {"id": request_id, "tenant_id": tenant_id},
+        {"$set": {"cdr_link": link, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(404, "Request not found")
+    return {"ok": True, "cdr_link": link}
+
+
 @router.patch("/{request_id}/urgent")
 async def set_request_urgent(request_id: str, payload: UrgentUpdate, current_user: dict = Depends(get_current_user)):
     """Flag or unflag a design/marketing request as urgent. Allowed for the

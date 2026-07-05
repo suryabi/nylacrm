@@ -98,7 +98,10 @@ class PrintVendorUpdate(BaseModel):
 # ────────────────────────────── Print request ──────────────────────────────
 class PrintRequestCreate(BaseModel):
     marketing_request_id: str
-    quantity: int
+    quantity: Optional[int] = None
+    initial_order_quantity: Optional[int] = None
+    total_monthly_volume: Optional[float] = None
+    starting_monthly_volume: Optional[float] = None
     requested_due_date: str  # ISO date (YYYY-MM-DD)
     notes: Optional[str] = None
     assigned_department_id: Optional[str] = None

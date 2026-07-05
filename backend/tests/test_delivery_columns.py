@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://design-workflow-hub-10.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://lead-to-account-crm.preview.emergentagent.com')
 
 class TestDeliveryColumnCalculations:
     """Test delivery item amount calculations with new columns"""
