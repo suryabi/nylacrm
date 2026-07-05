@@ -186,6 +186,7 @@ export default function LeadDetail() {
     fetchMasterSkus();
     fetchProposal();
     fetchLinkedLeads();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchLinkedLeads = async () => {

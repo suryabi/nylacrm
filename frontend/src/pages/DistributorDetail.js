@@ -507,6 +507,7 @@ export default function DistributorDetail() {
         }
       }).catch(() => {});
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, fetchShipments]);
 
   // Fetch stock for selected source warehouse

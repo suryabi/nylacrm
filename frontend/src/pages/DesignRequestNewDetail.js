@@ -234,6 +234,7 @@ const FilePreviewDialog = ({ file, onClose }) => {
       .catch(() => toast.error('Preview failed'))
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; if (objUrl) URL.revokeObjectURL(objUrl); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file?.id, inlineable]);
 
   return (

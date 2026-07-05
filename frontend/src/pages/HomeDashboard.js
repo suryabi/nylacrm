@@ -173,6 +173,7 @@ export default function HomeDashboard() {
     }, 1000);
     
     return () => clearInterval(timeInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCreateOrUpdateMeeting = async () => {

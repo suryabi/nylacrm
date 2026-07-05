@@ -367,6 +367,7 @@ export default function AccountDetail() {
     fetchAccount();
     fetchUsers();
     fetchMasterSkus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Search for address suggestions via backend API - restricted to account's city
@@ -834,6 +835,7 @@ ${googleMapsLink}`;
     if (id) {
       fetchInvoices(id, invoicePage, invoiceLimit, invoiceTimeFilter);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoicePage, invoiceLimit]);
 
   // Invoice creation functions

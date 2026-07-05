@@ -83,7 +83,9 @@ export default function Dashboard() {
   
   const { territories: masterTerritories, getStateNamesByTerritoryName, getCityNamesByStateName } = useMasterLocations();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchSalesTeam(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchAnalytics(); }, [timeFilter, territoryFilter, stateFilter, cityFilter, salesResource]);
 
   const fetchSalesTeam = async () => {

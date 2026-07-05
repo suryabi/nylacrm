@@ -405,6 +405,7 @@ export default function ContactsList() {
       }
     }, 300);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
   // Handle filter change

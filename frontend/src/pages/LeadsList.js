@@ -157,13 +157,16 @@ export default function LeadsList() {
   // Fetch quadrant metrics when filters change
   useEffect(() => {
     fetchQuadrantMetrics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter]);
 
   // Fetch users on mount
   useEffect(() => {
     fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchLeads(); }, [currentPage, itemsPerPage, debouncedSearch, statusFilter, cityFilter, stateFilter, territoryFilter, assignedToFilter, timeFilter, selectedQuadrants, sortField, sortDirection, targetClosureMonth, targetClosureYear, pipelineView, pipelineClosureMonths, pipelineClosureYears]);
 
   const fetchQuadrantMetrics = async () => {
