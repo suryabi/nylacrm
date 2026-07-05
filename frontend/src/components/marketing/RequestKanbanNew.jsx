@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { format, parseISO, isValid, isPast, isToday } from 'date-fns';
 import {
   GripVertical, ChevronUp, ChevronDown, Calendar, AlertTriangle,
-  Users, Tag, Clock, Flame, Image as ImageIcon,
+  Users, Tag, Clock, Flame, Image as ImageIcon, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Badge } from '../ui/badge';
 
@@ -184,6 +184,23 @@ export default function RequestKanbanNew({ rows, states, navigate }) {
 
   const orderedStates = useMemo(() => states || [], [states]);
 
+  // Horizontal scroll controls (arrow buttons) — auto-hide at the edges.
+  const [canLeft, setCanLeft] = useState(false);
+  const [canRight, setCanRight] = useState(false);
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanLeft(scrollLeft > 4);
+    setCanRight(scrollLeft + clientWidth < scrollWidth - 4);
+  }, []);
+  const scrollByAmount = (dir) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const amount = Math.max(el.clientWidth * 0.8, 320);
+    el.scrollBy({ left: dir === 'left' ? -amount : amount, behavior: 'smooth' });
+  };
+
   // (Re)build columns whenever the source rows change.
   useEffect(() => {
     const grouped = {};
@@ -262,12 +279,43 @@ export default function RequestKanbanNew({ rows, states, navigate }) {
     });
   };
 
+  // Recompute arrow visibility on mount, when columns change, and on resize.
+  useEffect(() => {
+    const raf = requestAnimationFrame(updateScrollState);
+    window.addEventListener('resize', updateScrollState);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updateScrollState); };
+  }, [updateScrollState, cols, orderedStates]);
+
   return (
-    <div
-      ref={scrollRef}
-      className="flex gap-3 overflow-x-auto pb-3 scrollbar-thin"
-      data-testid="mr-kanban"
-    >
+    <div className="relative" data-testid="mr-kanban-wrap">
+      {canLeft && (
+        <button
+          type="button"
+          onClick={() => scrollByAmount('left')}
+          aria-label="Scroll left"
+          data-testid="kanban-scroll-left"
+          className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-30 h-10 w-10 -ml-3 items-center justify-center rounded-full bg-white/95 backdrop-blur border border-slate-200 shadow-lg text-slate-600 transition-all hover:text-emerald-700 hover:border-emerald-300 hover:scale-105 active:scale-95"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+      )}
+      {canRight && (
+        <button
+          type="button"
+          onClick={() => scrollByAmount('right')}
+          aria-label="Scroll right"
+          data-testid="kanban-scroll-right"
+          className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-30 h-10 w-10 -mr-3 items-center justify-center rounded-full bg-white/95 backdrop-blur border border-slate-200 shadow-lg text-slate-600 transition-all hover:text-emerald-700 hover:border-emerald-300 hover:scale-105 active:scale-95"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
+      )}
+      <div
+        ref={scrollRef}
+        onScroll={updateScrollState}
+        className="flex gap-3 overflow-x-auto pb-3 scrollbar-thin scroll-smooth"
+        data-testid="mr-kanban"
+      >
       {orderedStates.map((s) => {
         const list = cols[s.key] || [];
         const color = s.color || '#64748b';
@@ -313,6 +361,7 @@ export default function RequestKanbanNew({ rows, states, navigate }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
