@@ -1,0 +1,33 @@
+{
+  "summary": "Verified display-only rendering of Print Request detail page for PR-2026-0006 (id 87b26758-ba9a-496f-8ef6-e0d2f5a8c35f). Logged in as CEO surya.yadavalli@nylaairwater.earth via email/password form, navigated to /print-requests/87b26758-ba9a-496f-8ef6-e0d2f5a8c35f, and confirmed all newly-captured fields render with the expected values.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification": {
+    "print-info-initial-qty": {"expected": "5000", "got": "Initial Order Quantity5000", "match": true},
+    "print-info-total-volume": {"expected": "12000", "got": "Total Monthly Volume12000", "match": true},
+    "print-info-starting-volume": {"expected": "8000", "got": "Starting Monthly Volume8000", "match": true},
+    "print-info-due": {"expected": "Aug 15, 2026", "got": "Requested Due DateAug 15, 2026", "match": true},
+    "print-notes": {"expected": "Matte finish, gold foil on logo", "got": "Matte finish, gold foil on logo", "match": true},
+    "print_number_visible_PR-2026-0006": true,
+    "page_load_errors": "none (no error selectors, no page/pageerror events)"
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PrintRequestDetail.js lines 203-208 gate Total/Starting Monthly Volume with a null check (val ?? null) !== null which correctly displays 0 values too — good.",
+    "Initial Order Quantity falls back to pr.quantity when initial_order_quantity is missing (line 202). Fine for legacy PRs.",
+    "Notes card only renders when pr.notes is truthy (line 247) — empty-string safe."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% (5/5 fields match, print number and status badge visible, no page errors)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, nyla-air-water)",
+  "seed_data_creation": "None. PR-2026-0006 already existed and was NOT deleted.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Print Request detail page renders initial_order_quantity, total_monthly_volume, starting_monthly_volume, requested_due_date and notes via data-testid print-info-initial-qty / print-info-total-volume / print-info-starting-volume / print-info-due / print-notes. All confirmed working for PR-2026-0006. Login form uses email+password with 'Sign In' button (exact=True) — there's also a 'Sign in with Google' button so use exact match to disambiguate.",
+  "rca of the issue": "N/A — feature works as designed."
+}

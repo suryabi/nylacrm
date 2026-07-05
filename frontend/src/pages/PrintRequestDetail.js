@@ -17,8 +17,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '../components/ui/dialog';
 import {
-  ArrowLeft, Printer, Tag, Package, Calendar, Users, Building2, FileText,
+  ArrowLeft, Printer, Tag, Calendar, Users, Building2, FileText,
   Download, Loader2, Pencil, Trash2, History, ExternalLink, Sparkles, FileCheck2,
+  Boxes, TrendingUp, Gauge,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
@@ -198,7 +199,13 @@ export default function PrintRequestDetail() {
           <Card className="border border-slate-100 rounded-xl">
             <CardContent className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-5">
               <InfoRow icon={Users} label="Lead" value={pr.lead_company || pr.lead_name} testid="print-info-lead" />
-              <InfoRow icon={Package} label="Quantity" value={pr.quantity} testid="print-info-qty" />
+              <InfoRow icon={Boxes} label="Initial Order Quantity" value={pr.initial_order_quantity ?? pr.quantity} testid="print-info-initial-qty" />
+              {(pr.total_monthly_volume ?? null) !== null && (
+                <InfoRow icon={TrendingUp} label="Total Monthly Volume" value={pr.total_monthly_volume} testid="print-info-total-volume" />
+              )}
+              {(pr.starting_monthly_volume ?? null) !== null && (
+                <InfoRow icon={Gauge} label="Starting Monthly Volume" value={pr.starting_monthly_volume} testid="print-info-starting-volume" />
+              )}
               <InfoRow icon={Calendar} label="Requested Due Date" value={fmtDate(pr.requested_due_date)} testid="print-info-due" />
               <InfoRow icon={Sparkles} label="Production Team" value={pr.assigned_department_name} testid="print-info-team" />
               <InfoRow icon={Building2} label="Vendor" value={pr.vendor_name} testid="print-info-vendor" />
