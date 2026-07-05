@@ -346,6 +346,16 @@ async def _enrich_requestor_city(rows, tenant_id: str):
         ):
             city_by_lead[l["id"]] = l.get("city")
 
+    # Request-type default icon — shown on cards when a request has no image of its own.
+    type_ids = list({r.get("request_type_id") for r in rows if r.get("request_type_id")})
+    icon_by_type = {}
+    if type_ids:
+        async for t in db.marketing_request_types.find(
+            {"id": {"$in": type_ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "icon_file_id": 1}
+        ):
+            if t.get("icon_file_id"):
+                icon_by_type[t["id"]] = f"/api/design-requests-new/files/{t['icon_file_id']}"
+
     for r in rows:
         city = city_by_id.get(r.get("created_by"))
         r["created_by_city"] = city
@@ -353,6 +363,7 @@ async def _enrich_requestor_city(rows, tenant_id: str):
         lead_city = city_by_lead.get(r.get("lead_id"))
         r["lead_city"] = lead_city
         r["lead_city_color"] = _color_for(lead_city)
+        r["request_type_icon_url"] = icon_by_type.get(r.get("request_type_id"))
     return rows
 
 
@@ -948,9 +959,11 @@ async def set_request_urgent(request_id: str, payload: UrgentUpdate, current_use
         {"id": request_id, "tenant_id": tenant_id}, {"_id": 0}
     )
     return doc
-def _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by):
+def _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by, lead_id=None):
     """Shared Mongo query builder for the list + export endpoints."""
     q: dict = {"tenant_id": tenant_id}
+    if lead_id:
+        q["lead_id"] = lead_id
     if queue == "my_raised":
         q["created_by"] = current_user.get("id")
     elif queue == "my_assigned":
@@ -994,6 +1007,7 @@ async def list_requests(
     request_type_id: Optional[str] = None,
     assigned_department_id: Optional[str] = None,
     created_by: Optional[str] = None,
+    lead_id: Optional[str] = None,
     page: int = 1,
     limit: int = 20,
     no_limit: bool = False,
@@ -1003,7 +1017,7 @@ async def list_requests(
     tenant_id = get_current_tenant_id()
     page = max(page, 1)
 
-    q = _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by)
+    q = _build_requests_query(tenant_id, current_user, queue, search, state_key, request_type_id, assigned_department_id, created_by, lead_id=lead_id)
 
     total = await db.design_requests_new.count_documents(q)
     sort_field = sort.lstrip("-+")

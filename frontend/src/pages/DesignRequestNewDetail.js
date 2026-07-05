@@ -589,7 +589,7 @@ export default function DesignRequestNewDetail() {
     <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6 bg-stone-50 min-h-screen" data-testid="mr-detail-page">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => navigate('/design-requests-new')} data-testid="mr-back-btn">
-          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests - New
+          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests
         </Button>
         <div className="flex items-center gap-2">
           {((user?.id && req?.created_by && user.id === req.created_by) || hasActionPermission('marketing_requests', 'edit')) && (

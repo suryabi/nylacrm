@@ -134,10 +134,10 @@ export const NavigationProvider = ({ children }) => {
     if (path.match(/^\/leads\/[^/]+\/edit$/)) return 'Edit Lead';
     if (path.match(/^\/accounts\/[^/]+$/)) return 'Account Details';
     if (path.match(/^\/target-planning\/[^/]+$/)) return 'Plan Dashboard';
-    if (path === '/marketing-requests') return 'Design Requests';
+    if (path === '/marketing-requests') return 'Design Requests - OLD';
     if (path === '/marketing-requests/new') return 'New Design Request';
     if (path.match(/^\/marketing-requests\/[^/]+$/)) return 'Design Request Details';
-    if (path === '/design-requests-new') return 'Design Requests - New';
+    if (path === '/design-requests-new') return 'Design Requests';
     if (path === '/design-requests-new/new') return 'New Design Request';
     if (path.match(/^\/design-requests-new\/[^/]+\/edit$/)) return 'Edit Design Request';
     if (path.match(/^\/design-requests-new\/[^/]+$/)) return 'Design Request Details';

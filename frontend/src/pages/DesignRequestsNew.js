@@ -149,6 +149,19 @@ function StatusFilter({ states, stateCount, stateKey, onPick }) {
 }
 
 // ── Advanced filters (popover with the 3 dropdowns) ──────────────────────────
+const ReqThumb = ({ req }) => {
+  const src = req.logo?.id
+    ? `${API}/design-requests-new/files/${req.logo.id}`
+    : (req.request_type_icon_url ? `${process.env.REACT_APP_BACKEND_URL}${req.request_type_icon_url}` : null);
+  return (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-zinc-100 bg-zinc-50" data-testid={`req-thumb-${req.id}`}>
+      {src
+        ? <img src={src} alt="" className="h-full w-full object-contain p-0.5" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        : <Tag className="h-3.5 w-3.5 text-zinc-300" />}
+    </span>
+  );
+};
+
 function AdvancedFilters({ types, depts, users, requestTypeId, deptId, requestedBy, onType, onDept, onBy, activeCount, onClear }) {
   const selectCls = 'h-9 w-full rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-600/20';
   return (
@@ -313,10 +326,13 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
             >
               <CardContent className="space-y-2.5 p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-sm font-semibold leading-snug text-zinc-900">
-                    {req.is_urgent && <Flame className="h-3.5 w-3.5 shrink-0 text-rose-500" data-testid={`mr-urgent-badge-${req.id}`} />}
-                    {req.request_type_name || 'Untyped Request'}
-                  </span>
+                  <div className="flex items-start gap-2 min-w-0">
+                    <ReqThumb req={req} />
+                    <span className="flex items-center gap-1.5 text-sm font-semibold leading-snug text-zinc-900">
+                      {req.is_urgent && <Flame className="h-3.5 w-3.5 shrink-0 text-rose-500" data-testid={`mr-urgent-badge-${req.id}`} />}
+                      {req.request_type_name || 'Untyped Request'}
+                    </span>
+                  </div>
                   <StatusBadge label={req.current_state_label || req.current_state_key} color={req.current_state_color} />
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
@@ -385,6 +401,7 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                   >
                     <TableCell className="py-3.5 align-top" style={{ maxWidth: 460 }}>
                       <div className="flex items-center gap-1.5">
+                        <ReqThumb req={req} />
                         {req.is_urgent && (
                           <span className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-700" data-testid={`mr-urgent-badge-${req.id}`}>
                             <Flame className="h-2.5 w-2.5" /> Urgent
@@ -484,7 +501,7 @@ function MigrationDialog({ open, onOpenChange, onDone }) {
       <DialogContent className="max-w-lg" data-testid="migration-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><ArrowLeftRight className="h-5 w-5 text-emerald-600" /> Migrate Marketing Requests</DialogTitle>
-          <DialogDescription>Copies your Marketing Requests (and their files, comments &amp; versions) into Design Requests - New. Originals are kept untouched and re-running is safe.</DialogDescription>
+          <DialogDescription>Copies your Marketing Requests (and their files, comments &amp; versions) into Design Requests. Originals are kept untouched and re-running is safe.</DialogDescription>
         </DialogHeader>
 
         {loading ? (
@@ -682,7 +699,7 @@ export default function DesignRequestsNew() {
             <Sparkles className="h-6 w-6 text-white" strokeWidth={1.75} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">Design Requests - New</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-3xl">Design Requests</h1>
             <p className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500 sm:text-sm">
               <GitBranch className="h-3.5 w-3.5" />
               {counts.state_machine_name || 'No state machine attached'}

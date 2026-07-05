@@ -65,7 +65,30 @@ async def list_roles(current_user: dict = Depends(get_current_user)):
                 {"id": role["id"], "tenant_id": tenant_id},
                 {"$set": {"permissions": perms, "updated_at": datetime.now(timezone.utc).isoformat()}}
             )
-    
+
+    # One-time migration for the "Design Requests" rename:
+    #   • the renamed module (design_requests_new → "Design Requests") inherits the
+    #     access the old "Design Requests" (marketing_requests) module granted this role
+    #   • the old module ("Design Requests - OLD") becomes admin-only
+    for role in roles:
+        if role.get("dr_rename_migrated"):
+            continue
+        perms = role.get("permissions") or {}
+        old_perm = perms.get("marketing_requests") or {"view": False, "create": False, "edit": False, "delete": False}
+        is_admin_like = role.get("name") in admin_role_names
+        perms["design_requests_new"] = dict(old_perm)
+        perms["marketing_requests"] = (
+            {"view": True, "create": True, "edit": True, "delete": True}
+            if is_admin_like
+            else {"view": False, "create": False, "edit": False, "delete": False}
+        )
+        role["permissions"] = perms
+        role["dr_rename_migrated"] = True
+        await db.roles.update_one(
+            {"id": role["id"], "tenant_id": tenant_id},
+            {"$set": {"permissions": perms, "dr_rename_migrated": True, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+
     return {
         "roles": roles,
         "module_categories": MODULE_CATEGORIES,

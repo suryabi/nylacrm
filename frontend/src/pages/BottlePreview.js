@@ -908,7 +908,7 @@ export default function BottlePreview() {
       const cleanData = await buildCompositeDataUrl(false); // bottle + logo, no quote strip
       const token = localStorage.getItem('token');
       const res = await axios.post(
-        `${API_URL}/marketing-requests/from-bottle-design`,
+        `${API_URL}/design-requests-new/from-bottle-design`,
         {
           image_data: cleanData,
           lead_id: selectedLead?.id || null,

@@ -53,7 +53,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
 
   const fetchRequests = async () => {
     try {
-      const res = await axios.get(`${API_URL}/marketing-requests`, {
+      const res = await axios.get(`${API_URL}/design-requests-new`, {
         params: { lead_id: leadId, no_limit: true },
         withCredentials: true,
       });
@@ -117,11 +117,11 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
     }
     setBusyAction(action);
     try {
-      const res = await axios.post(`${API_URL}/marketing-requests/${path}`, {}, { withCredentials: true });
+      const res = await axios.post(`${API_URL}/design-requests-new/${path}`, {}, { withCredentials: true });
       const num = res.data?.request_number;
       const rid = res.data?.id;
       toast.success(`${label} request ${num || ''} created`, {
-        action: rid ? { label: 'View', onClick: () => navigate(`/marketing-requests/${rid}`) } : undefined,
+        action: rid ? { label: 'View', onClick: () => navigate(`/design-requests-new/${rid}`) } : undefined,
       });
       fetchRequests();
     } catch (e) {
@@ -152,7 +152,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       fd.append('file', sampleFile);
       fd.append('attach_bottle_design', attachDesign ? 'true' : 'false');
       const res = await axios.post(
-        `${API_URL}/marketing-requests/from-lead/${leadId}/bottle-sample`,
+        `${API_URL}/design-requests-new/from-lead/${leadId}/bottle-sample`,
         fd,
         { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' } }
       );
@@ -162,7 +162,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       setSampleFile(null);
       setAttachDesign(false);
       toast.success(`Bottle sample request ${num || ''} created`, {
-        action: rid ? { label: 'View', onClick: () => navigate(`/marketing-requests/${rid}`) } : undefined,
+        action: rid ? { label: 'View', onClick: () => navigate(`/design-requests-new/${rid}`) } : undefined,
       });
       fetchRequests();
     } catch (e) {
@@ -255,7 +255,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
               <button
                 key={r.id}
                 type="button"
-                onClick={() => navigate(`/marketing-requests/${r.id}`)}
+                onClick={() => navigate(`/design-requests-new/${r.id}`)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
                 data-testid={`lead-design-request-${r.id}`}
                 title="Open request"

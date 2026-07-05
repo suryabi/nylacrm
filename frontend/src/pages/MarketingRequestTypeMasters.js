@@ -17,7 +17,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { Tag, Plus, Pencil, Trash2, Loader2, ArrowLeft, Sparkles } from 'lucide-react';
+import { Tag, Plus, Pencil, Trash2, Loader2, ArrowLeft, Sparkles, Image as ImageIcon, UploadCloud } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { useTenantConfig } from '../context/TenantConfigContext';
@@ -27,6 +27,12 @@ const HEAD = () => {
   const t = localStorage.getItem('token');
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
+
+const TypeIconThumb = ({ t }) => (
+  t.icon_file_id
+    ? <img src={`${API}/design-requests-new/files/${t.icon_file_id}`} alt="" className="h-6 w-6 shrink-0 rounded-md border border-slate-100 bg-white object-contain p-0.5" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+    : <Tag className="h-4 w-4 text-emerald-500 shrink-0" />
+);
 
 const ADMIN_ROLES = ['ceo', 'director', 'admin', 'system admin', 'system_admin', 'tenant_admin'];
 const EMPTY = { name: '', design_lead_time_days: 7, production_lead_time_days: 7, is_active: true };
@@ -46,6 +52,7 @@ export default function MarketingRequestTypeMasters() {
   const [saving, setSaving] = useState(false);
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [uploadingIcon, setUploadingIcon] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +74,7 @@ export default function MarketingRequestTypeMasters() {
       design_lead_time_days: t.design_lead_time_days ?? 0,
       production_lead_time_days: t.production_lead_time_days ?? 0,
       is_active: t.is_active !== false,
+      icon_file_id: t.icon_file_id || '',
     });
     setDialogOpen(true);
   };
@@ -78,6 +86,7 @@ export default function MarketingRequestTypeMasters() {
       design_lead_time_days: Number(form.design_lead_time_days) || 0,
       production_lead_time_days: Number(form.production_lead_time_days) || 0,
       is_active: !!form.is_active,
+      icon_file_id: form.icon_file_id || '',
     };
     setSaving(true);
     try {
@@ -93,6 +102,24 @@ export default function MarketingRequestTypeMasters() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally { setSaving(false); }
+  };
+
+  const onIconChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { toast.error('Please choose an image file (PNG, JPG or SVG).'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('Icon must be under 2 MB.'); return; }
+    setUploadingIcon(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data } = await axios.post(`${API}/design-requests-new/upload`, fd, { headers: { ...HEAD(), 'Content-Type': 'multipart/form-data' } });
+      setForm((f) => ({ ...f, icon_file_id: data.id }));
+      toast.success('Icon uploaded');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to upload icon');
+    } finally { setUploadingIcon(false); }
   };
 
   const toggleActive = async (t) => {
@@ -168,7 +195,7 @@ export default function MarketingRequestTypeMasters() {
                 <div key={t.id} className={`p-4 space-y-3 ${t.is_active === false ? 'opacity-60' : ''}`} data-testid={`mr-type-card-${t.id}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Tag className="h-4 w-4 text-emerald-500 shrink-0" />
+                      <TypeIconThumb t={t} />
                       <span className="font-medium text-slate-800 truncate">{t.name}</span>
                       {t.is_default && <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-500 border-slate-200 shrink-0">Default</Badge>}
                     </div>
@@ -215,7 +242,7 @@ export default function MarketingRequestTypeMasters() {
                     <TableRow key={t.id} className={`border-b border-slate-50 ${t.is_active === false ? 'opacity-60' : ''}`} data-testid={`mr-type-row-${t.id}`}>
                       <TableCell className="py-3">
                         <div className="flex items-center gap-2">
-                          <Tag className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          <TypeIconThumb t={t} />
                           <span className="font-medium text-slate-800">{t.name}</span>
                           {t.is_default && <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-500 border-slate-200">Default</Badge>}
                         </div>

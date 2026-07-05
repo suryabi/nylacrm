@@ -60,8 +60,8 @@ DEFAULT_MODULE_PERMISSIONS = {
     # Marketing
     "marketing_calendar": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_masters": {"view": False, "create": False, "edit": False, "delete": False},
-    "marketing_requests": {"view": True, "create": True, "edit": True, "delete": False},
-    "design_requests_new": {"view": False, "create": False, "edit": False, "delete": False},
+    "marketing_requests": {"view": False, "create": False, "edit": False, "delete": False},
+    "design_requests_new": {"view": True, "create": True, "edit": True, "delete": False},
     "print_requests": {"view": True, "create": True, "edit": True, "delete": False},
     "master_departments": {"view": False, "create": False, "edit": False, "delete": False},
     "marketing_request_types": {"view": False, "create": False, "edit": False, "delete": False},
@@ -146,7 +146,7 @@ VIEWER_PERMISSIONS = {
 # Disable admin modules for viewer
 VIEWER_PERMISSIONS["tenant_settings"] = {"view": False, "create": False, "edit": False, "delete": False}
 VIEWER_PERMISSIONS["team"] = {"view": False, "create": False, "edit": False, "delete": False}
-VIEWER_PERMISSIONS["design_requests_new"] = {"view": False, "create": False, "edit": False, "delete": False}
+VIEWER_PERMISSIONS["marketing_requests"] = {"view": False, "create": False, "edit": False, "delete": False}
 
 
 class ModulePermission(BaseModel):
@@ -208,6 +208,7 @@ def get_default_roles(tenant_id: str) -> List[dict]:
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
             "name": "Admin",
+            "dr_rename_migrated": True,
             "description": "Full access to all features and settings",
             "permissions": FULL_ACCESS_PERMISSIONS,
             "is_system_role": True,
@@ -219,6 +220,7 @@ def get_default_roles(tenant_id: str) -> List[dict]:
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
             "name": "Manager",
+            "dr_rename_migrated": True,
             "description": "Can manage team, leads, and most features",
             "permissions": MANAGER_PERMISSIONS,
             "is_system_role": True,
@@ -230,6 +232,7 @@ def get_default_roles(tenant_id: str) -> List[dict]:
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
             "name": "User",
+            "dr_rename_migrated": True,
             "description": "Standard user access to core features",
             "permissions": DEFAULT_MODULE_PERMISSIONS,
             "is_system_role": True,
@@ -241,6 +244,7 @@ def get_default_roles(tenant_id: str) -> List[dict]:
             "id": str(uuid.uuid4()),
             "tenant_id": tenant_id,
             "name": "Viewer",
+            "dr_rename_migrated": True,
             "description": "Read-only access to view data",
             "permissions": VIEWER_PERMISSIONS,
             "is_system_role": True,
@@ -306,8 +310,8 @@ MODULE_LABELS = {
     "budget_requests": "Budget Requests",
     "marketing_calendar": "Content Calendar",
     "marketing_masters": "Marketing Masters",
-    "marketing_requests": "Design Requests",
-    "design_requests_new": "Design Requests - New",
+    "marketing_requests": "Design Requests - OLD",
+    "design_requests_new": "Design Requests",
     "master_departments": "Departments",
     "marketing_request_types": "Design Request Types",
     "print_requests": "Print Requests",

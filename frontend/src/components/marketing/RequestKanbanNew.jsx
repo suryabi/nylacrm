@@ -40,7 +40,10 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
   const urgent = !!req.is_urgent;
   const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : null);
   const leadLabel = req.lead_company || req.lead_name;
-  const logoSrc = req.logo?.id ? `${BACKEND}/api/design-requests-new/files/${req.logo.id}` : null;
+  const ownLogo = req.logo?.id ? `${BACKEND}/api/design-requests-new/files/${req.logo.id}` : null;
+  const typeIcon = req.request_type_icon_url ? `${BACKEND}${req.request_type_icon_url}` : null;
+  const logoSrc = ownLogo || typeIcon;
+  const isTypeIcon = !ownLogo && !!typeIcon;
   return (
     <div
       draggable
@@ -75,9 +78,10 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
         {logoSrc ? (
           <img
             src={logoSrc}
-            alt={`${req.request_type_name || 'Request'} logo`}
-            className="max-h-full max-w-full object-contain p-3"
+            alt={`${req.request_type_name || 'Request'} ${isTypeIcon ? 'type icon' : 'logo'}`}
+            className={`max-h-full max-w-full object-contain p-3 ${isTypeIcon ? 'opacity-70' : ''}`}
             loading="lazy"
+            data-testid={`kanban-card-image-${req.id}`}
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         ) : (

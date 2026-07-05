@@ -28,6 +28,7 @@ class MarketingRequestType(BaseModel):
     production_lead_time_days: int = 7
     is_active: bool = True
     is_default: bool = False
+    icon_file_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -37,6 +38,7 @@ class MarketingRequestTypeCreate(BaseModel):
     design_lead_time_days: int = 7
     production_lead_time_days: int = 7
     is_active: bool = True
+    icon_file_id: Optional[str] = None
 
 
 class MarketingRequestTypeUpdate(BaseModel):
@@ -44,6 +46,7 @@ class MarketingRequestTypeUpdate(BaseModel):
     design_lead_time_days: Optional[int] = None
     production_lead_time_days: Optional[int] = None
     is_active: Optional[bool] = None
+    icon_file_id: Optional[str] = None
 
 
 # ──────────────────────────────────────────────────────────────

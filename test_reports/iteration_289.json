@@ -1,0 +1,43 @@
+{
+  "summary": "Tested Design Requests module rename (marketing_requests -> 'Design Requests - OLD', design_requests_new -> 'Design Requests') + request-type default icon fallback on cards + lead-driven creation targeting NEW module. Backend fully working (RBAC migrated, icon upload/serve/enrich, from-lead endpoint, lead_id filter). Frontend nav labels, H1 headings, Kanban icon fallback, List view thumbnails and lead-initiated creation all pass. ONE CRITICAL UI BUG: the Edit Request Type dialog does not render the 'Default icon' section — admins cannot upload a type icon via UI.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MarketingRequestTypeMasters.js (Edit Request Type dialog)",
+        "issue": "The 'Default icon' section is completely missing from the dialog JSX. Handlers/state exist (onIconChange, form.icon_file_id, TypeIconThumb) but no <input type='file' data-testid='mr-type-icon-input'>, no upload button (mr-type-icon-upload-btn), no preview (mr-type-icon-preview) is rendered. Result: admins cannot upload a per-type default icon through the UI. Only Name / Design lead / Production lead / Active are shown. Backend PATCH /api/marketing-request-types/{id} { icon_file_id } works fine (verified via pytest and by uploading via API).",
+        "selector": "[data-testid='mr-type-dialog']",
+        "priority": "CRITICAL"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_289_dr_rename_icons.py",
+    "/app/test_reports/pytest/iteration_289.xml"
+  ],
+  "action_items": [
+    "Add the missing 'Default icon' UI section to the Edit/Create Request Type dialog in /app/frontend/src/pages/MarketingRequestTypeMasters.js. It must include: (a) hidden <input type='file' data-testid='mr-type-icon-input' accept='image/*' onChange={onIconChange}>, (b) a wrapper with data-testid='mr-type-icon-preview' showing either <img src={form.icon_file_id ? `${API}/design-requests-new/files/${form.icon_file_id}` : ''} /> or a placeholder, (c) an 'Upload icon' button with data-testid='mr-type-icon-upload-btn' that triggers the hidden file input. Currently the section is entirely missing between the 'Production lead (days)' and 'Active' rows in the dialog (approximately after line 304 in MarketingRequestTypeMasters.js).",
+    "Fix the review-request/documented route path for Type Masters: the running app uses /admin/request-types (see App.js line 420 + DashboardLayout href), not /marketing-request-types. Either add a redirect or update docs.",
+    "Optional: expose a public /api/roles/module-labels endpoint (currently 404) so external tools can verify module labels without inspecting role responses."
+  ],
+  "critical_code_review_comments": [
+    "MarketingRequestTypeMasters.js has plumbed all the icon state, uploader, save payload and thumbnail renderer, but is missing the dialog UI to actually pick a file. High-impact copy-paste omission.",
+    "TypeIconThumb hides itself onError (style.display='none'). Fine, but consider showing a small placeholder icon on failure so the row layout doesn't jump.",
+    "design_requests_new._enrich_requestor_city issues one extra Mongo query per list call to build icon_by_type; acceptable at current volume but could be memoized or joined with an $lookup pipeline for large tenants.",
+    "The 4 lead-driven action buttons (request-neck-tags-btn, create-bottle-design-btn, request-bottle-design-btn, request-bottle-sample-btn) all correctly hit /api/design-requests-new/from-lead/... — verified via network log.",
+    "Sidebar labels and route/H1 combinations are internally consistent: 'Design Requests' -> /design-requests-new -> H1 'Design Requests'; 'Design Requests - OLD' -> /marketing-requests -> H1 'Design Requests - OLD'.",
+    "Marketing Request Type icon file cascade fallback (own logo -> request_type_icon_url -> placeholder) verified on both Kanban and List views: kanban-card-image-* elements present for cards with icon OR logo (13 of 21), remaining 8 fall back to placeholder; list view has 40 req-thumb-* elements (20 rows x desktop table + mobile card) with either <img> or <svg> depending on availability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_289_dr_rename_icons.py (new)"
+  ],
+  "success_rate": {"backend": "100% (3 passed, 1 skipped optional endpoint)", "frontend": "83% (5 of 6 review items pass; type-icon UI upload is broken)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water).",
+  "seed_data_creation": "Uploaded a 32x32 green PNG via /api/design-requests-new/upload and attached to request type 'Neck Tags' (id 8e6173f8-5490-4c6a-9950-ab0f0f029b47) via PATCH /api/marketing-request-types/{id}. Created 1 additional lead-driven design request DRN-2026-0003 for lead 08c93122-99fc-4587-b31c-559649f29c17 (Drive Folder Test Lead) — safe test data, can remain.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "PASS matrix: (1) Sidebar shows both 'Design Requests' and 'Design Requests - OLD' as CEO. (2) /design-requests-new renders H1 'Design Requests'; /marketing-requests renders H1 'Design Requests - OLD'. (3) Kanban board on /design-requests-new: cards without own logo but whose type has icon_file_id render <img data-testid='kanban-card-image-{id}'> pointing to /api/design-requests-new/files/{icon_file_id}; cards with own logo render own logo; both work. (4) List view on /design-requests-new: leading <div data-testid='req-thumb-{id}'> contains <img> if request has logo or type has icon, else an SVG tag placeholder. (5) Lead detail (id 08c93122-...): Customer branding card shows 4 buttons (request-neck-tags-btn, create-bottle-design-btn, request-bottle-design-btn, request-bottle-sample-btn); clicking Neck Tags posts to /api/design-requests-new/from-lead/{leadId}/neck-tags and the new DRN-* appears in the lead's requests list; clicking the newly created row navigates to /design-requests-new/{id} (NOT /marketing-requests/{id}); detail page lifecycle = 'Design Requests - New Lifecycle (default)'. (6) Backend pytest_iteration_289 all pass (see xml). FAIL: (F1) Type Masters at /admin/request-types (NOT /marketing-request-types as review request stated) — Edit dialog missing icon upload UI (mr-type-icon-preview / mr-type-icon-upload-btn / mr-type-icon-input NOT rendered). Once main agent adds the JSX, retest by opening the Edit dialog for Neck Tags, uploading a small PNG, saving, and verifying the type row shows the thumbnail (TypeIconThumb).",
+  "rca of the issue": "In /app/frontend/src/pages/MarketingRequestTypeMasters.js the developer wired up all the plumbing: state (setUploadingIcon), form.icon_file_id, onIconChange handler (posts to /api/design-requests-new/upload), save includes icon_file_id in the payload, and TypeIconThumb renders the icon in the table row. However the JSX section that actually renders the file input + upload button + preview inside <DialogContent> is missing (the dialog contents jump from 'Production lead (days)' straight to 'Active' toggle). The reproduction is: login as CEO -> /admin/request-types -> click the pencil icon on any type -> the dialog opens with only Name/Design lead/Production lead/Active fields, and NO 'Default icon' section. Fix: add the missing JSX block referenced above between the lead-time grid and the Active row."
+}
