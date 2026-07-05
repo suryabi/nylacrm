@@ -1274,3 +1274,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Backend (print_requests.py create): guard widened to accept a terminal current state (via state machine) OR the legacy FINAL_APPROVED_STATES — non-breaking.
 - Frontend (LeadBottleDesigns.js): canPrint = r.current_state_is_terminal && isAssignedToMe(r, user); isAssignedToMe checks assigned_user_id==user.id OR user.department (str/list) matches assigned_department_name OR user.role matches assigned_role.
 - Verified via curl: current_state_is_terminal correctly surfaces (production_completed=true; final_approved/production_in_progress=false for default DRN machine).
+
+## 2026-06 — Print Request detail: show all captured inputs
+- PrintRequestDetail.js: added InfoRows for Initial Order Quantity, Total Monthly Volume, Starting Monthly Volume (volume rows null-guarded) alongside existing Requested Due Date + Notes. Removed the redundant generic "Quantity" row (initial order quantity supersedes it).
+- Backend already persisted these fields on create; no backend change needed.
+- Verified via testing_agent iteration_291 (frontend-only, 5/5 fields render correctly on a sample PR).
