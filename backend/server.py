@@ -31,11 +31,6 @@ load_dotenv(ROOT_DIR / '.env')
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# ActiveMQ globals (will be set on startup)
-MQ_AVAILABLE = False
-mq_subscriber = None
-start_mq_subscriber = None
-stop_mq_subscriber = None
 
 # Resend email configuration
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
@@ -6103,86 +6098,7 @@ async def match_invoice_to_lead(
     
     return {'message': 'Invoice matched successfully', 'lead_id': lead.get('lead_id')}
 
-@api_router.get("/mq/status")
-async def get_mq_status(current_user: dict = Depends(get_current_user)):
-    """Get ActiveMQ connection status"""
-    if not MQ_AVAILABLE:
-        return {'status': 'unavailable', 'message': 'ActiveMQ subscriber module not loaded'}
-    
-    try:
-        is_connected = mq_subscriber.is_connected() if mq_subscriber else False
-        return {
-            'status': 'connected' if is_connected else 'disconnected',
-            'host': os.environ.get('ACTIVEMQ_HOST', 'not configured'),
-            'queue': os.environ.get('ACTIVEMQ_QUEUE', 'not configured'),
-            'enabled': os.environ.get('ACTIVEMQ_ENABLED', 'false')
-        }
-    except Exception as e:
-        return {'status': 'error', 'message': str(e)}
-
-class InvoiceWebhookPayload(BaseModel):
-    """Payload for invoice webhook (matches ActiveMQ message format)"""
-    invoiceDate: Optional[str] = None  # Correct field name
-    invoiceData: Optional[str] = None  # Legacy field name (typo in source system)
-    grossInvoiceValue: str
-    netInvoiceValue: str
-    C_LEAD_ID: Optional[str] = None
-    CA_LEAD_ID: str  # Our lead_id to match
-    invoiceNo: str
-    creditNoteValue: str
-    outstanding: Optional[float] = None
-    items: Optional[List[dict]] = None
-
-@api_router.post("/invoices/webhook")
-async def process_invoice_webhook(payload: InvoiceWebhookPayload):
-    """
-    Webhook endpoint for processing invoice messages.
-    Use this when ActiveMQ is not accessible or for testing.
-    No authentication required - validate via secret header in production.
-    """
-    try:
-        from mq_subscriber import process_invoice_manually
-        
-        invoice_data = payload.model_dump()
-        result = await process_invoice_manually(invoice_data, db)
-        
-        if result.get('success'):
-            return {
-                'status': 'success',
-                'message': f"Invoice {payload.invoiceNo} processed for lead {result.get('lead_id')}",
-                'details': result
-            }
-        else:
-            return {
-                'status': 'partial' if result.get('invoice_stored') else 'failed',
-                'message': result.get('error'),
-                'details': result
-            }
-    except ImportError:
-        raise HTTPException(status_code=500, detail='Invoice processing module not available')
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.get("/activemq/status")
-async def get_activemq_status_endpoint():
-    """
-    Get ActiveMQ connection status and statistics.
-    Useful for monitoring in production. No auth required for health checks.
-    """
-    try:
-        from mq_subscriber import get_activemq_status
-        status = get_activemq_status()
-        return status
-    except ImportError:
-        return {
-            'enabled': False,
-            'error': 'ActiveMQ module not available'
-        }
-    except Exception as e:
-        return {
-            'enabled': False,
-            'error': str(e)
-        }
+# ActiveMQ invoice-subscriber integration removed — no longer used.
 
 # ============= ACCOUNTS ROUTES =============
 
@@ -10962,41 +10878,27 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import and start ActiveMQ subscriber
-try:
-    from mq_subscriber import start_mq_subscriber as _start_mq, stop_mq_subscriber as _stop_mq, mq_subscriber as _mq_sub
-    MQ_AVAILABLE = True
-    mq_subscriber = _mq_sub
-    start_mq_subscriber = _start_mq
-    stop_mq_subscriber = _stop_mq
-except ImportError as e:
-    logger.warning(f"ActiveMQ subscriber not available: {e}")
 
 @app.on_event("startup")
 async def startup_event():
-    """Start ActiveMQ subscriber on app startup"""
-    global MQ_AVAILABLE
-    if MQ_AVAILABLE and start_mq_subscriber:
-        try:
-            start_mq_subscriber()
-            logger.info("ActiveMQ subscriber started")
-        except Exception as e:
-            logger.error(f"Failed to start ActiveMQ subscriber: {e}")
-            MQ_AVAILABLE = False
-    # Ensure the accounting-transactions de-dup unique index exists from boot,
-    # so the no-duplicate guarantee holds even before the first Zoho sync.
+    """App startup — keep this fast and non-blocking so the Kubernetes
+    readiness probe passes immediately. Any Mongo/network work is scheduled as
+    a background task rather than awaited on the critical startup path (a slow
+    or unreachable database must never stall the app from serving)."""
+    asyncio.create_task(_ensure_txn_indexes_bg())
+
+
+async def _ensure_txn_indexes_bg():
+    """Ensure the accounting-transactions de-dup unique index exists so the
+    no-duplicate guarantee holds even before the first Zoho sync. Runs in the
+    background and never blocks startup."""
     try:
         from routes.accounting_transactions import ensure_indexes as _ensure_txn_indexes
         await _ensure_txn_indexes()
     except Exception as e:
         logger.error(f"Failed to ensure accounting_transactions indexes: {e}")
 
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    if MQ_AVAILABLE and stop_mq_subscriber:
-        try:
-            stop_mq_subscriber()
-            logger.info("ActiveMQ subscriber stopped")
-        except Exception as e:
-            logger.error(f"Error stopping ActiveMQ subscriber: {e}")
     client.close()

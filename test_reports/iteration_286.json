@@ -1,0 +1,33 @@
+{
+  "summary": "Backend regression after ActiveMQ removal + non-blocking startup. Ran /app/backend/tests/test_iteration_286_activemq_removal.py — 13/13 passed. Verified: (1) /api/health, /api/healthz, /api/ping all 200. (2) POST /api/auth/login with CEO creds returns session_token + user object. (3) Removed ActiveMQ endpoints do NOT 500 — GET /api/mq/status = 404, GET /api/activemq/status = 404, POST /api/invoices/webhook = 405 (path is now shadowed by dynamic /api/invoices/{invoice_id} routes such as DELETE/void/pdf, so FastAPI returns Method Not Allowed instead of Not Found — this still confirms the ActiveMQ webhook POST handler is gone). (4) Core reads under CEO token all 200: /api/leads, /api/design-requests-new/, /api/invoices, /api/accounting-transactions. (5) Guard framework regression: /api/state-machines/fields/catalog?workflow_key=design_requests_new returns 200 with approved_versions + lead.status (10 opts) + lead.logo_url; /api/design-requests-new/24d674f4-74ac-4752-992e-9fc73c801bc0/available-transitions returns 200. Confirmed /app/backend/mq_subscriber.py is deleted. Confirmed server.py startup_event only does asyncio.create_task(_ensure_txn_indexes_bg()) — nothing awaited on the critical startup path. No import/runtime errors in backend logs after boot.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/invoices/webhook", "issue": "Returns 405 (not 404) because 'webhook' is captured by the dynamic /api/invoices/{invoice_id} route family. Not a regression — the ActiveMQ webhook POST handler is genuinely removed — but if the review expects a strict 404, the /api/invoices dynamic routes need explicit path constraints or a stub 404 handler."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_286_activemq_removal.py",
+    "/app/test_reports/pytest/iteration_286.xml"
+  ],
+  "action_items": [
+    "(Optional / cosmetic) If a strict 404 is required for POST /api/invoices/webhook, add an explicit route or path validation on /api/invoices/{invoice_id} handlers — currently FastAPI returns 405 because 'webhook' matches the invoice_id path param but no method is registered for that concrete combination."
+  ],
+  "critical_code_review_comments": [
+    "server.py startup_event is correctly non-blocking (asyncio.create_task(_ensure_txn_indexes_bg())). Good. However, there is a second @app.on_event('startup') handler init_master_locations_startup which also creates a background task — verified it too avoids awaited DB work on startup path. Both are safe for the readiness probe.",
+    "shutdown_db_client only calls client.close() — synchronous close on an AsyncIOMotorClient. This is fine (motor tolerates it) but for cleanliness use await client.close()? Motor's client.close() is synchronous, so current code is correct — no action needed.",
+    "server.py is 10,905 lines. This exceeds the 700-line guideline by ~15x. Continued modularization into /app/backend/routes/ is recommended (already partly done). Not a blocker.",
+    "The removed ActiveMQ InvoiceWebhookPayload Pydantic model class (server.py line 1515) is now dead code — the /api/invoices/webhook endpoint that used it is deleted. Safe to drop. Similarly server.py:813 still references 'Invoice fields (populated from ActiveMQ)' in a comment on a data model — the fields (invoice_number, invoice_amount, etc.) may still be populated by other flows (accounts.py PUT /accounts/{account_id}/invoices/{invoice_no}), so the fields themselves stay, but the comment should be updated to reflect the new source of truth."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_286_activemq_removal.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13 pytest)", "frontend": "not tested (per request)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). Login returns session_token; sent as Authorization: Bearer <session_token>.",
+  "seed_data_creation": "None. Read-only tests using existing DRN-2026-0001 (id 24d674f4-74ac-4752-992e-9fc73c801bc0).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reusable pytest suite: /app/backend/tests/test_iteration_286_activemq_removal.py — health probes, auth, removed-MQ-endpoints, core reads, guard-framework regression. Session-scoped auth_client fixture caches the CEO session_token. If a future change should force a strict 404 for /api/invoices/webhook (currently 405), update the acceptable set on the parametrize. mq_subscriber.py is confirmed deleted; server.py's startup_event only schedules a background task for accounting-transactions index creation.",
+  "rca_of_the_issue": "N/A — deployment-readiness regression check. The ActiveMQ integration is fully removed (mq_subscriber.py deleted, /api/mq/status + /api/activemq/status + POST /api/invoices/webhook all gone). Startup is now non-blocking (asyncio.create_task instead of await). Backend boots and serves immediately; all core routers still import and respond 200."
+}
