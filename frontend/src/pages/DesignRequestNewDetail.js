@@ -918,7 +918,7 @@ export default function DesignRequestNewDetail() {
                         disabled={verBusy[v.id]}
                         data-testid={`version-approve-btn-${v.id}`}
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve this version
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Choose this design
                       </Button>
                     )}
                     {!req.production && (
