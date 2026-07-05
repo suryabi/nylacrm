@@ -1279,3 +1279,13 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - PrintRequestDetail.js: added InfoRows for Initial Order Quantity, Total Monthly Volume, Starting Monthly Volume (volume rows null-guarded) alongside existing Requested Due Date + Notes. Removed the redundant generic "Quantity" row (initial order quantity supersedes it).
 - Backend already persisted these fields on create; no backend change needed.
 - Verified via testing_agent iteration_291 (frontend-only, 5/5 fields render correctly on a sample PR).
+
+## 2026-06 — Design Requests: "Choose this design" rename + require-chosen-version enforcement
+- RENAME (DesignRequestNewDetail.js): work-version button "Approve this version" → "Choose this design"; approved badge "Approved by X" → "Chosen by X"; revert button "Revert approval" → "Unselect".
+- ENFORCEMENT: certain state-machine actions can now require a chosen work version. Implemented purely via the existing guard engine — guard {field: approved_versions, op: not_empty}. augment_doc_for_guards already exposes approved_versions; trigger_transition runs evaluate_guards (server-side block) and the detail page already blocks the action + shows the guard message client-side.
+- Workflow builder (StateMachines.js): new friendly per-transition checkbox "Require a chosen work version" (data-testid txn-require-chosen-version-<idx>) that adds/removes the approved_versions:not_empty guard. Shown only for workflows exposing approved_versions (design_requests_new / marketing_requests). Lets users enable this on ANY custom state machine without hand-building guard conditions.
+- Default DRN seed (sm_helpers _DEFAULT_MR_TRANSITIONS): approve + final_approve now carry the guard (new tenants get it; requires redeploy).
+- Applied the guard to nyla-air-water's live DRN machine (approve + final_approve) via one-time script for preview.
+- Verified: testing_agent iteration_292 — 100% (rename labels, in_review Approve blocked until chosen then advances, builder checkbox pre-checked + persists). Engine unit-check: no chosen version → blocked with message; with chosen version → allowed.
+- NOTE (prod): state machines are per-tenant DATA. On the custom production workflow, after redeploy, open Workflow builder → expand the approve transition(s) → check "Require a chosen work version" → Save. No further redeploy needed for that config.
+- Minor: pre-existing React "unique key prop" console warning in DesignRequestNewDetail.js (non-blocking) noted by tester; not addressed.
