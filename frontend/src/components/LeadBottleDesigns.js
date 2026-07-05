@@ -17,8 +17,11 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 import { toast } from 'sonner';
-import { Sparkles, Download, Trash2, Eye, Loader2, Tag, Wine, FileImage, FlaskConical, UploadCloud, ClipboardList, ChevronRight } from 'lucide-react';
+import { Sparkles, Download, Trash2, Eye, Loader2, Tag, Wine, FileImage, FlaskConical, UploadCloud, ClipboardList, ChevronRight, Printer } from 'lucide-react';
 import { format } from 'date-fns';
+import CreatePrintRequestDialog from './CreatePrintRequestDialog';
+
+const FINAL_APPROVED_STATES = new Set(['final_approved', 'production_in_progress', 'production_completed']);
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
@@ -41,6 +44,8 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [leadHasLogo, setLeadHasLogo] = useState(!!hasLogo);
   const [resolvedLeadId, setResolvedLeadId] = useState(null);
+  const [monthlyVolume, setMonthlyVolume] = useState(null);
+  const [printRequestTarget, setPrintRequestTarget] = useState(null);
 
   const fetchDesigns = async () => {
     try {
@@ -48,6 +53,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       setDesigns(res.data?.designs || []);
       setLeadHasLogo(!!res.data?.has_logo);
       setResolvedLeadId(res.data?.lead_uuid || leadId);
+      setMonthlyVolume(res.data?.current_volume ?? null);
     } catch (e) {
       setDesigns([]);
       setResolvedLeadId(leadId);
@@ -261,40 +267,58 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
             <Badge variant="secondary" data-testid="lead-design-requests-count">{requests.length}</Badge>
           </div>
           <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
-            {requests.map((r) => (
-              <button
+            {requests.map((r) => {
+              const canPrint = FINAL_APPROVED_STATES.has(r.current_state_key);
+              return (
+              <div
                 key={r.id}
-                type="button"
-                onClick={() => navigate(`/design-requests-new/${r.id}`)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
+                className="flex items-center gap-2 pr-2 hover:bg-muted/50 transition-colors"
                 data-testid={`lead-design-request-${r.id}`}
-                title="Open request"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-primary truncate">{r.request_number}</span>
-                    {r.is_urgent && (
-                      <Badge className="text-[10px] font-normal bg-red-100 text-red-700 hover:bg-red-100">Urgent</Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {r.request_type_name || r.title || 'Design request'}
-                  </p>
-                </div>
-                <Badge
-                  variant="outline"
-                  className="text-[11px] font-medium shrink-0"
-                  style={{
-                    color: r.current_state_color || undefined,
-                    borderColor: r.current_state_color ? `${r.current_state_color}66` : undefined,
-                  }}
-                  data-testid={`lead-design-request-status-${r.id}`}
+                <button
+                  type="button"
+                  onClick={() => navigate(`/design-requests-new/${r.id}`)}
+                  className="flex items-center gap-3 px-3 py-2.5 text-left flex-1 min-w-0"
+                  title="Open request"
                 >
-                  {r.current_state_label || r.current_state_key || '—'}
-                </Badge>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-primary truncate">{r.request_number}</span>
+                      {r.is_urgent && (
+                        <Badge className="text-[10px] font-normal bg-red-100 text-red-700 hover:bg-red-100">Urgent</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {r.request_type_name || r.title || 'Design request'}
+                    </p>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="text-[11px] font-medium shrink-0"
+                    style={{
+                      color: r.current_state_color || undefined,
+                      borderColor: r.current_state_color ? `${r.current_state_color}66` : undefined,
+                    }}
+                    data-testid={`lead-design-request-status-${r.id}`}
+                  >
+                    {r.current_state_label || r.current_state_key || '—'}
+                  </Badge>
+                </button>
+                {canPrint && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 shrink-0 text-[11px]"
+                    onClick={(e) => { e.stopPropagation(); setPrintRequestTarget(r); }}
+                    data-testid={`create-print-request-btn-${r.id}`}
+                  >
+                    <Printer className="h-3.5 w-3.5 mr-1" /> Print Request
+                  </Button>
+                )}
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-              </button>
-            ))}
+              </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -512,6 +536,15 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create Print Request from an approved design request */}
+      <CreatePrintRequestDialog
+        open={!!printRequestTarget}
+        onOpenChange={(o) => { if (!o) setPrintRequestTarget(null); }}
+        designRequest={printRequestTarget}
+        defaultMonthlyVolume={monthlyVolume}
+        onCreated={() => { setPrintRequestTarget(null); fetchRequests(); }}
+      />
     </Card>
   );
 };

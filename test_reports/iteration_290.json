@@ -1,0 +1,39 @@
+{
+  "summary": "Verified new 'Create Print Request from Customer Branding' wiring — full backend + frontend integration. Backend: added test_print_request_create_from_branding.py covering final-approved gating (400), zero/negative qty (400), invalid due date (400) and persistence of total_monthly_volume/starting_monthly_volume/initial_order_quantity/requested_due_date/notes. Frontend: exercised the entire flow end-to-end on Lead detail page (Drive Folder Test Lead, uuid 08c93122-99fc-4587-b31c-559649f29c17) — Customer Branding card renders, design requests list renders, Print Request button is visible ONLY on final-approved rows and absent on submitted rows, dialog opens with pre-filled Total Monthly Volume from the lead's current_volume, submit created PR-2026-0006 with a success toast.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/leads/{id}", "issue": "Lead pydantic model requires current_volume to be a string; setting a numeric value in DB triggers a 500 ValidationError. Not caused by this iteration but worth type-coercing on read to prevent brittle failures."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_print_request_create_from_branding.py",
+    "/app/backend/tests/test_print_requests_module.py",
+    "/app/test_reports/pytest/iteration_290_branding.xml",
+    "/app/test_reports/pytest/iteration_290_module.xml"
+  ],
+  "action_items": [
+    "Optional: harden Lead read endpoint to coerce current_volume to string (or make schema more permissive) so bad DB data doesn't blow up the Lead Detail page."
+  ],
+  "critical_code_review_comments": [
+    "print_requests.py create endpoint correctly guards on FINAL_APPROVED_STATES, validates order_qty>0 and ISO date, and captures all new volume/quantity fields — good.",
+    "CreatePrintRequestDialog imports DatePicker as a named export which matches ui/date-picker.jsx (named export confirmed).",
+    "LeadBottleDesigns wires visibility with FINAL_APPROVED_STATES.has(r.current_state_key) — matches backend.",
+    "Consider making initial_order_quantity a required field in PrintRequestCreate (currently Optional=None with fallback to quantity). Frontend enforces >0 client-side but a Pydantic field-level validator would be safer."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_print_request_create_from_branding.py (NEW)"
+  ],
+  "success_rate": {"backend": "100% (5 passed, 1 skipped due to seed data; all 18 existing module tests still pass)", "frontend": "100% (button visibility, dialog open, prefill, submit → toast all verified)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, nyla-air-water tenant)",
+  "seed_data_creation": "Temporarily linked design request 5be2c9a1-b940-4d8e-8044-faa7299d5906 (state final_approved) to lead 08c93122-99fc-4587-b31c-559649f29c17 (Drive Folder Test Lead) and set lead.current_volume='8000' to exercise the frontend flow. Both fields were REVERTED (unset) after the test. All TEST_ prefixed print requests deleted from DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Nyla-air-water seed data has very few final-approved design requests, none originally tied to a lead. For future frontend testing of this flow you may need to link a final_approved design_requests_new doc to a lead via mongosh (as done here) and revert afterwards. Lead pydantic model treats current_volume as str, so any numeric override in DB will 500 the /leads/{id} endpoint — use '8000' (string) not 8000.",
+  "rca of the issue": "N/A — no unresolved issues. Both new-feature wiring and validation flow work correctly."
+}
