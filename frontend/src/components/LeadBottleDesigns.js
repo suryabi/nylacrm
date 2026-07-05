@@ -39,13 +39,18 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   const [submittingSample, setSubmittingSample] = useState(false);
   const [requests, setRequests] = useState([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
+  const [leadHasLogo, setLeadHasLogo] = useState(!!hasLogo);
+  const [resolvedLeadId, setResolvedLeadId] = useState(null);
 
   const fetchDesigns = async () => {
     try {
       const res = await axios.get(`${API_URL}/leads/${leadId}/bottle-designs`, { withCredentials: true });
       setDesigns(res.data?.designs || []);
+      setLeadHasLogo(!!res.data?.has_logo);
+      setResolvedLeadId(res.data?.lead_uuid || leadId);
     } catch (e) {
       setDesigns([]);
+      setResolvedLeadId(leadId);
     } finally {
       setLoading(false);
     }
@@ -54,7 +59,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   const fetchRequests = async () => {
     try {
       const res = await axios.get(`${API_URL}/design-requests-new`, {
-        params: { lead_id: leadId, no_limit: true },
+        params: { lead_id: resolvedLeadId, no_limit: true },
         withCredentials: true,
       });
       setRequests(res.data?.items || []);
@@ -66,9 +71,14 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   };
 
   useEffect(() => {
-    if (leadId) { fetchDesigns(); fetchRequests(); }
+    if (leadId) fetchDesigns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [leadId]);
+
+  useEffect(() => {
+    if (resolvedLeadId) fetchRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedLeadId]);
 
   const handleDownload = async (design) => {
     try {
@@ -90,7 +100,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
     if (!confirmDelete) return;
     setDeleting(true);
     try {
-      await axios.delete(`${API_URL}/leads/${leadId}/bottle-designs/${confirmDelete.id}`, { withCredentials: true });
+      await axios.delete(`${API_URL}/leads/${resolvedLeadId}/bottle-designs/${confirmDelete.id}`, { withCredentials: true });
       toast.success('Design deleted');
       setDesigns((prev) => prev.filter((x) => x.id !== confirmDelete.id));
       setConfirmDelete(null);
@@ -102,16 +112,16 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   };
 
   const handleCreateDesign = () => {
-    if (!hasLogo) {
+    if (!leadHasLogo) {
       toast.error('Upload a logo on the lead first, then create a bottle design.');
       return;
     }
-    navigate(`/bottle-preview?lead=${leadId}`);
+    navigate(`/bottle-preview?lead=${resolvedLeadId}`);
   };
 
   // Shared: POST a lead-logo-based design request (neck tags / bottle design).
   const postLeadLogoRequest = async (action, path, label) => {
-    if (!hasLogo) {
+    if (!leadHasLogo) {
       toast.error('Upload a logo on the lead first, then raise this request.');
       return;
     }
@@ -132,9 +142,9 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   };
 
   const handleRequestNeckTags = () =>
-    postLeadLogoRequest('neck-tags', `from-lead/${leadId}/neck-tags`, 'Neck tags');
+    postLeadLogoRequest('neck-tags', `from-lead/${resolvedLeadId}/neck-tags`, 'Neck tags');
   const handleRequestBottleDesign = () =>
-    postLeadLogoRequest('bottle-design', `from-lead/${leadId}/bottle-design`, 'Bottle design');
+    postLeadLogoRequest('bottle-design', `from-lead/${resolvedLeadId}/bottle-design`, 'Bottle design');
 
   const handleSubmitSample = async () => {
     if (!sampleFile) {
@@ -152,7 +162,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       fd.append('file', sampleFile);
       fd.append('attach_bottle_design', attachDesign ? 'true' : 'false');
       const res = await axios.post(
-        `${API_URL}/design-requests-new/from-lead/${leadId}/bottle-sample`,
+        `${API_URL}/design-requests-new/from-lead/${resolvedLeadId}/bottle-sample`,
         fd,
         { withCredentials: true, headers: { 'Content-Type': 'multipart/form-data' } }
       );

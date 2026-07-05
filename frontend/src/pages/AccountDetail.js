@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import TaxBillingCard from '../components/TaxBillingCard';
+import LeadBottleDesigns from '../components/LeadBottleDesigns';
 import { isValidMapsLink } from '../utils/mapsLink';
 import { MapsLinkInput } from '../components/MapsLinkInput';
 import GammaGenerateButton from '../components/gamma/GammaGenerateButton';
@@ -1887,6 +1888,11 @@ ${googleMapsLink}`;
 
           {/* Multi-contact table (synced to the Contacts module) */}
           <EntityContactsSection parentType="account" parentId={account.account_id || account.id} />
+
+          {/* Customer branding — bottle designs & design requests, carried over from the converted lead */}
+          {account.lead_id && (
+            <LeadBottleDesigns leadId={account.lead_id} company={account.account_name} hasLogo={!!(account.logo_url || account.logo)} />
+          )}
 
           {/* Invoice Summary — second section, right after Account Information */}
           <Card className="p-4 sm:p-6">
