@@ -1,0 +1,50 @@
+{
+  "summary": "Verified bug fix: 'Create Print Request' dialog now auto-populates Total Monthly Volume from the lead's opportunity_estimation monthly bottles (not current_volume). Backend GET /api/leads/{lead_id}/bottle-designs returns monthly_bottles as expected for both target leads; frontend end-to-end shows the value pre-filled in the dialog.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verification": {
+    "backend_api": {
+      "endpoint": "GET /api/leads/{lead_id}/bottle-designs",
+      "patni_plaza_2e60a270-1222-4431-8959-e27edbf988ff": {"monthly_bottles": 2500, "company": "Patni Plaza", "current_volume": null, "expected": 2500, "pass": true},
+      "taj_sarees_2a3ca2de-8e26-406a-8be0-d9a28adfc0fb": {"monthly_bottles": 1800, "company": "Taj Sarees", "current_volume": null, "expected": 1800, "pass": true},
+      "response_shape": "designs, company, has_logo, lead_uuid, current_volume, monthly_bottles"
+    },
+    "code_binding": {
+      "LeadBottleDesigns.js:70": "setMonthlyVolume(res.data?.monthly_bottles ?? res.data?.current_volume ?? null)",
+      "LeadBottleDesigns.js:559": "defaultMonthlyVolume={monthlyVolume}",
+      "CreatePrintRequestDialog.jsx:26": "setTotalMonthlyVolume(numOrEmpty(defaultMonthlyVolume)) on open",
+      "input_testid": "pr-total-monthly-volume"
+    },
+    "frontend_e2e": {
+      "test_1_patni_plaza": {
+        "lead_id": "2e60a270-1222-4431-8959-e27edbf988ff",
+        "seeded_drn_id": "test-drn-prefill-001 (state=production_completed, assigned_user_id=CEO)",
+        "row_status_shown": "Production Completed",
+        "print_request_btn_visible": true,
+        "dialog_pr_total_monthly_volume_value": "2500",
+        "expected": "2500",
+        "pass": true
+      },
+      "test_2_taj_sarees": {
+        "lead_id": "2a3ca2de-8e26-406a-8be0-d9a28adfc0fb",
+        "seeded_drn_id": "test-drn-prefill-002 (state=production_completed, assigned_user_id=CEO)",
+        "dialog_pr_total_monthly_volume_value": "1800",
+        "expected": "1800",
+        "pass": true
+      }
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LeadDetail component logs 'LeadDetail Opportunity Check' dozens of times per render — indicates a render loop / non-memoized derived state; not blocking but wasteful and should be memoized (log-only, no functional impact)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (2/2 leads)", "frontend": "100% (2/2 leads)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, nyla-air-water)",
+  "seed_data_creation": "Created 2 temporary design_requests_new docs (id=test-drn-prefill-001 for Patni Plaza, id=test-drn-prefill-002 for Taj Sarees) with current_state_key=production_completed (terminal) and assigned_user_id=CEO to trigger the Print Request button. Both were deleted after testing (verified deletedCount=2).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "For future tests around 'Create Print Request', the button (data-testid=create-print-request-btn-<request_id>) only renders when the design_requests_new item's current_state is terminal AND assigned_user_id matches user OR assigned_department_name matches one of user's departments. State machine id=2434a384-84aa-4a30-8b1c-576e2205e618 'Design Requests - New Lifecycle (default)': terminal state key = 'production_completed'. The Total Monthly Volume input testid is pr-total-monthly-volume; dialog title 'Create Print Request'.",
+  "rca of the issue": "Original bug: get_lead_bottle_designs projection excluded opportunity_estimation, so the API only returned current_volume (usually null). Frontend fell back to current_volume and the field was blank despite the 'Pre-filled from opportunity' placeholder. Fix: backend now projects opportunity_estimation and derives monthly_bottles = est.monthly_bottles ?? est.final_monthly ?? est.calculated_monthly; frontend prefers this value over current_volume. Verified end-to-end for both Patni Plaza (2500) and Taj Sarees (1800)."
+}

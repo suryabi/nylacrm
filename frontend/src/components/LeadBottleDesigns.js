@@ -67,7 +67,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
       setDesigns(res.data?.designs || []);
       setLeadHasLogo(!!res.data?.has_logo);
       setResolvedLeadId(res.data?.lead_uuid || leadId);
-      setMonthlyVolume(res.data?.current_volume ?? null);
+      setMonthlyVolume(res.data?.monthly_bottles ?? res.data?.current_volume ?? null);
     } catch (e) {
       setDesigns([]);
       setResolvedLeadId(leadId);
