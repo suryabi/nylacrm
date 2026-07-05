@@ -20,8 +20,23 @@ import { toast } from 'sonner';
 import { Sparkles, Download, Trash2, Eye, Loader2, Tag, Wine, FileImage, FlaskConical, UploadCloud, ClipboardList, ChevronRight, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import CreatePrintRequestDialog from './CreatePrintRequestDialog';
+import { useAuth } from '../context/AuthContext';
 
 const FINAL_APPROVED_STATES = new Set(['final_approved', 'production_in_progress', 'production_completed']);
+
+// A print request can be raised only by the person the design request is assigned to,
+// or by someone in the assigned department (mirrors the backend "my_assigned" rule).
+const isAssignedToMe = (r, user) => {
+  if (!user) return false;
+  if (r.assigned_user_id && r.assigned_user_id === user.id) return true;
+  const depts = Array.isArray(user.department)
+    ? user.department
+    : (user.department ? [user.department] : []);
+  const deptSet = new Set(depts.map((d) => String(d).trim().toLowerCase()));
+  if (r.assigned_department_name && deptSet.has(String(r.assigned_department_name).trim().toLowerCase())) return true;
+  if (r.assigned_role && user.role && String(r.assigned_role).trim().toLowerCase() === String(user.role).trim().toLowerCase()) return true;
+  return false;
+};
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const BACKEND = process.env.REACT_APP_BACKEND_URL;
@@ -30,6 +45,7 @@ const srcFor = (url) => (url ? `${BACKEND}${url}` : '');
 
 export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState(null);
@@ -268,7 +284,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
           </div>
           <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
             {requests.map((r) => {
-              const canPrint = FINAL_APPROVED_STATES.has(r.current_state_key);
+              const canPrint = FINAL_APPROVED_STATES.has(r.current_state_key) && isAssignedToMe(r, user);
               return (
               <div
                 key={r.id}
