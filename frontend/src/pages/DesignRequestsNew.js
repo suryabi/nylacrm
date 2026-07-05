@@ -489,7 +489,6 @@ export default function DesignRequestsNew() {
             {/* Dynamic state chips */}
             {states.length > 0 && (
               <div className="flex flex-wrap items-center gap-2" data-testid="state-chips">
-                <span className="text-xs text-slate-500 mr-1">Filter by state:</span>
                 {states.map(s => (
                   <StateChip
                     key={s.key}
