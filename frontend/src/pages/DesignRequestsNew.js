@@ -150,14 +150,24 @@ function StatusFilter({ states, stateCount, stateKey, onPick }) {
 
 // ── Advanced filters (popover with the 3 dropdowns) ──────────────────────────
 const ReqThumb = ({ req }) => {
-  const src = req.logo?.id
-    ? `${API}/design-requests-new/files/${req.logo.id}`
-    : (req.request_type_icon_url ? `${process.env.REACT_APP_BACKEND_URL}${req.request_type_icon_url}` : null);
+  const ownLogo = req.logo?.id ? `${API}/design-requests-new/files/${req.logo.id}` : null;
+  const typeIcon = req.request_type_icon_url ? `${process.env.REACT_APP_BACKEND_URL}${req.request_type_icon_url}` : null;
+  const box = "flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-zinc-100 bg-zinc-50";
+  if (!ownLogo && !typeIcon) {
+    return <span className={box} data-testid={`req-thumb-${req.id}`}><Tag className="h-3.5 w-3.5 text-zinc-300" /></span>;
+  }
   return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md border border-zinc-100 bg-zinc-50" data-testid={`req-thumb-${req.id}`}>
-      {src
-        ? <img src={src} alt="" className="h-full w-full object-contain p-0.5" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-        : <Tag className="h-3.5 w-3.5 text-zinc-300" />}
+    <span className="flex items-center gap-1" data-testid={`req-thumb-${req.id}`}>
+      {ownLogo && (
+        <span className={box}>
+          <img src={ownLogo} alt="" className="h-full w-full object-contain p-0.5" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        </span>
+      )}
+      {typeIcon && (
+        <span className={`${box} ${ownLogo ? 'opacity-80' : ''}`} title={`Type: ${req.request_type_name || 'Request'}`} data-testid={`req-type-icon-${req.id}`}>
+          <img src={typeIcon} alt={`${req.request_type_name || 'type'} icon`} className="h-full w-full object-contain p-0.5" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        </span>
+      )}
     </span>
   );
 };

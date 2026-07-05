@@ -90,6 +90,21 @@ function RequestCard({ req, index, total, color, onDragStart, onDragOver, onDrag
             <span className="text-[10px] font-medium">No logo</span>
           </div>
         )}
+        {ownLogo && typeIcon && (
+          <div
+            className="absolute top-1.5 right-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white/95 shadow-sm"
+            title={`Type: ${req.request_type_name || 'Request'}`}
+            data-testid={`kanban-card-type-icon-${req.id}`}
+          >
+            <img
+              src={typeIcon}
+              alt={`${req.request_type_name || 'Type'} icon`}
+              className="h-full w-full object-contain p-0.5"
+              loading="lazy"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          </div>
+        )}
       </div>
 
       <div className="p-2.5">

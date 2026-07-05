@@ -10,6 +10,7 @@
 - **Design Request Types** dialog (`MarketingRequestTypeMasters.js`, route /admin/request-types): upload/replace/remove a default icon; icon thumbnail shown in the types table (`TypeIconThumb`).
 - List endpoint enriches each request with `request_type_icon_url`. Cards fall back **own image → type icon → placeholder** on the Kanban board (`RequestKanbanNew.jsx`) and the list view rows/cards (`ReqThumb` in `DesignRequestsNew.js`).
 - Note: an earlier file-truncation had dropped the icon dialog JSX (caught by testing_agent) — re-added and screenshot-confirmed.
+- **Follow-up (2026-07-05):** when a request HAS its own logo, the type icon is now ALSO shown *next to* it — a small type-icon chip in the top-right corner of the Kanban card's logo band (`kanban-card-type-icon-{id}`), and a second small icon beside the logo thumb in the list view (`req-type-icon-{id}`) — so users can identify what each request is for even when a logo is present. Self-verified via screenshot (4 cards rendered the chip).
 
 
 ## 2026-07-05 — 🔴 P0 FIX: Production deployment failure (CI build) + hide lead-only request types ✅ (self-verified: CI=true build + screenshot)
