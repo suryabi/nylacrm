@@ -1289,3 +1289,10 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Verified: testing_agent iteration_292 — 100% (rename labels, in_review Approve blocked until chosen then advances, builder checkbox pre-checked + persists). Engine unit-check: no chosen version → blocked with message; with chosen version → allowed.
 - NOTE (prod): state machines are per-tenant DATA. On the custom production workflow, after redeploy, open Workflow builder → expand the approve transition(s) → check "Require a chosen work version" → Save. No further redeploy needed for that config.
 - Minor: pre-existing React "unique key prop" console warning in DesignRequestNewDetail.js (non-blocking) noted by tester; not addressed.
+
+## 2026-06 — Fix: Print Request "Total Monthly Volume" prefill from Opportunity Estimation
+- BUG: Create Print Request dialog showed blank Total Monthly Volume (placeholder "Pre-filled from opportunity"). Root cause: get_lead_bottle_designs projection excluded opportunity_estimation, so only current_volume (usually null) was returned.
+- FIX (routes/leads.py get_lead_bottle_designs): projection now includes opportunity_estimation; returns monthly_bottles = est.monthly_bottles ?? final_monthly ?? calculated_monthly.
+- FIX (LeadBottleDesigns.js): monthlyVolume = res.data.monthly_bottles ?? current_volume; passed as defaultMonthlyVolume to the dialog.
+- Verified: testing_agent iteration_293 — 100% (API returns 2500/1800 for Patni Plaza/Taj Sarees; dialog pre-fills those values e2e). Temp test DRN docs cleaned up.
+- Minor (noted, not fixed): LeadDetail logs a 'LeadDetail Opportunity Check' repeatedly per render (non-blocking; candidate for memoization).
