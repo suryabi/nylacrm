@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Trash2, GitBranch, Save, Copy, ArrowLeft, RefreshCw, ChevronRight, Settings2, Sparkles } from 'lucide-react';
+import { Plus, Trash2, GitBranch, Save, Copy, ArrowLeft, RefreshCw, ChevronRight, Settings2, Sparkles, Lock } from 'lucide-react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -248,6 +248,22 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
   const opNeedsValue = (key, op) => !!opsForField(key).find((o) => o.key === op)?.needs_value;
   const enumOptionsFor = (key) => fieldCatalog.fields.find((f) => f.key === key)?.options || [];
   const requestTypeOptions = fieldCatalog.fields.find((f) => f.key === 'request_type_name')?.options || [];
+  const fieldLabel = (key) => fieldCatalog.fields.find((f) => f.key === key)?.label || key;
+  const opLabel = (key, op) => (opsForField(key).find((o) => o.key === op)?.label) || op;
+  // Plain-English rendering of a transition's guard block for at-a-glance review.
+  const guardSummary = (t) => {
+    const conds = t?.guards?.conditions || [];
+    if (!conds.length) return null;
+    const joiner = (t.guards?.match || 'all') === 'any' ? ' OR ' : ' AND ';
+    return conds
+      .map((c) => {
+        const needsVal = opNeedsValue(c.field, c.op);
+        const val = Array.isArray(c.value) ? c.value.join(', ') : c.value;
+        const valStr = needsVal && val !== '' && val != null ? ` ${val}` : '';
+        return `${fieldLabel(c.field)} ${opLabel(c.field, c.op).replace(/\s*\(N\)/, '')}${valStr}`;
+      })
+      .join(joiner);
+  };
 
   const addState = () => {
     const key = `state_${(sm.states || []).length + 1}`;
@@ -706,6 +722,17 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                 </Button>
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600" onClick={() => removeTransition(idx)} title="Delete transition"><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
+              {(t.guards?.conditions || []).length > 0 && (
+                <div className="col-span-12 -mt-0.5">
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"
+                    title="Business rule: this action is blocked unless these conditions are met"
+                    data-testid={`guard-summary-${idx}`}
+                  >
+                    <Lock className="h-3 w-3" /> Blocked unless: {guardSummary(t)}
+                  </span>
+                </div>
+              )}
               {expandedTxn === idx && (
                 <div className="col-span-12 mt-2 -mx-3 -mb-2 px-3 py-3 bg-slate-50 border-t border-slate-200 space-y-2 text-xs">
                   <div className="font-medium text-slate-700">Options for "{t.action_label || t.action_key}" → {(sm.states || []).find(s => s.key === t.to_state)?.label || t.to_state}</div>
@@ -896,6 +923,11 @@ function StateMachineEditor({ sm, setSm, onSave, onCancel, actionCatalog, workfl
                             <option value="all">ALL rules (AND)</option>
                             <option value="any">ANY rule (OR)</option>
                           </select>
+                        </div>
+                      )}
+                      {(t.guards?.conditions || []).length > 0 && (
+                        <div className="text-[11px] text-slate-600 bg-emerald-50 border border-emerald-100 rounded px-2 py-1" data-testid={`guard-preview-${idx}`}>
+                          <span className="font-medium text-emerald-700">In plain English:</span> this action is blocked unless {guardSummary(t)}.
                         </div>
                       )}
                       {(t.guards?.conditions || []).map((c, ci) => (

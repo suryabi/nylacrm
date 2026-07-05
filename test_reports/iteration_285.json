@@ -1,0 +1,24 @@
+{
+  "summary": "Verified the guard-framework enhancements on the design_requests_new workflow. Backend (4/4 pytest passed): GET /api/state-machines/fields/catalog?workflow_key=design_requests_new returns 17 fields including the NEW derived fields (approved_versions, lead.status, lead.logo_url, lead.city); enum fields request_type_name (7 opts), assigned_department_name (5 opts) AND the new lead.status (10 opts) all have non-empty options (fix (b) verified). End-to-end enforcement on DRN-2026-0001 (id 24d674f4-74ac-4752-992e-9fc73c801bc0, state production_in_progress, 0 versions): after PUT'ing a guard {field:versions, op:count_gte, value:1} onto the close transition, available-transitions returned guards_ok=false with block_reasons mentioning versions, and POST /transition {action_key:'close'} returned HTTP 400 with the block message. Also verified 'approved_versions' derived field blocks 'close' the same way. Frontend: /design-requests-new no longer shows 'Filter by state:' literal text; Admin -> State Machines -> 'Design Requests - New Lifecycle (default)' opens; clicking transition-options-10 expands the close transition, add-guard-10 is enabled, guard-field-10-0 lists ALL 17 fields including 'Work versions', 'Approved work versions', 'Linked lead — status/logo/city'; selecting request_type_name populates 7 enum options and selecting lead.status populates 10 enum options (fix (b) UI-verified); after configuring the rule, guard-preview-10 shows 'In plain English: this action is blocked unless Work versions has at least 1.' and after collapsing, the amber 'Blocked unless: Work versions has at least 1' chip renders as guard-summary-10. CLEANUP: pytest fixture snapshots+restores the state machine's transitions verbatim; post-run inspection confirmed no residual guards on the SM. Frontend guard changes made in the UI (unsaved) were not clicked-Save, so no persisted UI mutation.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_285_guard_framework.py",
+    "/app/test_reports/pytest/iteration_285.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sm_helpers.FIELD_REGISTRY still aliases design_requests_new to marketing_requests by reference (from prev iteration comment) — verified this session because the new derived fields (approved_versions + lead.*) added on marketing_requests DID propagate correctly to design_requests_new via that alias. This is convenient but any future divergence between the two workflows requires deep-copy, else edits bleed across. Recommend converting to explicit copies or a shared function that returns a fresh dict per workflow.",
+    "/app/backend/routes/state_machines.py fields/catalog resolves enum options for both marketing_requests AND design_requests_new by name-checking the workflow_key — good, but the request_type_name / assigned_department_name options come from tenant masters (marketing-request-types, master-departments) which are shared with marketing_requests. If design_requests_new ever needs its own distinct type/department masters, this coupling will need to break."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_285_guard_framework.py (new)"
+  ],
+  "success_rate": {"backend": "100% (4/4 pytest)", "frontend": "100% (all builder-UI + list-page assertions passed)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (nyla-air-water); Authorization: Bearer <session_token>.",
+  "seed_data_creation": "No new data created. Existing DRN-2026-0001 (id 24d674f4-74ac-4752-992e-9fc73c801bc0, production_in_progress, 0 versions) was used as the test subject. State machine 2434a384-84aa-4a30-8b1c-576e2205e618 was snapshotted and restored to its original no-guards state by pytest teardown; verified via GET after teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reusable pytest suite: /app/backend/tests/test_iteration_285_guard_framework.py. It snapshots the SM transitions before mutating and restores after. Testids used on the Admin -> State Machines builder: transition-options-{idx}, add-guard-{idx}, guard-field-{idx}-{ci}, guard-op-{idx}-{ci}, guard-value-{idx}-{ci}, guard-message-{idx}-{ci}, guard-preview-{idx}, guard-summary-{idx}, guard-match-{idx}. For DRN close transition, idx=10 in the default DRN SM. State machine route is /admin/state-machines (not /state-machines). Field catalog now exposes: approved_versions (list), lead.status (enum, 10 opts), lead.logo_url (text), lead.city (text) for design_requests_new — mirrored on marketing_requests via FIELD_REGISTRY alias.",
+  "rca_of_the_issue": "N/A — feature validation for new guard-framework fields + UI enhancements. All assertions passed."
+}

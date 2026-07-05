@@ -343,7 +343,7 @@ async def fields_catalog(
 
     # Resolve enum options dynamically per tenant.
     enum_options: dict = {}
-    if workflow_key == "marketing_requests":
+    if workflow_key in ("marketing_requests", "design_requests_new"):
         types = await db.marketing_request_types.find(
             {"tenant_id": tenant_id}, {"_id": 0, "name": 1}
         ).to_list(200)
@@ -352,6 +352,14 @@ async def fields_catalog(
             {"tenant_id": tenant_id}, {"_id": 0, "name": 1}
         ).to_list(200)
         enum_options["assigned_department_name"] = sorted({d["name"] for d in depts if d.get("name")})
+        # Linked-lead status options — distinct values seen on this tenant's leads,
+        # merged with the standard pipeline statuses so the dropdown is useful even
+        # before any lead exists.
+        lead_statuses = await db.leads.distinct("status", {"tenant_id": tenant_id})
+        _default_lead_statuses = ["new", "contacted", "qualified", "proposal", "closed_won", "closed_lost"]
+        enum_options["lead.status"] = sorted(
+            {s for s in (list(lead_statuses) + _default_lead_statuses) if s}
+        )
 
     for f in fields:
         f["operators"] = OPERATORS_BY_TYPE.get(f["type"], [])

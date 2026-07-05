@@ -243,6 +243,10 @@ FIELD_REGISTRY = {
         {"key": "assigned_department_name", "label": "Assigned department", "type": "enum"},
         {"key": "lead_id", "label": "Linked lead", "type": "text"},
         {"key": "production.quantity_required", "label": "Production quantity", "type": "number"},
+        {"key": "approved_versions", "label": "Approved work versions", "type": "list"},
+        {"key": "lead.status", "label": "Linked lead — status", "type": "enum"},
+        {"key": "lead.logo_url", "label": "Linked lead — logo", "type": "text"},
+        {"key": "lead.city", "label": "Linked lead — city", "type": "text"},
     ],
     "delivery_orders": [
         {"key": "items", "label": "Order line items", "type": "list"},
@@ -460,6 +464,36 @@ def evaluate_required_fields(required_fields: Optional[list], doc: dict, data: O
         else:
             cleaned[key] = raw
     return (len(errors) == 0), errors, cleaned
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Derived fields for guards. Some business rules need conditions that aren't
+# stored directly on the document — e.g. "has an APPROVED version" or an
+# attribute of the linked lead. We compute those on the fly and merge them into
+# a copy of the doc before the guard engine runs. `_resolve_path` already walks
+# dotted keys, so nested data (lead.status, lead.logo_url…) is guardable.
+# ─────────────────────────────────────────────────────────────────────────────
+_LEAD_GUARD_FIELDS = {"_id": 0, "status": 1, "city": 1, "company": 1, "logo_url": 1, "priority": 1}
+
+
+async def augment_doc_for_guards(doc: dict, tenant_id: str) -> dict:
+    """Return a copy of `doc` enriched with derived, guardable fields:
+      - approved_versions : work versions whose is_approved flag is set
+      - lead              : attributes of the linked lead (status, city, logo…)
+    Safe for any workflow — irrelevant keys simply resolve to empty values."""
+    d = dict(doc)
+    versions = d.get("versions") or []
+    d["approved_versions"] = [
+        v for v in versions if isinstance(v, dict) and v.get("is_approved")
+    ]
+    lead_id = d.get("lead_id")
+    if lead_id:
+        d["lead"] = await db.leads.find_one(
+            {"id": lead_id, "tenant_id": tenant_id}, _LEAD_GUARD_FIELDS
+        ) or {}
+    else:
+        d["lead"] = {}
+    return d
 
 
 async def ensure_default_marketing_request_sm(tenant_id: str) -> dict:

@@ -51,6 +51,7 @@ from utils.sm_helpers import (
     evaluate_guards,
     evaluate_required_fields,
     applicable_required_fields,
+    augment_doc_for_guards,
     _is_admin,
 )
 from models.marketing_request import (
@@ -1229,12 +1230,13 @@ async def available_transitions(request_id: str, current_user: dict = Depends(ge
 
     sm = await _resolve_sm(tenant_id)
     transitions = find_transitions_from(sm, doc.get("current_state_key") or "")
+    guard_doc = await augment_doc_for_guards(doc, tenant_id)
     out = []
     for t in transitions:
         allowed = await user_can_trigger(t, current_user, tenant_id, doc.get("created_by"))
         target_state = find_state(sm, t.get("to_state") or "")
-        guards_ok, block_reasons = evaluate_guards(t.get("guards"), doc)
-        req_fields = applicable_required_fields(t.get("required_fields"), doc)
+        guards_ok, block_reasons = evaluate_guards(t.get("guards"), guard_doc)
+        req_fields = applicable_required_fields(t.get("required_fields"), guard_doc)
         out.append({
             "action_key": t.get("action_key"),
             "action_label": t.get("action_label") or t.get("action_key"),
@@ -1282,13 +1284,14 @@ async def trigger_transition(request_id: str, payload: TransitionRequest, curren
         raise HTTPException(400, "A comment is required for this transition.")
 
     # Guard gate — preconditions on existing data (e.g. "≥ 2 reference files").
-    guards_ok, guard_reasons = evaluate_guards(transition.get("guards"), doc)
+    guard_doc = await augment_doc_for_guards(doc, tenant_id)
+    guards_ok, guard_reasons = evaluate_guards(transition.get("guards"), guard_doc)
     if not guards_ok:
         raise HTTPException(400, " ".join(guard_reasons) or "This action is blocked by a workflow rule.")
 
     # Required-field gate — capture new data (e.g. neck-tag quantity).
     fields_ok, field_errors, captured = evaluate_required_fields(
-        transition.get("required_fields"), doc, payload.field_data,
+        transition.get("required_fields"), guard_doc, payload.field_data,
     )
     if not fields_ok:
         raise HTTPException(400, " ".join(field_errors) or "Required information is missing.")
