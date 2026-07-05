@@ -76,6 +76,10 @@ const LinkListField = ({ label, placeholder, links, onChange, onAdd, onRemove, t
   </div>
 );
 
+// These request types must be initiated from a Lead record only, so they are
+// hidden from the standalone "New Design Request" create form.
+const HIDDEN_STANDALONE_TYPE_NAMES = ['neck tags', 'request bottle design concept', 'request physical sample'];
+
 export default function NewDesignRequestNew() {
   const navigate = useNavigate();
   const { id: editId } = useParams();
@@ -171,6 +175,13 @@ export default function NewDesignRequestNew() {
   }, [leadSearch, selectedLead]);
 
   const selectedType = useMemo(() => types.find(t => t.id === form.request_type_id), [types, form.request_type_id]);
+  // Filter out lead-only types from the standalone picker. In edit mode, keep the
+  // request's current type visible even if it's one of the hidden ones.
+  const visibleTypes = useMemo(() => types.filter(t => {
+    const n = (t.name || '').trim().toLowerCase();
+    if (HIDDEN_STANDALONE_TYPE_NAMES.includes(n)) return isEdit && t.id === form.request_type_id;
+    return true;
+  }), [types, isEdit, form.request_type_id]);
   const minLeadDays = selectedType ? (selectedType.design_lead_time_days + selectedType.production_lead_time_days) : 0;
   const earliestDate = useMemo(() => {
     const d = new Date();
@@ -279,7 +290,7 @@ export default function NewDesignRequestNew() {
           </div>
           {/* Big chip-style picker */}
           <div className="flex flex-wrap gap-2">
-            {types.map(t => {
+            {visibleTypes.map(t => {
               const active = form.request_type_id === t.id;
               return (
                 <button
@@ -300,7 +311,7 @@ export default function NewDesignRequestNew() {
                 </button>
               );
             })}
-            {types.length === 0 && <span className="text-sm text-slate-400">Loading types…</span>}
+            {visibleTypes.length === 0 && <span className="text-sm text-slate-400">Loading types…</span>}
           </div>
           {selectedType && (
             <div className="mt-4 rounded-lg bg-emerald-50/60 border border-emerald-100 px-3 py-2 text-xs text-emerald-800">
