@@ -1,46 +1,47 @@
-<analysis>**original_problem_statement**: The application is a multi-tenant CRM for beverage and FMCG operations. The user requested fixes for a GOA Revenue Analytics undercount bug, enhancements to the Bottle Preview tool, UI makeovers for performance/metric dashboards, invoice voiding, and a deletion audit system. PRODUCT REQUIREMENTS: Robust accounting sync, UI metrics dashboards, accurate document/image rendering tools, and design request management.
+<analysis>**original_problem_statement**: The application is a multi-tenant CRM for beverage and FMCG operations. The user requested continuous enhancements including a complete bento-grid UI redesign for Design Requests, state machine business-rule guards, Kanban UI improvements, and a data migration from marketing requests to design requests. Currently, the user is facing a critical Production Deployment Failure (timeout on readiness) that needs immediate resolution. PRODUCT REQUIREMENTS: Robust dynamic state-machine workflows, UI metrics dashboards, accurate document/image rendering tools, and reliable production deployment configurations.
 
 **User's preferred language**: English (INSTRUCT next agent to respond in English only)
 
 **what currently exists?**: 
-A full-stack CRM with robust accounting/inventory modules. The app features advanced UI cards, realized margin calculations, and a deletion audit system. The  tool allows highly accurate white-label logo rendering scaled to real-world bottle dimensions, generating composites saved to a persistent Emergent Object Storage. The Lead Detail page includes a Customer branding section displaying requested/linked design workflows. Invoices are now synced strictly via direct Zoho PDF fetching, removing self-generated ReportLab PDFs. A standalone Design Requests - New module exists alongside standard Marketing Requests, complete with its own state machine ( workflow), RBAC controls, and recently revamped visual Kanban boards (showing logo bands and lead city ribbons).
+A full-stack CRM (React + FastAPI + MongoDB) with robust inventory and design workflow modules. The app features a highly dynamic  architecture allowing custom workflow states, transitions, and business-rule guards (e.g., block transitions if no files uploaded). The  page uses a modern 12-column Control Room bento grid. The Design Requests list view uses a consolidated Command Strip layout. The backend is configured for non-blocking startup. A migration path exists to port old Marketing Requests into Design Requests.
 
 **Last working item**:
-    - Last item agent was working: A complete UI redesign of the  page. The user requested a non-traditional, highly appealing, and intuitive layout with prominent state CTAs. The agent called the  which produced a 12-column Control Room bento grid blueprint (). The agent has just begun executing batch  edits to apply the new UI wrapper, hero section, and Action Hub.
+    - Last item agent was working: Debugging a critical Production Deployment Failure. The deployment is timing out waiting for readiness. The agent previously made the backend startup non-blocking and removed ActiveMQ to fix suspected hangs. However, the deploy failed again. The agent ran the , which identified the true root cause: the deployment is incorrectly trying to run the React dev server instead of serving the compiled  static files, alongside some hardcoded config issues.
     - Status: IN PROGRESS
     - Agent Testing Done: N
-    - Which testing method agent to use? screenshot tool (for frontend UI validation of the redesigned layout)
+    - Which testing method agent to use? manual testing by curl / bash (Check deployment configuration files, Dockerfile/Supervisor config if accessible via bash, or package.json start scripts to ensure proper production serving).
     - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  Issue 1: Accounting Sync categorizing MONEY OUT as MONEY IN (P1)
-     - Attempted fixes: Investigating transaction directions.
-     - Next debug checklist: Await user providing raw Zoho fields (via the  endpoint) for 2-3 misclassified June transactions.
-     - Why fix this issue and what will be achieved with the fix? Fixes fundamental accounting directions preventing manual corrections.
+  Issue 1: Production Deployment Failure - Dev Server vs Prod Build (P0)
+     - Attempted fixes: Made backend startup Mongo indexing non-blocking. Removed ActiveMQ. 
+     - Next debug checklist: Review the  output at the end of the history. Ensure the frontend is configured to serve the static  directory in production (via serve, nginx, or fastapi static mounting) rather than . Check  and deployment manifests/scripts if accessible.
+     - Why fix this issue and what will be achieved with the fix? Absolute blocker. The user cannot deploy their application to production.
+     - Status: IN PROGRESS
+     - Is recurring issue? Y
+     - Should Test frontend/backend/both after fix? backend (verify prod build serving via curl locally)
+     - Blocked on other issue: None
+
+  Issue 2: Hide specific request types from Design Request Create Form (P1)
+     - Attempted fixes: Identified the types to hide (Neck Tags, Request Bottle Design Concept, Request Physical Sample).
+     - Next debug checklist: Implement the logic in  to filter out these specific types from the dropdown, as they should only be initiated directly from a Lead record.
+     - Why fix this issue and what will be achieved with the fix? Prevents users from manually creating standalone requests for items that strictly require Lead context.
+     - Status: NOT STARTED (Agent got side-tracked by Kanban/Migration tasks)
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix? frontend
+
+  Issue 3: Accounting Sync categorizing MONEY OUT as MONEY IN (P2)
+     - Next debug checklist: Await user providing raw Zoho fields for misclassified transactions.
      - Status: USER VERIFICATION PENDING
      - Is recurring issue? Y
      - Should Test frontend/backend/both after fix? backend
-     - Blocked on other issue: Awaiting diagnostic data from user.
 
-  Issue 2: Slack Integration failing for Marketing Requests (P2)
-     - Next debug checklist: User needs to confirm production environment configurations.
-     - Status: USER VERIFICATION PENDING
-     - Is recurring issue? Y
-     - Should Test frontend/backend/both after fix? backend
-
-  Issue 3: Gemini API Key returns 403 PERMISSION DENIED (P2)
-     - Next debug checklist: Await user providing a valid key.
+  Issue 4: Slack Integration & Gemini API Key 403 (P2)
+     - Next debug checklist: Await user to confirm prod configs and valid Gemini keys.
      - Status: BLOCKED
 
 **In progress Task List**:
-  Task 1: Redesign Design Request New Detail Page (P0)
-     - Where to resume: The agent just applied 5 initial  blocks on  to implement the bento grid layout and hero section. The next step is to continue migrating the remaining component sections (File Assets, input fields, status timelines) to the new layout without breaking their functionality.
-     - What will be achieved with this? A top-tier, modern Command Center UI providing massive UX improvements over the traditional card stack.
-     - Status: IN PROGRESS
-     - Should Test frontend/backend/both after fix? frontend
-     - Blocked on something: None
-
-  Task 2: Document Sharing Framework Phase 2 (WhatsApp Integration) (P1)
+  Task 1: Document Sharing Framework Phase 2 (WhatsApp Integration) (P1)
      - Where to resume: Awaiting Meta Cloud API credentials.
      - What will be achieved with this? Allows sharing quotes/documents directly to WhatsApp.
      - Status: BLOCKED
@@ -52,24 +53,23 @@ A full-stack CRM with robust accounting/inventory modules. The app features adva
     - P0: SKU Hierarchy & Variant Management Phase 1 (Model + CRUD + UI for Variant Config).
     - P1: Refactor  (~3,300 lines) and  (~9,500 lines) — extract Zoho, reverse, and cancel helpers.
     - P1: Target Planning: Actual-vs-monthly-target performance view.
-    - P2: Accounting Phase 2: Accounting Dashboard / Reports.
     
     Future Tasks:
-    - P2: Implement Share on WhatsApp action for approved bottle designs on the Lead page (once Meta API is unblocked).
     - P2: Employee Payroll Management System.
     - P2: Auto-attach generated Presentations to Lead/Account.
     - P2: KB Phase 2: Per-document permissions, embedding-based retrieval, Google Drive auto-sync.
     - P2: Inventory Management Module - Phase 2+ (Stock Entries, Purchase Receipts, Adjustments).
 
 **Completed work in this session**
-- Displayed linked design requests in the Customer branding section on the Lead Detail page (Backend filtering updated + Frontend list rendered) (DONE)
-- Switched Invoice PDF downloads to directly fetch the official PDF from Zoho Books instead of generating via ReportLab, and improved frontend blob error parsing (DONE)
-- Redesigned Kanban cards for Design/Marketing requests to include wider dimensions, a top logo band, the lead's city ribbon, and requestor initials (DONE)
-- Scoped the Requested by dropdown filter to strictly populate users belonging to Sales, Marketing, or Design departments (DONE)
-- Generated comprehensive UI guidelines () via  for the  overhaul (DONE)
+- Redesigned  to a 12-column Control Room bento grid layout. (DONE)
+- Implemented State Machine Transition Guards/Business Rules logic natively with UI builder improvements (plain English previews, block chips). (DONE)
+- Purged ActiveMQ integration entirely and made FastAPI startup non-blocking. (DONE)
+- Redesigned  list view into a single modern 'Command Strip' toolbar. (DONE)
+- Added horizontal scroll arrow buttons to the Request Kanban board. (DONE)
+- Created and executed a backend migration script to move existing  to , preserving files and state. (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-   - Issue 1: usage: pdfplumber [-h] [--structure | --structure-text]
+   Issue 1: usage: pdfplumber [-h] [--structure | --structure-text]
                   [--format {csv,json,text}] [--types TYPES [TYPES ...]]
                   [--include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]]
                   [--exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]]
@@ -131,8 +131,8 @@ options:
    - Should Test frontend/backend/both after fix: backend
    - Is recurring issue? N
 
-   - Issue 2: Batch ID deduction mismatch.
-   - Debug checklist: Ignore  matching if the warehouse doesn't track batches during deductions.
+   Issue 2: Batch ID deduction mismatch.
+   - Debug checklist: Ignore  matching if the warehouse doesn't track batches.
    - Why to solve this issue and what will be achieved with this? Prevents silent stock deduction failures.
    - Should Test frontend/backend/both after fix: backend
    - Is recurring issue? N
@@ -141,46 +141,33 @@ options:
   - Issue recurrence in previous fork: Users reporting bugs on production deployment but testing in preview environment.
   - Recurrence count: 50+
   - Status: IN PROGRESS
-  - Note: Always clarify preview vs production environments when the user reports bugs.
+  - Note: The current P0 issue is literally a production deployment failure. Keep preview and prod environments strictly separated in your logic.
 
 **Code Architecture**
-- , : Backend routers for request management, now injecting lead_city/logo enrichment.
--  & : Invoice PDF retrieval logic using direct Zoho API calls.
-- : UI for fetching and showing attached state machine workflows.
--  & : Enhanced Kanban board cards.
-- : Undergoing major bento-grid UI refactor.
+- Frontend: React SPA, Shadcn UI components.
+- Backend: FastAPI, motor (async MongoDB). Heavy reliance on dynamically evaluated  stored in DB for request routing.
 
-**Key Technical Concepts**
-- **State Machine Architecture**: Request lifecycles are driven dynamically via  connected by .
-- **Canvas Compositing**: Frontend off-screen compositing for bottle mockups, saved to Emergent Object Storage.
-- **Zoho Blob Proxying**: Streaming PDF bytes directly from Zoho's internal  endpoint instead of relying on data dumps mapped to local PDF templates.
-
-**key DB schema**
-  - : Uses  field referencing object storage, stores arrays in .
-  - : Separate module mimicking .
-  - : Critical table used to map internal  to  and  for direct API calls.
+**Key DB schema**
+  - : {id, tenant_id, request_number, state_machine_id, versions[], status_history[]}
+  - : {id, workflow_key, states[], transitions[] (with  and )}
+  - : {id, path, filename, tenant_id}
 
 **changes in tech stack**
-  - None this session.
+  - Removed ActiveMQ completely. The application no longer uses message queues for invoices.
 
 **All files of reference** 
-  -  (Updated)
-  -  (Updated)
-  -  (Updated)
-  -  (Updated)
-  -  (Updated)
-  -  (Updated)
-  -  (Updated)
-  -  (Updated)
-  -  (Updated)
-  -  (Updated)
-  -  (Updated / Editing heavily)
-  -  (Created)
+  -  (Updated: Made startup non-blocking, removed MQ endpoints)
+  -  (Updated: Guard frameworks)
+  -  (Updated: Added guard UI chips)
+  -  (Updated: Bento Grid applied)
+  -  (Updated: Command Strip applied, Migration Dialog added)
+  -  (Updated: Scroll arrows added)
+  -  (Updated: Added  admin endpoint)
+  -  (Pending edits for P1 issue)
 
 **Areas that need refactoring**: 
   -  (> 9,600 lines)
   -  (> 3,300 lines)
-  -  (> 2,500 lines)
 
 **key api endpoints**
   - 
@@ -188,27 +175,29 @@ options:
   - 
 
 **Critical Info for New Agent** 
-- Invoices are now exclusively fetched from Zoho via the  collection linking to . Never attempt to generate invoices natively inside the CRM moving forward.
-- You are in the middle of a massive UI overhaul on . The user asked for a visually appealing, non-traditional design with prominent CTA buttons for current workflow states. Please follow the  strictly while applying updates, and ensure existing interactive logic (file deletion, uploading, state changes) is securely wired in the new UI.
+- The user is currently blocked by a production deployment timeout. The  at the very end of the chat history discovered that the production build exists but the container is erroneously trying to run the dev server. Prioritize fixing this serving configuration.
+- ActiveMQ is officially dead and removed from the codebase. Do not attempt to fix or restore it.
+- State machines are highly dynamic. Any UI buttons for workflows rely on the  endpoint which evaluates  locally.
 
 **documents and test reports created in this job** 
   - 
   - 
+  - 
+  - 
+  - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - User: Answered clarification; requested showing the workflow state label and all requests linked to a lead.
- - Agent: Implemented and verified linked requests on the Lead detail page.
- - User: In the invoices section, when I download invoice, it should download zoho invoice only. system need not generate any invoice on its own since its all integrate with zoho.
- - Agent: Modified the backend to pipe the raw Zoho PDF through and handled Blob errors gracefully on the frontend. Tested via curl and UI screenshot.
- - User: Requested the design request Kanban card to be wider/taller, show the logo on top, ribbon to show the lead's city, and bottom to show requestor initials.
- - Agent: Upgraded the Kanban cards, applied city/logo enrichment on the backend, and verified UI.
- - User: requested by dropdown should populate only users who belong to sales or marketing or design departments
- - Agent: Updated frontend logic to filter the Requested By dropdown exclusively for Sales, Marketing, and Design users.
- - User: in the design request new - the entire details page should be completely redesigned... involve the design agent to desing it... The actions Current state should be very prominent...
- - Agent: Used the  to create  and started applying bento grid and hero-section UI batch replacements on . (PENDING)
+ 1. User: Make Kanban scrollable with arrow buttons.
+ 2. Agent: Implemented left/right arrows on .
+ 3. User: Migrate all marketing requests to design requests - new.
+ 4. Agent: Built and tested an idempotent migration script and admin UI dialog. Verified via .
+ 5. System: Deploy FAILED (Timeout).
+ 6. User: Use deployment agent to debug deployment failure logs.
+ 7. Agent: Investigated and identified that ESLint warnings were treated as errors under , but compile succeeded. Called  for deeper RCA. (PENDING FIX)
 
 **Project Health Check:**
-Broken: None.
+Broken: Production Deployment (Dev server serving issue).
 Mocked: None.
 
 **3rd Party Integrations** 
@@ -217,21 +206,23 @@ Mocked: None.
  - Slack API (Bot token webhook)
  - Resend (Configured via env vars)
  - Meta WhatsApp Cloud API (Pending integration, requires User API Keys)
- - Emergent Object Storage (Uses Emergent LLM Key inside backend via )
+ - Emergent Object Storage (Uses Emergent LLM Key)
 
 **Testing status**
-  - Testing agent used after significant changes: NO (UI modifications tested manually via screenshots and curl this session)
-  - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: None (relying on )
-  - Known regressions: None
+  - Testing agent used after significant changes: YES (Iterations 285-288)
+  - Troubleshoot agent used after agent stuck in loop: YES (For the deployment failure)
+  - Test files created: None
+  - Known regressions: Production deploy failing due to serving dev server.
 
 **Credentials to test flow:**
 Refer to  (CEO: surya.yadavalli@nylaairwater.earth / test123)
 
 **What agent forgot to execute**
-The agent has initiated the  page redesign using  but didn't finish the entire page structure. Ensure the rest of the layout (including forms, asset files, and status history logs) is updated and rigorously visually tested via the screenshot tool, as extensive structural overhauls can sometimes sever button event hooks or state properties.
+The user explicitly asked: When the user creates neck tags, request bottle design and reqeust bottle sample - these are should be initiated from the lead itself. The design request should not have the options to create requests of these types. The agent engaged in an  about building a toggle, but got distracted by the Kanban/Migration requests and NEVER actually filtered these options out of the standalone  form.
 
 **Debugging checklist for current issue**
-    Issue: Complete  Redesign 
+    Issue: Production Deployment Failure
     Frontend files to check: 
-    - : Complete the batch replacements for the layout matching . Ensure the Current State action CTA section is prominent. Test file upload, timeline, and delete hooks after the redesign is mounted.</analysis>
+    -  (Check  scripts to see if it forces  instead of serving )
+    Backend/Deployment files to check:
+    - Check how the supervisor or Dockerfile (if accessible) serves the frontend. You may need to ensure  is used, or FastAPI mounts the  static directory when in production. Review  output for exact paths.</analysis>

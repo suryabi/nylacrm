@@ -22,7 +22,7 @@ load_dotenv("/app/backend/.env")
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL",
-    "https://fmcg-command-center.preview.emergentagent.com",
+    "https://design-workflow-hub-10.preview.emergentagent.com",
 ).rstrip("/")
 ADMIN_EMAIL = "surya.yadavalli@nylaairwater.earth"
 ADMIN_PASS = "test123"

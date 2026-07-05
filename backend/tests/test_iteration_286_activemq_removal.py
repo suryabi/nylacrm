@@ -12,7 +12,7 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://fmcg-command-center.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://design-workflow-hub-10.preview.emergentagent.com").rstrip("/")
 CEO_EMAIL = "surya.yadavalli@nylaairwater.earth"
 CEO_PASSWORD = "test123"
 DRN_ID = "24d674f4-74ac-4752-992e-9fc73c801bc0"
