@@ -1763,3 +1763,154 @@ async def submit_for_production(request_id: str, payload: ProductionSubmitReques
     )
     doc = await db.design_requests_new.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
     return doc
+
+
+# ──────────────────────────────────────────────────────────────
+# One-time migration: Marketing Requests → Design Requests - New
+# ──────────────────────────────────────────────────────────────
+# MR state_key → DRN state_key. Keys are identical today (identity map); edit
+# here if the two workflows ever diverge.
+_MIGRATION_STATE_MAP = {
+    "submitted": "submitted",
+    "inputs_needed": "inputs_needed",
+    "in_progress": "in_progress",
+    "in_review": "in_review",
+    "approved_internal": "approved_internal",
+    "final_approved": "final_approved",
+    "production_in_progress": "production_in_progress",
+    "production_completed": "production_completed",
+}
+
+# Bookkeeping fields that must NOT be copied verbatim (re-derived below).
+_MR_SKIP_FIELDS = {
+    "_id", "id", "current_state_key", "current_state_label", "current_state_color",
+    "state_machine_id", "state_machine_name",
+}
+
+
+def _collect_file_dicts(node, acc: dict):
+    """Recursively gather every embedded file record (a dict carrying both a
+    string 'id' and a string 'path') anywhere in a request document — covers
+    logo, references, versions[].files and production.final_approved_files."""
+    if isinstance(node, dict):
+        if isinstance(node.get("id"), str) and isinstance(node.get("path"), str):
+            acc[node["id"]] = node
+        for v in node.values():
+            _collect_file_dicts(v, acc)
+    elif isinstance(node, list):
+        for v in node:
+            _collect_file_dicts(v, acc)
+
+
+@router.post("/migrate-from-marketing")
+async def migrate_from_marketing(commit: bool = Query(False), current_user: dict = Depends(get_current_user)):
+    """Idempotent migration of THIS tenant's Marketing Requests into the
+    Design Requests - New module. Dry-run by default; pass ?commit=true to write.
+    Admin only. Originals in `marketing_requests` are left untouched. Re-running
+    is safe — records already migrated (matched by migrated_from_marketing_request_id)
+    are skipped."""
+    tenant_id = get_current_tenant_id()
+    if not _is_admin(current_user):
+        raise HTTPException(403, "Only administrators can run the migration.")
+
+    sm = await _resolve_sm(tenant_id)
+    sm_states = {s.get("key"): s for s in (sm.get("states") or [])}
+    fallback_key = "submitted" if "submitted" in sm_states else next(iter(sm_states), "submitted")
+
+    sources = await db.marketing_requests.find({"tenant_id": tenant_id}, {"_id": 0}).to_list(5000)
+    already = 0
+    to_migrate = []            # list of (new_doc, [file_dicts])
+    unmapped_states: dict = {}
+    now = datetime.now(timezone.utc).isoformat()
+
+    for mr in sources:
+        exists = await db.design_requests_new.find_one(
+            {"tenant_id": tenant_id, "migrated_from_marketing_request_id": mr["id"]},
+            {"_id": 0, "id": 1},
+        )
+        if exists:
+            already += 1
+            continue
+
+        old_key = mr.get("current_state_key")
+        new_key = _MIGRATION_STATE_MAP.get(old_key, old_key)
+        if new_key not in sm_states:
+            unmapped_states[old_key] = unmapped_states.get(old_key, 0) + 1
+            new_key = fallback_key
+        st = sm_states.get(new_key, {})
+
+        new_doc = {k: v for k, v in mr.items() if k not in _MR_SKIP_FIELDS}
+        new_doc.update({
+            "id": str(uuid.uuid4()),
+            "state_machine_id": sm.get("id"),
+            "state_machine_name": sm.get("name"),
+            "current_state_key": new_key,
+            "current_state_label": st.get("label", new_key),
+            "current_state_color": st.get("color"),
+            # DRN-only fields (MR has no lead linkage / board rank)
+            "board_rank": mr.get("board_rank"),
+            "is_urgent": bool(mr.get("is_urgent", False)),
+            "lead_id": mr.get("lead_id"),
+            "lead_name": mr.get("lead_name"),
+            "lead_company": mr.get("lead_company"),
+            "status_history": mr.get("status_history") or [{
+                "at": now, "from_state": None, "to_state": new_key,
+                "to_state_label": st.get("label", new_key),
+                "by": current_user.get("id"), "by_name": current_user.get("name"),
+                "note": f"Migrated from Marketing Request {mr.get('request_number')}",
+            }],
+            "migrated_from_marketing_request_id": mr["id"],
+            "migrated_from_request_number": mr.get("request_number"),
+            "migrated_at": now,
+        })
+        files: dict = {}
+        _collect_file_dicts(mr, files)
+        to_migrate.append((new_doc, list(files.values())))
+
+    file_ids = {f["id"] for _, fs in to_migrate for f in fs}
+    state_breakdown: dict = {}
+    for d, _ in to_migrate:
+        state_breakdown[d["current_state_key"]] = state_breakdown.get(d["current_state_key"], 0) + 1
+
+    summary = {
+        "dry_run": not commit,
+        "tenant_id": tenant_id,
+        "source_total": len(sources),
+        "already_migrated": already,
+        "to_migrate": len(to_migrate),
+        "files_to_copy": len(file_ids),
+        "unmapped_states": unmapped_states,
+        "state_breakdown": state_breakdown,
+        "preview": [
+            {"request_number": d.get("request_number"), "type": d.get("request_type_name"),
+             "state": d["current_state_key"], "files": len(fs)}
+            for d, fs in to_migrate[:15]
+        ],
+    }
+
+    if not commit:
+        return summary
+
+    # Commit — copy file metadata first (idempotent), then insert docs.
+    copied_files = 0
+    for _, fs in to_migrate:
+        for f in fs:
+            src = await db.marketing_request_files.find_one({"id": f["id"]}, {"_id": 0})
+            row = dict(src) if src else dict(f)
+            row.setdefault("tenant_id", tenant_id)
+            res = await db.design_requests_new_files.update_one(
+                {"id": f["id"], "tenant_id": tenant_id},
+                {"$setOnInsert": row},
+                upsert=True,
+            )
+            if res.upserted_id is not None:
+                copied_files += 1
+
+    docs = [d for d, _ in to_migrate]
+    inserted = 0
+    if docs:
+        result = await db.design_requests_new.insert_many(docs)
+        inserted = len(result.inserted_ids)
+
+    summary.update({"migrated": inserted, "files_copied": copied_files})
+    return summary

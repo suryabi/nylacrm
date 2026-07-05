@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Popover, PopoverTrigger, PopoverContent } from '../components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Skeleton } from '../components/ui/skeleton';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -15,6 +16,7 @@ import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   LayoutList, Tag, User, Users, Calendar, Loader2, Truck, GitBranch, Download, Hourglass,
   ChevronsUpDown, ArrowUp, ArrowDown, LayoutGrid, Flame, Filter, Check, Inbox, SlidersHorizontal,
+  ArrowLeftRight, CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -442,9 +444,103 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
   );
 }
 
+// ── Marketing → Design Requests migration (admin, dry-run then commit) ───────
+function MigrationDialog({ open, onOpenChange, onDone }) {
+  const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (!open) { setPreview(null); setResult(null); return; }
+    (async () => {
+      setLoading(true);
+      try {
+        const { data } = await axios.post(`${API}/design-requests-new/migrate-from-marketing`, {}, { headers: HEAD() });
+        setPreview(data);
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'Could not load migration preview');
+        onOpenChange(false);
+      } finally { setLoading(false); }
+    })();
+  }, [open]); // eslint-disable-line
+
+  const runMigration = async () => {
+    setRunning(true);
+    try {
+      const { data } = await axios.post(`${API}/design-requests-new/migrate-from-marketing?commit=true`, {}, { headers: HEAD() });
+      setResult(data);
+      toast.success(`Migrated ${data.migrated} request${data.migrated === 1 ? '' : 's'}`);
+      onDone?.();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Migration failed'); }
+    finally { setRunning(false); }
+  };
+
+  const breakdown = (result || preview)?.state_breakdown || {};
+  const unmapped = Object.keys(preview?.unmapped_states || {});
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg" data-testid="migration-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><ArrowLeftRight className="h-5 w-5 text-emerald-600" /> Migrate Marketing Requests</DialogTitle>
+          <DialogDescription>Copies your Marketing Requests (and their files, comments &amp; versions) into Design Requests - New. Originals are kept untouched and re-running is safe.</DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex h-32 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /></div>
+        ) : result ? (
+          <div className="space-y-3 py-2 text-center">
+            <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-500" />
+            <p className="text-lg font-semibold text-zinc-900">Migration complete</p>
+            <p className="text-sm text-zinc-500"><span className="font-semibold text-emerald-700">{result.migrated}</span> request(s) and <span className="font-semibold text-emerald-700">{result.files_copied}</span> file(s) migrated.</p>
+          </div>
+        ) : preview ? (
+          <div className="space-y-3 py-1">
+            <div className="grid grid-cols-3 gap-2">
+              {[['To migrate', preview.to_migrate], ['Already done', preview.already_migrated], ['Files', preview.files_to_copy]].map(([l, v]) => (
+                <div key={l} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-center">
+                  <p className="text-2xl font-bold text-zinc-900">{v}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-zinc-400">{l}</p>
+                </div>
+              ))}
+            </div>
+            {Object.keys(breakdown).length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(breakdown).map(([k, n]) => (
+                  <span key={k} className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[11px] text-zinc-600">{k.replace(/_/g, ' ')}: <b>{n}</b></span>
+                ))}
+              </div>
+            )}
+            {unmapped.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> Unmapped states will default to the initial state: {unmapped.join(', ')}
+              </div>
+            )}
+            {preview.to_migrate === 0 && <p className="rounded-lg bg-emerald-50 p-3 text-center text-sm text-emerald-700">All caught up — nothing to migrate.</p>}
+          </div>
+        ) : null}
+
+        <DialogFooter>
+          {!result && preview && preview.to_migrate > 0 && (
+            <Button onClick={runMigration} disabled={running} className="bg-emerald-700 hover:bg-emerald-800" data-testid="run-migration-btn">
+              {running ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Migrating…</> : `Migrate ${preview.to_migrate} request(s)`}
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="migration-close-btn">Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const ADMIN_ROLES = ['ceo', 'director', 'admin', 'system admin', 'system_admin', 'tenant_admin'];
+
 export default function DesignRequestsNew() {
   const navigate = useNavigate();
-  const { user } = useAuth(); // eslint-disable-line no-unused-vars
+  const { user } = useAuth();
+  const isAdmin = ADMIN_ROLES.includes((user?.role || '').trim().toLowerCase());
+  const [migrateOpen, setMigrateOpen] = useState(false);
   const [sp, setSp] = useSearchParams();
 
   const [queue, setQueue] = useState(sp.get('queue') || 'all');
@@ -597,6 +693,12 @@ export default function DesignRequestsNew() {
         </div>
         <div className="flex items-center gap-2">
           <ViewToggle view={view} setView={setView} />
+          {isAdmin && (
+            <Button variant="outline" onClick={() => setMigrateOpen(true)} data-testid="open-migration-btn" title="Migrate Marketing Requests into this module">
+              <ArrowLeftRight className="mr-2 h-4 w-4" strokeWidth={1.75} />
+              <span className="hidden sm:inline">Migrate</span>
+            </Button>
+          )}
           <Button variant="outline" onClick={exportCsv} disabled={exporting || data.total === 0} data-testid="mr-export-btn">
             {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" strokeWidth={1.75} />}
             <span className="hidden sm:inline">Export CSV</span>
@@ -661,6 +763,8 @@ export default function DesignRequestsNew() {
           )}
         </>
       )}
+
+      <MigrationDialog open={migrateOpen} onOpenChange={setMigrateOpen} onDone={() => { fetchList(); fetchCounts(); }} />
     </div>
   );
 }
