@@ -15,8 +15,15 @@ import {
 } from '../components/ui/select';
 import {
   Printer, Search, ChevronLeft, ChevronRight, ChevronDown, Tag, Calendar, Package,
-  Users, Building2, Loader2, X, MapPin, Download,
+  Users, Building2, Loader2, X, MapPin, Download, Trash2,
 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../components/ui/alert-dialog';
+import { useAuth } from '../context/AuthContext';
+
+const ADMIN_ROLES = ['ceo', 'director', 'admin', 'system admin', 'system_admin', 'owner'];
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -132,6 +139,22 @@ export default function PrintRequests() {
   });
 
   const [exporting, setExporting] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = ADMIN_ROLES.includes((user?.role || '').toLowerCase());
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const confirmDelete = async () => {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await axios.delete(`${API}/print-requests/${toDelete.id}`, { headers: HEAD() });
+      toast.success(`Deleted ${toDelete.print_number}`);
+      setToDelete(null);
+      fetchList(); fetchFacets();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete print request');
+    } finally { setDeleting(false); }
+  };
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -242,7 +265,14 @@ export default function PrintRequests() {
                 <CardContent className="p-4 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-slate-900 text-sm">{pr.source_title || pr.request_type_name || 'Print Request'}</span>
-                    <Badge variant="outline" style={statusStyle(pr.status_color)} className="border text-[10px] shrink-0">{pr.status_name}</Badge>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge variant="outline" style={statusStyle(pr.status_color)} className="border text-[10px]">{pr.status_name}</Badge>
+                      {isAdmin && (
+                        <button onClick={(e) => { e.stopPropagation(); setToDelete(pr); }} className="p-1 text-slate-400 hover:text-red-600" data-testid={`print-delete-${pr.id}`}>
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap text-[10px] text-muted-foreground font-mono">
                     <span className="inline-flex items-center gap-1"><Tag className="h-3 w-3" /> {pr.print_number}</span>
@@ -309,7 +339,16 @@ export default function PrintRequests() {
                         <TableCell className="py-3 text-sm text-slate-700">{pr.quantity}</TableCell>
                         <TableCell className="py-3 text-sm text-slate-600">{fmtDate(pr.requested_due_date)}</TableCell>
                         <TableCell className="py-3 text-sm text-slate-700">{pr.vendor_name || <span className="text-slate-300">—</span>}</TableCell>
-                        <TableCell className="py-3"><Badge variant="outline" style={statusStyle(pr.status_color)} className="border text-xs">{pr.status_name}</Badge></TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge variant="outline" style={statusStyle(pr.status_color)} className="border text-xs">{pr.status_name}</Badge>
+                            {isAdmin && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600 hover:bg-red-50 shrink-0" onClick={(e) => { e.stopPropagation(); setToDelete(pr); }} data-testid={`print-delete-${pr.id}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                       ))}
                     </React.Fragment>
@@ -332,6 +371,23 @@ export default function PrintRequests() {
           )}
         </>
       )}
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => { if (!o) setToDelete(null); }}>
+        <AlertDialogContent data-testid="print-delete-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete print request?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {toDelete?.print_number}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="print-delete-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700" data-testid="print-delete-confirm">
+              {deleting ? 'Deleting…' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -367,6 +367,17 @@ async def _enrich_requestor_city(rows, tenant_id: str):
                 s.get("key"): bool(s.get("is_terminal")) for s in (sm.get("states") or [])
             }
 
+    # Fallback map: union of terminal flags across the tenant's design_requests_new
+    # workflow(s). Old/migrated requests can carry a stale state_machine_id (or a
+    # state key absent from it); we still resolve terminality via the live workflow.
+    fallback_terminal = {}
+    async for sm in db.state_machines.find(
+        {"tenant_id": tenant_id, "applied_to": "design_requests_new"}, {"_id": 0, "states": 1}
+    ):
+        for s in (sm.get("states") or []):
+            if s.get("key") is not None and (s.get("key") not in fallback_terminal or s.get("is_terminal")):
+                fallback_terminal[s.get("key")] = bool(s.get("is_terminal"))
+
     for r in rows:
         city = city_by_id.get(r.get("created_by"))
         r["created_by_city"] = city
@@ -375,9 +386,9 @@ async def _enrich_requestor_city(rows, tenant_id: str):
         r["lead_city"] = lead_city
         r["lead_city_color"] = _color_for(lead_city)
         r["request_type_icon_url"] = icon_by_type.get(r.get("request_type_id"))
-        r["current_state_is_terminal"] = terminal_by_sm.get(
-            r.get("state_machine_id"), {}
-        ).get(r.get("current_state_key"), False)
+        own = terminal_by_sm.get(r.get("state_machine_id"), {})
+        key = r.get("current_state_key")
+        r["current_state_is_terminal"] = own[key] if key in own else fallback_terminal.get(key, False)
     return rows
 
 

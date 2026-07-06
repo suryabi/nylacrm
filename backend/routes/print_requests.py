@@ -318,6 +318,27 @@ async def get_print_request(print_id: str, current_user: dict = Depends(get_curr
     doc = await db.print_requests.find_one({"id": print_id, "tenant_id": tenant_id}, {"_id": 0})
     if not doc:
         raise HTTPException(404, "Print request not found")
+    # Live CDR / file link(s) from the associated design request — always reflects the
+    # current value so edits to the design request's File Link show up here too.
+    src_id = doc.get("source_marketing_request_id") or doc.get("marketing_request_id")
+    doc["design_file_links"] = []
+    if src_id:
+        dr = await db.design_requests_new.find_one(
+            {"id": src_id, "tenant_id": tenant_id}, {"_id": 0, "file_links": 1, "cdr_link": 1}
+        )
+        # Older/migrated print requests reference the legacy marketing_requests collection.
+        if not dr:
+            dr = await db.marketing_requests.find_one(
+                {"id": src_id, "tenant_id": tenant_id}, {"_id": 0, "file_links": 1, "cdr_link": 1}
+            )
+        if dr:
+            links = []
+            if dr.get("cdr_link"):
+                links.append(dr["cdr_link"])
+            for l in (dr.get("file_links") or []):
+                if l and l not in links:
+                    links.append(l)
+            doc["design_file_links"] = links
     return doc
 
 

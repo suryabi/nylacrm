@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from './ui/select';
 import { DatePicker } from './ui/date-picker';
+import { Checkbox } from './ui/checkbox';
 import { Printer, Loader2, FileCheck2 } from 'lucide-react';
 import { PrintRequestOrderBanner } from './PrintRequestOrderBanner';
 
@@ -32,6 +33,7 @@ export const SendForPrintingDialog = ({ open, onOpenChange, marketingRequest, on
   const [notes, setNotes] = useState('');
   const [deptId, setDeptId] = useState('');
   const [vendorId, setVendorId] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const approvedFiles = useMemo(() => {
@@ -43,7 +45,7 @@ export const SendForPrintingDialog = ({ open, onOpenChange, marketingRequest, on
     if (!open) return;
     // reset on open
     setTotalMonthlyVolume(''); setStartingMonthlyVolume(''); setInitialOrderQty('');
-    setDueDate(null); setNotes(''); setDeptId(''); setVendorId('');
+    setDueDate(null); setNotes(''); setDeptId(''); setVendorId(''); setConfirmed(false);
     (async () => {
       try {
         const [d, v] = await Promise.all([
@@ -149,11 +151,17 @@ export const SendForPrintingDialog = ({ open, onOpenChange, marketingRequest, on
             <Label htmlFor="pr-notes">Notes / print specs</Label>
             <Textarea id="pr-notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Material, size, color, finish…" rows={3} data-testid="send-print-notes" />
           </div>
+          <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 cursor-pointer">
+            <Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} className="mt-0.5" data-testid="send-print-confirm-checkbox" />
+            <span className="text-xs text-slate-700 leading-snug">
+              I confirm that this is not a sample request or a design request. This request is for the customer's initial order.
+            </span>
+          </label>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
-          <Button onClick={submit} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700" data-testid="send-print-submit">
+          <Button onClick={submit} disabled={saving || !confirmed} className="bg-emerald-600 hover:bg-emerald-700" data-testid="send-print-submit">
             {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating…</> : <><Printer className="h-4 w-4 mr-2" /> Create Print Request</>}
           </Button>
         </DialogFooter>

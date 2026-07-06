@@ -8,6 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { DatePicker } from './ui/date-picker';
+import { Checkbox } from './ui/checkbox';
 import { Loader2, Printer } from 'lucide-react';
 import { PrintRequestOrderBanner } from './PrintRequestOrderBanner';
 
@@ -20,6 +21,7 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
   const [initialOrderQty, setInitialOrderQty] = useState('');
   const [deliveryDate, setDeliveryDate] = useState(null);
   const [notes, setNotes] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -29,6 +31,7 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
       setInitialOrderQty('');
       setDeliveryDate(null);
       setNotes('');
+      setConfirmed(false);
     }
   }, [open, defaultMonthlyVolume]);
 
@@ -86,10 +89,16 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
             <Label htmlFor="pr-notes">Notes</Label>
             <Textarea id="pr-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional print specs / notes" data-testid="pr-notes" />
           </div>
+          <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 cursor-pointer">
+            <Checkbox checked={confirmed} onCheckedChange={(v) => setConfirmed(!!v)} className="mt-0.5" data-testid="pr-confirm-checkbox" />
+            <span className="text-xs text-slate-700 leading-snug">
+              I confirm that this is not a sample request or a design request. This request is for the customer's initial order.
+            </span>
+          </label>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving} data-testid="pr-cancel-btn">Cancel</Button>
-          <Button onClick={submit} disabled={saving} data-testid="pr-submit-btn">
+          <Button onClick={submit} disabled={saving || !confirmed} data-testid="pr-submit-btn">
             {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating…</> : 'Create Print Request'}
           </Button>
         </DialogFooter>

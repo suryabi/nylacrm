@@ -251,6 +251,27 @@ export default function PrintRequestDetail() {
             </CardContent>
           </Card>
 
+          {/* CDR File Link for Printing — live from the associated design request */}
+          <Card className="border border-emerald-200 rounded-xl bg-emerald-50/40" data-testid="print-cdr-section">
+            <CardContent className="p-5">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2 mb-1">
+                <ExternalLink className="h-4 w-4 text-emerald-600" /> CDR File Link for Printing
+              </h3>
+              <p className="text-xs text-slate-500 mb-3">Always reflects the current File Link on the source design request.</p>
+              {(pr.design_file_links || []).length === 0 ? (
+                <p className="text-sm text-muted-foreground" data-testid="print-cdr-empty">No CDR / file link set on the design request yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {(pr.design_file_links || []).map((lnk, i) => (
+                    <a key={i} href={lnk} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 break-all" data-testid={`print-cdr-link-${i}`}>
+                      <ExternalLink className="h-4 w-4 shrink-0" /> <span className="truncate">{lnk}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {pr.notes && (
             <Card className="border border-slate-100 rounded-xl">
               <CardContent className="p-5">
