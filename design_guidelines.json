@@ -1,145 +1,98 @@
 {
-  "project_context": {
-    "domain": "SaaS CRM / Workflow Dashboard",
-    "theme": "Light",
-    "archetype": "Archetype 4 (Swiss & High-Contrast) blended with subtle Archetype 1 (Organic/FMCG context)",
-    "description": "Redesigning the List view of 'Design Requests - New' to reduce cognitive overload, consolidate scattered controls, and create a highly scannable, contemporary data table while preserving the existing Kanban board."
-  },
+  "project_name": "B2B CRM Details Redesign",
+  "theme": "light",
+  "archetype": "Swiss & High-Contrast with Emerald Accent",
+  "description": "A refined, scan-optimized layout for dense data pages (Lead and Account details). Introduces a sticky table-of-contents navigation, highly distinct collapsible section headers, and generous optical spacing to prevent visual fatigue.",
   "typography": {
-    "font_families": {
-      "heading": "Cabinet Grotesk",
-      "body": "Manrope",
-      "mono": "JetBrains Mono"
-    },
+    "primary_font": "Manrope, sans-serif",
+    "body_font": "IBM Plex Sans, sans-serif",
     "hierarchy": {
-      "page_title": "text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900",
-      "section_title": "text-lg font-semibold tracking-tight text-zinc-900",
-      "table_header": "text-xs font-semibold tracking-[0.05em] uppercase text-zinc-500",
-      "body_text": "text-sm font-medium text-zinc-700",
-      "meta_text": "text-xs font-medium text-zinc-500"
+      "h1_page_title": "text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 font-manrope",
+      "h2_section_title": "text-xl font-bold tracking-tight text-slate-900 font-manrope",
+      "eyebrow": "text-xs font-bold uppercase tracking-[0.15em] text-slate-500",
+      "body": "text-sm text-slate-600 font-ibm-plex",
+      "metric_value": "text-2xl font-bold tracking-tight text-slate-900 font-manrope"
     }
   },
-  "color_palette": {
-    "backgrounds": {
-      "page": "bg-zinc-50",
+  "colors": {
+    "background": {
+      "app": "bg-slate-50",
       "surface": "bg-white",
-      "surface_hover": "bg-zinc-50",
-      "subtle": "bg-zinc-100"
+      "surface_header": "bg-slate-50/80",
+      "surface_hover": "bg-slate-100/50"
+    },
+    "border": {
+      "subtle": "border-slate-200",
+      "divider": "border-slate-100",
+      "focus": "border-emerald-500"
     },
     "text": {
-      "primary": "text-zinc-900",
-      "secondary": "text-zinc-500",
-      "tertiary": "text-zinc-400"
+      "primary": "text-slate-900",
+      "secondary": "text-slate-500",
+      "accent": "text-emerald-700",
+      "muted": "text-slate-400"
     },
-    "borders": {
-      "default": "border-zinc-200",
-      "focus": "ring-zinc-900",
-      "subtle": "border-zinc-100"
-    },
-    "actions": {
-      "primary": "bg-emerald-700 text-white hover:bg-emerald-800",
-      "secondary": "bg-white border border-zinc-200 text-zinc-900 hover:bg-zinc-50",
-      "ghost": "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900"
-    },
-    "status_indicators": {
-      "urgent": "text-rose-700 bg-rose-50 border-rose-200",
-      "new": "text-blue-700 bg-blue-50 border-blue-200",
-      "tight_timeline": "text-amber-700 bg-amber-50 border-amber-200",
-      "approved": "text-emerald-700 bg-emerald-50 border-emerald-200",
-      "in_progress": "text-indigo-700 bg-indigo-50 border-indigo-200",
-      "default": "text-zinc-700 bg-zinc-100 border-zinc-200"
+    "accent": {
+      "primary": "bg-emerald-600",
+      "primary_hover": "bg-emerald-700",
+      "subtle": "bg-emerald-50",
+      "indicator": "bg-emerald-500"
     }
   },
-  "layout_hierarchy": {
-    "page_container": "min-h-screen bg-zinc-50 p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto",
-    "top_header": {
-      "description": "Consolidates Title, Total Count, and Main Actions into a single crisp row.",
-      "layout": "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4",
-      "left": "H1 Title (Cabinet Grotesk) + subdued text-sm badge showing total count.",
-      "right": "Flex row gap-3: [List/Kanban Toggle] [Export CSV (Ghost)] [New Request (Primary Button)]"
+  "spacing_and_layout": {
+    "page_container": "max-w-[1600px] mx-auto p-4 md:p-8 flex flex-col xl:flex-row gap-8 items-start relative",
+    "main_content_column": "flex-1 flex flex-col gap-8 w-full min-w-0",
+    "sidebar_navigation": "hidden xl:block w-72 shrink-0 sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto no-scrollbar pb-8",
+    "section_gap": "gap-8",
+    "card_padding": "p-0",
+    "content_padding": "p-6 sm:p-8"
+  },
+  "components": {
+    "StickySectionNav": {
+      "container": "flex flex-col gap-1 border-l border-slate-200 pl-4",
+      "nav_item": "group flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900 data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-700 data-[active=true]:font-bold relative",
+      "nav_item_indicator": "absolute -left-[17px] w-[2px] h-6 rounded-r bg-emerald-500 transition-transform origin-left scale-y-0 group-data-[active=true]:scale-y-100",
+      "usage": "Use IntersectionObserver to track which section is currently in view and update the `data-active` state of the nav items."
     },
-    "consolidated_toolbar": {
-      "description": "Replaces 3 separate bands (Tabs, 8 Status Pills, 4 Filter Drops) with a single highly functional 'Command Strip'.",
-      "layout": "flex flex-col lg:flex-row gap-3 p-1.5 bg-white border border-zinc-200 rounded-lg shadow-sm items-center",
-      "components": {
-        "queue_switcher": {
-          "type": "Segmented Control",
-          "layout": "flex p-1 bg-zinc-100 rounded-md shrink-0 w-full lg:w-auto",
-          "items": "All, Raised By Me, Assigned To Me",
-          "style": "Active item gets bg-white, shadow-sm, text-zinc-900. Inactive gets text-zinc-500. Include count badges (text-xs) inside each segment."
-        },
-        "search_bar": {
-          "type": "Input",
-          "layout": "flex-1 relative w-full",
-          "style": "Border-none, focus:ring-0, bg-transparent. Search icon (lucide) left aligned. Minimalist, looks like an OS search bar."
-        },
-        "divider": "w-px h-6 bg-zinc-200 hidden lg:block",
-        "status_filter": {
-          "type": "Popover / Multi-select Dropdown",
-          "description": "Replaces the 8 pills.",
-          "trigger_style": "Ghost button, 'Status: All' or 'Status: 2 Selected'.",
-          "menu_style": "Dropdown with checkboxes for the 8 states, each showing their respective counts right-aligned."
-        },
-        "advanced_filters": {
-          "type": "Popover",
-          "trigger_style": "Ghost button with Lucide Filter icon. If active, show a tiny blue dot indicator.",
-          "menu_style": "A popover card containing the 3 remaining dropdowns: Request Type, Assigned Team, Requested By. Includes a 'Clear All' button."
-        }
-      }
+    "SectionContainer": {
+      "wrapper": "scroll-mt-24 group flex flex-col rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md overflow-hidden",
+      "usage": "Each section must have a unique `id` matching the href of the Sticky Nav. Use `scroll-mt-24` (or similar) to ensure the header doesn't get hidden behind a sticky top-nav when scrolling to anchor."
+    },
+    "SectionHeader": {
+      "wrapper": "flex items-center justify-between px-6 py-5 border-b border-slate-100 bg-slate-50/50 cursor-pointer select-none transition-colors hover:bg-slate-50",
+      "left_group": "flex items-center gap-4",
+      "icon_wrapper": "flex items-center justify-center w-10 h-10 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-500 group-hover:text-emerald-600 group-hover:border-emerald-200 group-hover:bg-emerald-50/50 transition-colors",
+      "title_group": "flex flex-col gap-0.5",
+      "indicator_pill": "w-1.5 h-6 bg-emerald-500 rounded-full hidden sm:block",
+      "action_group": "flex items-center gap-3 text-slate-400",
+      "collapse_icon": "w-5 h-5 transition-transform duration-300 data-[state=open]:rotate-180",
+      "usage": "Implement as a button/trigger for collapsibility. Add a visual indicator (like a left emerald pill or distinct icon container) to anchor the eye. Provide right-aligned utility actions if needed (e.g. 'Add', 'Edit') before the collapse chevron."
+    },
+    "SectionContent": {
+      "wrapper": "p-6 sm:p-8 animate-in fade-in duration-300 data-[state=closed]:hidden data-[state=closed]:animate-out data-[state=closed]:fade-out",
+      "empty_state": "flex flex-col items-center justify-center py-12 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 m-6"
     }
   },
-  "list_view_redesign": {
-    "container": "bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden",
-    "table_style": "w-full text-left border-collapse",
-    "header_row": "border-b border-zinc-200 bg-zinc-50/50",
-    "data_row": {
-      "style": "group border-b border-zinc-100 hover:bg-zinc-50/80 transition-colors duration-200",
-      "columns": [
-        {
-          "name": "Request",
-          "composition": "2-line layout. Top: Request Title (text-sm font-semibold text-zinc-900). Bottom: Request Number (Mono text-xs text-zinc-500) + Snippet truncate.",
-          "indicators": "Replace heavy pills with inline icons or micro-badges. 'Urgent' = red flame icon. 'New' = blue dot indicator on the row edge. 'Tight timeline' = amber clock icon."
-        },
-        {
-          "name": "Status",
-          "composition": "Compact badge: border + subtle bg + text. No massive pills. e.g. px-2 py-0.5 rounded-md text-xs font-medium."
-        },
-        {
-          "name": "People (Lead / Assignee / Raised By)",
-          "composition": "Consolidate into Avatar groups or subtle flex rows (Avatar 20px + Name text-sm). Use tooltips for full names if space is tight."
-        },
-        {
-          "name": "Due Date & Age",
-          "composition": "text-sm. If overdue, text-rose-600 font-semibold. Age shown as '• 4d old' in text-zinc-400."
-        }
-      ]
-    },
-    "pagination": "flex items-center justify-between p-4 border-t border-zinc-200 bg-white"
+  "motion": {
+    "scroll": "scroll-smooth",
+    "transitions": "transition-all duration-200 ease-in-out",
+    "collapsible": "overflow-hidden transition-[height] duration-300 ease-in-out"
   },
-  "kanban_preservation": {
-    "note": "When the List/Kanban toggle is set to Kanban, hide the `list_view_redesign` table and render the existing Kanban board layout exactly as it is, placing it below the new `consolidated_toolbar`."
+  "accessibility": {
+    "headings": "Ensure sequential heading order (H1 for page, H2 for sections, H3 for sub-cards).",
+    "interactive": "Include aria-expanded for collapsibles, aria-controls pointing to the content region ID.",
+    "focus": "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
   },
-  "micro_interactions": {
-    "hover_states": "All buttons use slight background darkens or text-color shifts. Table rows slightly darken (`hover:bg-zinc-50`).",
-    "focus_states": "Use `focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2` for accessibility.",
-    "transitions": "Use `transition-all duration-200 ease-in-out` on all interactive elements."
-  },
-  "states": {
-    "empty": "A spacious 400px high flex-col center container inside the table body. Uses a Lucide Inbox icon (stroke-1, text-zinc-300 w-12 h-12), bold text 'No requests found', and subdued text 'Adjust your filters or create a new request'.",
-    "loading": "Replace table rows with Shadcn Skeleton rows. 1 height-10 header skeleton, 5 height-16 row skeletons."
-  },
-  "data_testid_conventions": {
-    "page_container": "data-testid='design-requests-page'",
-    "view_toggle": "data-testid='view-toggle-list-kanban'",
-    "queue_switcher": "data-testid='queue-segment-control'",
-    "search_input": "data-testid='request-search-input'",
-    "status_filter_trigger": "data-testid='status-filter-trigger'",
-    "advanced_filters_trigger": "data-testid='advanced-filters-trigger'",
-    "table_row": "data-testid='request-list-row-{id}'",
-    "action_new_request": "data-testid='new-request-btn'"
-  },
-  "iconography": {
-    "library": "lucide-react",
-    "usage": "Use strokeWidth={1.5} for a contemporary, refined aesthetic. Avoid heavy icons."
-  }
+  "instructions_to_main_agent": [
+    "1. Do not convert the app to TypeScript. Use React JS and standard Tailwind classes.",
+    "2. Add `scroll-smooth` to the html/body if not present.",
+    "3. Restructure both 'Lead Detail' and 'Account Detail' pages to use a two-column layout on large screens: the left column (main content, `flex-1`) and right/left sidebar (Sticky Navigation, `w-72 sticky top-8`).",
+    "4. Create a reusable `Section` component that encapsulates the `SectionContainer`, `SectionHeader`, and `SectionContent`. Use Shadcn's `Collapsible` primitive or local state to handle the open/close behavior.",
+    "5. Every section must have an `id` attribute. Pass this ID to the Sticky Nav component to render anchor links (`<a href=\"#section-id\">`).",
+    "6. In the `SectionHeader`, implement the dual-title system: An `eyebrow` text (e.g., 'FINANCIALS') and the main `h2` title (e.g., 'Invoice Summary').",
+    "7. Include a distinct icon inside `icon_wrapper` for every single section (e.g., FileText for Deck, MapPin for Location, DollarSign for Projections).",
+    "8. Implement an IntersectionObserver hook in the Sticky Nav to automatically highlight the current section as the user scrolls down.",
+    "9. Add `data-testid` to all navigational elements, section headers, and collapse triggers (e.g., `data-testid=\"nav-link-location\"`, `data-testid=\"section-header-location\"`).",
+    "10. Replace existing basic white Cards with this new Section structure. Do NOT alter the inner data logic/tables of the sections, just the wrapper and header presentation."
+  ]
 }
