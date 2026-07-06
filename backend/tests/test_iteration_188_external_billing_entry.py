@@ -28,7 +28,7 @@ load_dotenv("/app/backend/.env")
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL",
-    "https://lead-to-account-crm.preview.emergentagent.com",
+    "https://crm-beverage-ops.preview.emergentagent.com",
 ).rstrip("/")
 ADMIN_EMAIL = "surya.yadavalli@nylaairwater.earth"
 ADMIN_PASS = "test123"
