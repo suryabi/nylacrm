@@ -306,27 +306,26 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
                       {r.request_type_name || r.title || 'Design request'}
                     </p>
                   </div>
-                  <Badge
-                    variant="outline"
-                    className="text-[11px] font-medium shrink-0"
+                  <span
+                    className="inline-flex items-center gap-1.5 shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium"
                     style={{
-                      color: r.current_state_color || undefined,
-                      borderColor: r.current_state_color ? `${r.current_state_color}66` : undefined,
+                      color: r.current_state_color || '#475569',
+                      backgroundColor: `${r.current_state_color || '#64748b'}1a`,
                     }}
                     data-testid={`lead-design-request-status-${r.id}`}
                   >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: r.current_state_color || '#64748b' }} />
                     {r.current_state_label || r.current_state_key || '—'}
-                  </Badge>
+                  </span>
                 </button>
                 {canPrint && (
                   <Button
-                    variant="outline"
                     size="sm"
-                    className="h-7 px-2 shrink-0 text-[11px]"
+                    className="h-8 px-3 shrink-0 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                     onClick={(e) => { e.stopPropagation(); setPrintRequestTarget(r); }}
                     data-testid={`create-print-request-btn-${r.id}`}
                   >
-                    <Printer className="h-3.5 w-3.5 mr-1" /> Print Request
+                    <Printer className="h-3.5 w-3.5 mr-1.5" /> Print Request
                   </Button>
                 )}
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
