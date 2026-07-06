@@ -124,8 +124,8 @@ export default function PrintRequestDetail() {
         total_monthly_volume: form.totalMonthlyVolume === '' ? null : Number(form.totalMonthlyVolume),
         requested_due_date: form.dueDate ? format(form.dueDate, 'yyyy-MM-dd') : undefined,
         notes: form.notes || '',
-        assigned_department_id: form.deptId || '',
-        vendor_id: form.vendorId || '',
+        assigned_department_id: form.deptId || null,
+        vendor_id: form.vendorId || null,
       }, { headers: HEAD() });
       setPr(data); setEditOpen(false);
       toast.success('Print request updated');
@@ -208,10 +208,10 @@ export default function PrintRequestDetail() {
               <InfoRow icon={Users} label="Lead" value={pr.lead_company || pr.lead_name} testid="print-info-lead" />
               <InfoRow icon={Boxes} label="Initial Order Quantity" value={pr.initial_order_quantity ?? pr.quantity} testid="print-info-initial-qty" />
               {(pr.total_monthly_volume ?? null) !== null && (
-                <InfoRow icon={TrendingUp} label="Total Monthly Volume" value={pr.total_monthly_volume} testid="print-info-total-volume" />
+                <InfoRow icon={TrendingUp} label="Total Monthly Volume (Future Potential)" value={pr.total_monthly_volume} testid="print-info-total-volume" />
               )}
               {(pr.starting_monthly_volume ?? null) !== null && (
-                <InfoRow icon={Gauge} label="Starting Monthly Volume" value={pr.starting_monthly_volume} testid="print-info-starting-volume" />
+                <InfoRow icon={Gauge} label="Initial Monthly Quantity" value={pr.starting_monthly_volume} testid="print-info-starting-volume" />
               )}
               <InfoRow icon={Calendar} label="Requested Due Date" value={fmtDate(pr.requested_due_date)} testid="print-info-due" />
               <InfoRow icon={Sparkles} label="Production Team" value={pr.assigned_department_name} testid="print-info-team" />
