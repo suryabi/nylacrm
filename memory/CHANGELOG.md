@@ -1320,3 +1320,7 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - CITY GROUPING: Print Requests list + Design Requests list (List view) now grouped by lead city with city header rows (print-city-row/group-<City>, mr-city-row/group-<City>); cities alphabetical, "No City" last; fetch limit raised to 200 so groups are complete; Kanban unaffected.
 - Fix: edit dialog sends null (not '') for cleared team/vendor so they properly unassign.
 - VERIFIED: curl (create 400 w/o starting vol; PATCH persists+syncs) + testing_agent iteration_297 (100% live: both list groupings, edit dialog banner+labels+mandatory+persist; Create & SendForPrinting dialogs source-verified for banner+labels+validation).
+
+## 2026-06 — City grouping: prominent + collapsible
+- Print Requests & Design Requests (List view) city group headers are now large prominent bands (rounded grey band, pin icon, big bold city name, count badge, ChevronDown) and COLLAPSIBLE — click to collapse/expand that city's rows; chevron rotates; groups collapse independently. collapsedCities Set state on each list.
+- VERIFIED testing_agent iteration_298 (100% frontend; regressions on tiles/filter/sort intact).
