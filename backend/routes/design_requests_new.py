@@ -277,7 +277,7 @@ async def _insert_request_doc(
 
 async def _can_delete_request(tenant_id: str, user: dict) -> bool:
     """Admin roles can always delete; other roles need the explicit
-    `marketing_requests.delete` permission configured in Role Management."""
+    `design_requests_new.delete` permission configured in Role Management."""
     if _is_admin(user):
         return True
     role_name = (user.get("role") or "").strip()
@@ -293,7 +293,7 @@ async def _can_delete_request(tenant_id: str, user: dict) -> bool:
 
 async def _can_edit_request(tenant_id: str, user: dict, request_doc: dict) -> bool:
     """Admins can always edit; the original requester can edit their own
-    request; any other role needs the `marketing_requests.edit` permission."""
+    request; any other role needs the `design_requests_new.edit` permission."""
     if _is_admin(user):
         return True
     if request_doc.get("created_by") and request_doc.get("created_by") == user.get("id"):
@@ -510,7 +510,7 @@ async def delete_request(request_id: str, current_user: dict = Depends(get_curre
     """Permanently delete a design (marketing) request and all its attached files.
 
     Guarded by RBAC: admin roles always; other roles need the explicit
-    `marketing_requests.delete` permission.
+    `design_requests_new.delete` permission.
     """
     tenant_id = get_current_tenant_id()
     doc = await db.design_requests_new.find_one({"id": request_id, "tenant_id": tenant_id}, {"_id": 0})
@@ -848,7 +848,7 @@ async def create_bottle_sample_request(payload: BottleSampleRequestCreate, curre
 @router.patch("/{request_id}")
 async def update_request(request_id: str, payload: MarketingRequestCreate, current_user: dict = Depends(get_current_user)):
     """Edit an existing design/marketing request. Allowed for the original
-    requester and admins/managers with the `marketing_requests.edit`
+    requester and admins/managers with the `design_requests_new.edit`
     permission, at any state. State-machine progress, versions, comments and
     production are preserved — only the request's descriptive fields change."""
     tenant_id = get_current_tenant_id()

@@ -275,7 +275,8 @@ export default function DesignRequestNewDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { hasActionPermission } = useTenantConfig();
-  const canDelete = hasActionPermission('design_requests_new', 'delete');  const [req, setReq] = useState(null);
+  const canDelete = hasActionPermission('design_requests_new', 'delete');
+  const [req, setReq] = useState(null);
   const [transitions, setTransitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
