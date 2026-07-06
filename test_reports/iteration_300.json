@@ -1,0 +1,27 @@
+{
+  "summary": "Frontend-only verification of Print Request button gating fix for migrated MR-prefix design requests. All four requested checks passed for lead 'The Rameshwaram Cafe' (20c97966-ab07-4428-893f-cd5633393eee) logged in as CEO Surya Yadavalli (Sales/Marketing, not Design dept).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verification_results": [
+    {"check": "MR-2026-0020 (final_approved, Design dept) shows green Print Request button in Customer Branding on lead detail page", "result": "PASS", "evidence": "data-testid=create-print-request-btn-09b6d251-7d27-4581-93d2-a4ce38dd2af9 present and visible; button text 'Print Request'"},
+    {"check": "MR-2026-0017 (submitted, not finalized) does NOT show Print Request button", "result": "PASS", "evidence": "Only 1 create-print-request-btn-* element on page (belongs to 0020); screenshot confirms 0017 row has no button, only 'Submitted' badge"},
+    {"check": "Clicking Print Request on MR-2026-0020 opens Create Print Request dialog", "result": "PASS", "evidence": "role=dialog opened with title 'Create Print Request' and subtitle 'For MR-2026-0020 · Request Bottle Design Concept'. Dialog closed with Escape; no submission performed."},
+    {"check": "Regression: /design-requests-new/{id} for MR-2026-0020 still shows Send for Printing (data-testid=mr-send-print-btn)", "result": "PASS", "evidence": "Button present and visible with text 'Send for Printing'"}
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix in LeadBottleDesigns.js (PRINTABLE_STATE_KEYS + canRaisePrint) correctly mirrors DesignRequestNewDetail.js gating logic (['final_approved','production_in_progress','production_completed'] OR current_state_is_terminal). No isAssignedToMe restriction — matches canonical Send-for-Printing behavior."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water) — working",
+  "seed_data_creation": "None; used pre-seeded MR-2026-0020 and MR-2026-0017 on lead 20c97966-ab07-4428-893f-cd5633393eee.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix verified end-to-end. The Print Request button on migrated MR-prefix design requests now shows for non-Design-department users (CEO) when the request is in final_approved / production_in_progress / production_completed or is in a terminal state. Regression on DRN detail page (Send for Printing) intact. No further action needed on this issue."
+}
