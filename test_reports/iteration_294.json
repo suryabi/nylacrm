@@ -1,0 +1,35 @@
+{
+  "summary": "Verified two Design Requests UI changes: (A) Work Versions card side-by-side layout with h-11 taller buttons on the left and file preview on the right — passes; and (B) URL validation on Social Media / File Links in the New Design Request form — passes (inline red error text, red border, submission blocked with correct toast, error clears on valid URL).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "DesignRequestNewDetail — Work Versions card", "issues": ["React warning in console: 'Each child in a list should have a unique key prop' when rendering the Work Versions card children. Non-blocking but should be fixed in DesignRequestNewDetail.js by adding stable `key` props to whichever list is currently using array indexes or missing keys around lines 875-940."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_294.json"],
+  "action_items": [
+    "IMPORTANT SPEC vs CODE MISMATCH — The review request said the LinkListField uses testPrefix 'social-links' and 'file-links' (i.e. data-testids like social-links-input-0, file-links-error-0, file-links-add). The actual code in /app/frontend/src/pages/NewDesignRequestNew.js lines 556 & 565 uses testPrefix 'mr-social' and 'mr-filelink' (data-testids: mr-social-input-0, mr-social-error-0, mr-social-add, mr-filelink-input-0, mr-filelink-error-0, mr-filelink-add). Functionality is fully working, but if any downstream test relies on the spec'd testids they will break. Decide whether to rename testPrefix to 'social-links' / 'file-links' or update the spec.",
+    "Fix React key warning in Work Versions section of DesignRequestNewDetail.js (~lines 875-940) — cosmetic console noise."
+  ],
+  "critical_code_review_comments": [
+    "isValidUrl helper (NewDesignRequestNew.js line 39-48) correctly rejects protocol-relative and bare tokens; empty rows are permitted and stripped on submit — good.",
+    "handleSubmit order (line 254-257): canSubmit fires first ('Please fill all required fields'), then badLinks check. Because the Submit Request button is disabled when canSubmit is false, users won't see the required-fields toast by clicking submit (button is disabled) — the link validation therefore only surfaces once all required fields are filled. That is the intended behaviour and matches the reviewer's context note.",
+    "Work Versions layout uses flex-col sm:flex-row with actions column sm:w-56 shrink-0 on the left and files flex-1 min-w-0 on the right — clean, responsive, and the buttons are h-11 as required.",
+    "Version buttons remain full-width inside the actions column (w-full) so they stretch nicely; Delete button is amber/red bordered — good visual hierarchy."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (2/2 features verified)"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing MR-2026-0006 (id 537081ec-e022-4d26-a39c-25045cf2e6ee) which already has 1 work version (V1) with a chosen state that was toggled and restored during test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "For the New Design Request form (/design-requests-new/new), link field data-testids are prefixed 'mr-social' and 'mr-filelink' (NOT 'social-links' / 'file-links' as some specs state). Add-link buttons: mr-social-add, mr-filelink-add. Error paragraphs: mr-social-error-0, mr-filelink-error-0. Inputs: mr-social-input-0, mr-filelink-input-0. Submit Request button remains disabled until request_type + department + due date + requirement_details are populated; the link-validation toast is only reachable after all required fields are filled.",
+  "measured_ui_metrics": {
+    "work_version_action_button_height_px": 44,
+    "action_column_x_px": 454,
+    "files_column_x_px": 694,
+    "actions_left_of_files": true
+  }
+}

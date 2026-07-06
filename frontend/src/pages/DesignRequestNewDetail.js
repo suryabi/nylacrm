@@ -874,7 +874,7 @@ export default function DesignRequestNewDetail() {
             <div className="space-y-3">
               {req.versions.map((v) => (
                 <div key={v.id} className={`border rounded-lg p-3 ${v.is_approved ? 'border-emerald-300 bg-emerald-50/60 ring-1 ring-emerald-200' : 'border-emerald-100 bg-emerald-50/30'}`} data-testid={`version-card-${v.id}`}>
-                  <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                  <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                     <span className="font-semibold text-slate-900 flex items-center gap-2">
                       {v.version_name}
                       {v.is_approved && (
@@ -887,51 +887,53 @@ export default function DesignRequestNewDetail() {
                       <span className="font-medium text-slate-700">{v.uploaded_by_name}</span> &middot; {fmtDate(v.uploaded_at, 'dd MMM yyyy, hh:mm a')}
                     </span>
                   </div>
-                  {v.comments && <p className="text-xs text-slate-700 italic mb-2">{v.comments}</p>}
-                  <div className="flex flex-wrap gap-2.5 items-start">
-                    {(v.files || []).map(f => <FileAsset key={f.id} f={f} onPreview={setPreviewFile} />)}
-                    {(v.links || []).map((l, i) => (
-                      <a key={i} href={l} target="_blank" rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-emerald-100 bg-white text-xs hover:bg-emerald-50/60">
-                        <ExternalLink className="h-3 w-3 text-emerald-600" /> {l.length > 40 ? l.slice(0, 40) + '…' : l}
-                      </a>
-                    ))}
-                  </div>
+                  {v.comments && <p className="text-xs text-slate-700 italic mb-3">{v.comments}</p>}
 
-                  {/* Approve / Revert / Delete controls */}
-                  <div className="mt-3 flex items-center gap-2 flex-wrap">
-                    {v.is_approved ? (
-                      <Button
-                        size="sm" variant="outline"
-                        className="h-7 text-xs text-amber-700 border-amber-200 hover:bg-amber-50"
-                        onClick={() => setVersionApproval(v.id, false)}
-                        disabled={verBusy[v.id]}
-                        data-testid={`version-revert-btn-${v.id}`}
-                      >
-                        <RotateCcw className="h-3.5 w-3.5 mr-1" /> Unselect
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => setVersionApproval(v.id, true)}
-                        disabled={verBusy[v.id]}
-                        data-testid={`version-approve-btn-${v.id}`}
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Choose this design
-                      </Button>
-                    )}
-                    {!req.production && (
-                      <Button
-                        size="sm" variant="outline"
-                        className="h-7 text-xs text-red-700 border-red-200 hover:bg-red-50"
-                        onClick={() => setVersionToDelete(v)}
-                        disabled={verBusy[v.id] || deletingVersion}
-                        data-testid={`version-delete-btn-${v.id}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
-                      </Button>
-                    )}
+                  {/* Actions (left) + file preview / links (right) — compact side-by-side */}
+                  <div className="flex items-stretch gap-4 flex-col sm:flex-row">
+                    <div className="flex flex-col justify-center gap-2 w-full sm:w-56 shrink-0">
+                      {v.is_approved ? (
+                        <Button
+                          variant="outline"
+                          className="h-11 w-full justify-center text-sm font-medium text-amber-700 border-amber-300 hover:bg-amber-50 hover:text-amber-800"
+                          onClick={() => setVersionApproval(v.id, false)}
+                          disabled={verBusy[v.id]}
+                          data-testid={`version-revert-btn-${v.id}`}
+                        >
+                          {verBusy[v.id] ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />} Unselect
+                        </Button>
+                      ) : (
+                        <Button
+                          className="h-11 w-full justify-center text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                          onClick={() => setVersionApproval(v.id, true)}
+                          disabled={verBusy[v.id]}
+                          data-testid={`version-approve-btn-${v.id}`}
+                        >
+                          {verBusy[v.id] ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />} Choose this design
+                        </Button>
+                      )}
+                      {!req.production && (
+                        <Button
+                          variant="outline"
+                          className="h-11 w-full justify-center text-sm font-medium text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          onClick={() => setVersionToDelete(v)}
+                          disabled={verBusy[v.id] || deletingVersion}
+                          data-testid={`version-delete-btn-${v.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" /> Delete
+                        </Button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2.5 items-start flex-1 min-w-0">
+                      {(v.files || []).map(f => <FileAsset key={f.id} f={f} onPreview={setPreviewFile} />)}
+                      {(v.links || []).map((l, i) => (
+                        <a key={`${v.id}-link-${i}`} href={l} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-emerald-100 bg-white text-xs hover:bg-emerald-50/60 self-start">
+                          <ExternalLink className="h-3 w-3 text-emerald-600" /> {l.length > 40 ? l.slice(0, 40) + '…' : l}
+                        </a>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Per-version comments thread */}

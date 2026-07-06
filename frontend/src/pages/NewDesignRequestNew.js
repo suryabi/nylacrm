@@ -35,17 +35,31 @@ const CAL_CLASSNAMES = { day_selected: 'bg-emerald-600 text-white hover:bg-emera
 
 const isImg = (f) => (f?.content_type || '').startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(f?.filename || '');
 
+// Accept only real http/https URLs in link fields.
+const isValidUrl = (s) => {
+  const v = (s || '').trim();
+  if (!v) return true; // empty rows are ignored on submit
+  try {
+    const u = new URL(v);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 // Repeatable URL list — stacked styled rows + dashed "Add link" button.
 const LinkListField = ({ label, placeholder, links, onChange, onAdd, onRemove, testPrefix }) => (
   <div className="space-y-2">
     <Label className={LABEL_CLS}>{label}</Label>
     <div className="space-y-2">
-      {links.map((l, i) => (
+      {links.map((l, i) => {
+        const invalid = !isValidUrl(l);
+        return (
+        <div key={i} className="space-y-1">
         <div
-          key={i}
-          className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 pl-3.5 rounded-xl focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10 transition-all"
+          className={`flex items-center gap-2 bg-slate-50 border p-2 pl-3.5 rounded-xl transition-all ${invalid ? 'border-red-300 focus-within:border-red-400 focus-within:ring-4 focus-within:ring-red-500/10' : 'border-slate-200 focus-within:border-emerald-400 focus-within:ring-4 focus-within:ring-emerald-500/10'}`}
         >
-          <LinkIcon className="h-4 w-4 text-emerald-500 shrink-0" />
+          <LinkIcon className={`h-4 w-4 shrink-0 ${invalid ? 'text-red-500' : 'text-emerald-500'}`} />
           <input
             className="flex-1 border-0 bg-transparent outline-none text-sm text-slate-800 placeholder:text-slate-400"
             placeholder={placeholder}
@@ -63,7 +77,14 @@ const LinkListField = ({ label, placeholder, links, onChange, onAdd, onRemove, t
             <X className="h-4 w-4" />
           </button>
         </div>
-      ))}
+        {invalid && (
+          <p className="text-[11px] text-red-500 pl-1" data-testid={`${testPrefix}-error-${i}`}>
+            Enter a valid URL starting with http:// or https://
+          </p>
+        )}
+        </div>
+        );
+      })}
     </div>
     <button
       type="button"
@@ -232,6 +253,8 @@ export default function NewDesignRequestNew() {
 
   const handleSubmit = async () => {
     if (!canSubmit) { toast.error('Please fill all required fields.'); return; }
+    const badLinks = [...socialLinks, ...fileLinks].some((l) => l.trim() && !isValidUrl(l));
+    if (badLinks) { toast.error('Please enter valid URLs (http:// or https://) in the link fields, or remove them.'); return; }
     setSubmitting(true);
     try {
       const payload = {
