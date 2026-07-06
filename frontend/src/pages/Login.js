@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap, Factory, Truck, Megaphone, Package, Boxes, ShieldCheck, Sparkles, Receipt } from 'lucide-react';
+import { Mail, Lock, Loader2, Building2, ArrowRight, BarChart3, Users, TrendingUp, Target, PieChart, Zap, Factory, Truck, Megaphone, Package, Boxes, ShieldCheck, Sparkles, Receipt, Eye, EyeOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
 
@@ -53,6 +53,7 @@ export default function Login() {
   
   const [email, setEmail] = useState(rememberedEmail || defaultEmail);
   const [password, setPassword] = useState(defaultPassword);
+  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(!!rememberedEmail);
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
@@ -350,14 +351,27 @@ export default function Login() {
                   </div>
                   <div>
                     <Label>Password</Label>
-                    <Input
-                      type="password"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      placeholder="Enter password"
-                      required
-                      className="h-12"
-                    />
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="Enter password"
+                        required
+                        className="h-12 pr-12"
+                        data-testid="login-password-input"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(v => !v)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute inset-y-0 right-0 flex items-center pr-4 text-muted-foreground hover:text-foreground transition-colors"
+                        data-testid="toggle-password-visibility"
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox 

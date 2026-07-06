@@ -52,13 +52,13 @@ const CityGroupHeader = ({ name, count, collapsed, onToggle }) => (
   <button
     type="button"
     onClick={onToggle}
-    className="w-full flex items-center gap-2.5 rounded-xl bg-slate-100/80 border border-slate-200 px-4 py-3 hover:bg-slate-100 transition-colors"
+    className="w-full flex items-center gap-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 border border-emerald-700/20 px-4 py-3 shadow-sm hover:from-emerald-700 hover:to-teal-700 transition-colors"
     data-testid={`print-city-group-${name}`}
   >
-    <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-    <MapPin className="h-5 w-5 text-emerald-600 shrink-0" />
-    <span className="text-base font-bold text-slate-800 tracking-tight">{name}</span>
-    <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">{count}</span>
+    <ChevronDown className={`h-5 w-5 text-white/90 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+    <MapPin className="h-5 w-5 text-emerald-100 shrink-0" />
+    <span className="text-base font-bold text-white tracking-tight">{name}</span>
+    <span className="text-xs font-bold text-white bg-white/20 border border-white/30 rounded-full px-2 py-0.5">{count}</span>
   </button>
 );
 
@@ -314,13 +314,13 @@ export default function PrintRequests() {
                     const collapsed = collapsedCities.has(cityName);
                     return (
                     <React.Fragment key={cityName}>
-                      <TableRow className="bg-slate-100/80 hover:bg-slate-100 border-y border-slate-200 cursor-pointer" onClick={() => toggleCity(cityName)} data-testid={`print-city-row-${cityName}`}>
+                      <TableRow className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 border-y border-emerald-700/20 cursor-pointer" onClick={() => toggleCity(cityName)} data-testid={`print-city-row-${cityName}`}>
                         <TableCell colSpan={6} className="py-3">
                           <div className="flex items-center gap-2.5">
-                            <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
-                            <MapPin className="h-5 w-5 text-emerald-600" />
-                            <span className="text-base font-bold text-slate-800 tracking-tight">{cityName}</span>
-                            <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">{cityRows.length}</span>
+                            <ChevronDown className={`h-5 w-5 text-white/90 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+                            <MapPin className="h-5 w-5 text-emerald-100" />
+                            <span className="text-base font-bold text-white tracking-tight">{cityName}</span>
+                            <span className="text-xs font-bold text-white bg-white/20 border border-white/30 rounded-full px-2 py-0.5">{cityRows.length}</span>
                           </div>
                         </TableCell>
                       </TableRow>
