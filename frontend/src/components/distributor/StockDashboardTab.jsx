@@ -10,6 +10,18 @@ import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 
 const fmt = (v) => (v || 0).toLocaleString('en-IN');
+
+// Convert a bottle quantity into the SKU's default packaging (e.g. "144.8 Crate - 12").
+// Returns null when the SKU has no multi-unit default packaging.
+const pkgEquiv = (bottles, sku) => {
+  const u = Number(sku?.default_packaging_units) || 0;
+  if (u > 1 && bottles) {
+    const n = bottles / u;
+    const disp = Number.isInteger(n) ? n : Number(n.toFixed(1));
+    return `${disp.toLocaleString('en-IN')} ${sku.default_packaging_name || 'pkg'}`;
+  }
+  return null;
+};
 const pct = (v) => `${(v || 0).toFixed(1)}%`;
 
 /**
@@ -54,7 +66,7 @@ function FactoryWarehouseSkuRow({ sku, fmt: format }) {
           <span className="text-slate-700 truncate">{sku.sku_name}</span>
         </div>
         <div className="flex items-baseline gap-2 flex-shrink-0">
-          <span className="font-bold text-teal-700">{format(sku.quantity)} crates</span>
+          <span className="font-bold text-teal-700">{format(sku.quantity)} bottles</span>
           {hasBatches && (
             <span className="text-[10px] font-medium text-teal-600/80 bg-teal-50 border border-teal-200 rounded px-1.5 py-0.5">
               {batches.length} batch{batches.length === 1 ? '' : 'es'}
@@ -66,7 +78,7 @@ function FactoryWarehouseSkuRow({ sku, fmt: format }) {
         <div className="border-t border-teal-100 bg-teal-50/40 px-2 py-1.5" data-testid={`fw-sku-batches-${sku.sku_id}`}>
           <div className="text-[10px] font-semibold text-teal-700 uppercase tracking-wider mb-1 flex items-center justify-between">
             <span>Per-batch breakdown · FIFO</span>
-            <span className="text-teal-600/70 normal-case">{format(sku.quantity)} crates total</span>
+            <span className="text-teal-600/70 normal-case">{format(sku.quantity)} bottles total</span>
           </div>
           <div className="space-y-0.5">
             {batches.map((b, bi) => {
@@ -195,7 +207,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
             <BarChart3 className="h-5 w-5 text-indigo-600" />
             Stock Dashboard
           </h2>
-          <p className="text-sm text-muted-foreground">Real-time inventory across all SKUs</p>
+          <p className="text-sm text-muted-foreground">Real-time inventory across all SKUs · all quantities in bottles (base UOM)</p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchDashboard} disabled={loading} data-testid="refresh-stock-dashboard">
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -286,7 +298,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                   <Factory className="h-4 w-4 text-teal-600" />
                   Factory Warehouse Stock
                   <Badge className="bg-teal-100 text-teal-700 border-teal-200 ml-2" variant="outline">
-                    {fmt(t.factory_warehouse_stock)} crates total
+                    {fmt(t.factory_warehouse_stock)} bottles total
                   </Badge>
                 </CardTitle>
                 <CardDescription>Stock transferred from production, available for dispatch</CardDescription>
@@ -426,6 +438,9 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                             <div>
                               <p className="font-medium text-slate-800">{sku.sku_name}</p>
                               <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                <span className="text-[10px] text-slate-400 font-medium" data-testid={`sku-uom-${sku.sku_id}`}>
+                                  in bottles{sku.default_packaging_units > 1 ? ` · default: ${sku.default_packaging_name}` : ''}
+                                </span>
                                 {sku.pending_factory_return > 0 && (
                                   <span className="text-[10px] text-purple-600 font-medium">{sku.pending_factory_return} pending factory return</span>
                                 )}
@@ -456,9 +471,12 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                           {sku.factory_warehouse_stock > 0 ? fmt(sku.factory_warehouse_stock) : '-'}
                         </td>
                         <td className="p-3 text-right">
-                          <span className={`font-bold ${sku.stock_at_hand < 0 ? 'text-red-600' : sku.stock_at_hand === 0 ? 'text-slate-400' : 'text-indigo-700'}`}>
+                          <span className={`font-bold ${sku.stock_at_hand < 0 ? 'text-red-600' : sku.stock_at_hand === 0 ? 'text-slate-400' : 'text-indigo-700'}`} data-testid={`sku-available-${sku.sku_id}`}>
                             {fmt(sku.stock_at_hand)}
                           </span>
+                          {pkgEquiv(sku.stock_at_hand, sku) && (
+                            <div className="text-[10px] text-slate-400 font-medium" data-testid={`sku-available-pkg-${sku.sku_id}`}>≈ {pkgEquiv(sku.stock_at_hand, sku)}</div>
+                          )}
                         </td>
                         <td className="p-3 text-right">
                           <StockBar value={sku.pct_stock_at_hand} />
@@ -477,7 +495,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                                 <div className="rounded-lg border border-teal-200 overflow-hidden" data-testid={`sku-batches-${sku.sku_id}`}>
                                   <div className="bg-teal-50 px-3 py-1.5 flex items-center justify-between border-b border-teal-200">
                                     <span className="text-[11px] font-semibold text-teal-700 uppercase tracking-wider">Factory Warehouse Stock · per-batch · FIFO</span>
-                                    <span className="text-[11px] font-bold text-teal-800">{fmt(sku.factory_warehouse_stock)} crates</span>
+                                    <span className="text-[11px] font-bold text-teal-800">{fmt(sku.factory_warehouse_stock)} bottles</span>
                                   </div>
                                   <div className="divide-y divide-slate-100">
                                     {batches.map((b, bi) => {
@@ -509,7 +527,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                                               </span>
                                             )}
                                           </div>
-                                          <span className="font-semibold text-teal-700 tabular-nums">{fmt(b.quantity)} crates</span>
+                                          <span className="font-semibold text-teal-700 tabular-nums">{fmt(b.quantity)} bottles</span>
                                         </div>
                                       );
                                     })}

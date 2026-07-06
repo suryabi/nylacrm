@@ -8515,37 +8515,39 @@ async def get_stock_dashboard(
     #   2. Falling back to `bpc_by_sku` (seeded from master_skus +
     #      factory_warehouse_stock rows below) for sources that don't store
     #      packaging_units (returns).
+    # ── UNIT MODEL (updated per user requirement, Jul 2026) ─────────────────
+    # The dashboard reports every quantity in the SKU's base UOM = BOTTLES
+    # (the lowest unit defined in SKU Management). A line's bottle count is
+    # `quantity × packaging_units` (the packaging chosen on that line). When no
+    # packaging was chosen (`packaging_units` unset/≤0) the quantity is already
+    # in UOM, so it is used as-is. Returns / factory-warehouse rows are already
+    # stored in bottles, so no conversion is applied to them.
     bpc_by_sku: dict = {}
 
     def _to_crates(sku_id: str, bottles_qty, row_bpc=None) -> int:
-        bpc = row_bpc or bpc_by_sku.get(sku_id) or 1
+        # Returns / factory-warehouse quantities are already stored in BOTTLES
+        # (the base UOM). Report them as-is — no bottles→crates division.
         try:
-            return int(bottles_qty) // int(bpc) if int(bpc) > 0 else int(bottles_qty)
+            return int(round(float(bottles_qty or 0)))
         except Exception:
-            return int(bottles_qty)
+            return 0
 
     def _bottle_to_crates(item: dict) -> int:
-        """Convert an item dict whose `quantity` is in bottles to crates,
-        preferring the per-item `packaging_units` field (most accurate)."""
-        bottles = int(item.get('quantity') or 0)
-        pu = int(item.get('packaging_units') or 0)
-        if pu > 0:
-            if not bpc_by_sku.get(item.get('sku_id')):
-                bpc_by_sku[item['sku_id']] = pu     # seed for downstream returns
-            return bottles // pu
-        return _to_crates(item.get('sku_id', ''), bottles)
+        """Item `quantity` is in bottles → returned in bottles (base UOM)."""
+        try:
+            return int(item.get('quantity') or 0)
+        except Exception:
+            return 0
 
     def _item_crates(item: dict) -> int:
-        """Stock-In/Out line items are ENTERED AND STORED IN CRATES (users type
-        crates, not bottles). So the stored quantity is already the crate count
-        — do NOT divide by bottles-per-crate. The only exception is legacy rows
-        that explicitly carried a per-item `packaging_units` (>1), meaning they
-        were recorded in bottles; those we still convert."""
+        """Stock-In / Stock-Out / delivery line items store `quantity` = number
+        of packages and `packaging_units` = bottles per package. The base UOM is
+        BOTTLES, so a line's contribution is `quantity × packaging_units`. If no
+        packaging was chosen (packaging_units unset/≤0) the quantity is already
+        in bottles and is used as-is."""
         qty = int(item.get('quantity') or 0)
         pu = int(item.get('packaging_units') or 0)
-        if pu > 1:
-            return qty // pu
-        return qty
+        return qty * pu if pu > 0 else qty
 
     # === 1. STOCK IN: Shipments received (only delivered shipments) ===
     delivered_shipment_ids = await db.distributor_shipments.distinct(
@@ -8691,23 +8693,48 @@ async def get_stock_dashboard(
             {"_id": 0, "id": 1},
         ):
             _factory_loc.add(_ld["id"])
+        # Fallback bottles-per-package for transfer items missing `units_per_package`
+        # (older records): use the SKU's default packaging units.
+        _xfer_sids = {it.get("sku_id") for xf in xfers for it in (xf.get("items") or []) if it.get("sku_id")}
+        _xfer_default_upp = {}
+        if _xfer_sids:
+            async for ms in tdb.master_skus.find(
+                {"id": {"$in": list(_xfer_sids)}},
+                {"_id": 0, "id": 1, "packaging_config": 1, "bottles_per_crate": 1},
+            ):
+                units = ms.get("bottles_per_crate")
+                if not units:
+                    pc = ms.get("packaging_config") or {}
+                    for key in ("stock_out", "production", "master"):
+                        arr = pc.get(key) or []
+                        # Prefer the default packaging (with >1 units), else any >1.
+                        d = next((p for p in arr if p.get("is_default") and int(p.get("units_per_package") or 1) > 1), None) \
+                            or next((p for p in arr if int(p.get("units_per_package") or 1) > 1), None)
+                        if d:
+                            units = int(d.get("units_per_package"))
+                            break
+                if units:
+                    _xfer_default_upp[ms["id"]] = int(units)
         for xf in xfers:
             for it in (xf.get("items") or []):
                 sid = it.get("sku_id", "")
                 if not sid:
                     continue
-                crates = int(it.get("quantity", 0) or 0)
-                if crates <= 0:
+                # Base UOM = bottles: quantity(packages) × units_per_package.
+                qty = int(it.get("quantity", 0) or 0)
+                upp = int(it.get("units_per_package") or 0) or _xfer_default_upp.get(sid) or 1
+                bottles = qty * upp
+                if bottles <= 0:
                     continue
                 sku_name = it.get("sku_name", "Unknown")
                 # Inbound: destination is THIS distributor & dest warehouse is non-factory
                 if xf.get("dest_distributor_id") == distributor_id and xf.get("dest_location_id") not in _factory_loc:
                     b = transfer_in_by_sku.setdefault(sid, {"sku_id": sid, "sku_name": sku_name, "qty": 0})
-                    b["qty"] += crates
+                    b["qty"] += bottles
                 # Outbound: source is THIS distributor & source warehouse is non-factory
                 if xf.get("source_distributor_id") == distributor_id and xf.get("source_location_id") not in _factory_loc:
                     b = transfer_out_by_sku.setdefault(sid, {"sku_id": sid, "sku_name": sku_name, "qty": 0})
-                    b["qty"] += crates
+                    b["qty"] += bottles
 
 
     # === 2. STOCK OUT: Deliveries to customers (delivered/completed/complete) ===
@@ -8872,6 +8899,40 @@ async def get_stock_dashboard(
             if bpc:
                 bpc_by_sku.setdefault(ms["id"], bpc)
 
+    # Per-SKU base UOM + default packaging (for the "bottles (= N default-pkg)"
+    # display). `packaging_config[*]` entries carry `units_per_package` and
+    # `packaging_type_name`. Prefer the stock_out default, then production, then
+    # any multi-unit packaging.
+    default_pkg_by_sku: dict = {}
+    sku_uom_by_id: dict = {}
+    sku_ids_for_pkg = [sid for sid in all_sku_ids if sid]
+    if sku_ids_for_pkg:
+        async for ms in tdb.master_skus.find(
+            {"id": {"$in": sku_ids_for_pkg}},
+            {"_id": 0, "id": 1, "unit": 1, "packaging_config": 1},
+        ):
+            sku_uom_by_id[ms["id"]] = ms.get("unit") or "bottles"
+            pc = ms.get("packaging_config") or {}
+            chosen = None
+            for key in ("stock_out", "production", "master", "stock_in"):
+                arr = pc.get(key) or []
+                d = next((p for p in arr if p.get("is_default")), None)
+                if d:
+                    chosen = d
+                    break
+            if not chosen or int(chosen.get("units_per_package") or 1) <= 1:
+                for key in ("stock_out", "production", "master"):
+                    arr = pc.get(key) or []
+                    d = next((p for p in arr if int(p.get("units_per_package") or 1) > 1), None)
+                    if d:
+                        chosen = d
+                        break
+            if chosen:
+                default_pkg_by_sku[ms["id"]] = {
+                    "units": int(chosen.get("units_per_package") or 1),
+                    "name": chosen.get("packaging_type_name") or "",
+                }
+
     sku_summaries = []
     total_stock_in = 0
     total_stock_out = 0
@@ -8951,9 +9012,17 @@ async def get_stock_dashboard(
 
         sku_name = si.get('sku_name') or so.get('sku_name') or po.get('sku_name') or fr_data.get('sku_name') or fws_data.get('sku_name') or tin_data.get('sku_name') or tout_data.get('sku_name') or 'Unknown'
 
+        dp = default_pkg_by_sku.get(sid) or {}
+        dp_units = dp.get('units') or 0
+
         sku_summaries.append({
             "sku_id": sid,
             "sku_name": sku_name,
+            # All quantities below are in the base UOM = BOTTLES.
+            "unit": "bottles",
+            "uom": sku_uom_by_id.get(sid) or "bottles",
+            "default_packaging_name": dp.get('name') or "",
+            "default_packaging_units": dp_units,
             "stock_received": qty_in,
             "stock_delivered": qty_out,
             "stock_pending_out": qty_pending_out,
@@ -9030,6 +9099,7 @@ async def get_stock_dashboard(
     return {
         "distributor_id": distributor_id,
         "distributor_name": distributor.get('distributor_name', ''),
+        "unit": "bottles",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "totals": {
             "stock_received": total_stock_in,

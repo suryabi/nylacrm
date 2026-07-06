@@ -1,0 +1,26 @@
+{
+  "summary": "Verified the fix for the Stock Dashboard 'negative Available' bug caused by unit mismatch (crates vs bottles). Backend + frontend fully pass all acceptance criteria. All quantities on the dashboard are now normalized to the SKU base UOM = BOTTLES; each SKU row also shows the default-packaging equivalent.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Observation (out of current scope): On distributor 'Test' the top-level totals AVAILABLE card shows -180 ('Deliverable now') because totals.stock_available is computed as on_hand (405) - reserved (585). No individual SKU row is negative, so the per-SKU fix requested here is correct, but the aggregate card can still display a negative when open reservations exceed on-hand. Consider clamping totals.stock_available to max(0, on_hand-reserved) or showing a distinct 'over-committed' state at the totals level for consistency with the per-SKU rows (which the fix already keeps positive).",
+    "routes/distributors.py is now 9865 lines — exceeds the 700-line guideline. Recommend splitting the stock-dashboard aggregation into its own module (e.g. services/stock_dashboard.py) for maintainability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 — verified",
+  "seed_data_creation": "None. Used pre-seeded UNITTEST-SH-1 (210×12 shipment) and UNITTEST-DL-1 (842×1 delivery) rows that reproduced the pre-fix negative-balance bug.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Surya Distributions (d091204f-e04f-46f2-b9a9-d92d9f89b528) — Nyla 600ml Silver row shows Received 2,580, Delivered 842, Available 1,738 (positive, indigo text) with default-pkg secondary line '≈ 144.8 Crate - 12' and UOM hint 'in bottles · default: Crate - 12'. Dashboard subtitle reads 'Real-time inventory across all SKUs · all quantities in bottles (base UOM)'. Playwright scan of all [data-testid^=sku-available-] cells finds ZERO negatives. Distributor Test (99fb55dc-532c-4e85-b618-6b8a5e552c04) Factory Warehouse Stock card correctly shows 'Nyla – 660 ml / Sparkling · 60 bottles · 1 batch' with card total '60 bottles total'. Only note: totals.stock_available card on Test shows -180 because on_hand(405)-reserved(585) — reported as out-of-scope observation.",
+  "rca of the issue": "Root cause was unit mismatch: shipment items were being aggregated as `quantity` (=210 crates) while delivery items were aggregated as raw `quantity` (=842 bottles), so 210-842 produced -632-ish. Fix (verified): _item_crates now returns quantity × packaging_units, converting both sources to BOTTLES (210×12=2,520 + additional stock-in = 2,580 bottles; delivery 842×1 = 842 bottles → available 1,738). _to_crates for returns/factory rows is now identity because those tables already store bottles. Each SKU summary also exposes uom, default_packaging_name, default_packaging_units so the UI can show the '≈ N default-pkg' equivalent. Frontend StockDashboardTab.jsx correctly renders pkgEquiv, sku-uom hint, and relabels crate texts to bottles."
+}
