@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
 import {
-  Printer, Search, ChevronLeft, ChevronRight, Tag, Calendar, Package,
+  Printer, Search, ChevronLeft, ChevronRight, ChevronDown, Tag, Calendar, Package,
   Users, Building2, Loader2, X, MapPin,
 } from 'lucide-react';
 
@@ -41,13 +41,18 @@ const groupByCity = (rows) => {
   });
 };
 
-const CityGroupHeader = ({ name, count }) => (
-  <div className="flex items-center gap-2 pt-1" data-testid={`print-city-group-${name}`}>
-    <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-    <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{name}</span>
-    <span className="text-[10px] text-slate-400">({count})</span>
-    <div className="flex-1 h-px bg-slate-100" />
-  </div>
+const CityGroupHeader = ({ name, count, collapsed, onToggle }) => (
+  <button
+    type="button"
+    onClick={onToggle}
+    className="w-full flex items-center gap-2.5 rounded-xl bg-slate-100/80 border border-slate-200 px-4 py-3 hover:bg-slate-100 transition-colors"
+    data-testid={`print-city-group-${name}`}
+  >
+    <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+    <MapPin className="h-5 w-5 text-emerald-600 shrink-0" />
+    <span className="text-base font-bold text-slate-800 tracking-tight">{name}</span>
+    <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">{count}</span>
+  </button>
 );
 
 export default function PrintRequests() {
@@ -119,6 +124,12 @@ export default function PrintRequests() {
 
   const items = data.items || [];
   const hasFilters = search || statusIds.length > 0 || city;
+  const [collapsedCities, setCollapsedCities] = useState(new Set());
+  const toggleCity = (c) => setCollapsedCities((prev) => {
+    const n = new Set(prev);
+    if (n.has(c)) n.delete(c); else n.add(c);
+    return n;
+  });
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6" data-testid="print-requests-page">
@@ -198,10 +209,12 @@ export default function PrintRequests() {
           <div className="lg:hidden space-y-3" data-testid="print-mobile-list">
             {items.length === 0 ? (
               <Card className="border border-slate-100 rounded-xl"><CardContent className="p-10 text-center text-sm text-muted-foreground">No print requests yet. Create one from a Final-Approved design request.</CardContent></Card>
-            ) : groupByCity(items).map(([cityName, cityRows]) => (
+            ) : groupByCity(items).map(([cityName, cityRows]) => {
+              const collapsed = collapsedCities.has(cityName);
+              return (
               <div key={cityName} className="space-y-3">
-                <CityGroupHeader name={cityName} count={cityRows.length} />
-                {cityRows.map((pr) => (
+                <CityGroupHeader name={cityName} count={cityRows.length} collapsed={collapsed} onToggle={() => toggleCity(cityName)} />
+                {!collapsed && cityRows.map((pr) => (
                 <Card key={pr.id} className="border border-slate-100 rounded-xl shadow-sm active:scale-[0.99] transition-transform cursor-pointer" onClick={() => navigate(`/print-requests/${pr.id}`)} data-testid={`print-card-${pr.id}`}>
                 <CardContent className="p-4 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
@@ -223,7 +236,8 @@ export default function PrintRequests() {
                 </Card>
                 ))}
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Desktop table */}
@@ -243,18 +257,21 @@ export default function PrintRequests() {
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="p-12 text-center text-sm text-muted-foreground">No print requests yet. Create one from a Final-Approved design request.</TableCell></TableRow>
-                  ) : groupByCity(items).map(([cityName, cityRows]) => (
+                  ) : groupByCity(items).map(([cityName, cityRows]) => {
+                    const collapsed = collapsedCities.has(cityName);
+                    return (
                     <React.Fragment key={cityName}>
-                      <TableRow className="bg-slate-50/80 hover:bg-slate-50/80 border-b border-slate-100">
-                        <TableCell colSpan={6} className="py-2">
-                          <div className="flex items-center gap-2" data-testid={`print-city-row-${cityName}`}>
-                            <MapPin className="h-3.5 w-3.5 text-emerald-600" />
-                            <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{cityName}</span>
-                            <span className="text-[10px] text-slate-400">({cityRows.length})</span>
+                      <TableRow className="bg-slate-100/80 hover:bg-slate-100 border-y border-slate-200 cursor-pointer" onClick={() => toggleCity(cityName)} data-testid={`print-city-row-${cityName}`}>
+                        <TableCell colSpan={6} className="py-3">
+                          <div className="flex items-center gap-2.5">
+                            <ChevronDown className={`h-5 w-5 text-slate-500 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+                            <MapPin className="h-5 w-5 text-emerald-600" />
+                            <span className="text-base font-bold text-slate-800 tracking-tight">{cityName}</span>
+                            <span className="text-xs font-semibold text-slate-500 bg-white border border-slate-200 rounded-full px-2 py-0.5">{cityRows.length}</span>
                           </div>
                         </TableCell>
                       </TableRow>
-                      {cityRows.map((pr) => (
+                      {!collapsed && cityRows.map((pr) => (
                       <TableRow key={pr.id} className="cursor-pointer hover:bg-slate-50 border-b border-slate-50 transition-colors" onClick={() => navigate(`/print-requests/${pr.id}`)} data-testid={`print-row-${pr.id}`}>
                         <TableCell className="py-3">
                           <div className="font-medium text-primary text-sm">{pr.source_title || pr.request_type_name || 'Print Request'}</div>
@@ -273,7 +290,8 @@ export default function PrintRequests() {
                       </TableRow>
                       ))}
                     </React.Fragment>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>

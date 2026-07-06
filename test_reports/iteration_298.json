@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only verification of prominent + collapsible city grouping on Print Requests (/print-requests) and Design Requests List view (/design-requests-new). Both pages render large, prominent city header bands (rounded grey band, pin icon, big bold city name, count badge, ChevronDown). Clicking a header collapses that city's rows and rotates the chevron; clicking again expands. Multiple groups collapse independently. Regression checks (Print status tiles + city filter, Design table sort headers) still work.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_results": {
+    "print_requests_prominent_headers": "PASS - Desktop headers rendered with data-testid print-city-row-Mumbai and print-city-row-No City; each is a full-row band containing pin icon, big city name, count badge (Mumbai:2, No City:3) and ChevronDown. Row height ~49px.",
+    "print_requests_collapse_toggle": "PASS - Before collapse: 5 print-row-* rows visible. Clicking print-city-row-Mumbai hides its 2 rows (rows drop to 3); chevron class becomes 'lucide lucide-chevron-down ... transition-transform -rotate-90'. Second click restores 5 rows.",
+    "print_requests_multi_independent": "PASS - Collapsing Mumbai AND No City → 0 data rows; expanding both → 5 rows again. Groups toggle independently.",
+    "print_requests_regression": "PASS - 6 status tiles (print-status-tile-*) still render, print-city-filter dropdown still present.",
+    "design_requests_prominent_headers": "PASS - Desktop headers rendered with data-testid mr-city-row-Hyderabad, mr-city-row-Mumbai, mr-city-row-No City; each a full-row band with pin icon, big bold city name, count badge (Hyderabad:1, Mumbai:3, No City:18) and ChevronDown. Row height ~49px.",
+    "design_requests_collapse_toggle": "PASS - Clicking mr-city-row-Hyderabad hides its 1 data row (screenshot confirms row disappears and chevron rotates from down to right). Re-clicking restores it. Mumbai and No City rows remain visible while Hyderabad is collapsed → independent per-group state.",
+    "design_requests_sort_regression": "PASS - 6 sortable column headers detected on the design requests table (sort still available)."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Nice-to-have: The Print Requests desktop table only exposes data-testid print-city-row-<City> on the header <tr>, but the underlying rows are already keyed with print-row-*. Consider adding an aria-expanded attribute on the header cells to help screen readers announce collapse state (currently only visual chevron rotation).",
+    "Nice-to-have: Same suggestion for Design Requests mr-city-row-<City> header row — add role='button' and aria-expanded for a11y."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (nyla-air-water)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "City grouping testids: Print Requests desktop print-city-row-<City> (Mumbai, 'No City'); mobile print-city-group-<City>. Design Requests List desktop mr-city-row-<City> (Hyderabad, Mumbai, 'No City'); mobile mr-city-group-<City>. Collapsed state is client-side React state (collapsedCities Set) — nothing persisted across reload. Chevron rotation uses '-rotate-90' when collapsed. Kanban view has no city grouping (unchanged).",
+  "rca of the issue": "n/a — feature working as specified."
+}

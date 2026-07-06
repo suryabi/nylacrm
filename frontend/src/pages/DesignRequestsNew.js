@@ -16,7 +16,7 @@ import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   LayoutList, Tag, User, Users, Calendar, Loader2, Truck, GitBranch, Download, Hourglass,
   ChevronsUpDown, ArrowUp, ArrowDown, LayoutGrid, Flame, Filter, Check, Inbox, SlidersHorizontal,
-  ArrowLeftRight, CheckCircle2, MapPin,
+  ArrowLeftRight, CheckCircle2, MapPin, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -283,6 +283,12 @@ function groupRowsByCity(rows) {
 }
 
 function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
+  const [collapsedCities, setCollapsedCities] = useState(new Set());
+  const toggleCity = (c) => setCollapsedCities((prev) => {
+    const n = new Set(prev);
+    if (n.has(c)) n.delete(c); else n.add(c);
+    return n;
+  });
   const initialKeys = new Set((states || []).filter((s) => s.is_initial).map((s) => s.key));
   if (initialKeys.size === 0) initialKeys.add('submitted');
   const isNewReq = (req) => initialKeys.has(req.current_state_key);
@@ -336,15 +342,22 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
         </div>
         {rows.length === 0 ? (
           <Card className="rounded-xl border border-zinc-100"><CardContent className="flex flex-col items-center gap-2 p-10 text-center"><Inbox className="h-10 w-10 text-zinc-300" strokeWidth={1} /><p className="text-sm font-medium text-zinc-600">No requests found</p></CardContent></Card>
-        ) : groupRowsByCity(rows).map(([cityName, cityRows]) => (
+        ) : groupRowsByCity(rows).map(([cityName, cityRows]) => {
+          const collapsed = collapsedCities.has(cityName);
+          return (
           <div key={cityName} className="space-y-3">
-            <div className="flex items-center gap-2 pt-1" data-testid={`mr-city-group-${cityName}`}>
-              <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-              <span className="text-xs font-bold uppercase tracking-wide text-zinc-700">{cityName}</span>
-              <span className="text-[10px] text-zinc-400">({cityRows.length})</span>
-              <div className="flex-1 h-px bg-zinc-100" />
-            </div>
-            {cityRows.map((req) => {
+            <button
+              type="button"
+              onClick={() => toggleCity(cityName)}
+              className="w-full flex items-center gap-2.5 rounded-xl bg-zinc-100/80 border border-zinc-200 px-4 py-3 hover:bg-zinc-100 transition-colors"
+              data-testid={`mr-city-group-${cityName}`}
+            >
+              <ChevronDown className={`h-5 w-5 text-zinc-500 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+              <MapPin className="h-5 w-5 text-emerald-600 shrink-0" />
+              <span className="text-base font-bold text-zinc-800 tracking-tight">{cityName}</span>
+              <span className="text-xs font-semibold text-zinc-500 bg-white border border-zinc-200 rounded-full px-2 py-0.5">{cityRows.length}</span>
+            </button>
+            {!collapsed && cityRows.map((req) => {
           const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
           const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
           const leadLabel = req.lead_company || req.lead_name;
@@ -390,7 +403,8 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
           );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Desktop: refined table */}
@@ -421,18 +435,21 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
             <TableBody>
               {rows.length === 0 ? (
                 <EmptyState colSpan={6} />
-              ) : groupRowsByCity(rows).map(([cityName, cityRows]) => (
+              ) : groupRowsByCity(rows).map(([cityName, cityRows]) => {
+                const collapsed = collapsedCities.has(cityName);
+                return (
                 <React.Fragment key={cityName}>
-                  <TableRow className="bg-zinc-50/80 hover:bg-zinc-50/80 border-b border-zinc-100">
-                    <TableCell colSpan={6} className="py-2">
-                      <div className="flex items-center gap-2" data-testid={`mr-city-row-${cityName}`}>
-                        <MapPin className="h-3.5 w-3.5 text-emerald-600" />
-                        <span className="text-xs font-bold uppercase tracking-wide text-zinc-700">{cityName}</span>
-                        <span className="text-[10px] text-zinc-400">({cityRows.length})</span>
+                  <TableRow className="bg-zinc-100/80 hover:bg-zinc-100 border-y border-zinc-200 cursor-pointer" onClick={() => toggleCity(cityName)} data-testid={`mr-city-row-${cityName}`}>
+                    <TableCell colSpan={6} className="py-3">
+                      <div className="flex items-center gap-2.5">
+                        <ChevronDown className={`h-5 w-5 text-zinc-500 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+                        <MapPin className="h-5 w-5 text-emerald-600" />
+                        <span className="text-base font-bold text-zinc-800 tracking-tight">{cityName}</span>
+                        <span className="text-xs font-semibold text-zinc-500 bg-white border border-zinc-200 rounded-full px-2 py-0.5">{cityRows.length}</span>
                       </div>
                     </TableCell>
                   </TableRow>
-                  {cityRows.map((req) => {
+                  {!collapsed && cityRows.map((req) => {
                 const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
                 const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
                 const leadLabel = req.lead_company || req.lead_name;
@@ -500,7 +517,8 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                 );
                   })}
                 </React.Fragment>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>
