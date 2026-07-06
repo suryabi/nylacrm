@@ -1,0 +1,31 @@
+{
+  "summary": "Retest of print-request card rendering under Customer Branding / Design Requests section of lead detail page (lead 20c97966-... 'The Rameshwaram Cafe'). After stale test data was repaired, the visible outcome is now CONFIRMED PASS: PR-2026-0003 with 'On Hold' status badge renders as a clickable card beneath MR-2026-0020, MR-2026-0017 has no print-request block, click navigates to /print-requests/<id>, and the green 'Print Request' create button still shows on MR-2026-0020.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_search_and_printreq_link.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LeadBottleDesigns.js correctly fetches print requests via source_request_ids comma-list, keys by pr.source_marketing_request_id, and only renders block when linkedPrints.length > 0 — verified: exactly one lead-print-requests block on the page (under MR-2026-0020), none on MR-2026-0017.",
+    "Consider adding referential integrity to prevent stale print-request → design-request linkage (root cause of iteration_305 miss). Suggestion: on hard-delete of a design request, either block if dependent print requests exist, or cascade-update/null the source_marketing_request_id on children."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water) — working",
+  "seed_data_creation": "None. Used existing repaired data. PR-2026-0003 (id 3554ed9b-5897-4b11-a6b9-74451dbb3328) now correctly has source_marketing_request_id=09b6d251-... (MR-2026-0020).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All acceptance criteria met. Backend GET /api/print-requests?source_request_ids=09b6d251-... returns PR-2026-0003 (status 'On Hold'). Frontend renders card [data-testid=lead-print-request-3554ed9b-5897-4b11-a6b9-74451dbb3328] with text 'PR-2026-0003 · Acme Print House' + status badge 'On Hold' beneath MR-2026-0020 design row. MR-2026-0017 has no print-request block. Card click navigates to /print-requests/3554ed9b-.... Create PR button remains for MR-2026-0020.",
+  "rca of the issue": "N/A — issue resolved. Prior gap was stale data (PR-2026-0003.source_marketing_request_id pointed to deleted design-request id 3761de64-...). After repair to 09b6d251-... (current MR-2026-0020), the frontend now renders the card as designed. No code change needed on frontend."
+}
