@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-06 — 🐛 Fix: Design Requests free-form search 500 + ✨ show linked Print Requests in Customer Branding ✅ (testing_agent iterations 305–306: 100%)
+- **Search fix** (`routes/design_requests_new.py` `_build_requests_query`): the search term was passed as a raw `$regex`, so any special char (`(`, `)`, `\`, `[`, etc.) crashed the endpoint with 500. Now `re.escape(search.strip())`. Verified 200 for all special-char payloads.
+- **Print Requests in Customer Branding**: `LeadBottleDesigns.js` now fetches print requests linked to the lead's design requests and renders them as clickable cards (print number + status badge) beneath each design-request row. Added a `source_request_ids` (comma-separated) filter to `GET /api/print-requests` (`_build_list_query` → `source_marketing_request_id $in`).
+- **Data repair**: fixed 4 orphaned print-request→design-request links in preview (print requests pointed to deleted+recreated design-request ids). Matched by `request_number`. Testing agent flagged a referential-integrity gap: hard-deleting a design request orphans its print requests — candidate future safeguard.
+- **Verified**: PR-2026-0003 ('On Hold') renders under MR-2026-0020 on lead 'The Rameshwaram Cafe'; click navigates to the print request; design requests without print requests show no block; create button preserved.
+
+
 ## 2026-07-06 — 🐛 Fix: Stock transfers into non-factory distributor warehouses not reflected in stock views ✅ (testing_agent iteration_304: backend+frontend 100%)
 - **Reported**: Stock In reflected at the destination warehouse, but Stock Transfer did not. User: source is always a factory/master warehouse → self-managed distributor; viewed on Stock Dashboard + Distributor Detail Stock tab; transferred-in stock should be on-hand sellable.
 - **Root cause** (`routes/distributors.py` `get_stock_dashboard`): on-hand was derived from `distributor_shipments` + `factory_warehouse_stock` and NEVER read `distributor_stock`. Transfers into a NON-factory distributor warehouse write only to `distributor_stock` → invisible. (Transfers into factory warehouses were already covered via `factory_warehouse_stock`.)
