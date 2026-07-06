@@ -1329,3 +1329,11 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Backend GET /print-requests/export (before /{id} route): CSV of all matching requests using the same _build_list_query (search, status_ids/status_id, city, vendor, dept), no pagination; columns incl Print#, Source#, Title, Lead, City, Status, Initial Order Qty, Initial Monthly Qty, Total Monthly Volume (Future Potential), Delivery Date, Vendor, Team, Created By/At. StreamingResponse text/csv.
 - Frontend PrintRequests.js: "Download" button (print-export-btn) in filter row; fetches export with current search/status/city as blob and downloads print_requests_<date>.csv.
 - VERIFIED curl: export headers correct; city=Mumbai → 2 rows (honors filter). Frontend compiles.
+
+## 2026-06 — Print Request: terminal fallback, live CDR link, confirm checkbox, CEO delete
+- BUG FIX (terminal): old/migrated design requests carried a stale state_machine_id so current_state_is_terminal computed false → Print Request button hidden on Lead detail even in terminal state. _enrich_requestor_city now falls back to the union of terminal flags across the tenant's live design_requests_new state machine(s) when the request's own machine/key doesn't resolve.
+- CDR live link: Print Request detail now has a "CDR File Link for Printing" section (print-cdr-section) that LIVE-reflects the source design request's cdr_link + file_links; get_print_request enriches design_file_links from design_requests_new OR legacy marketing_requests (covers migrated PRs). Reflects edits to the design request's File Link immediately.
+- Confirmation checkbox on both create dialogs (CreatePrintRequestDialog pr-confirm-checkbox, SendForPrintingDialog send-print-confirm-checkbox): "I confirm that this is not a sample request or a design request. This request is for the customer's initial order." — submit disabled until checked.
+- CEO/Admin delete from Print Requests list (print-delete-<id> + AlertDialog print-delete-dialog); detail page delete already existed.
+- Incidental fix (by testing agent): removed an orphan ")}" rendering as literal text near Notes on PrintRequestDetail.js.
+- VERIFIED: curl (terminal fallback True for stale-machine req; design_file_links live from both collections) + testing_agent iteration_299 (100% frontend on all 4). Test data cleaned up.
