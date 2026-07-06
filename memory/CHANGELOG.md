@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-06 — 🐛 Fix: Stock transfers into non-factory distributor warehouses not reflected in stock views ✅ (testing_agent iteration_304: backend+frontend 100%)
+- **Reported**: Stock In reflected at the destination warehouse, but Stock Transfer did not. User: source is always a factory/master warehouse → self-managed distributor; viewed on Stock Dashboard + Distributor Detail Stock tab; transferred-in stock should be on-hand sellable.
+- **Root cause** (`routes/distributors.py` `get_stock_dashboard`): on-hand was derived from `distributor_shipments` + `factory_warehouse_stock` and NEVER read `distributor_stock`. Transfers into a NON-factory distributor warehouse write only to `distributor_stock` → invisible. (Transfers into factory warehouses were already covered via `factory_warehouse_stock`.)
+- **Fix**: Added a "1c. STOCK TRANSFERS" aggregation over `distributor_stock_transfers` (status=completed) that folds transfer in/out of the distributor's NON-factory warehouses into per-SKU `qty_in` / `stock_on_hand` / `stock_at_hand`, and totals subtract `total_transferred_out`. Factory-warehouse locations are excluded (looked up live from `distributor_locations.is_factory`) to avoid double-counting. Read-only fix — no inventory data moved, no backfill.
+- **Verified**: Surya Distributions — "Nyla 600ml Silver" (5 crates, transferred into non-factory warehouse) now shows on-hand/available=5 (was missing); 330ml Gold/Silver unchanged at 1000. Distributor "Test" — "Nyla 660ml Sparkling" (factory-warehouse transfer) stays at 5, counted once.
+
+
 ## 2026-07-06 — 🐛 Fix: Edit button hidden for non-admin roles granted edit on "Design Requests" ✅ (testing_agent iteration_302: frontend 100%, 6/6)
 - **Reported**: A "Creative Director" role given view+edit on "Design Requests" in tenant settings couldn't see the Edit option when logged in.
 - **Root cause** (`pages/DesignRequestNewDetail.js`): the page checked `hasActionPermission('marketing_requests', 'edit'/'delete')` — the OLD module key. The "Design Requests" settings store permissions under `design_requests_new` (MODULE_LABELS: design_requests_new→"Design Requests", marketing_requests→"Design Requests - OLD"). Non-admin roles have marketing_requests all-false after the rename migration, so Edit/Delete stayed hidden. Backend edit/delete endpoints already used the correct `design_requests_new` key.
