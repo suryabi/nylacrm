@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-06 — 🐛 Fix: Edit button hidden for non-admin roles granted edit on "Design Requests" ✅ (testing_agent iteration_302: frontend 100%, 6/6)
+- **Reported**: A "Creative Director" role given view+edit on "Design Requests" in tenant settings couldn't see the Edit option when logged in.
+- **Root cause** (`pages/DesignRequestNewDetail.js`): the page checked `hasActionPermission('marketing_requests', 'edit'/'delete')` — the OLD module key. The "Design Requests" settings store permissions under `design_requests_new` (MODULE_LABELS: design_requests_new→"Design Requests", marketing_requests→"Design Requests - OLD"). Non-admin roles have marketing_requests all-false after the rename migration, so Edit/Delete stayed hidden. Backend edit/delete endpoints already used the correct `design_requests_new` key.
+- **Fix**: Changed the 3 checks (line 278 canDelete + lines 607/632 edit gate) to `design_requests_new`. Left `MarketingRequestDetail.js` (the OLD module) on `marketing_requests`.
+- **Verified**: As Creative Director (design_requests_new edit=true, delete=false) — Edit + Mark Urgent visible, Delete hidden, /edit route loads. Test user creative.director@nylaairwater.earth / test123 seeded.
+
+
 ## 2026-07-06 — 🐛 Fix: Print/Send-for-Printing hidden for NEW (DRN) requests in terminal state ✅ (testing_agent iteration_301: frontend 100%, 5/5)
 - **Reported**: Even non-migrated (DRN-prefix) design requests in a terminal state didn't surface the print option.
 - **Root cause**: Gating relied only on hardcoded state keys `['final_approved','production_in_progress','production_completed']`. A custom-keyed terminal state (or any state flagged `is_terminal` that isn't one of those keys) was missed.
