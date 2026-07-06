@@ -8899,20 +8899,27 @@ async def get_stock_dashboard(
             if bpc:
                 bpc_by_sku.setdefault(ms["id"], bpc)
 
-    # Per-SKU base UOM + default packaging (for the "bottles (= N default-pkg)"
+    # Per-SKU base UOM + default packaging (for the "<base unit> (= N default-pkg)"
     # display). `packaging_config[*]` entries carry `units_per_package` and
-    # `packaging_type_name`. Prefer the stock_out default, then production, then
-    # any multi-unit packaging.
+    # `packaging_type_name`. The base unit is the packaging with units==1 (e.g.
+    # "Bottle", "Can", "Piece") — tenant-specific, never hardcoded.
     default_pkg_by_sku: dict = {}
-    sku_uom_by_id: dict = {}
+    base_unit_by_sku: dict = {}
     sku_ids_for_pkg = [sid for sid in all_sku_ids if sid]
     if sku_ids_for_pkg:
         async for ms in tdb.master_skus.find(
             {"id": {"$in": sku_ids_for_pkg}},
-            {"_id": 0, "id": 1, "unit": 1, "packaging_config": 1},
+            {"_id": 0, "id": 1, "unit": 1, "base_uom": 1, "packaging_config": 1},
         ):
-            sku_uom_by_id[ms["id"]] = ms.get("unit") or "bottles"
             pc = ms.get("packaging_config") or {}
+            all_pkgs = []
+            for key in ("stock_out", "production", "master", "stock_in"):
+                all_pkgs.extend(pc.get(key) or [])
+            # Base unit from SKU Management (`base_uom`, e.g. "Bottle"/"Can"/"Piece"),
+            # falling back to a single-unit packaging name, then generic "units".
+            base = next((p.get("packaging_type_name") for p in all_pkgs
+                         if int(p.get("units_per_package") or 0) == 1 and p.get("packaging_type_name")), None)
+            base_unit_by_sku[ms["id"]] = ms.get("base_uom") or base or "units"
             chosen = None
             for key in ("stock_out", "production", "master", "stock_in"):
                 arr = pc.get(key) or []
@@ -9018,9 +9025,9 @@ async def get_stock_dashboard(
         sku_summaries.append({
             "sku_id": sid,
             "sku_name": sku_name,
-            # All quantities below are in the base UOM = BOTTLES.
-            "unit": "bottles",
-            "uom": sku_uom_by_id.get(sid) or "bottles",
+            # All quantities below are in the SKU's base UOM (units==1 packaging).
+            "unit": "units",
+            "base_unit_name": base_unit_by_sku.get(sid) or "units",
             "default_packaging_name": dp.get('name') or "",
             "default_packaging_units": dp_units,
             "stock_received": qty_in,
@@ -9099,7 +9106,7 @@ async def get_stock_dashboard(
     return {
         "distributor_id": distributor_id,
         "distributor_name": distributor.get('distributor_name', ''),
-        "unit": "bottles",
+        "unit": "units",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "totals": {
             "stock_received": total_stock_in,

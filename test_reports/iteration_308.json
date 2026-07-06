@@ -1,0 +1,34 @@
+{
+  "summary": "Retest of the tenant-agnostic labeling for the Stock Dashboard (post unit-mismatch fix). All primary acceptance criteria PASS: per-SKU UOM hint uses the SKU's own base_uom ('Bottle'), shared/aggregate labels use generic 'units', header subtitle no longer hardcodes 'bottles', and the Nyla 600ml Silver row on Surya Distributions is correctly positive (Available = 1,738 = Received 2,580 - Delivered 842).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "StockDashboardTab.jsx (secondary text)",
+        "issues": [
+          "SummaryCard 'Empty Bottles' still has sub-text 'bottles · for recycling' (line 256) — hardcoded lowercase 'bottles' visible on every tenant.",
+          "Column tooltip on 'Empty Bottles' header (line 398) still reads 'counted in raw BOTTLES, not crates'.",
+          "Bottle Tracking card description/section title (lines 351,356) still say 'Empty bottles (for recycling)' / 'Empty & FOC bottles cycle back...'. These are business-flow specific but if the tenant does not deal in bottles, they will read oddly. Consider using base_uom or a tenant-configurable label."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Minor / follow-up) Replace remaining hardcoded 'bottles' strings in StockDashboardTab.jsx at lines 256, 351, 356, 398 with generic 'units' or a base_uom-driven label to fully complete the tenant-agnostic labeling.",
+    "(Pre-existing, out-of-scope observation from iteration_307) On distributor 'Test', SKU 'Nyla – 330 ml / Silver' Available renders as -476 because stock_received (100) - stock_pending_out/reserved (576) is negative. This is the same 'over-committed reservations' pattern already flagged for the totals card, but now visible per-SKU. Consider clamping Available to max(0, on_hand-reserved) at the SKU level or surfacing an 'over-committed' badge."
+  ],
+  "critical_code_review_comments": [
+    "StockDashboardTab.jsx still contains 4 hardcoded 'bottles' strings (see design_issues). The core per-SKU/base-UOM plumbing is correct, but these secondary labels weaken the tenant-agnostic contract."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only)", "frontend": "100% on primary acceptance criteria"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 — verified",
+  "seed_data_creation": "None (used pre-seeded UNITTEST-SH-1 shipment 210×12 and UNITTEST-DL-1 delivery 842×1 for Surya Distributions).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Playwright verified end-to-end on the live public URL: (1) Surya Distributions Nyla 600ml Silver: data-testid=sku-available-20d525e8-c4af-4f40-965a-549dcd50c0a9 = '1,738', class contains 'text-indigo-700' (positive), no red. (2) data-testid=sku-uom-...-20d525e8 = 'in Bottle · default: Crate - 12' — capital 'Bottle' from master_sku.base_uom, not the old hardcoded lowercase 'bottles'. (3) data-testid=sku-available-pkg-...-20d525e8 = '≈ 144.8 Crate - 12'. (4) Header subtitle = 'Real-time inventory across all SKUs · quantities shown in each SKU\\'s base unit (UOM)' — no 'bottles'. (5) Distributor 'Test' Factory Warehouse card badge = '60 units total' and Nyla 660ml Sparkling row = '60 units · 1 batch' — generic 'units'. Scan of all sku-available-* cells on Surya returned ZERO negatives. However, on Test the SKU 'Nyla 330 ml / Silver' still shows Available = -476 (over-committed reservations, same class of issue as the -180 totals card noted in iteration_307).",
+  "rca of the issue": "Not applicable — this iteration was a retest of the tenant-agnostic labeling change. The prior root cause (unit mismatch: crates aggregated as raw quantity vs bottles) was resolved in iteration_307 and remains fixed. The new labeling fix: backend routes/distributors.get_stock_dashboard now returns per-SKU base_unit_name (from master_sku.base_uom, fallback to single-unit packaging name → 'units') and default_packaging_name/units; frontend StockDashboardTab renders `in {base_unit_name} · default: {default_packaging_name}` per row and uses 'units' in the shared factory-warehouse/aggregate labels. Verified rendering matches the spec."
+}
