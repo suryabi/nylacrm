@@ -1,0 +1,26 @@
+{
+  "summary": "Frontend-only verification of Print Request / Send-for-Printing button visibility for NEW (DRN-prefix) design requests in terminal states. All 5 requested checks PASS. CEO login (surya.yadavalli@nylaairwater.earth / test123) used.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verification_results": [
+    {"check": "TEST1 - DRN-2026-0001 (production_completed / terminal) on lead 08c93122 Customer Branding shows green 'Print Request' button", "result": "PASS", "evidence": "data-testid=create-print-request-btn-24d674f4-74ac-4752-992e-9fc73c801bc0 present, visible=true, text='Print Request'. Section screenshot shows green button next to 'Production Completed' badge for DRN-2026-0001 (Urgent, Neck Tags)."},
+    {"check": "TEST2 - DRN-2026-0002, DRN-2026-0003, MR-2026-0022 (all submitted) do NOT show Print Request button", "result": "PASS", "evidence": "Section innerText confirms all 4 codes present with 3 'Submitted' badges. Only 1 create-print-request-btn-* element in lead-design-requests section (belonging to DRN-2026-0001). Other three rows show only 'Submitted' badge."},
+    {"check": "TEST3 - Clicking Print Request on DRN-2026-0001 opens Create Print Request dialog", "result": "PASS", "evidence": "role=dialog opened with title 'Create Print Request' and subtitle 'For DRN-2026-0001 · Neck Tags'. Dialog contains form fields (Initial Monthly Quantity, Initial Order Quantity, Requested Delivery Date, Notes, confirmation checkbox). Closed via Escape without submitting; dialog count returned to 0."},
+    {"check": "TEST4 - /design-requests-new/24d674f4-74ac-4752-992e-9fc73c801bc0 shows 'Send for Printing' button (mr-send-print-btn)", "result": "PASS", "evidence": "data-testid=mr-send-print-btn count=1, visible=true, text='Send for Printing'. Current state pill on page reads 'Production Completed'. Detail screenshot shows green 'Send for Printing' in top-right toolbar next to Urgent/Edit/Delete."},
+    {"check": "TEST5 - Regression: migrated MR-2026-0020 (final_approved) on lead 20c97966 still shows Print Request button", "result": "PASS", "evidence": "data-testid=create-print-request-btn-09b6d251-7d27-4581-93d2-a4ce38dd2af9 visible=true, text='Print Request'. MR-2026-0020 present in lead-design-requests section."}
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LeadBottleDesigns.js canRaisePrint(r) correctly ORs current_state_key in PRINTABLE_STATE_KEYS with !!r.current_state_is_terminal — this made DRN-2026-0001 (production_completed, terminal) light up the Print Request button on Customer Branding for a non-migrated request.",
+    "DesignRequestNewDetail.js canSendToPrint gating now honors current_state_is_terminal — mr-send-print-btn visible for DRN-prefix terminal states. Behavior parity between the lead section and detail page achieved."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% (5/5 checks passed)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water) — working",
+  "seed_data_creation": "None; used pre-seeded DRN-2026-0001 (production_completed, linked to lead 08c93122) plus DRN-2026-0002/0003 and MR-2026-0022 (submitted) on the same lead, and MR-2026-0020 (final_approved) on lead 20c97966.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix for Print Request / Send-for-Printing visibility on NEW (DRN-prefix) terminal-state design requests is fully verified. Both Customer Branding button (LeadBottleDesigns.js) and detail-page button (DesignRequestNewDetail.js) surface correctly for terminal states based on current_state_is_terminal flag. Regression on migrated MR-prefix path also intact. No further action required.",
+  "rca of the issue": "Prior gating only checked hardcoded state keys (['final_approved','production_in_progress','production_completed']). NEW DRN-prefix requests use dynamic lifecycle states where terminal-ness is signalled by the backend flag current_state_is_terminal. Fix ORed this flag into the gating logic in both LeadBottleDesigns.js (canRaisePrint) and DesignRequestNewDetail.js (canSendToPrint), restoring parity across migrated and new requests."
+}

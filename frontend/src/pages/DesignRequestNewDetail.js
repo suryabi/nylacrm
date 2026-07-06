@@ -595,7 +595,7 @@ export default function DesignRequestNewDetail() {
 
   const overdue = req.requested_due_date && !['production_completed'].includes(req.current_state_key) && isOverdueDate(req.requested_due_date);
   const stateStyle = stateBadgeStyle(req.current_state_color);
-  const canSendToPrint = ['final_approved', 'production_in_progress', 'production_completed'].includes(req.current_state_key);
+  const canSendToPrint = ['final_approved', 'production_in_progress', 'production_completed'].includes(req.current_state_key) || !!req.current_state_is_terminal;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6 bg-stone-50 min-h-screen" data-testid="mr-detail-page">
