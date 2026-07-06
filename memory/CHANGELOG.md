@@ -1305,3 +1305,9 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - Status History (mr-status-history) is now collapsible and COLLAPSED by default (toggle mr-status-history-toggle, chevron rotates).
 - VERIFIED iteration 295 (100% frontend). Post-test fixes: days now derived from req.created_at (was under-reporting from segment sums); fmtDuration guards NaN (was showing "NaNm" for pre-history segment).
 - KNOWN (non-blocking): a React "unique key" console warning persists on this page (pre-existing; primary maps all have keys); DesignRequestNewDetail.js is ~1500 lines — candidate for component split.
+
+## 2026-06 — Print Requests filters (city + status tiles) & Design Request header redesign
+- Print Requests (routes/print_requests.py): list now accepts status_ids (comma, multi) + city; items enriched with lead_city (joined from leads.city by lead_id). New GET /print-requests/facets → {status_counts, total, cities} (counts respect search/city, not status).
+- Print Requests (PrintRequests.js): status metric tiles at top (print-status-tiles / print-status-tile-<id>) with per-status counts; click to filter, MULTI-SELECT union, click-again to deselect; city filter dropdown (print-city-filter) from facets.cities; lead city shown under lead in table + mobile cards. Replaced single status Select with tiles.
+- Design Request header (DesignRequestNewDetail.js): removed the AI/Sparkles icon → shows request-type icon (request_type_icon_url, FileImage fallback); lighter/smaller title (text-2xl/3xl font-bold, was 3xl/4xl font-black); tightened spacing; Due Date + Est. Finish pulled into distinct highlighted chips (mr-due-chip, mr-est-date-display) with due turning red when overdue.
+- VERIFIED: curl (facets, city=Mumbai→2, status_ids two→4) + testing_agent iteration_296 (100% frontend: tiles multi-select union, deselect, clear, city filter, combined filters, header type-icon + date chips + regression).
