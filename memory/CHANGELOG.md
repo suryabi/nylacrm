@@ -1324,3 +1324,8 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 ## 2026-06 — City grouping: prominent + collapsible
 - Print Requests & Design Requests (List view) city group headers are now large prominent bands (rounded grey band, pin icon, big bold city name, count badge, ChevronDown) and COLLAPSIBLE — click to collapse/expand that city's rows; chevron rotates; groups collapse independently. collapsedCities Set state on each list.
 - VERIFIED testing_agent iteration_298 (100% frontend; regressions on tiles/filter/sort intact).
+
+## 2026-06 — Print Requests CSV export (honors filters)
+- Backend GET /print-requests/export (before /{id} route): CSV of all matching requests using the same _build_list_query (search, status_ids/status_id, city, vendor, dept), no pagination; columns incl Print#, Source#, Title, Lead, City, Status, Initial Order Qty, Initial Monthly Qty, Total Monthly Volume (Future Potential), Delivery Date, Vendor, Team, Created By/At. StreamingResponse text/csv.
+- Frontend PrintRequests.js: "Download" button (print-export-btn) in filter row; fetches export with current search/status/city as blob and downloads print_requests_<date>.csv.
+- VERIFIED curl: export headers correct; city=Mumbai → 2 rows (honors filter). Frontend compiles.

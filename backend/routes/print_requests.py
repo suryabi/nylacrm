@@ -252,6 +252,66 @@ async def print_request_facets(
     return {"status_counts": status_counts, "total": total, "cities": sorted(cities)}
 
 
+@router.get("/export")
+async def export_print_requests(
+    search: Optional[str] = None,
+    status_id: Optional[str] = None,
+    status_ids: Optional[str] = None,
+    city: Optional[str] = None,
+    vendor_id: Optional[str] = None,
+    assigned_department_id: Optional[str] = None,
+    sort: str = "-created_at",
+    current_user: dict = Depends(get_current_user),
+):
+    """CSV export of the print requests matching the current filters (no pagination)."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    tenant_id = get_current_tenant_id()
+    q = await _build_list_query(tenant_id, search, city, status_id, status_ids, vendor_id, assigned_department_id)
+    field = sort[1:] if sort.startswith("-") else sort
+    direction = -1 if sort.startswith("-") else 1
+    rows = await db.print_requests.find(q, {"_id": 0}).sort(field, direction).to_list(10000)
+    await _attach_lead_city(rows, tenant_id)
+
+    def fmt_date(v):
+        return (v or "")[:10] if isinstance(v, str) else ""
+
+    columns = [
+        ("Print #", "print_number"),
+        ("Source Design #", "source_request_number"),
+        ("Title", lambda r: r.get("source_title") or r.get("request_type_name") or ""),
+        ("Lead", lambda r: r.get("lead_company") or r.get("lead_name") or ""),
+        ("City", "lead_city"),
+        ("Status", "status_name"),
+        ("Initial Order Qty", lambda r: r.get("initial_order_quantity") or r.get("quantity") or ""),
+        ("Initial Monthly Qty", "starting_monthly_volume"),
+        ("Total Monthly Volume (Future Potential)", "total_monthly_volume"),
+        ("Requested Delivery Date", lambda r: fmt_date(r.get("requested_due_date"))),
+        ("Vendor", "vendor_name"),
+        ("Production Team", "assigned_department_name"),
+        ("Created By", "created_by_name"),
+        ("Created At", lambda r: fmt_date(r.get("created_at"))),
+    ]
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([c[0] for c in columns])
+    for r in rows:
+        writer.writerow([
+            (c[1](r) if callable(c[1]) else r.get(c[1])) if (callable(c[1]) or r.get(c[1]) is not None) else ""
+            for c in columns
+        ])
+    buf.seek(0)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=print_requests_{stamp}.csv"},
+    )
+
+
 @router.get("/{print_id}")
 async def get_print_request(print_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()

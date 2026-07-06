@@ -15,7 +15,7 @@ import {
 } from '../components/ui/select';
 import {
   Printer, Search, ChevronLeft, ChevronRight, ChevronDown, Tag, Calendar, Package,
-  Users, Building2, Loader2, X, MapPin,
+  Users, Building2, Loader2, X, MapPin, Download,
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -131,6 +131,26 @@ export default function PrintRequests() {
     return n;
   });
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (statusIds.length) params.set('status_ids', statusIds.join(','));
+      if (city) params.set('city', city);
+      const res = await axios.get(`${API}/print-requests/export?${params}`, { headers: HEAD(), responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `print_requests_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error('Failed to export print requests');
+    } finally { setExporting(false); }
+  };
+
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6" data-testid="print-requests-page">
       {/* Header */}
@@ -199,6 +219,9 @@ export default function PrintRequests() {
             <X className="h-4 w-4 mr-1" /> Clear
           </Button>
         )}
+        <Button variant="outline" onClick={handleExport} disabled={exporting || items.length === 0} className="shrink-0" data-testid="print-export-btn">
+          {exporting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />} Download
+        </Button>
       </div>
 
       {loading ? (
