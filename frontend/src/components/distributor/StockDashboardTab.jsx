@@ -253,7 +253,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           value={fmt(t.empty_bottles_returned || 0)}
           icon={<RotateCcw className="h-4 w-4" />}
           color="emerald"
-          sub="bottles · for recycling"
+          sub="units · for recycling"
           testId="total-empty-bottles"
         />
         <SummaryCard
@@ -395,7 +395,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <span className="text-amber-600" title="Committed to open Stock Out orders (draft → in-transit) — not available for other orders">Reserved</span>
                   </th>
                   <th className="text-right p-3">
-                    <span className="text-emerald-600" title="Empty / Reusable + FOC bottles returned for recycling (counted in raw BOTTLES, not crates)">Empty Bottles</span>
+                    <span className="text-emerald-600" title="Empty / Reusable + FOC units returned for recycling (counted in raw base units)">Empty Bottles</span>
                   </th>
                   <th className="text-right p-3">
                     <span className="text-amber-600" title="Damaged + Expired — unsellable product">Product Ret.</span>

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-06 — 🐛 Fix: Stock Dashboard unit mismatch (crates vs bottles → negative balance) + tenant-agnostic UOM labels ✅ (testing_agent iterations 307–308: 100%)
+- **Reported**: Received recorded in crates (210 × 12) but customer billed in bottles (842); the "Stock by SKU" dashboard subtracted `210 − 842` and showed a negative Available.
+- **Fix** (`routes/distributors.py` `get_stock_dashboard`): base unit is now the SKU's UOM (bottles). Every line's contribution = `quantity × packaging_units` (`_item_crates` rewritten; `_to_crates` made identity since returns/factory-wh are already stored in bottles; transfers use `quantity × units_per_package` with default-packaging fallback). Verified: received 2,580, delivered 842, available 1,738 (positive); factory-warehouse card now in bottles.
+- **Tenant-agnostic labels** (per user): no hardcoded "bottles". Each SKU row shows its own base unit from `master_sku.base_uom` (e.g. "Bottle"/"Can"/"Piece") via new `base_unit_name` field, plus the SKU's default packaging (`default_packaging_name`/`units`) and a "≈ N Crate-12" equivalent on Available. Shared/aggregate labels use generic "units". Frontend `StockDashboardTab.jsx` updated (`pkgEquiv`, per-row UOM hint, generic factory-card/header wording).
+- **Known follow-up** (flagged, out of original scope): per-SKU/totals Available can still go negative when *reserved* (pending stock-out) exceeds received — an over-commitment scenario, not a unit bug. Candidate: clamp to 0 or show an "over-committed" badge.
+
+
 ## 2026-07-06 — 🐛 Fix: Design Requests free-form search 500 + ✨ show linked Print Requests in Customer Branding ✅ (testing_agent iterations 305–306: 100%)
 - **Search fix** (`routes/design_requests_new.py` `_build_requests_query`): the search term was passed as a raw `$regex`, so any special char (`(`, `)`, `\`, `[`, etc.) crashed the endpoint with 500. Now `re.escape(search.strip())`. Verified 200 for all special-char payloads.
 - **Print Requests in Customer Branding**: `LeadBottleDesigns.js` now fetches print requests linked to the lead's design requests and renders them as clickable cards (print number + status badge) beneath each design-request row. Added a `source_request_ids` (comma-separated) filter to `GET /api/print-requests` (`_build_list_query` → `source_marketing_request_id $in`).
