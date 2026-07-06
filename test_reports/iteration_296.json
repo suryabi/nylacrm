@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only verification of (A) Print Requests page status tiles + multi-select + city filter and (B) Design Request detail header redesign. All features work as specified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "print_requests_page": {
+      "status_tiles_render": "PASS - 6 tiles rendered with data-testid print-status-tile-<statusId> and correct counts (Submitted 0, New 2, In Printing 1, Printed 0, On Hold 2, Cancelled 0; total 5 matches expected)",
+      "single_tile_filter": "PASS - Clicking 'New' tile filters list to 2 rows",
+      "multi_select_union": "PASS - Clicking 'New' (2) then 'In Printing' (1) shows 3 rows (union). Tiles show visual selection ring in screenshot.",
+      "deselect_tile": "PASS - Clicking 'New' again with 'In Printing' still selected reduces list to 1 row",
+      "clear_button": "PASS - print-clear-filters resets list to all 5 rows and clears selected tiles and city",
+      "city_filter_dropdown": "PASS - print-city-filter dropdown shows ['All cities', 'Mumbai']; selecting Mumbai filters to 2 rows",
+      "lead_city_displayed": "PASS - 'Mumbai' shown under lead name in rows (rendered 5x in HTML after filter incl. dropdown label)",
+      "combined_filters": "PASS - In Printing status + Mumbai city returns 0 rows (empty state 'No print requests yet' shown correctly)"
+    },
+    "design_request_header": {
+      "type_icon_replaces_sparkle": "PASS - data-testid=mr-type-icon present in header",
+      "due_date_chip": "PASS - mr-due-chip present, shows 'Due Date 03 Oct 2026'",
+      "est_finish_chip": "PASS - mr-est-date-display present, shows 'Est. Finish Set date'",
+      "est_date_popover": "PASS - Clicking chip opens mr-est-date-popover date picker (July 2026 calendar visible)",
+      "title_present_lighter": "PASS - 'Neck Tags' title rendered with lighter styling (not oversized bold); spacing tightened per screenshot",
+      "regression_page_loads": "PASS - Work Versions, Comments, Status History, badges, Current State, Available Actions, Details all present. No new console errors from header change (only 2 pre-existing 401s on unrelated resources)."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: The visual selection state of status tiles is applied via inline style/wrapper (screenshots confirm), but the base className string returned by getAttribute did not visibly change - if this is done via style attribute it works, otherwise adding an aria-pressed or class-based indicator would be more test-friendly. Not blocking."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (nyla-air-water)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Print Requests: statusIds passed as comma list to backend; facets endpoint returns status_counts, total, cities. Design Request MR-2026-0006 (id 537081ec-e022-4d26-a39c-25045cf2e6ee) confirms header redesign. Screenshots stored under /app/.screenshots/print_union.png, /app/.screenshots/design_header.png, /app/.screenshots/design_est_popover.png."
+}

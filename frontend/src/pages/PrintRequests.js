@@ -15,7 +15,7 @@ import {
 } from '../components/ui/select';
 import {
   Printer, Search, ChevronLeft, ChevronRight, Tag, Calendar, Package,
-  Users, Building2, Loader2, X,
+  Users, Building2, Loader2, X, MapPin,
 } from 'lucide-react';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -31,9 +31,11 @@ export default function PrintRequests() {
   const [sp, setSp] = useSearchParams();
   const [statuses, setStatuses] = useState([]);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
+  const [facets, setFacets] = useState({ status_counts: {}, total: 0, cities: [] });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(sp.get('q') || '');
-  const [statusId, setStatusId] = useState(sp.get('status') || '');
+  const [statusIds, setStatusIds] = useState(() => (sp.get('status') || '').split(',').filter(Boolean));
+  const [city, setCity] = useState(sp.get('city') || '');
   const [page, setPage] = useState(parseInt(sp.get('p') || '1'));
 
   useEffect(() => {
@@ -42,18 +44,30 @@ export default function PrintRequests() {
       .catch(() => {});
   }, []);
 
+  // Facets (tile counts + city list) reflect search + city, not the status selection.
+  const fetchFacets = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      if (city) params.set('city', city);
+      const { data } = await axios.get(`${API}/print-requests/facets?${params}`, { headers: HEAD() });
+      setFacets(data || { status_counts: {}, total: 0, cities: [] });
+    } catch { /* non-blocking */ }
+  }, [search, city]);
+
   const fetchList = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: '20' });
       if (search) params.set('search', search);
-      if (statusId) params.set('status_id', statusId);
+      if (statusIds.length) params.set('status_ids', statusIds.join(','));
+      if (city) params.set('city', city);
       const { data } = await axios.get(`${API}/print-requests?${params}`, { headers: HEAD() });
       setData(data || { items: [], total: 0, pages: 0 });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load print requests');
     } finally { setLoading(false); }
-  }, [page, search, statusId]);
+  }, [page, search, statusIds, city]);
 
   useEffect(() => {
     const t = setTimeout(fetchList, search ? 350 : 0);
@@ -61,14 +75,26 @@ export default function PrintRequests() {
   }, [fetchList, search]);
 
   useEffect(() => {
+    const t = setTimeout(fetchFacets, search ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [fetchFacets, search]);
+
+  useEffect(() => {
     const next = new URLSearchParams();
     if (search) next.set('q', search);
-    if (statusId) next.set('status', statusId);
+    if (statusIds.length) next.set('status', statusIds.join(','));
+    if (city) next.set('city', city);
     if (page > 1) next.set('p', String(page));
     setSp(next, { replace: true });
-  }, [search, statusId, page, setSp]);
+  }, [search, statusIds, city, page, setSp]);
+
+  const toggleStatus = (id) => {
+    setStatusIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setPage(1);
+  };
 
   const items = data.items || [];
+  const hasFilters = search || statusIds.length > 0 || city;
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6" data-testid="print-requests-page">
@@ -85,6 +111,35 @@ export default function PrintRequests() {
         </div>
       </div>
 
+      {/* Status metric tiles — click to filter (multi-select) */}
+      {statuses.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5" data-testid="print-status-tiles">
+          {statuses.map((s) => {
+            const active = statusIds.includes(s.id);
+            const count = facets.status_counts?.[s.id] || 0;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => toggleStatus(s.id)}
+                aria-pressed={active}
+                className="text-left rounded-xl border bg-white p-3 transition-all hover:shadow-sm focus:outline-none"
+                style={active
+                  ? { borderColor: s.color || '#0f766e', backgroundColor: (s.color || '#64748b') + '12', boxShadow: `0 0 0 1.5px ${s.color || '#0f766e'}` }
+                  : { borderColor: '#e2e8f0' }}
+                data-testid={`print-status-tile-${s.id}`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.color || '#94a3b8' }} />
+                  <span className="text-[11px] font-medium text-slate-600 truncate">{s.name}</span>
+                </div>
+                <div className="text-2xl font-bold text-slate-900 mt-1 leading-none">{count}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -97,15 +152,15 @@ export default function PrintRequests() {
             data-testid="print-search"
           />
         </div>
-        <Select value={statusId || '__all'} onValueChange={(v) => { setStatusId(v === '__all' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="sm:w-56" data-testid="print-status-filter"><SelectValue placeholder="All statuses" /></SelectTrigger>
+        <Select value={city || '__all'} onValueChange={(v) => { setCity(v === '__all' ? '' : v); setPage(1); }}>
+          <SelectTrigger className="sm:w-52" data-testid="print-city-filter"><SelectValue placeholder="All cities" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all">All statuses</SelectItem>
-            {statuses.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+            <SelectItem value="__all">All cities</SelectItem>
+            {(facets.cities || []).map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
           </SelectContent>
         </Select>
-        {(search || statusId) && (
-          <Button variant="ghost" onClick={() => { setSearch(''); setStatusId(''); setPage(1); }} data-testid="print-clear-filters">
+        {hasFilters && (
+          <Button variant="ghost" onClick={() => { setSearch(''); setStatusIds([]); setCity(''); setPage(1); }} data-testid="print-clear-filters">
             <X className="h-4 w-4 mr-1" /> Clear
           </Button>
         )}
@@ -132,6 +187,7 @@ export default function PrintRequests() {
                   </div>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-1 border-t border-slate-50 text-xs">
                     {(pr.lead_company || pr.lead_name) && <div className="flex items-center gap-1.5 col-span-2 text-slate-600"><Users className="h-3.5 w-3.5 text-emerald-500" /> <span className="truncate">{pr.lead_company || pr.lead_name}</span></div>}
+                    {pr.lead_city && <div className="flex items-center gap-1.5 col-span-2 text-slate-500"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> <span className="truncate">{pr.lead_city}</span></div>}
                     <div className="flex items-center gap-1.5 text-slate-600"><Package className="h-3.5 w-3.5 text-emerald-500" /> Qty {pr.quantity}</div>
                     <div className="flex items-center gap-1.5 text-slate-600"><Calendar className="h-3.5 w-3.5 text-emerald-500" /> {fmtDate(pr.requested_due_date)}</div>
                     {pr.vendor_name && <div className="flex items-center gap-1.5 col-span-2 text-slate-600"><Building2 className="h-3.5 w-3.5 text-emerald-500" /> <span className="truncate">{pr.vendor_name}</span></div>}
@@ -166,7 +222,10 @@ export default function PrintRequests() {
                           <Tag className="h-3 w-3" /> {pr.print_number} · from {pr.source_request_number}
                         </div>
                       </TableCell>
-                      <TableCell className="py-3 text-sm text-slate-700">{pr.lead_company || pr.lead_name || <span className="text-slate-300">—</span>}</TableCell>
+                      <TableCell className="py-3 text-sm text-slate-700">
+                        {pr.lead_company || pr.lead_name || <span className="text-slate-300">—</span>}
+                        {pr.lead_city && <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" /> {pr.lead_city}</div>}
+                      </TableCell>
                       <TableCell className="py-3 text-sm text-slate-700">{pr.quantity}</TableCell>
                       <TableCell className="py-3 text-sm text-slate-600">{fmtDate(pr.requested_due_date)}</TableCell>
                       <TableCell className="py-3 text-sm text-slate-700">{pr.vendor_name || <span className="text-slate-300">—</span>}</TableCell>

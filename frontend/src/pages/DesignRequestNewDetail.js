@@ -19,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { Calendar as CalendarPicker } from '../components/ui/calendar';
 import {
-  ArrowLeft, Sparkles, Send, MessageSquare, Plus, Upload, FileText, X,
+  ArrowLeft, Send, MessageSquare, Plus, Upload, FileText, X,
   Loader2, ExternalLink, ChevronRight, Truck, AlertTriangle, Clock,
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
@@ -715,36 +715,60 @@ export default function DesignRequestNewDetail() {
               )}
             </div>
             <div className="flex items-start gap-3.5">
-              <div className="hidden sm:flex h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
-                <Sparkles className="h-6 w-6" />
+              <div className="hidden sm:flex h-12 w-12 rounded-2xl bg-white border border-slate-200 items-center justify-center shadow-sm shrink-0 overflow-hidden" title={req.request_type_name || 'Request type'} data-testid="mr-type-icon">
+                {req.request_type_icon_url
+                  ? <img src={`${process.env.REACT_APP_BACKEND_URL}${req.request_type_icon_url}`} alt={req.request_type_name || 'Type'} className="h-8 w-8 object-contain" />
+                  : <FileImage className="h-6 w-6 text-emerald-500" />}
               </div>
-              <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-slate-900 leading-tight">
-                {req.request_type_name || 'Untyped Request'}
-              </h1>
+              <div className="min-w-0">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 leading-tight">
+                  {req.request_type_name || 'Untyped Request'}
+                </h1>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-2 text-[13px] text-slate-500">
+                  <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-slate-400" /> {req.assigned_department_name || '—'}</span>
+                  {(req.lead_company || req.lead_name) && (
+                    <span className="flex items-center gap-1.5 lg:hidden" data-testid="mr-lead-tag">
+                      <Users className="h-3.5 w-3.5 text-slate-400" /> {req.lead_company || req.lead_name}
+                    </span>
+                  )}
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-slate-400" /> Design {req.design_lead_time_days}d · Prod {req.production_lead_time_days}d
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-semibold text-slate-600">{getInitials(req.created_by_name)}</div>
+                    {req.created_by_name}
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5 text-sm text-slate-500 sm:pl-[62px]">
-              <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-emerald-500" /> {req.assigned_department_name || '—'}</span>
-              {(req.lead_company || req.lead_name) && (
-                <span className="flex items-center gap-1.5 lg:hidden" data-testid="mr-lead-tag">
-                  <Users className="h-4 w-4 text-emerald-500" /> Lead: {req.lead_company || req.lead_name}
-                </span>
-              )}
-              <span className="flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-emerald-500" /> Due {fmtDate(req.requested_due_date)}
-              </span>
+
+            {/* Dates — highlighted separately for quick scanning */}
+            <div className="flex flex-wrap items-stretch gap-2 mt-4 sm:pl-[62px]">
+              <div className={`inline-flex items-center gap-2.5 rounded-xl border px-3 py-2 ${overdue ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`} data-testid="mr-due-chip">
+                <Calendar className={`h-4 w-4 shrink-0 ${overdue ? 'text-red-500' : 'text-emerald-600'}`} />
+                <div className="leading-tight">
+                  <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Due Date</p>
+                  <p className={`text-sm font-bold ${overdue ? 'text-red-600' : 'text-slate-900'}`}>{fmtDate(req.requested_due_date)}</p>
+                </div>
+              </div>
               <Popover open={estOpen} onOpenChange={setEstOpen}>
                 <PopoverTrigger asChild>
                   <button
-                    className="flex items-center gap-1.5 group hover:text-emerald-700 transition-colors focus:outline-none"
+                    className="inline-flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors group text-left"
                     data-testid="mr-est-date-display"
                   >
-                    <CalendarCheck className="h-4 w-4 text-emerald-500" />
-                    {req.estimated_finished_date
-                      ? <>Est. Finish <span className="text-slate-700 font-medium">{fmtDate(req.estimated_finished_date)}</span></>
-                      : <span className="text-emerald-600">Set est. finish date</span>}
-                    {savingEst
-                      ? <Loader2 className="h-3 w-3 animate-spin text-emerald-500" />
-                      : <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                    <CalendarCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <div className="leading-tight">
+                      <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">Est. Finish</p>
+                      <p className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        {req.estimated_finished_date
+                          ? fmtDate(req.estimated_finished_date)
+                          : <span className="text-emerald-600 font-medium">Set date</span>}
+                        {savingEst
+                          ? <Loader2 className="h-3 w-3 animate-spin text-emerald-500" />
+                          : <Pencil className="h-3 w-3 text-slate-300 group-hover:text-emerald-500 transition-colors" />}
+                      </p>
+                    </div>
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start" data-testid="mr-est-date-popover">
@@ -770,13 +794,6 @@ export default function DesignRequestNewDetail() {
                   )}
                 </PopoverContent>
               </Popover>
-              <span className="flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-emerald-500" /> Design {req.design_lead_time_days}d &middot; Production {req.production_lead_time_days}d
-              </span>
-              <span className="flex items-center gap-1.5">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-[10px] font-semibold text-emerald-700">{getInitials(req.created_by_name)}</div>
-                Raised by <span className="text-slate-700 font-medium">{req.created_by_name}</span>
-              </span>
             </div>
           </div>
 

@@ -131,26 +131,35 @@ async def _can_delete(tenant_id: str, user: dict) -> bool:
 
 
 # ──────────────────────────────── list ────────────────────────────────
-@router.get("")
-@router.get("/")
-async def list_print_requests(
-    page: int = 1,
-    limit: int = 20,
-    search: Optional[str] = None,
-    status_id: Optional[str] = None,
-    vendor_id: Optional[str] = None,
-    assigned_department_id: Optional[str] = None,
-    sort: str = "-created_at",
-    current_user: dict = Depends(get_current_user),
-):
-    tenant_id = get_current_tenant_id()
+async def _lead_ids_in_city(tenant_id: str, city: str) -> List[str]:
+    """Lead UUIDs whose city matches (case-insensitive)."""
+    rx = {"$regex": f"^{re.escape(city.strip())}$", "$options": "i"}
+    ids = []
+    async for l in db.leads.find({"tenant_id": tenant_id, "city": rx}, {"_id": 0, "id": 1}):
+        ids.append(l["id"])
+    return ids
+
+
+async def _build_list_query(
+    tenant_id: str, search: Optional[str], city: Optional[str],
+    status_id: Optional[str], status_ids: Optional[str],
+    vendor_id: Optional[str], assigned_department_id: Optional[str],
+    include_status: bool = True,
+) -> dict:
     q: dict = {"tenant_id": tenant_id}
-    if status_id:
-        q["status_id"] = status_id
+    if include_status:
+        ids = [s.strip() for s in (status_ids or "").split(",") if s.strip()]
+        if ids:
+            q["status_id"] = {"$in": ids}
+        elif status_id:
+            q["status_id"] = status_id
     if vendor_id:
         q["vendor_id"] = vendor_id
     if assigned_department_id:
         q["assigned_department_id"] = assigned_department_id
+    if city:
+        lead_ids = await _lead_ids_in_city(tenant_id, city)
+        q["lead_id"] = {"$in": lead_ids or ["__none__"]}
     if search:
         rx = {"$regex": re.escape(search), "$options": "i"}
         q["$or"] = [
@@ -158,6 +167,37 @@ async def list_print_requests(
             {"lead_company": rx}, {"lead_name": rx}, {"source_title": rx},
             {"vendor_name": rx},
         ]
+    return q
+
+
+async def _attach_lead_city(items: List[dict], tenant_id: str):
+    lead_ids = list({it.get("lead_id") for it in items if it.get("lead_id")})
+    city_by_lead = {}
+    if lead_ids:
+        async for l in db.leads.find(
+            {"id": {"$in": lead_ids}, "tenant_id": tenant_id}, {"_id": 0, "id": 1, "city": 1}
+        ):
+            city_by_lead[l["id"]] = l.get("city")
+    for it in items:
+        it["lead_city"] = city_by_lead.get(it.get("lead_id"))
+
+
+@router.get("")
+@router.get("/")
+async def list_print_requests(
+    page: int = 1,
+    limit: int = 20,
+    search: Optional[str] = None,
+    status_id: Optional[str] = None,
+    status_ids: Optional[str] = None,
+    city: Optional[str] = None,
+    vendor_id: Optional[str] = None,
+    assigned_department_id: Optional[str] = None,
+    sort: str = "-created_at",
+    current_user: dict = Depends(get_current_user),
+):
+    tenant_id = get_current_tenant_id()
+    q = await _build_list_query(tenant_id, search, city, status_id, status_ids, vendor_id, assigned_department_id)
 
     field = sort[1:] if sort.startswith("-") else sort
     direction = -1 if sort.startswith("-") else 1
@@ -172,8 +212,44 @@ async def list_print_requests(
         .limit(limit)
         .to_list(limit)
     )
+    await _attach_lead_city(items, tenant_id)
     pages = (total + limit - 1) // limit
     return {"items": items, "total": total, "page": page, "pages": pages, "limit": limit}
+
+
+@router.get("/facets")
+async def print_request_facets(
+    search: Optional[str] = None,
+    city: Optional[str] = None,
+    vendor_id: Optional[str] = None,
+    assigned_department_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Per-status counts (for the metric tiles) + the list of lead cities available
+    to filter by. Counts respect search/city/vendor filters but NOT the status
+    selection, so the tiles always reflect the full breakdown."""
+    tenant_id = get_current_tenant_id()
+    q = await _build_list_query(
+        tenant_id, search, city, None, None, vendor_id, assigned_department_id, include_status=False
+    )
+    status_counts: dict = {}
+    total = 0
+    async for row in db.print_requests.aggregate([
+        {"$match": q}, {"$group": {"_id": "$status_id", "count": {"$sum": 1}}},
+    ]):
+        status_counts[row["_id"] or "__none"] = row["count"]
+        total += row["count"]
+
+    lead_ids = await db.print_requests.distinct("lead_id", {"tenant_id": tenant_id})
+    lead_ids = [lid for lid in lead_ids if lid]
+    cities = set()
+    if lead_ids:
+        async for l in db.leads.find(
+            {"id": {"$in": lead_ids}, "tenant_id": tenant_id}, {"_id": 0, "city": 1}
+        ):
+            if l.get("city"):
+                cities.add(l["city"])
+    return {"status_counts": status_counts, "total": total, "cities": sorted(cities)}
 
 
 @router.get("/{print_id}")
