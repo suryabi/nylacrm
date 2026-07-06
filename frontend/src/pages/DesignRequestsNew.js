@@ -16,7 +16,7 @@ import {
   Plus, Search, Sparkles, Clock, AlertTriangle, ChevronLeft, ChevronRight,
   LayoutList, Tag, User, Users, Calendar, Loader2, Truck, GitBranch, Download, Hourglass,
   ChevronsUpDown, ArrowUp, ArrowDown, LayoutGrid, Flame, Filter, Check, Inbox, SlidersHorizontal,
-  ArrowLeftRight, CheckCircle2,
+  ArrowLeftRight, CheckCircle2, MapPin,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -267,6 +267,21 @@ function ListSkeleton() {
   );
 }
 
+// Group rows by the lead's city; alphabetical, "No City" last.
+function groupRowsByCity(rows) {
+  const map = new Map();
+  (rows || []).forEach((r) => {
+    const c = (r.lead_city || '').trim() || 'No City';
+    if (!map.has(c)) map.set(c, []);
+    map.get(c).push(r);
+  });
+  return [...map.entries()].sort((a, b) => {
+    if (a[0] === 'No City') return 1;
+    if (b[0] === 'No City') return -1;
+    return a[0].localeCompare(b[0]);
+  });
+}
+
 function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
   const initialKeys = new Set((states || []).filter((s) => s.is_initial).map((s) => s.key));
   if (initialKeys.size === 0) initialKeys.add('submitted');
@@ -321,7 +336,15 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
         </div>
         {rows.length === 0 ? (
           <Card className="rounded-xl border border-zinc-100"><CardContent className="flex flex-col items-center gap-2 p-10 text-center"><Inbox className="h-10 w-10 text-zinc-300" strokeWidth={1} /><p className="text-sm font-medium text-zinc-600">No requests found</p></CardContent></Card>
-        ) : rows.map((req) => {
+        ) : groupRowsByCity(rows).map(([cityName, cityRows]) => (
+          <div key={cityName} className="space-y-3">
+            <div className="flex items-center gap-2 pt-1" data-testid={`mr-city-group-${cityName}`}>
+              <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+              <span className="text-xs font-bold uppercase tracking-wide text-zinc-700">{cityName}</span>
+              <span className="text-[10px] text-zinc-400">({cityRows.length})</span>
+              <div className="flex-1 h-px bg-zinc-100" />
+            </div>
+            {cityRows.map((req) => {
           const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
           const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
           const leadLabel = req.lead_company || req.lead_name;
@@ -365,7 +388,9 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
               </CardContent>
             </Card>
           );
-        })}
+            })}
+          </div>
+        ))}
       </div>
 
       {/* Desktop: refined table */}
@@ -396,7 +421,18 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
             <TableBody>
               {rows.length === 0 ? (
                 <EmptyState colSpan={6} />
-              ) : rows.map((req) => {
+              ) : groupRowsByCity(rows).map(([cityName, cityRows]) => (
+                <React.Fragment key={cityName}>
+                  <TableRow className="bg-zinc-50/80 hover:bg-zinc-50/80 border-b border-zinc-100">
+                    <TableCell colSpan={6} className="py-2">
+                      <div className="flex items-center gap-2" data-testid={`mr-city-row-${cityName}`}>
+                        <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-zinc-700">{cityName}</span>
+                        <span className="text-[10px] text-zinc-400">({cityRows.length})</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                  {cityRows.map((req) => {
                 const overdue = req.requested_due_date && req.current_state_key !== 'production_completed' && isOverdueDate(req.requested_due_date);
                 const assignedTo = req.assigned_user_name || req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : '—');
                 const leadLabel = req.lead_company || req.lead_name;
@@ -462,7 +498,9 @@ function RequestTable({ rows, navigate, sort, onSort, onSortChange, states }) {
                     </TableCell>
                   </TableRow>
                 );
-              })}
+                  })}
+                </React.Fragment>
+              ))}
             </TableBody>
           </Table>
         </div>
@@ -591,7 +629,7 @@ export default function DesignRequestsNew() {
     try {
       const params = new URLSearchParams({ queue, page: String(page) });
       if (view === 'kanban') params.set('no_limit', 'true');
-      else params.set('limit', '20');
+      else params.set('limit', '200');
       if (search) params.set('search', search);
       if (stateKey) params.set('state_key', stateKey);
       if (requestTypeId) params.set('request_type_id', requestTypeId);

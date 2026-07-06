@@ -9,6 +9,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { DatePicker } from './ui/date-picker';
 import { Loader2, Printer } from 'lucide-react';
+import { PrintRequestOrderBanner } from './PrintRequestOrderBanner';
 
 const API_URL = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const numOrEmpty = (v) => String(v ?? '').replace(/[^0-9.]/g, '');
@@ -33,6 +34,7 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
 
   const submit = async () => {
     if (!initialOrderQty || Number(initialOrderQty) <= 0) { toast.error('Enter a valid Initial Order Quantity.'); return; }
+    if (startingMonthlyVolume === '' || Number(startingMonthlyVolume) < 0) { toast.error('Enter the Initial Monthly Quantity (Starting Monthly Volume).'); return; }
     if (!deliveryDate) { toast.error('Select a Requested Delivery Date.'); return; }
     setSaving(true);
     try {
@@ -63,20 +65,21 @@ export const CreatePrintRequestDialog = ({ open, onOpenChange, designRequest, de
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
+          <PrintRequestOrderBanner />
           <div className="space-y-1.5">
-            <Label htmlFor="pr-total-vol">Total Monthly Volume</Label>
+            <Label htmlFor="pr-total-vol">Total Monthly Volume (Future Potential)</Label>
             <Input id="pr-total-vol" type="number" min={0} value={totalMonthlyVolume} onChange={(e) => setTotalMonthlyVolume(e.target.value)} placeholder="Pre-filled from opportunity" data-testid="pr-total-monthly-volume" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="pr-start-vol">Starting Monthly Volume</Label>
+            <Label htmlFor="pr-start-vol">Initial Monthly Quantity <span className="text-red-500">*</span></Label>
             <Input id="pr-start-vol" type="number" min={0} value={startingMonthlyVolume} onChange={(e) => setStartingMonthlyVolume(e.target.value)} data-testid="pr-starting-monthly-volume" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="pr-init-qty">Initial Order Quantity</Label>
+            <Label htmlFor="pr-init-qty">Initial Order Quantity <span className="text-red-500">*</span></Label>
             <Input id="pr-init-qty" type="number" min={1} value={initialOrderQty} onChange={(e) => setInitialOrderQty(e.target.value)} data-testid="pr-initial-order-qty" />
           </div>
           <div className="space-y-1.5">
-            <Label>Requested Delivery Date</Label>
+            <Label>Requested Delivery Date <span className="text-red-500">*</span></Label>
             <DatePicker value={deliveryDate} onChange={setDeliveryDate} minDate={new Date()} placeholder="Select delivery date" data-testid="pr-delivery-date" />
           </div>
           <div className="space-y-1.5">

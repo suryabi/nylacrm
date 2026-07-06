@@ -13,6 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../components/ui/select';
 import { DatePicker } from '../components/ui/date-picker';
+import { PrintRequestOrderBanner } from '../components/PrintRequestOrderBanner';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '../components/ui/dialog';
@@ -100,7 +101,9 @@ export default function PrintRequestDetail() {
 
   const openEdit = () => {
     setForm({
-      quantity: pr.quantity,
+      initialOrderQty: pr.initial_order_quantity ?? pr.quantity ?? '',
+      startingMonthlyVolume: pr.starting_monthly_volume ?? '',
+      totalMonthlyVolume: pr.total_monthly_volume ?? '',
       dueDate: pr.requested_due_date ? parseISO(pr.requested_due_date) : null,
       notes: pr.notes || '',
       deptId: pr.assigned_department_id || '',
@@ -110,11 +113,15 @@ export default function PrintRequestDetail() {
   };
 
   const saveEdit = async () => {
-    if (!form.quantity || Number(form.quantity) <= 0) { toast.error('Enter a valid quantity'); return; }
+    if (!form.initialOrderQty || Number(form.initialOrderQty) <= 0) { toast.error('Enter a valid Initial Order Quantity'); return; }
+    if (form.startingMonthlyVolume === '' || Number(form.startingMonthlyVolume) < 0) { toast.error('Enter the Initial Monthly Quantity'); return; }
+    if (!form.dueDate) { toast.error('Select a Requested Delivery Date'); return; }
     setSavingEdit(true);
     try {
       const { data } = await axios.patch(`${API}/print-requests/${id}`, {
-        quantity: Number(form.quantity),
+        initial_order_quantity: Number(form.initialOrderQty),
+        starting_monthly_volume: Number(form.startingMonthlyVolume),
+        total_monthly_volume: form.totalMonthlyVolume === '' ? null : Number(form.totalMonthlyVolume),
         requested_due_date: form.dueDate ? format(form.dueDate, 'yyyy-MM-dd') : undefined,
         notes: form.notes || '',
         assigned_department_id: form.deptId || '',
@@ -297,17 +304,28 @@ export default function PrintRequestDetail() {
         <DialogContent className="max-w-lg" data-testid="print-edit-dialog">
           <DialogHeader>
             <DialogTitle>Edit Print Request</DialogTitle>
-            <DialogDescription>Update quantity, due date, assignment, vendor and notes.</DialogDescription>
+            <DialogDescription>Update order quantities, delivery date, assignment, vendor and notes.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-1">
+            <PrintRequestOrderBanner />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Quantity</Label>
-                <Input type="number" min={1} value={form.quantity || ''} onChange={(e) => setForm({ ...form, quantity: e.target.value })} data-testid="print-edit-qty" />
+                <Label>Initial Order Quantity <span className="text-red-500">*</span></Label>
+                <Input type="number" min={1} value={form.initialOrderQty || ''} onChange={(e) => setForm({ ...form, initialOrderQty: e.target.value })} data-testid="print-edit-qty" />
               </div>
               <div className="space-y-1.5">
-                <Label>Requested due date</Label>
+                <Label>Requested Delivery Date <span className="text-red-500">*</span></Label>
                 <DatePicker value={form.dueDate} onChange={(d) => setForm({ ...form, dueDate: d })} data-testid="print-edit-due" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Initial Monthly Quantity <span className="text-red-500">*</span></Label>
+                <Input type="number" min={0} value={form.startingMonthlyVolume ?? ''} onChange={(e) => setForm({ ...form, startingMonthlyVolume: e.target.value })} data-testid="print-edit-starting-volume" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Total Monthly Volume (Future Potential)</Label>
+                <Input type="number" min={0} value={form.totalMonthlyVolume ?? ''} onChange={(e) => setForm({ ...form, totalMonthlyVolume: e.target.value })} data-testid="print-edit-total-volume" />
               </div>
             </div>
             <div className="space-y-1.5">

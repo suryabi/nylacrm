@@ -26,6 +26,30 @@ const HEAD = () => {
 const fmtDate = (s) => { try { const d = parseISO(s); return isValid(d) ? format(d, 'MMM d, yyyy') : '—'; } catch { return '—'; } };
 const statusStyle = (color) => ({ color: color || '#64748b', borderColor: (color || '#64748b') + '55', backgroundColor: (color || '#64748b') + '14' });
 
+// Group rows by the lead's city; cities alphabetical, "No City" last.
+const groupByCity = (rows) => {
+  const map = new Map();
+  (rows || []).forEach((r) => {
+    const c = (r.lead_city || '').trim() || 'No City';
+    if (!map.has(c)) map.set(c, []);
+    map.get(c).push(r);
+  });
+  return [...map.entries()].sort((a, b) => {
+    if (a[0] === 'No City') return 1;
+    if (b[0] === 'No City') return -1;
+    return a[0].localeCompare(b[0]);
+  });
+};
+
+const CityGroupHeader = ({ name, count }) => (
+  <div className="flex items-center gap-2 pt-1" data-testid={`print-city-group-${name}`}>
+    <MapPin className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+    <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{name}</span>
+    <span className="text-[10px] text-slate-400">({count})</span>
+    <div className="flex-1 h-px bg-slate-100" />
+  </div>
+);
+
 export default function PrintRequests() {
   const navigate = useNavigate();
   const [sp, setSp] = useSearchParams();
@@ -58,7 +82,7 @@ export default function PrintRequests() {
   const fetchList = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      const params = new URLSearchParams({ page: String(page), limit: '200' });
       if (search) params.set('search', search);
       if (statusIds.length) params.set('status_ids', statusIds.join(','));
       if (city) params.set('city', city);
@@ -174,8 +198,11 @@ export default function PrintRequests() {
           <div className="lg:hidden space-y-3" data-testid="print-mobile-list">
             {items.length === 0 ? (
               <Card className="border border-slate-100 rounded-xl"><CardContent className="p-10 text-center text-sm text-muted-foreground">No print requests yet. Create one from a Final-Approved design request.</CardContent></Card>
-            ) : items.map((pr) => (
-              <Card key={pr.id} className="border border-slate-100 rounded-xl shadow-sm active:scale-[0.99] transition-transform cursor-pointer" onClick={() => navigate(`/print-requests/${pr.id}`)} data-testid={`print-card-${pr.id}`}>
+            ) : groupByCity(items).map(([cityName, cityRows]) => (
+              <div key={cityName} className="space-y-3">
+                <CityGroupHeader name={cityName} count={cityRows.length} />
+                {cityRows.map((pr) => (
+                <Card key={pr.id} className="border border-slate-100 rounded-xl shadow-sm active:scale-[0.99] transition-transform cursor-pointer" onClick={() => navigate(`/print-requests/${pr.id}`)} data-testid={`print-card-${pr.id}`}>
                 <CardContent className="p-4 space-y-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-slate-900 text-sm">{pr.source_title || pr.request_type_name || 'Print Request'}</span>
@@ -193,7 +220,9 @@ export default function PrintRequests() {
                     {pr.vendor_name && <div className="flex items-center gap-1.5 col-span-2 text-slate-600"><Building2 className="h-3.5 w-3.5 text-emerald-500" /> <span className="truncate">{pr.vendor_name}</span></div>}
                   </div>
                 </CardContent>
-              </Card>
+                </Card>
+                ))}
+              </div>
             ))}
           </div>
 
@@ -214,23 +243,36 @@ export default function PrintRequests() {
                 <TableBody>
                   {items.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="p-12 text-center text-sm text-muted-foreground">No print requests yet. Create one from a Final-Approved design request.</TableCell></TableRow>
-                  ) : items.map((pr) => (
-                    <TableRow key={pr.id} className="cursor-pointer hover:bg-slate-50 border-b border-slate-50 transition-colors" onClick={() => navigate(`/print-requests/${pr.id}`)} data-testid={`print-row-${pr.id}`}>
-                      <TableCell className="py-3">
-                        <div className="font-medium text-primary text-sm">{pr.source_title || pr.request_type_name || 'Print Request'}</div>
-                        <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground font-mono">
-                          <Tag className="h-3 w-3" /> {pr.print_number} · from {pr.source_request_number}
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3 text-sm text-slate-700">
-                        {pr.lead_company || pr.lead_name || <span className="text-slate-300">—</span>}
-                        {pr.lead_city && <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" /> {pr.lead_city}</div>}
-                      </TableCell>
-                      <TableCell className="py-3 text-sm text-slate-700">{pr.quantity}</TableCell>
-                      <TableCell className="py-3 text-sm text-slate-600">{fmtDate(pr.requested_due_date)}</TableCell>
-                      <TableCell className="py-3 text-sm text-slate-700">{pr.vendor_name || <span className="text-slate-300">—</span>}</TableCell>
-                      <TableCell className="py-3"><Badge variant="outline" style={statusStyle(pr.status_color)} className="border text-xs">{pr.status_name}</Badge></TableCell>
-                    </TableRow>
+                  ) : groupByCity(items).map(([cityName, cityRows]) => (
+                    <React.Fragment key={cityName}>
+                      <TableRow className="bg-slate-50/80 hover:bg-slate-50/80 border-b border-slate-100">
+                        <TableCell colSpan={6} className="py-2">
+                          <div className="flex items-center gap-2" data-testid={`print-city-row-${cityName}`}>
+                            <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                            <span className="text-xs font-bold uppercase tracking-wide text-slate-700">{cityName}</span>
+                            <span className="text-[10px] text-slate-400">({cityRows.length})</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {cityRows.map((pr) => (
+                      <TableRow key={pr.id} className="cursor-pointer hover:bg-slate-50 border-b border-slate-50 transition-colors" onClick={() => navigate(`/print-requests/${pr.id}`)} data-testid={`print-row-${pr.id}`}>
+                        <TableCell className="py-3">
+                          <div className="font-medium text-primary text-sm">{pr.source_title || pr.request_type_name || 'Print Request'}</div>
+                          <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground font-mono">
+                            <Tag className="h-3 w-3" /> {pr.print_number} · from {pr.source_request_number}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3 text-sm text-slate-700">
+                          {pr.lead_company || pr.lead_name || <span className="text-slate-300">—</span>}
+                          {pr.lead_city && <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5"><MapPin className="h-3 w-3" /> {pr.lead_city}</div>}
+                        </TableCell>
+                        <TableCell className="py-3 text-sm text-slate-700">{pr.quantity}</TableCell>
+                        <TableCell className="py-3 text-sm text-slate-600">{fmtDate(pr.requested_due_date)}</TableCell>
+                        <TableCell className="py-3 text-sm text-slate-700">{pr.vendor_name || <span className="text-slate-300">—</span>}</TableCell>
+                        <TableCell className="py-3"><Badge variant="outline" style={statusStyle(pr.status_color)} className="border text-xs">{pr.status_name}</Badge></TableCell>
+                      </TableRow>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>

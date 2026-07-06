@@ -14,6 +14,7 @@ import {
 } from './ui/select';
 import { DatePicker } from './ui/date-picker';
 import { Printer, Loader2, FileCheck2 } from 'lucide-react';
+import { PrintRequestOrderBanner } from './PrintRequestOrderBanner';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -24,7 +25,9 @@ const HEAD = () => {
 export const SendForPrintingDialog = ({ open, onOpenChange, marketingRequest, onCreated }) => {
   const [departments, setDepartments] = useState([]);
   const [vendors, setVendors] = useState([]);
-  const [quantity, setQuantity] = useState('');
+  const [totalMonthlyVolume, setTotalMonthlyVolume] = useState('');
+  const [startingMonthlyVolume, setStartingMonthlyVolume] = useState('');
+  const [initialOrderQty, setInitialOrderQty] = useState('');
   const [dueDate, setDueDate] = useState(null);
   const [notes, setNotes] = useState('');
   const [deptId, setDeptId] = useState('');
@@ -39,7 +42,8 @@ export const SendForPrintingDialog = ({ open, onOpenChange, marketingRequest, on
   useEffect(() => {
     if (!open) return;
     // reset on open
-    setQuantity(''); setDueDate(null); setNotes(''); setDeptId(''); setVendorId('');
+    setTotalMonthlyVolume(''); setStartingMonthlyVolume(''); setInitialOrderQty('');
+    setDueDate(null); setNotes(''); setDeptId(''); setVendorId('');
     (async () => {
       try {
         const [d, v] = await Promise.all([
@@ -55,13 +59,17 @@ export const SendForPrintingDialog = ({ open, onOpenChange, marketingRequest, on
   }, [open]);
 
   const submit = async () => {
-    if (!quantity || Number(quantity) <= 0) { toast.error('Enter a valid quantity'); return; }
-    if (!dueDate) { toast.error('Pick a requested due date'); return; }
+    if (!initialOrderQty || Number(initialOrderQty) <= 0) { toast.error('Enter a valid Initial Order Quantity'); return; }
+    if (startingMonthlyVolume === '' || Number(startingMonthlyVolume) < 0) { toast.error('Enter the Initial Monthly Quantity'); return; }
+    if (!dueDate) { toast.error('Pick a Requested Delivery Date'); return; }
     setSaving(true);
     try {
       const { data } = await axios.post(`${API}/print-requests`, {
         marketing_request_id: marketingRequest.id,
-        quantity: Number(quantity),
+        initial_order_quantity: Number(initialOrderQty),
+        quantity: Number(initialOrderQty),
+        total_monthly_volume: totalMonthlyVolume === '' ? null : Number(totalMonthlyVolume),
+        starting_monthly_volume: startingMonthlyVolume === '' ? null : Number(startingMonthlyVolume),
         requested_due_date: format(dueDate, 'yyyy-MM-dd'),
         notes: notes || null,
         assigned_department_id: deptId || null,
@@ -94,14 +102,25 @@ export const SendForPrintingDialog = ({ open, onOpenChange, marketingRequest, on
         </div>
 
         <div className="space-y-4 py-1">
+          <PrintRequestOrderBanner />
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="pr-qty">Quantity *</Label>
-              <Input id="pr-qty" type="number" min={1} value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="e.g. 1000" data-testid="send-print-qty" />
+              <Label htmlFor="pr-init-qty">Initial Order Quantity <span className="text-red-500">*</span></Label>
+              <Input id="pr-init-qty" type="number" min={1} value={initialOrderQty} onChange={(e) => setInitialOrderQty(e.target.value)} placeholder="e.g. 1000" data-testid="send-print-qty" />
             </div>
             <div className="space-y-1.5">
-              <Label>Requested due date *</Label>
+              <Label>Requested Delivery Date <span className="text-red-500">*</span></Label>
               <DatePicker value={dueDate} onChange={setDueDate} placeholder="Pick a date" data-testid="send-print-due" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="pr-start-vol">Initial Monthly Quantity <span className="text-red-500">*</span></Label>
+              <Input id="pr-start-vol" type="number" min={0} value={startingMonthlyVolume} onChange={(e) => setStartingMonthlyVolume(e.target.value)} data-testid="send-print-starting-volume" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pr-total-vol">Total Monthly Volume (Future Potential)</Label>
+              <Input id="pr-total-vol" type="number" min={0} value={totalMonthlyVolume} onChange={(e) => setTotalMonthlyVolume(e.target.value)} data-testid="send-print-total-volume" />
             </div>
           </div>
 

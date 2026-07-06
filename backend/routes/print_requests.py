@@ -294,6 +294,8 @@ async def create_print_request(payload: PrintRequestCreate, current_user: dict =
     order_qty = payload.initial_order_quantity if payload.initial_order_quantity is not None else payload.quantity
     if order_qty is None or int(order_qty) <= 0:
         raise HTTPException(400, "Initial order quantity must be a positive number")
+    if payload.starting_monthly_volume is None:
+        raise HTTPException(400, "Starting monthly volume (initial monthly quantity) is required")
     try:
         date.fromisoformat(payload.requested_due_date[:10])
     except (ValueError, TypeError):
@@ -433,10 +435,19 @@ async def update_print_request(print_id: str, payload: PrintRequestUpdate, curre
         raise HTTPException(404, "Print request not found")
 
     upd: dict = {}
-    if payload.quantity is not None:
+    if payload.initial_order_quantity is not None:
+        if int(payload.initial_order_quantity) <= 0:
+            raise HTTPException(400, "Initial order quantity must be a positive number")
+        upd["initial_order_quantity"] = int(payload.initial_order_quantity)
+        upd["quantity"] = int(payload.initial_order_quantity)
+    elif payload.quantity is not None:
         if int(payload.quantity) <= 0:
             raise HTTPException(400, "Quantity must be a positive number")
         upd["quantity"] = int(payload.quantity)
+    if payload.total_monthly_volume is not None:
+        upd["total_monthly_volume"] = float(payload.total_monthly_volume)
+    if payload.starting_monthly_volume is not None:
+        upd["starting_monthly_volume"] = float(payload.starting_monthly_volume)
     if payload.requested_due_date is not None:
         try:
             upd["requested_due_date"] = date.fromisoformat(payload.requested_due_date[:10]).isoformat()

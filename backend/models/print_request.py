@@ -110,6 +110,9 @@ class PrintRequestCreate(BaseModel):
 
 class PrintRequestUpdate(BaseModel):
     quantity: Optional[int] = None
+    initial_order_quantity: Optional[int] = None
+    total_monthly_volume: Optional[float] = None
+    starting_monthly_volume: Optional[float] = None
     requested_due_date: Optional[str] = None
     notes: Optional[str] = None
     assigned_department_id: Optional[str] = None

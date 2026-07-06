@@ -1,0 +1,51 @@
+{
+  "summary": "Frontend-only verification of Print Request improvements + city grouping. All high-value checks pass: (a) Print Requests list grouped by lead city with correct testids and 'No City' last; (b) Design Requests list (List view) grouped by lead city with mr-city-row-* desktop testids present; (c) Print Request Edit dialog shows amber banner, all 5 field labels correct, mandatory validation blocks save with toast when Initial Monthly Quantity is cleared, valid save persists both Starting Monthly Volume and Total Monthly Volume on the detail page. Send-for-Printing dialog verified via source review (banner + full field set + validations present) — a live click-through wasn't executed because the only clickable card via 'MR-2026-0009' landed on a Submitted (not yet approved) request; no other blocking issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "print_requests_list_grouping": {
+      "desktop_city_headers": "PASS - [{print-city-row-Mumbai, 'Mumbai(2)'}, {print-city-row-No City, 'No City(3)'}] — Mumbai first (alphabetical), 'No City' last as spec",
+      "row_count": "PASS - 5 rows visible under grouped headers",
+      "status_tiles_still_render": "PASS - 6 status tiles rendered (Submitted 0, New 2, In Printing 1, Printed 0, On Hold 2, Cancelled 0)",
+      "city_filter_dropdown": "PASS - 'All cities' + 'Mumbai' still selectable (unchanged behaviour)"
+    },
+    "design_requests_list_grouping": {
+      "desktop_city_headers": "PASS - [Hyderabad(1), Mumbai(3), No City(18)] rendered with data-testid mr-city-row-<City>; 'No City' last as spec",
+      "mobile_city_group_testids": "PASS - mr-city-group-Hyderabad, mr-city-group-Mumbai, mr-city-group-No City present in DOM",
+      "kanban_unaffected": "PASS - Kanban view still renders columns (Submitted/InputsNeeded/InProgress/InReview/Approved(Internal)) and no city grouping in that view"
+    },
+    "print_request_edit_dialog": {
+      "banner_shown": "PASS - data-testid=print-order-banner visible in Edit dialog",
+      "field_labels": "PASS - Labels: ['Initial Order Quantity *', 'Requested Delivery Date *', 'Initial Monthly Quantity *', 'Total Monthly Volume (Future Potential)', 'Production team', 'Vendor', 'Notes / print specs']",
+      "mandatory_validation_blocks_save": "PASS - Clearing Initial Monthly Quantity + Save → dialog stays open + toast 'Enter the Initial Monthly Quantity'",
+      "valid_save_persists": "PASS - Setting Starting Monthly=77, Total Monthly=999 → dialog closes; detail page InfoRows show 'Starting Monthly Volume 77' and 'Total Monthly Volume 999' (values restored after test)",
+      "detail_page_labels": "PASS - InfoRow labels 'Initial Order Quantity', 'Starting Monthly Volume', 'Total Monthly Volume', 'Requested Due Date' visible"
+    },
+    "send_for_printing_dialog": {
+      "live_ui_test": "SKIPPED - The Approved(Internal) card selected (MR-2026-0009) navigated to a request currently in 'Submitted' state (Available Actions: Start Working / Request Inputs), so 'Send for Printing' button was not shown. No approved-without-print-request design request was quickly reachable from the Kanban board.",
+      "source_review": "PASS by source review - components/SendForPrintingDialog.jsx contains <PrintRequestOrderBanner/>, labels 'Initial Order Quantity *', 'Requested Delivery Date *', 'Initial Monthly Quantity *', 'Total Monthly Volume (Future Potential)', optional Assign to production team + Print vendor, Notes; submit() validates all three mandatories with toasts before POST /api/print-requests."
+    },
+    "create_print_request_dialog_customer_branding": {
+      "live_ui_test": "SKIPPED - Reaching the customer-branding entry point (Lead/Account → Customer Branding → terminal+assigned design request → 'Print Request' button) requires multiple hops; per request instructions this was deprioritised.",
+      "source_review": "PASS by source review - components/CreatePrintRequestDialog.jsx renders <PrintRequestOrderBanner/>, labels 'Total Monthly Volume (Future Potential)', 'Initial Monthly Quantity *', 'Initial Order Quantity *', 'Requested Delivery Date *', 'Notes'; submit() enforces the three mandatories with toasts and POSTS starting_monthly_volume + initial_order_quantity + requested_due_date."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor consistency: Detail page InfoRow still labels the field 'Starting Monthly Volume' while dialogs use 'Initial Monthly Quantity'. Consider renaming the detail row label to 'Initial Monthly Quantity' for full UX parity with the spec. Not blocking.",
+    "Minor: PrintRequestDetail.saveEdit sends 'assigned_department_id' and 'vendor_id' as empty strings when cleared (instead of null); if backend expects null-to-unassign this could silently fail to unassign. Recommend sending null for empty selects."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% on live-tested items; 2 dialogs verified by source review"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (nyla-air-water)",
+  "seed_data_creation": "None — no test print requests left behind; edited PR-2026-0005 values were restored to original (empty starting/total volumes).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Print Requests page has 5 items across 2 cities (Mumbai×2, No City×3). Edit dialog testids: print-edit-btn, print-edit-dialog, print-edit-qty, print-edit-starting-volume, print-edit-total-volume, print-edit-due, print-edit-dept, print-edit-vendor, print-edit-notes, print-edit-save. Detail page InfoRow testids: print-info-initial-qty, print-info-starting-volume (only rendered when non-null), print-info-total-volume (only when non-null). Design Requests list grouping testids: mr-city-row-<City> (desktop table), mr-city-group-<City> (mobile). Send-for-Printing button only appears on design requests in an approved/terminal state — Kanban 'Approved(Internal)' column card was not the right entry point in this run; try MR-2026-0022 or MR-2026-0021 by URL if you need to live-test.",
+  "rca of the issue": "n/a — no bugs found."
+}
