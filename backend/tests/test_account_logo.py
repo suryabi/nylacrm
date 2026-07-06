@@ -14,7 +14,7 @@ import requests
 import pytest
 from PIL import Image
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://crm-beverage-ops.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stock-state-machine.preview.emergentagent.com").rstrip("/")
 CEO_EMAIL = "surya.yadavalli@nylaairwater.earth"
 CEO_PASS = "test123"
 ACCOUNT_ID = "b529f00e-54b3-4709-92c1-db08137ef0b3"

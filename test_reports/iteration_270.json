@@ -27,7 +27,7 @@
     "/app/backend/tests/test_iteration_270_promo_zoho_push_normalized.py"
   ],
   "success_rate": {"backend": "100% (7/7 new + 3/3 iter_269 regression)", "frontend": "n/a (backend-only)"},
-  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). Login field session_token (Bearer). REACT_APP_BACKEND_URL=https://crm-beverage-ops.preview.emergentagent.com.",
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water). Login field session_token (Bearer). REACT_APP_BACKEND_URL=https://stock-state-machine.preview.emergentagent.com.",
   "seed_data_creation": "Tests created 14 promo dispatches under Brian (id bb12d90e-...) across reruns — all cleaned up via reverse-then-delete and an emergency mongo cleanup. Final state verified: 0 TEST_ITER270 records remain.",
   "retest_needed": false,
   "should_main_agent_self_test": false,
