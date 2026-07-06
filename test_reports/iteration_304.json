@@ -1,0 +1,47 @@
+{
+  "summary": "Verified the bug fix for stock transfers into a distributor's NON-factory warehouse being invisible on the Stock Dashboard. Logged in as CEO (surya.yadavalli@nylaairwater.earth) and inspected the Stock tab for both distributors. Fix works end-to-end: transferred-in stock now counts as normal on-hand sellable stock without double-counting for factory-warehouse transfers.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/surya_stock_tab.png",
+    "/app/test_reports/test_dist_stock.png"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (via API responses captured during UI flow)", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (tenant Nyla Air Water) - working",
+  "seed_data_creation": "None. Used existing distributors 'Surya Distributions' (d091204f-...) and 'Test' (99fb55dc-...) and their pre-existing stock transfers.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Stock tab (data-testid=stock-dashboard-tab) on distributor detail page (/distributors/{id}) renders StockDashboardTab.jsx which calls GET /api/distributors/{id}/stock-dashboard. Response contains totals, factory_warehouses, and skus[] with stock_on_hand/stock_at_hand. Table columns: SKU, RECEIVED, DELIVERED, RESERVED, EMPTY BOTTLES, PRODUCT RET., FACTORY RET., WH. STOCK, AVAILABLE, % AVAIL, WKLY AVG. Factory Warehouse Stock card lists non-double-counted factory warehouse stock separately with 'WH. STOCK' column also populated for that SKU.",
+  "verified_scenarios": {
+    "surya_distributions_transfer_in_non_factory": {
+      "sku": "Nyla – 600 ml / Silver",
+      "expected_on_hand": 5,
+      "actual_on_hand": 5,
+      "expected_available": 5,
+      "actual_available": 5,
+      "note": "Previously missing from Stock-by-SKU table; now correctly appears (delivered via ST-2026-0003 + ST-2026-0004 to non-factory 1st Warehouse). API returned stock_on_hand=5, stock_at_hand=5."
+    },
+    "surya_distributions_no_regression": {
+      "Nyla – 330 ml / Silver": {"on_hand": 1000, "available": 1000},
+      "Nyla – 330 ml / Gold": {"on_hand": 1000, "available": 1000},
+      "totals": {"stock_received": 2005, "stock_on_hand": 2005, "stock_available": 2005, "sku_count": 3}
+    },
+    "test_distributor_factory_warehouse_no_double_count": {
+      "sku": "Nyla – 660 ml / Sparkling",
+      "expected_on_hand": 5,
+      "actual_on_hand": 5,
+      "wh_stock_column": 5,
+      "factory_warehouse_card_qty": 5,
+      "totals_received": 162,
+      "note": "Value appears in both the Factory Warehouse Stock card (Noida Factory Warehouse, 5 crates, 1 batch) AND the Stock-by-SKU table row (WH. STOCK=5, AVAILABLE=5), but counted only once in totals — no double counting. Received via ST-2026-0009."
+    },
+    "no_render_errors": "Stock Dashboard rendered cleanly for both distributors. No 500s, no blank pages, only unrelated 401s on pre-login /api/auth/me probe."
+  }
+}

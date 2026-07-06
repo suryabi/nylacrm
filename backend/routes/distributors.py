@@ -8660,6 +8660,56 @@ async def get_stock_dashboard(
             key=lambda b: (b.get("production_date") or b.get("received_at") or "9999")
         )
     
+    # === 1c. STOCK TRANSFERS in/out of this distributor's NON-FACTORY warehouses ===
+    # Transfers touching a *factory* warehouse are already reflected in the live
+    # factory_warehouse_stock balance above. Transfers into/out of a regular
+    # (non-factory) distributor warehouse are stored only in `distributor_stock`,
+    # which this dashboard does not read — so we fold them in here as explicit
+    # in/out flows. `item.quantity` is in packages/crates (same unit the rest of
+    # the dashboard uses), so no bottle→crate conversion is needed.
+    transfer_in_by_sku = {}
+    transfer_out_by_sku = {}
+    xfers = await db.distributor_stock_transfers.find(
+        {
+            "tenant_id": tenant_id, "status": "completed",
+            "$or": [{"source_distributor_id": distributor_id}, {"dest_distributor_id": distributor_id}],
+        },
+        {"_id": 0, "source_distributor_id": 1, "source_location_id": 1,
+         "dest_distributor_id": 1, "dest_location_id": 1, "items": 1},
+    ).to_list(5000)
+    if xfers:
+        # Resolve is_factory for every involved location in one batch query.
+        _loc_ids = set()
+        for xf in xfers:
+            if xf.get("source_location_id"):
+                _loc_ids.add(xf["source_location_id"])
+            if xf.get("dest_location_id"):
+                _loc_ids.add(xf["dest_location_id"])
+        _factory_loc = set()
+        async for _ld in db.distributor_locations.find(
+            {"tenant_id": tenant_id, "id": {"$in": list(_loc_ids)}, "is_factory": True},
+            {"_id": 0, "id": 1},
+        ):
+            _factory_loc.add(_ld["id"])
+        for xf in xfers:
+            for it in (xf.get("items") or []):
+                sid = it.get("sku_id", "")
+                if not sid:
+                    continue
+                crates = int(it.get("quantity", 0) or 0)
+                if crates <= 0:
+                    continue
+                sku_name = it.get("sku_name", "Unknown")
+                # Inbound: destination is THIS distributor & dest warehouse is non-factory
+                if xf.get("dest_distributor_id") == distributor_id and xf.get("dest_location_id") not in _factory_loc:
+                    b = transfer_in_by_sku.setdefault(sid, {"sku_id": sid, "sku_name": sku_name, "qty": 0})
+                    b["qty"] += crates
+                # Outbound: source is THIS distributor & source warehouse is non-factory
+                if xf.get("source_distributor_id") == distributor_id and xf.get("source_location_id") not in _factory_loc:
+                    b = transfer_out_by_sku.setdefault(sid, {"sku_id": sid, "sku_name": sku_name, "qty": 0})
+                    b["qty"] += crates
+
+
     # === 2. STOCK OUT: Deliveries to customers (delivered/completed/complete) ===
     delivered_delivery_ids = await db.distributor_deliveries.distinct(
         "id",
@@ -8798,7 +8848,9 @@ async def get_stock_dashboard(
         list(stock_pending_out_by_sku.keys()) +
         list(cust_return_by_sku.keys()) +
         list(factory_return_by_sku.keys()) +
-        list(factory_wh_stock_by_sku.keys())
+        list(factory_wh_stock_by_sku.keys()) +
+        list(transfer_in_by_sku.keys()) +
+        list(transfer_out_by_sku.keys())
     )
 
     # bpc lookup for every SKU we touch (not just factory-warehouse ones) so
@@ -8829,6 +8881,7 @@ async def get_stock_dashboard(
     total_empty_bottles_returned = 0
     total_product_returns = 0
     total_factory_returns = 0
+    total_transferred_out = 0
 
     for sid in all_sku_ids:
         si = stock_in_by_sku.get(sid, {})
@@ -8837,6 +8890,8 @@ async def get_stock_dashboard(
         cr_data = cust_return_by_sku.get(sid, {})
         fr_data = factory_return_by_sku.get(sid, {})
         fws_data = factory_wh_stock_by_sku.get(sid, {})
+        tin_data = transfer_in_by_sku.get(sid, {})
+        tout_data = transfer_out_by_sku.get(sid, {})
 
         # Bottle-level inputs → convert to crates. Shipment/delivery/pending
         # were already converted at the aggregation step (using each item's
@@ -8848,12 +8903,15 @@ async def get_stock_dashboard(
         qty_cust_returned = _to_crates(sid, cr_data.get('total', 0))
         qty_factory_returned = _to_crates(sid, fr_data.get('total', 0))
         qty_factory_wh    = fws_data.get('qty', 0)                       # already crates
+        qty_transferred_in  = tin_data.get('qty', 0)                     # already crates
+        qty_transferred_out = tout_data.get('qty', 0)                    # already crates
 
         # `stock_received` = everything the distributor has been *given*:
-        # primary stock-in shipments + production-to-warehouse transfers.
+        # primary stock-in shipments + production-to-warehouse transfers +
+        # stock moved IN via a stock transfer to a non-factory warehouse.
         # Returns are NEVER part of received — they're a separate flow back
         # to the factory and not deliverable (used / damaged / expired bottles).
-        qty_in = qty_in_shipments + qty_factory_wh
+        qty_in = qty_in_shipments + qty_factory_wh + qty_transferred_in
 
         # NEW formula — what's actually deliverable RIGHT NOW:
         #
@@ -8861,18 +8919,19 @@ async def get_stock_dashboard(
         #                   − delivered_to_customers
         #                   − scheduled_or_in_transit (committed but not yet out)
         #                   − sent_back_to_factory
+        #                   − transferred_out (moved to another warehouse)
         #
         # No `+ customer_returns` add-back: returned bottles can't be re-sold
         # without going through factory QC first. The user explicitly flagged
         # this on May 27 — over-deliveries would otherwise be possible.
-        stock_at_hand = qty_in - qty_out - qty_pending_out - qty_factory_returned
+        stock_at_hand = qty_in - qty_out - qty_pending_out - qty_factory_returned - qty_transferred_out
 
         # Explicit reserve→deliver model (derived):
         #   on_hand  = physical balance still held (incl. reserved units)
         #   reserved = committed to open Stock Out orders
         #   available= on_hand − reserved  (== stock_at_hand, what's deliverable now)
         #   delivered= permanently consumed/delivered out
-        stock_on_hand = qty_in - qty_out - qty_factory_returned
+        stock_on_hand = qty_in - qty_out - qty_factory_returned - qty_transferred_out
         stock_reserved = qty_pending_out
         stock_available = stock_at_hand
 
@@ -8890,7 +8949,7 @@ async def get_stock_dashboard(
         daily_avg = weekly_avg / 7 if weekly_avg > 0 else 0
         days_remaining = round(stock_at_hand / daily_avg, 0) if daily_avg > 0 and stock_at_hand > 0 else None
 
-        sku_name = si.get('sku_name') or so.get('sku_name') or po.get('sku_name') or fr_data.get('sku_name') or fws_data.get('sku_name') or 'Unknown'
+        sku_name = si.get('sku_name') or so.get('sku_name') or po.get('sku_name') or fr_data.get('sku_name') or fws_data.get('sku_name') or tin_data.get('sku_name') or tout_data.get('sku_name') or 'Unknown'
 
         sku_summaries.append({
             "sku_id": sid,
@@ -8956,6 +9015,7 @@ async def get_stock_dashboard(
         total_empty_bottles_returned += s['empty_bottles_returned']
         total_product_returns += s['product_returns']
         total_factory_returns += s['factory_returns']
+        total_transferred_out += transfer_out_by_sku.get(s['sku_id'], {}).get('qty', 0)
     
     # Aggregate bottle tracking — these are in BOTTLES (kept as-is so the
     # bottle counters in the UI reflect the actual number of physical bottles,
@@ -8976,7 +9036,7 @@ async def get_stock_dashboard(
             "stock_delivered": total_stock_out,
             "stock_pending_out": total_stock_pending_out,
             "stock_reserved": total_stock_pending_out,
-            "stock_on_hand": total_stock_in - total_stock_out - total_factory_returns,
+            "stock_on_hand": total_stock_in - total_stock_out - total_factory_returns - total_transferred_out,
             "stock_available": total_at_hand,
             "stock_at_hand": total_at_hand,
             "customer_returns": total_cust_returns,
