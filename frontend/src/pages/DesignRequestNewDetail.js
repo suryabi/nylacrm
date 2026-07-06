@@ -275,7 +275,7 @@ export default function DesignRequestNewDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { hasActionPermission } = useTenantConfig();
-  const canDelete = hasActionPermission('marketing_requests', 'delete');  const [req, setReq] = useState(null);
+  const canDelete = hasActionPermission('design_requests_new', 'delete');  const [req, setReq] = useState(null);
   const [transitions, setTransitions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [comment, setComment] = useState('');
@@ -604,7 +604,7 @@ export default function DesignRequestNewDetail() {
           <ArrowLeft className="h-4 w-4 mr-2" /> Back to Design Requests
         </Button>
         <div className="flex items-center gap-2">
-          {((user?.id && req?.created_by && user.id === req.created_by) || hasActionPermission('marketing_requests', 'edit')) && (
+          {((user?.id && req?.created_by && user.id === req.created_by) || hasActionPermission('design_requests_new', 'edit')) && (
             <Button
               variant="outline"
               size="sm"
@@ -629,7 +629,7 @@ export default function DesignRequestNewDetail() {
               <Printer className="h-4 w-4 mr-2" /> Send for Printing
             </Button>
           )}
-          {((user?.id && req?.created_by && user.id === req.created_by) || hasActionPermission('marketing_requests', 'edit')) && (
+          {((user?.id && req?.created_by && user.id === req.created_by) || hasActionPermission('design_requests_new', 'edit')) && (
             <Button
               variant="outline"
               size="sm"

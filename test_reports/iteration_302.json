@@ -1,0 +1,32 @@
+{
+  "summary": "Verified the RBAC edit-button visibility fix on DesignRequestNewDetail.js. Logged in as Creative Director (non-admin role with design_requests_new view/create/edit=true, delete=false) and confirmed all expected behaviors on DRN-2026-0001 detail page.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "DesignRequestNewDetail.js line 278: `const canDelete = ...;  const [req, setReq] = ...;` are on the same line (double-space separated). Cosmetic only, but readability suffers. Suggest splitting onto separate lines."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "creative.director@nylaairwater.earth / test123 (tenant nyla-air-water) — login via password form works, session token returned.",
+  "seed_data_creation": "No new seed data created. Used existing DRN-2026-0001 (24d674f4-74ac-4752-992e-9fc73c801bc0) authored by CEO Surya Yadavalli.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "RBAC gating on DesignRequestNewDetail.js now correctly uses module key 'design_requests_new' for edit/delete checks. Verified for Creative Director (non-admin): Edit + Mark Urgent visible, Delete hidden, /edit route loads. No regressions in login flow.",
+  "verification_details": {
+    "test_case_1_login": "PASS — API POST /api/auth/login returned 200 with session_token; frontend redirected to /marketing-requests?queue=all.",
+    "test_case_2_detail_page_loads": "PASS — /design-requests-new/24d674f4-74ac-4752-992e-9fc73c801bc0 loaded; mr-hero present; GET /api/design-requests-new/{id} returned 200.",
+    "test_case_3_edit_button_visible": "PASS — [data-testid=mr-edit-request-btn] present and visible (core fix confirmed).",
+    "test_case_4_urgent_button_visible": "PASS — [data-testid=mr-urgent-toggle-btn] present and visible (shares edit-permission gate).",
+    "test_case_5_delete_button_hidden": "PASS — [data-testid=mr-delete-request-btn] NOT present in DOM (delete=false honored).",
+    "test_case_6_edit_navigation": "PASS — Clicking Edit Request navigates to /design-requests-new/{id}/edit and the edit form (request type, department, due date, requirement details) renders correctly."
+  }
+}
