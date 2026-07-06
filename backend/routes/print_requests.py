@@ -144,9 +144,13 @@ async def _build_list_query(
     tenant_id: str, search: Optional[str], city: Optional[str],
     status_id: Optional[str], status_ids: Optional[str],
     vendor_id: Optional[str], assigned_department_id: Optional[str],
-    include_status: bool = True,
+    include_status: bool = True, source_request_ids: Optional[str] = None,
 ) -> dict:
     q: dict = {"tenant_id": tenant_id}
+    if source_request_ids:
+        src_ids = [s.strip() for s in source_request_ids.split(",") if s.strip()]
+        if src_ids:
+            q["source_marketing_request_id"] = {"$in": src_ids}
     if include_status:
         ids = [s.strip() for s in (status_ids or "").split(",") if s.strip()]
         if ids:
@@ -193,11 +197,12 @@ async def list_print_requests(
     city: Optional[str] = None,
     vendor_id: Optional[str] = None,
     assigned_department_id: Optional[str] = None,
+    source_request_ids: Optional[str] = None,
     sort: str = "-created_at",
     current_user: dict = Depends(get_current_user),
 ):
     tenant_id = get_current_tenant_id()
-    q = await _build_list_query(tenant_id, search, city, status_id, status_ids, vendor_id, assigned_department_id)
+    q = await _build_list_query(tenant_id, search, city, status_id, status_ids, vendor_id, assigned_department_id, source_request_ids=source_request_ids)
 
     field = sort[1:] if sort.startswith("-") else sort
     direction = -1 if sort.startswith("-") else 1

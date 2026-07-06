@@ -1,0 +1,45 @@
+{
+  "summary": "Backend fixes both work perfectly (search re.escape + print-requests source_request_ids filter). Frontend integration also wired correctly (LeadBottleDesigns calls GET /api/print-requests?source_request_ids=... and would render cards). HOWEVER: the customer-facing outcome for MR-2026-0020 is NOT achieved because of BROKEN SEED DATA — PR-2026-0003.source_marketing_request_id = 3761de64-c0c7-42b7-adaf-a15c8a17e2e9, which no longer exists (GET /api/design-requests-new/3761de64... → 404). The actual current MR-2026-0020 has id 09b6d251-7d27-4581-93d2-a4ce38dd2af9. In fact ALL 5 existing print requests point to non-existent design-request IDs, so no linked-print card can render for any lead.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Lead → Customer Branding → Design Requests → Print Request card",
+        "issue": "Data integrity: PR-2026-0003.source_marketing_request_id points to design request id 3761de64-... which returns 404. The real MR-2026-0020 id today is 09b6d251-7d27-4581-93d2-a4ce38dd2af9. Frontend calls /api/print-requests?source_request_ids=09b6d251-...,9ccb8856-... and correctly gets 0 items, so no card is rendered. All 5 print requests in the tenant have orphaned source_marketing_request_id values.",
+        "affected_selectors": ["lead-print-requests-<designReqId>", "lead-print-request-<printReqId>"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_search_and_printreq_link.py",
+    "/app/test_reports/pytest/search_printreq_link.xml"
+  ],
+  "action_items": [
+    "Fix stale print-request→design-request linkage: update PR-2026-0003.source_marketing_request_id from 3761de64-c0c7-42b7-adaf-a15c8a17e2e9 to the current MR-2026-0020 id (09b6d251-7d27-4581-93d2-a4ce38dd2af9). Repeat for the other 4 print requests (PR-2026-0001..0005) which all reference deleted design request IDs (3c56c6fd, 89ece4aa, 806ba125).",
+    "Investigate root cause: design requests appear to have been deleted+recreated at some point without updating the source_marketing_request_id on child print requests. Consider a) forbidding hard-delete of design requests that have linked print requests, or b) cascade-updating print requests when a design request is replaced, or c) at minimum warn/notify when creating a design request whose id has orphan print requests.",
+    "After data fix, re-verify the lead-detail Customer Branding section shows the PR-2026-0003 card with 'On Hold' badge under MR-2026-0020."
+  ],
+  "critical_code_review_comments": [
+    "Backend routes/design_requests_new.py:1035 correctly uses re.escape() on the free-form search term. Verified 200 OK for all of these payloads: '(', '\\\\', '(unclosed', ')', '[]', '*', '+', '?', '.*'.",
+    "Backend routes/print_requests.py:147-151 correctly accepts source_request_ids as comma-separated string and applies $in filter on source_marketing_request_id. Working as expected.",
+    "Frontend LeadBottleDesigns.js correctly (a) fetches print requests by source_request_ids after loading design requests, (b) keys them by pr.source_marketing_request_id into printRequestsByReq, (c) renders a card block only when linkedPrints.length > 0 (verified: 0 empty blocks on the tested lead), (d) preserves the green Create-Print-Request button (verified: create-print-request-btn-09b6d251-... present)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_search_and_printreq_link.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 pytest cases pass: 3 normal terms + 9 special-char cases + source_request_ids returns PR-2026-0003 + empty id returns [] + lead scoped design requests)",
+    "frontend": "80% — search UI graceful on special chars ✅, regression create button ✅, no empty PR blocks ✅, structural code correct ✅, but the visible PR card outcome cannot render for this lead due to stale data"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water) — working",
+  "seed_data_creation": "None. Used existing lead 20c97966-... 'The Rameshwaram Cafe' and existing design/print requests.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Everything backend-wise is verified via /app/backend/tests/test_search_and_printreq_link.py (run with REACT_APP_BACKEND_URL env). Frontend uses cookie-based session (no Bearer token) — login POST /api/auth/login sets a cookie, use requests.Session. On lead 20c97966 the fetched design request ids from the API are 09b6d251-... (MR-2026-0020) and 9ccb8856-... (MR-2026-0017), but no print request has those ids as source_marketing_request_id (all 5 point to deleted ids: 3761de64, 3c56c6fd, 89ece4aa, 806ba125). If data is repaired, re-verify by opening /leads/20c97966-ab07-4428-893f-cd5633393eee, scrolling to Customer branding, and asserting a card with testid lead-print-request-<id> containing 'PR-2026-0003' + status badge 'On Hold' renders beneath the MR-2026-0020 row.",
+  "rca of the issue": "Root cause of the missing UI outcome: PR-2026-0003 (and all other 4 print requests) reference design-request UUIDs that no longer exist. GET /api/design-requests-new/3761de64-c0c7-42b7-adaf-a15c8a17e2e9 → 404. Meanwhile the frontend correctly queries the CURRENT design-request ids of the lead (from the design-requests-new list response). Query returns 0, so no card renders — which is actually the correct behavior of the frontend code given the broken data. Reproduction: 1) Login as CEO. 2) GET /api/design-requests-new?lead_id=20c97966-... → MR-2026-0020 id = 09b6d251-... . 3) GET /api/print-requests?source_request_ids=09b6d251-... → items=[]. 4) GET /api/print-requests?search=PR-2026-0003 → source_marketing_request_id=3761de64-... (stale). 5) GET /api/design-requests-new/3761de64-... → 404. Mitigation: update the 5 orphan print-request source_marketing_request_id values via a data-fix script (or via a UI 'relink' action) and add referential integrity: prevent hard-delete of design requests with dependent print requests, or cascade-update those references."
+}

@@ -1029,8 +1029,10 @@ def _build_requests_query(tenant_id, current_user, queue, search, state_key, req
         q["created_by"] = created_by
     if state_key:
         q["current_state_key"] = state_key
-    if search:
-        s = {"$regex": search, "$options": "i"}
+    if search and search.strip():
+        # Escape user input so special regex characters (e.g. "(", ")", "\", "[")
+        # are treated literally instead of crashing the query with a 500.
+        s = {"$regex": re.escape(search.strip()), "$options": "i"}
         text_ors = [
             {"request_number": s}, {"title": s}, {"request_type_name": s},
             {"requirement_details": s},

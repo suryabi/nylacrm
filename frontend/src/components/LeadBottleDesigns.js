@@ -46,6 +46,7 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
   const [attachDesign, setAttachDesign] = useState(false);
   const [submittingSample, setSubmittingSample] = useState(false);
   const [requests, setRequests] = useState([]);
+  const [printRequestsByReq, setPrintRequestsByReq] = useState({});
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [leadHasLogo, setLeadHasLogo] = useState(!!hasLogo);
   const [resolvedLeadId, setResolvedLeadId] = useState(null);
@@ -73,9 +74,31 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
         params: { lead_id: resolvedLeadId, no_limit: true },
         withCredentials: true,
       });
-      setRequests(res.data?.items || []);
+      const items = res.data?.items || [];
+      setRequests(items);
+      const ids = items.map((i) => i.id).filter(Boolean);
+      if (ids.length) {
+        try {
+          const prRes = await axios.get(`${API_URL}/print-requests`, {
+            params: { source_request_ids: ids.join(','), limit: 100 },
+            withCredentials: true,
+          });
+          const map = {};
+          (prRes.data?.items || []).forEach((pr) => {
+            const key = pr.source_marketing_request_id;
+            if (!key) return;
+            (map[key] = map[key] || []).push(pr);
+          });
+          setPrintRequestsByReq(map);
+        } catch (e) {
+          setPrintRequestsByReq({});
+        }
+      } else {
+        setPrintRequestsByReq({});
+      }
     } catch (e) {
       setRequests([]);
+      setPrintRequestsByReq({});
     } finally {
       setRequestsLoading(false);
     }
@@ -274,11 +297,11 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
           <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
             {requests.map((r) => {
               const canPrint = canRaisePrint(r);
+              const linkedPrints = printRequestsByReq[r.id] || [];
               return (
+              <div key={r.id} data-testid={`lead-design-request-${r.id}`}>
               <div
-                key={r.id}
                 className="flex items-center gap-2 pr-2 hover:bg-muted/50 transition-colors"
-                data-testid={`lead-design-request-${r.id}`}
               >
                 <button
                   type="button"
@@ -320,6 +343,38 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
                   </Button>
                 )}
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              </div>
+              {linkedPrints.length > 0 && (
+                <div className="pl-10 pr-3 pb-2.5 pt-1 bg-muted/20 space-y-1" data-testid={`lead-print-requests-${r.id}`}>
+                  {linkedPrints.map((pr) => (
+                    <button
+                      key={pr.id}
+                      type="button"
+                      onClick={() => navigate(`/print-requests/${pr.id}`)}
+                      className="w-full flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 hover:bg-muted/50 transition-colors"
+                      title="Open print request"
+                      data-testid={`lead-print-request-${pr.id}`}
+                    >
+                      <Printer className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <span className="text-xs font-medium text-foreground truncate">{pr.print_number}</span>
+                      {pr.vendor_name && (
+                        <span className="text-[11px] text-muted-foreground truncate hidden sm:inline">· {pr.vendor_name}</span>
+                      )}
+                      <span
+                        className="ml-auto inline-flex items-center gap-1.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                        style={{
+                          color: pr.status_color || '#475569',
+                          backgroundColor: `${pr.status_color || '#64748b'}1a`,
+                        }}
+                        data-testid={`lead-print-request-status-${pr.id}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: pr.status_color || '#64748b' }} />
+                        {pr.status_name || 'Submitted'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
               </div>
               );
             })}
