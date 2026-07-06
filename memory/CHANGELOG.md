@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-06 — 🐛 Fix: Print/Send-for-Printing hidden for NEW (DRN) requests in terminal state ✅ (testing_agent iteration_301: frontend 100%, 5/5)
+- **Reported**: Even non-migrated (DRN-prefix) design requests in a terminal state didn't surface the print option.
+- **Root cause**: Gating relied only on hardcoded state keys `['final_approved','production_in_progress','production_completed']`. A custom-keyed terminal state (or any state flagged `is_terminal` that isn't one of those keys) was missed.
+- **Fix**: Both entry points now OR-in the dynamic terminal flag: `LeadBottleDesigns.js canRaisePrint(r)` and `DesignRequestNewDetail.js canSendToPrint` = `HARDCODED_KEYS.includes(current_state_key) || current_state_is_terminal`. Backend already returns `current_state_is_terminal` on both the list (`?lead_id=&no_limit=true`) and detail endpoints.
+- **Verified**: DRN-2026-0001 (production_completed) shows Print Request in Customer Branding + Send-for-Printing on detail; submitted requests stay hidden; dialog opens; migrated MR-2026-0020 regression intact.
+
+
 ## 2026-07-06 — 🐛 Fix: Print Request button hidden on migrated (MR-prefix) design requests in Customer Branding ✅ (testing_agent iteration_300: frontend 100%)
 - **Reported**: Migrated MR-prefix design requests in a finalized state didn't show the "Print Request" button in a Lead's Customer Branding section.
 - **Root cause** (`components/LeadBottleDesigns.js`): button gated by strictly-terminal state AND `isAssignedToMe(...)`. Migrated MR requests are assigned to the "Design" dept, but a CEO in Sales/Marketing failed the assignment check → button hidden. This differed from the canonical detail-page "Send for Printing" gating which is state-only.
