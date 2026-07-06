@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-07-06 — 🐛 Fix: Print Request button hidden on migrated (MR-prefix) design requests in Customer Branding ✅ (testing_agent iteration_300: frontend 100%)
+- **Reported**: Migrated MR-prefix design requests in a finalized state didn't show the "Print Request" button in a Lead's Customer Branding section.
+- **Root cause** (`components/LeadBottleDesigns.js`): button gated by strictly-terminal state AND `isAssignedToMe(...)`. Migrated MR requests are assigned to the "Design" dept, but a CEO in Sales/Marketing failed the assignment check → button hidden. This differed from the canonical detail-page "Send for Printing" gating which is state-only.
+- **Fix**: Replaced gating with `canRaisePrint(r)` = `current_state_key in ['final_approved','production_in_progress','production_completed'] || current_state_is_terminal`. Removed the `isAssignedToMe`/`useAuth` usage. Now mirrors `DesignRequestNewDetail.js` line 598.
+- **Verified**: MR-2026-0020 (final_approved) shows the button for the CEO (not in Design dept); MR-2026-0017 (submitted) does not; dialog opens; detail-page Send-for-Printing regression intact.
+
+
 ## 2026-07-05 — Design Requests module rename + RBAC swap, lead→new-module routing, and per-type default icons ✅ (testing_agent iteration_289: backend 100%, frontend all pass after icon-dialog fix)
 ### Task A — Rename & RBAC
 - **Renamed** the OLD module `marketing_requests` → **"Design Requests - OLD"** (route /marketing-requests, hidden from menu except CEO/Admin/System Admin) and `design_requests_new` → **"Design Requests"** (route /design-requests-new). Updated MODULE_LABELS, DashboardLayout nav (3 menus), NavigationContext titles, and page H1s (`DesignRequestsNew.js`, `MarketingRequests.js`, `DesignRequestNewDetail.js`).
