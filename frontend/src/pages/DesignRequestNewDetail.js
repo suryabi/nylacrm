@@ -24,7 +24,7 @@ import {
   Tag, Calendar, Building2, Image as ImageIcon, Link as LinkIcon,
   UserCircle, ShieldCheck, Users, Download, Trash2,
   Eye, FileImage, FileSpreadsheet, Presentation, Film, Music, FileArchive, File,
-  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy, Printer, Flame, Lock,
+  CheckCircle2, RotateCcw, Hourglass, History, CalendarCheck, Pencil, Copy, Printer, Flame, Lock, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
@@ -561,8 +561,12 @@ export default function DesignRequestNewDetail() {
     });
     const agg = Object.values(aggMap).sort((a, b) => b.ms - a.ms);
     const backfilled = hist.some((h) => h.backfilled);
-    return { segments, total, agg, backfilled };
+    const currentMs = segments.length ? segments[segments.length - 1].ms : 0;
+    return { segments, total, agg, backfilled, currentMs };
   }, [req]);
+  const [statusHistoryOpen, setStatusHistoryOpen] = useState(false);
+  const daysInStatus = statusTimeline.currentMs > 0 ? Math.max(1, Math.ceil(statusTimeline.currentMs / 86400000)) : 0;
+  const totalDaysElapsed = statusTimeline.total > 0 ? Math.max(daysInStatus, Math.ceil(statusTimeline.total / 86400000)) : 0;
   const blockedTransitions = useMemo(() => transitions.filter(t => !t.allowed), [transitions]);
 
   const confirmDeleteFile = async () => {
@@ -692,6 +696,15 @@ export default function DesignRequestNewDetail() {
                 </Badge>
               )}
               <AgePill createdAt={req.created_at} />
+              {totalDaysElapsed > 0 && (
+                <span
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200"
+                  title={`In current status for ${daysInStatus} day(s) · ${totalDaysElapsed} day(s) total since raised`}
+                  data-testid="mr-status-days"
+                >
+                  <Clock className="h-3 w-3 text-emerald-500" /> {daysInStatus} / {totalDaysElapsed} days
+                </span>
+              )}
             </div>
             <div className="flex items-start gap-3.5">
               <div className="hidden sm:flex h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white items-center justify-center shadow-md shadow-emerald-600/20 shrink-0">
@@ -703,12 +716,6 @@ export default function DesignRequestNewDetail() {
             </div>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5 text-sm text-slate-500 sm:pl-[62px]">
               <span className="flex items-center gap-1.5"><Building2 className="h-4 w-4 text-emerald-500" /> {req.assigned_department_name || '—'}</span>
-              {req.assigned_user_name && (
-                <span className="flex items-center gap-1.5"><UserCircle className="h-4 w-4 text-emerald-500" /> {req.assigned_user_name}</span>
-              )}
-              {req.assigned_role && (
-                <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-500" /> Role: {req.assigned_role}</span>
-              )}
               {(req.lead_company || req.lead_name) && (
                 <span className="flex items-center gap-1.5 lg:hidden" data-testid="mr-lead-tag">
                   <Users className="h-4 w-4 text-emerald-500" /> Lead: {req.lead_company || req.lead_name}
@@ -765,20 +772,53 @@ export default function DesignRequestNewDetail() {
             </div>
           </div>
 
-          {(req.lead_company || req.lead_name) && (
-            <div className="hidden lg:flex items-center gap-3 rounded-2xl bg-emerald-50/70 border border-emerald-100 px-4 py-3 w-64 shrink-0" data-testid="mr-hero-lead">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shrink-0 shadow-sm shadow-emerald-600/20">
-                <Users className="h-5 w-5 text-white" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Associated Lead</p>
-                <p className="text-sm font-bold text-slate-900 truncate">{req.lead_company || req.lead_name}</p>
-                {req.lead_company && req.lead_name && req.lead_company !== req.lead_name && (
-                  <p className="text-[11px] text-slate-500 truncate">{req.lead_name}</p>
-                )}
-              </div>
+          {/* Right rail: prominent assignee + associated lead */}
+          <div className="flex flex-col gap-3 w-full lg:w-64 lg:shrink-0">
+            <div className="rounded-2xl bg-white border border-emerald-100 px-4 py-3 shadow-sm" data-testid="mr-assigned-to">
+              <p className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold flex items-center gap-1.5">
+                <UserCircle className="h-3.5 w-3.5" /> Currently Assigned To
+              </p>
+              {req.assigned_user_name ? (
+                <div className="flex items-center gap-2.5 mt-2">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-sm">
+                    {getInitials(req.assigned_user_name)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">{req.assigned_user_name}</p>
+                    <p className="text-[11px] text-slate-500 truncate">
+                      {req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : 'Team member')}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5 mt-2">
+                  <div className="w-9 h-9 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-600 flex items-center justify-center shrink-0">
+                    {req.assigned_role ? <ShieldCheck className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">
+                      {req.assigned_department_name || (req.assigned_role ? `Role: ${req.assigned_role}` : 'Unassigned')}
+                    </p>
+                    <p className="text-[11px] text-slate-500 truncate">{req.assigned_department_name ? 'Department' : ''}</p>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+            {(req.lead_company || req.lead_name) && (
+              <div className="hidden lg:flex items-center gap-3 rounded-2xl bg-emerald-50/70 border border-emerald-100 px-4 py-3" data-testid="mr-hero-lead">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shrink-0 shadow-sm shadow-emerald-600/20">
+                  <Users className="h-5 w-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Associated Lead</p>
+                  <p className="text-sm font-bold text-slate-900 truncate">{req.lead_company || req.lead_name}</p>
+                  {req.lead_company && req.lead_name && req.lead_company !== req.lead_name && (
+                    <p className="text-[11px] text-slate-500 truncate">{req.lead_name}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -994,77 +1034,20 @@ export default function DesignRequestNewDetail() {
         </CardContent>
       </Card>
 
-      {/* Status history — time spent in each status */}
-      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]" data-testid="mr-status-history">
-        <CardContent className="p-5 space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-              <History className="h-4 w-4 text-emerald-600" /> Status History
-            </h2>
-            <AgePill createdAt={req.created_at} />
-          </div>
-
-          {/* Proportional bar */}
-          <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-slate-100" title="Time distribution across statuses">
-            {statusTimeline.segments.map((s, i) => (
-              <div
-                key={i}
-                style={{ width: `${(s.ms / statusTimeline.total) * 100}%`, backgroundColor: s.state_color || '#94a3b8' }}
-                title={`${s.state_label}: ${fmtDuration(s.ms)}`}
-              />
-            ))}
-          </div>
-
-          {/* Aggregated time-in-status (primary ask: days at each status) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {statusTimeline.agg.map((a) => (
-              <div key={a.state_key} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2" data-testid={`mr-status-agg-${a.state_key}`}>
-                <span className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: a.state_color }} />
-                  <span className="text-sm text-slate-700 truncate">{a.state_label}</span>
-                </span>
-                <span className="text-sm font-semibold text-slate-900 shrink-0">{fmtDuration(a.ms)}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Chronological journey */}
-          <div className="pt-1">
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Journey</p>
-            <div className="space-y-0">
-              {statusTimeline.segments.map((s, i) => (
-                <div key={i} className="flex items-start gap-3" data-testid={`mr-status-segment-${i}`}>
-                  <div className="flex flex-col items-center">
-                    <span className="w-3 h-3 rounded-full mt-1 shrink-0 ring-2 ring-white" style={{ backgroundColor: s.state_color }} />
-                    {i < statusTimeline.segments.length - 1 && <span className="w-px flex-1 bg-slate-200 my-0.5 min-h-[24px]" />}
-                  </div>
-                  <div className="flex-1 pb-3 min-w-0">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-slate-800">{s.state_label}</span>
-                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                        {s.ongoing ? `${fmtDuration(s.ms)} (ongoing)` : fmtDuration(s.ms)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {fmtDate(s.entered_at, 'dd MMM yyyy, hh:mm a')}{s.by_user_name ? ` · ${s.by_user_name}` : ''}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {statusTimeline.backfilled && (
-              <p className="text-[11px] text-amber-600 mt-1">Detailed history wasn&apos;t tracked before this request&apos;s earlier transitions — showing time in the current status from creation.</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Comments timeline */}
-      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
+      {/* Comments & Activity — composer on top, newest first */}
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]" data-testid="mr-comments-activity">
         <CardContent className="p-5 space-y-3">
           <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
             <MessageSquare className="h-4 w-4 text-emerald-600" /> Comments & Activity
           </h3>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <MentionTextarea rows={2} value={comment} onChange={setComment} placeholder="Add a comment… (type @ to mention a teammate)" testid="mr-comment-input" />
+            </div>
+            <Button onClick={addComment} size="sm" disabled={!comment.trim()} className="bg-emerald-600 hover:bg-emerald-700 self-start" data-testid="mr-comment-send-btn">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
           <div className="space-y-2">
             {(req.comments || []).slice().reverse().map((c) => (
               <div key={c.id} className={`text-xs p-2.5 rounded-md border ${c.kind === 'comment' ? 'bg-white border-slate-200' : 'bg-emerald-50/40 border-emerald-100 italic text-slate-700'}`}>
@@ -1082,14 +1065,83 @@ export default function DesignRequestNewDetail() {
               </div>
             ))}
           </div>
-          <div className="flex gap-2 pt-1">
-            <div className="flex-1">
-              <MentionTextarea rows={2} value={comment} onChange={setComment} placeholder="Add a comment… (type @ to mention a teammate)" testid="mr-comment-input" />
-            </div>
-            <Button onClick={addComment} size="sm" disabled={!comment.trim()} className="bg-emerald-600 hover:bg-emerald-700 self-start" data-testid="mr-comment-send-btn">
-              <Send className="h-4 w-4" />
-            </Button>
-          </div>
+        </CardContent>
+      </Card>
+
+      {/* Status history — collapsible, collapsed by default */}
+      <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]" data-testid="mr-status-history">
+        <CardContent className="p-5 space-y-4">
+          <button
+            type="button"
+            onClick={() => setStatusHistoryOpen((o) => !o)}
+            className="w-full flex items-center justify-between flex-wrap gap-2 text-left"
+            data-testid="mr-status-history-toggle"
+          >
+            <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+              <History className="h-4 w-4 text-emerald-600" /> Status History
+            </h2>
+            <span className="flex items-center gap-2">
+              <AgePill createdAt={req.created_at} />
+              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${statusHistoryOpen ? 'rotate-180' : ''}`} />
+            </span>
+          </button>
+
+          {statusHistoryOpen && (
+            <>
+              {/* Proportional bar */}
+              <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-slate-100" title="Time distribution across statuses">
+                {statusTimeline.segments.map((s, i) => (
+                  <div
+                    key={i}
+                    style={{ width: `${(s.ms / statusTimeline.total) * 100}%`, backgroundColor: s.state_color || '#94a3b8' }}
+                    title={`${s.state_label}: ${fmtDuration(s.ms)}`}
+                  />
+                ))}
+              </div>
+
+              {/* Aggregated time-in-status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {statusTimeline.agg.map((a) => (
+                  <div key={a.state_key} className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2" data-testid={`mr-status-agg-${a.state_key}`}>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: a.state_color }} />
+                      <span className="text-sm text-slate-700 truncate">{a.state_label}</span>
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900 shrink-0">{fmtDuration(a.ms)}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Chronological journey */}
+              <div className="pt-1">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">Journey</p>
+                <div className="space-y-0">
+                  {statusTimeline.segments.map((s, i) => (
+                    <div key={i} className="flex items-start gap-3" data-testid={`mr-status-segment-${i}`}>
+                      <div className="flex flex-col items-center">
+                        <span className="w-3 h-3 rounded-full mt-1 shrink-0 ring-2 ring-white" style={{ backgroundColor: s.state_color }} />
+                        {i < statusTimeline.segments.length - 1 && <span className="w-px flex-1 bg-slate-200 my-0.5 min-h-[24px]" />}
+                      </div>
+                      <div className="flex-1 pb-3 min-w-0">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-slate-800">{s.state_label}</span>
+                          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            {s.ongoing ? `${fmtDuration(s.ms)} (ongoing)` : fmtDuration(s.ms)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {fmtDate(s.entered_at, 'dd MMM yyyy, hh:mm a')}{s.by_user_name ? ` · ${s.by_user_name}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {statusTimeline.backfilled && (
+                  <p className="text-[11px] text-amber-600 mt-1">Detailed history wasn&apos;t tracked before this request&apos;s earlier transitions — showing time in the current status from creation.</p>
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
         </div>

@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only verification of DesignRequestNewDetail UI refinements on MR-2026-0006. All 5 requested behaviors are working: (1) prominent 'Currently Assigned To' card on right rail (mr-assigned-to) with label + assignee/department/role fallback, (2) status-days pill shows 'X / Y days' (mr-status-days -> '1 / 1 days'), (3) DOM/visual order: mr-comments-activity precedes mr-status-history (comments top 1052px < history top 1724px), (4) composer (mr-comment-input + mr-comment-send-btn) sits at TOP of comments card and activity entries are in descending chronological order (06 Jul 02:59 AM → 05 Jun 11:14 AM), (5) Status History card is collapsed by default (cardHeight 64.5px = only header/toggle) and expands to 383.5px after clicking mr-status-history-toggle, re-collapses on second click. Assignee is no longer shown inline in the meta row (meta shows Department, Due, Est finish, lead-times, Raised by only).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "DesignRequestNewDetail — Status History (expanded)", "issues": ["Timeline aggregate labels show 'NaNm' for the first/oldest segment when its computed ms is 0 or invalid (segment before recorded history). Not part of this task but visible in the expanded Status History section (see screenshot mr_status_history_expanded.png)."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional (not in task scope): React key warning fires from DesignRequestNewDetail render — 'Each child in a list should have a unique key prop.' Likely in one of the mapped lists (activity/comments/history segments). Non-blocking but should be fixed.",
+    "Optional: The 'X / Y days' pill shows '1 / 1 days' on MR-2026-0006 while the adjacent AgePill says '30 days old'. Because daysInStatus/totalDaysElapsed are derived from statusTimeline.total (sum of history segments) rather than from created_at, they under-report when the request had periods without recorded history entries. Consider computing totalDaysElapsed from req.created_at to align with AgePill semantics ('total days since raised' as the spec states)."
+  ],
+  "critical_code_review_comments": [
+    "DesignRequestNewDetail.js is 1496 lines — exceeds the 700-line guideline. Consider splitting header/right-rail/comments/status-history into sub-components.",
+    "totalDaysElapsed is currently derived from statusTimeline.total (sum of segments) but the spec text says 'total days since raised' — should probably use (now - req.created_at) to match the AgePill label."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100%"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None — used existing MR-2026-0006 (id 537081ec-e022-4d26-a39c-25045cf2e6ee).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "MR-2026-0006 route: /design-requests-new/537081ec-e022-4d26-a39c-25045cf2e6ee. Key testids exercised: mr-assigned-to, mr-status-days, mr-comments-activity, mr-comment-input, mr-comment-send-btn, mr-status-history, mr-status-history-toggle. DOM ordering + toggle expand/collapse confirmed via JS eval (compareDocumentPosition and card getBoundingClientRect().height 64.5 → 383.5 → 64.5).",
+  "rca of the issue": "No blocking issues found. The React 'unique key' warning originates from DesignRequestNewDetail render (console reported during page render) — likely a .map() without a stable key. Recommend running `grep -n \\\".map(\\\" DesignRequestNewDetail.js` and ensuring each returned JSX element has a stable key (avoid using index alone if items can reorder)."
+}
