@@ -1296,3 +1296,12 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - FIX (LeadBottleDesigns.js): monthlyVolume = res.data.monthly_bottles ?? current_volume; passed as defaultMonthlyVolume to the dialog.
 - Verified: testing_agent iteration_293 — 100% (API returns 2500/1800 for Patni Plaza/Taj Sarees; dialog pre-fills those values e2e). Temp test DRN docs cleaned up.
 - Minor (noted, not fixed): LeadDetail logs a 'LeadDetail Opportunity Check' repeatedly per render (non-blocking; candidate for memoization).
+
+## 2026-06 — Design Request detail: header + comments + status history UX
+- Work Versions redesign (prev turn, iteration 294): Choose/Delete buttons enlarged (h-11) and moved beside the file preview (side-by-side) to cut height. VERIFIED 100%.
+- Link URL validation (NewDesignRequestNew.js, iteration 294): Social Media / File Links now accept only http(s) URLs — inline red error + submit blocked otherwise. VERIFIED 100%.
+- Header (DesignRequestNewDetail.js): removed assignee from inline meta row; added a prominent "Currently Assigned To" card on the right rail (data-testid mr-assigned-to) with avatar + name + dept/role fallback. Added a status-days pill (mr-status-days) "X / Y days" = days in current status / total days since raised.
+- Comments & Activity (mr-comments-activity) now renders ABOVE Status History; composer moved to TOP of the card; comments newest-first (descending).
+- Status History (mr-status-history) is now collapsible and COLLAPSED by default (toggle mr-status-history-toggle, chevron rotates).
+- VERIFIED iteration 295 (100% frontend). Post-test fixes: days now derived from req.created_at (was under-reporting from segment sums); fmtDuration guards NaN (was showing "NaNm" for pre-history segment).
+- KNOWN (non-blocking): a React "unique key" console warning persists on this page (pre-existing; primary maps all have keys); DesignRequestNewDetail.js is ~1500 lines — candidate for component split.

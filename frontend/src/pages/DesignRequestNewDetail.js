@@ -50,7 +50,7 @@ const getInitials = (name) => {
 const ageDays = (s) => { try { return Math.max(0, Math.floor((Date.now() - parseISO(s).getTime()) / 86400000)); } catch { return null; } };
 const ageLabel = (s) => { const n = ageDays(s); if (n === null) return '—'; return n === 0 ? 'Today' : n === 1 ? '1 day old' : `${n} days old`; };
 const fmtDuration = (ms) => {
-  if (ms < 0) ms = 0;
+  if (!Number.isFinite(ms) || ms < 0) ms = 0;
   const days = Math.floor(ms / 86400000);
   const hours = Math.floor((ms % 86400000) / 3600000);
   const mins = Math.floor((ms % 3600000) / 60000);
@@ -565,8 +565,16 @@ export default function DesignRequestNewDetail() {
     return { segments, total, agg, backfilled, currentMs };
   }, [req]);
   const [statusHistoryOpen, setStatusHistoryOpen] = useState(false);
-  const daysInStatus = statusTimeline.currentMs > 0 ? Math.max(1, Math.ceil(statusTimeline.currentMs / 86400000)) : 0;
-  const totalDaysElapsed = statusTimeline.total > 0 ? Math.max(daysInStatus, Math.ceil(statusTimeline.total / 86400000)) : 0;
+  const { daysInStatus, totalDaysElapsed } = useMemo(() => {
+    const DAY = 86400000;
+    const createdMs = req?.created_at ? new Date(req.created_at).getTime() : null;
+    const segs = statusTimeline.segments;
+    const curEnteredMs = segs.length ? new Date(segs[segs.length - 1].entered_at).getTime() : createdMs;
+    const now = Date.now();
+    const inStatus = Number.isFinite(curEnteredMs) ? Math.max(1, Math.ceil((now - curEnteredMs) / DAY)) : 0;
+    const total = Number.isFinite(createdMs) ? Math.max(inStatus, Math.ceil((now - createdMs) / DAY)) : 0;
+    return { daysInStatus: inStatus, totalDaysElapsed: total };
+  }, [req, statusTimeline]);
   const blockedTransitions = useMemo(() => transitions.filter(t => !t.allowed), [transitions]);
 
   const confirmDeleteFile = async () => {
