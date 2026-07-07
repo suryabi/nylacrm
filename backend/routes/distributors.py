@@ -8540,14 +8540,29 @@ async def get_stock_dashboard(
             return 0
 
     def _item_crates(item: dict) -> int:
-        """Stock-In / Stock-Out / delivery line items store `quantity` = number
-        of packages and `packaging_units` = bottles per package. The base UOM is
-        BOTTLES, so a line's contribution is `quantity × packaging_units`. If no
-        packaging was chosen (packaging_units unset/≤0) the quantity is already
-        in bottles and is used as-is."""
+        """Return a line item's contribution in the base UOM (bottles).
+
+        Two historical storage models coexist (the "code change between
+        deliveries" the user observed):
+          • NEW — the item carries a `packages` field (> 0). Here `quantity` is
+            ALREADY the base-unit total (quantity == packages × packaging_units).
+            Use `quantity` as-is; multiplying by packaging_units again would
+            double-count (the crates-counted-as-bottles bug, e.g. 150 → 2250).
+          • OLD — no `packages` field but packaging_units > 1. Here `quantity` is
+            the number of packages, so the base total is quantity × packaging_units.
+        Plain lines (no packaging chosen) store the base quantity directly."""
         qty = int(item.get('quantity') or 0)
         pu = int(item.get('packaging_units') or 0)
-        return qty * pu if pu > 0 else qty
+        pk = item.get('packages')
+        try:
+            pk = int(pk) if pk not in (None, "") else 0
+        except (TypeError, ValueError):
+            pk = 0
+        if pk > 0:
+            return qty            # NEW model: quantity is already base units
+        if pu > 1:
+            return qty * pu       # OLD model: quantity is number of packages
+        return qty
 
     # === 1. STOCK IN: Shipments received (only delivered shipments) ===
     delivered_shipment_ids = await db.distributor_shipments.distinct(
@@ -8556,7 +8571,7 @@ async def get_stock_dashboard(
     )
     shipment_items = await db.distributor_shipment_items.find(
         {"tenant_id": tenant_id, "shipment_id": {"$in": delivered_shipment_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1, "packages": 1}
     ).to_list(50000)
     
     stock_in_by_sku = {}
@@ -8744,7 +8759,7 @@ async def get_stock_dashboard(
     )
     delivery_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": delivered_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1, "packages": 1}
     ).to_list(50000)
     
     stock_out_by_sku = {}
@@ -8768,7 +8783,7 @@ async def get_stock_dashboard(
     )
     pending_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": pending_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1}
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "packaging_units": 1, "packages": 1}
     ).to_list(50000)
     stock_pending_out_by_sku = {}
     for di in pending_items:
@@ -8796,7 +8811,7 @@ async def get_stock_dashboard(
     
     recent_items = await db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": recent_delivery_ids}},
-        {"_id": 0, "sku_id": 1, "quantity": 1, "delivery_id": 1}
+        {"_id": 0, "sku_id": 1, "quantity": 1, "packaging_units": 1, "packages": 1, "delivery_id": 1}
     ).to_list(50000)
     
     # Map delivery_id -> delivery_date for weekly grouping
