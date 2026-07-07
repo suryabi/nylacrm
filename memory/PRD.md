@@ -19,6 +19,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-07 — Stock-by-SKU crates/bottles toggle + Factory→Master crates fix + Lead/Account detail redesign ✅ DONE
+- **Stock by SKU** table (`StockDashboardTab.jsx`) has a **Bottles / Default Crates** toggle; converts each SKU by its own default crate size, which is shown per row. SKUs without a crate stay in base units.
+- **P0 inventory fix**: `bottles_per_crate` now always resolved (SKU-packaging fallback) in `GET /production/batches/{id}` + `transfer_to_warehouse` (`production_qc.py`), so "Transfer to Master Warehouse" can't treat crates as bottles. Backfill: `backend/scripts/backfill_bottles_per_crate.py` (RUN ON PROD AFTER DEPLOY).
+- **P0 UI redesign**: `LeadDetail.js` & `AccountDetail.js` now have a sticky "On this page" nav + distinct section headers (new `components/detail/{Section,SectionHeader,StickySectionNav}.jsx`). Inner logic untouched. Verified by testing_agent iteration_309 (regressions fixed).
+
+
 ### 2026-07-05 — Design Requests rename + RBAC swap + lead routing + per-type icons ✅ DONE
 - OLD `marketing_requests` → "Design Requests - OLD" (admin-only in menu); `design_requests_new` → "Design Requests" (inherits old module's per-role perms via one-time `dr_rename_migrated` migration in routes/roles.py).
 - Lead-initiated requests (LeadBottleDesigns.js, BottlePreview.js) now create in the NEW module; added `lead_id` filter to design_requests_new list.

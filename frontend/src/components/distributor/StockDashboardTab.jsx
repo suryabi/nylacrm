@@ -116,6 +116,7 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [expandedSku, setExpandedSku] = useState({});
+  const [unitView, setUnitView] = useState('bottles'); // 'bottles' | 'crates'
   // Reset stock dialog state — CEO / System Admin only
   const [resetOpen, setResetOpen] = useState(false);
   const [resetMode, setResetMode] = useState('zero'); // 'zero' | 'purge'
@@ -197,6 +198,26 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
   const t = data.totals || {};
   const bt = data.bottle_tracking || {};
   const skus = data.skus || [];
+
+  // Stock-by-SKU unit view: show each quantity either in the SKU's base unit
+  // (bottles) or converted to that SKU's own default crate. The crate size is
+  // shown per row so the divisor is never ambiguous.
+  const viewCrates = unitView === 'crates';
+  const cellVal = (bottles, sku) => {
+    const b = Number(bottles) || 0;
+    if (!viewCrates) return fmt(b);
+    const u = Number(sku?.default_packaging_units) || 0;
+    if (u > 1) {
+      const n = b / u;
+      return (Number.isInteger(n) ? n : Number(n.toFixed(1))).toLocaleString('en-IN');
+    }
+    return fmt(b); // no multi-unit crate defined → keep base units
+  };
+  const availSub = (sku) => {
+    const b = Number(sku.stock_at_hand) || 0;
+    if (!viewCrates) return pkgEquiv(sku.stock_at_hand, sku); // ≈ default crates
+    return b ? `${fmt(b)} ${sku.base_unit_name || 'units'}` : null; // ≈ base units
+  };
 
   return (
     <div className="space-y-6" data-testid="stock-dashboard">
@@ -373,11 +394,36 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
       {/* SKU-wise Stock Table */}
       <Card data-testid="sku-stock-table">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Package className="h-4 w-4 text-blue-600" />
-            Stock by SKU
-          </CardTitle>
-          <CardDescription>Complete inventory picture per product</CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Package className="h-4 w-4 text-blue-600" />
+                Stock by SKU
+              </CardTitle>
+              <CardDescription>
+                Complete inventory picture per product · showing quantities in{' '}
+                <span className="font-semibold text-slate-600">{viewCrates ? 'default crates' : 'base units (bottles)'}</span>
+              </CardDescription>
+            </div>
+            <div className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 self-start" data-testid="stock-unit-toggle">
+              <button
+                type="button"
+                onClick={() => setUnitView('bottles')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${!viewCrates ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                data-testid="stock-unit-bottles"
+              >
+                Bottles
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnitView('crates')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${viewCrates ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                data-testid="stock-unit-crates"
+              >
+                Default Crates
+              </button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -439,7 +485,8 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                               <p className="font-medium text-slate-800">{sku.sku_name}</p>
                               <div className="flex items-center gap-2 flex-wrap mt-0.5">
                                 <span className="text-[10px] text-slate-400 font-medium" data-testid={`sku-uom-${sku.sku_id}`}>
-                                  in {sku.base_unit_name || 'units'}{sku.default_packaging_units > 1 ? ` · default: ${sku.default_packaging_name}` : ''}
+                                  in {viewCrates && sku.default_packaging_units > 1 ? sku.default_packaging_name : (sku.base_unit_name || 'units')}
+                                  {sku.default_packaging_units > 1 ? ` · 1 ${sku.default_packaging_name} = ${sku.default_packaging_units} ${sku.base_unit_name || 'units'}` : ''}
                                 </span>
                                 {sku.pending_factory_return > 0 && (
                                   <span className="text-[10px] text-purple-600 font-medium">{sku.pending_factory_return} pending factory return</span>
@@ -453,36 +500,36 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                             </div>
                           </div>
                         </td>
-                        <td className="p-3 text-right text-blue-600 font-medium">{fmt(sku.stock_received)}</td>
-                        <td className="p-3 text-right text-emerald-600 font-medium">{fmt(sku.stock_delivered)}</td>
+                        <td className="p-3 text-right text-blue-600 font-medium">{cellVal(sku.stock_received, sku)}</td>
+                        <td className="p-3 text-right text-emerald-600 font-medium">{cellVal(sku.stock_delivered, sku)}</td>
                         <td className={`p-3 text-right font-medium ${sku.stock_pending_out > 0 ? 'text-amber-600' : 'text-slate-300'}`} data-testid={`sku-pending-out-${sku.sku_id}`}>
-                          {sku.stock_pending_out > 0 ? fmt(sku.stock_pending_out) : '-'}
+                          {sku.stock_pending_out > 0 ? cellVal(sku.stock_pending_out, sku) : '-'}
                         </td>
                         <td className={`p-3 text-right font-medium ${sku.empty_bottles_returned > 0 ? 'text-emerald-600' : 'text-slate-300'}`} data-testid={`sku-empty-bottles-${sku.sku_id}`}>
-                          {sku.empty_bottles_returned > 0 ? fmt(sku.empty_bottles_returned) : '-'}
+                          {sku.empty_bottles_returned > 0 ? cellVal(sku.empty_bottles_returned, sku) : '-'}
                         </td>
                         <td className={`p-3 text-right font-medium ${sku.product_returns > 0 ? 'text-amber-600' : 'text-slate-300'}`} data-testid={`sku-product-returns-${sku.sku_id}`}>
-                          {sku.product_returns > 0 ? fmt(sku.product_returns) : '-'}
+                          {sku.product_returns > 0 ? cellVal(sku.product_returns, sku) : '-'}
                         </td>
                         <td className={`p-3 text-right font-medium ${sku.factory_returns > 0 ? 'text-purple-600' : 'text-slate-300'}`}>
-                          {sku.factory_returns > 0 ? fmt(sku.factory_returns) : '-'}
+                          {sku.factory_returns > 0 ? cellVal(sku.factory_returns, sku) : '-'}
                         </td>
                         <td className={`p-3 text-right font-medium ${sku.factory_warehouse_stock > 0 ? 'text-teal-600' : 'text-slate-300'}`}>
-                          {sku.factory_warehouse_stock > 0 ? fmt(sku.factory_warehouse_stock) : '-'}
+                          {sku.factory_warehouse_stock > 0 ? cellVal(sku.factory_warehouse_stock, sku) : '-'}
                         </td>
                         <td className="p-3 text-right">
                           <span className={`font-bold ${sku.stock_at_hand < 0 ? 'text-red-600' : sku.stock_at_hand === 0 ? 'text-slate-400' : 'text-indigo-700'}`} data-testid={`sku-available-${sku.sku_id}`}>
-                            {fmt(sku.stock_at_hand)}
+                            {cellVal(sku.stock_at_hand, sku)}
                           </span>
-                          {pkgEquiv(sku.stock_at_hand, sku) && (
-                            <div className="text-[10px] text-slate-400 font-medium" data-testid={`sku-available-pkg-${sku.sku_id}`}>≈ {pkgEquiv(sku.stock_at_hand, sku)}</div>
+                          {availSub(sku) && (
+                            <div className="text-[10px] text-slate-400 font-medium" data-testid={`sku-available-pkg-${sku.sku_id}`}>≈ {availSub(sku)}</div>
                           )}
                         </td>
                         <td className="p-3 text-right">
                           <StockBar value={sku.pct_stock_at_hand} />
                         </td>
                         <td className="p-3 text-right text-teal-600 font-medium">
-                          {sku.weekly_avg_deliveries > 0 ? fmt(sku.weekly_avg_deliveries) : '-'}
+                          {sku.weekly_avg_deliveries > 0 ? cellVal(sku.weekly_avg_deliveries, sku) : '-'}
                           {sku.weeks_analyzed > 0 && <span className="text-[10px] text-slate-400 ml-1">/{sku.weeks_analyzed}w</span>}
                         </td>
                       </tr>

@@ -35,7 +35,7 @@ export const useActiveSection = (ids = []) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return active;
+  return [active, setActive];
 };
 
 /**
@@ -44,16 +44,17 @@ export const useActiveSection = (ids = []) => {
  */
 export const StickySectionNav = ({ items = [], title = 'On this page', testid = 'section-nav' }) => {
   const ids = items.map((i) => i.id);
-  const active = useActiveSection(ids);
+  const [active, setActive] = useActiveSection(ids);
 
   const handleClick = useCallback((e, id) => {
     e.preventDefault();
     const el = document.getElementById(id);
     if (el) {
+      setActive(id);
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       window.history.replaceState(null, '', `#${id}`);
     }
-  }, []);
+  }, [setActive]);
 
   if (!items.length) return null;
 

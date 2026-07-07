@@ -1716,8 +1716,8 @@ ${userEmail}`;
 
 
           {/* Contact Information */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Contact Information</h2>
+          <Card id="lead-contact" className="p-6 scroll-mt-24 overflow-hidden">
+            <SectionHeader eyebrow="Overview" title="Contact Information" icon={User} testid="header-lead-contact" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center gap-3">
                 <Building2 className="h-5 w-5 text-muted-foreground" />

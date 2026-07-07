@@ -2083,11 +2083,8 @@ ${googleMapsLink}`;
           </Card>
 
           {/* Location */}
-          <Card className="p-4 sm:p-6">
-            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
-              <MapPin className="h-4 w-4 sm:h-5 sm:w-5" />
-              Location
-            </h2>
+          <Card id="acc-location" className="p-4 sm:p-6 scroll-mt-24 overflow-hidden">
+            <SectionHeader eyebrow="Address" title="Location" icon={MapPin} testid="header-acc-location" />
             <div className="grid grid-cols-3 gap-3 sm:gap-4">
               <div>
                 <p className="text-[11px] sm:text-sm text-muted-foreground">City</p>
