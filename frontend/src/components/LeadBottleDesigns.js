@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Card } from './ui/card';
+import { SectionHeader } from './detail/SectionHeader';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
@@ -218,14 +219,15 @@ export const LeadBottleDesigns = ({ leadId, company, hasLogo }) => {
 
   return (
     <Card className="p-4 sm:p-6" data-testid="lead-bottle-designs-card">
-      <div className="flex items-center gap-2 mb-1">
-        <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-          <Wine className="h-4 w-4 sm:h-5 sm:w-5 text-primary" /> Customer branding
-        </h2>
-        {designs.length > 0 && (
+      <SectionHeader
+        eyebrow="Branding"
+        title="Customer branding"
+        icon={Wine}
+        testid="header-customer-branding"
+        actions={designs.length > 0 ? (
           <Badge variant="secondary" data-testid="bottle-designs-count">{designs.length} saved</Badge>
-        )}
-      </div>
+        ) : null}
+      />
       <p className="text-xs text-muted-foreground mb-4">
         Design and request branded artwork &amp; physical samples for {company || 'this lead'}.
       </p>

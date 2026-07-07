@@ -12,6 +12,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Send, Loader2, MessageSquare } from 'lucide-react';
+import { SectionHeader } from './detail/SectionHeader';
 import MentionTextarea, { renderMentionedText } from './MentionTextarea';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -56,11 +57,13 @@ export default function EntityCommentThread({ basePath, title = 'Discussion', te
 
   return (
     <div className="border border-slate-200 rounded-xl p-5 bg-white" data-testid={testid}>
-      <div className="flex items-center gap-2 mb-4">
-        <MessageSquare size={16} className="text-emerald-600" />
-        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
-        <span className="text-xs font-normal text-slate-400">({comments.length})</span>
-      </div>
+      <SectionHeader
+        eyebrow="Collaboration"
+        title={title}
+        icon={MessageSquare}
+        testid="header-comment-thread"
+        actions={<span className="text-xs font-normal text-slate-400">({comments.length})</span>}
+      />
 
       <div className="space-y-3 mb-4">
         {loading ? (

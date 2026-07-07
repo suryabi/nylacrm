@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 312 — Verified the section-header refactor on Lead Detail and Account Detail. Confirmed both pages load top-to-bottom at 1920px with the new prominent SectionHeader (green accent bar + eyebrow + bold title) and NO sticky nav (data-testid lead-section-nav / account-section-nav do not exist). All shared sub-module headers (Contacts, Customer Branding, Invoice Summary, Delivery Orders, Expense Requests, Comment Thread) render the new header and keep their action buttons wired in the SectionHeader `actions` slot. Zero pageerror events on both pages; only pre-auth 401s at initial load. Regression on distributor Stock Dashboard (bb12d90e Brian) holds — Bottles total-received=2,130 / total-available=2,020, Crates total-received=246.7 / total-available=216.3.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL (low priority, naming only): The review request specified data-testid `header-comment-thread` for the Lead Detail Comments section, but LeadDetail.js line 1914 uses its own inline SectionHeader with testid=`header-lead-comments`. The shared EntityCommentThread.jsx does use `header-comment-thread` (and Account Detail correctly exposes it via EntityCommentThread → confirmed present). Either (a) rename the Lead inline header testid to `header-comment-thread` to match the spec, or (b) update the spec to `header-lead-comments`. Functionality is fine either way."
+  ],
+  "critical_code_review_comments": [
+    "LeadDetail.js has its own inline Comments card (lines 1912–1948) that duplicates EntityCommentThread's role. Consider consolidating Lead Detail onto <EntityCommentThread testid=\"lead-comments\" /> like AccountDetail does — would unify the header testid, comment input, mentions, and reduce ~40 lines of duplicated logic.",
+    "InvoiceSummaryCard renders `null` when invoice_count is 0 (line 8). This makes the `header-invoice-summary` testid absent for any lead/account with no invoices this month. Fine, but the review checklist implies always-visible; confirm this is the intended UX (currently the Lead page just skips the section entirely when there are no invoices).",
+    "LeadDetail.js is 2,566 lines — well past the 700-line file-size guideline. Extracting the sub-sections (Documents, Emails, Location, Brand Details, Comments) into their own components under /components/lead/ would make future header refactors like this one atomic."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not tested (frontend-only iteration per request)",
+    "frontend": "100% on functional checks. Lead: 10/13 target headers rendered (header-lead-brand & header-invoice-summary are correctly conditional on data — this test lead has no brand data and no invoices; header-comment-thread is present as header-lead-comments — naming mismatch only). Account: 9/9 target headers rendered, both columns render fully. All action buttons open dialogs / toggle edit mode as expected."
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water). Login: fill email + password + press Enter.",
+  "seed_data_creation": "None. Used the exact IDs in the review request: lead 08c93122-99fc-4587-b31c-559649f29c17, account b529f00e-54b3-4709-92c1-db08137ef0b3, distributor bb12d90e-4d33-4890-ac5f-17573c551b5c.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Detailed evidence collected at 1920px: LEAD (Drive Folder Test Lead): headers rendered in order OPPORTUNITY/Interested-Proposed SKUs (Edit Pricing button), COLLATERAL/Documents (Share via Email), BRANDING/Customer branding, OVERVIEW/Contact Information, PEOPLE/Contacts (Add Contact), COMMUNICATION/Emails, ADDRESS/Location, LOGISTICS/Stock Delivery Requests (New), FINANCE/Expense Requests (New Request), ONLINE PRESENCE/Social Links (Add Link), DISCUSSION/Comments. Missing (correctly conditional): header-lead-brand (no brand data), header-invoice-summary (no invoices). Testid mismatch: header-comment-thread → header-lead-comments (Lead uses inline card, not EntityCommentThread). Functional buttons verified: edit-pricing-btn opens edit mode showing add-proposed-sku-btn + save-pricing-btn + cancel-pricing-btn; add-contact-btn opens dialog; entity-do-new-btn opens dialog; new-expense-btn opens 'New Expense Request' dialog; add-social-link-btn appends an inline row (no dialog by design). ACCOUNT (The Rameshwaram Cafe): all 9 headers present with correct eyebrows (OVERVIEW/PEOPLE/BRANDING/FINANCIALS/ADDRESS/PRICING/LOGISTICS/FINANCE/COLLABORATION). header-acc-invoices shows 'This Month' badge + Create Invoice button; header-acc-pricing shows Edit Pricing button. Right column renders Financial Summary, GST/Tax & Billing, Delivery Address, Payment Terms fully. Create Invoice → dialog opens; Edit Pricing → add-sku-btn + save + cancel appear; entity-do-new-btn → dialog; new-expense-btn → dialog. Stock Dashboard (Brian) untouched: Bottles 2,130/2,020, Crates 246.7/216.3. No pageerror, no functional console errors on either page.",
+  "rca of the issue": "N/A — refactor is clean. Only observation is a testid naming mismatch (header-lead-comments vs header-comment-thread) on the Lead page's inline Comments card, which does not impact user-facing behavior."
+}

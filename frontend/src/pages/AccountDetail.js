@@ -1898,37 +1898,28 @@ ${googleMapsLink}`;
 
           {/* Invoice Summary — second section, right after Account Information */}
           <Card id="acc-invoices" className="p-4 sm:p-6 scroll-mt-24">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-5">
-              <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2 flex-wrap">
-                <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                Invoice Summary
-                <Badge variant="secondary" className="text-[10px] sm:text-xs font-medium">This Month</Badge>
-                {invoiceTotalCount > 0 && (
-                  <Badge variant="outline" className="text-[10px] sm:text-xs">{invoiceTotalCount} Total</Badge>
-                )}
-              </h2>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  size="sm"
-                  onClick={() => setShowCreateInvoice(true)}
-                  data-testid="create-invoice-btn"
-                >
-                  <Plus className="h-4 w-4 mr-1" /> Create Invoice
-                </Button>
-
-                {(user?.role === 'CEO' || user?.role === 'System Admin') && (invoiceData?.invoices?.length || 0) > 0 && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setShowDeleteAllInvoicesDialog(true)}
-                    data-testid="delete-all-invoices-btn"
-                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" /> Delete All Invoices
+            <SectionHeader
+              eyebrow="Financials"
+              title="Invoice Summary"
+              icon={FileText}
+              testid="header-acc-invoices"
+              actions={
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <Badge variant="secondary" className="text-[10px] sm:text-xs font-medium">This Month</Badge>
+                  {invoiceTotalCount > 0 && (
+                    <Badge variant="outline" className="text-[10px] sm:text-xs">{invoiceTotalCount} Total</Badge>
+                  )}
+                  <Button size="sm" onClick={() => setShowCreateInvoice(true)} data-testid="create-invoice-btn">
+                    <Plus className="h-4 w-4 mr-1" /> Create Invoice
                   </Button>
-                )}
-              </div>
-            </div>
+                  {(user?.role === 'CEO' || user?.role === 'System Admin') && (invoiceData?.invoices?.length || 0) > 0 && (
+                    <Button size="sm" variant="outline" onClick={() => setShowDeleteAllInvoicesDialog(true)} data-testid="delete-all-invoices-btn" className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700">
+                      <Trash2 className="h-4 w-4 mr-1" /> Delete All Invoices
+                    </Button>
+                  )}
+                </div>
+              }
+            />
             {loadingInvoices ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -2088,38 +2079,41 @@ ${googleMapsLink}`;
 
           {/* SKU Pricing Grid */}
           <Card id="acc-pricing" className="p-4 sm:p-6 scroll-mt-24">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <h2 className="text-base sm:text-lg font-semibold">SKU Pricing</h2>
-              <div className="flex items-center gap-2">
-                {skuEditing && (
-                  <Button size="sm" variant="outline" onClick={handleAddSKU} data-testid="add-sku-btn">
-                    <Plus className="h-4 w-4 mr-1" /> Add SKU
-                  </Button>
-                )}
-                {/* Section-level inline edit — only when NOT in the global
-                    account edit flow (that flow has its own Save button). */}
-                {!isEditing && (
-                  pricingEditing ? (
-                    <>
-                      <Button size="sm" variant="ghost" onClick={handleCancelPricing} data-testid="cancel-pricing-btn">
-                        Cancel
-                      </Button>
-                      <Button size="sm" onClick={handleSavePricing} disabled={savingPricing} data-testid="save-pricing-btn">
-                        {savingPricing ? (
-                          <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving...</>
-                        ) : (
-                          <><Save className="h-4 w-4 mr-1" /> Save</>
-                        )}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => setPricingEditing(true)} data-testid="edit-pricing-btn">
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit Pricing
+            <SectionHeader
+              eyebrow="Pricing"
+              title="SKU Pricing"
+              icon={Package}
+              testid="header-acc-pricing"
+              actions={
+                <>
+                  {skuEditing && (
+                    <Button size="sm" variant="outline" onClick={handleAddSKU} data-testid="add-sku-btn">
+                      <Plus className="h-4 w-4 mr-1" /> Add SKU
                     </Button>
-                  )
-                )}
-              </div>
-            </div>
+                  )}
+                  {!isEditing && (
+                    pricingEditing ? (
+                      <>
+                        <Button size="sm" variant="ghost" onClick={handleCancelPricing} data-testid="cancel-pricing-btn">
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleSavePricing} disabled={savingPricing} data-testid="save-pricing-btn">
+                          {savingPricing ? (
+                            <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving...</>
+                          ) : (
+                            <><Save className="h-4 w-4 mr-1" /> Save</>
+                          )}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => setPricingEditing(true)} data-testid="edit-pricing-btn">
+                        <Pencil className="h-3.5 w-3.5 mr-1" /> Edit Pricing
+                      </Button>
+                    )
+                  )}
+                </>
+              }
+            />
             
             {skuPricing.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">

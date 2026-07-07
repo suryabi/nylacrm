@@ -5,6 +5,7 @@ import { Plus, Pencil, Trash2, Loader2, Users, Mail, Phone, Building2 } from 'lu
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
+import { SectionHeader } from './detail/SectionHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './ui/select';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './ui/table';
@@ -91,10 +92,13 @@ export default function EntityContactsSection({ parentType, parentId }) {
 
   return (
     <Card className="p-4 sm:p-6" data-testid="entity-contacts-section">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2"><Users className="h-5 w-5 text-primary" /> Contacts</h2>
-        <Button size="sm" onClick={openAdd} data-testid="add-contact-btn"><Plus className="h-4 w-4 mr-1.5" /> Add Contact</Button>
-      </div>
+      <SectionHeader
+        eyebrow="People"
+        title="Contacts"
+        icon={Users}
+        testid="header-contacts"
+        actions={<Button size="sm" onClick={openAdd} data-testid="add-contact-btn"><Plus className="h-4 w-4 mr-1.5" /> Add Contact</Button>}
+      />
 
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { FileText } from 'lucide-react';
+import { SectionHeader } from './detail/SectionHeader';
 
 export default function InvoiceSummaryCard({ invoiceData }) {
   if (!invoiceData || !invoiceData.invoice_count) {
@@ -14,13 +15,13 @@ export default function InvoiceSummaryCard({ invoiceData }) {
 
   return (
     <Card className="p-6" data-testid="invoice-summary-card">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <FileText className="h-5 w-5 text-primary" />
-          Invoice Summary
-        </h2>
-        <Badge variant="outline">{invoiceData.invoice_count} Invoices</Badge>
-      </div>
+      <SectionHeader
+        eyebrow="Financials"
+        title="Invoice Summary"
+        icon={FileText}
+        testid="header-invoice-summary"
+        actions={<Badge variant="outline">{invoiceData.invoice_count} Invoices</Badge>}
+      />
       
       <div className="grid grid-cols-3 gap-3 mb-5">
         <div className="bg-green-50 rounded-lg p-4 border border-green-100">

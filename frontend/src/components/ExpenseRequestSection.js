@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { SectionHeader } from './detail/SectionHeader';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -236,19 +237,13 @@ export default function ExpenseRequestSection({ entityType, entityId, entityName
   
   return (
     <Card className="p-6" data-testid="expense-request-section">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Receipt className="h-5 w-5 text-primary" />
-          Expense Requests
-        </h2>
-        <Button
-          size="sm"
-          onClick={() => setShowForm(true)}
-          data-testid="new-expense-btn"
-        >
-          <Plus className="h-4 w-4 mr-1" /> New Request
-        </Button>
-      </div>
+      <SectionHeader
+        eyebrow="Finance"
+        title="Expense Requests"
+        icon={Receipt}
+        testid="header-expense-requests"
+        actions={<Button size="sm" onClick={() => setShowForm(true)} data-testid="new-expense-btn"><Plus className="h-4 w-4 mr-1" /> New Request</Button>}
+      />
       
       {/* Expense History Table */}
       {loading ? (

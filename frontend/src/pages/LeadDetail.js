@@ -1230,58 +1230,29 @@ ${userEmail}`;
             )}
 
             {/* Header */}
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <h2 className="text-sm sm:text-lg font-semibold flex items-center gap-2">
-                <Package className="h-4 w-4 sm:h-5 sm:w-5" />
-                <span className="hidden sm:inline">Interested / Proposed SKUs</span>
-                <span className="sm:hidden">SKUs</span>
-              </h2>
-              <div className="flex items-center gap-2">
-                {isEditingPricing ? (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleCancelPricingEdit}
-                      data-testid="cancel-pricing-btn"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSaveProposedPricing}
-                      disabled={savingPricing}
-                      data-testid="save-pricing-btn"
-                    >
-                      {savingPricing ? (
-                        <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving</>
-                      ) : (
-                        <><Save className="h-4 w-4 mr-1" /> Save</>
-                      )}
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setIsEditingPricing(true)}
-                    data-testid="edit-pricing-btn"
-                  >
-                    Edit Pricing
-                  </Button>
-                )}
-                {isEditingPricing && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleAddProposedSKU}
-                    data-testid="add-proposed-sku-btn"
-                  >
-                    <Plus className="h-4 w-4 mr-1" /> Add SKU
-                  </Button>
-                )}
-              </div>
-            </div>
+            <SectionHeader
+              eyebrow="Opportunity"
+              title="Interested / Proposed SKUs"
+              icon={Package}
+              testid="header-lead-skus"
+              actions={
+                <>
+                  {isEditingPricing ? (
+                    <>
+                      <Button size="sm" variant="outline" onClick={handleCancelPricingEdit} data-testid="cancel-pricing-btn">Cancel</Button>
+                      <Button size="sm" onClick={handleSaveProposedPricing} disabled={savingPricing} data-testid="save-pricing-btn">
+                        {savingPricing ? (<><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Saving</>) : (<><Save className="h-4 w-4 mr-1" /> Save</>)}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => setIsEditingPricing(true)} data-testid="edit-pricing-btn">Edit Pricing</Button>
+                  )}
+                  {isEditingPricing && (
+                    <Button size="sm" variant="outline" onClick={handleAddProposedSKU} data-testid="add-proposed-sku-btn"><Plus className="h-4 w-4 mr-1" /> Add SKU</Button>
+                  )}
+                </>
+              }
+            />
 
             {/* No monthly bottles warning */}
             {proposedSkuPricing.length > 0 && getMonthlyBottles() === 0 && (
@@ -1444,14 +1415,19 @@ ${userEmail}`;
             )}
           </Card>
           {/* Documents — Proposal + Deck (side by side) */}
-          <div id="lead-documents" className="flex items-center justify-between mt-2 scroll-mt-24" data-testid="lead-documents-header">
-            <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-              <FileText className="h-4 w-4 sm:h-5 sm:w-5" /> Documents
-            </h2>
-            <ShareButton
-              documentType="lead_proposal" documentId={id} leadId={id}
-              label="Share via Email" variant="outline" size="sm"
-              testId={`lead-docs-${id}`}
+          <div id="lead-documents" className="mt-2 scroll-mt-24" data-testid="lead-documents-header">
+            <SectionHeader
+              eyebrow="Collateral"
+              title="Documents"
+              icon={FileText}
+              testid="header-lead-documents"
+              actions={
+                <ShareButton
+                  documentType="lead_proposal" documentId={id} leadId={id}
+                  label="Share via Email" variant="outline" size="sm"
+                  testId={`lead-docs-${id}`}
+                />
+              }
             />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 items-start" data-testid="lead-documents-section">
