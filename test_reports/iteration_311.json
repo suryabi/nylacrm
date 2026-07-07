@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 311 — Verified the Stock-by-SKU TOTALS row now respects the Bottles/Default-Crates toggle in /app/frontend/src/components/distributor/StockDashboardTab.jsx (new totalCell helper). Frontend-only test. Distributor b8876367 (Surya 1): in Bottles mode tfoot total-received = 42,571 and total-available = 42,570. Clicking Default Crates (data-testid stock-unit-crates) flips the totals to total-received = 2,873, total-available = 2,872, total-empty = 0.1 (fractional as expected), total-wh-stock = 2,822 and label reads 'Total (6 SKUs) · in default crates'. Per-SKU crate values (600 Silver 1,018 + 330 Gold 500 + 330 Silver 500 + 660 Gold 500 + 660 Sparkling 307 (base, no crate) + 20L Premium 48) sum to 2,873 — matches total exactly. Toggling back to Bottles restores 42,571. Active-tab styling switches correctly on stock-unit-bottles / stock-unit-crates (bg-white class asserted). Regression on distributor bb12d90e (Brian) held: Nyla – 660 ml / Sparkling delivered = 24 in BOTH modes (Sparkling has no default crate so it stays as base units in crate view — correct); 600 Silver delivered 64→5.3, received 1,857→154.8; 330 Silver 5→0.2, 166→6.9; 660 Gold 24 received → 2. No NaN/undefined tokens found in either mode across all 8 tfoot testids (total-received, total-delivered, total-reserved, total-empty, total-product-returns, total-factory-returns, total-wh-stock, total-available). No pageerror events, no functional console errors (only two unrelated 401s on pre-auth resource loads at the very start).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "StockDashboardTab.jsx",
+        "issue": "Duplicate data-testid: 'total-product-returns' and 'total-factory-returns' are each used TWICE — on the top SummaryCard AND on the tfoot totals cell. document.querySelectorAll returns 2 elements for each. Testing scripts that select by testid alone will hit the SummaryCard, not the tfoot cell. All 6 other tfoot testids (total-received, total-delivered, total-reserved, total-empty, total-wh-stock, total-available) are unique.",
+        "selector": "[data-testid=\"total-product-returns\"], [data-testid=\"total-factory-returns\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL (low priority): rename the tfoot totals cells 'total-product-returns' and 'total-factory-returns' to 'total-row-product-returns' and 'total-row-factory-returns' (or rename the SummaryCard ones) so each data-testid is unique. Bug fix itself is CORRECT — this is a testability cleanup only."
+  ],
+  "critical_code_review_comments": [
+    "Duplicate data-testid on total-product-returns and total-factory-returns between SummaryCard (top) and tfoot cell (bottom). Violates the 'each data-testid is unique' principle in your own code-review-guidelines and complicates automated testing.",
+    "totalCell(bottlesTotal, field) discards `bottlesTotal` when viewCrates=true and recomputes from Σ per-SKU. That works correctly here because skus[] carries the raw base-unit field, but if a backend total ever includes cross-SKU aggregation the tfoot won't match the top summary. Consider asserting via a small comment that Σ skus[field] must equal t[field] in bottle mode, so drift is caught.",
+    "StockDashboardTab.jsx is now ~800 lines with 3 sub-components (SummaryCard, BottleCard, StockBar, FactoryWarehouseSkuRow) inline. Approaching the 700-line threshold in your guidelines — consider splitting sub-components into /components/distributor/stock/ so future edits stay focused."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "not tested (frontend-only iteration)",
+    "frontend": "100% — all 3 review requirements pass: (1) tfoot totals convert with toggle (42,571↔2,873); (2) Sparkling delivered=24 regression holds in both modes; (3) no NaN/undefined and toggle styling switches correctly"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water). Login: fill email + password + press Enter on password field.",
+  "seed_data_creation": "None. Used existing distributors b8876367-df64-4c55-a382-d5eb3b4b2380 (Surya 1) and bb12d90e-4d33-4890-ac5f-17573c551b5c (Brian).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fix is landed and verified end-to-end via Playwright at 1920px. Key numeric evidence: Surya 1 bottles→crates: total-received 42,571→2,873, total-available 42,570→2,872, total-empty 1→0.1, total-wh-stock 42,300→2,822; label 'Total (6 SKUs)' becomes 'Total (6 SKUs) · in default crates'. Brian bottles→crates: total-received 2,130→246.7, total-delivered 93→29.5, and crucially Sparkling row delivered stays 24 in both modes (base unit fallback). If future iterations touch this component: watch for the duplicate testids noted above, and note that totalCell recomputes Σ per-SKU in crate mode instead of trusting the backend total (so any tenant with per-SKU rounding will accumulate fractional error — currently rendered to 1 decimal which the review notes is expected).",
+  "rca of the issue": "N/A — no bug found in the fix itself. The one minor testability defect (duplicate data-testid on total-product-returns / total-factory-returns) is pre-existing collision between SummaryCard at the top and the newly-added tfoot cell; it does not affect user-facing behavior."
+}

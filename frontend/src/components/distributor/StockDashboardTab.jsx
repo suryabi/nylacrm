@@ -218,6 +218,18 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
     if (!viewCrates) return pkgEquiv(sku.stock_at_hand, sku); // ≈ default crates
     return b ? `${fmt(b)} ${sku.base_unit_name || 'units'}` : null; // ≈ base units
   };
+  // Totals row: in crate view each SKU converts by its OWN crate size, so the
+  // column total = Σ (per-SKU crate value). SKUs without a crate stay in base
+  // units (same as their row). In bottle view we use the backend base totals.
+  const totalCell = (bottlesTotal, field) => {
+    if (!viewCrates) return fmt(bottlesTotal);
+    const sum = skus.reduce((acc, sku) => {
+      const b = Number(sku[field]) || 0;
+      const u = Number(sku.default_packaging_units) || 0;
+      return acc + (u > 1 ? b / u : b);
+    }, 0);
+    return (Number.isInteger(sum) ? sum : Number(sum.toFixed(1))).toLocaleString('en-IN');
+  };
 
   return (
     <div className="space-y-6" data-testid="stock-dashboard">
@@ -653,15 +665,15 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
               {skus.length > 0 && (
                 <tfoot>
                   <tr className="bg-slate-100 border-t-2 font-semibold text-sm">
-                    <td className="p-3 pl-4">Total ({data.sku_count} SKUs)</td>
-                    <td className="p-3 text-right text-blue-700">{fmt(t.stock_received)}</td>
-                    <td className="p-3 text-right text-emerald-700">{fmt(t.stock_delivered)}</td>
-                    <td className="p-3 text-right text-amber-700">{fmt(t.stock_pending_out || 0)}</td>
-                    <td className="p-3 text-right text-emerald-700">{fmt(t.empty_bottles_returned || 0)}</td>
-                    <td className="p-3 text-right text-amber-700">{fmt(t.product_returns || 0)}</td>
-                    <td className="p-3 text-right text-purple-700">{fmt(t.factory_returns)}</td>
-                    <td className="p-3 text-right text-teal-700">{fmt(t.factory_warehouse_stock)}</td>
-                    <td className="p-3 text-right text-indigo-800 text-base">{fmt(t.stock_at_hand)}</td>
+                    <td className="p-3 pl-4">Total ({data.sku_count} SKUs){viewCrates ? ' · in default crates' : ''}</td>
+                    <td className="p-3 text-right text-blue-700" data-testid="total-received">{totalCell(t.stock_received, 'stock_received')}</td>
+                    <td className="p-3 text-right text-emerald-700" data-testid="total-delivered">{totalCell(t.stock_delivered, 'stock_delivered')}</td>
+                    <td className="p-3 text-right text-amber-700" data-testid="total-reserved">{totalCell(t.stock_pending_out || 0, 'stock_pending_out')}</td>
+                    <td className="p-3 text-right text-emerald-700" data-testid="total-empty">{totalCell(t.empty_bottles_returned || 0, 'empty_bottles_returned')}</td>
+                    <td className="p-3 text-right text-amber-700" data-testid="total-product-returns">{totalCell(t.product_returns || 0, 'product_returns')}</td>
+                    <td className="p-3 text-right text-purple-700" data-testid="total-factory-returns">{totalCell(t.factory_returns, 'factory_returns')}</td>
+                    <td className="p-3 text-right text-teal-700" data-testid="total-wh-stock">{totalCell(t.factory_warehouse_stock, 'factory_warehouse_stock')}</td>
+                    <td className="p-3 text-right text-indigo-800 text-base" data-testid="total-available">{totalCell(t.stock_at_hand, 'stock_at_hand')}</td>
                     <td className="p-3 text-right">{pct(t.pct_stock_at_hand)}</td>
                     <td className="p-3 text-right"></td>
                   </tr>
