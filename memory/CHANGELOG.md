@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-07-07 — 🐛 Fix: Stock-by-SKU TOTALS row not converted in Default-Crates view ✅ (testing_agent iteration_311: frontend 100%)
+- **Reported**: with the Stock-by-SKU toggle set to "Default Crates", the bottom **Total** row still showed bottle totals.
+- **Fix** (`components/distributor/StockDashboardTab.jsx`): added `totalCell(bottlesTotal, field)` — in crate view it sums each SKU's own crate conversion (Σ bottles_i ÷ default_packaging_units_i; SKUs without a crate stay in base units, matching their row); in bottle view it uses the backend base total. All tfoot cells now use it, with unique data-testids. Verified: distributor Surya 1 total received 42,571 bottles ↔ 2,873 crates; toggling back restores bottles; Sparkling-delivered regression (=24) holds.
+
 ## 2026-07-07 — 🐛 Fix: Stock-by-SKU DELIVERED double-counted for carton/package deliveries ✅ (testing_agent iteration_310: backend+frontend 100%)
 - **Reported (production)**: DELIVERED for "pH 7.5 - 750 ml (PET)" showed 2,550 instead of 450. Three 150-bottle deliveries; the one entered as **10 × 15-Bottle Cartons** (DEL-2026-0257) was counted as 150 × 15 = 2,250; the other two as 150 each.
 - **Root cause**: two line-item storage models coexist (a code change between deliveries). NEW rows store `quantity` = base bottles (150) plus `packages`(10) × `packaging_units`(15); OLD rows store `quantity` = number of packages and rely on ×packaging_units. The dashboard's `_item_crates` blindly did `quantity × packaging_units`, so NEW rows double-counted.

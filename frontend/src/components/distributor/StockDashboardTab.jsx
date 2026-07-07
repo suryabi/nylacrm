@@ -670,8 +670,8 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
                     <td className="p-3 text-right text-emerald-700" data-testid="total-delivered">{totalCell(t.stock_delivered, 'stock_delivered')}</td>
                     <td className="p-3 text-right text-amber-700" data-testid="total-reserved">{totalCell(t.stock_pending_out || 0, 'stock_pending_out')}</td>
                     <td className="p-3 text-right text-emerald-700" data-testid="total-empty">{totalCell(t.empty_bottles_returned || 0, 'empty_bottles_returned')}</td>
-                    <td className="p-3 text-right text-amber-700" data-testid="total-product-returns">{totalCell(t.product_returns || 0, 'product_returns')}</td>
-                    <td className="p-3 text-right text-purple-700" data-testid="total-factory-returns">{totalCell(t.factory_returns, 'factory_returns')}</td>
+                    <td className="p-3 text-right text-amber-700" data-testid="total-row-product-returns">{totalCell(t.product_returns || 0, 'product_returns')}</td>
+                    <td className="p-3 text-right text-purple-700" data-testid="total-row-factory-returns">{totalCell(t.factory_returns, 'factory_returns')}</td>
                     <td className="p-3 text-right text-teal-700" data-testid="total-wh-stock">{totalCell(t.factory_warehouse_stock, 'factory_warehouse_stock')}</td>
                     <td className="p-3 text-right text-indigo-800 text-base" data-testid="total-available">{totalCell(t.stock_at_hand, 'stock_at_hand')}</td>
                     <td className="p-3 text-right">{pct(t.pct_stock_at_hand)}</td>
