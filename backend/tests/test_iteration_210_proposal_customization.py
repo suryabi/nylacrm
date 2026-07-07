@@ -13,7 +13,7 @@ import copy
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://stock-state-machine.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://design-workflow-hub-11.preview.emergentagent.com").rstrip("/")
 LEAD_ID = "08c93122-99fc-4587-b31c-559649f29c17"
 EMAIL = "surya.yadavalli@nylaairwater.earth"
 PASSWORD = "test123"
