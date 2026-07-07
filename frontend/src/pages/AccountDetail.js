@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, TrendingDown, Minus, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt, Eye, User, ImageIcon
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt, Eye
 } from 'lucide-react';
 import { format } from 'date-fns';
 import TaxBillingCard from '../components/TaxBillingCard';
@@ -47,21 +47,8 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 import AccountScoringCard from '../components/AccountScoringCard';
 import EntityContactsSection from '../components/EntityContactsSection';
 import { SectionHeader } from '../components/detail/SectionHeader';
-import { StickySectionNav } from '../components/detail/StickySectionNav';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
-const ACCOUNT_NAV_ITEMS = [
-  { id: 'acc-info', label: 'Account Info', icon: Building2 },
-  { id: 'acc-contacts', label: 'Contacts', icon: User },
-  { id: 'acc-branding', label: 'Customer Branding', icon: ImageIcon },
-  { id: 'acc-invoices', label: 'Invoice Summary', icon: FileText },
-  { id: 'acc-location', label: 'Location', icon: MapPin },
-  { id: 'acc-pricing', label: 'SKU Pricing', icon: Package },
-  { id: 'acc-orders', label: 'Delivery Orders', icon: Truck },
-  { id: 'acc-expenses', label: 'Expenses', icon: DollarSign },
-  { id: 'acc-discussion', label: 'Discussion', icon: MessageSquare },
-];
 
 // Invoice Card Component with expandable line items
 function InvoiceCard({ invoice }) {
@@ -1666,9 +1653,7 @@ ${googleMapsLink}`;
         </div>
       )}
 
-      <div className="flex flex-col xl:flex-row gap-6 items-start">
-        <StickySectionNav items={ACCOUNT_NAV_ITEMS} title="On this page" testid="account-section-nav" />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-w-0 w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Main Info */}
         <div className="lg:col-span-2 space-y-6">
           {/* Account Information */}
@@ -3321,7 +3306,6 @@ ${googleMapsLink}`;
           />
           </div>{/* /Mobile-collapsible secondary section */}
         </div>
-      </div>
       </div>
 
       {/* Create Invoice Dialog */}

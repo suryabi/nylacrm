@@ -55,25 +55,8 @@ import EntityContactsSection from '../components/EntityContactsSection';
 import ProposalCustomizeDialog from '../components/ProposalCustomizeDialog';
 import LeadBottleDesigns from '../components/LeadBottleDesigns';
 import { SectionHeader } from '../components/detail/SectionHeader';
-import { StickySectionNav } from '../components/detail/StickySectionNav';
-import { Receipt, Truck, DollarSign } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
-const LEAD_NAV_ITEMS = [
-  { id: 'lead-skus', label: 'Proposed SKUs', icon: Package },
-  { id: 'lead-documents', label: 'Documents', icon: FileText },
-  { id: 'lead-designs', label: 'Bottle Designs', icon: ImageIcon },
-  { id: 'lead-contact', label: 'Contact Info', icon: User },
-  { id: 'lead-emails', label: 'Emails', icon: Mail },
-  { id: 'lead-location', label: 'Location', icon: MapPin },
-  { id: 'lead-brand', label: 'Current Brand', icon: Package },
-  { id: 'lead-invoices', label: 'Invoices', icon: Receipt },
-  { id: 'lead-orders', label: 'Delivery Orders', icon: Truck },
-  { id: 'lead-expenses', label: 'Expenses', icon: DollarSign },
-  { id: 'lead-social', label: 'Social Links', icon: LinkIcon },
-  { id: 'lead-comments', label: 'Comments', icon: MessageSquare },
-];
 
 // Roles that can approve/reject proposals
 const PROPOSAL_APPROVER_ROLES = ['CEO', 'Director', 'Vice President', 'National Sales Head'];
@@ -1214,9 +1197,7 @@ ${userEmail}`;
       </div>
 
       {/* Main Content Grid - Stack on mobile */}
-      <div className="flex flex-col xl:flex-row gap-6 items-start">
-        <StickySectionNav items={LEAD_NAV_ITEMS} title="On this page" testid="lead-section-nav" />
-        <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 sm:gap-6 flex-1 min-w-0 w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 sm:gap-6">
         {/* Left Column - Lead Info */}
         <div className="lg:col-span-5 space-y-4 sm:space-y-6">
           {/* Timeline Summary - Moved to Top */}
@@ -2327,7 +2308,6 @@ ${userEmail}`;
               </div>
             </div>
           </Card>
-        </div>
         </div>
       </div>
 
