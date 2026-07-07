@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, TrendingDown, Minus, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt, Eye
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt, Eye, User, ImageIcon
 } from 'lucide-react';
 import { format } from 'date-fns';
 import TaxBillingCard from '../components/TaxBillingCard';
@@ -46,8 +46,22 @@ import EntityCommentThread from '../components/EntityCommentThread';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import AccountScoringCard from '../components/AccountScoringCard';
 import EntityContactsSection from '../components/EntityContactsSection';
+import { SectionHeader } from '../components/detail/SectionHeader';
+import { StickySectionNav } from '../components/detail/StickySectionNav';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+const ACCOUNT_NAV_ITEMS = [
+  { id: 'acc-info', label: 'Account Info', icon: Building2 },
+  { id: 'acc-contacts', label: 'Contacts', icon: User },
+  { id: 'acc-branding', label: 'Customer Branding', icon: ImageIcon },
+  { id: 'acc-invoices', label: 'Invoice Summary', icon: FileText },
+  { id: 'acc-location', label: 'Location', icon: MapPin },
+  { id: 'acc-pricing', label: 'SKU Pricing', icon: Package },
+  { id: 'acc-orders', label: 'Delivery Orders', icon: Truck },
+  { id: 'acc-expenses', label: 'Expenses', icon: DollarSign },
+  { id: 'acc-discussion', label: 'Discussion', icon: MessageSquare },
+];
 
 // Invoice Card Component with expandable line items
 function InvoiceCard({ invoice }) {
@@ -1652,15 +1666,14 @@ ${googleMapsLink}`;
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="flex flex-col xl:flex-row gap-6 items-start">
+        <StickySectionNav items={ACCOUNT_NAV_ITEMS} title="On this page" testid="account-section-nav" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-w-0 w-full">
         {/* Left Column - Main Info */}
         <div className="lg:col-span-2 space-y-6">
           {/* Account Information */}
-          <Card className="p-4 sm:p-6">
-            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2">
-              <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
-              Account Information
-            </h2>
+          <Card id="acc-info" className="p-4 sm:p-6 scroll-mt-24 overflow-hidden">
+            <SectionHeader eyebrow="Overview" title="Account Information" icon={Building2} testid="header-acc-info" />
             {isEditing ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1887,15 +1900,19 @@ ${googleMapsLink}`;
           </Card>
 
           {/* Multi-contact table (synced to the Contacts module) */}
-          <EntityContactsSection parentType="account" parentId={account.account_id || account.id} />
+          <div id="acc-contacts" className="scroll-mt-24">
+            <EntityContactsSection parentType="account" parentId={account.account_id || account.id} />
+          </div>
 
           {/* Customer branding — bottle designs & design requests, carried over from the converted lead */}
           {account.lead_id && (
-            <LeadBottleDesigns leadId={account.lead_id} company={account.account_name} hasLogo={!!(account.logo_url || account.logo)} />
+            <div id="acc-branding" className="scroll-mt-24">
+              <LeadBottleDesigns leadId={account.lead_id} company={account.account_name} hasLogo={!!(account.logo_url || account.logo)} />
+            </div>
           )}
 
           {/* Invoice Summary — second section, right after Account Information */}
-          <Card className="p-4 sm:p-6">
+          <Card id="acc-invoices" className="p-4 sm:p-6 scroll-mt-24">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-5">
               <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2 flex-wrap">
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
@@ -2088,7 +2105,7 @@ ${googleMapsLink}`;
           </Card>
 
           {/* SKU Pricing Grid */}
-          <Card className="p-4 sm:p-6">
+          <Card id="acc-pricing" className="p-4 sm:p-6 scroll-mt-24">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <h2 className="text-base sm:text-lg font-semibold">SKU Pricing</h2>
               <div className="flex items-center gap-2">
@@ -2297,31 +2314,37 @@ ${googleMapsLink}`;
 
           {/* Delivery Orders (account-specific) */}
           {account && (
-            <EntityDeliveryOrders
-              entityType="account"
-              entityId={account.id || account.account_id}
-              entityName={account.account_name}
-              entity={account}
-            />
+            <div id="acc-orders" className="scroll-mt-24">
+              <EntityDeliveryOrders
+                entityType="account"
+                entityId={account.id || account.account_id}
+                entityName={account.account_name}
+                entity={account}
+              />
+            </div>
           )}
 
           {/* Expense Requests Section */}
           {account && (
-            <ExpenseRequestSection
-              entityType="account"
-              entityId={account.id || account.account_id}
-              entityName={account.account_name}
-              entityCity={account.city}
-            />
+            <div id="acc-expenses" className="scroll-mt-24">
+              <ExpenseRequestSection
+                entityType="account"
+                entityId={account.id || account.account_id}
+                entityName={account.account_name}
+                entityCity={account.city}
+              />
+            </div>
           )}
 
           {/* Discussion thread with @-mentions */}
           {account && (
-            <EntityCommentThread
-              basePath={`/accounts/${account.account_id || account.id}/comments`}
-              title="Discussion"
-              testid="account-comments"
-            />
+            <div id="acc-discussion" className="scroll-mt-24">
+              <EntityCommentThread
+                basePath={`/accounts/${account.account_id || account.id}/comments`}
+                title="Discussion"
+                testid="account-comments"
+              />
+            </div>
           )}
         </div>
 
@@ -3301,6 +3324,7 @@ ${googleMapsLink}`;
           />
           </div>{/* /Mobile-collapsible secondary section */}
         </div>
+      </div>
       </div>
 
       {/* Create Invoice Dialog */}

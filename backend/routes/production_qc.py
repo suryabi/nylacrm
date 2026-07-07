@@ -512,6 +512,60 @@ async def list_batches(
     batches = await tdb.production_batches.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return batches
 
+def _sku_crate_units(sku_doc: dict) -> Optional[int]:
+    """Return the SKU's crate size (units per crate/pack > 1) from its
+    packaging_config, preferring the `production` default. Returns None when
+    the SKU has no multi-unit packaging (genuine single-unit / base-UOM SKU)."""
+    if not sku_doc:
+        return None
+    pc = sku_doc.get("packaging_config") or {}
+    # 1) production default, if it is a real multi-unit pack
+    prod = pc.get("production") or []
+    default = next((p for p in prod if p.get("is_default")), None) or (prod[0] if prod else None)
+    if default:
+        u = int(default.get("units_per_package") or 0)
+        if u > 1:
+            return u
+    # 2) any packaging (production/stock_out/master/stock_in) with units > 1
+    for key in ("production", "stock_out", "master", "stock_in"):
+        for p in (pc.get(key) or []):
+            u = int(p.get("units_per_package") or 0)
+            if u > 1:
+                return u
+    # 3) explicit bottles_per_crate on the SKU master
+    bpc = sku_doc.get("bottles_per_crate")
+    try:
+        if bpc and int(bpc) > 1:
+            return int(bpc)
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+async def _effective_bottles_per_crate(tdb, batch: dict) -> int:
+    """The trustworthy crate size for a batch. Uses the batch's stored value
+    when it is a real crate size (>1); otherwise derives it from the SKU's
+    configured crate packaging. Falls back to the stored value (or 1) only when
+    the SKU genuinely has no multi-unit packaging. This prevents the
+    'crates counted as bottles' bug when a legacy batch has no bottles_per_crate."""
+    stored = batch.get("bottles_per_crate")
+    try:
+        stored_int = int(stored) if stored is not None else 0
+    except (TypeError, ValueError):
+        stored_int = 0
+    if stored_int > 1:
+        return stored_int
+    sku_id = batch.get("sku_id")
+    if sku_id:
+        sku_doc = await tdb.master_skus.find_one(
+            {"id": sku_id}, {"_id": 0, "packaging_config": 1, "bottles_per_crate": 1}
+        )
+        crate = _sku_crate_units(sku_doc or {})
+        if crate and crate > 1:
+            return crate
+    return stored_int if stored_int > 0 else 1
+
+
 @router.get("/batches/{batch_id}")
 async def get_batch(batch_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
@@ -519,6 +573,9 @@ async def get_batch(batch_id: str, current_user: dict = Depends(get_current_user
     batch = await tdb.production_batches.find_one({"id": batch_id, "tenant_id": tenant_id}, {"_id": 0})
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
+    # Always surface a trustworthy crate size so the "Transfer to Master
+    # Warehouse" UI never collapses crates→bottles via a missing bpc.
+    batch["bottles_per_crate"] = await _effective_bottles_per_crate(tdb, batch)
     return batch
 
 @router.post("/batches")
@@ -1934,6 +1991,9 @@ async def transfer_to_warehouse(
 
     now = datetime.now(timezone.utc).isoformat()
 
+    # Trustworthy crate size (derives from SKU packaging if the batch lacks it)
+    effective_bpc = await _effective_bottles_per_crate(tdb, batch)
+
     # 1. Update batch: increment transferred_to_warehouse
     new_transferred = (batch.get("transferred_to_warehouse", 0) or 0) + data.quantity
     await tdb.production_batches.update_one(
@@ -1962,7 +2022,7 @@ async def transfer_to_warehouse(
             "quantity": new_qty,
             # Keep bottles_per_crate in sync with the most recent batch so
             # the dashboard can convert bottles → crates accurately.
-            "bottles_per_crate": batch.get("bottles_per_crate") or existing_stock.get("bottles_per_crate"),
+            "bottles_per_crate": batch.get("bottles_per_crate") or existing_stock.get("bottles_per_crate") or effective_bpc,
             "updated_at": now,
         }
         if wh_tracks_batches:
@@ -1981,7 +2041,7 @@ async def transfer_to_warehouse(
             "sku_id": sku_id,
             "sku_name": sku_name,
             "quantity": data.quantity,  # stored in BOTTLES
-            "bottles_per_crate": batch.get("bottles_per_crate"),
+            "bottles_per_crate": batch.get("bottles_per_crate") or effective_bpc,
             "created_at": now,
             "updated_at": now,
         }

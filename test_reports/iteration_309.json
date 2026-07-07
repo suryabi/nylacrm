@@ -1,0 +1,58 @@
+{
+  "summary": "Iteration 309 — Verified (1) backend fix for GET /api/production/batches/{id} bottles_per_crate enrichment and (2) frontend regression of Lead Detail & Account Detail redesign with sticky 'On this page' nav. Backend: PASS — batch 87ebf40f (Nyla 330 Silver) returns bpc=48 (>1) and every batch scanned exposes a valid bpc>=1; the _effective_bottles_per_crate helper works. Frontend: MOSTLY PASS at 1920px — both sticky navs render (12 lead links, 9 account links), scroll-on-click works, all core existing widgets (SKU Pricing, Documents, Add Contact, Edit Pricing, Social Links, Comments, Financial Summary, GST Certificate, Signed Contract, Delivery Address, Payment Terms, Account Score) are intact and no console errors. However, TWO nav links are dead links because the corresponding anchor id was never added to the target card: (a) nav-link-lead-contact has no <id='lead-contact'> anchor and no header-lead-contact SectionHeader in LeadDetail.js, (b) nav-link-acc-location has no <id='acc-location'> anchor and no header-acc-location SectionHeader in AccountDetail.js. These sections render visually but clicking their nav item does not jump to them. This is a real regression (not the 'conditionally hidden' graceful no-op case, because Contact Info and Location are always-visible sections).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "LeadDetail.js — Contact Info card",
+        "issue": "LEAD_NAV_ITEMS declares { id: 'lead-contact', label: 'Contact Info' } and the task requires data-testid='header-lead-contact', but no element with id='lead-contact' exists in the file and no SectionHeader with testid='header-lead-contact' is rendered. Clicking nav-link-lead-contact does not scroll anywhere (verified — window.scrollY did not change after click). Contact Info card is always visible so this is a real dead link.",
+        "selector": "[data-testid='nav-link-lead-contact'] → missing #lead-contact anchor",
+        "priority": "HIGH"
+      },
+      {
+        "component": "AccountDetail.js — Location card",
+        "issue": "ACCOUNT_NAV_ITEMS declares { id: 'acc-location', label: 'Location' } and the task requires data-testid='header-acc-location', but no element with id='acc-location' exists in the file (grep of AccountDetail.js finds acc-info, acc-contacts, acc-branding, acc-invoices, acc-pricing, acc-orders, acc-expenses, acc-discussion — but NOT acc-location) and no SectionHeader with testid='header-acc-location' is rendered. Location card renders visually but clicking nav-link-acc-location does not scroll to it. Real dead link.",
+        "selector": "[data-testid='nav-link-acc-location'] → missing #acc-location anchor",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "StickySectionNav — active-link highlight",
+        "issues": [
+          "After clicking a nav link the target section scrolls into view but data-active on the clicked link often stays 'false' (observed for nav-link-lead-orders, nav-link-lead-comments, nav-link-acc-orders). Cause: the IntersectionObserver in useActiveSection uses rootMargin '-96px 0px -55% 0px', which requires the section top to be within the top ~45% of the viewport; for tall or bottom sections the ratio can stay below any threshold and the previous active id remains. Minor UX: consider also setting active on click (setActive(id) inside handleClick) or relaxing the rootMargin."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_309_batch_bpc_enrichment.py",
+    "/app/test_reports/pytest/iteration_309.xml"
+  ],
+  "action_items": [
+    "LeadDetail.js: add `id=\"lead-contact\"` and a SectionHeader with testid=\"header-lead-contact\" to the Contact Information card so nav-link-lead-contact actually scrolls to it.",
+    "AccountDetail.js: add `id=\"acc-location\"` and a SectionHeader with testid=\"header-acc-location\" to the Location card so nav-link-acc-location actually scrolls to it.",
+    "(Minor / UX) StickySectionNav.jsx: in handleClick also call setActive(id) — or export a setter from useActiveSection — so the active pill updates immediately on click, then IntersectionObserver takes over."
+  ],
+  "critical_code_review_comments": [
+    "LEAD_NAV_ITEMS and ACCOUNT_NAV_ITEMS are the source of truth for section anchors, but the code that renders the sections is a separate ~2600-3750 line file. There is no compile-time check that every nav id has a matching DOM anchor. Two of ~21 anchors are missing. Consider (a) a small runtime dev-only warning in StickySectionNav that logs if getElementById(id) returns null on mount, or (b) declaring the ids as constants that both the nav item and the target Card import.",
+    "SectionHeader.jsx uses className '-mx-6 -mt-6' which assumes the wrapping Card has p-6 padding — this is used inconsistently. On AccountDetail.js line 1675 the Card uses `p-4 sm:p-6` so on mobile the header's -mx-6/-mt-6 overshoots the padding by 8px on each side. Not a visible break at 1920px (sm: applies) but will look off on <640px. Recommend using -mx-4 sm:-mx-6 -mt-4 sm:-mt-6 to match."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_309_batch_bpc_enrichment.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (2 passed, 1 skipped — endpoint variant not exposed, core test covers the fix)",
+    "frontend": "~90% — sticky nav renders on both pages, all existing widgets present, all functional buttons intact, 19/21 nav anchor targets resolve; 2 dead nav links (lead-contact, acc-location) are the only regressions"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water) — used for both backend and frontend runs.",
+  "seed_data_creation": "None. Used existing lead 08c93122-99fc-4587-b31c-559649f29c17, account b529f00e-54b3-4709-92c1-db08137ef0b3, batch 87ebf40f-9947-4713-81d3-572730f54def.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend curl on GET /api/production/batches/87ebf40f-9947-4713-81d3-572730f54def returns bottles_per_crate=48, sku_id=b39203a7-4067-458b-a316-5831a98be946 — enrichment path is live. The two anchor bugs are trivial to fix (2-3 lines each): add id and SectionHeader to the Contact card on LeadDetail.js and to the Location card on AccountDetail.js. On the Lead Detail page the Contact section is likely rendered by an existing sub-component; either wrap the card in a Section wrapper with the id or attach id directly. All other 19 nav anchors (lead-skus, lead-documents, lead-designs, lead-emails, lead-location, lead-invoices, lead-orders, lead-expenses, lead-social, lead-comments; acc-info, acc-contacts, acc-branding, acc-invoices, acc-pricing, acc-orders, acc-expenses, acc-discussion) resolve correctly. lead-brand section is legitimately hidden for this record because none of current_brands/current_water_brand/current_volume/current_landing_price/current_selling_price are set (graceful no-op — that's expected per the task).",
+  "rca of the issue": "Root cause: the redesign extracted section metadata into LEAD_NAV_ITEMS / ACCOUNT_NAV_ITEMS arrays but the corresponding DOM anchors (`id=`) and SectionHeader components had to be added at each render site by hand. For 19/21 sections that was done; for the Contact card in LeadDetail.js and the Location card in AccountDetail.js it was missed. Reproduction: at 1920px viewport, on the referenced lead (id 08c93122-99fc-4587-b31c-559649f29c17) click 'Contact Info' in the 'On this page' sidebar — page does not scroll. Same on the account (id b529f00e-54b3-4709-92c1-db08137ef0b3) with 'Location'. Mitigation: add `id=\"lead-contact\"` and `<SectionHeader eyebrow=\"Details\" title=\"Contact Information\" icon={User} testid=\"header-lead-contact\" />` to the Contact card in LeadDetail.js, and mirror the same for the Location card in AccountDetail.js (`id=\"acc-location\"`, `testid=\"header-acc-location\"`)."
+}

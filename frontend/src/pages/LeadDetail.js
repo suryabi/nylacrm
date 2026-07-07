@@ -54,8 +54,26 @@ import ContactEmails from '../components/gmail/ContactEmails';
 import EntityContactsSection from '../components/EntityContactsSection';
 import ProposalCustomizeDialog from '../components/ProposalCustomizeDialog';
 import LeadBottleDesigns from '../components/LeadBottleDesigns';
+import { SectionHeader } from '../components/detail/SectionHeader';
+import { StickySectionNav } from '../components/detail/StickySectionNav';
+import { Receipt, Truck, DollarSign } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+const LEAD_NAV_ITEMS = [
+  { id: 'lead-skus', label: 'Proposed SKUs', icon: Package },
+  { id: 'lead-documents', label: 'Documents', icon: FileText },
+  { id: 'lead-designs', label: 'Bottle Designs', icon: ImageIcon },
+  { id: 'lead-contact', label: 'Contact Info', icon: User },
+  { id: 'lead-emails', label: 'Emails', icon: Mail },
+  { id: 'lead-location', label: 'Location', icon: MapPin },
+  { id: 'lead-brand', label: 'Current Brand', icon: Package },
+  { id: 'lead-invoices', label: 'Invoices', icon: Receipt },
+  { id: 'lead-orders', label: 'Delivery Orders', icon: Truck },
+  { id: 'lead-expenses', label: 'Expenses', icon: DollarSign },
+  { id: 'lead-social', label: 'Social Links', icon: LinkIcon },
+  { id: 'lead-comments', label: 'Comments', icon: MessageSquare },
+];
 
 // Roles that can approve/reject proposals
 const PROPOSAL_APPROVER_ROLES = ['CEO', 'Director', 'Vice President', 'National Sales Head'];
@@ -1196,14 +1214,16 @@ ${userEmail}`;
       </div>
 
       {/* Main Content Grid - Stack on mobile */}
-      <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 sm:gap-6">
+      <div className="flex flex-col xl:flex-row gap-6 items-start">
+        <StickySectionNav items={LEAD_NAV_ITEMS} title="On this page" testid="lead-section-nav" />
+        <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 sm:gap-6 flex-1 min-w-0 w-full">
         {/* Left Column - Lead Info */}
         <div className="lg:col-span-5 space-y-4 sm:space-y-6">
           {/* Timeline Summary - Moved to Top */}
           <TimelineSummaryCompact activities={activities} />
 
           {/* Proposed SKU Pricing - Moved to Top for Importance */}
-          <Card className="p-3 sm:p-6" data-testid="proposed-sku-pricing-card">
+          <Card id="lead-skus" className="p-3 sm:p-6 scroll-mt-24" data-testid="proposed-sku-pricing-card">
             {/* Prominent Estimated Monthly Opportunity Display */}
             {proposedSkuPricing.length > 0 && getMonthlyBottles() > 0 && (
               <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
@@ -1443,7 +1463,7 @@ ${userEmail}`;
             )}
           </Card>
           {/* Documents — Proposal + Deck (side by side) */}
-          <div className="flex items-center justify-between mt-2" data-testid="lead-documents-header">
+          <div id="lead-documents" className="flex items-center justify-between mt-2 scroll-mt-24" data-testid="lead-documents-header">
             <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
               <FileText className="h-4 w-4 sm:h-5 sm:w-5" /> Documents
             </h2>
@@ -1690,7 +1710,9 @@ ${userEmail}`;
           </div>
 
           {/* Bottle Designs — approved white-label mockups saved against this lead */}
-          <LeadBottleDesigns leadId={id} company={lead.company} hasLogo={!!lead.logo_url} />
+          <div id="lead-designs" className="scroll-mt-24">
+            <LeadBottleDesigns leadId={id} company={lead.company} hasLogo={!!lead.logo_url} />
+          </div>
 
 
           {/* Contact Information */}
@@ -1722,15 +1744,15 @@ ${userEmail}`;
 
           {/* Email history with this contact (Gmail) */}
           {lead.email && (
-            <Card className="p-6" data-testid="lead-emails-card">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2"><Mail className="h-5 w-5 text-rose-600" /> Emails</h2>
+            <Card id="lead-emails" className="p-6 scroll-mt-24 overflow-hidden" data-testid="lead-emails-card">
+              <SectionHeader eyebrow="Communication" title="Emails" icon={Mail} testid="header-lead-emails" />
               <ContactEmails email={lead.email} name={lead.contact_person || lead.company} leadId={lead.id} onLogged={async () => { try { const r = await activitiesAPI.getByLeadId(id); setActivities(r.data); } catch (e) { /* ignore */ } }} />
             </Card>
           )}
 
           {/* Location Information */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Location</h2>
+          <Card id="lead-location" className="p-6 scroll-mt-24 overflow-hidden">
+            <SectionHeader eyebrow="Address" title="Location" icon={MapPin} testid="header-lead-location" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {lead.city && (
                 <div>
@@ -1768,8 +1790,8 @@ ${userEmail}`;
 
           {/* Current Brand Details */}
           {((lead.current_brands && lead.current_brands.length > 0) || lead.current_water_brand || lead.current_volume || lead.current_landing_price || lead.current_selling_price) && (
-            <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Current Brand Details</h2>
+            <Card id="lead-brand" className="p-6 scroll-mt-24 overflow-hidden">
+              <SectionHeader eyebrow="Competition" title="Current Brand Details" icon={Package} testid="header-lead-brand" />
               {lead.current_brands && lead.current_brands.length > 0 ? (
                 <div className="border rounded-lg overflow-hidden" data-testid="lead-brands-grid">
                   <table className="w-full text-sm">
@@ -1825,40 +1847,48 @@ ${userEmail}`;
           )}
 
           {/* Invoice Summary */}
-          <InvoiceSummaryCard invoiceData={invoiceData} />
+          <div id="lead-invoices" className="scroll-mt-24">
+            <InvoiceSummaryCard invoiceData={invoiceData} />
+          </div>
 
           {/* Delivery Orders (lead-specific) */}
           {lead && (
-            <EntityDeliveryOrders
-              entityType="lead"
-              entityId={lead.id}
-              entityName={lead.company || lead.contact_person}
-              entity={lead}
-            />
+            <div id="lead-orders" className="scroll-mt-24">
+              <EntityDeliveryOrders
+                entityType="lead"
+                entityId={lead.id}
+                entityName={lead.company || lead.contact_person}
+                entity={lead}
+              />
+            </div>
           )}
 
           {/* Expense Requests Section */}
           {lead && (
-            <ExpenseRequestSection
-              entityType="lead"
-              entityId={lead.id}
-              entityName={lead.company}
-              entityCity={lead.city}
-              currentUser={user}
-            />
+            <div id="lead-expenses" className="scroll-mt-24">
+              <ExpenseRequestSection
+                entityType="lead"
+                entityId={lead.id}
+                entityName={lead.company}
+                entityCity={lead.city}
+                currentUser={user}
+              />
+            </div>
           )}
 
           {/* Social Links */}
-          <Card className="p-4 sm:p-6" data-testid="lead-social-links-card">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
-              <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-                <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                Social Links
-              </h2>
-              <Button variant="outline" size="sm" onClick={addSocialLink} data-testid="add-social-link-btn">
-                <Plus className="h-4 w-4 mr-1" /> Add Link
-              </Button>
-            </div>
+          <Card id="lead-social" className="p-4 sm:p-6 scroll-mt-24 overflow-hidden" data-testid="lead-social-links-card">
+            <SectionHeader
+              eyebrow="Online Presence"
+              title="Social Links"
+              icon={LinkIcon}
+              testid="header-lead-social"
+              actions={
+                <Button variant="outline" size="sm" onClick={addSocialLink} data-testid="add-social-link-btn">
+                  <Plus className="h-4 w-4 mr-1" /> Add Link
+                </Button>
+              }
+            />
 
             {socialLinks.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">No social links yet. Click "Add Link" to add the lead's website or social profiles.</p>
@@ -1923,11 +1953,8 @@ ${userEmail}`;
           </Card>
 
           {/* Comments */}
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              Comments
-            </h2>
+          <Card id="lead-comments" className="p-6 scroll-mt-24 overflow-hidden">
+            <SectionHeader eyebrow="Discussion" title="Comments" icon={MessageSquare} testid="header-lead-comments" />
             <div className="space-y-4 mb-6">
               {comments.length === 0 && (
                 <p className="text-muted-foreground text-sm">No comments yet</p>
@@ -2300,6 +2327,7 @@ ${userEmail}`;
               </div>
             </div>
           </Card>
+        </div>
         </div>
       </div>
 
