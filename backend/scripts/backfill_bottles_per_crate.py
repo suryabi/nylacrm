@@ -1,15 +1,29 @@
-"""Idempotent backfill: ensure `bottles_per_crate` (crate size) is set wherever
-it's missing/≤1 but the SKU actually has a multi-unit crate packaging.
+"""OPTIONAL, SAFE backfill: fill the `bottles_per_crate` (crate size) HINT field
+wherever it is missing/<=1 but the SKU actually has a multi-unit crate packaging.
 
-Fixes the "crates counted as bottles" class of bugs on the Transfer-to-Master-
-Warehouse flow and the stock dashboard's bottles→crates display conversion.
+You do NOT need to run this for the Transfer-to-Master-Warehouse fix — the backend
+now derives the crate size from the SKU packaging at read-time. This script only
+tidies the stored hint field for display consistency on legacy rows.
 
-SAFE: only fills the crate-size hint field. It never recomputes derived totals
-(total_bottles / passed / rejected balances). Run anytime; re-running is a no-op.
+SAFETY GUARANTEES:
+  * Only ever WRITES `bottles_per_crate`. Never touches any quantity / balance /
+    total / received / delivered / on-hand / passed / rejected field.
+  * Only fills rows where `bottles_per_crate` is missing or <= 1. Never overwrites
+    an existing real crate size (> 1).
+  * Derives the value from the SKU's own configured packaging (same source the app
+    already uses everywhere else).
+  * Idempotent — re-running is a no-op.
+  * DRY-RUN BY DEFAULT: prints exactly what it *would* change and writes NOTHING.
+    You must pass --apply to actually write.
 
 Usage:
+    # 1) Preview only (writes nothing):
     cd /app/backend && python scripts/backfill_bottles_per_crate.py
+
+    # 2) Apply for real (after reviewing the preview):
+    cd /app/backend && python scripts/backfill_bottles_per_crate.py --apply
 """
+import argparse
 import asyncio
 import os
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -49,9 +63,12 @@ def _missing(v) -> bool:
         return True
 
 
-async def main():
+async def main(apply: bool):
     client = AsyncIOMotorClient(os.environ["MONGO_URL"])
     db = client[os.environ["DB_NAME"]]
+
+    mode = "APPLY (writing changes)" if apply else "DRY-RUN (no writes — preview only)"
+    print(f"\n=== bottles_per_crate backfill — {mode} ===\n")
 
     # Build SKU crate-size map (across all tenants)
     sku_map = {}
@@ -59,37 +76,51 @@ async def main():
         sku_map[ms["id"]] = crate_units_from_sku(ms)
 
     stats = {"master_skus": 0, "production_batches": 0, "factory_warehouse_stock": 0}
+    MAX_PRINT = 40
 
-    # 1) master_skus: set explicit bottles_per_crate when derivable and missing
-    async for ms in db.master_skus.find({}, {"_id": 0, "id": 1, "bottles_per_crate": 1, "packaging_config": 1}):
-        crate = crate_units_from_sku(ms)
-        if crate and _missing(ms.get("bottles_per_crate")):
-            await db.master_skus.update_one({"id": ms["id"]}, {"$set": {"bottles_per_crate": crate}})
-            stats["master_skus"] += 1
+    async def process(collection_name, extra_proj=None):
+        coll = db[collection_name]
+        proj = {"_id": 0, "id": 1, "bottles_per_crate": 1}
+        if extra_proj:
+            proj.update(extra_proj)
+        printed = 0
+        async for doc in coll.find({}, proj):
+            if not _missing(doc.get("bottles_per_crate")):
+                continue
+            if collection_name == "master_skus":
+                crate = crate_units_from_sku(
+                    await db.master_skus.find_one({"id": doc["id"]}, {"_id": 0, "packaging_config": 1, "bottles_per_crate": 1})
+                )
+            else:
+                crate = sku_map.get(doc.get("sku_id"))
+            if not (crate and crate > 1):
+                continue
+            stats[collection_name] += 1
+            if printed < MAX_PRINT:
+                label = doc.get("batch_code") or doc.get("sku_name") or doc.get("id")
+                print(f"  [{collection_name}] {label}: bottles_per_crate {doc.get('bottles_per_crate')!r} -> {crate}")
+                printed += 1
+            if apply:
+                await coll.update_one({"id": doc["id"]}, {"$set": {"bottles_per_crate": crate}})
+        if stats[collection_name] > printed:
+            print(f"  ... and {stats[collection_name] - printed} more in {collection_name}")
 
-    # 2) production_batches: set crate size (field only; does NOT recompute totals)
-    async for b in db.production_batches.find({}, {"_id": 0, "id": 1, "sku_id": 1, "bottles_per_crate": 1}):
-        if not _missing(b.get("bottles_per_crate")):
-            continue
-        crate = sku_map.get(b.get("sku_id"))
-        if crate and crate > 1:
-            await db.production_batches.update_one({"id": b["id"]}, {"$set": {"bottles_per_crate": crate}})
-            stats["production_batches"] += 1
+    await process("master_skus")
+    await process("production_batches", {"sku_id": 1, "sku_name": 1, "batch_code": 1})
+    await process("factory_warehouse_stock", {"sku_id": 1, "sku_name": 1})
 
-    # 3) factory_warehouse_stock: set crate size for correct bottles→crates display
-    async for fws in db.factory_warehouse_stock.find({}, {"_id": 0, "id": 1, "sku_id": 1, "bottles_per_crate": 1}):
-        if not _missing(fws.get("bottles_per_crate")):
-            continue
-        crate = sku_map.get(fws.get("sku_id"))
-        if crate and crate > 1:
-            await db.factory_warehouse_stock.update_one({"id": fws["id"]}, {"$set": {"bottles_per_crate": crate}})
-            stats["factory_warehouse_stock"] += 1
-
-    print("Backfill complete. Updated:")
+    print("\n--- Summary (rows " + ("updated" if apply else "that WOULD be updated") + ") ---")
     for k, v in stats.items():
         print(f"  {k}: {v}")
+    if not apply:
+        print("\nNo changes were written (dry-run). Re-run with --apply to write.\n")
+    else:
+        print("\nDone. Changes written.\n")
     client.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Backfill bottles_per_crate hint field (safe, idempotent).")
+    parser.add_argument("--apply", action="store_true", help="Actually write changes (default is dry-run/preview).")
+    args = parser.parse_args()
+    asyncio.run(main(args.apply))
