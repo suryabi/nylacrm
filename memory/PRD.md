@@ -19,6 +19,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-08 — 🐛 Fix: Stock Dashboard counted crates as bottles (under-count, 3 crates → 3) ✅ DONE
+- **Reported (PRODUCTION, Mumbai)**: A Stock Out of 3 crates (1 crate = 12 bottles = 36 bottles) showed as **3** in the Stock Dashboard "Delivered" column (which is in base bottles). Invoice amounts were correct; only the dashboard aggregation was wrong.
+- **Root cause** (`distributors.py` `_item_crates`, ~line 8811): the earlier double-count fix returned `quantity` as-is whenever `packages > 0`, assuming `quantity` was already base bottles. But this line stored `quantity` as the **crate count (3)** while also carrying `packages=3` / `packaging_units=12` → returned 3 instead of 36.
+- **Fix**: when a line has BOTH `packages` (>0, crates) and `packaging_units` (>1, bottles/crate), authoritatively return **`packages × packaging_units`** — the true base-bottle total, immune to whether `quantity` was mis-stored as crates or bottles. Self-heals at read time (no data migration). Keeps the prior over-count case correct too (10 crates × 15 = 150, not 2250). Applies to stock_received / stock_delivered / stock_pending_out.
+- **Verified**: testing_agent iteration_313 (5/5 pass) — seeded a mis-stored 3-crate line → dashboard `stock_delivered=36`; no over-count regression across other SKUs. Regression test: `backend/tests/test_stock_dashboard_crate_bug.py`. **⚠️ Redeploy to apply on production.**
+
 ### 2026-07-08 — Stock Transfers & Stock Out exports: per-SKU drill-down ✅ DONE
 - Both Excel exports now use **Excel outline grouping** — a per-record **summary row** (green, bold) with **collapsible per-SKU detail rows** beneath it (the +/- drill-down control in Excel; `summaryBelow=False`).
 - **Stock Transfers** (`distributor_stock_transfers.py::export`): summary (transfer #, source, dest, total packages/units/value, doc type, status) + detail per SKU (packaging, units/pkg, quantity, total units, batch, rate, line value).
