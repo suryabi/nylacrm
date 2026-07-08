@@ -107,6 +107,7 @@ export default function NewDesignRequestNew() {
   const isEdit = Boolean(editId);
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editId));
   const [types, setTypes] = useState([]);
+  const [fallbackType, setFallbackType] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   // Lead the request is being raised for (optional)
@@ -164,6 +165,16 @@ export default function NewDesignRequestNew() {
           short_timeline_reason: req.short_timeline_reason || '',
           is_urgent: !!req.is_urgent,
         });
+        // Keep the lead-time guardrail working even if this request's type is
+        // inactive/hidden and therefore absent from the loaded `types` list —
+        // synthesise it from the request's own stored lead-time fields so the
+        // "short timeline reason" box renders and submit isn't silently blocked.
+        setFallbackType({
+          id: req.request_type_id,
+          name: req.request_type_name || 'Request type',
+          design_lead_time_days: Number(req.design_lead_time_days) || 0,
+          production_lead_time_days: Number(req.production_lead_time_days) || 0,
+        });
         if (req.logo) setLogoFile({ ...req.logo, _preview: isImg(req.logo) ? `${API}/design-requests-new/files/${req.logo.id}` : null });
         if (Array.isArray(req.references)) setReferenceFiles(req.references.map(f => ({ ...f, _preview: null })));
         setSocialLinks(req.social_media_links?.length ? req.social_media_links : ['']);
@@ -195,15 +206,24 @@ export default function NewDesignRequestNew() {
     return () => clearTimeout(t);
   }, [leadSearch, selectedLead]);
 
-  const selectedType = useMemo(() => types.find(t => t.id === form.request_type_id), [types, form.request_type_id]);
+  // Types available for selection, plus a synthesised fallback for the current
+  // request's type when it's inactive/hidden (keeps edit + lead-time guard working).
+  const allTypes = useMemo(() => {
+    if (fallbackType && fallbackType.id && !types.some(t => t.id === fallbackType.id)) {
+      return [...types, fallbackType];
+    }
+    return types;
+  }, [types, fallbackType]);
+
+  const selectedType = useMemo(() => allTypes.find(t => t.id === form.request_type_id), [allTypes, form.request_type_id]);
   // Filter out lead-only types from the standalone picker. In edit mode, keep the
   // request's current type visible even if it's one of the hidden ones.
-  const visibleTypes = useMemo(() => types.filter(t => {
+  const visibleTypes = useMemo(() => allTypes.filter(t => {
     const n = (t.name || '').trim().toLowerCase();
     if (HIDDEN_STANDALONE_TYPE_NAMES.includes(n)) return isEdit && t.id === form.request_type_id;
     return true;
-  }), [types, isEdit, form.request_type_id]);
-  const minLeadDays = selectedType ? (selectedType.design_lead_time_days + selectedType.production_lead_time_days) : 0;
+  }), [allTypes, isEdit, form.request_type_id]);
+  const minLeadDays = selectedType ? ((selectedType.design_lead_time_days || 0) + (selectedType.production_lead_time_days || 0)) : 0;
   const earliestDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + minLeadDays);

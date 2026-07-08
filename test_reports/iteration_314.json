@@ -1,0 +1,56 @@
+{
+  "summary": "Bug-fix verification for Edit Design Request 'short-timeline reason' bug PASSED. When editing a request whose type is inactive (DRN-2026-0002 / Neck Tags), the fallbackType synthesised from the request's stored lead-time fields now correctly makes the amber warning + mr-short-reason-input textarea render. Typing a reason enables mr-submit-btn, PUT returns 200, and the app navigates back to the detail page. Regression on active type (DRN-2026-0003) and the Create flow both succeed.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix in /app/frontend/src/pages/NewDesignRequestNew.js (fallbackType + allTypes) is correctly scoped to edit mode only (populated inside the edit-load useEffect ~line 172), so it cannot affect the create flow - verified.",
+    "The fallback type uses Number(req.design_lead_time_days) || 0 and same for production - safe against null/undefined from the API.",
+    "canSubmit gates on short_timeline_reason.trim() when isShortTimeline is true - correctly enforces the requirement and matches the backend rule in routes/design_requests_new.py update_request (PUT returns 400 otherwise)."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped per request)", "frontend": "100% (3/3 flows)" },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Nyla Air & Water tenant)",
+  "seed_data_creation": "Created one new design request during Test 3 (id eb3b87dd-e57d-4647-9629-eefccf296f5a, type Others, due 2026-07-08). Main agent may clean up if desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The Neck Tags request type was intentionally left deactivated in this iteration to reproduce the bug condition. Per the review request, the main agent will restore it afterwards. Do NOT reactivate it while verifying the fix.",
+  "features_tested": {
+    "Test1_Edit_Inactive_Type_DRN_2026_0002": {
+      "status": "PASS",
+      "verified": [
+        "Edit page /design-requests-new/4fc21734-677b-42fb-abf1-43c3e99c6b87/edit loads with the deactivated Neck Tags card visible (fallbackType synthesised into allTypes)",
+        "Amber warning 'Tighter than the minimum lead time (15 days, earliest 2026-07-23). Please explain why.' visible",
+        "data-testid mr-short-reason-input textarea rendered and visible",
+        "data-testid mr-submit-btn disabled BEFORE typing reason",
+        "Typing a reason enables mr-submit-btn",
+        "PUT /api/design-requests-new/4fc21734-677b-42fb-abf1-43c3e99c6b87 returns 200",
+        "Navigates to detail page /design-requests-new/4fc21734-..."
+      ]
+    },
+    "Test2_Edit_Active_Type_DRN_2026_0003_regression": {
+      "status": "PASS",
+      "verified": [
+        "Edit page loads for active-type request",
+        "Short-timeline reason box appears because due date is short",
+        "Reason editable, submit works, PUT /api/design-requests-new/cbf94ae9-d62c-4c8c-b6e8-5b8f2545e79c returns 200"
+      ]
+    },
+    "Test3_Create_New_Design_Request_regression": {
+      "status": "PASS",
+      "verified": [
+        "/design-requests-new/new loads with request-type chips (4 active types)",
+        "Selecting a type shows 'minimum lead time X days (earliest delivery: YYYY-MM-DD)' banner",
+        "Picking a short due date via shadcn Calendar renders the mr-short-reason-input textarea",
+        "Filling all required fields + reason enables Submit Request",
+        "POST /api/design-requests-new returns 200 and navigates to the new record's detail page"
+      ]
+    }
+  },
+  "rca of the issue": "Original bug: when the request type of an existing design request had been deactivated, GET /api/marketing-request-types (active-only) did not include that type; the frontend's `types` state therefore did not contain the request's type, so `selectedType` was undefined, `minLeadDays` fell back to 0, `isShortTimeline` was false, and the short-reason textarea never rendered. User could not enter the required reason so backend rejected the PUT with 400. Fix: On edit-load, synthesise a fallbackType from the request's stored request_type_name / design_lead_time_days / production_lead_time_days and merge it into `allTypes` via useMemo. `selectedType`, `visibleTypes`, and `minLeadDays` now use `allTypes`, so the short-timeline warning + textarea render correctly even for inactive types. Verified against the real failure condition (Neck Tags kept deactivated)."
+}
