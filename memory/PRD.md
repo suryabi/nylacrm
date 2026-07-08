@@ -19,6 +19,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-08 — Stock Transfers & Stock Out exports: per-SKU drill-down ✅ DONE
+- Both Excel exports now use **Excel outline grouping** — a per-record **summary row** (green, bold) with **collapsible per-SKU detail rows** beneath it (the +/- drill-down control in Excel; `summaryBelow=False`).
+- **Stock Transfers** (`distributor_stock_transfers.py::export`): summary (transfer #, source, dest, total packages/units/value, doc type, status) + detail per SKU (packaging, units/pkg, quantity, total units, batch, rate, line value).
+- **Stock Out** (new `GET /distributors/{id}/deliveries/export` in `distributors.py`): mirrors the list filters (status/account_ids/location_id/time_filter, all records not just current page); summary per delivery + detail per SKU with the full financial columns (Margin %, Base/Transfer Price, Billed to Distributor, Customer Price, New Transfer Price, Actual Billable, Adjustment, Customer Invoice). Replaces the old client-side CSV (which only covered the current page).
+- **Frontend**: `DeliveriesTab.downloadExcel` now calls the backend export via `fetch` (xlsx blob).
+- Verified: curl (ST 21 rows w/ lvl-0 summary + lvl-1 detail; SO 41 rows same) + Playwright UI (Stock Out "Download Excel" → `stock_out_Brian_*.xlsx` downloaded).
+
 ### 2026-07-08 — Stock Transfers: Excel download ✅ DONE
 - **Stock Transfers page** (`StockTransfers.js`) header now has a **"Download"** button that exports the (search-filtered) transfers list to `.xlsx`.
 - **Backend** (`distributor_stock_transfers.py`): new `GET /distributor/stock-transfers/export` (defined before `/{transfer_id}` to avoid path capture) streams an openpyxl workbook — Transfer #, Date, Source/Dest Distributor+Warehouse+GSTIN, Total Packages, SKUs, Items, Doc Type, Zoho Status, Total Value, Vehicle #, Status, Created By — honoring the same `search`/`distributor_id`/`sku_id`/`status` filters as the list.

@@ -4433,6 +4433,170 @@ async def list_distributor_deliveries(
     }
 
 
+@router.get("/{distributor_id}/deliveries/export")
+async def export_distributor_deliveries(
+    distributor_id: str,
+    status: Optional[str] = None,
+    account_id: Optional[str] = None,
+    account_ids: Optional[str] = None,
+    location_id: Optional[str] = None,
+    time_filter: Optional[str] = 'this_month',
+    current_user: dict = Depends(get_current_user)
+):
+    """Export the (filtered) Stock Out deliveries to an Excel (.xlsx) file with
+    a per-delivery summary row and collapsible per-SKU detail rows (drill-down)."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from fastapi.responses import StreamingResponse
+
+    tenant_id = get_current_tenant_id()
+
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    if status and status != 'all':
+        query["status"] = status
+
+    selected_accounts = set()
+    if account_id and account_id != 'all':
+        selected_accounts.add(account_id)
+    if account_ids:
+        selected_accounts.update(a for a in account_ids.split(',') if a and a != 'all')
+    if selected_accounts:
+        query["account_id"] = {"$in": list(selected_accounts)}
+
+    if location_id and location_id != 'all':
+        query["distributor_location_id"] = location_id
+
+    now = datetime.now(timezone.utc)
+    if time_filter and time_filter != 'lifetime':
+        start_date = end_date = None
+        if time_filter == 'this_week':
+            start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0); end_date = now
+        elif time_filter == 'last_week':
+            start_date = (now - timedelta(days=now.weekday() + 7)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = (now - timedelta(days=now.weekday() + 1)).replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif time_filter == 'this_month':
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0); end_date = now
+        elif time_filter == 'last_month':
+            first_of_current = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            last_day_of_prev = first_of_current - timedelta(days=1)
+            start_date = last_day_of_prev.replace(day=1); end_date = last_day_of_prev.replace(hour=23, minute=59, second=59, microsecond=999999)
+        elif time_filter == 'last_3_months':
+            start_date = (now - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0); end_date = now
+        elif time_filter == 'last_6_months':
+            start_date = (now - timedelta(days=180)).replace(hour=0, minute=0, second=0, microsecond=0); end_date = now
+        elif time_filter == 'this_year':
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0); end_date = now
+        if start_date and end_date:
+            query["delivery_date"] = {"$gte": start_date.strftime("%Y-%m-%d"), "$lte": end_date.strftime("%Y-%m-%d")}
+
+    deliveries = await db.distributor_deliveries.find(query, {"_id": 0}) \
+        .sort([("delivery_date", -1), ("created_at", -1)]).to_list(5000)
+    for delivery in deliveries:
+        delivery['items'] = await db.distributor_delivery_items.find(
+            {"delivery_id": delivery['id'], "tenant_id": tenant_id}, {"_id": 0}
+        ).to_list(500)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Stock Out"
+    ws.sheet_properties.outlinePr.summaryBelow = False
+
+    headers = ['Delivery #', 'Date', 'Account', 'City', 'SKU', 'Quantity', 'Margin %',
+               'Base Price', 'Transfer Price', 'Billed to Distributor', 'Customer Price',
+               'New Transfer Price', 'Actual Billable to Distributor',
+               'Adjustment (Dist to Factory)', 'Customer Invoice Amount', 'Status']
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
+    summary_fill = PatternFill(start_color="ecfdf5", end_color="ecfdf5", fill_type="solid")
+    summary_font = Font(bold=True, color="065f46")
+    thin = Side(style="thin", color="d0d5dd")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for c_idx, name in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=c_idx, value=name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = border
+
+    widths = [16, 12, 28, 16, 30, 10, 9, 12, 14, 16, 12, 14, 20, 18, 18, 12]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    def _item_calc(item):
+        qty = item.get('quantity') or 0
+        customer_price = item.get('customer_selling_price') or item.get('unit_price') or 0
+        commission_pct = item.get('distributor_commission_percent')
+        if commission_pct is None:
+            commission_pct = item.get('margin_percent')
+        if commission_pct is None:
+            commission_pct = 2.5
+        base_price = item.get('base_price') or item.get('transfer_price') or 0
+        transfer_price = base_price * (1 - commission_pct / 100) if base_price > 0 else 0
+        billed = qty * transfer_price
+        new_tp = customer_price * (1 - commission_pct / 100) if customer_price > 0 else 0
+        actual = qty * new_tp
+        return {
+            'qty': qty, 'commission_pct': commission_pct, 'base_price': base_price,
+            'transfer_price': transfer_price, 'billed': billed, 'customer_price': customer_price,
+            'new_tp': new_tp, 'actual': actual, 'adjustment': actual - billed,
+            'customer_invoice': qty * customer_price,
+        }
+
+    r = 2
+    for d in deliveries:
+        items = d.get('items') or []
+        dev_date = d.get('delivery_date') or '-'
+        if isinstance(dev_date, str):
+            dev_date = dev_date[:10]
+        calcs = [_item_calc(it) for it in items]
+        tot = {k: sum(c[k] for c in calcs) for k in ('qty', 'billed', 'actual', 'adjustment', 'customer_invoice')} if calcs else {k: 0 for k in ('qty', 'billed', 'actual', 'adjustment', 'customer_invoice')}
+        summary = [
+            d.get('delivery_number') or '-', dev_date, d.get('account_name') or '-', d.get('account_city') or '-',
+            f"{len(items)} SKU(s)", tot['qty'], '', '', '', round(tot['billed'], 2), '', '',
+            round(tot['actual'], 2), round(tot['adjustment'], 2), round(tot['customer_invoice'], 2),
+            d.get('status') or '-',
+        ]
+        for c_idx, val in enumerate(summary, 1):
+            cell = ws.cell(row=r, column=c_idx, value=val)
+            cell.border = border
+            cell.fill = summary_fill
+            cell.font = summary_font
+            if c_idx == 6:
+                cell.number_format = '#,##0'
+            elif c_idx in (10, 13, 14, 15):
+                cell.number_format = '#,##0.00'
+        r += 1
+        for it, c in zip(items, calcs):
+            detail = [
+                '', '', '', '', f"    {it.get('sku_name') or it.get('sku_code') or 'N/A'}",
+                c['qty'], round(c['commission_pct'], 2), round(c['base_price'], 2),
+                round(c['transfer_price'], 2), round(c['billed'], 2), round(c['customer_price'], 2),
+                round(c['new_tp'], 2), round(c['actual'], 2), round(c['adjustment'], 2),
+                round(c['customer_invoice'], 2), '',
+            ]
+            for c_idx, val in enumerate(detail, 1):
+                cell = ws.cell(row=r, column=c_idx, value=val)
+                cell.border = border
+                if c_idx == 6:
+                    cell.number_format = '#,##0'
+                elif c_idx in (7, 8, 9, 10, 11, 12, 13, 14, 15):
+                    cell.number_format = '#,##0.00'
+            ws.row_dimensions[r].outline_level = 1
+            r += 1
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"stock_out_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/{distributor_id}/deliveries/{delivery_id}")
 async def get_delivery(
     distributor_id: str,

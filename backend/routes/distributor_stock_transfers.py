@@ -941,13 +941,16 @@ async def export_stock_transfers(
     wb = Workbook()
     ws = wb.active
     ws.title = "Stock Transfers"
+    # Summary row sits ABOVE its per-SKU detail group (Excel drill-down)
+    ws.sheet_properties.outlinePr.summaryBelow = False
 
-    headers = ['Transfer #', 'Date', 'Source Distributor', 'Source Warehouse', 'Source GSTIN',
-               'Destination Distributor', 'Destination Warehouse', 'Destination GSTIN',
-               'Total Packages', 'SKUs', 'Items', 'Doc Type', 'Zoho Status', 'Total Value',
-               'Vehicle #', 'Status', 'Created By']
+    headers = ['Transfer #', 'Date', 'Source', 'Destination', 'SKU', 'Packaging',
+               'Units/Pkg', 'Quantity', 'Total Units', 'Batch', 'Rate', 'Line Value',
+               'Doc Type', 'Zoho', 'Status', 'Created By']
     header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
+    summary_fill = PatternFill(start_color="ecfdf5", end_color="ecfdf5", fill_type="solid")
+    summary_font = Font(bold=True, color="065f46")
     thin = Side(style="thin", color="d0d5dd")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
@@ -958,43 +961,58 @@ async def export_stock_transfers(
         cell.alignment = Alignment(horizontal="center")
         cell.border = border
 
-    widths = [16, 12, 22, 22, 18, 22, 22, 18, 14, 8, 40, 16, 12, 14, 14, 12, 18]
+    widths = [16, 12, 32, 32, 30, 16, 10, 12, 12, 16, 12, 14, 16, 10, 12, 18]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[chr(64 + i)].width = w
 
-    for r_idx, t in enumerate(rows, 2):
+    r = 2
+    for t in rows:
         items = t.get('items') or []
-        items_str = "; ".join(
-            f"{it.get('quantity')} {it.get('packaging_type_name') or 'units'} {it.get('sku_name') or ''}".strip()
-            for it in items
-        )
+        src = f"{t.get('source_distributor_name') or '-'} — {t.get('source_location_name') or '-'}"
+        dst = f"{t.get('dest_distributor_name') or '-'} — {t.get('dest_location_name') or '-'}"
         doc_type = 'Delivery Challan' if t.get('zoho_doc_type') == 'delivery_challan' else 'Invoice'
-        row = [
-            t.get('transfer_number') or '-',
-            (t.get('transfer_date') or '')[:10] if isinstance(t.get('transfer_date'), str) else (t.get('transfer_date') or '-'),
-            t.get('source_distributor_name') or '-',
-            t.get('source_location_name') or '-',
-            t.get('source_gstin') or '-',
-            t.get('dest_distributor_name') or '-',
-            t.get('dest_location_name') or '-',
-            t.get('dest_gstin') or '-',
-            t.get('total_packages') if t.get('total_packages') is not None else (t.get('total_quantity') or 0),
-            len(items),
-            items_str or '-',
-            doc_type,
-            t.get('zoho_status') or '-',
-            round(t.get('total_value') or 0, 2),
-            t.get('vehicle_number') or '-',
-            t.get('status') or '-',
-            t.get('created_by_name') or '-',
+        transfer_date = (t.get('transfer_date') or '')[:10] if isinstance(t.get('transfer_date'), str) else (t.get('transfer_date') or '-')
+        total_packages = t.get('total_packages') if t.get('total_packages') is not None else (t.get('total_quantity') or 0)
+        # ── Summary row (transfer level) ──
+        summary = [
+            t.get('transfer_number') or '-', transfer_date, src, dst,
+            f"{len(items)} SKU(s)", '', '', total_packages, t.get('total_units') or '',
+            '', '', round(t.get('total_value') or 0, 2),
+            doc_type, t.get('zoho_status') or '-', t.get('status') or '-', t.get('created_by_name') or '-',
         ]
-        for c_idx, val in enumerate(row, 1):
-            cell = ws.cell(row=r_idx, column=c_idx, value=val)
+        for c_idx, val in enumerate(summary, 1):
+            cell = ws.cell(row=r, column=c_idx, value=val)
             cell.border = border
-            if c_idx == 9:
+            cell.fill = summary_fill
+            cell.font = summary_font
+            if c_idx == 8:
                 cell.number_format = '#,##0'
-            elif c_idx == 14:
+            elif c_idx == 12:
                 cell.number_format = '#,##0.00'
+        r += 1
+        # ── Detail rows (per SKU, grouped/collapsible) ──
+        for it in items:
+            detail = [
+                '', '', '', '',
+                f"    {it.get('sku_name') or '-'}",
+                it.get('packaging_type_name') or '-',
+                it.get('units_per_package') or '',
+                it.get('quantity') or 0,
+                it.get('quantity_units') or '',
+                it.get('batch_code') or '-',
+                round(it.get('rate') or 0, 2),
+                round(it.get('line_total') or 0, 2),
+                '', '', '', '',
+            ]
+            for c_idx, val in enumerate(detail, 1):
+                cell = ws.cell(row=r, column=c_idx, value=val)
+                cell.border = border
+                if c_idx in (7, 8, 9):
+                    cell.number_format = '#,##0'
+                elif c_idx in (11, 12):
+                    cell.number_format = '#,##0.00'
+            ws.row_dimensions[r].outline_level = 1
+            r += 1
 
     buf = io.BytesIO()
     wb.save(buf)

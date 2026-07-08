@@ -683,102 +683,36 @@ export default function DeliveriesTab({
     }
   };
   
-  // Download as Excel
+  // Download as Excel (backend export — ALL filtered records + per-SKU drill-down)
   const downloadExcel = async () => {
     setDownloading(true);
     try {
-      // Prepare data for Excel
-      const excelData = [];
-      
-      deliveries.forEach(delivery => {
-        const items = delivery.items || [];
-        if (items.length > 0) {
-          items.forEach(item => {
-            const qty = item.quantity || 0;
-            const customerPrice = item.customer_selling_price || item.unit_price || 0;
-            const commissionPct = item.distributor_commission_percent || item.margin_percent || 2.5;
-            const basePrice = item.base_price || item.transfer_price || 0;
-            
-            // Calculations matching the table
-            const transferPrice = basePrice > 0 ? basePrice * (1 - commissionPct / 100) : 0;
-            const billedToDist = qty * transferPrice;
-            const newTransferPrice = customerPrice > 0 ? customerPrice * (1 - commissionPct / 100) : 0;
-            const actualBillable = qty * newTransferPrice;
-            const adjustment = actualBillable - billedToDist;
-            const customerInvoice = qty * customerPrice;
-            
-            excelData.push({
-              'Delivery #': delivery.delivery_number,
-              'Date': new Date(delivery.delivery_date).toLocaleDateString(),
-              'Account': delivery.account_name,
-              'City': delivery.account_city,
-              'SKU': item.sku_name || item.sku_code || 'N/A',
-              'Quantity': qty,
-              'Margin %': commissionPct,
-              'Base Price': basePrice,
-              'Transfer Price': transferPrice,
-              'Billed to Distributor': billedToDist,
-              'Customer Price': customerPrice,
-              'New Transfer Price': newTransferPrice,
-              'Actual Billable to Distributor': actualBillable,
-              'Adjustment (Dist to Factory)': adjustment,
-              'Customer Invoice Amount': customerInvoice,
-              'Status': delivery.status
-            });
-          });
-        } else {
-          excelData.push({
-            'Delivery #': delivery.delivery_number,
-            'Date': new Date(delivery.delivery_date).toLocaleDateString(),
-            'Account': delivery.account_name,
-            'City': delivery.account_city,
-            'SKU': 'No items',
-            'Quantity': 0,
-            'Margin %': 0,
-            'Base Price': 0,
-            'Transfer Price': 0,
-            'Billed to Distributor': 0,
-            'Customer Price': 0,
-            'New Transfer Price': 0,
-            'Actual Billable to Distributor': 0,
-            'Adjustment (Dist to Factory)': 0,
-            'Customer Invoice Amount': 0,
-            'Status': delivery.status
-          });
-        }
-      });
-      
-      // Convert to CSV
-      if (excelData.length === 0) {
-        alert('No data to download');
-        return;
+      const params = new URLSearchParams();
+      if (deliveriesTimeFilter) params.set('time_filter', deliveriesTimeFilter);
+      if (Array.isArray(deliveriesAccountFilter) && deliveriesAccountFilter.length > 0) {
+        params.set('account_ids', deliveriesAccountFilter.join(','));
       }
-      
-      const headers = Object.keys(excelData[0]);
-      const csvContent = [
-        headers.join(','),
-        ...excelData.map(row => 
-          headers.map(header => {
-            const value = row[header];
-            // Escape commas and quotes
-            if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-              return `"${value.replace(/"/g, '""')}"`;
-            }
-            return value;
-          }).join(',')
-        )
-      ].join('\n');
-      
-      // Download
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      if (deliveriesLocationFilter && deliveriesLocationFilter !== 'all') {
+        params.set('location_id', deliveriesLocationFilter);
+      }
+      const res = await fetch(
+        `${API_URL}/api/distributors/${distributor.id}/deliveries/export?${params}`,
+        { headers: { Authorization: `Bearer ${token}` }, credentials: 'include' }
+      );
+      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `deliveries_${distributor?.name || 'distributor'}_${new Date().toISOString().split('T')[0]}.csv`;
+      link.href = url;
+      link.download = `stock_out_${distributor?.distributor_name || distributor?.name || 'distributor'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(link.href);
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success('Stock Out exported');
     } catch (error) {
       console.error('Download failed:', error);
-      alert('Failed to download');
+      toast.error('Failed to download Stock Out');
     } finally {
       setDownloading(false);
     }
