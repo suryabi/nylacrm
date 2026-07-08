@@ -11,6 +11,7 @@ Mounted under /api/accounts:
 """
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 
@@ -124,7 +125,13 @@ async def statement_pdf(
     if end_date:
         date_params["end_date"] = end_date
     try:
-        pdf_bytes = await zoho_service.get_contact_statement_pdf(tenant_id, contact_id, date_params or None)
+        pdf_bytes = await asyncio.wait_for(
+            zoho_service.get_contact_statement_pdf(tenant_id, contact_id, date_params or None),
+            timeout=45.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Zoho statement fetch hit the 45s ceiling for account %s", account_id)
+        raise HTTPException(504, "Zoho Books took too long to return this statement. Please try again in a moment.")
     except RuntimeError as e:
         # not connected / refresh token missing
         raise HTTPException(409, str(e))
@@ -149,6 +156,21 @@ async def statement_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="{_statement_filename(acc)}"'},
     )
+
+
+@router.get("/{account_id}/statement/debug")
+async def statement_debug(account_id: str, current_user: dict = Depends(get_current_user)):
+    """Diagnostic: returns the raw Zoho statement-call results as JSON (no PDF).
+    Use to pinpoint why the live statement fetch fails on production."""
+    tenant_id = get_current_tenant_id()
+    acc = await _get_account(tenant_id, account_id)
+    contact_id = (acc.get("zoho_contact_id") or "").strip()
+    if not contact_id:
+        return {"error": "Account is not linked to a Zoho customer.", "account_id": account_id}
+    report = await zoho_service.diagnose_contact_statement(tenant_id, contact_id)
+    report["account_name"] = _account_name(acc)
+    return report
+
 
 
 @router.post("/{account_id}/statement/share-link")

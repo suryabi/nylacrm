@@ -26,6 +26,21 @@ export const AccountZohoLedger = ({ accountId }) => {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState(null);
   const [sharing, setSharing] = useState(false);
+  const [diag, setDiag] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+
+  const runDiagnostics = useCallback(async () => {
+    setDiagLoading(true);
+    setDiag(null);
+    try {
+      const { data } = await axios.get(`${API_URL}/accounts/${accountId}/statement/debug`, { headers: authHeader() });
+      setDiag(data);
+    } catch (e) {
+      setDiag({ error: e.response?.data?.detail || e.message || 'Diagnostics failed' });
+    } finally {
+      setDiagLoading(false);
+    }
+  }, [accountId]);
 
   const fetchStatus = useCallback(async () => {
     setLoadingStatus(true);
@@ -160,9 +175,23 @@ export const AccountZohoLedger = ({ accountId }) => {
         <div className="py-12 text-center" data-testid="ledger-pdf-error">
           <AlertCircle className="h-6 w-6 text-amber-500 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">{pdfError}</p>
-          <Button size="sm" variant="outline" className="mt-3" onClick={fetchPdf}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Retry
-          </Button>
+          <div className="flex items-center gap-2 justify-center mt-3">
+            <Button size="sm" variant="outline" onClick={fetchPdf}>
+              <RefreshCw className="h-4 w-4 mr-1" /> Retry
+            </Button>
+            <Button size="sm" variant="outline" onClick={runDiagnostics} disabled={diagLoading} data-testid="ledger-diagnose-btn">
+              {diagLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <AlertCircle className="h-4 w-4 mr-1" />} Run diagnostics
+            </Button>
+          </div>
+          {diag ? (
+            <div className="mt-4 text-left max-w-2xl mx-auto">
+              <p className="text-xs text-muted-foreground mb-1">Diagnostics (copy &amp; share this with support):</p>
+              <pre
+                className="text-[11px] leading-snug bg-slate-900 text-slate-100 rounded-lg p-3 overflow-auto max-h-80 whitespace-pre-wrap break-all"
+                data-testid="ledger-diagnostics-output"
+              >{JSON.stringify(diag, null, 2)}</pre>
+            </div>
+          ) : null}
         </div>
       ) : pdfLoading && !pdfUrl ? (
         <div className="flex flex-col items-center justify-center py-12" data-testid="ledger-pdf-loading">

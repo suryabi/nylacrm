@@ -608,6 +608,85 @@ async def get_contact_statement_pdf(tenant_id: str, contact_id: str, params: Opt
     raise RuntimeError("Zoho statement request failed")
 
 
+async def diagnose_contact_statement(tenant_id: str, contact_id: str) -> dict:
+    """Diagnostic probe for the customer Statement PDF fetch.
+
+    Runs the exact same Zoho calls the real endpoint uses, but returns a JSON
+    report (status codes, content-types, body previews, redirect history,
+    timings) instead of a PDF — so a production failure can be diagnosed
+    without server log access. Never raises; captures errors into the report.
+    """
+    import time as _time
+    report: dict = {"contact_id": contact_id, "steps": []}
+    try:
+        cfg = get_zoho_config()
+        creds = await get_credentials(tenant_id)
+        if not creds:
+            report["error"] = "Zoho Books is not connected for this tenant"
+            return report
+        api_base = (creds.get("api_base_url") or cfg["api_base_url"]).rstrip("/")
+        org_id = creds.get("organization_id")
+        report["api_base"] = api_base
+        report["organization_id"] = org_id
+        report["connection_status"] = creds.get("connection_status")
+        try:
+            token = await get_valid_access_token(tenant_id)
+            report["token_ok"] = bool(token)
+        except Exception as e:  # noqa: BLE001
+            report["token_ok"] = False
+            report["token_error"] = f"{type(e).__name__}: {e}"
+            return report
+
+        today = datetime.now(timezone.utc).date()
+        fy_start_year = today.year if today.month >= 4 else today.year - 1
+        base_params = {"organization_id": org_id}
+        stmt_url = f"{api_base}/books/v3/contacts/{contact_id}/statement"
+
+        probes = [
+            ("contact_lookup", "GET", f"{api_base}/books/v3/contacts/{contact_id}",
+             {**base_params}, "application/json"),
+            ("statement_json_no_dates", "GET", stmt_url,
+             {**base_params}, "application/json"),
+            ("statement_json_with_dates", "GET", stmt_url,
+             {**base_params, "start_date": f"{fy_start_year}-04-01", "end_date": today.isoformat()},
+             "application/json"),
+            ("statement_pdf_with_dates", "GET", stmt_url,
+             {**base_params, "accept": "pdf", "start_date": f"{fy_start_year}-04-01", "end_date": today.isoformat()},
+             "application/pdf"),
+        ]
+
+        for name, method, url, params, accept in probes:
+            step = {"name": name, "url": url.replace(api_base, ""), "params": {k: v for k, v in params.items() if k != "organization_id"}}
+            headers = {"Authorization": f"Zoho-oauthtoken {token}", "Accept": accept}
+            t0 = _time.monotonic()
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=10.0), follow_redirects=True) as client:
+                    resp = await client.request(method, url, headers=headers, params=params)
+                step["status_code"] = resp.status_code
+                step["content_type"] = resp.headers.get("content-type")
+                step["content_length"] = resp.headers.get("content-length")
+                step["bytes_received"] = len(resp.content)
+                step["redirects"] = [str(r.url) for r in resp.history]
+                ctype = (resp.headers.get("content-type") or "").lower()
+                if "pdf" in ctype:
+                    step["body_preview"] = f"<PDF binary, {len(resp.content)} bytes>"
+                else:
+                    try:
+                        step["body_preview"] = resp.text[:600]
+                    except Exception:
+                        step["body_preview"] = "<unreadable body>"
+            except httpx.TimeoutException:
+                step["error"] = "TIMEOUT (>20s)"
+            except Exception as e:  # noqa: BLE001
+                step["error"] = f"{type(e).__name__}: {e}"
+            step["elapsed_ms"] = int((_time.monotonic() - t0) * 1000)
+            report["steps"].append(step)
+    except Exception as e:  # noqa: BLE001
+        report["fatal_error"] = f"{type(e).__name__}: {e}"
+    return report
+
+
+
 
 # ---------- Contact upsert ----------
 

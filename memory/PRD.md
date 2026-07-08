@@ -19,13 +19,17 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — 🐛 Fix: Zoho Statement download → Cloudflare "invalid/incomplete response" (origin hang) ✅ CODE DONE (prod-verify pending)
-- **Reported (PRODUCTION, after redeploying the date-param fix)**: Downloading a customer statement showed a Cloudflare page "The origin web server returned an invalid or incomplete response" — i.e. the origin hung/crashed mid-response instead of returning a clean error.
-- **Fixes** (`services/zoho_service.py::get_contact_statement_pdf` + `routes/account_ledger.py::statement_pdf`):
-  - **Fail fast**: httpx timeout lowered to 20s read / 10s connect; `httpx.TimeoutException`/`HTTPError` now caught and turned into clean `ZohoApiError(504/502)` instead of an unhandled crash.
-  - **follow_redirects=True**: Zoho can serve PDF exports via a redirect — httpx doesn't follow by default, a likely cause of the hang/incomplete response.
-  - **Route catch-all**: any unexpected error now returns a clean JSON 502 (never a truncated/incomplete response → no more Cloudflare 520 page). Empty-PDF guard added.
-- **⚠️ Verify on production**: redeploy → retry download. It will now either succeed (if redirect was the cause) or show a clear, specific message.
+### 2026-07-09 — 🐛 Zoho Statement → Cloudflare 520 (origin hang) + built a production diagnostic ✅ CODE DONE (prod-run needed)
+- **Reported (PRODUCTION, still failing after redeploy)**: Statement download shows Cloudflare "Error 520 — origin returned an invalid/incomplete response". A *clean* error would pass through as a normal 502/504, so a 520 means the origin was **hanging/crashing mid-response**, not returning a Zoho error. Invoice PDF (same StreamingResponse+Zoho pattern) works, so it's specific to the statement path.
+- **Hardening (guarantees no more 520)** in `routes/account_ledger.py` + `services/zoho_service.py`:
+  - **Hard 45s ceiling** via `asyncio.wait_for` around the fetch → always returns a clean 504 well under Cloudflare's 100s.
+  - `follow_redirects=True` + fail-fast httpx timeouts (20s read / 10s connect) + caught `TimeoutException`/`HTTPError`.
+  - Route **catch-all** → clean JSON always; empty-PDF guard.
+- **NEW diagnostic** (since Zoho isn't connected in preview & no prod log access): `GET /api/accounts/{id}/statement/debug` runs 4 probes (contact lookup, statement JSON w/ & w/o dates, statement PDF) and returns a JSON report (status, content-type, bytes, redirects, body-preview, timing per step). Surfaced in the UI as a **"Run diagnostics"** button in the ledger error state (`AccountZohoLedger.jsx`, `data-testid=ledger-diagnose-btn` / `ledger-diagnostics-output`).
+- **Verified in preview**: both endpoints return clean JSON (400/“not linked”), no hang; frontend compiles.
+- **⚠️ NEXT (user)**: redeploy → open the account's Ledger section → if it errors, click **Run diagnostics** and share the JSON. That report pinpoints the exact Zoho behaviour (missing template / scope / redirect / timeout).
+
+
 
 
 - **Reported (PRODUCTION)**: Every customer's statement pull returned 502 "Zoho Books did not return this statement. Please try again in a moment." (GET `/api/accounts/{id}/statement/pdf` → 502).
