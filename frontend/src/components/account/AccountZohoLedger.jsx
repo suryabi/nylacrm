@@ -51,7 +51,19 @@ export const AccountZohoLedger = ({ accountId }) => {
     } catch (e) {
       const status = e.response?.status;
       let msg = 'Could not load the statement from Zoho Books right now.';
-      if (status === 502) msg = 'Zoho Books did not return this statement. Please try again in a moment.';
+      // Error responses arrive as a Blob (responseType='blob'); parse the JSON detail.
+      try {
+        if (e.response?.data instanceof Blob) {
+          const text = await e.response.data.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.detail) msg = parsed.detail;
+        } else if (e.response?.data?.detail) {
+          msg = e.response.data.detail;
+        }
+      } catch { /* fall back to generic msg */ }
+      if (status === 502 && msg === 'Could not load the statement from Zoho Books right now.') {
+        msg = 'Zoho Books did not return this statement. Please try again in a moment.';
+      }
       setPdfError(msg);
     } finally {
       setPdfLoading(false);

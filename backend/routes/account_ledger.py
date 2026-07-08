@@ -106,21 +106,34 @@ async def statement_status(account_id: str, current_user: dict = Depends(get_cur
 
 
 @router.get("/{account_id}/statement/pdf")
-async def statement_pdf(account_id: str, current_user: dict = Depends(get_current_user)):
+async def statement_pdf(
+    account_id: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    current_user: dict = Depends(get_current_user),
+):
     """Live customer Statement of Accounts PDF, straight from Zoho Books."""
     tenant_id = get_current_tenant_id()
     acc = await _get_account(tenant_id, account_id)
     contact_id = (acc.get("zoho_contact_id") or "").strip()
     if not contact_id:
         raise HTTPException(400, "This account is not linked to a Zoho customer. Link it from the account's Zoho action first.")
+    date_params = {}
+    if start_date:
+        date_params["start_date"] = start_date
+    if end_date:
+        date_params["end_date"] = end_date
     try:
-        pdf_bytes = await zoho_service.get_contact_statement_pdf(tenant_id, contact_id)
+        pdf_bytes = await zoho_service.get_contact_statement_pdf(tenant_id, contact_id, date_params or None)
     except RuntimeError as e:
         # not connected / refresh token missing
         raise HTTPException(409, str(e))
     except zoho_service.ZohoApiError as e:
         logger.warning("Zoho statement fetch failed for account %s: %s", account_id, e)
-        raise HTTPException(502, "Zoho Books could not return this customer's statement right now.")
+        # Surface the real Zoho message so the cause is actionable (missing template,
+        # date range, scope, etc.) rather than a generic "try again".
+        detail = e.message or "Zoho Books could not return this customer's statement right now."
+        raise HTTPException(502, f"Zoho Books: {detail}")
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",

@@ -551,6 +551,13 @@ async def get_contact_statement_pdf(tenant_id: str, contact_id: str, params: Opt
     req_params = dict(params or {})
     req_params["organization_id"] = creds["organization_id"]
     req_params["accept"] = "pdf"
+    # Zoho requires start_date & end_date for the statement. Default to the
+    # current India financial year (Apr 1 → today) when the caller omits them.
+    if not req_params.get("start_date") or not req_params.get("end_date"):
+        today = datetime.now(timezone.utc).date()
+        fy_start_year = today.year if today.month >= 4 else today.year - 1
+        req_params.setdefault("start_date", f"{fy_start_year}-04-01")
+        req_params.setdefault("end_date", today.isoformat())
 
     for attempt in range(2):
         token = await get_valid_access_token(tenant_id)

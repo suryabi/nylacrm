@@ -19,6 +19,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-09 — 🐛 Fix: Zoho Statement PDF returned 502 on production (missing required date params) ✅ CODE DONE (prod-verify pending)
+- **Reported (PRODUCTION)**: Every customer's statement pull returned 502 "Zoho Books did not return this statement. Please try again in a moment." (GET `/api/accounts/{id}/statement/pdf` → 502).
+- **Root cause**: Zoho Books' `GET /contacts/{contact_id}/statement?accept=pdf` **requires** `start_date` and `end_date` query params (confirmed via Zoho API docs). Our `get_contact_statement_pdf` sent only `organization_id` + `accept=pdf`, so Zoho rejected it — and the route masked the real reason behind a generic 502.
+- **Fix**:
+  - `zoho_service.get_contact_statement_pdf`: defaults `start_date`/`end_date` to the current India financial year (Apr 1 → today) when the caller omits them; still accepts explicit overrides.
+  - `routes/account_ledger.py::statement_pdf`: accepts optional `start_date`/`end_date` query params and now **surfaces the real Zoho error message** (`Zoho Books: <detail>`) instead of the generic 502.
+  - `components/account/AccountZohoLedger.jsx`: parses the error Blob body to display the actual Zoho reason in the UI.
+- **⚠️ Verify on production** (Zoho not connected in preview): redeploy, then retry a customer statement — it should now render, or show the exact Zoho reason if any remains.
+
+
 ### 2026-07-08 — ✨ Per-customer Zoho ledger / Statement of Accounts (Account detail) ✅ DONE
 - New **"Ledger / Statement"** section on the Account detail page that pulls the customer's **official Statement of Accounts live from Zoho Books as a PDF** (`GET /books/v3/contacts/{contact_id}/statement?accept=pdf`), embedded in an inline viewer.
 - Actions: **Refresh**, **Download PDF**, and **Share via WhatsApp** (creates a 7-day signed public link via the existing document-sharing framework and opens a `wa.me` deep link prefilled with the customer's number + statement link — no Meta API needed).
