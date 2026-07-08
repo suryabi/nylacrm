@@ -573,7 +573,23 @@ async def get_contact_statement_pdf(tenant_id: str, contact_id: str, params: Opt
                 payload = resp.json()
             except Exception:
                 pass
-            raise ZohoApiError(resp.status_code, resp.text[:500], payload)
+            zmsg = (payload or {}).get("message") if isinstance(payload, dict) else None
+            raise ZohoApiError(resp.status_code, zmsg or resp.text[:500], payload)
+        ctype = (resp.headers.get("content-type") or "").lower()
+        if "pdf" not in ctype:
+            # Zoho fell back to a JSON body instead of the PDF — surface why.
+            body_text = ""
+            try:
+                body_text = resp.text[:400]
+            except Exception:
+                pass
+            logger.error("Zoho statement returned non-PDF content-type=%r body=%r", ctype, body_text)
+            raise ZohoApiError(
+                502,
+                "Zoho returned a non-PDF response for this statement. In Zoho Books, open "
+                "Settings → Preferences → Customers/Statements and set a default statement "
+                "template, then retry.",
+            )
         return resp.content
     raise RuntimeError("Zoho statement request failed")
 
