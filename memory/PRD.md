@@ -19,6 +19,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-08 — ✨ Per-customer Zoho ledger / Statement of Accounts (Account detail) ✅ DONE
+- New **"Ledger / Statement"** section on the Account detail page that pulls the customer's **official Statement of Accounts live from Zoho Books as a PDF** (`GET /books/v3/contacts/{contact_id}/statement?accept=pdf`), embedded in an inline viewer.
+- Actions: **Refresh**, **Download PDF**, and **Share via WhatsApp** (creates a 7-day signed public link via the existing document-sharing framework and opens a `wa.me` deep link prefilled with the customer's number + statement link — no Meta API needed).
+- Backend: `routes/account_ledger.py` (`/statement/status`, `/statement/pdf`, `/statement/share-link`) + `zoho_service.get_contact_statement_pdf` + registered `account_statement` share resolver.
+- Graceful states: Zoho-not-connected, account-not-linked, and Zoho-fetch-error all handled with clear UI.
+- **Verified**: testing_agent iteration_315 (9/9 backend + frontend flow pass; regression-clean). ⚠️ **Live Zoho PDF pull is NOT verifiable in preview** (Zoho not connected here) — the 'not connected' state is expected; the live statement will render on **production** once Zoho is connected. New pytest: `backend/tests/test_account_ledger.py`.
+
 ### 2026-07-08 — 🐛 Fix: Edit Design Request blocked when request type is inactive ✅ DONE
 - **Reported**: In "Edit Design Request", could not enter the reason for urgent/short delivery and could not submit.
 - **Root cause** (`NewDesignRequestNew.js`): if a request's type had been deactivated, `GET /marketing-request-types` (active-only) omitted it, so the frontend's `types` list lacked it → `selectedType` was `undefined` → `minLeadDays=0` → `isShortTimeline` false → the short-timeline reason textarea never rendered. Meanwhile the backend `update_request` still resolved the type by id, saw the due date was tighter than the real lead time, and rejected the save with **400** — so the user could neither enter the required reason nor submit.
