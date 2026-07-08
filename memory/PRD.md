@@ -19,7 +19,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — 🐛 Fix: Zoho Statement PDF returned 502 on production (missing required date params) ✅ CODE DONE (prod-verify pending)
+### 2026-07-09 — 🐛 Fix: Zoho Statement download → Cloudflare "invalid/incomplete response" (origin hang) ✅ CODE DONE (prod-verify pending)
+- **Reported (PRODUCTION, after redeploying the date-param fix)**: Downloading a customer statement showed a Cloudflare page "The origin web server returned an invalid or incomplete response" — i.e. the origin hung/crashed mid-response instead of returning a clean error.
+- **Fixes** (`services/zoho_service.py::get_contact_statement_pdf` + `routes/account_ledger.py::statement_pdf`):
+  - **Fail fast**: httpx timeout lowered to 20s read / 10s connect; `httpx.TimeoutException`/`HTTPError` now caught and turned into clean `ZohoApiError(504/502)` instead of an unhandled crash.
+  - **follow_redirects=True**: Zoho can serve PDF exports via a redirect — httpx doesn't follow by default, a likely cause of the hang/incomplete response.
+  - **Route catch-all**: any unexpected error now returns a clean JSON 502 (never a truncated/incomplete response → no more Cloudflare 520 page). Empty-PDF guard added.
+- **⚠️ Verify on production**: redeploy → retry download. It will now either succeed (if redirect was the cause) or show a clear, specific message.
+
+
 - **Reported (PRODUCTION)**: Every customer's statement pull returned 502 "Zoho Books did not return this statement. Please try again in a moment." (GET `/api/accounts/{id}/statement/pdf` → 502).
 - **Root cause**: Zoho Books' `GET /contacts/{contact_id}/statement?accept=pdf` **requires** `start_date` and `end_date` query params (confirmed via Zoho API docs). Our `get_contact_statement_pdf` sent only `organization_id` + `accept=pdf`, so Zoho rejected it — and the route masked the real reason behind a generic 502.
 - **Fix**:

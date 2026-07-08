@@ -565,8 +565,15 @@ async def get_contact_statement_pdf(tenant_id: str, contact_id: str, params: Opt
             "Authorization": f"Zoho-oauthtoken {token}",
             "Accept": "application/pdf",
         }
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(url, headers=headers, params=req_params)
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=10.0), follow_redirects=True) as client:
+                resp = await client.get(url, headers=headers, params=req_params)
+        except httpx.TimeoutException:
+            logger.error("Zoho statement request timed out for tenant=%s contact=%s", tenant_id, contact_id)
+            raise ZohoApiError(504, "Zoho Books took too long to return this statement. Please try again in a moment.")
+        except httpx.HTTPError as e:
+            logger.error("Zoho statement request network error: %s", e)
+            raise ZohoApiError(502, "Could not reach Zoho Books to fetch this statement. Please try again.")
         if resp.status_code == 401 and attempt == 0:
             # Force a token refresh on the retry by expiring the cached token.
             await db.zoho_credentials.update_one(

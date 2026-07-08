@@ -133,7 +133,17 @@ async def statement_pdf(
         # Surface the real Zoho message so the cause is actionable (missing template,
         # date range, scope, etc.) rather than a generic "try again".
         detail = e.message or "Zoho Books could not return this customer's statement right now."
-        raise HTTPException(502, f"Zoho Books: {detail}")
+        status = 504 if getattr(e, "status_code", None) == 504 else 502
+        raise HTTPException(status, f"Zoho Books: {detail}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Never let an unhandled error crash the response mid-stream (that produces
+        # a Cloudflare "invalid/incomplete response" page instead of clean JSON).
+        logger.exception("Unexpected error fetching Zoho statement for account %s", account_id)
+        raise HTTPException(502, f"Zoho Books: unexpected error fetching statement ({type(e).__name__}).")
+    if not pdf_bytes:
+        raise HTTPException(502, "Zoho Books returned an empty statement.")
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
