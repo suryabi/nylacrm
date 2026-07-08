@@ -19,6 +19,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-08 — 🐛 Fix: Edit Design Request blocked when request type is inactive ✅ DONE
+- **Reported**: In "Edit Design Request", could not enter the reason for urgent/short delivery and could not submit.
+- **Root cause** (`NewDesignRequestNew.js`): if a request's type had been deactivated, `GET /marketing-request-types` (active-only) omitted it, so the frontend's `types` list lacked it → `selectedType` was `undefined` → `minLeadDays=0` → `isShortTimeline` false → the short-timeline reason textarea never rendered. Meanwhile the backend `update_request` still resolved the type by id, saw the due date was tighter than the real lead time, and rejected the save with **400** — so the user could neither enter the required reason nor submit.
+- **Fix**: on edit-load, synthesise a `fallbackType` from the request's own stored `request_type_name` / `design_lead_time_days` / `production_lead_time_days`, and merge it into a new `allTypes` list (`selectedType`, `visibleTypes`, `minLeadDays` now use `allTypes`). The lead-time guard + reason box now render correctly even for inactive/hidden types. Edit-mode only (does not affect Create).
+- **Verified**: testing_agent iteration_314 (3/3 pass) — inactive-type edit (reason box renders, Save→200), active-type edit regression, and Create-flow regression all pass. **⚠️ Redeploy to apply on production.**
+
 ### 2026-07-08 — 🐛 Fix: Stock Dashboard counted crates as bottles (under-count, 3 crates → 3) ✅ DONE
 - **Reported (PRODUCTION, Mumbai)**: A Stock Out of 3 crates (1 crate = 12 bottles = 36 bottles) showed as **3** in the Stock Dashboard "Delivered" column (which is in base bottles). Invoice amounts were correct; only the dashboard aggregation was wrong.
 - **Root cause** (`distributors.py` `_item_crates`, ~line 8811): the earlier double-count fix returned `quantity` as-is whenever `packages > 0`, assuming `quantity` was already base bottles. But this line stored `quantity` as the **crate count (3)** while also carrying `packages=3` / `packaging_units=12` → returned 3 instead of 36.
