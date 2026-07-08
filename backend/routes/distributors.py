@@ -8811,15 +8811,23 @@ async def get_stock_dashboard(
     def _item_crates(item: dict) -> int:
         """Return a line item's contribution in the base UOM (bottles).
 
-        Two historical storage models coexist (the "code change between
-        deliveries" the user observed):
-          • NEW — the item carries a `packages` field (> 0). Here `quantity` is
-            ALREADY the base-unit total (quantity == packages × packaging_units).
-            Use `quantity` as-is; multiplying by packaging_units again would
-            double-count (the crates-counted-as-bottles bug, e.g. 150 → 2250).
-          • OLD — no `packages` field but packaging_units > 1. Here `quantity` is
-            the number of packages, so the base total is quantity × packaging_units.
-        Plain lines (no packaging chosen) store the base quantity directly."""
+        The reliable ground truth for base units is `packages × packaging_units`
+        (crates × bottles-per-crate) whenever BOTH are known — this is immune to
+        the two historical `quantity` storage inconsistencies that coexist:
+          • Some rows stored `quantity` as the base-unit total already
+            (quantity == packages × packaging_units) — e.g. a 10-crate line as
+            quantity=150 with packaging_units=15. Multiplying quantity × pu here
+            would double-count (150 → 2250).
+          • Other rows stored `quantity` as the number of packages/crates while
+            still carrying `packages`/`packaging_units` — e.g. a 3-crate line as
+            quantity=3 with packaging_units=12. Returning quantity as-is would
+            under-count (36 bottles → 3).
+        Computing packages × packaging_units yields the correct base total in
+        BOTH cases (10×15=150 and 3×12=36).
+
+        Fallbacks: when `packages` is absent but packaging_units > 1, `quantity`
+        is the package count (OLD model → quantity × packaging_units). Plain
+        lines (loose base units, pu ≤ 1) store the base quantity directly."""
         qty = int(item.get('quantity') or 0)
         pu = int(item.get('packaging_units') or 0)
         pk = item.get('packages')
@@ -8827,8 +8835,10 @@ async def get_stock_dashboard(
             pk = int(pk) if pk not in (None, "") else 0
         except (TypeError, ValueError):
             pk = 0
+        if pk > 0 and pu > 1:
+            return pk * pu        # crates × bottles-per-crate = base bottles (authoritative)
         if pk > 0:
-            return qty            # NEW model: quantity is already base units
+            return qty            # loose units (pu ≤ 1): quantity is already base units
         if pu > 1:
             return qty * pu       # OLD model: quantity is number of packages
         return qty

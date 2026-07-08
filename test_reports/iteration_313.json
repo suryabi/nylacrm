@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 313 — Backend-only verification of the crates→bottles bug fix in the distributor Stock Dashboard. Wrote /app/backend/tests/test_stock_dashboard_crate_bug.py (5 tests, all PASS). Confirmed GET /api/distributors/bb12d90e-4d33-4890-ac5f-17573c551b5c/stock-dashboard returns stock_delivered=36 for SKU 51cbec53-a1d5-4e23-b708-a1fd0c014059 ('20L Premium') — matches the expected 3 crates × 12 bottles/crate. Pre-fix value was 3.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_stock_dashboard_crate_bug.py",
+    "/app/test_reports/pytest/stock_dashboard_crate_bug.xml"
+  ],
+  "action_items": [
+    "Main agent: clean up the seeded delivery TEST-DELIVERY-CRATE-BUG (delivery_number TEST-DC-BUG) on distributor Brian after verification, per the review request. Note: the seeded SKU '20L Premium' currently shows stock_available=-36 (received=0, delivered=36) which is expected for a synthetic seed with no corresponding in-flow, but should not leak into production tenants."
+  ],
+  "critical_code_review_comments": [
+    "The `_item_crates` helper in /app/backend/routes/distributors.py (~line 8811) now correctly returns packages * packaging_units when both are meaningful (packages>0, packaging_units>1). This is a two-way guard — it fixes both under-counts (3 stored as CRATES with pkg=3, units=12 → 36) and over-counts (10-crate x 15-bpc line → 150, not 2250). Consider adding a code comment and a unit test at the helper level (not just endpoint-level) to lock in the invariant.",
+    "distributors.py is a very large file (helper at line ~8811). Splitting stock-dashboard aggregation logic into a dedicated module under routes/stock/ would improve testability."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_stock_dashboard_crate_bug.py"
+  ],
+  "success_rate": {
+    "backend": "100% (5/5 tests pass)",
+    "frontend": "not tested (backend-only per request)"
+  },
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (Tenant nyla-air-water) — POST /api/auth/login returns session_token.",
+  "seed_data_creation": "None created by testing agent. Used the pre-seeded TEST-DELIVERY-CRATE-BUG delivery (main agent must clean up).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Verified endpoint response for Brian (bb12d90e-4d33-4890-ac5f-17573c551b5c): SKUs → Nyla-600ml/Silver 1857/64/1791, Nyla-330ml/Silver 166/5/146, Nyla-660ml/Sparkling 83/24/59, Nyla-660ml/Gold 24/0/24, 20L Premium 0/36/-36. Totals → received=2130, delivered=129, pending_out=17, on_hand=2001, available=1984. No SKU shows the multiplicative over-count regression (delivered ≤ received × 20 guard passes). stock_delivered=36 for the target SKU is a clean multiple of packaging_units=12, confirming base-bottle aggregation. Test module: /app/backend/tests/test_stock_dashboard_crate_bug.py — reusable for regression on future distributors.py edits.",
+  "rca of the issue": "Root cause was in _item_crates helper: when a delivery line item was mis-stored with unit=CRATES but quantity=3 (crate count instead of base bottles), the helper returned quantity as-is → 3 bottles reported. Fix: when packages>0 AND packaging_units>1, authoritatively compute base bottles = packages × packaging_units (=36). This also protects against the inverse regression (quantity already in base bottles being multiplied by packaging_units). Verified live via /api/distributors/{id}/stock-dashboard on preview."
+}
