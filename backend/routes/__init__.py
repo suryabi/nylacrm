@@ -316,4 +316,8 @@ routes_router.include_router(gamma_router, tags=["Gamma Generator"])
 from .sharing import router as sharing_router
 routes_router.include_router(sharing_router, prefix="/share", tags=["Document Sharing"])
 
+# Per-account Zoho ledger / statement of accounts (live PDF + WhatsApp share)
+from .account_ledger import router as account_ledger_router
+routes_router.include_router(account_ledger_router, prefix="/accounts", tags=["Account Ledger"])
+
 __all__ = ['routes_router']

@@ -1,0 +1,32 @@
+{
+  "summary": "Verified NEW per-account Zoho Books ledger/statement feature end-to-end in preview (Zoho intentionally NOT connected). Backend: 9/9 tests pass covering /statement/status, /statement/pdf (409 not-connected & 400 not-linked), /statement/share-link (absolute https public_url ending in /api/share/d/<token>, whatsapp_url built with url-encoded public_url), and the public /api/share/d/{token} endpoint (returns clean 502 without crashing when Zoho is unreachable). Frontend: Account Detail page for the linked account (Toopa Ice-creamery, 81263309-2118-4d51-b1d9-fe9549da07b7) renders the new Ledger / Statement section (data-testid=account-ledger-section, header-acc-ledger) in the correct 'Zoho Books isn't connected' state (data-testid=ledger-not-connected). No regression on Account Information, Invoice Summary, or Contacts sections. Action buttons correctly hidden in the disconnected state.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_account_ledger.py",
+    "/app/test_reports/pytest/pytest_account_ledger.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/account_ledger.py: RuntimeError from zoho_service (Zoho not connected / refresh token missing) is caught and mapped to HTTP 409 with a clean detail — verified.",
+    "routes/account_ledger.py:_resolve_account_statement returns a lazy fetch_pdf coroutine so the share-link creation never touches Zoho — the PDF is only pulled when the public link is downloaded. Correct plumbing.",
+    "services/share_service.build_public_url uses the caller-supplied base_url (REACT_APP_BACKEND_URL) and produces an absolute https URL ending in /api/share/d/<token>. Verified.",
+    "routes/sharing.py:public_download catches all exceptions and returns a JSON 502 without leaking a traceback — Cloudflare replaces the 502 body with an HTML error page, but the FastAPI response itself is clean (confirmed via /var/log/supervisor/backend.out.log: '502 Bad Gateway' with no traceback surfacing).",
+    "AccountZohoLedger.jsx correctly gates the action buttons behind `ready = zoho_connected && linked`, so the disconnected state shows only the informational block — good UX and matches the expected preview behaviour.",
+    "Minor: AccountZohoLedger.jsx catches all axios errors in fetchStatus() and silently sets status=null, which would fall through to the not-connected UI regardless of the actual failure. Consider surfacing a network-error state for observability, but not a blocker."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_account_ledger.py (new)"
+  ],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100% (1/1 flow, all assertions passed)" },
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (Nyla Air & Water tenant)",
+  "seed_data_creation": "Two share_links records were created during share-link tests (7-day TTL). They are harmless; the resolver refuses to serve them without Zoho creds.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "New pytest file at /app/backend/tests/test_account_ledger.py covers all account-ledger endpoints. Uses REACT_APP_BACKEND_URL env var (must be exported when running pytest). The public download test tolerates either JSON body (direct FastAPI response) or HTML body (Cloudflare-replaced 5xx page) because Cloudflare replaces upstream 5xx responses in this preview environment — this is infra behaviour, not a backend bug. All 9 tests pass in ~1.4s.",
+  "rca of the issue": "N/A — this iteration verifies a new feature. All expected behaviours matched (409 for not-connected PDF, 400 for not-linked, absolute https share-link URLs, whatsapp deep link with url-encoded public_url, ledger UI section visible with correct not-connected state, no regression to existing account-detail sections)."
+}

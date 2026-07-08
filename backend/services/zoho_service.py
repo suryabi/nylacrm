@@ -537,6 +537,48 @@ async def _zoho_request(
     raise RuntimeError("Zoho request failed after maximum retries")
 
 
+async def get_contact_statement_pdf(tenant_id: str, contact_id: str, params: Optional[dict] = None) -> bytes:
+    """Fetch a customer's Statement of Accounts as a PDF, live from Zoho Books.
+
+    Uses GET /books/v3/contacts/{contact_id}/statement with `accept=pdf`. Returns
+    the raw PDF bytes. Retries once on a 401 (expired token)."""
+    cfg = get_zoho_config()
+    creds = await get_credentials(tenant_id)
+    if not creds:
+        raise RuntimeError("Zoho Books is not connected for this tenant")
+    api_base = (creds.get("api_base_url") or cfg["api_base_url"]).rstrip("/")
+    url = f"{api_base}/books/v3/contacts/{contact_id}/statement"
+    req_params = dict(params or {})
+    req_params["organization_id"] = creds["organization_id"]
+    req_params["accept"] = "pdf"
+
+    for attempt in range(2):
+        token = await get_valid_access_token(tenant_id)
+        headers = {
+            "Authorization": f"Zoho-oauthtoken {token}",
+            "Accept": "application/pdf",
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(url, headers=headers, params=req_params)
+        if resp.status_code == 401 and attempt == 0:
+            # Force a token refresh on the retry by expiring the cached token.
+            await db.zoho_credentials.update_one(
+                {"tenant_id": tenant_id},
+                {"$set": {"token_expires_at": datetime.now(timezone.utc).isoformat()}},
+            )
+            continue
+        if resp.status_code >= 400:
+            payload = None
+            try:
+                payload = resp.json()
+            except Exception:
+                pass
+            raise ZohoApiError(resp.status_code, resp.text[:500], payload)
+        return resp.content
+    raise RuntimeError("Zoho statement request failed")
+
+
+
 # ---------- Contact upsert ----------
 
 async def upsert_contact(tenant_id: str, account: dict) -> str:

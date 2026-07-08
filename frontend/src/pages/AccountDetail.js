@@ -47,6 +47,7 @@ import AppBreadcrumb from '../components/AppBreadcrumb';
 import AccountScoringCard from '../components/AccountScoringCard';
 import EntityContactsSection from '../components/EntityContactsSection';
 import { SectionHeader } from '../components/detail/SectionHeader';
+import AccountZohoLedger from '../components/account/AccountZohoLedger';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1896,12 +1897,14 @@ ${googleMapsLink}`;
             </div>
           )}
 
+          {/* Zoho Books ledger / statement of accounts (live PDF + WhatsApp share) */}
+          <AccountZohoLedger accountId={account.account_id || account.id} />
+
           {/* Invoice Summary — second section, right after Account Information */}
           <Card id="acc-invoices" className="p-4 sm:p-6 scroll-mt-24">
             <SectionHeader
               eyebrow="Financials"
-              title="Invoice Summary"
-              icon={FileText}
+              title="Invoice Summary"              icon={FileText}
               testid="header-acc-invoices"
               actions={
                 <div className="flex items-center gap-2 flex-wrap justify-end">
