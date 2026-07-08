@@ -747,6 +747,7 @@ export default function StockTransfers() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [showNew, setShowNew] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -761,6 +762,29 @@ export default function StockTransfers() {
   }, [page, search]);
 
   useEffect(() => { load(); }, [load]);
+
+  const exportTransfers = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.set('search', search);
+      const res = await axios.get(`${API}/distributor/stock-transfers/export?${params}`, {
+        headers: HEAD(),
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stock_transfers_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Stock Transfers exported');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to export transfers');
+    } finally { setExporting(false); }
+  };
 
   const retryZoho = async (id) => {
     try {
@@ -884,9 +908,20 @@ export default function StockTransfers() {
             Move stock between warehouses (internal logistics — <b>no margin</b>). Same GSTIN → Delivery Challan; different GSTIN of the same legal entity (same PAN) → Tax Invoice at the SKU's Base Price. Cross-PAN sales are blocked — use <b>Stock In</b> instead.
           </p>
         </div>
-        <Button onClick={() => setShowNew(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-stock-transfer-btn">
-          <Plus className="h-4 w-4 mr-2" /> New Stock Transfer
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={exportTransfers}
+            disabled={exporting || (data.total || 0) === 0}
+            data-testid="export-transfers-btn"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {exporting ? 'Exporting…' : 'Download'}
+          </Button>
+          <Button onClick={() => setShowNew(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-stock-transfer-btn">
+            <Plus className="h-4 w-4 mr-2" /> New Stock Transfer
+          </Button>
+        </div>
       </div>
 
       <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">

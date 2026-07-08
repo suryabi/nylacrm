@@ -19,6 +19,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-08 — Stock Transfers: Excel download ✅ DONE
+- **Stock Transfers page** (`StockTransfers.js`) header now has a **"Download"** button that exports the (search-filtered) transfers list to `.xlsx`.
+- **Backend** (`distributor_stock_transfers.py`): new `GET /distributor/stock-transfers/export` (defined before `/{transfer_id}` to avoid path capture) streams an openpyxl workbook — Transfer #, Date, Source/Dest Distributor+Warehouse+GSTIN, Total Packages, SKUs, Items, Doc Type, Zoho Status, Total Value, Vehicle #, Status, Created By — honoring the same `search`/`distributor_id`/`sku_id`/`status` filters as the list.
+- Verified: curl (10 transfers → 11 rows, 17 cols populated) + Playwright UI (Download renders, 10 rows).
+
 ### 2026-07-08 — Stock In: destination-warehouse filter + Excel download ✅ DONE
 - **Stock In tab** (`ShipmentsTab.jsx`) header now has a **"All destinations" filter** (lists the distributor's active locations) and a **"Download"** button that exports the (filtered) shipments list to `.xlsx`.
 - **Backend** (`distributors.py`): `GET /{id}/shipments` accepts a `location_id` filter; new `GET /{id}/shipments/export` streams an openpyxl workbook (Shipment #, Ref/PO, Date, Destination, From Warehouse, Status, Qty, Subtotal, Discount, GST %, GST Amt, Total), honoring the `status`/`location_id` filters. Export route defined before `/{shipment_id}` to avoid path capture.

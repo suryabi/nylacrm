@@ -899,6 +899,114 @@ async def list_stock_transfers(
     }
 
 
+@router.get("/export")
+async def export_stock_transfers(
+    distributor_id: Optional[str] = None,
+    sku_id: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Export the (filtered) stock-transfers list to an Excel (.xlsx) file."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from fastapi.responses import StreamingResponse
+
+    tenant_id = get_current_tenant_id()
+
+    q: dict = {"tenant_id": tenant_id}
+    if distributor_id:
+        q["$or"] = [{"source_distributor_id": distributor_id}, {"dest_distributor_id": distributor_id}]
+    if sku_id:
+        q["items.sku_id"] = sku_id
+    if status:
+        q["status"] = status
+    if search:
+        text_or = [
+            {"transfer_number": {"$regex": search, "$options": "i"}},
+            {"source_distributor_name": {"$regex": search, "$options": "i"}},
+            {"dest_distributor_name": {"$regex": search, "$options": "i"}},
+            {"source_location_name": {"$regex": search, "$options": "i"}},
+            {"dest_location_name": {"$regex": search, "$options": "i"}},
+        ]
+        if "$or" in q:
+            q = {"$and": [q, {"$or": text_or}]}
+        else:
+            q["$or"] = text_or
+
+    rows = await db.distributor_stock_transfers.find(q, {"_id": 0}) \
+        .sort("created_at", -1).to_list(5000)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Stock Transfers"
+
+    headers = ['Transfer #', 'Date', 'Source Distributor', 'Source Warehouse', 'Source GSTIN',
+               'Destination Distributor', 'Destination Warehouse', 'Destination GSTIN',
+               'Total Packages', 'SKUs', 'Items', 'Doc Type', 'Zoho Status', 'Total Value',
+               'Vehicle #', 'Status', 'Created By']
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
+    thin = Side(style="thin", color="d0d5dd")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for c_idx, name in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=c_idx, value=name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = border
+
+    widths = [16, 12, 22, 22, 18, 22, 22, 18, 14, 8, 40, 16, 12, 14, 14, 12, 18]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    for r_idx, t in enumerate(rows, 2):
+        items = t.get('items') or []
+        items_str = "; ".join(
+            f"{it.get('quantity')} {it.get('packaging_type_name') or 'units'} {it.get('sku_name') or ''}".strip()
+            for it in items
+        )
+        doc_type = 'Delivery Challan' if t.get('zoho_doc_type') == 'delivery_challan' else 'Invoice'
+        row = [
+            t.get('transfer_number') or '-',
+            (t.get('transfer_date') or '')[:10] if isinstance(t.get('transfer_date'), str) else (t.get('transfer_date') or '-'),
+            t.get('source_distributor_name') or '-',
+            t.get('source_location_name') or '-',
+            t.get('source_gstin') or '-',
+            t.get('dest_distributor_name') or '-',
+            t.get('dest_location_name') or '-',
+            t.get('dest_gstin') or '-',
+            t.get('total_packages') if t.get('total_packages') is not None else (t.get('total_quantity') or 0),
+            len(items),
+            items_str or '-',
+            doc_type,
+            t.get('zoho_status') or '-',
+            round(t.get('total_value') or 0, 2),
+            t.get('vehicle_number') or '-',
+            t.get('status') or '-',
+            t.get('created_by_name') or '-',
+        ]
+        for c_idx, val in enumerate(row, 1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=val)
+            cell.border = border
+            if c_idx == 9:
+                cell.number_format = '#,##0'
+            elif c_idx == 14:
+                cell.number_format = '#,##0.00'
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"stock_transfers_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.get("/{transfer_id}")
 async def get_stock_transfer(transfer_id: str, current_user: dict = Depends(get_current_user)):
     tenant_id = get_current_tenant_id()
