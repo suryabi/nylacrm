@@ -178,6 +178,8 @@ export default function DistributorDetail() {
   // Shipment state
   const [shipments, setShipments] = useState([]);
   const [shipmentsLoading, setShipmentsLoading] = useState(false);
+  const [shipmentLocationFilter, setShipmentLocationFilter] = useState('all');
+  const [exportingShipments, setExportingShipments] = useState(false);
   const [showShipmentDialog, setShowShipmentDialog] = useState(false);
   const [shipmentForm, setShipmentForm] = useState({
     distributor_location_id: '',
@@ -479,8 +481,13 @@ export default function DistributorDetail() {
   const fetchShipments = useCallback(async () => {
     try {
       setShipmentsLoading(true);
+      const params = { page_size: 100 };
+      if (shipmentLocationFilter && shipmentLocationFilter !== 'all') {
+        params.location_id = shipmentLocationFilter;
+      }
       const response = await axios.get(`${API_URL}/api/distributors/${id}/shipments`, {
         headers: { Authorization: `Bearer ${token}` },
+        params,
         withCredentials: true
       });
       setShipments(response.data.shipments || []);
@@ -489,7 +496,38 @@ export default function DistributorDetail() {
     } finally {
       setShipmentsLoading(false);
     }
-  }, [id, token]);
+  }, [id, token, shipmentLocationFilter]);
+
+  // Export shipments (Stock In) to Excel, honoring the active location filter
+  const handleExportShipments = useCallback(async () => {
+    try {
+      setExportingShipments(true);
+      const params = {};
+      if (shipmentLocationFilter && shipmentLocationFilter !== 'all') {
+        params.location_id = shipmentLocationFilter;
+      }
+      const response = await axios.get(`${API_URL}/api/distributors/${id}/shipments/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+        responseType: 'blob',
+        withCredentials: true
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `stock_in_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Stock In list exported');
+    } catch (error) {
+      console.error('Failed to export shipments:', error);
+      toast.error('Failed to export Stock In list');
+    } finally {
+      setExportingShipments(false);
+    }
+  }, [id, token, shipmentLocationFilter]);
 
   useEffect(() => {
     if (activeTab === 'stockin') {
@@ -2923,6 +2961,10 @@ export default function DistributorDetail() {
             setDeleteTarget={setDeleteTarget}
             handleReverseShipment={handleReverseShipment}
             getShipmentStatusBadge={getShipmentStatusBadge}
+            shipmentLocationFilter={shipmentLocationFilter}
+            setShipmentLocationFilter={setShipmentLocationFilter}
+            handleExportShipments={handleExportShipments}
+            exportingShipments={exportingShipments}
             sourceTracksBatches={!!(factoryWarehouses.find(w => w.id === shipmentForm.source_warehouse_id)?.track_batches)}
             destTracksBatches={destDistributorTracksBatches}
             batchesBySku={shipmentBatchesBySku}

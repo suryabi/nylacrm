@@ -19,6 +19,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-08 — Stock In: destination-warehouse filter + Excel download ✅ DONE
+- **Stock In tab** (`ShipmentsTab.jsx`) header now has a **"All destinations" filter** (lists the distributor's active locations) and a **"Download"** button that exports the (filtered) shipments list to `.xlsx`.
+- **Backend** (`distributors.py`): `GET /{id}/shipments` accepts a `location_id` filter; new `GET /{id}/shipments/export` streams an openpyxl workbook (Shipment #, Ref/PO, Date, Destination, From Warehouse, Status, Qty, Subtotal, Discount, GST %, GST Amt, Total), honoring the `status`/`location_id` filters. Export route defined before `/{shipment_id}` to avoid path capture.
+- **Frontend** (`DistributorDetail.js`): `shipmentLocationFilter` state drives `fetchShipments` (now `page_size=100` + `location_id`); `handleExportShipments` downloads the blob.
+- Verified: curl (list Delhi=23/37, export all=37 rows, export Delhi=23 rows) + Playwright UI (filter switches 37→23 rows, Download button renders).
+
 ### 2026-07-07 — Stock-by-SKU crates/bottles toggle + Factory→Master crates fix + Lead/Account detail redesign ✅ DONE
 - **Stock by SKU** table (`StockDashboardTab.jsx`) has a **Bottles / Default Crates** toggle; converts each SKU by its own default crate size, which is shown per row. SKUs without a crate stay in base units.
 - **P0 inventory fix**: `bottles_per_crate` now always resolved (SKU-packaging fallback) in `GET /production/batches/{id}` + `transfer_to_warehouse` (`production_qc.py`), so "Transfer to Master Warehouse" can't treat crates as bottles. Backfill: `backend/scripts/backfill_bottles_per_crate.py` (RUN ON PROD AFTER DEPLOY).

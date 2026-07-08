@@ -2290,6 +2290,7 @@ async def get_shipments_summary(
 async def list_distributor_shipments(
     distributor_id: str,
     status: Optional[str] = None,
+    location_id: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     current_user: dict = Depends(get_current_user)
@@ -2301,6 +2302,9 @@ async def list_distributor_shipments(
     
     if status and status != 'all':
         query["status"] = status
+
+    if location_id and location_id != 'all':
+        query["distributor_location_id"] = location_id
     
     total = await db.distributor_shipments.count_documents(query)
     
@@ -2343,6 +2347,107 @@ async def list_distributor_shipments(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size
     }
+
+
+@router.get("/{distributor_id}/shipments/export")
+async def export_distributor_shipments(
+    distributor_id: str,
+    status: Optional[str] = None,
+    location_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Export the (filtered) Stock In shipments list to an Excel (.xlsx) file."""
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from fastapi.responses import StreamingResponse
+
+    tenant_id = get_current_tenant_id()
+
+    distributor = await db.distributors.find_one(
+        {"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0, "distributor_name": 1}
+    )
+    if not distributor:
+        raise HTTPException(status_code=404, detail="Distributor not found")
+
+    query = {"tenant_id": tenant_id, "distributor_id": distributor_id}
+    if status and status != 'all':
+        query["status"] = status
+    if location_id and location_id != 'all':
+        query["distributor_location_id"] = location_id
+
+    shipments = await db.distributor_shipments.find(
+        query, {"_id": 0}
+    ).sort("shipment_date", -1).to_list(5000)
+
+    # Resolve weighted-average GST% per shipment (mirrors the list endpoint)
+    for shipment in shipments:
+        items = await db.distributor_shipment_items.find(
+            {"shipment_id": shipment['id'], "tenant_id": tenant_id},
+            {"_id": 0, "tax_percent": 1, "quantity": 1}
+        ).to_list(500)
+        total_qty = sum(item.get('quantity', 0) for item in items)
+        if total_qty > 0:
+            weighted_gst = sum((item.get('tax_percent') or 0) * item.get('quantity', 0) for item in items)
+            shipment['avg_gst_percent'] = round(weighted_gst / total_qty, 2) if weighted_gst else 0
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Stock In"
+
+    headers = ['Shipment #', 'Reference / PO', 'Date', 'Destination Location', 'From Warehouse',
+               'Status', 'Total Qty', 'Subtotal', 'Discount', 'GST %', 'GST Amount', 'Total']
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="166534", end_color="166534", fill_type="solid")
+    thin = Side(style="thin", color="d0d5dd")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for c_idx, name in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=c_idx, value=name)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = border
+
+    widths = [18, 18, 14, 26, 24, 14, 12, 16, 14, 10, 14, 16]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + i)].width = w
+
+    for r_idx, s in enumerate(shipments, 2):
+        gst_pct = s.get('gst_percent')
+        if gst_pct is None:
+            gst_pct = s.get('avg_gst_percent') or 0
+        row = [
+            s.get('shipment_number') or '-',
+            s.get('reference_number') or '-',
+            (s.get('shipment_date') or '')[:10] if isinstance(s.get('shipment_date'), str) else (s.get('shipment_date') or '-'),
+            s.get('distributor_location_name') or '-',
+            s.get('source_warehouse_name') or '-',
+            s.get('status') or '-',
+            s.get('total_quantity') or 0,
+            round(s.get('total_gross_amount') or 0, 2),
+            round(s.get('total_discount_amount') or 0, 2),
+            round(gst_pct or 0, 2),
+            round(s.get('total_tax_amount') or 0, 2),
+            round(s.get('total_net_amount') or 0, 2),
+        ]
+        for c_idx, val in enumerate(row, 1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=val)
+            cell.border = border
+            if c_idx == 7:
+                cell.number_format = '#,##0'
+            elif c_idx in (8, 9, 11, 12):
+                cell.number_format = '#,##0.00'
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"stock_in_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{distributor_id}/shipments/{shipment_id}")

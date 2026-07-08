@@ -7,7 +7,7 @@ import { Badge } from '../ui/badge';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Factory, RotateCcw } from 'lucide-react';
+import { MapPin, Plus, Trash2, Truck, RefreshCw, Package, Calendar, FileText, Factory, RotateCcw, Download } from 'lucide-react';
 import BatchPickerCards from './BatchPickerCards';
 
 export default function ShipmentsTab({
@@ -38,6 +38,11 @@ export default function ShipmentsTab({
   setDeleteTarget,
   handleReverseShipment,
   getShipmentStatusBadge,
+  // Filters & export
+  shipmentLocationFilter = 'all',
+  setShipmentLocationFilter,
+  handleExportShipments,
+  exportingShipments = false,
   // Phase 2 batch tracking — optional batch list keyed by sku_id for the
   // Phase 2 batch tracking — optional batch list keyed by sku_id for the
   // currently-selected source warehouse. Empty map when neither side
@@ -48,12 +53,42 @@ export default function ShipmentsTab({
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle className="text-lg">Stock In (Factory → Distributor)</CardTitle>
           <CardDescription>Stock shipments to this distributor&apos;s locations</CardDescription>
         </div>
-        {canManage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-full sm:w-56">
+            <Select
+              value={shipmentLocationFilter}
+              onValueChange={(v) => setShipmentLocationFilter && setShipmentLocationFilter(v)}
+            >
+              <SelectTrigger data-testid="shipment-location-filter" className="h-9">
+                <SelectValue placeholder="All destinations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All destinations</SelectItem>
+                {(distributor.locations || [])
+                  .filter(loc => loc.status === 'active')
+                  .map(loc => (
+                    <SelectItem key={loc.id} value={loc.id}>
+                      {loc.location_name} ({loc.city}){loc.is_default ? ' ★' : ''}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleExportShipments}
+            disabled={exportingShipments || (shipments || []).length === 0}
+            data-testid="export-shipments-btn"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {exportingShipments ? 'Exporting...' : 'Download'}
+          </Button>
+          {canManage && (
           <Dialog open={showShipmentDialog} onOpenChange={(open) => {
             setShowShipmentDialog(open);
             if (!open) resetShipmentForm();
@@ -394,6 +429,7 @@ export default function ShipmentsTab({
             </DialogContent>
           </Dialog>
         )}
+        </div>
       </CardHeader>
       <CardContent>
         {shipmentsLoading ? (
