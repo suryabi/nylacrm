@@ -37,7 +37,7 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
     resource_city = ""
     
     if plan_id:
-        # Get target from plan — sum across all selected resources
+        # 1) Resource-level allocations for the selected resources (most specific).
         target_allocs = await db.target_allocations_v2.find(
             {"plan_id": plan_id, "resource_id": resource_filter, "level": "resource"},
             {"_id": 0, "amount": 1, "city": 1, "resource_name": 1}
@@ -46,6 +46,17 @@ async def compute_metrics(tenant_id: str, resource_ids: list, plan_id: str, mont
         resource_names = [t.get("resource_name", "") for t in target_allocs]
         resource_name = ", ".join(resource_names) if resource_names else ""
         resource_city = ", ".join(sorted(set(t.get("city", "") for t in target_allocs if t.get("city")))) if target_allocs else ""
+
+        # 2) Fallback when the plan is NOT allocated down to these resources
+        #    (e.g. allocated only at the territory/city level, or not broken down
+        #    at all). Show the plan's overall target instead of ₹0. We use the
+        #    plan total (never territory/city sums) because those rows can nest,
+        #    duplicate, or share names and would double-count.
+        if monthly_target == 0:
+            plan_doc = await db.target_plans_v2.find_one(
+                {"id": plan_id}, {"_id": 0, "total_amount": 1}
+            )
+            monthly_target = (plan_doc or {}).get("total_amount", 0) or 0
     
     # Fallback: get resource names/cities from users collection if not found via plan
     if not resource_name:

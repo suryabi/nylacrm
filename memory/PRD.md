@@ -19,7 +19,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — 🐛 Email template "Insert variable" now inserts at the caret (subject OR body) ✅ DONE
+### 2026-07-09 — 🐛 Performance Tracker: Target tile showed ₹0 for target plans ✅ FIXED
+- **Reported (production)**: In Performance Tracker → "View by Target Plan", selecting any plan showed **Target ₹0 / 0.0%**.
+- **Root cause**: `compute_metrics` (`routes/performance.py`) derived the target ONLY from **resource-level** allocations (`target_allocations_v2`, `level="resource"`). Plans allocated at the **city/territory level** (or not broken down to individual reps) have no resource-level rows, so the sum was 0. Confirmed: plans with resource-level allocations already worked (₹5.25L / ₹26.5L); a plan without them returned 0.
+- **Fix**: when the resource-level sum is 0, fall back to the plan's **`total_amount`** (plan overall target). City/territory sums were deliberately NOT used — those rows nest/duplicate/share names in the data and would double-count (verified: territory-name match double-counted 4.8M→7.9M).
+- **Verified**: no-allocation plan → ₹4,00,000 (plan total) via direct call + live `/api/performance/generate`; resource-level plans unchanged (₹5.25L, ₹26.5L); month-mode (no plan) still 0. Backend health 200.
+
+
 - **Reported**: Clicking a variable chip always appended to the **subject**, ignoring cursor position.
 - **Fix**:
   - `RichEmailEditor.jsx` → `forwardRef` exposing `insertAtCursor(text)` (uses Quill `getSelection`/`insertText`) + accepts `onFocus`.
