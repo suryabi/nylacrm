@@ -279,7 +279,7 @@ MODULE_LABELS = {
     "pipeline": "Pipeline",
     "accounts": "Accounts",
     "account_gop_metrics": "Account GOP Metrics",
-    "customer_complaints": "Customer Complaints",
+    "customer_complaints": "Issues",
     "gamma_generator": "Gamma Generator",
     "contacts": "Contacts",
     "invoices": "Invoices",

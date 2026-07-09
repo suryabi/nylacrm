@@ -19,7 +19,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — 🐛 Performance Tracker: Target tile showed ₹0 for target plans ✅ FIXED
+### 2026-07-09 — ✏️ Renamed "Customer Complaints" → "Issues" (UI labels only) ✅ DONE
+- Renamed all user-facing labels: sidebar nav, page heading + subtitle ("N issues tracked"), "New Issue" button, empty states, table header, dialog title ("New Issue"), toasts, delete-confirm; plus the permissions module label (`models/role.py`, key `customer_complaints` → display "Issues").
+- **Unchanged (intentionally)**: route `/complaints`, `moduleKey='customer_complaints'`, API prefix `/api/complaints`, DB collection, code identifiers, and the record number prefix `CMP-` (backend-generated).
+- Verified via screenshot: page shows "Issues", no "Customer Complaints" anywhere; backend health 200, frontend compiles.
+
+
 - **Reported (production)**: In Performance Tracker → "View by Target Plan", selecting any plan showed **Target ₹0 / 0.0%**.
 - **Root cause**: `compute_metrics` (`routes/performance.py`) derived the target ONLY from **resource-level** allocations (`target_allocations_v2`, `level="resource"`). Plans allocated at the **city/territory level** (or not broken down to individual reps) have no resource-level rows, so the sum was 0. Confirmed: plans with resource-level allocations already worked (₹5.25L / ₹26.5L); a plan without them returned 0.
 - **Fix**: when the resource-level sum is 0, fall back to the plan's **`total_amount`** (plan overall target). City/territory sums were deliberately NOT used — those rows nest/duplicate/share names in the data and would double-count (verified: territory-name match double-counted 4.8M→7.9M).

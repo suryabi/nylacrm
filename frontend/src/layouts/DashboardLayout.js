@@ -67,7 +67,7 @@ const salesNavigationGroups = [
       { name: 'My Calendar', href: '/personal-calendar', icon: CalendarDays, moduleKey: 'personal_calendar', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin', 'Production Manager', 'Production Engineer', 'QC Manager', 'Distributor', 'Distributor Manager', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
       { name: 'Mail', href: '/mail', icon: Mail },
       { name: 'Status Summary', href: '/status-summary', icon: UsersRound, moduleKey: 'status_summary', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
-      { name: 'Customer Complaints', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Issues', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -137,7 +137,7 @@ const productionNavigationGroups = [
       { name: 'Print Requests', href: '/print-requests', icon: Printer, moduleKey: 'print_requests', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Sample Delivery Requests', href: '/delivery-orders', icon: Package, moduleKey: 'delivery_orders', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
       { name: 'Quality Control', href: '/quality-control', icon: ShieldCheck, moduleKey: 'quality_control', roles: ['CEO', 'Director', 'Vice President', 'Production Manager', 'Production Supervisor', 'Production Staff', 'Admin', 'System Admin'] },
-      { name: 'Customer Complaints', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Issues', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
     ]
   },
   {

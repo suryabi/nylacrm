@@ -66,7 +66,7 @@ export default function CustomerComplaints() {
       const res = await axios.get(`${API}/complaints?${params}`, { headers: HEAD() });
       setData(res.data);
     } catch (e) {
-      toast.error('Failed to load complaints');
+      toast.error('Failed to load issues');
     } finally {
       setLoading(false);
     }
@@ -87,12 +87,12 @@ export default function CustomerComplaints() {
             <MessageSquareWarning className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">Customer Complaints</h1>
-            <p className="text-sm text-slate-500">{data.total} complaint{data.total === 1 ? '' : 's'} tracked</p>
+            <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-slate-800">Issues</h1>
+            <p className="text-sm text-slate-500">{data.total} issue{data.total === 1 ? '' : 's'} tracked</p>
           </div>
         </div>
         <Button onClick={() => setShowCreate(true)} className="bg-rose-600 hover:bg-rose-700" data-testid="new-complaint-btn">
-          <Plus className="h-4 w-4 mr-2" /> New Complaint
+          <Plus className="h-4 w-4 mr-2" /> New Issue
         </Button>
       </div>
 
@@ -126,15 +126,15 @@ export default function CustomerComplaints() {
           ) : data.data.length === 0 ? (
             <div className="py-16 text-center text-muted-foreground">
               <MessageSquareWarning className="h-12 w-12 mx-auto mb-3 opacity-40" />
-              <p>No complaints found</p>
-              <p className="text-sm">Click "New Complaint" to log one.</p>
+              <p>No issues found</p>
+              <p className="text-sm">Click "New Issue" to log one.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm" data-testid="complaints-table">
                 <thead>
                   <tr className="border-b bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="text-left p-3 font-medium">Complaint</th>
+                    <th className="text-left p-3 font-medium">Issue</th>
                     <th className="text-left p-3 font-medium">Customer</th>
                     <th className="text-left p-3 font-medium">SKUs</th>
                     <th className="text-center p-3 font-medium">Category</th>
@@ -348,10 +348,10 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
         assigned_to_name: assignedUser?.name || null,
       };
       const res = await axios.post(`${API}/complaints`, payload, { headers: HEAD() });
-      toast.success('Complaint created');
+      toast.success('Issue created');
       onCreated(res.data.id);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to create complaint');
+      toast.error(e.response?.data?.detail || 'Failed to create issue');
     } finally {
       setSaving(false);
     }
@@ -360,7 +360,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" data-testid="create-complaint-dialog">
-        <DialogHeader><DialogTitle>New Customer Complaint</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>New Issue</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <Label>Title *</Label>

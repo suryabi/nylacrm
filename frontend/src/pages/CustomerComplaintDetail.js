@@ -44,7 +44,7 @@ export default function CustomerComplaintDetail() {
       const res = await axios.get(`${API}/complaints/${id}`, { headers: HEAD() });
       setComplaint(res.data);
     } catch (e) {
-      toast.error('Complaint not found');
+      toast.error('Issue not found');
       navigate('/complaints');
     } finally {
       setLoading(false);
@@ -112,7 +112,7 @@ export default function CustomerComplaintDetail() {
   const doDelete = async () => {
     try {
       await axios.delete(`${API}/complaints/${id}`, { headers: HEAD() });
-      toast.success('Complaint deleted');
+      toast.success('Issue deleted');
       navigate('/complaints');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Delete failed');
@@ -266,7 +266,7 @@ export default function CustomerComplaintDetail() {
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete complaint?</AlertDialogTitle>
+            <AlertDialogTitle>Delete issue?</AlertDialogTitle>
             <AlertDialogDescription>This permanently removes {complaint.complaint_number} and its comments. This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
