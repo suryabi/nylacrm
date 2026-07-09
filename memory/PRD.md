@@ -19,7 +19,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — 🐛 ROOT CAUSE + FIX: Zoho Statement used wrong endpoint (`/statement` → `/statements`) ✅ FIXED (prod-verify)
+### 2026-07-09 — ⚡ Frontend code-splitting + lighter production build (deploy de-risk) ✅ DONE
+- **Context**: Production Cloud Build failed (transient/OOM signature). Local checks (frontend `craco build`, `yarn install --frozen-lockfile`, fresh backend dep resolution, `pip check`, `server` import) ALL pass → no code-level blocker; failure was infra/build-memory.
+- **Fixes** (no Docker changes):
+  - `frontend/.env`: added `GENERATE_SOURCEMAP=false` (cuts build memory + time).
+  - `App.js`: converted ~130 page imports to **`React.lazy`** + wrapped `<Routes>` in **`<Suspense>`** (entry/auth pages — SplashScreen, Login, RegisterTenant, GoogleAuthCallback, DashboardLayout — stay eager). Named-export driver pages handled via `.then(m => ({ default: m.X }))`.
+- **Result**: initial JS bundle **1.43 MB → 296 KB gzipped** (~80% smaller); split into 162 on-demand route chunks. Production build exits 0 in ~50s.
+- **Verified (preview)**: login → /home → lazy `/accounts` all render; no ChunkLoadError; only benign pre-login 401s + Cloudflare RUM noise in console.
+- **⚠️ Redeploy** to apply on production — lighter build should clear the Cloud Build failure.
+
+
 - **Diagnosis (via the new `/statement/debug` probe on production)**: contact lookup returned 200 (auth/org/contact all fine), but every statement call returned **404 `{"code":5,"message":"Invalid URL Passed"}`**. The endpoint path was **singular** `/contacts/{id}/statement` — Zoho Books' real endpoint is **plural** `/contacts/{id}/statements`.
 - **Fix**: `zoho_service.get_contact_statement_pdf` now calls `/books/v3/contacts/{id}/statements?accept=pdf` (with FY date defaults). Diagnostic probes updated to the plural path (json/pdf, with/without dates) so a re-run confirms the working combo.
 - Earlier hardening retained (45s ceiling, follow_redirects, fail-fast timeouts, catch-all) — these turned the prior hang/Cloudflare-520 into a clean error and enabled this diagnosis.
