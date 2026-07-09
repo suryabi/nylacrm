@@ -22,7 +22,6 @@ import TaxBillingCard from '../components/TaxBillingCard';
 import LeadBottleDesigns from '../components/LeadBottleDesigns';
 import { isValidMapsLink } from '../utils/mapsLink';
 import { MapsLinkInput } from '../components/MapsLinkInput';
-import GammaGenerateButton from '../components/gamma/GammaGenerateButton';
 import {
   Select,
   SelectContent,
@@ -1390,7 +1389,6 @@ ${googleMapsLink}`;
         </div>
         {/* Actions: wrap to a second row on mobile */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:shrink-0">
-          <GammaGenerateButton sourceType="account" sourceId={id} label="QBR Deck" className="h-9 sm:h-10 text-xs sm:text-sm border-indigo-300 text-indigo-700 hover:bg-indigo-50" />
           <Button
             onClick={() => isEditing ? handleSave() : setIsEditing(true)}
             disabled={saving}

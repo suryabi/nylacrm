@@ -134,6 +134,7 @@ class TenantSettings(BaseModel):
 
     # Sales/Field Settings
     check_in_radius_meters: int = 50  # Geo-fence radius for "I am here" sales rep check-ins on leads
+    check_in_cooldown_minutes: int = 30  # Minimum gap between a user's check-ins on the SAME lead (anti-spam)
 
     # Factory / company HQ address — used by distributor delivery schedules to
     # compute the "last delivery → factory" leg of the route distance.

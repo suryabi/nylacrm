@@ -19,7 +19,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — 📱 Backend prep for native mobile app (drivers + distributors) ✅ DONE
+### 2026-07-09 — ✅ Lead check-in cooldown (anti-spam) + removed QBR Deck button
+- **QBR Deck removed** from the Account detail header (`AccountDetail.js`) — deleted the `GammaGenerateButton` usage + its now-unused import (avoids build error). Verified gone via screenshot; only Edit/Delete remain.
+- **"I am here" check-in cooldown** (per user, per lead; configurable):
+  - Setting `check_in_cooldown_minutes` (default 30) added to `TenantSettings` model + editable in **Tenant Settings → Sales/Field** (`data-testid=input-check-in-cooldown`, 0 = disabled).
+  - Backend (`server.py`): new `GET /api/leads/{id}/check-in/status` (returns `can_check_in`, `seconds_remaining`, `next_allowed_at`, `cooldown_minutes`); `POST /check-in` now enforces the cooldown server-side (**429** with a friendly message) and returns `next_allowed_at`.
+  - Frontend (`LeadDeliveryAddressCard.js`): fetches status on mount, **disables the button with a live mm:ss countdown** ("Available in 12:34"), sets cooldown after a successful check-in, and syncs on 429.
+  - **Verified (curl)**: status→check-in(within radius)→status(1799s left)→repeat=429. Frontend renders correctly (button enabled when no active cooldown). Test activity cleaned up.
+
+
 - **Goal**: Ready the existing backend for a companion **native Expo/React Native app** (built separately via Emergent's Mobile Agent) serving both drivers and distributors. Spec doc handed off at `/app/memory/MOBILE_API.md`.
 - **New endpoints** (`routes/mobile.py`, mounted `/api/mobile`, reuse existing bcrypt + `user_sessions` Bearer-token auth):
   - `POST /mobile/login` — unified login: email → staff/distributor, phone → Driver; returns `{token, role, user{home_screen}}`; no user-enumeration (uniform 401).

@@ -238,6 +238,7 @@ export default function TenantSettings() {
     fiscal_year_start: '04-01',
     default_distributor_gst_percent: 18,
     check_in_radius_meters: 50,
+    check_in_cooldown_minutes: 30,
     gps_ping_interval_minutes: 5,
     idle_timeout_minutes: 20,
   });
@@ -1978,6 +1979,28 @@ export default function TenantSettings() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Sales reps clicking "I am here" on a lead are flagged as off-site when they are farther than this radius from the lead's saved GPS location.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Check-in Cooldown
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min="0"
+                    max="1440"
+                    step="1"
+                    value={settings.check_in_cooldown_minutes ?? 30}
+                    onChange={(e) => setSettings(prev => ({ ...prev, check_in_cooldown_minutes: parseInt(e.target.value, 10) || 0 }))}
+                    className="max-w-[120px]"
+                    data-testid="input-check-in-cooldown"
+                  />
+                  <span className="text-muted-foreground">minutes</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  After a sales rep checks in on a lead, the "I am here" button is disabled for this many minutes (per user, per lead) to prevent repeated presses. Set to 0 to disable the cooldown.
                 </p>
               </div>
               <div className="space-y-2">

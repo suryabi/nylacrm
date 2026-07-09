@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Copy,
   Crosshair,
+  Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { leadsAPI } from '../utils/api';
@@ -39,6 +40,39 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
   const [editing, setEditing] = useState(!hasSavedAddress);
   const [saving, setSaving] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
+  // Anti-spam cooldown: cooldownUntil is an epoch-ms timestamp (or null).
+  const [cooldownUntil, setCooldownUntil] = useState(null);
+  const [nowTs, setNowTs] = useState(Date.now());
+  const cooldownRemainingMs = cooldownUntil ? Math.max(0, cooldownUntil - nowTs) : 0;
+  const inCooldown = cooldownRemainingMs > 0;
+  const cooldownLabel = (() => {
+    const s = Math.ceil(cooldownRemainingMs / 1000);
+    const m = Math.floor(s / 60);
+    return `${m}:${String(s % 60).padStart(2, '0')}`;
+  })();
+
+  const fetchCheckInStatus = useCallback(async () => {
+    if (!lead?.id) return;
+    try {
+      const { data } = await axios.get(
+        `${API_URL}/api/leads/${lead.id}/check-in/status`,
+        { headers: getHeaders(), withCredentials: true }
+      );
+      if (data && !data.can_check_in && data.seconds_remaining > 0) {
+        setCooldownUntil(Date.now() + data.seconds_remaining * 1000);
+      } else {
+        setCooldownUntil(null);
+      }
+    } catch { /* non-blocking */ }
+  }, [lead?.id]);
+
+  useEffect(() => { fetchCheckInStatus(); }, [fetchCheckInStatus]);
+
+  useEffect(() => {
+    if (!cooldownUntil) return undefined;
+    const t = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [cooldownUntil]);
 
   const [form, setForm] = useState({
     address_line1: saved.address_line1 || '',
@@ -249,8 +283,17 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
             );
           }
           if (onActivityLogged) await onActivityLogged();
+          if (data.next_allowed_at) {
+            const until = new Date(data.next_allowed_at).getTime();
+            if (until > Date.now()) setCooldownUntil(until);
+          }
         } catch (err) {
-          toast.error(err.response?.data?.detail || 'Check-in failed');
+          if (err.response?.status === 429) {
+            toast.warning(err.response?.data?.detail || 'You recently checked in here. Please wait a bit.');
+            fetchCheckInStatus();
+          } else {
+            toast.error(err.response?.data?.detail || 'Check-in failed');
+          }
         } finally {
           setCheckingIn(false);
         }
@@ -538,16 +581,23 @@ export default function LeadDeliveryAddressCard({ lead, onLeadUpdated, onActivit
           </div>
           <Button
             onClick={handleCheckIn}
-            disabled={checkingIn || !hasCoordinates}
+            disabled={checkingIn || !hasCoordinates || inCooldown}
             data-testid="lead-i-am-here-btn"
           >
             {checkingIn ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Locating...</>
+            ) : inCooldown ? (
+              <><Clock className="h-4 w-4 mr-2" /> Available in {cooldownLabel}</>
             ) : (
               <><Crosshair className="h-4 w-4 mr-2" /> I am here</>
             )}
           </Button>
         </div>
+        {inCooldown && (
+          <p className="text-[11px] text-muted-foreground mt-2" data-testid="lead-checkin-cooldown-note">
+            You already checked in here. You can check in again in {cooldownLabel}.
+          </p>
+        )}
         {!hasCoordinates && (
           <p className="text-[11px] text-amber-600 mt-2">
             Add the lead's address from Google search above to enable check-in.

@@ -5269,6 +5269,54 @@ def _haversine_meters(lat1: float, lng1: float, lat2: float, lng2: float) -> flo
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+async def _resolve_check_in_cooldown_minutes(tenant: dict) -> int:
+    try:
+        return max(0, int(((tenant or {}).get('settings') or {}).get('check_in_cooldown_minutes', 30)))
+    except (TypeError, ValueError):
+        return 30
+
+
+async def _last_check_in(lead_id: str, user_id: str) -> Optional[dict]:
+    """Most recent 'I am here' check-in activity by this user on this lead."""
+    return await get_tdb().activities.find_one(
+        {'lead_id': lead_id, 'created_by': user_id, 'check_in': {'$exists': True}},
+        {'_id': 0, 'created_at': 1},
+        sort=[('created_at', -1)],
+    )
+
+
+def _cooldown_state(last_created_at: Optional[str], cooldown_minutes: int) -> dict:
+    """Compute {can_check_in, next_allowed_at, seconds_remaining} from the last check-in."""
+    now = datetime.now(timezone.utc)
+    if not last_created_at or cooldown_minutes <= 0:
+        return {'can_check_in': True, 'last_check_in_at': last_created_at,
+                'next_allowed_at': None, 'seconds_remaining': 0}
+    try:
+        last_dt = datetime.fromisoformat(str(last_created_at).replace('Z', '+00:00'))
+    except (TypeError, ValueError):
+        return {'can_check_in': True, 'last_check_in_at': last_created_at,
+                'next_allowed_at': None, 'seconds_remaining': 0}
+    next_allowed = last_dt + timedelta(minutes=cooldown_minutes)
+    remaining = (next_allowed - now).total_seconds()
+    return {
+        'can_check_in': remaining <= 0,
+        'last_check_in_at': last_created_at,
+        'next_allowed_at': next_allowed.isoformat(),
+        'seconds_remaining': max(0, int(remaining)),
+    }
+
+
+@api_router.get("/leads/{lead_id}/check-in/status")
+async def lead_check_in_status(lead_id: str, current_user: dict = Depends(get_current_user)):
+    """Whether the current user may check in on this lead now, plus the cooldown
+    window so the UI can disable the button and show a countdown."""
+    tenant = await db.tenants.find_one({'tenant_id': get_current_tenant_id()}, {'_id': 0, 'settings': 1})
+    cooldown_minutes = await _resolve_check_in_cooldown_minutes(tenant)
+    last = await _last_check_in(lead_id, current_user['id'])
+    state = _cooldown_state((last or {}).get('created_at'), cooldown_minutes)
+    return {'cooldown_minutes': cooldown_minutes, **state}
+
+
 @api_router.post("/leads/{lead_id}/check-in")
 async def lead_check_in(
     lead_id: str,
@@ -5280,6 +5328,9 @@ async def lead_check_in(
     Computes distance from the lead's saved delivery address and logs a visit
     activity. Distance is always recorded; an off-site flag is set when the
     sales rep is outside the tenant's configured geo-fence radius.
+
+    A per-user, per-lead cooldown (tenant setting `check_in_cooldown_minutes`)
+    prevents repeated check-ins on the same lead within the window.
     """
     lead = await get_tdb().leads.find_one({'id': lead_id}, {'_id': 0})
     if not lead:
@@ -5308,6 +5359,18 @@ async def lead_check_in(
         radius_m = int(((tenant or {}).get('settings') or {}).get('check_in_radius_meters') or 50)
     except (TypeError, ValueError):
         radius_m = 50
+
+    # Enforce per-user, per-lead cooldown (anti-spam) before recording anything.
+    cooldown_minutes = await _resolve_check_in_cooldown_minutes(tenant)
+    if cooldown_minutes > 0:
+        last = await _last_check_in(lead_id, current_user['id'])
+        state = _cooldown_state((last or {}).get('created_at'), cooldown_minutes)
+        if not state['can_check_in']:
+            mins_left = max(1, round(state['seconds_remaining'] / 60))
+            raise HTTPException(
+                status_code=429,
+                detail=f"You already checked in here. You can check in again in about {mins_left} min.",
+            )
 
     within = distance_m <= radius_m
     distance_label = f"{distance_m:.0f}m" if distance_m < 1000 else f"{(distance_m/1000):.2f}km"
@@ -5376,6 +5439,8 @@ async def lead_check_in(
         'radius_m': radius_m,
         'within_radius': within,
         'description': description,
+        'cooldown_minutes': cooldown_minutes,
+        'next_allowed_at': (now + timedelta(minutes=cooldown_minutes)).isoformat() if cooldown_minutes > 0 else None,
     }
 
 
