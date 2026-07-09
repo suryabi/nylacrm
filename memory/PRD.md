@@ -19,15 +19,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — 🐛 Zoho Statement → Cloudflare 520 (origin hang) + built a production diagnostic ✅ CODE DONE (prod-run needed)
-- **Reported (PRODUCTION, still failing after redeploy)**: Statement download shows Cloudflare "Error 520 — origin returned an invalid/incomplete response". A *clean* error would pass through as a normal 502/504, so a 520 means the origin was **hanging/crashing mid-response**, not returning a Zoho error. Invoice PDF (same StreamingResponse+Zoho pattern) works, so it's specific to the statement path.
-- **Hardening (guarantees no more 520)** in `routes/account_ledger.py` + `services/zoho_service.py`:
-  - **Hard 45s ceiling** via `asyncio.wait_for` around the fetch → always returns a clean 504 well under Cloudflare's 100s.
-  - `follow_redirects=True` + fail-fast httpx timeouts (20s read / 10s connect) + caught `TimeoutException`/`HTTPError`.
-  - Route **catch-all** → clean JSON always; empty-PDF guard.
-- **NEW diagnostic** (since Zoho isn't connected in preview & no prod log access): `GET /api/accounts/{id}/statement/debug` runs 4 probes (contact lookup, statement JSON w/ & w/o dates, statement PDF) and returns a JSON report (status, content-type, bytes, redirects, body-preview, timing per step). Surfaced in the UI as a **"Run diagnostics"** button in the ledger error state (`AccountZohoLedger.jsx`, `data-testid=ledger-diagnose-btn` / `ledger-diagnostics-output`).
-- **Verified in preview**: both endpoints return clean JSON (400/“not linked”), no hang; frontend compiles.
-- **⚠️ NEXT (user)**: redeploy → open the account's Ledger section → if it errors, click **Run diagnostics** and share the JSON. That report pinpoints the exact Zoho behaviour (missing template / scope / redirect / timeout).
+### 2026-07-09 — 🐛 ROOT CAUSE + FIX: Zoho Statement used wrong endpoint (`/statement` → `/statements`) ✅ FIXED (prod-verify)
+- **Diagnosis (via the new `/statement/debug` probe on production)**: contact lookup returned 200 (auth/org/contact all fine), but every statement call returned **404 `{"code":5,"message":"Invalid URL Passed"}`**. The endpoint path was **singular** `/contacts/{id}/statement` — Zoho Books' real endpoint is **plural** `/contacts/{id}/statements`.
+- **Fix**: `zoho_service.get_contact_statement_pdf` now calls `/books/v3/contacts/{id}/statements?accept=pdf` (with FY date defaults). Diagnostic probes updated to the plural path (json/pdf, with/without dates) so a re-run confirms the working combo.
+- Earlier hardening retained (45s ceiling, follow_redirects, fail-fast timeouts, catch-all) — these turned the prior hang/Cloudflare-520 into a clean error and enabled this diagnosis.
+- **⚠️ Redeploy to verify**: the statement should now render. If not, re-run diagnostics — it'll show which plural variant Zoho accepts.
+
+
 
 
 

@@ -547,7 +547,9 @@ async def get_contact_statement_pdf(tenant_id: str, contact_id: str, params: Opt
     if not creds:
         raise RuntimeError("Zoho Books is not connected for this tenant")
     api_base = (creds.get("api_base_url") or cfg["api_base_url"]).rstrip("/")
-    url = f"{api_base}/books/v3/contacts/{contact_id}/statement"
+    # Zoho Books customer statement endpoint is /statements (plural). The singular
+    # /statement path returns 404 "Invalid URL Passed" (code 5).
+    url = f"{api_base}/books/v3/contacts/{contact_id}/statements"
     req_params = dict(params or {})
     req_params["organization_id"] = creds["organization_id"]
     req_params["accept"] = "pdf"
@@ -640,19 +642,20 @@ async def diagnose_contact_statement(tenant_id: str, contact_id: str) -> dict:
         today = datetime.now(timezone.utc).date()
         fy_start_year = today.year if today.month >= 4 else today.year - 1
         base_params = {"organization_id": org_id}
-        stmt_url = f"{api_base}/books/v3/contacts/{contact_id}/statement"
+        stmt_url = f"{api_base}/books/v3/contacts/{contact_id}/statements"
+        dates = {"start_date": f"{fy_start_year}-04-01", "end_date": today.isoformat()}
 
         probes = [
             ("contact_lookup", "GET", f"{api_base}/books/v3/contacts/{contact_id}",
              {**base_params}, "application/json"),
-            ("statement_json_no_dates", "GET", stmt_url,
+            ("statements_json_no_dates", "GET", stmt_url,
              {**base_params}, "application/json"),
-            ("statement_json_with_dates", "GET", stmt_url,
-             {**base_params, "start_date": f"{fy_start_year}-04-01", "end_date": today.isoformat()},
-             "application/json"),
-            ("statement_pdf_with_dates", "GET", stmt_url,
-             {**base_params, "accept": "pdf", "start_date": f"{fy_start_year}-04-01", "end_date": today.isoformat()},
-             "application/pdf"),
+            ("statements_json_with_dates", "GET", stmt_url,
+             {**base_params, **dates}, "application/json"),
+            ("statements_pdf_with_dates", "GET", stmt_url,
+             {**base_params, "accept": "pdf", **dates}, "application/pdf"),
+            ("statements_pdf_no_dates", "GET", stmt_url,
+             {**base_params, "accept": "pdf"}, "application/pdf"),
         ]
 
         for name, method, url, params, accept in probes:
