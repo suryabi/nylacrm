@@ -39,6 +39,11 @@ class EmailTemplateBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     subject: str = Field("", max_length=500)
     body_html: str = ""
+    # Pre-configured recipients. Comma-separated; may contain {{variables}}
+    # (e.g. {{contact_email}}) which are resolved on render.
+    to_emails: str = Field("", max_length=1000)
+    cc_emails: str = Field("", max_length=1000)
+    bcc_emails: str = Field("", max_length=1000)
     is_public: bool = False
     crm_document_ids: List[str] = Field(default_factory=list)
 
@@ -51,6 +56,9 @@ class EmailTemplateUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=120)
     subject: Optional[str] = Field(None, max_length=500)
     body_html: Optional[str] = None
+    to_emails: Optional[str] = Field(None, max_length=1000)
+    cc_emails: Optional[str] = Field(None, max_length=1000)
+    bcc_emails: Optional[str] = Field(None, max_length=1000)
     is_public: Optional[bool] = None
     crm_document_ids: Optional[List[str]] = None
 
@@ -111,12 +119,15 @@ async def _resolve_variables(
         vars_map["company"] = doc.get("company") or ""
         vars_map["lead_company"] = doc.get("company") or ""
         vars_map["lead_city"] = vars_map["city"]
+        vars_map["contact_email"] = doc.get("email") or doc.get("contact_email") or ""
     elif entity_type == "account":
         vars_map["account_name"] = doc.get("account_name") or ""
         vars_map["contact_name"] = doc.get("contact_name") or ""
         vars_map["company"] = doc.get("account_name") or ""
+        vars_map["contact_email"] = doc.get("email") or doc.get("contact_email") or doc.get("delivery_contact_email") or ""
     elif entity_type == "contact":
         vars_map["contact_name"] = doc.get("name") or doc.get("full_name") or ""
+        vars_map["contact_email"] = doc.get("email") or ""
         # Contacts may also reference an account.
         if doc.get("account_name"):
             vars_map["account_name"] = doc["account_name"]
@@ -186,6 +197,9 @@ async def create_template(
         "name": payload.name.strip(),
         "subject": payload.subject or "",
         "body_html": payload.body_html or "",
+        "to_emails": payload.to_emails or "",
+        "cc_emails": payload.cc_emails or "",
+        "bcc_emails": payload.bcc_emails or "",
         "is_public": bool(payload.is_public),
         "crm_document_ids": list(payload.crm_document_ids or []),
         "created_at": now,
