@@ -320,4 +320,9 @@ routes_router.include_router(sharing_router, prefix="/share", tags=["Document Sh
 from .account_ledger import router as account_ledger_router
 routes_router.include_router(account_ledger_router, prefix="/accounts", tags=["Account Ledger"])
 
+# Mobile app support (unified login, push tokens, delta sync) for the native
+# Expo companion app (drivers + distributors). See routes/mobile.py
+from .mobile import router as mobile_router
+routes_router.include_router(mobile_router, prefix="/mobile", tags=["Mobile App"])
+
 __all__ = ['routes_router']

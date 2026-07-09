@@ -99,6 +99,18 @@ async def notify_users(
     except Exception:
         logger.exception("notify_users: failed to insert notifications")
 
+    # Best-effort push to any registered mobile devices for these recipients.
+    try:
+        from services import push_service
+        await push_service.send_push_to_users(
+            tenant_id, list(allowed_ids),
+            title=title, body=body,
+            data={"link": link, "kind": kind, "category": cat or None,
+                  "entity_type": entity_type, "entity_id": entity_id},
+        )
+    except Exception:
+        logger.exception("notify_users: push fan-out failed")
+
     if not send_email_too:
         return
 

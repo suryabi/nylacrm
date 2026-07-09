@@ -19,7 +19,18 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — ⚡ Frontend code-splitting + lighter production build (deploy de-risk) ✅ DONE
+### 2026-07-09 — 📱 Backend prep for native mobile app (drivers + distributors) ✅ DONE
+- **Goal**: Ready the existing backend for a companion **native Expo/React Native app** (built separately via Emergent's Mobile Agent) serving both drivers and distributors. Spec doc handed off at `/app/memory/MOBILE_API.md`.
+- **New endpoints** (`routes/mobile.py`, mounted `/api/mobile`, reuse existing bcrypt + `user_sessions` Bearer-token auth):
+  - `POST /mobile/login` — unified login: email → staff/distributor, phone → Driver; returns `{token, role, user{home_screen}}`; no user-enumeration (uniform 401).
+  - `GET /mobile/me`, `POST /mobile/logout`.
+  - `POST /mobile/push/register` + `/push/unregister` — device Expo push tokens (`push_tokens` collection).
+  - `GET /mobile/sync?since=<ISO>` — role-based delta (notifications + driver schedules / distributor deliveries) with a `server_time` cursor for offline caching.
+- **Push fan-out**: `services/push_service.py` (Expo push, no key needed) wired into the central `utils/notify.py::notify_users` → every in-app notification now also pushes to registered mobile devices (best-effort, gated by existing preference matrix).
+- **Verified (curl, external URL, both roles)**: staff login→me→push register→sync; distributor login (home=distributor, 21 deliveries in sync); push unregister; delta `since` cursor returns 0 on future timestamp; wrong-pass & unknown-user both 401. Driver phone-path mirrors proven `driver_app.login` (not password-tested — system-generated pw). Backend imports clean, health 200.
+- **Note**: The mobile APP itself must be built in a SEPARATE Emergent project via the **Mobile Agent** (paid feature). Android = install-from-APK link; iOS needs an Apple Developer account. Native push/GPS require an EAS standalone build (not Expo Go).
+
+
 - **Context**: Production Cloud Build failed (transient/OOM signature). Local checks (frontend `craco build`, `yarn install --frozen-lockfile`, fresh backend dep resolution, `pip check`, `server` import) ALL pass → no code-level blocker; failure was infra/build-memory.
 - **Fixes** (no Docker changes):
   - `frontend/.env`: added `GENERATE_SOURCEMAP=false` (cuts build memory + time).
