@@ -19,7 +19,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — ✏️ Renamed "Customer Complaints" → "Issues" (UI labels only) ✅ DONE
+### 2026-07-09 — ✨ New Issue dialog: City dropdown filters accounts by city ✅ DONE
+- Added a **City** dropdown to the New Issue (create) dialog. Selecting a city narrows the Account (and Lead) picker to entities in that city; "All cities" clears it. Shown only for account/lead link types (distributors have no city).
+- Backend (`routes/customer_complaints.py`): new `GET /complaints/meta/cities?link_type=` (distinct cities) + `city` query param on `/meta/entity-search` (filters leads/accounts by `city`).
+- Frontend (`CustomerComplaints.js`): `EntityPicker` accepts a `city` prop (re-searches on change); dialog fetches cities per link type, resets the selected entity when city/link type changes; Account picker spans full width when the city filter is shown (`data-testid=complaint-city-select`).
+- **Verified**: cities endpoint returns 6 cities; Hyderabad→6 accounts, Delhi→1 (curl) and via screenshot (picker shows only Hyderabad accounts). Backend health 200, frontend compiles.
+
+
 - Renamed all user-facing labels: sidebar nav, page heading + subtitle ("N issues tracked"), "New Issue" button, empty states, table header, dialog title ("New Issue"), toasts, delete-confirm; plus the permissions module label (`models/role.py`, key `customer_complaints` → display "Issues").
 - **Unchanged (intentionally)**: route `/complaints`, `moduleKey='customer_complaints'`, API prefix `/api/complaints`, DB collection, code identifiers, and the record number prefix `CMP-` (backend-generated).
 - Verified via screenshot: page shows "Issues", no "Customer Complaints" anywhere; backend health 200, frontend compiles.

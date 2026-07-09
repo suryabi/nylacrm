@@ -215,7 +215,7 @@ const FilterSelect = ({ value, onChange, options, placeholder, testid }) => (
 );
 
 // ── Entity (Lead/Account/Distributor) autocomplete picker ──
-const EntityPicker = ({ linkType, value, onSelect }) => {
+const EntityPicker = ({ linkType, city, value, onSelect }) => {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [results, setResults] = useState([]);
@@ -225,13 +225,13 @@ const EntityPicker = ({ linkType, value, onSelect }) => {
     if (!linkType) return;
     setLoading(true);
     const t = setTimeout(() => {
-      axios.get(`${API}/complaints/meta/entity-search`, { headers: HEAD(), params: { link_type: linkType, q } })
+      axios.get(`${API}/complaints/meta/entity-search`, { headers: HEAD(), params: { link_type: linkType, q, city: city || '' } })
         .then((r) => setResults(r.data.results || []))
         .catch(() => setResults([]))
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(t);
-  }, [linkType, q, open]);
+  }, [linkType, q, city, open]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -314,6 +314,16 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
   const [details, setDetails] = useState('');
   const [linkType, setLinkType] = useState('account');
   const [entity, setEntity] = useState(null);
+  const [city, setCity] = useState('');
+  const [cities, setCities] = useState([]);
+  const cityFilterable = linkType === 'account' || linkType === 'lead';
+
+  useEffect(() => {
+    if (!cityFilterable) { setCities([]); return; }
+    axios.get(`${API}/complaints/meta/cities`, { headers: HEAD(), params: { link_type: linkType } })
+      .then((r) => setCities(r.data.cities || []))
+      .catch(() => setCities([]));
+  }, [linkType, cityFilterable]);
   const [skus, setSkus] = useState([]);
   const [selectedSkus, setSelectedSkus] = useState([]); // [{id,name}]
   const [category, setCategory] = useState('quality');
@@ -370,7 +380,7 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Linked to</Label>
-              <Select value={linkType} onValueChange={(v) => { setLinkType(v); setEntity(null); }}>
+              <Select value={linkType} onValueChange={(v) => { setLinkType(v); setEntity(null); setCity(''); }}>
                 <SelectTrigger data-testid="complaint-linktype-select"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="account">Account</SelectItem>
@@ -379,9 +389,21 @@ const CreateComplaintDialog = ({ options, onClose, onCreated }) => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+            {cityFilterable && (
+              <div className="space-y-1.5">
+                <Label>City</Label>
+                <Select value={city || 'all'} onValueChange={(v) => { setCity(v === 'all' ? '' : v); setEntity(null); }}>
+                  <SelectTrigger data-testid="complaint-city-select"><SelectValue placeholder="All cities" /></SelectTrigger>
+                  <SelectContent className="max-h-[260px]">
+                    <SelectItem value="all">All cities</SelectItem>
+                    {cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className={`space-y-1.5 ${cityFilterable ? 'col-span-2' : ''}`}>
               <Label className="capitalize">{linkType}</Label>
-              <EntityPicker linkType={linkType} value={entity} onSelect={setEntity} />
+              <EntityPicker linkType={linkType} city={city} value={entity} onSelect={setEntity} />
             </div>
           </div>
 

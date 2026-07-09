@@ -126,18 +126,35 @@ async def get_options(current_user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/meta/cities")
+async def entity_cities(link_type: str, current_user: dict = Depends(get_current_user)):
+    """Distinct cities for the given entity type, to power the city filter."""
+    tenant_id = get_current_tenant_id()
+    coll = {"account": _db.accounts, "lead": _db.leads}.get(link_type)
+    if coll is None:
+        return {"cities": []}
+    cities = await coll.distinct("city", {"tenant_id": tenant_id, "city": {"$nin": [None, ""]}})
+    return {"cities": sorted({c for c in cities if c})}
+
+
 @router.get("/meta/entity-search")
 async def entity_search(
     link_type: str,
     q: str = "",
+    city: str = "",
     current_user: dict = Depends(get_current_user),
 ):
-    """Search leads / accounts / distributors for linking a complaint."""
+    """Search leads / accounts / distributors for linking a complaint.
+
+    An optional `city` narrows leads/accounts to that city."""
     tenant_id = get_current_tenant_id()
     q = (q or "").strip()
+    city = (city or "").strip()
     results = []
     if link_type == "lead":
         query = {"tenant_id": tenant_id}
+        if city:
+            query["city"] = city
         if q:
             query["$or"] = [
                 {"company": {"$regex": q, "$options": "i"}},
@@ -149,6 +166,8 @@ async def entity_search(
                     "subtitle": " · ".join([x for x in [r.get("lead_id"), r.get("city")] if x])} for r in rows]
     elif link_type == "account":
         query = {"tenant_id": tenant_id}
+        if city:
+            query["city"] = city
         if q:
             query["$or"] = [
                 {"account_name": {"$regex": q, "$options": "i"}},
