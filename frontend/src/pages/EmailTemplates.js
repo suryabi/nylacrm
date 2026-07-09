@@ -5,7 +5,7 @@
  * tenant. Owners can edit / delete / toggle public; others can preview and
  * "use as starting point" (server clone) to get a private editable copy.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Globe, Lock, Copy, FileText, X, Save, Loader2, Paperclip } from 'lucide-react';
@@ -47,6 +47,12 @@ export default function EmailTemplates() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [attachmentDocs, setAttachmentDocs] = useState([]); // hydrated header info for the editing template's docs
   const [saving, setSaving] = useState(false);
+
+  // Variable insertion: remember the last-focused field + caret position.
+  const subjectRef = useRef(null);
+  const bodyEditorRef = useRef(null);
+  const lastFocusedRef = useRef('subject');
+  const subjectSelRef = useRef({ start: null, end: null });
 
   const refresh = async () => {
     setLoading(true);
@@ -117,7 +123,32 @@ export default function EmailTemplates() {
   };
 
   const insertVarAt = (tag) => {
-    setEditing((p) => ({ ...p, subject: (p.subject || '') + tag }));
+    // Insert the variable at the caret of whichever field was focused last
+    // (subject input or the rich body editor) — not always the subject.
+    if (lastFocusedRef.current === 'body' && bodyEditorRef.current?.insertAtCursor) {
+      bodyEditorRef.current.insertAtCursor(tag);
+      return;
+    }
+    const el = subjectRef.current;
+    const s = editing?.subject || '';
+    let { start, end } = subjectSelRef.current;
+    if (start == null) { start = s.length; end = s.length; }
+    const next = s.slice(0, start) + tag + s.slice(end);
+    setEditing((p) => ({ ...p, subject: next }));
+    const pos = start + tag.length;
+    subjectSelRef.current = { start: pos, end: pos };
+    requestAnimationFrame(() => {
+      if (el) {
+        el.focus();
+        try { el.setSelectionRange(pos, pos); } catch { /* noop */ }
+      }
+    });
+  };
+
+  const rememberSubjectCaret = (e) => {
+    lastFocusedRef.current = 'subject';
+    const el = e.target;
+    subjectSelRef.current = { start: el.selectionStart, end: el.selectionEnd };
   };
 
   return (
@@ -202,8 +233,13 @@ export default function EmailTemplates() {
               <div>
                 <Label className="text-xs">Subject</Label>
                 <Input
+                  ref={subjectRef}
                   value={editing.subject}
-                  onChange={(e) => setEditing({ ...editing, subject: e.target.value })}
+                  onChange={(e) => { subjectSelRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd }; setEditing({ ...editing, subject: e.target.value }); }}
+                  onFocus={rememberSubjectCaret}
+                  onSelect={rememberSubjectCaret}
+                  onClick={rememberSubjectCaret}
+                  onKeyUp={rememberSubjectCaret}
                   placeholder="Welcome {{contact_name}} – introducing Nyla"
                   data-testid="tpl-subject"
                 />
@@ -211,8 +247,10 @@ export default function EmailTemplates() {
               <div>
                 <Label className="text-xs">Body</Label>
                 <RichEmailEditor
+                  ref={bodyEditorRef}
                   value={editing.body_html}
                   onChange={(html) => setEditing({ ...editing, body_html: html })}
+                  onFocus={() => { lastFocusedRef.current = 'body'; }}
                 />
               </div>
 
@@ -233,7 +271,7 @@ export default function EmailTemplates() {
                     </button>
                   ))}
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">Click to append to the subject. You can also type the variable anywhere in the body.</p>
+                <p className="text-[11px] text-slate-400 mt-1">Click to insert the variable at your cursor — in the subject or the body, wherever you last clicked.</p>
               </div>
 
               {/* Attachments */}

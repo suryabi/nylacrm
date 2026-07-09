@@ -19,7 +19,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — ✅ Lead check-in cooldown (anti-spam) + removed QBR Deck button
+### 2026-07-09 — 🐛 Email template "Insert variable" now inserts at the caret (subject OR body) ✅ DONE
+- **Reported**: Clicking a variable chip always appended to the **subject**, ignoring cursor position.
+- **Fix**:
+  - `RichEmailEditor.jsx` → `forwardRef` exposing `insertAtCursor(text)` (uses Quill `getSelection`/`insertText`) + accepts `onFocus`.
+  - `EmailTemplates.js` → tracks last-focused field (`subject`/`body`) + subject caret (onFocus/onSelect/onClick/onKeyUp); `insertVarAt` inserts into the body editor at its caret, or into the subject at the saved selection (with caret restored). Helper text updated.
+- **Verified (Playwright)**: subject caret-insert → `Hello {{company}}team` with caret left right after the var; body focus → var inserted in body, **subject unchanged**. Frontend compiles clean.
+
+
 - **QBR Deck removed** from the Account detail header (`AccountDetail.js`) — deleted the `GammaGenerateButton` usage + its now-unused import (avoids build error). Verified gone via screenshot; only Edit/Delete remain.
 - **"I am here" check-in cooldown** (per user, per lead; configurable):
   - Setting `check_in_cooldown_minutes` (default 30) added to `TenantSettings` model + editable in **Tenant Settings → Sales/Field** (`data-testid=input-check-in-cooldown`, 0 = disabled).
