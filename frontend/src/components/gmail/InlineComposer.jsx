@@ -90,6 +90,10 @@ export default function InlineComposer({
       setSubject(data.subject || '');
       // Preserve the user's signature if they had one already appended.
       setBodyHtml(data.body_html || '');
+      // Pre-fill recipients from the template (only when they were configured).
+      if (toEditable && (data.to_emails || '').trim()) setTo(data.to_emails);
+      if ((data.cc_emails || '').trim()) { setCc(data.cc_emails); setShowCcBcc(true); }
+      if ((data.bcc_emails || '').trim()) { setBcc(data.bcc_emails); setShowCcBcc(true); }
       // Pre-check the template's default CRM docs — user can remove with ✕.
       const incoming = (data.attachments || []);
       setCrmDocs((prev) => {

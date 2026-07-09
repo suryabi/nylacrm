@@ -90,10 +90,8 @@ const salesNavigationGroups = [
     items: [
       { name: 'Company Documents', href: '/company-documents', icon: FileText, moduleKey: 'company_documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin'] },
       { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, moduleKey: 'files_documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
-      { name: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen, moduleKey: 'knowledge_base', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
       { name: 'Email Templates', href: '/email-templates', icon: Mail, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive'] },
       { name: 'Notifications', href: '/notification-settings', icon: Bell, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator', 'Production Manager', 'Production Executive', 'Distribution Manager', 'Distribution Executive'] },
-      { name: 'Sharing Recipients', href: '/settings/share-recipients', icon: Share2, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -309,6 +307,12 @@ const adminNavigationGroups = [
     ],
   },
   {
+    title: 'Documents',
+    items: [
+      { name: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen, moduleKey: 'knowledge_base', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
+    ],
+  },
+  {
     title: 'Finance & Audit',
     items: [
       { name: 'Reversals Log', href: '/admin/reversals', icon: RotateCcw, roles: ADMIN_ONLY_ROLES },
@@ -324,6 +328,7 @@ const adminNavigationGroups = [
       { name: 'Google Drive', href: '/admin/google-drive', icon: Cable, moduleKey: 'google_drive_integration', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'State Machines', href: '/admin/state-machines', icon: Cable, moduleKey: 'state_machines', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'Notification Templates', href: '/admin/notification-templates', icon: Bell, moduleKey: 'state_machines', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Sharing Recipients', href: '/settings/share-recipients', icon: Share2, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
       { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
     ],
   },

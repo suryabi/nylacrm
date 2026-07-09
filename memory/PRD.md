@@ -19,7 +19,21 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
-### 2026-07-09 — ✨ New Issue dialog: City dropdown filters accounts by city ✅ DONE
+### 2026-07-09 — 🗂️ Nav reorg + ✉️ Email Template To/Cc/Bcc ✅ DONE
+
+**Nav module reorg** (`layouts/DashboardLayout.js`):
+- **Knowledge Base** moved Sales → **Admin** module (new "Documents" group; kept its broad roles per user's choice — note: only Admin-module roles will actually see it in nav).
+- **Sharing Recipients** moved Sales → **Admin** ("Settings & Integrations"). No access impact (was already CEO/Director/Admin-only).
+- **Notifications** (per-user `/notification-settings`) **left in Sales** per user (everyone needs their own settings).
+- Verified via screenshot: Admin module shows Knowledge Base + Sharing Recipients; both removed from Sales; Notifications stays in Sales. Frontend compiles.
+
+**Email Templates — pre-configured To/Cc/Bcc** (`routes/email_templates.py`, `EmailTemplates.js`, `gmail/InlineComposer.jsx`):
+- Added `to_emails`/`cc_emails`/`bcc_emails` to template model + create/update/clone; `/render` substitutes {{variables}} in them and returns them. Added email variables (`contact_email` for lead/account/contact) to the resolver.
+- Editor: To/Cc/Bcc inputs (comma-separated, variables supported; `data-testid=tpl-to/tpl-cc/tpl-bcc`).
+- Composer `applyTemplate`: pre-fills To (when editable)/Cc/Bcc from the template and auto-reveals Cc/Bcc.
+- Verified (curl): create stores addresses; render returns fixed cc/bcc + resolves `{{contact_email}}`; editor shows the 3 fields (screenshot).
+
+
 - Added a **City** dropdown to the New Issue (create) dialog. Selecting a city narrows the Account (and Lead) picker to entities in that city; "All cities" clears it. Shown only for account/lead link types (distributors have no city).
 - Backend (`routes/customer_complaints.py`): new `GET /complaints/meta/cities?link_type=` (distinct cities) + `city` query param on `/meta/entity-search` (filters leads/accounts by `city`).
 - Frontend (`CustomerComplaints.js`): `EntityPicker` accepts a `city` prop (re-searches on change); dialog fetches cities per link type, resets the selected entity when city/link type changes; Account picker spans full width when the city filter is shown (`data-testid=complaint-city-select`).

@@ -279,6 +279,9 @@ async def clone_template(template_id: str, current_user: dict = Depends(get_curr
         "name": f"{src['name']} (copy)",
         "subject": src.get("subject", ""),
         "body_html": src.get("body_html", ""),
+        "to_emails": src.get("to_emails", ""),
+        "cc_emails": src.get("cc_emails", ""),
+        "bcc_emails": src.get("bcc_emails", ""),
         "is_public": False,
         "crm_document_ids": list(src.get("crm_document_ids") or []),
         "created_at": now,
@@ -318,6 +321,9 @@ async def render_template(
         "name": tpl["name"],
         "subject": _substitute(tpl.get("subject", ""), vars_map),
         "body_html": _substitute(tpl.get("body_html", ""), vars_map),
+        "to_emails": _substitute(tpl.get("to_emails", ""), vars_map),
+        "cc_emails": _substitute(tpl.get("cc_emails", ""), vars_map),
+        "bcc_emails": _substitute(tpl.get("bcc_emails", ""), vars_map),
         "crm_document_ids": tpl.get("crm_document_ids") or [],
         # Headers (no file_data) so the composer can render chips. The send
         # endpoint already accepts crm_document_ids and pulls the bytes itself.

@@ -38,7 +38,7 @@ const AVAILABLE_VARS = [
   { tag: '{{today}}', desc: 'Today\u2019s date (e.g. 16 Jun 2026)' },
 ];
 
-const empty = () => ({ name: '', subject: '', body_html: '', is_public: false, crm_document_ids: [] });
+const empty = () => ({ name: '', subject: '', body_html: '', to_emails: '', cc_emails: '', bcc_emails: '', is_public: false, crm_document_ids: [] });
 
 export default function EmailTemplates() {
   const [items, setItems] = useState([]);
@@ -86,6 +86,9 @@ export default function EmailTemplates() {
         name: editing.name.trim(),
         subject: editing.subject || '',
         body_html: editing.body_html || '',
+        to_emails: editing.to_emails || '',
+        cc_emails: editing.cc_emails || '',
+        bcc_emails: editing.bcc_emails || '',
         is_public: !!editing.is_public,
         crm_document_ids: attachmentDocs.map((d) => d.id),
       };
@@ -244,6 +247,36 @@ export default function EmailTemplates() {
                   data-testid="tpl-subject"
                 />
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">To</Label>
+                  <Input
+                    value={editing.to_emails || ''}
+                    onChange={(e) => setEditing({ ...editing, to_emails: e.target.value })}
+                    placeholder="{{contact_email}} or ops@nyla.com"
+                    data-testid="tpl-to"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Cc</Label>
+                  <Input
+                    value={editing.cc_emails || ''}
+                    onChange={(e) => setEditing({ ...editing, cc_emails: e.target.value })}
+                    placeholder="manager@nyla.com"
+                    data-testid="tpl-cc"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Bcc</Label>
+                  <Input
+                    value={editing.bcc_emails || ''}
+                    onChange={(e) => setEditing({ ...editing, bcc_emails: e.target.value })}
+                    placeholder="records@nyla.com"
+                    data-testid="tpl-bcc"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 -mt-2">Pre-fill recipients. Separate multiple addresses with commas. Variables like {'{{contact_email}}'} are supported.</p>
               <div>
                 <Label className="text-xs">Body</Label>
                 <RichEmailEditor
