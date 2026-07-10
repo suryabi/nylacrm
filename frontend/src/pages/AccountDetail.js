@@ -73,18 +73,36 @@ const buildShareBodyHtml = (account, opts = {}) => {
   const item = (label, value) => `<li><strong>${label}:</strong> ${escHtml(value) || '—'}</li>`;
   const deliveryContact = [account.delivery_contact_name, account.delivery_contact_phone].filter(Boolean).join(' · ');
   const salesContact = salesperson ? [salesperson.name, salesperson.phone].filter(Boolean).join(' · ') : '';
-  const sig = sender
-    ? `<p>${escHtml(sender.name || '')}${sender.email ? `<br>${escHtml(sender.email)}` : ''}</p>`
-    : '';
+  const accRef = account.account_id || account.id || '';
+
+  // Billing address prefixed with the GST legal name (deduped if already present).
+  const legal = (account.gst_legal_name || '').trim();
+  const billingAddr = fmtShareAddr(account.billing_address);
+  const billing = (legal && billingAddr && !billingAddr.toLowerCase().includes(legal.toLowerCase()))
+    ? `${legal}, ${billingAddr}`
+    : (billingAddr || legal);
+
+  // Sender signature: First Last on one line, phone on the next.
+  let sig = '';
+  if (sender) {
+    const full = (sender.name || '').trim();
+    const first = sender.first_name || full.split(' ')[0] || '';
+    const last = sender.last_name || full.split(' ').slice(1).join(' ') || '';
+    const nameLine = [first, last].filter(Boolean).join(' ');
+    const phone = sender.phone || '';
+    sig = `<p>${escHtml(nameLine)}${phone ? `<br>${escHtml(phone)}` : ''}</p>`;
+  }
+
   return '<p>Hi,</p>'
-    + `<p>Please find below the account details for <strong>${escHtml(account.account_name)}</strong>.</p>`
+    + `<p>Please find below the account details for <strong>${escHtml(account.account_name)}</strong> (Account Reference: <strong>${escHtml(accRef)}</strong>).</p>`
     + '<p><strong>Tax Details</strong></p>'
     + `<ul>${item('GST Number', account.gst_number)}${item('PAN', account.pan_number)}</ul>`
     + '<p><strong>Addresses</strong></p>'
-    + `<ul>${item('Billing Address', fmtShareAddr(account.billing_address))}${item('Delivery Address', fmtShareAddr(account.delivery_address))}</ul>`
+    + `<ul>${item('Billing Address', billing)}${item('Delivery Address', fmtShareAddr(account.delivery_address))}</ul>`
     + '<p><strong>Contacts</strong></p>'
     + `<ul>${item('Delivery Contact', deliveryContact)}${item('Nyla Sales Contact', salesContact)}</ul>`
     + (hasContract ? '<p>The signed contract is attached for your reference.</p>' : '')
+    + `<p>For any questions regarding this account, please include the Account Reference <strong>${escHtml(accRef)}</strong> in the subject line for future correspondence.</p>`
     + '<p>Best regards,</p>'
     + sig;
 };
@@ -824,7 +842,7 @@ ${googleMapsLink}`;
       } catch { /* no contract on file */ }
 
       setShareData({
-        subject: `Account Details — ${account.account_name || ''}`.trim(),
+        subject: `Account Details — ${account.account_name || ''}${account.account_id ? ` · ${account.account_id}` : ''}`.trim(),
         cc,
         bodyHtml: buildShareBodyHtml(account, { hasContract, salesperson: sp, sender: user }),
         localFiles,

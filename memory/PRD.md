@@ -19,6 +19,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-10 — ✉️ Share Details email — enhancements ✅ DONE
+- **Nyla Sales Contact**: now shows the **assigned salesperson's name + phone** (was the account's primary contact).
+- **Formatting**: body grouped into **Tax Details / Addresses / Contacts** sections with bulleted items (survives `react-quill-new`).
+- **CC**: now also adds **all Admin-team users** (role contains "admin") alongside the salesperson + reporting manager (deduped).
+- **Signature** (after "Best regards,"): logged-in user's **name on one line, phone on the next** (not password — passwords are bcrypt-hashed and never retrievable; confirmed with user).
+- **Billing Address** now prepends the **GST Legal Name** (`gst_legal_name`), deduped if already in the address.
+- **Account Reference** (business `account_id`, e.g. `SAVA-GOA-A26-001`) added to the **subject** (`… · {account_id}`), the body intro, and a note: *"please include the Account Reference {id} in the subject line for future correspondence."*
+- Verified via preview screenshot (Empire Restaurant: subject `Account Details — Empire Restaurant · EMPI-BEN-A26-001`, all sections/CC/signature render).
+
+
 ### 2026-07-10 — 🔗 Delivery-Contact → central Contacts linkage (P0) ✅ DONE
 - When an account's **delivery contact** is saved, it's now auto-mirrored into the shared `contacts` collection so it also appears in the account's Contacts section and the global Contacts module, and feeds the driver delivery schedule.
 - **Backend** (`routes/accounts.py`): new `_sync_account_delivery_contact()` helper, called from BOTH `PATCH /accounts/{id}/delivery-info` and `PUT /accounts/{id}` (only when delivery_contact fields are present). Best-effort (never blocks the save).
