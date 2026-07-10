@@ -72,6 +72,75 @@ class RenderRequest(BaseModel):
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
 
 
+def _fmt_addr(a) -> str:
+    """Join a structured address dict into a single readable line."""
+    if not a or not isinstance(a, dict):
+        return ""
+    return ", ".join(
+        str(a.get(k)) for k in ("address_line1", "address_line2", "landmark", "city", "state", "pincode") if a.get(k)
+    )
+
+
+# System (built-in) templates seeded per tenant so they always appear in the
+# Templates picker. Keyed by `system_key` (idempotent); owned by "system" so no
+# individual user can edit/delete them (they can clone-and-edit instead).
+_ACCOUNT_DETAILS_BODY = (
+    "<p>Hi,</p>"
+    "<p>Please find below the account details for <strong>{{account_name}}</strong> "
+    "(Account Reference: <strong>{{account_id}}</strong>).</p>"
+    "<p><strong>Tax Details</strong></p>"
+    "<ul><li><strong>GST Number:</strong> {{gst_number}}</li>"
+    "<li><strong>PAN:</strong> {{pan_number}}</li></ul>"
+    "<p><strong>Addresses</strong></p>"
+    "<ul><li><strong>Billing Address:</strong> {{billing_address}}</li>"
+    "<li><strong>Delivery Address:</strong> {{delivery_address}}</li></ul>"
+    "<p><strong>Contacts</strong></p>"
+    "<ul><li><strong>Delivery Contact:</strong> {{delivery_contact}}</li>"
+    "<li><strong>Nyla Sales Contact:</strong> {{nyla_sales_contact}}</li></ul>"
+    "<p>For any questions regarding this account, please include the Account Reference "
+    "<strong>{{account_id}}</strong> in the subject line for future correspondence.</p>"
+    "<p>Best regards,</p>"
+    "<p>{{my_name}}<br>{{my_phone}}</p>"
+)
+
+_SYSTEM_TEMPLATES = [
+    {
+        "system_key": "account_details",
+        "name": "Account Details",
+        "subject": "Account Details — {{account_name}} · {{account_id}}",
+        "body_html": _ACCOUNT_DETAILS_BODY,
+    },
+]
+
+
+async def _ensure_system_templates(tenant_id: str) -> None:
+    """Idempotently seed built-in public templates for this tenant."""
+    for t in _SYSTEM_TEMPLATES:
+        existing = await _db.email_templates.find_one(
+            {"tenant_id": tenant_id, "system_key": t["system_key"]}, {"_id": 0, "id": 1}
+        )
+        if existing:
+            continue
+        now = datetime.now(timezone.utc).isoformat()
+        await _db.email_templates.insert_one({
+            "id": str(uuid.uuid4()),
+            "tenant_id": tenant_id,
+            "owner_id": "system",
+            "owner_name": "System",
+            "system_key": t["system_key"],
+            "name": t["name"],
+            "subject": t["subject"],
+            "body_html": t["body_html"],
+            "to_emails": "",
+            "cc_emails": "",
+            "bcc_emails": "",
+            "is_public": True,
+            "crm_document_ids": [],
+            "created_at": now,
+            "updated_at": now,
+        })
+
+
 async def _resolve_variables(
     tenant_id: str,
     current_user: dict,
@@ -88,6 +157,7 @@ async def _resolve_variables(
     vars_map = {
         "my_name": current_user.get("name", ""),
         "my_email": current_user.get("email", ""),
+        "my_phone": current_user.get("phone", ""),
         # Today's date in a human-friendly format. Useful for "Hi {{contact_name}}, on {{today}} …".
         "today": datetime.now(timezone.utc).strftime("%-d %b %Y"),
     }
@@ -122,9 +192,32 @@ async def _resolve_variables(
         vars_map["contact_email"] = doc.get("email") or doc.get("contact_email") or ""
     elif entity_type == "account":
         vars_map["account_name"] = doc.get("account_name") or ""
+        vars_map["account_id"] = doc.get("account_id") or ""
         vars_map["contact_name"] = doc.get("contact_name") or ""
         vars_map["company"] = doc.get("account_name") or ""
         vars_map["contact_email"] = doc.get("email") or doc.get("contact_email") or doc.get("delivery_contact_email") or ""
+        vars_map["gst_number"] = doc.get("gst_number") or ""
+        vars_map["pan_number"] = doc.get("pan_number") or ""
+        # Billing address prefixed with the GST legal name (deduped).
+        legal = (doc.get("gst_legal_name") or "").strip()
+        billing = _fmt_addr(doc.get("billing_address"))
+        if legal and billing and legal.lower() not in billing.lower():
+            billing = f"{legal}, {billing}"
+        elif not billing:
+            billing = legal
+        vars_map["billing_address"] = billing
+        vars_map["delivery_address"] = _fmt_addr(doc.get("delivery_address"))
+        vars_map["delivery_contact"] = " · ".join(
+            [x for x in [doc.get("delivery_contact_name"), doc.get("delivery_contact_phone")] if x]
+        )
+        # Nyla sales contact = the assigned salesperson (name · phone).
+        assigned = doc.get("assigned_to")
+        if assigned:
+            sp = await _db.users.find_one({"id": assigned}, {"_id": 0, "name": 1, "phone": 1})
+            if sp:
+                vars_map["nyla_sales_contact"] = " · ".join(
+                    [x for x in [sp.get("name"), sp.get("phone")] if x]
+                )
     elif entity_type == "contact":
         vars_map["contact_name"] = doc.get("name") or doc.get("full_name") or ""
         vars_map["contact_email"] = doc.get("email") or ""
@@ -168,6 +261,7 @@ async def list_templates(current_user: dict = Depends(get_current_user)):
     can render edit / delete actions only on owned rows."""
     tenant_id = get_current_tenant_id()
     uid = current_user["id"]
+    await _ensure_system_templates(tenant_id)
     cursor = _db.email_templates.find(
         {
             "tenant_id": tenant_id,

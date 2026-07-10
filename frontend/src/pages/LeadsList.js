@@ -46,6 +46,8 @@ import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import AppBreadcrumb from '../components/AppBreadcrumb';
 import { useNavigation } from '../context/NavigationContext';
+import { useAuth } from '../context/AuthContext';
+import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 
 const TIME_FILTERS = [
   { value: 'this_week', label: 'This Week' }, { value: 'last_week', label: 'Last Week' },
@@ -58,6 +60,10 @@ const TIME_FILTERS = [
 export default function LeadsList() {
   const navigate = useNavigate();
   const { navigateTo, saveFilters } = useNavigation();
+  const { user } = useAuth();
+  // Delete is restricted to CEO / Admin (double-confirmation required).
+  const canDelete = ['ceo', 'admin', 'system admin'].includes((user?.role || '').toLowerCase());
+  const [deletingLead, setDeletingLead] = useState(false);
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -241,12 +247,16 @@ export default function LeadsList() {
   };
 
   const handleDelete = async () => {
+    if (!leadToDelete) return;
+    setDeletingLead(true);
     try {
       await leadsAPI.delete(leadToDelete.id);
       toast.success('Lead deleted successfully');
+      setDeleteDialogOpen(false);
+      setLeadToDelete(null);
       fetchLeads();
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed to delete lead'); }
-    finally { setDeleteDialogOpen(false); setLeadToDelete(null); }
+    finally { setDeletingLead(false); }
   };
 
   const [exporting, setExporting] = useState(false);
@@ -1127,9 +1137,11 @@ export default function LeadsList() {
                         </TableCell>
                         <TableCell><Badge className={`${getStatusColor(lead.status)} text-[10px] sm:text-xs`}>{getStatusLabel(lead.status)}</Badge></TableCell>
                         <TableCell className="text-right hidden sm:table-cell">
-                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setLeadToDelete(lead); setDeleteDialogOpen(true); }} data-testid={`delete-lead-${lead.id}`}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
+                          {canDelete && (
+                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setLeadToDelete(lead); setDeleteDialogOpen(true); }} data-testid={`delete-lead-${lead.id}`}>
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1183,18 +1195,14 @@ export default function LeadsList() {
         </Card>
       </div>
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Lead?</AlertDialogTitle>
-            <AlertDialogDescription>Are you sure you want to delete {leadToDelete?.company || leadToDelete?.name}? This action cannot be undone.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(v) => { setDeleteDialogOpen(v); if (!v) setLeadToDelete(null); }}
+        entityType="lead"
+        entityName={leadToDelete?.company || leadToDelete?.name}
+        onConfirm={handleDelete}
+        loading={deletingLead}
+      />
     </div>
   );
 }

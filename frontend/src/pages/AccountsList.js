@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 import { useNavigation } from '../context/NavigationContext';
 import axios from 'axios';
 import { Button } from '../components/ui/button';
@@ -100,24 +101,25 @@ export default function AccountsList() {
   const logoGridRef = useRef(null);
   const [deletingAccountId, setDeletingAccountId] = useState(null);
 
-  // Check if user is admin (CEO or Director)
-  const isAdmin = user?.role === 'CEO' || user?.role === 'Director';
+  // Delete is restricted to CEO / Admin (double-confirmation required).
+  const canDelete = ['ceo', 'admin', 'system admin'].includes((user?.role || '').toLowerCase());
+  const [accountToDelete, setAccountToDelete] = useState(null);
 
-  const handleDeleteAccount = async (accountId, accountName, e) => {
-    e.stopPropagation(); // Prevent row click navigation
-    
-    if (!window.confirm(`Are you sure you want to delete account "${accountName}"? This action cannot be undone.`)) {
-      return;
-    }
-    
-    setDeletingAccountId(accountId);
+  const handleDeleteAccount = (accountId, accountName, e) => {
+    if (e) e.stopPropagation(); // Prevent row click navigation
+    setAccountToDelete({ id: accountId, name: accountName });
+  };
+
+  const confirmDeleteAccount = async () => {
+    if (!accountToDelete) return;
+    setDeletingAccountId(accountToDelete.id);
     try {
-      await axios.delete(`${API_URL}/accounts/${accountId}`, { withCredentials: true });
+      await axios.delete(`${API_URL}/accounts/${accountToDelete.id}`, { withCredentials: true });
       toast.success('Account deleted successfully');
+      setAccountToDelete(null);
       fetchAccounts(); // Refresh the list
     } catch (error) {
-      const errorMsg = error.response?.data?.detail || 'Failed to delete account';
-      toast.error(errorMsg);
+      toast.error(error.response?.data?.detail || 'Failed to delete account');
     } finally {
       setDeletingAccountId(null);
     }
@@ -432,7 +434,7 @@ export default function AccountsList() {
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Location</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Sales Contact</th>
                       <th className="text-left py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Financials</th>
-                      {isAdmin && (
+                      {canDelete && (
                         <th className="text-center py-4 px-5 font-semibold text-amber-800 dark:text-amber-300 uppercase text-xs tracking-wider">Actions</th>
                       )}
                     </tr>
@@ -554,7 +556,7 @@ export default function AccountsList() {
                             </div>
                           </div>
                         </td>
-                        {isAdmin && (
+                        {canDelete && (
                           <td className="py-5 px-5 text-center">
                             <Button
                               variant="ghost"
@@ -616,6 +618,15 @@ export default function AccountsList() {
         </Card>
         <p className="text-xs text-muted-foreground mt-4 text-center">{viewMode === 'gallery' ? 'Click on a logo to view account details.' : 'Click on an account row to view details.'}</p>
       </div>
+
+      <DeleteConfirmDialog
+        open={!!accountToDelete}
+        onOpenChange={(v) => { if (!v) setAccountToDelete(null); }}
+        entityType="account"
+        entityName={accountToDelete?.name}
+        onConfirm={confirmDeleteAccount}
+        loading={!!deletingAccountId}
+      />
     </div>
   );
 }

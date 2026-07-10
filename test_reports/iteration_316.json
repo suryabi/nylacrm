@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend E2E tests for double-confirmation delete flows (Accounts list, Account detail, Leads list), Account Details email template, and auto-open share composer after account activation. Logged in as CEO surya.yadavalli. 5 of 6 explicit scenarios verified end-to-end; the 6th (auto-open share after activation) could NOT be set up because the only available not-yet-active account (Empire Restaurant) is blocked by the activation checklist (GST/delivery/SKU/contact/payment terms/logo all missing), so activation cannot complete on the preview data.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: to make the 'auto-open share after activation' flow fully testable in preview, either seed an account whose activation checklist already passes, or fill in the missing onboarding fields for Empire Restaurant (GST cert, delivery address+coords, SKU pricing row, delivery contact, payment terms, logo) so the modal's 'Activate & Sync to Zoho' button becomes enabled."
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped by request)", "frontend": "5/6 verified, 1/6 could-not-set-up"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (tenant nyla-air-water)",
+  "seed_data_creation": "Created a throwaway lead 'ZZ Test Delete Lead' (Bengaluru/Karnataka, Restaurant, B2B) then fully deleted it via the type-to-confirm flow as instructed. No residual seed data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 5 verifiable scenarios PASSED. Detailed findings: (1) /accounts LIST: clicking the row trash icon opens DeleteConfirmDialog with data-testid=delete-confirm-dialog; delete-confirm-action stays disabled with empty or wrong text, becomes enabled ONLY after typing the exact account name; delete-confirm-cancel closes the dialog without deleting (verified account 'The Rameshwaram Cafe' still present after cancel). (2) /accounts/<id> DETAIL header (Empire Restaurant): 'Delete account' button (data-testid=delete-account-button) opens the same DeleteConfirmDialog with 'Empire Restaurant' as the target; disabled/enabled logic works; Cancel closes without deleting. (3) /leads LIST: created a throwaway lead 'ZZ Test Delete Lead' via /leads/new, then row's delete-lead-<id> opens 'Delete lead?' DeleteConfirmDialog with the same type-to-confirm behavior; typing the exact name enabled the button; confirming actually deleted the lead ('Lead deleted successfully' toast shown, row removed from list). (4) Share composer template: opening data-testid=share-details-composer-card and clicking the Templates dropdown shows an 'Account Details' entry with a 'SHARED' badge; selecting it fills subject 'Account Details — Empire Restaurant · EMPI-BEN-A26-001' and body containing Tax Details, Addresses, Contacts and Nyla Sales Contact sections as specified. (5) Role gating positive case: as CEO, row trash icons are visible on both /accounts and /leads and the Delete account button is visible on the account detail header. (6) Auto-open share composer after activation: the Activate Account modal opens correctly but 'Activate & Sync to Zoho' is disabled because six onboarding checklist items are Missing on Empire Restaurant, so activation cannot be completed on the current seed data — marked as 'could not set up', not a functional failure.",
+  "rca of the issue": "N/A — no bugs found. The single non-verified scenario is a data-setup limitation (no activatable account) rather than a code defect. Reference: AccountDetail.js openShareComposer() is invoked from the activation success handler around line 1441, but activation requires the checklist to pass first."
+}

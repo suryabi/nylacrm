@@ -48,6 +48,7 @@ import EntityContactsSection from '../components/EntityContactsSection';
 import { SectionHeader } from '../components/detail/SectionHeader';
 import AccountZohoLedger from '../components/account/AccountZohoLedger';
 import InlineComposer from '../components/gmail/InlineComposer';
+import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -1306,7 +1307,9 @@ ${googleMapsLink}`;
 
   // Check if user is admin (CEO or Director)
   const isAdmin = user?.role === 'CEO' || user?.role === 'Director';
+  const canDelete = ['ceo', 'admin', 'system admin'].includes((user?.role || '').toLowerCase());
   const [deleting, setDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [showDeleteAllInvoicesDialog, setShowDeleteAllInvoicesDialog] = useState(false);
   const [deletingAllInvoices, setDeletingAllInvoices] = useState(false);
 
@@ -1326,19 +1329,17 @@ ${googleMapsLink}`;
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!window.confirm(`Are you sure you want to delete account "${account.account_name}"? This action cannot be undone.`)) {
-      return;
-    }
-    
+  const handleDeleteAccount = () => setDeleteDialogOpen(true);
+
+  const confirmDeleteAccount = async () => {
     setDeleting(true);
     try {
       await axios.delete(`${API_URL}/accounts/${id}`, { withCredentials: true });
       toast.success('Account deleted successfully');
+      setDeleteDialogOpen(false);
       navigateTo('/accounts', { fromSidebar: true });
     } catch (error) {
-      const errorMsg = error.response?.data?.detail || 'Failed to delete account';
-      toast.error(errorMsg);
+      toast.error(error.response?.data?.detail || 'Failed to delete account');
     } finally {
       setDeleting(false);
     }
@@ -1435,6 +1436,9 @@ ${googleMapsLink}`;
       toast.success(data.message || 'Account activated.');
       setActivateDialogOpen(false);
       fetchAccount();
+      // Immediately open the share-details email so the user can send it now
+      // instead of forgetting to do it later.
+      openShareComposer();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Activation failed.');
     } finally {
@@ -1563,7 +1567,7 @@ ${googleMapsLink}`;
               Cancel
             </Button>
           )}
-          {isAdmin && !isEditing && (
+          {canDelete && !isEditing && (
             <Button 
               variant="outline" 
               size="sm"
@@ -1592,6 +1596,8 @@ ${googleMapsLink}`;
             key={`share-${account.account_id}`}
             initialTo=""
             toEditable
+            entityType="account"
+            entityId={account.id}
             initialSubject={shareData.subject}
             initialCc={shareData.cc}
             initialBodyHtml={shareData.bodyHtml}
@@ -1602,6 +1608,15 @@ ${googleMapsLink}`;
           />
         </Card>
       )}
+
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        entityType="account"
+        entityName={account.account_name}
+        onConfirm={confirmDeleteAccount}
+        loading={deleting}
+      />
 
       {/* ── Account Activation Card ─────────────────────────────────────────────
           Prominent CTA shown immediately after lead-conversion. Once the
