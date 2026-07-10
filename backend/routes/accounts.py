@@ -645,6 +645,18 @@ async def update_account(account_id: str, update: AccountUpdate, current_user: d
 
     updated = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
 
+    # ── Mirror the delivery contact into the central Contacts module ──
+    if updated and ('delivery_contact_name' in update_data or 'delivery_contact_phone' in update_data):
+        try:
+            await _sync_account_delivery_contact(
+                tdb, updated,
+                updated.get('delivery_contact_name'),
+                updated.get('delivery_contact_phone'),
+                current_user,
+            )
+        except Exception as e:
+            _logger.warning(f"[contacts] Delivery-contact sync failed: {e}")
+
     # ── Best-effort Zoho re-sync ──
     # If this account is already linked to a Zoho contact AND any Zoho-relevant
     # field changed in this update, push the new values to Zoho so the very
@@ -1979,6 +1991,76 @@ async def get_place_details(
     }
 
 
+async def _sync_account_delivery_contact(tdb, account: dict, name, phone, current_user: dict):
+    """One-way sync: mirror the account's delivery contact into the shared
+    `contacts` collection as a 'Delivery'-category contact so it also shows in
+    the Contacts module and feeds the driver delivery schedule. Deduped by phone
+    (and by a stable auto-sync marker so re-saves update the same record)."""
+    name = (name or '').strip()
+    phone = re.sub(r'\D', '', str(phone or ''))
+    if not name or len(phone) != 10:
+        return
+    # Key by the business code so it lists under the account's Contacts section
+    # (EntityContactsSection lists by account.account_id || account.id).
+    fk = account.get('account_id') or account.get('id')
+    if not fk:
+        return
+
+    from routes.entity_contacts import _get_or_create_category, _cap_name, _full_name
+
+    parts = name.split(' ', 1)
+    first, last = parts[0], (parts[1] if len(parts) > 1 else '')
+    company = account.get('account_name') or account.get('company') or account.get('name') or ''
+    now = datetime.now(timezone.utc).isoformat()
+
+    existing = await tdb.contacts.find_one(
+        {'account_id': fk, 'source': 'account_delivery_sync'}, {'_id': 0, 'id': 1}
+    ) or await tdb.contacts.find_one(
+        {'account_id': fk, 'phone': phone}, {'_id': 0, 'id': 1}
+    )
+
+    if existing:
+        await tdb.contacts.update_one(
+            {'id': existing['id']},
+            {'$set': {
+                'first_name': _cap_name(first),
+                'last_name': _cap_name(last),
+                'name': _full_name(first, last),
+                'phone': phone,
+                'category': 'Delivery',
+                'source': 'account_delivery_sync',
+                'company': company,
+                'updated_at': now,
+                'updated_by': current_user['id'],
+            }},
+        )
+        return
+
+    cat = await _get_or_create_category(tdb)
+    await tdb.contacts.insert_one({
+        'id': str(uuid.uuid4()),
+        'category_id': cat['id'],
+        'category_name': cat['name'],
+        'salutation': None,
+        'first_name': _cap_name(first),
+        'last_name': _cap_name(last),
+        'name': _full_name(first, last),
+        'designation': None,
+        'phone': phone,
+        'email': None,
+        'category': 'Delivery',
+        'company': company,
+        'account_id': fk,
+        'parent_type': 'account',
+        'source': 'account_delivery_sync',
+        'created_by': current_user['id'],
+        'created_by_name': current_user.get('name', 'Unknown'),
+        'created_at': now,
+        'updated_at': now,
+    })
+
+
+
 @router.patch("/{account_id}/delivery-info")
 async def update_delivery_info(
     account_id: str,
@@ -2011,9 +2093,22 @@ async def update_delivery_info(
 
     await tdb.accounts.update_one(_account_match(account_id), {'$set': update_doc})
 
+    updated = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
+
+    # ── Mirror the delivery contact into the central Contacts module ──
+    try:
+        if updated:
+            await _sync_account_delivery_contact(
+                tdb, updated,
+                updated.get('delivery_contact_name'),
+                updated.get('delivery_contact_phone'),
+                current_user,
+            )
+    except Exception as e:
+        _logger.warning(f"[contacts] Delivery-contact sync failed: {e}")
+
     # ── Best-effort Zoho re-sync (mirrors PUT /accounts/{id}) ──
     try:
-        updated = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0})
         if updated and updated.get('zoho_contact_id') and (updated.get('billed_by') or 'company').lower() == 'company':
             from services import zoho_service as _zoho
             if _zoho.is_zoho_configured():

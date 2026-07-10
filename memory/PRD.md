@@ -19,6 +19,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-10 — 🔗 Delivery-Contact → central Contacts linkage (P0) ✅ DONE
+- When an account's **delivery contact** is saved, it's now auto-mirrored into the shared `contacts` collection so it also appears in the account's Contacts section and the global Contacts module, and feeds the driver delivery schedule.
+- **Backend** (`routes/accounts.py`): new `_sync_account_delivery_contact()` helper, called from BOTH `PATCH /accounts/{id}/delivery-info` and `PUT /accounts/{id}` (only when delivery_contact fields are present). Best-effort (never blocks the save).
+  - Keyed by the account's **business code** (`account_id`) so it lists under `EntityContactsSection` (which queries by `account.account_id || account.id`).
+  - Tagged `category="Delivery"` (a first-class UI category + the exact tag the delivery-schedule enrichment matches).
+  - **One-way sync, deduped**: a stable `source="account_delivery_sync"` marker means re-saves update the SAME record (even when the phone changes → no duplicates); falls back to phone-match for pre-existing contacts.
+  - Name split into first/last via `_cap_name`/`_full_name` (reused from `entity_contacts.py`).
+- **Verified (curl)**: create (delivery-info PATCH → "Delivery" contact appears), update name+phone → same record updated (count stays 2, no dup), and PUT-edit path also syncs. Test data cleaned up.
+
+
 ### 2026-07-10 — ✉️ Account "Share Details via Email" + contract tenant_id backfill ✅ DONE
 - **New "Share Details" button** on the Account detail header (`AccountDetail.js`, `data-testid=share-details-button`). Opens the inline email composer pre-filled with:
   - **Subject**: `Account Details — {account_name}`.
