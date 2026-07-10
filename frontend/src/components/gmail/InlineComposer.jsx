@@ -26,6 +26,11 @@ export default function InlineComposer({
   toEditable = true,
   recipientLabel = '',
   initialSubject = '',
+  initialCc = '',
+  initialBcc = '',
+  initialBodyHtml = '',
+  initialLocalFiles = [],
+  initialCrmDocs = [],
   replyToMessageId = null,
   threadId = null,
   // Used to fill {{placeholders}} in email templates.
@@ -36,13 +41,13 @@ export default function InlineComposer({
   testid = 'inline-composer',
 }) {
   const [to, setTo] = useState(initialTo);
-  const [cc, setCc] = useState('');
-  const [bcc, setBcc] = useState('');
+  const [cc, setCc] = useState(initialCc);
+  const [bcc, setBcc] = useState(initialBcc);
   const [subject, setSubject] = useState(initialSubject);
-  const [bodyHtml, setBodyHtml] = useState('');
-  const [showCcBcc, setShowCcBcc] = useState(false);
-  const [localFiles, setLocalFiles] = useState([]);
-  const [crmDocs, setCrmDocs] = useState([]);
+  const [bodyHtml, setBodyHtml] = useState(initialBodyHtml);
+  const [showCcBcc, setShowCcBcc] = useState(!!(initialCc || initialBcc));
+  const [localFiles, setLocalFiles] = useState(initialLocalFiles);
+  const [crmDocs, setCrmDocs] = useState(initialCrmDocs);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sending, setSending] = useState(false);
   const [templates, setTemplates] = useState([]);

@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { 
   ArrowLeft, Building2, Phone, MapPin, Save, Loader2, Plus, Trash2, FileText,
   DollarSign, CreditCard, Calendar, AlertTriangle, TrendingUp, TrendingDown, Minus, Truck, Search, Copy, ExternalLink,
-  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt, Eye
+  Upload, Download, CheckCircle, XCircle, Clock, MessageSquare, FileCheck, ChevronDown, ChevronRight, ChevronLeft, Package, Zap, ShieldCheck, Pencil, Receipt, Eye, Share2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import TaxBillingCard from '../components/TaxBillingCard';
@@ -47,8 +47,41 @@ import AccountScoringCard from '../components/AccountScoringCard';
 import EntityContactsSection from '../components/EntityContactsSection';
 import { SectionHeader } from '../components/detail/SectionHeader';
 import AccountZohoLedger from '../components/account/AccountZohoLedger';
+import InlineComposer from '../components/gmail/InlineComposer';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+
+// --- Share Details via email helpers ---
+const escHtml = (v) => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const fmtShareAddr = (a) => {
+  if (!a) return '';
+  return [a.address_line1, a.address_line2, a.landmark, a.city, a.state, a.pincode]
+    .filter(Boolean).join(', ');
+};
+
+const b64ToFile = (b64, filename, mime) => {
+  const chars = atob(b64);
+  const bytes = new Uint8Array(chars.length);
+  for (let i = 0; i < chars.length; i++) bytes[i] = chars.charCodeAt(i);
+  return new File([bytes], filename || 'contract', { type: mime || 'application/octet-stream' });
+};
+
+const buildShareBodyHtml = (account, hasContract) => {
+  const line = (label, value) => `<p><strong>${label}:</strong> ${escHtml(value) || '—'}</p>`;
+  const sales = [account.contact_name, account.contact_number].filter(Boolean).join(' · ');
+  const delivery = [account.delivery_contact_name, account.delivery_contact_phone].filter(Boolean).join(' · ');
+  return `<p>Hi,</p><p>Please find below the account details for <strong>${escHtml(account.account_name)}</strong>.</p>`
+    + line('GST Number', account.gst_number)
+    + line('PAN', account.pan_number)
+    + line('Billing Address', fmtShareAddr(account.billing_address))
+    + line('Delivery Address', fmtShareAddr(account.delivery_address))
+    + line('Delivery Contact', delivery)
+    + line('Sales Contact', sales)
+    + (hasContract ? '<p>The signed contract is attached for your reference.</p>' : '')
+    + '<p>Best regards,</p>';
+};
 
 // Invoice Card Component with expandable line items
 function InvoiceCard({ invoice }) {
@@ -224,6 +257,12 @@ export default function AccountDetail() {
   const [reviewComment, setReviewComment] = useState('');
   const [showReviewForm, setShowReviewForm] = useState(false);
   const contractInputRef = useRef(null);
+
+  // Share Details via email
+  const [showShareComposer, setShowShareComposer] = useState(false);
+  const [preparingShare, setPreparingShare] = useState(false);
+  const [shareData, setShareData] = useState(null);
+
   
   // Editable fields
   const [accountName, setAccountName] = useState('');
@@ -736,6 +775,57 @@ ${googleMapsLink}`;
     const user = users.find(u => u.id === account.assigned_to);
     return user ? `${user.name} - ${user.territory || 'No Territory'}` : account.assigned_to;
   };
+
+  const openShareComposer = async () => {
+    if (!account) return;
+    setPreparingShare(true);
+    try {
+      // Gmail must be connected to send.
+      try {
+        const st = await axios.get(`${API_URL}/gmail/status`, { withCredentials: true });
+        if (!st.data?.connected) {
+          toast.error('Connect your Gmail from the Mail page first to share details via email.');
+          return;
+        }
+      } catch { /* proceed; send will surface any error */ }
+
+      // CC = assigned salesperson + their reporting manager.
+      const ccEmails = [];
+      const sp = users.find((u) => u.id === account.assigned_to);
+      if (sp?.email) ccEmails.push(sp.email);
+      if (account.assigned_to) {
+        try {
+          const mgr = await axios.get(`${API_URL}/users/${account.assigned_to}/reporting-manager`, { withCredentials: true });
+          if (mgr.data?.manager?.email) ccEmails.push(mgr.data.manager.email);
+        } catch { /* no manager mapped */ }
+      }
+      const cc = [...new Set(ccEmails)].join(', ');
+
+      // Attach the signed contract if one exists (optional).
+      let localFiles = [];
+      let hasContract = false;
+      try {
+        const cr = await axios.get(`${API_URL}/accounts/${id}/contract/download`, { withCredentials: true });
+        const c = cr.data?.contract;
+        if (c?.file_data) {
+          localFiles = [b64ToFile(c.file_data, c.file_name, c.content_type)];
+          hasContract = true;
+        }
+      } catch { /* no contract on file */ }
+
+      setShareData({
+        subject: `Account Details — ${account.account_name || ''}`.trim(),
+        cc,
+        bodyHtml: buildShareBodyHtml(account, hasContract),
+        localFiles,
+      });
+      setShowShareComposer(true);
+      if (!hasContract) toast.info('No signed contract on file — sending without an attachment.');
+    } finally {
+      setPreparingShare(false);
+    }
+  };
+
 
   const fetchAccount = async () => {
     setLoading(true);
@@ -1408,6 +1498,22 @@ ${googleMapsLink}`;
               </>
             )}
           </Button>
+          {!isEditing && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none h-9 sm:h-10 text-xs sm:text-sm"
+              onClick={openShareComposer}
+              disabled={preparingShare}
+              data-testid="share-details-button"
+            >
+              {preparingShare ? (
+                <><Loader2 className="h-4 w-4 sm:mr-2 animate-spin" /> <span className="hidden sm:inline">Preparing...</span></>
+              ) : (
+                <><Share2 className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Share Details</span></>
+              )}
+            </Button>
+          )}
           {isEditing && (
             <Button
               variant="outline"
@@ -1447,6 +1553,27 @@ ${googleMapsLink}`;
           )}
         </div>
       </div>
+
+      {showShareComposer && shareData && (
+        <Card className="p-3 sm:p-4 mt-4 border-rose-200" data-testid="share-details-composer-card">
+          <div className="flex items-center gap-2 mb-2">
+            <Share2 className="h-4 w-4 text-rose-600" />
+            <h3 className="text-sm font-semibold text-slate-800">Share account details via email</h3>
+          </div>
+          <InlineComposer
+            key={`share-${account.account_id}`}
+            initialTo=""
+            toEditable
+            initialSubject={shareData.subject}
+            initialCc={shareData.cc}
+            initialBodyHtml={shareData.bodyHtml}
+            initialLocalFiles={shareData.localFiles}
+            onCancel={() => setShowShareComposer(false)}
+            onSent={() => setShowShareComposer(false)}
+            testid="share-details-composer"
+          />
+        </Card>
+      )}
 
       {/* ── Account Activation Card ─────────────────────────────────────────────
           Prominent CTA shown immediately after lead-conversion. Once the

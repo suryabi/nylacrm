@@ -19,6 +19,18 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-10 — ✉️ Account "Share Details via Email" + contract tenant_id backfill ✅ DONE
+- **New "Share Details" button** on the Account detail header (`AccountDetail.js`, `data-testid=share-details-button`). Opens the inline email composer pre-filled with:
+  - **Subject**: `Account Details — {account_name}`.
+  - **Body** (label:value paragraphs — chosen over an HTML table because `react-quill-new` strips `<table>`): GST Number, PAN, Billing Address, Delivery Address, Delivery Contact, Sales Contact. HTML-escaped; empty values show `—`.
+  - **CC**: the assigned salesperson's email + their reporting manager's email (via `GET /api/users/{assigned_to}/reporting-manager`), deduped.
+  - **Attachment**: the account's signed contract auto-attached (fetched from `GET /api/accounts/{id}/contract/download`, base64→File). If no contract, opens without attachment + shows an info toast.
+  - Gmail-connected check up front (toast if not connected).
+- **InlineComposer** extended with optional props `initialCc`, `initialBcc`, `initialBodyHtml`, `initialLocalFiles`, `initialCrmDocs` (auto-reveals Cc/Bcc when cc/bcc supplied). No change to existing call sites.
+- **Bug fixed**: 2 legacy `account_contracts` docs lacked `tenant_id`, so the tenant-scoped `TenantDB` query hid them (contract never attached). Backfilled `tenant_id` from the owning account (0 remaining). Also removed a stale duplicated JSX fragment at the end of `AccountDetail.js` that was breaking the build.
+- **Verified** (preview, UI + curl): composer opens for accounts with & without a contract; Empire Restaurant shows CC = salesperson + manager and attaches `Nyla_Citadel.pdf` (172 KB). Send uses the proven `/gmail/send` path (not fired in test to avoid a real email).
+
+
 ### 2026-07-09 — 🗂️ Nav reorg + ✉️ Email Template To/Cc/Bcc ✅ DONE
 
 **Nav module reorg** (`layouts/DashboardLayout.js`):
