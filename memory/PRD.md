@@ -19,6 +19,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-10 — 🗺️ Share email tweaks: Google Maps link + Admin-dept CC ✅ DONE
+- **Google Maps link under Delivery Address** in the Share Details email: uses the delivery address's `maps_link`, else builds a pin from `lat`/`lng`, else a Google Maps search link from the address text. Renders as a clickable "View on Google Maps" (`AccountDetail.js` `buildShareBodyHtml`). Verified in preview.
+- **Admin CC now matches by department** (not role): `department` == "Admin" (handles string or list, case-insensitive). NOTE: no users currently have an "Admin" department (depts are Sales/Marketing/Design/Distribution) — pending user decision on how "Admin team" should be defined. Salesperson + reporting manager CC unchanged.
+- Confirmed "Nyla Sales Contact" (assigned salesperson name+phone) populates correctly on preview; the user's "empty" report is the older production deploy (Savara account exists only in prod) — needs redeploy.
+
+
 ### 2026-07-10 — 🗑️ Double-confirm delete + auto-share-on-activation + reusable template ✅ DONE
 - **Double-confirmation delete (type-to-confirm), restricted to CEO/Admin:**
   - New reusable `components/DeleteConfirmDialog.jsx` — the Delete button stays disabled until the user types the exact entity name (GitHub-style). Test IDs: `delete-confirm-dialog/input/action/cancel`.

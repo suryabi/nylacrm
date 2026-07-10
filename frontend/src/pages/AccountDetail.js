@@ -83,6 +83,20 @@ const buildShareBodyHtml = (account, opts = {}) => {
     ? `${legal}, ${billingAddr}`
     : (billingAddr || legal);
 
+  // Delivery address + a Google Maps link (precise pin if available, else a search).
+  const da = account.delivery_address || {};
+  const deliveryAddr = fmtShareAddr(da);
+  let mapsLink = (da.maps_link || '').trim();
+  if (!mapsLink && da.lat != null && da.lng != null) {
+    mapsLink = `https://www.google.com/maps?q=${da.lat},${da.lng}`;
+  }
+  if (!mapsLink && deliveryAddr) {
+    mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddr)}`;
+  }
+  const mapsItem = mapsLink
+    ? `<li><strong>Delivery Location (Maps):</strong> <a href="${escHtml(mapsLink)}">View on Google Maps</a></li>`
+    : '';
+
   // Sender signature: First Last on one line, phone on the next.
   let sig = '';
   if (sender) {
@@ -99,7 +113,7 @@ const buildShareBodyHtml = (account, opts = {}) => {
     + '<p><strong>Tax Details</strong></p>'
     + `<ul>${item('GST Number', account.gst_number)}${item('PAN', account.pan_number)}</ul>`
     + '<p><strong>Addresses</strong></p>'
-    + `<ul>${item('Billing Address', billing)}${item('Delivery Address', fmtShareAddr(account.delivery_address))}</ul>`
+    + `<ul>${item('Billing Address', billing)}${item('Delivery Address', deliveryAddr)}${mapsItem}</ul>`
     + '<p><strong>Contacts</strong></p>'
     + `<ul>${item('Delivery Contact', deliveryContact)}${item('Nyla Sales Contact', salesContact)}</ul>`
     + (hasContract ? '<p>The signed contract is attached for your reference.</p>' : '')
