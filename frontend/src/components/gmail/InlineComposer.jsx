@@ -255,7 +255,7 @@ export default function InlineComposer({
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={onCancel} data-testid={`${testid}-cancel`}>Cancel</Button>
-          <Button size="sm" className="bg-rose-600 hover:bg-rose-700 text-white" onClick={send} disabled={sending} data-testid={`${testid}-send`}>
+          <Button size="sm" className="bg-rose-600 hover:bg-rose-700 text-white" onClick={send} disabled={sending || !to.trim()} data-testid={`${testid}-send`}>
             {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Send
           </Button>
         </div>
