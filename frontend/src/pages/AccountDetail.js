@@ -68,19 +68,25 @@ const b64ToFile = (b64, filename, mime) => {
   return new File([bytes], filename || 'contract', { type: mime || 'application/octet-stream' });
 };
 
-const buildShareBodyHtml = (account, hasContract) => {
-  const line = (label, value) => `<p><strong>${label}:</strong> ${escHtml(value) || '—'}</p>`;
-  const sales = [account.contact_name, account.contact_number].filter(Boolean).join(' · ');
-  const delivery = [account.delivery_contact_name, account.delivery_contact_phone].filter(Boolean).join(' · ');
-  return `<p>Hi,</p><p>Please find below the account details for <strong>${escHtml(account.account_name)}</strong>.</p>`
-    + line('GST Number', account.gst_number)
-    + line('PAN', account.pan_number)
-    + line('Billing Address', fmtShareAddr(account.billing_address))
-    + line('Delivery Address', fmtShareAddr(account.delivery_address))
-    + line('Delivery Contact', delivery)
-    + line('Sales Contact', sales)
+const buildShareBodyHtml = (account, opts = {}) => {
+  const { hasContract = false, salesperson = null, sender = null } = opts;
+  const item = (label, value) => `<li><strong>${label}:</strong> ${escHtml(value) || '—'}</li>`;
+  const deliveryContact = [account.delivery_contact_name, account.delivery_contact_phone].filter(Boolean).join(' · ');
+  const salesContact = salesperson ? [salesperson.name, salesperson.phone].filter(Boolean).join(' · ') : '';
+  const sig = sender
+    ? `<p>${escHtml(sender.name || '')}${sender.email ? `<br>${escHtml(sender.email)}` : ''}</p>`
+    : '';
+  return '<p>Hi,</p>'
+    + `<p>Please find below the account details for <strong>${escHtml(account.account_name)}</strong>.</p>`
+    + '<p><strong>Tax Details</strong></p>'
+    + `<ul>${item('GST Number', account.gst_number)}${item('PAN', account.pan_number)}</ul>`
+    + '<p><strong>Addresses</strong></p>'
+    + `<ul>${item('Billing Address', fmtShareAddr(account.billing_address))}${item('Delivery Address', fmtShareAddr(account.delivery_address))}</ul>`
+    + '<p><strong>Contacts</strong></p>'
+    + `<ul>${item('Delivery Contact', deliveryContact)}${item('Nyla Sales Contact', salesContact)}</ul>`
     + (hasContract ? '<p>The signed contract is attached for your reference.</p>' : '')
-    + '<p>Best regards,</p>';
+    + '<p>Best regards,</p>'
+    + sig;
 };
 
 // Invoice Card Component with expandable line items
@@ -789,7 +795,7 @@ ${googleMapsLink}`;
         }
       } catch { /* proceed; send will surface any error */ }
 
-      // CC = assigned salesperson + their reporting manager.
+      // CC = assigned salesperson + their reporting manager + the Admin team.
       const ccEmails = [];
       const sp = users.find((u) => u.id === account.assigned_to);
       if (sp?.email) ccEmails.push(sp.email);
@@ -799,6 +805,10 @@ ${googleMapsLink}`;
           if (mgr.data?.manager?.email) ccEmails.push(mgr.data.manager.email);
         } catch { /* no manager mapped */ }
       }
+      // Everyone on the Admin team (role contains "admin", e.g. Admin / System Admin).
+      users
+        .filter((u) => u.email && (u.role || '').toLowerCase().includes('admin'))
+        .forEach((u) => ccEmails.push(u.email));
       const cc = [...new Set(ccEmails)].join(', ');
 
       // Attach the signed contract if one exists (optional).
@@ -816,7 +826,7 @@ ${googleMapsLink}`;
       setShareData({
         subject: `Account Details — ${account.account_name || ''}`.trim(),
         cc,
-        bodyHtml: buildShareBodyHtml(account, hasContract),
+        bodyHtml: buildShareBodyHtml(account, { hasContract, salesperson: sp, sender: user }),
         localFiles,
       });
       setShowShareComposer(true);
