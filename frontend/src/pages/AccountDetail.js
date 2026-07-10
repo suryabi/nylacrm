@@ -824,9 +824,14 @@ ${googleMapsLink}`;
           if (mgr.data?.manager?.email) ccEmails.push(mgr.data.manager.email);
         } catch { /* no manager mapped */ }
       }
-      // Everyone on the Admin team (role contains "admin", e.g. Admin / System Admin).
+      // Everyone in the Admin department (department may be a string or a list).
+      const inAdminDept = (u) => {
+        const d = u.department;
+        const arr = Array.isArray(d) ? d : (d ? [d] : []);
+        return arr.some((x) => String(x).trim().toLowerCase() === 'admin');
+      };
       users
-        .filter((u) => u.email && (u.role || '').toLowerCase().includes('admin'))
+        .filter((u) => u.email && inAdminDept(u))
         .forEach((u) => ccEmails.push(u.email));
       const cc = [...new Set(ccEmails)].join(', ');
 
