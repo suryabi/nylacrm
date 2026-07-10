@@ -19,6 +19,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-10 — 🗑️ Double-confirm delete + auto-share-on-activation + reusable template ✅ DONE
+- **Double-confirmation delete (type-to-confirm), restricted to CEO/Admin:**
+  - New reusable `components/DeleteConfirmDialog.jsx` — the Delete button stays disabled until the user types the exact entity name (GitHub-style). Test IDs: `delete-confirm-dialog/input/action/cancel`.
+  - Wired into **Delete Account** (`AccountDetail.js` header + `AccountsList.js` row) and **Delete Lead** (`LeadsList.js` row; replaced the old single-step AlertDialog).
+  - Role gate `canDelete = role ∈ {ceo, admin, system admin}` (case-insensitive) on all three surfaces (LeadsList delete was previously ungated; Account delete was previously CEO/Director → now CEO/Admin).
+  - Verified by testing agent: dialog opens, action disabled on empty/wrong text, enabled on exact match, Cancel is non-destructive; throwaway lead fully deleted via the flow.
+- **Auto-open Share after Activation** (`AccountDetail.js`): the activation success handler now calls `openShareComposer()` so the Share Details email opens immediately. (Code in place + `openShareComposer` verified; a full activation couldn't be exercised in preview because no seeded account passes the activation checklist.)
+- **Reusable "Account Details" Email Template** (`routes/email_templates.py`): `_ensure_system_templates()` idempotently seeds a public, System-owned template (`system_key=account_details`) on GET /email-templates. Extended `_resolve_variables` for account with `account_id, gst_number, pan_number, billing_address` (incl. GST legal name), `delivery_address, delivery_contact, nyla_sales_contact` (assigned salesperson), and `my_phone`. Share composer now passes `entityType/entityId` so the template resolves in-context. Verified: renders `Account Details — Empire Restaurant · EMPI-BEN-A26-001` and appears in the composer's Templates picker (SHARED badge).
+
+
 ### 2026-07-10 — ✉️ Share Details email — enhancements ✅ DONE
 - **Nyla Sales Contact**: now shows the **assigned salesperson's name + phone** (was the account's primary contact).
 - **Formatting**: body grouped into **Tax Details / Addresses / Contacts** sections with bulleted items (survives `react-quill-new`).
