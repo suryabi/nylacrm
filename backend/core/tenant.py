@@ -10,9 +10,43 @@ import os
 # Context variable to store current tenant
 _current_tenant_id: ContextVar[Optional[str]] = ContextVar('current_tenant_id', default=None)
 _current_tenant: ContextVar[Optional[dict]] = ContextVar('current_tenant', default=None)
+# Public base URL of the incoming request (from ingress forwarded headers), used
+# to build absolute links in outbound emails/notifications.
+_current_base_url: ContextVar[str] = ContextVar('current_base_url', default='')
 
 # Default tenant for development/fallback
 DEFAULT_TENANT_ID = os.environ.get('DEFAULT_TENANT_ID', 'nyla-air-water')
+
+
+def set_current_base_url_from_request(request) -> None:
+    """Capture the public base URL (scheme://host) from the Emergent ingress
+    forwarded headers so notifications can build absolute links that work in
+    both preview and production."""
+    try:
+        headers = getattr(request, 'headers', {}) or {}
+        proto = (headers.get('x-forwarded-proto') or '').split(',')[0].strip()
+        host = (headers.get('x-forwarded-host') or headers.get('host') or '').split(',')[0].strip()
+        if host and 'localhost' not in host and '0.0.0.0' not in host:
+            _current_base_url.set(f"{proto or 'https'}://{host}")
+    except Exception:
+        pass
+
+
+def get_current_base_url() -> str:
+    """Public base URL for absolute links: request context → APP_BASE_URL env → ''."""
+    return (_current_base_url.get() or os.environ.get('APP_BASE_URL') or '').strip().rstrip('/')
+
+
+def to_absolute_url(link: Optional[str]) -> Optional[str]:
+    """Turn a relative app path (e.g. /leads/<id>) into an absolute URL."""
+    if not link:
+        return link
+    if link.startswith('http://') or link.startswith('https://'):
+        return link
+    base = get_current_base_url()
+    if not base:
+        return link
+    return f"{base}/{link.lstrip('/')}"
 
 
 def get_current_tenant_id() -> str:
@@ -117,6 +151,9 @@ async def tenant_middleware(request: Request, call_next):
         # Fall back to default tenant if extraction unexpectedly fails
         set_current_tenant(DEFAULT_TENANT_ID)
         request.state.tenant_id = DEFAULT_TENANT_ID
+
+    # Capture the public base URL for building absolute links in emails.
+    set_current_base_url_from_request(request)
 
     response = await call_next(request)
     return response

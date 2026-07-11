@@ -368,9 +368,10 @@ async def send_via_email(
 
 def build_public_url(base_url: str | None, token: str) -> str:
     """Build the absolute public download URL. Prefer the caller-supplied base
-    (the frontend's REACT_APP_BACKEND_URL, so it's environment-correct), then
-    APP_BASE_URL env, else a relative path."""
-    base = (base_url or os.environ.get("APP_BASE_URL") or "").strip().rstrip("/")
+    (the frontend's REACT_APP_BACKEND_URL), then the request's ingress host,
+    then APP_BASE_URL env, else a relative path."""
+    from core.tenant import get_current_base_url
+    base = (base_url or get_current_base_url() or "").strip().rstrip("/")
     path = f"/api/share/d/{token}"
     if base.startswith("http://") or base.startswith("https://"):
         return f"{base}{path}"

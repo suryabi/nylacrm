@@ -114,15 +114,19 @@ async def notify_users(
     if not send_email_too:
         return
 
+    # Emails need an ABSOLUTE link (relative paths resolve to http:///… in mail clients).
+    from core.tenant import to_absolute_url
+    email_link = to_absolute_url(link)
+
     html = f"""
     <div style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0f172a;">
       <h2 style="margin:0 0 8px;font-size:18px;">{title}</h2>
       <p style="margin:0 0 16px;color:#334155;font-size:14px;line-height:1.5;">{body}</p>
-      {f'<a href="{link}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;">Open</a>' if link else ''}
+      {f'<a href="{email_link}" style="display:inline-block;background:#0f172a;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;">Open</a>' if email_link else ''}
       <p style="margin:24px 0 0;color:#94a3b8;font-size:12px;">This is an automated notification — action may be required.</p>
     </div>
     """
-    text = f"{title}\n\n{body}" + (f"\n\nOpen: {link}" if link else "")
+    text = f"{title}\n\n{body}" + (f"\n\nOpen: {email_link}" if email_link else "")
     for u in users:
         email = u.get("email")
         if email:
