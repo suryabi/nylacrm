@@ -10097,6 +10097,8 @@ class Document(BaseModel):
     file_data: str  # base64 encoded file
     uploaded_by: str
     uploaded_by_name: str
+    linked_entity_type: Optional[str] = None  # e.g. 'account'
+    linked_entity_id: Optional[str] = None    # e.g. account.id
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Key user roles that can manage categories
@@ -10303,14 +10305,20 @@ ALLOWED_DOCUMENT_TYPES = {
 async def get_documents(
     category_id: Optional[str] = None,
     subcategory_id: Optional[str] = None,
+    linked_entity_type: Optional[str] = None,
+    linked_entity_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get documents filtered by category/subcategory"""
+    """Get documents filtered by category/subcategory and/or linked entity"""
     query = {}
     if category_id:
         query['category_id'] = category_id
     if subcategory_id:
         query['subcategory_id'] = subcategory_id
+    if linked_entity_type:
+        query['linked_entity_type'] = linked_entity_type
+    if linked_entity_id:
+        query['linked_entity_id'] = linked_entity_id
     
     # Get all documents including file_data for preview
     documents = await get_tdb().documents.find(query, {'_id': 0}).sort('created_at', -1).to_list(1000)
@@ -10323,6 +10331,8 @@ async def upload_document(
     name: str = Form(None),
     category_id: str = Form(None),
     subcategory_id: str = Form(None),
+    linked_entity_type: str = Form(None),
+    linked_entity_id: str = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
     """Upload a new document"""
@@ -10375,7 +10385,9 @@ async def upload_document(
         content_type=file.content_type,
         file_data=file_data,
         uploaded_by=current_user['id'],
-        uploaded_by_name=current_user['name']
+        uploaded_by_name=current_user['name'],
+        linked_entity_type=linked_entity_type,
+        linked_entity_id=linked_entity_id
     )
     
     doc = document.model_dump()
@@ -10436,6 +10448,41 @@ async def delete_document(document_id: str, current_user: dict = Depends(get_cur
     await get_tdb().documents.delete_one({'id': document_id})
     
     return {'message': 'Document deleted successfully'}
+
+@api_router.post("/documents/{document_id}/reupload")
+async def reupload_document(
+    document_id: str,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Replace the file of an existing document (keeps id/category/entity link)."""
+    document = await get_tdb().documents.find_one({'id': document_id})
+    if not document:
+        raise HTTPException(status_code=404, detail='Document not found')
+
+    if document['uploaded_by'] != current_user['id'] and not is_key_user(current_user['role']):
+        raise HTTPException(status_code=403, detail='Only the uploader, Admin, CEO, or Director can replace this document')
+
+    if file.content_type not in ALLOWED_DOCUMENT_TYPES:
+        raise HTTPException(status_code=400, detail='File type not allowed. Allowed types: PDF, DOC, DOCX, PNG, JPG, GIF, WEBP')
+
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail=f'File size exceeds 5 MB limit. Your file is {round(len(contents) / (1024*1024), 2)} MB')
+
+    await get_tdb().documents.update_one(
+        {'id': document_id},
+        {'$set': {
+            'file_name': file.filename,
+            'file_size': len(contents),
+            'content_type': file.content_type,
+            'document_type': ALLOWED_DOCUMENT_TYPES[file.content_type],
+            'file_data': base64.b64encode(contents).decode('utf-8'),
+            'uploaded_by': current_user['id'],
+            'uploaded_by_name': current_user['name'],
+        }}
+    )
+    return {'message': 'Document re-uploaded successfully'}
 
 # ============= PROPOSAL / CONTRACT SHARED CONSTANTS =============
 # Lead proposal endpoints were extracted to routes/lead_proposals.py.

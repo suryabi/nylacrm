@@ -47,6 +47,7 @@ import AccountScoringCard from '../components/AccountScoringCard';
 import EntityContactsSection from '../components/EntityContactsSection';
 import { SectionHeader } from '../components/detail/SectionHeader';
 import AccountZohoLedger from '../components/account/AccountZohoLedger';
+import AccountDocumentsSection from '../components/account/AccountDocumentsSection';
 import InlineComposer from '../components/gmail/InlineComposer';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
 
@@ -3482,6 +3483,9 @@ ${googleMapsLink}`;
               )}
             </div>
           </Card>
+
+          {/* Documents (multi-upload + categories; part of Files & Documents) */}
+          <AccountDocumentsSection accountId={account?.id || id} contract={contract} />
 
           {/* Account Scoring Card */}
           <AccountScoringCard 

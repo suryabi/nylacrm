@@ -154,11 +154,16 @@ export const filesAPI = {
     const queryParams = new URLSearchParams();
     if (params.category_id) queryParams.append('category_id', params.category_id);
     if (params.subcategory_id) queryParams.append('subcategory_id', params.subcategory_id);
+    if (params.linked_entity_type) queryParams.append('linked_entity_type', params.linked_entity_type);
+    if (params.linked_entity_id) queryParams.append('linked_entity_id', params.linked_entity_id);
     const url = queryParams.toString() ? `${API_URL}/documents?${queryParams.toString()}` : `${API_URL}/documents`;
     return axios.get(url, { headers: getAuthHeaders() });
   },
   getDocument: (id) => axios.get(`${API_URL}/documents/${id}`, { headers: getAuthHeaders() }),
   uploadDocument: (formData) => axios.post(`${API_URL}/documents/upload`, formData, { 
+    headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
+  }),
+  reuploadDocument: (id, formData) => axios.post(`${API_URL}/documents/${id}/reupload`, formData, {
     headers: { ...getAuthHeaders(), 'Content-Type': 'multipart/form-data' }
   }),
   deleteDocument: (id) => axios.delete(`${API_URL}/documents/${id}`, { headers: getAuthHeaders() }),
