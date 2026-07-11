@@ -117,6 +117,48 @@ DEFAULT_MODULE_PERMISSIONS = {
     "task_management": {"view": True, "create": True, "edit": True, "delete": False},
     "task_milestones": {"view": True, "create": False, "edit": False, "delete": False},
     "task_labels": {"view": True, "create": False, "edit": False, "delete": False},
+
+    # Communication & Templates
+    "mail": {"view": False, "create": False, "edit": False, "delete": False},
+    "email_templates": {"view": False, "create": False, "edit": False, "delete": False},
+    "notification_settings": {"view": True, "create": False, "edit": True, "delete": False},
+
+    # Proposal & Presentation Tools
+    "proposal_template": {"view": False, "create": False, "edit": False, "delete": False},
+
+    # Fleet
+    "fleet_vehicles": {"view": False, "create": False, "edit": False, "delete": False},
+    "fleet_drivers": {"view": False, "create": False, "edit": False, "delete": False},
+
+    # Production (extras)
+    "batch_genealogy": {"view": False, "create": False, "edit": False, "delete": False},
+
+    # Admin masters (extras)
+    "vendor_types": {"view": False, "create": False, "edit": False, "delete": False},
+
+    # Finance & Audit
+    "reversals_log": {"view": False, "create": False, "edit": False, "delete": False},
+
+    # Integrations
+    "zoho_integration": {"view": False, "create": False, "edit": False, "delete": False},
+    "slack_integration": {"view": False, "create": False, "edit": False, "delete": False},
+    "google_drive_integration": {"view": False, "create": False, "edit": False, "delete": False},
+    "state_machines": {"view": False, "create": False, "edit": False, "delete": False},
+    "notification_templates": {"view": False, "create": False, "edit": False, "delete": False},
+    "share_recipients": {"view": False, "create": False, "edit": False, "delete": False},
+
+    # Accounting Module
+    "accounting_transactions": {"view": False, "create": False, "edit": False, "delete": False},
+    "accounting_masters": {"view": False, "create": False, "edit": False, "delete": False},
+    "accounting_income_masters": {"view": False, "create": False, "edit": False, "delete": False},
+    "accounting_vendors": {"view": False, "create": False, "edit": False, "delete": False},
+    "accounting_employees": {"view": False, "create": False, "edit": False, "delete": False},
+
+    # Additional module keys used in menus
+    "delivery_orders": {"view": True, "create": True, "edit": True, "delete": False},
+    "knowledge_base": {"view": True, "create": False, "edit": False, "delete": False},
+    "customer_returns": {"view": True, "create": True, "edit": True, "delete": False},
+    "stock_transfers": {"view": False, "create": False, "edit": False, "delete": False},
 }
 
 # Full access permissions (for Admin role)
@@ -265,9 +307,15 @@ MODULE_CATEGORIES = {
     "Requests": ["leaves", "travel_requests", "budget_requests"],
     "Marketing": ["marketing_calendar", "marketing_masters", "marketing_requests", "design_requests_new", "print_requests"],
     "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories", "cogs_components", "master_departments"],
-    "Admin": ["tenant_settings", "api_keys", "sku_replace", "marketing_request_types", "print_request_statuses"],
-    "Distribution": ["distributors", "stock_dashboard", "cost_cards", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
-    "Production": ["production_dashboard", "production_batches", "qc_routes", "qc_team", "rejection_reasons", "rejection_report", "rejection_cost_config", "packaging_types", "maintenance", "inventory", "quality_control", "assets", "vendors"],
+    "Admin": ["tenant_settings", "api_keys", "sku_replace", "marketing_request_types", "print_request_statuses", "vendor_types", "reversals_log", "platform_admin"],
+    "Fleet": ["fleet_vehicles", "fleet_drivers"],
+    "Integrations": ["zoho_integration", "slack_integration", "google_drive_integration", "state_machines", "notification_templates", "share_recipients"],
+    "Communication": ["mail", "email_templates", "notification_settings"],
+    "Presentation": ["proposal_template"],
+    "Accounting": ["accounting_transactions", "accounting_masters", "accounting_income_masters", "accounting_vendors", "accounting_employees"],
+    "Sales Operations Extras": ["delivery_orders", "customer_returns", "knowledge_base"],
+    "Distribution": ["distributors", "stock_dashboard", "cost_cards", "stock_transfers", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
+    "Production": ["production_dashboard", "production_batches", "qc_routes", "qc_team", "rejection_reasons", "rejection_report", "rejection_cost_config", "packaging_types", "maintenance", "inventory", "quality_control", "assets", "vendors", "batch_genealogy"],
     "Inventory & Procurement": ["purchase_orders", "goods_receipt"],
     "Task Management": ["task_management", "task_milestones", "task_labels"],
 }
@@ -355,4 +403,29 @@ MODULE_LABELS = {
     "task_management": "Tasks",
     "task_milestones": "Milestones",
     "task_labels": "Labels",
+    "mail": "Mail",
+    "email_templates": "Email Templates",
+    "notification_settings": "Notification Settings",
+    "proposal_template": "Proposal Template",
+    "fleet_vehicles": "Vehicles",
+    "fleet_drivers": "Drivers",
+    "batch_genealogy": "Batch Genealogy",
+    "vendor_types": "Vendor Types",
+    "reversals_log": "Reversals Log",
+    "zoho_integration": "Zoho Books",
+    "slack_integration": "Slack",
+    "google_drive_integration": "Google Drive",
+    "state_machines": "State Machines",
+    "notification_templates": "Notification Templates",
+    "share_recipients": "Sharing Recipients",
+    "accounting_transactions": "Accounting: Transactions",
+    "accounting_masters": "Accounting: Masters",
+    "accounting_income_masters": "Accounting: Income Masters",
+    "accounting_vendors": "Accounting: Vendors",
+    "accounting_employees": "Accounting: Employees",
+    "delivery_orders": "Sample Delivery Requests",
+    "knowledge_base": "Knowledge Base",
+    "customer_returns": "Customer Returns",
+    "stock_transfers": "Stock Transfers",
+    "platform_admin": "Platform Admin",
 }

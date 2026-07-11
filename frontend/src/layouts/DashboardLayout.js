@@ -65,7 +65,7 @@ const salesNavigationGroups = [
       { name: 'Daily Status', href: '/daily-status', icon: CalendarDays, moduleKey: 'daily_status', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Meeting Minutes', href: '/meeting-minutes', icon: NotebookPen, moduleKey: 'meeting_minutes', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'My Calendar', href: '/personal-calendar', icon: CalendarDays, moduleKey: 'personal_calendar', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin', 'Production Manager', 'Production Engineer', 'QC Manager', 'Distributor', 'Distributor Manager', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
-      { name: 'Mail', href: '/mail', icon: Mail },
+      { name: 'Mail', href: '/mail', icon: Mail, moduleKey: 'mail' },
       { name: 'Status Summary', href: '/status-summary', icon: UsersRound, moduleKey: 'status_summary', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Issues', href: '/complaints', icon: MessageSquareWarning, moduleKey: 'customer_complaints', roles: ['CEO', 'Admin', 'System Admin'] },
     ]
@@ -82,7 +82,7 @@ const salesNavigationGroups = [
     items: [
       { name: 'Bottle Preview', href: '/bottle-preview', icon: Droplets, moduleKey: 'bottle_preview', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
       { name: 'Presentation Generator', href: '/gamma-generator', icon: Sparkles, moduleKey: 'gamma_generator', roles: ['CEO', 'Admin', 'System Admin'] },
-      { name: 'Proposal Template', href: '/proposal-template', icon: FileText, roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Proposal Template', href: '/proposal-template', icon: FileText, moduleKey: 'proposal_template', roles: ['CEO', 'Admin', 'System Admin'] },
     ]
   },
   {
@@ -90,8 +90,8 @@ const salesNavigationGroups = [
     items: [
       { name: 'Company Documents', href: '/company-documents', icon: FileText, moduleKey: 'company_documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin'] },
       { name: 'Files & Documents', href: '/files-documents', icon: FolderOpen, moduleKey: 'files_documents', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Admin', 'System Admin'] },
-      { name: 'Email Templates', href: '/email-templates', icon: Mail, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive'] },
-      { name: 'Notifications', href: '/notification-settings', icon: Bell, roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator', 'Production Manager', 'Production Executive', 'Distribution Manager', 'Distribution Executive'] },
+      { name: 'Email Templates', href: '/email-templates', icon: Mail, moduleKey: 'email_templates', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive'] },
+      { name: 'Notifications', href: '/notification-settings', icon: Bell, moduleKey: 'notification_settings', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business', 'Partner - Sales', 'Sales Partner', 'Sales Rep', 'Business Development Executive', 'Sales Representative', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator', 'Production Manager', 'Production Executive', 'Distribution Manager', 'Distribution Executive'] },
     ]
   },
   {
@@ -167,7 +167,7 @@ const distributionNavigationGroups = [
     title: 'Distribution',
     items: [
       { name: 'Distributors', href: '/distributors', icon: Truck, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
-      { name: 'Stock Transfers', href: '/distributor/stock-transfers', icon: ArrowLeftRight, moduleKey: 'distributors', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
+      { name: 'Stock Transfers', href: '/distributor/stock-transfers', icon: ArrowLeftRight, moduleKey: 'stock_transfers', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Customer Returns', href: '/customer-returns', icon: PackageOpen, moduleKey: 'customer_returns', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin', 'Distributor', 'Distributor Manager'] },
       { name: 'Stock Dashboard', href: '/stock-dashboard', icon: Package, moduleKey: 'stock_dashboard', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
       { name: 'Sample Delivery Requests', href: '/delivery-orders', icon: Package, moduleKey: 'delivery_orders', roles: ['CEO', 'Director', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Admin', 'System Admin'] },
@@ -252,7 +252,7 @@ const marketingNavigationGroups = [
       { name: 'Company Profile', href: '/company-profile', icon: Building, moduleKey: 'company_profile', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
       { name: 'Team', href: '/team', icon: UserCog, moduleKey: 'team', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager'] },
       { name: 'Tasks & Requests', href: '/tasks', icon: ClipboardList, moduleKey: 'task_management', roles: ['CEO', 'Director', 'Admin', 'System Admin', 'Marketing Manager', 'Marketing Executive', 'Content Creator'] },
-      { name: 'Mail', href: '/mail', icon: Mail },
+      { name: 'Mail', href: '/mail', icon: Mail, moduleKey: 'mail' },
     ]
   },
 ];
@@ -266,11 +266,11 @@ const accountingNavigationGroups = [
   {
     title: 'Accounting',
     items: [
-      { name: 'Transactions', href: '/accounting/transactions', icon: Banknote, roles: ACCOUNTING_ROLES },
-      { name: 'Accounting Masters', href: '/accounting/masters', icon: Calculator, roles: ACCOUNTING_ROLES },
-      { name: 'Income Masters', href: '/accounting/income-masters', icon: TrendingUp, roles: ACCOUNTING_ROLES },
-      { name: 'Vendors', href: '/accounting/vendors', icon: Building, roles: ACCOUNTING_ROLES },
-      { name: 'Employees', href: '/accounting/employees', icon: Users, roles: ACCOUNTING_ROLES },
+      { name: 'Transactions', href: '/accounting/transactions', icon: Banknote, moduleKey: 'accounting_transactions', roles: ACCOUNTING_ROLES },
+      { name: 'Accounting Masters', href: '/accounting/masters', icon: Calculator, moduleKey: 'accounting_masters', roles: ACCOUNTING_ROLES },
+      { name: 'Income Masters', href: '/accounting/income-masters', icon: TrendingUp, moduleKey: 'accounting_income_masters', roles: ACCOUNTING_ROLES },
+      { name: 'Vendors', href: '/accounting/vendors', icon: Building, moduleKey: 'accounting_vendors', roles: ACCOUNTING_ROLES },
+      { name: 'Employees', href: '/accounting/employees', icon: Users, moduleKey: 'accounting_employees', roles: ACCOUNTING_ROLES },
     ],
   },
 ];
@@ -279,8 +279,8 @@ const adminNavigationGroups = [
   {
     title: 'Fleet',
     items: [
-      { name: 'Vehicles', href: '/admin/vehicles', icon: Truck, roles: ADMIN_ONLY_ROLES },
-      { name: 'Drivers', href: '/admin/drivers', icon: UsersRound, roles: ADMIN_ONLY_ROLES },
+      { name: 'Vehicles', href: '/admin/vehicles', icon: Truck, moduleKey: 'fleet_vehicles', roles: ADMIN_ONLY_ROLES },
+      { name: 'Drivers', href: '/admin/drivers', icon: UsersRound, moduleKey: 'fleet_drivers', roles: ADMIN_ONLY_ROLES },
     ],
   },
   {
@@ -288,7 +288,7 @@ const adminNavigationGroups = [
     items: [
       { name: 'SKU Management', href: '/sku-management', icon: Package, moduleKey: 'sku_management', roles: ADMIN_ONLY_ROLES },
       { name: 'Replace SKU', href: '/admin/sku-migrate', icon: ArrowLeftRight, moduleKey: 'sku_replace', roles: ADMIN_ONLY_ROLES },
-      { name: 'Batch Genealogy', href: '/admin/batch-genealogy', icon: Layers, roles: ADMIN_ONLY_ROLES },
+      { name: 'Batch Genealogy', href: '/admin/batch-genealogy', icon: Layers, moduleKey: 'batch_genealogy', roles: ADMIN_ONLY_ROLES },
     ],
   },
   {
@@ -299,7 +299,7 @@ const adminNavigationGroups = [
       { name: 'Design Request Types', href: '/admin/request-types', icon: Tag, moduleKey: 'marketing_request_types', roles: ADMIN_ONLY_ROLES },
       { name: 'Print Settings', href: '/admin/print-settings', icon: Printer, moduleKey: 'print_request_statuses', roles: ADMIN_ONLY_ROLES },
       { name: 'Business Categories', href: '/master-business-categories', icon: Building, moduleKey: 'business_categories', roles: ADMIN_ONLY_ROLES },
-      { name: 'Vendor Types', href: '/admin/vendor-types', icon: Truck, roles: ADMIN_ONLY_ROLES },
+      { name: 'Vendor Types', href: '/admin/vendor-types', icon: Truck, moduleKey: 'vendor_types', roles: ADMIN_ONLY_ROLES },
       { name: 'Contact Categories', href: '/master-contact-categories', icon: Users, moduleKey: 'contact_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'Expense Categories', href: '/expense-category-master', icon: Receipt, moduleKey: 'expense_categories', roles: ADMIN_ONLY_ROLES },
       { name: 'COGS Components', href: '/master/cogs-components', icon: Receipt, moduleKey: 'cogs_components', roles: ['CEO', 'Director', 'System Admin'] },
@@ -315,7 +315,7 @@ const adminNavigationGroups = [
   {
     title: 'Finance & Audit',
     items: [
-      { name: 'Reversals Log', href: '/admin/reversals', icon: RotateCcw, roles: ADMIN_ONLY_ROLES },
+      { name: 'Reversals Log', href: '/admin/reversals', icon: RotateCcw, moduleKey: 'reversals_log', roles: ADMIN_ONLY_ROLES },
     ],
   },
   {
@@ -327,8 +327,8 @@ const adminNavigationGroups = [
       { name: 'Slack', href: '/admin/slack', icon: Cable, moduleKey: 'slack_integration', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'Google Drive', href: '/admin/google-drive', icon: Cable, moduleKey: 'google_drive_integration', roles: ['CEO', 'Admin', 'System Admin'] },
       { name: 'State Machines', href: '/admin/state-machines', icon: Cable, moduleKey: 'state_machines', roles: ['CEO', 'Admin', 'System Admin'] },
-      { name: 'Notification Templates', href: '/admin/notification-templates', icon: Bell, moduleKey: 'state_machines', roles: ['CEO', 'Admin', 'System Admin'] },
-      { name: 'Sharing Recipients', href: '/settings/share-recipients', icon: Share2, roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
+      { name: 'Notification Templates', href: '/admin/notification-templates', icon: Bell, moduleKey: 'notification_templates', roles: ['CEO', 'Admin', 'System Admin'] },
+      { name: 'Sharing Recipients', href: '/settings/share-recipients', icon: Share2, moduleKey: 'share_recipients', roles: ['CEO', 'Director', 'Admin', 'System Admin'] },
       { name: 'Platform Admin', href: '/platform-admin', icon: Crown, isPlatformAdminOnly: true },
     ],
   },

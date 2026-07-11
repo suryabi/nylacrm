@@ -170,7 +170,7 @@ function ActivityTrackerWrapper({ children }) {
 
 function ProtectedRoute({ children, moduleKey, appModule }) {
   const { user, loading } = useAuth();
-  const { isModuleEnabled, loading: configLoading } = useTenantConfig();
+  const { isModuleEnabled, hasRolePermission, loading: configLoading } = useTenantConfig();
   const { canAccessSales, canAccessProduction, canAccessDistribution, canAccessMarketing } = useAppContext();
   const location = useLocation();
 
@@ -182,7 +182,7 @@ function ProtectedRoute({ children, moduleKey, appModule }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Check if module is enabled (if moduleKey is provided)
+  // Check if module is enabled at tenant level (if moduleKey is provided)
   if (moduleKey && !isModuleEnabled(moduleKey)) {
     return (
       <DashboardLayout>
@@ -198,6 +198,36 @@ function ProtectedRoute({ children, moduleKey, appModule }) {
               This feature has been disabled by your administrator. Contact your admin to enable it.
             </p>
             <button 
+              onClick={() => window.history.back()}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Go Back
+            </button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Enforce role-permission at route level (URL-jump protection).
+  // The Role Management UI is the sole source of truth for who can see what;
+  // if the user's role does not grant view on this module, block access.
+  // Distributor role is exempt — they have their own portal with its own guards.
+  if (moduleKey && user?.role !== 'Distributor' && !hasRolePermission(moduleKey)) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center p-8 max-w-md">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 flex items-center justify-center">
+              <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-foreground mb-2">Access Denied</h2>
+            <p className="text-muted-foreground mb-4">
+              Your role does not have permission to view this page. Ask an admin to enable it under Role Management.
+            </p>
+            <button
               onClick={() => window.history.back()}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
             >
@@ -334,9 +364,9 @@ function AppRouter() {
           <Route path="/revenue-analytics" element={<ProtectedRoute moduleKey="report_revenue_analytics"><RevenueAnalytics /></ProtectedRoute>} />
           <Route path="/sku-performance" element={<ProtectedRoute moduleKey="report_sku_performance"><SKUPerformance /></ProtectedRoute>} />
           <Route path="/resource-performance" element={<ProtectedRoute moduleKey="report_resource_performance"><ResourcePerformance /></ProtectedRoute>} />
-          <Route path="/email-templates" element={<ProtectedRoute><EmailTemplates /></ProtectedRoute>} />
-          <Route path="/notification-settings" element={<ProtectedRoute><NotificationSettings /></ProtectedRoute>} />
-          <Route path="/settings/share-recipients" element={<ProtectedRoute><ShareRecipientSettings /></ProtectedRoute>} />
+          <Route path="/email-templates" element={<ProtectedRoute moduleKey="email_templates"><EmailTemplates /></ProtectedRoute>} />
+          <Route path="/notification-settings" element={<ProtectedRoute moduleKey="notification_settings"><NotificationSettings /></ProtectedRoute>} />
+          <Route path="/settings/share-recipients" element={<ProtectedRoute moduleKey="share_recipients"><ShareRecipientSettings /></ProtectedRoute>} />
           <Route path="/accounts" element={<ProtectedRoute moduleKey="accounts"><AccountsList /></ProtectedRoute>} />
           <Route path="/accounts/sku-pricing" element={<ProtectedRoute moduleKey="accounts"><AccountSKUPricing /></ProtectedRoute>} />
           <Route path="/complaints" element={<ProtectedRoute moduleKey="customer_complaints"><CustomerComplaints /></ProtectedRoute>} />
@@ -344,9 +374,9 @@ function AppRouter() {
           <Route path="/gamma-generator" element={<ProtectedRoute moduleKey="gamma_generator"><GammaGenerator /></ProtectedRoute>} />
           <Route path="/master/cogs-components" element={<ProtectedRoute moduleKey="cogs_components"><MasterCOGSComponents /></ProtectedRoute>} />
           <Route path="/admin/sku-migrate" element={<ProtectedRoute moduleKey="admin"><AdminSkuMigrate /></ProtectedRoute>} />
-          <Route path="/admin/vehicles" element={<ProtectedRoute><VehiclesList /></ProtectedRoute>} />
-          <Route path="/admin/drivers" element={<ProtectedRoute><DriversList /></ProtectedRoute>} />
-          <Route path="/admin/reversals" element={<ProtectedRoute><ReversalsAudit /></ProtectedRoute>} />
+          <Route path="/admin/vehicles" element={<ProtectedRoute moduleKey="fleet_vehicles"><VehiclesList /></ProtectedRoute>} />
+          <Route path="/admin/drivers" element={<ProtectedRoute moduleKey="fleet_drivers"><DriversList /></ProtectedRoute>} />
+          <Route path="/admin/reversals" element={<ProtectedRoute moduleKey="reversals_log"><ReversalsAudit /></ProtectedRoute>} />
           <Route path="/distributor/delivery-schedules" element={<ProtectedRoute><DeliverySchedulesList /></ProtectedRoute>} />
           <Route path="/distributor/delivery-schedules/:id" element={<ProtectedRoute><DeliveryScheduleDetail /></ProtectedRoute>} />
           <Route path="/accounts/:id" element={<ProtectedRoute moduleKey="accounts"><AccountDetail /></ProtectedRoute>} />
@@ -356,8 +386,8 @@ function AppRouter() {
           <Route path="/transportation-calculator" element={<ProtectedRoute moduleKey="transport_calculator"><TransportationCostCalculator /></ProtectedRoute>} />
           <Route path="/sku-management" element={<ProtectedRoute moduleKey="sku_management"><SKUManagement /></ProtectedRoute>} />
           <Route path="/sku-management/relink" element={<ProtectedRoute moduleKey="sku_management"><SkuRelinkTool /></ProtectedRoute>} />
-          <Route path="/admin/batch-genealogy" element={<ProtectedRoute><BatchGenealogy /></ProtectedRoute>} />
-          <Route path="/admin/batch-genealogy/:batchId" element={<ProtectedRoute><BatchGenealogy /></ProtectedRoute>} />
+          <Route path="/admin/batch-genealogy" element={<ProtectedRoute moduleKey="batch_genealogy"><BatchGenealogy /></ProtectedRoute>} />
+          <Route path="/admin/batch-genealogy/:batchId" element={<ProtectedRoute moduleKey="batch_genealogy"><BatchGenealogy /></ProtectedRoute>} />
           <Route path="/packaging-types" element={<ProtectedRoute moduleKey="sku_management"><PackagingTypes /></ProtectedRoute>} />
           <Route path="/company-profile" element={<ProtectedRoute moduleKey="company_profile"><CompanyProfile /></ProtectedRoute>} />
           <Route path="/files-documents" element={<ProtectedRoute moduleKey="files_documents"><FilesDocuments /></ProtectedRoute>} />
@@ -369,30 +399,30 @@ function AppRouter() {
           <Route path="/master-contact-categories" element={<ProtectedRoute moduleKey="contact_categories"><MasterContactCategories /></ProtectedRoute>} />
           <Route path="/contacts" element={<ProtectedRoute moduleKey="contacts"><ContactsList /></ProtectedRoute>} />
           <Route path="/delivery-orders" element={<ProtectedRoute moduleKey="delivery_orders"><DeliveryOrders /></ProtectedRoute>} />
-          <Route path="/tenant-settings" element={<ProtectedRoute><TenantSettings /></ProtectedRoute>} />
-          <Route path="/proposal-template" element={<ProtectedRoute><ProposalTemplateSettings /></ProtectedRoute>} />
-          <Route path="/admin/slack" element={<ProtectedRoute><SlackSettings /></ProtectedRoute>} />
-          <Route path="/admin/google-drive" element={<ProtectedRoute><GoogleDriveSettings /></ProtectedRoute>} />
-          <Route path="/admin/state-machines" element={<ProtectedRoute><StateMachines /></ProtectedRoute>} />
-          <Route path="/admin/notification-templates" element={<ProtectedRoute><NotificationTemplates /></ProtectedRoute>} />
-          <Route path="/settings/api-keys" element={<ProtectedRoute><ApiKeysPage /></ProtectedRoute>} />
-          <Route path="/settings/integrations/zoho" element={<ProtectedRoute><ZohoIntegration /></ProtectedRoute>} />
+          <Route path="/tenant-settings" element={<ProtectedRoute moduleKey="tenant_settings"><TenantSettings /></ProtectedRoute>} />
+          <Route path="/proposal-template" element={<ProtectedRoute moduleKey="proposal_template"><ProposalTemplateSettings /></ProtectedRoute>} />
+          <Route path="/admin/slack" element={<ProtectedRoute moduleKey="slack_integration"><SlackSettings /></ProtectedRoute>} />
+          <Route path="/admin/google-drive" element={<ProtectedRoute moduleKey="google_drive_integration"><GoogleDriveSettings /></ProtectedRoute>} />
+          <Route path="/admin/state-machines" element={<ProtectedRoute moduleKey="state_machines"><StateMachines /></ProtectedRoute>} />
+          <Route path="/admin/notification-templates" element={<ProtectedRoute moduleKey="notification_templates"><NotificationTemplates /></ProtectedRoute>} />
+          <Route path="/settings/api-keys" element={<ProtectedRoute moduleKey="api_keys"><ApiKeysPage /></ProtectedRoute>} />
+          <Route path="/settings/integrations/zoho" element={<ProtectedRoute moduleKey="zoho_integration"><ZohoIntegration /></ProtectedRoute>} />
           <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdmin /></ProtectedRoute>} />
           <Route path="/knowledge-base" element={<ProtectedRoute moduleKey="knowledge_base"><KnowledgeBase /></ProtectedRoute>} />
           <Route path="/lead-scoring-model" element={<ProtectedRoute moduleKey="lead_scoring"><LeadScoringModel /></ProtectedRoute>} />
           
           {/* Production Context Routes */}
-          <Route path="/production-dashboard" element={<ProtectedRoute><ProductionDashboard /></ProtectedRoute>} />
+          <Route path="/production-dashboard" element={<ProtectedRoute moduleKey="production_dashboard"><ProductionDashboard /></ProtectedRoute>} />
           <Route path="/maintenance" element={<ProtectedRoute moduleKey="maintenance"><Maintenance /></ProtectedRoute>} />
           <Route path="/inventory" element={<ProtectedRoute moduleKey="inventory"><Inventory /></ProtectedRoute>} />
           <Route path="/quality-control" element={<ProtectedRoute moduleKey="quality_control"><QualityControl /></ProtectedRoute>} />
-          <Route path="/production-batches" element={<ProtectedRoute><ProductionBatches /></ProtectedRoute>} />
-          <Route path="/production-batches/:batchId" element={<ProtectedRoute><BatchDetail /></ProtectedRoute>} />
-          <Route path="/qc-routes" element={<ProtectedRoute><QCRouteConfig /></ProtectedRoute>} />
-          <Route path="/rejection-reasons" element={<ProtectedRoute><RejectionReasons /></ProtectedRoute>} />
-          <Route path="/rejection-report" element={<ProtectedRoute><RejectionReport /></ProtectedRoute>} />
-          <Route path="/production/rejection-cost-config" element={<ProtectedRoute><RejectionCostConfig /></ProtectedRoute>} />
-          <Route path="/qc-team" element={<ProtectedRoute><QCTeam /></ProtectedRoute>} />
+          <Route path="/production-batches" element={<ProtectedRoute moduleKey="production_batches"><ProductionBatches /></ProtectedRoute>} />
+          <Route path="/production-batches/:batchId" element={<ProtectedRoute moduleKey="production_batches"><BatchDetail /></ProtectedRoute>} />
+          <Route path="/qc-routes" element={<ProtectedRoute moduleKey="qc_routes"><QCRouteConfig /></ProtectedRoute>} />
+          <Route path="/rejection-reasons" element={<ProtectedRoute moduleKey="rejection_reasons"><RejectionReasons /></ProtectedRoute>} />
+          <Route path="/rejection-report" element={<ProtectedRoute moduleKey="rejection_report"><RejectionReport /></ProtectedRoute>} />
+          <Route path="/production/rejection-cost-config" element={<ProtectedRoute moduleKey="rejection_cost_config"><RejectionCostConfig /></ProtectedRoute>} />
+          <Route path="/qc-team" element={<ProtectedRoute moduleKey="qc_team"><QCTeam /></ProtectedRoute>} />
           <Route path="/assets" element={<ProtectedRoute moduleKey="assets"><Assets /></ProtectedRoute>} />
           <Route path="/vendors" element={<ProtectedRoute moduleKey="vendors"><Vendors /></ProtectedRoute>} />
           
@@ -401,42 +431,42 @@ function AppRouter() {
           <Route path="/distributors" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorList /></ProtectedRoute>} />
           <Route path="/distributors/:id" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
           <Route path="/distributors/:id/edit" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><DistributorDetail /></ProtectedRoute>} />
-          <Route path="/distributor/stock-transfers" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockTransfers /></ProtectedRoute>} />
-          <Route path="/accounting/masters" element={<ProtectedRoute><AccountingMasters group="expense" /></ProtectedRoute>} />
-          <Route path="/accounting/income-masters" element={<ProtectedRoute><AccountingMasters group="income" /></ProtectedRoute>} />
-          <Route path="/accounting/transactions" element={<ProtectedRoute><AccountingTransactions /></ProtectedRoute>} />
-          <Route path="/accounting/vendors" element={<ProtectedRoute><VendorsAccounting /></ProtectedRoute>} />
-          <Route path="/accounting/employees" element={<ProtectedRoute><EmployeesAccounting /></ProtectedRoute>} />
-          <Route path="/admin/vendor-types" element={<ProtectedRoute><VendorTypes /></ProtectedRoute>} />
+          <Route path="/distributor/stock-transfers" element={<ProtectedRoute moduleKey="stock_transfers" appModule="distribution"><StockTransfers /></ProtectedRoute>} />
+          <Route path="/accounting/masters" element={<ProtectedRoute moduleKey="accounting_masters"><AccountingMasters group="expense" /></ProtectedRoute>} />
+          <Route path="/accounting/income-masters" element={<ProtectedRoute moduleKey="accounting_income_masters"><AccountingMasters group="income" /></ProtectedRoute>} />
+          <Route path="/accounting/transactions" element={<ProtectedRoute moduleKey="accounting_transactions"><AccountingTransactions /></ProtectedRoute>} />
+          <Route path="/accounting/vendors" element={<ProtectedRoute moduleKey="accounting_vendors"><VendorsAccounting /></ProtectedRoute>} />
+          <Route path="/accounting/employees" element={<ProtectedRoute moduleKey="accounting_employees"><EmployeesAccounting /></ProtectedRoute>} />
+          <Route path="/admin/vendor-types" element={<ProtectedRoute moduleKey="vendor_types"><VendorTypes /></ProtectedRoute>} />
           <Route path="/stock-dashboard" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><StockDashboard /></ProtectedRoute>} />
           <Route path="/cost-cards" element={<ProtectedRoute moduleKey="distributors" appModule="distribution"><CostCards /></ProtectedRoute>} />
           
           {/* Task Management */}
-          <Route path="/tasks" element={<ProtectedRoute><TaskManagement /></ProtectedRoute>} />
-          <Route path="/tasks/:taskId" element={<ProtectedRoute><TaskDetail /></ProtectedRoute>} />
+          <Route path="/tasks" element={<ProtectedRoute moduleKey="task_management"><TaskManagement /></ProtectedRoute>} />
+          <Route path="/tasks/:taskId" element={<ProtectedRoute moduleKey="task_management"><TaskDetail /></ProtectedRoute>} />
           <Route path="/performance" element={<ProtectedRoute moduleKey="performance_tracker"><PerformanceTracker /></ProtectedRoute>} />
           <Route path="/investor-dashboard" element={<ProtectedRoute moduleKey="investor_dashboard"><InvestorDashboard /></ProtectedRoute>} />
           {/* Marketing Module */}
           <Route path="/marketing-calendar" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingCalendar /></ProtectedRoute>} />
           <Route path="/marketing-post/:postId" element={<ProtectedRoute moduleKey="marketing_calendar"><MarketingPostDetail /></ProtectedRoute>} />
           <Route path="/marketing-masters" element={<ProtectedRoute moduleKey="marketing_masters"><MarketingMasters /></ProtectedRoute>} />
-          <Route path="/admin/request-types" element={<ProtectedRoute><MarketingRequestTypeMasters /></ProtectedRoute>} />
+          <Route path="/admin/request-types" element={<ProtectedRoute moduleKey="marketing_request_types"><MarketingRequestTypeMasters /></ProtectedRoute>} />
           {/* New Marketing Requests Module (Sales raises -> Marketing fulfils -> Delivery produces) */}
-          <Route path="/marketing-requests" element={<ProtectedRoute><MarketingRequests /></ProtectedRoute>} />
-          <Route path="/marketing-requests/new" element={<ProtectedRoute><NewMarketingRequest /></ProtectedRoute>} />
-          <Route path="/marketing-requests/:id/edit" element={<ProtectedRoute><NewMarketingRequest /></ProtectedRoute>} />
-          <Route path="/marketing-requests/:id" element={<ProtectedRoute><MarketingRequestDetail /></ProtectedRoute>} />
+          <Route path="/marketing-requests" element={<ProtectedRoute moduleKey="marketing_requests"><MarketingRequests /></ProtectedRoute>} />
+          <Route path="/marketing-requests/new" element={<ProtectedRoute moduleKey="marketing_requests"><NewMarketingRequest /></ProtectedRoute>} />
+          <Route path="/marketing-requests/:id/edit" element={<ProtectedRoute moduleKey="marketing_requests"><NewMarketingRequest /></ProtectedRoute>} />
+          <Route path="/marketing-requests/:id" element={<ProtectedRoute moduleKey="marketing_requests"><MarketingRequestDetail /></ProtectedRoute>} />
           <Route path="/design-requests-new" element={<ProtectedRoute moduleKey="design_requests_new"><DesignRequestsNew /></ProtectedRoute>} />
           <Route path="/design-requests-new/new" element={<ProtectedRoute moduleKey="design_requests_new"><NewDesignRequestNew /></ProtectedRoute>} />
           <Route path="/design-requests-new/:id/edit" element={<ProtectedRoute moduleKey="design_requests_new"><NewDesignRequestNew /></ProtectedRoute>} />
           <Route path="/design-requests-new/:id" element={<ProtectedRoute moduleKey="design_requests_new"><DesignRequestNewDetail /></ProtectedRoute>} />
           <Route path="/print-requests" element={<ProtectedRoute moduleKey="print_requests"><PrintRequests /></ProtectedRoute>} />
           <Route path="/print-requests/:id" element={<ProtectedRoute moduleKey="print_requests"><PrintRequestDetail /></ProtectedRoute>} />
-          <Route path="/admin/print-settings" element={<ProtectedRoute><PrintRequestSettings /></ProtectedRoute>} />
+          <Route path="/admin/print-settings" element={<ProtectedRoute moduleKey="print_request_statuses"><PrintRequestSettings /></ProtectedRoute>} />
           {/* Personal Calendar */}
-          <Route path="/personal-calendar" element={<ProtectedRoute><PersonalCalendar /></ProtectedRoute>} />
+          <Route path="/personal-calendar" element={<ProtectedRoute moduleKey="personal_calendar"><PersonalCalendar /></ProtectedRoute>} />
           {/* Mail (Gmail integration) */}
-          <Route path="/mail" element={<ProtectedRoute><Mail /></ProtectedRoute>} />
+          <Route path="/mail" element={<ProtectedRoute moduleKey="mail"><Mail /></ProtectedRoute>} />
         </Routes>
         </Suspense>
         <Toaster />
