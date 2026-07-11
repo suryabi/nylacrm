@@ -19,6 +19,14 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-11 — 🔐 RBAC unification: all menu items + routes now Role-Management controllable ✅ DONE
+- **Backend** (`/app/backend/models/role.py`): added 25 missing module keys to `DEFAULT_MODULE_PERMISSIONS`, `MODULE_LABELS`, and `MODULE_CATEGORIES` — `mail`, `email_templates`, `notification_settings`, `proposal_template`, `fleet_vehicles`, `fleet_drivers`, `batch_genealogy`, `vendor_types`, `reversals_log`, `zoho_integration`, `slack_integration`, `google_drive_integration`, `state_machines`, `notification_templates`, `share_recipients`, `accounting_transactions`, `accounting_masters`, `accounting_income_masters`, `accounting_vendors`, `accounting_employees`, `delivery_orders`, `knowledge_base`, `customer_returns`, `stock_transfers`. Added 6 new categories (Fleet, Integrations, Communication, Presentation, Accounting, Sales Operations Extras). Added an import-time drift-guard assertion so any future label added without a matching permission entry fails fast.
+- **Frontend `DashboardLayout.js`**: every navigation item now has a `moduleKey`. No more "orphan" sidebar entries (previously ~15 items — Mail, Vehicles, Drivers, Batch Genealogy, Vendor Types, Reversals Log, Sharing Recipients, all Accounting items, Notification Templates, Proposal Template, Email Templates, Notifications — were invisible to the Role Management UI).
+- **Frontend `App.js`**: every `ProtectedRoute` gets its correct `moduleKey`. `ProtectedRoute` now enforces `hasRolePermission(moduleKey)` at the URL level (in addition to the existing tenant-level `isModuleEnabled` check), so URL-jumping to a permission-denied route lands on an Access Denied screen. Distributor role exempt (has its own portal).
+- **Backfill** (`/app/backend/routes/roles.py`, unchanged): on every `GET /api/roles` fetch, any new keys are auto-populated into every existing role's permissions dict — Admin/CEO-like roles get full access, non-admin roles get the defaults from `DEFAULT_MODULE_PERMISSIONS`. Existing tenants pick up the new keys transparently.
+- Verified end-to-end via testing agent (iteration_318): 107 module_labels, 19 categories (including 6 new), all 5 roles in the Nyla tenant backfilled correctly, all 12 tested admin routes load cleanly for the CEO user, and Role Management UI surfaces every new category with editable toggles.
+
+
 ### 2026-07-10 — 📂 Account Documents section (multi-upload + categories, unified with Files & Documents) ✅ DONE
 - New `components/account/AccountDocumentsSection.jsx` on the Account detail page (`data-testid=account-documents-section`), rendered right after the Signed Contract card.
 - **Multi-file upload** with a **Category dropdown** whose options come from the Files & Documents categories (`GET /document-categories`). Upload blocked (toast) until a category is chosen.

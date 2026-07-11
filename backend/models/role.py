@@ -307,7 +307,7 @@ MODULE_CATEGORIES = {
     "Requests": ["leaves", "travel_requests", "budget_requests"],
     "Marketing": ["marketing_calendar", "marketing_masters", "marketing_requests", "design_requests_new", "print_requests"],
     "Organization": ["company_profile", "team", "master_locations", "lead_statuses", "business_categories", "contact_categories", "expense_categories", "cogs_components", "master_departments"],
-    "Admin": ["tenant_settings", "api_keys", "sku_replace", "marketing_request_types", "print_request_statuses", "vendor_types", "reversals_log", "platform_admin"],
+    "Admin": ["tenant_settings", "api_keys", "sku_replace", "marketing_request_types", "print_request_statuses", "vendor_types", "reversals_log"],
     "Fleet": ["fleet_vehicles", "fleet_drivers"],
     "Integrations": ["zoho_integration", "slack_integration", "google_drive_integration", "state_machines", "notification_templates", "share_recipients"],
     "Communication": ["mail", "email_templates", "notification_settings"],
@@ -427,5 +427,19 @@ MODULE_LABELS = {
     "knowledge_base": "Knowledge Base",
     "customer_returns": "Customer Returns",
     "stock_transfers": "Stock Transfers",
-    "platform_admin": "Platform Admin",
 }
+
+
+# Drift-guard: every key referenced in MODULE_CATEGORIES and MODULE_LABELS
+# MUST also exist in DEFAULT_MODULE_PERMISSIONS. This assertion runs at module
+# import so any future drift (e.g. adding a label without the corresponding
+# permission entry) fails fast rather than producing a ghost toggle in the
+# Role Management UI that never persists a value on any role.
+_labels_keys = set(MODULE_LABELS.keys())
+_perms_keys = set(DEFAULT_MODULE_PERMISSIONS.keys())
+_cat_keys = {k for v in MODULE_CATEGORIES.values() for k in v}
+_missing_in_perms = (_labels_keys | _cat_keys) - _perms_keys
+assert not _missing_in_perms, (
+    f"role.py drift: these module keys are labeled/categorized but missing from "
+    f"DEFAULT_MODULE_PERMISSIONS (backfill will skip them): {sorted(_missing_in_perms)}"
+)
