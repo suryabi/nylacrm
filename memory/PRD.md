@@ -19,6 +19,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## What's implemented (changelog)
 
+### 2026-07-10 — 📂 Account Documents section (multi-upload + categories, unified with Files & Documents) ✅ DONE
+- New `components/account/AccountDocumentsSection.jsx` on the Account detail page (`data-testid=account-documents-section`), rendered right after the Signed Contract card.
+- **Multi-file upload** with a **Category dropdown** whose options come from the Files & Documents categories (`GET /document-categories`). Upload blocked (toast) until a category is chosen.
+- **Delete** and **Re-upload** (replace file) per document.
+- Uploads are saved into the **global `documents` collection (Files & Documents)** and linked to the account — added `linked_entity_type`/`linked_entity_id` to the `Document` model + `POST /documents/upload`, an entity filter on `GET /documents`, and a new `POST /documents/{id}/reupload` endpoint (`server.py`). Extended `filesAPI` with entity params + `reuploadDocument`.
+- The **approved contract** is merged into the list as a read-only row with a "Signed Contract" badge (the existing contract card + approval workflow is untouched).
+- Verified: backend CRUD via curl; full frontend E2E via testing agent (iteration_317, 8/8 passed, 100%) — upload/reupload/delete, category dropdown, cross-module persistence on `/files-documents`, and the approved-contract row.
+
+
 ### 2026-07-10 — 🔗 Fix: broken `http:///leads/...` links in notification emails ✅ DONE
 - **Root cause**: notification emails embedded a RELATIVE href (`/leads/<id>`), which mail clients resolve to an invalid `http:///leads/<id>` (empty host → "Redirect Notice").
 - **Fix**: build ABSOLUTE links. Added `_current_base_url` ContextVar + `set_current_base_url_from_request()` / `get_current_base_url()` / `to_absolute_url()` in `core/tenant.py`; the tenant middleware now captures the public host from the ingress `X-Forwarded-Proto`/`X-Forwarded-Host` headers each request. `utils/notify.py` email builder now uses `to_absolute_url(link)`. This works in BOTH preview and production automatically (uses the actual request host), with `APP_BASE_URL` env as fallback.
