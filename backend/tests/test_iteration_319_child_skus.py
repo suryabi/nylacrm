@@ -21,6 +21,7 @@ PASSWORD = "test123"
 PARENT_SKU_ID = "8bc87348-5398-4604-92d8-eff59610b7f9"  # 24 Brand
 
 created_ids: list[str] = []
+_assoc_state: dict = {}  # temp account↔SKU association added by the test (restored in teardown)
 
 
 @pytest.fixture(scope="module")
@@ -38,6 +39,16 @@ def client():
     for cid in created_ids:
         try:
             s.delete(f"{BASE_URL}/api/child-skus/{cid}", timeout=15)
+        except Exception:
+            pass
+    # Restore the account's original sku_pricing if we temporarily associated it
+    if _assoc_state.get("account_id"):
+        try:
+            s.put(
+                f"{BASE_URL}/api/accounts/{_assoc_state['account_id']}",
+                json={"sku_pricing": _assoc_state["original_pricing"]},
+                timeout=15,
+            )
         except Exception:
             pass
 
@@ -121,22 +132,55 @@ def test_child_sku_customer_requires_account_id(client):
 
 
 def test_child_sku_customer_happy_path_and_dup_checks(client):
-    # get an account
-    r = client.get(f"{BASE_URL}/api/accounts?page=1&page_size=100", timeout=30)
+    # Eligible accounts = accounts already associated with the parent SKU via sku_pricing
+    r = client.get(f"{BASE_URL}/api/child-skus/eligible-accounts?parent_sku_id={PARENT_SKU_ID}", timeout=30)
     assert r.status_code == 200, r.text
     body = r.json()
-    accs = body.get("data") or body.get("accounts") or []
-    assert accs, "no accounts available"
-    acc = accs[0]
-    acc_id = acc.get("id") or acc.get("account_id")
+    parent_code = body.get("parent_code")
+    assert parent_code, "eligible-accounts must return parent_code"
+    eligible = body.get("accounts") or []
 
+    if not eligible:
+        # Associate the first account with the parent SKU (restored in teardown)
+        r = client.get(f"{BASE_URL}/api/accounts?page=1&page_size=5", timeout=30)
+        accs = r.json().get("data") or []
+        assert accs, "no accounts available"
+        acc = accs[0]
+        _assoc_state["account_id"] = acc["id"]
+        _assoc_state["original_pricing"] = acc.get("sku_pricing") or []
+        new_pricing = _assoc_state["original_pricing"] + [
+            {"sku_id": PARENT_SKU_ID, "sku": "24 Brand", "price_per_unit": 1.0}
+        ]
+        r = client.put(f"{BASE_URL}/api/accounts/{acc['id']}", json={"sku_pricing": new_pricing}, timeout=30)
+        assert r.status_code == 200, r.text
+        r = client.get(f"{BASE_URL}/api/child-skus/eligible-accounts?parent_sku_id={PARENT_SKU_ID}", timeout=30)
+        eligible = r.json().get("accounts") or []
+        assert eligible, "account should now be eligible"
+
+    acc = eligible[0]
+    acc_id = acc["id"]
+
+    # An account NOT associated with the parent SKU must be rejected
+    r = client.get(f"{BASE_URL}/api/accounts?page=1&page_size=100", timeout=30)
+    all_accs = r.json().get("data") or []
+    eligible_ids = {a["id"] for a in eligible}
+    outsider = next((a for a in all_accs if a["id"] not in eligible_ids), None)
+    if outsider:
+        r = client.post(f"{BASE_URL}/api/child-skus", json={
+            "parent_sku_id": PARENT_SKU_ID,
+            "child_sku_name": "TEST_24B_Outsider_319",
+            "child_type": "customer",
+            "customer_account_id": outsider["id"],
+        }, timeout=30)
+        assert r.status_code == 400
+        assert "not associated" in r.text.lower()
+
+    # Happy path — no child_sku_code sent → auto-generated from parent code + account code
     payload = {
         "parent_sku_id": PARENT_SKU_ID,
         "child_sku_name": "TEST_24B_CustA_319",
-        "child_sku_code": "TEST-24B-CUSTA-319",
         "child_type": "customer",
         "customer_account_id": acc_id,
-        "customer_brand_name": "AquaX",
         "label_version": "v1",
     }
     r = client.post(f"{BASE_URL}/api/child-skus", json=payload, timeout=30)
@@ -145,16 +189,19 @@ def test_child_sku_customer_happy_path_and_dup_checks(client):
     assert data["child_type"] == "customer"
     assert data["customer_account_id"] == acc_id
     assert data["customer_account_name"], "customer_account_name must be denormalized"
+    assert data["child_sku_code"].startswith(f"{parent_code}-"), f"auto code should start with parent code: {data['child_sku_code']}"
+    if acc.get("account_id"):
+        assert acc["account_id"] in data["child_sku_code"]
     created_ids.append(data["id"])
 
-    # duplicate code
-    dup_code = dict(payload, child_sku_name="TEST_dup_name_319")
+    # duplicate explicit code
+    dup_code = dict(payload, child_sku_name="TEST_dup_name_319", child_sku_code=data["child_sku_code"])
     r = client.post(f"{BASE_URL}/api/child-skus", json=dup_code, timeout=30)
     assert r.status_code == 400
     assert "code" in r.text.lower()
 
-    # duplicate name (different code)
-    dup_name = dict(payload, child_sku_code="TEST-OTHER-319")
+    # duplicate name (auto code would differ)
+    dup_name = dict(payload)
     r = client.post(f"{BASE_URL}/api/child-skus", json=dup_name, timeout=30)
     assert r.status_code == 400
     assert "already exists" in r.text.lower()

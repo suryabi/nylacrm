@@ -35,10 +35,9 @@ def _now_iso() -> str:
 class ChildSkuCreate(BaseModel):
     parent_sku_id: str
     child_sku_name: str
-    child_sku_code: str
+    child_sku_code: Optional[str] = None  # auto-generated from parent code + account code when omitted
     child_type: str  # 'generic' | 'customer'
     customer_account_id: Optional[str] = None
-    customer_brand_name: Optional[str] = None
     branding_type: Optional[str] = None
     label_version: Optional[str] = None
     is_active: bool = True
@@ -48,7 +47,6 @@ class ChildSkuUpdate(BaseModel):
     child_sku_name: Optional[str] = None
     child_sku_code: Optional[str] = None
     customer_account_id: Optional[str] = None
-    customer_brand_name: Optional[str] = None
     branding_type: Optional[str] = None
     label_version: Optional[str] = None
     is_active: Optional[bool] = None
@@ -79,10 +77,28 @@ def _sku_association_filter(parent: dict) -> dict:
     ]}
 
 
+def _parent_code(parent: dict) -> str:
+    code = (parent.get("external_sku_id") or "").strip()
+    if code:
+        return code.upper()
+    return "".join(ch for ch in (parent.get("sku_name") or "SKU").upper() if ch.isalnum())[:8]
+
+
+async def _generate_child_code(tdb, parent: dict, account: Optional[dict]) -> str:
+    suffix = "GEN" if account is None else (account.get("account_id") or "".join(
+        ch for ch in (account.get("account_name") or "CUST").upper() if ch.isalnum())[:8])
+    base = f"{_parent_code(parent)}-{suffix}"
+    code, n = base, 1
+    while await tdb.child_skus.find_one({"child_sku_code": code}, {"_id": 1}):
+        n += 1
+        code = f"{base}-{n}"
+    return code
+
+
 async def _ensure_account_linked_to_parent(tdb, account_ref: str, parent: dict) -> dict:
     account = await tdb.accounts.find_one(
         {"$or": [{"id": account_ref}, {"account_id": account_ref}]},
-        {"_id": 0, "id": 1, "account_name": 1, "sku_pricing": 1},
+        {"_id": 0, "id": 1, "account_id": 1, "account_name": 1, "sku_pricing": 1},
     )
     if not account:
         raise HTTPException(status_code=404, detail="Customer account not found")
@@ -106,9 +122,9 @@ async def list_eligible_accounts(parent_sku_id: str, current_user: dict = Depend
     tdb = get_tenant_db()
     rows = await tdb.accounts.find(
         _sku_association_filter(parent),
-        {"_id": 0, "id": 1, "account_name": 1, "city": 1, "state": 1, "territory": 1},
+        {"_id": 0, "id": 1, "account_id": 1, "account_name": 1, "city": 1, "state": 1, "territory": 1},
     ).sort("account_name", 1).to_list(1000)
-    return {"accounts": rows}
+    return {"accounts": rows, "parent_code": _parent_code(parent)}
 
 
 @router.get("")
@@ -150,17 +166,14 @@ async def create_child_sku(payload: ChildSkuCreate, current_user: dict = Depends
         )
 
     name = payload.child_sku_name.strip()
-    code = payload.child_sku_code.strip()
-    if not name or not code:
-        raise HTTPException(status_code=400, detail="Child SKU name and code are required")
+    if not name:
+        raise HTTPException(status_code=400, detail="Child SKU name is required")
 
-    # Uniqueness: code per tenant, name per parent
-    if await tdb.child_skus.find_one({"child_sku_code": code}):
-        raise HTTPException(status_code=400, detail=f"Child SKU code '{code}' is already in use")
     if await tdb.child_skus.find_one({"parent_sku_id": payload.parent_sku_id, "child_sku_name": name}):
         raise HTTPException(status_code=400, detail=f"Child SKU '{name}' already exists under this parent")
 
     customer_name = None
+    account = None
     if payload.child_type == "customer":
         if not payload.customer_account_id:
             raise HTTPException(status_code=400, detail="A customer account is required for a customer-specific child SKU")
@@ -175,6 +188,14 @@ async def create_child_sku(payload: ChildSkuCreate, current_user: dict = Depends
                 detail=f"A generic child SKU ('{existing_generic.get('child_sku_name')}') already exists under this parent",
             )
 
+    # Code: auto-generated from parent code + account code (manual override allowed)
+    code = (payload.child_sku_code or "").strip()
+    if code:
+        if await tdb.child_skus.find_one({"child_sku_code": code}):
+            raise HTTPException(status_code=400, detail=f"Child SKU code '{code}' is already in use")
+    else:
+        code = await _generate_child_code(tdb, parent, account)
+
     doc = {
         "id": str(uuid.uuid4()),
         "parent_sku_id": payload.parent_sku_id,
@@ -184,7 +205,6 @@ async def create_child_sku(payload: ChildSkuCreate, current_user: dict = Depends
         "child_type": payload.child_type,
         "customer_account_id": payload.customer_account_id if payload.child_type == "customer" else None,
         "customer_account_name": customer_name,
-        "customer_brand_name": payload.customer_brand_name,
         "branding_type": payload.branding_type,
         "label_version": payload.label_version,
         "artwork_storage_path": None,

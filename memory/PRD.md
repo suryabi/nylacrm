@@ -1533,6 +1533,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Children inherit product info dynamically from parent and structurally carry NO pricing; pricing/production/invoicing stay on the parent master SKU.
 - Validations: children only when toggle on; toggle can't turn off while children exist; unique code per tenant; unique name per parent; customer required for customer type; delete → deactivate when transaction history exists (future-proofed for Phase 2/3).
 - Frontend: toggle in SKU form + Parent badge + "Child SKUs (n)" button opening `ChildSkuManager.js` dialog (list, create/edit, artwork upload/download, deactivate/reactivate) on `/sku-management`.
+- Refinements (same session): Customer Account picker is an autocomplete combobox listing ONLY accounts associated with the parent SKU (via `accounts.sku_pricing`, `GET /child-skus/eligible-accounts`, enforced server-side too); Customer Brand Name field removed (lives on Account); child SKU code AUTO-GENERATED as `{PARENT_CODE}-{ACCOUNT_CODE}` (generic → `{PARENT_CODE}-GEN`; parent code = external_sku_id or sanitized name; collision suffix -2, -3…), read-only preview in UI.
 - Tested: iteration_319 — backend 9/9 pytest, frontend E2E 100%. Regression file: `/app/backend/tests/test_iteration_319_child_skus.py`.
 - User decisions: Phase 1 only for now; rebranding approval flow NOT wanted yet; fulfilment (Phase 3) may use customer child OR generic OR unbranded stock (all three allowed).
 

@@ -28,7 +28,6 @@ const emptyForm = {
   child_sku_code: '',
   child_type: 'customer',
   customer_account_id: '',
-  customer_brand_name: '',
   branding_type: '',
   label_version: '',
   is_active: true,
@@ -42,6 +41,7 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState([]);
+  const [parentCode, setParentCode] = useState('');
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
   const [uploadingId, setUploadingId] = useState(null);
 
@@ -69,6 +69,7 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
     try {
       const res = await childSkusAPI.eligibleAccounts(sku.id);
       setAccounts(res.data.accounts || []);
+      setParentCode(res.data.parent_code || '');
     } catch { /* ignore */ }
   };
 
@@ -85,7 +86,6 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
       child_sku_code: child.child_sku_code || '',
       child_type: child.child_type || 'customer',
       customer_account_id: child.customer_account_id || '',
-      customer_brand_name: child.customer_brand_name || '',
       branding_type: child.branding_type || '',
       label_version: child.label_version || '',
       is_active: child.is_active !== false,
@@ -95,7 +95,6 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
 
   const handleSave = async () => {
     if (!form.child_sku_name.trim()) { toast.error('Child SKU name is required'); return; }
-    if (!form.child_sku_code.trim()) { toast.error('Child SKU code is required'); return; }
     if (form.child_type === 'customer' && !form.customer_account_id) {
       toast.error('Select the customer account for this child SKU');
       return;
@@ -105,8 +104,6 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
       if (editing) {
         const payload = {
           child_sku_name: form.child_sku_name,
-          child_sku_code: form.child_sku_code,
-          customer_brand_name: form.customer_brand_name || null,
           branding_type: form.branding_type || null,
           label_version: form.label_version || null,
           is_active: form.is_active,
@@ -120,10 +117,8 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
         await childSkusAPI.create({
           parent_sku_id: sku.id,
           child_sku_name: form.child_sku_name,
-          child_sku_code: form.child_sku_code,
           child_type: form.child_type,
           customer_account_id: form.child_type === 'customer' ? form.customer_account_id : null,
-          customer_brand_name: form.customer_brand_name || null,
           branding_type: form.branding_type || null,
           label_version: form.label_version || null,
           is_active: form.is_active,
@@ -246,7 +241,6 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
                         {c.is_active === false && <Badge variant="outline" className="text-red-600 border-red-300 text-[10px]">Inactive</Badge>}
                       </div>
                       <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
-                        {c.customer_brand_name && <span>Brand: {c.customer_brand_name}</span>}
                         {c.branding_type && <span>Branding: {c.branding_type}</span>}
                         {c.label_version && <span>Label v: {c.label_version}</span>}
                         {c.artwork_file_name && (
@@ -299,14 +293,19 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Child SKU Code *</Label>
+                <Label>Child SKU Code</Label>
                 <Input
-                  value={form.child_sku_code}
-                  onChange={(e) => setForm({ ...form, child_sku_code: e.target.value })}
-                  placeholder="e.g. 24B-CUSTA"
-                  className="font-mono text-sm"
+                  value={editing
+                    ? form.child_sku_code
+                    : `${parentCode || 'SKU'}-${form.child_type === 'generic'
+                        ? 'GEN'
+                        : (accounts.find((a) => a.id === form.customer_account_id)?.account_id || '…')}`}
+                  readOnly
+                  disabled
+                  className="font-mono text-sm bg-muted"
                   data-testid="child-sku-code-input"
                 />
+                <p className="text-[10px] text-muted-foreground">Auto-generated from the parent SKU code and the account code.</p>
               </div>
             </div>
 
@@ -384,16 +383,7 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Customer Brand Name</Label>
-                <Input
-                  value={form.customer_brand_name}
-                  onChange={(e) => setForm({ ...form, customer_brand_name: e.target.value })}
-                  placeholder="e.g. AquaFresh"
-                  data-testid="child-sku-brand-input"
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Branding Type</Label>
                 <Input
