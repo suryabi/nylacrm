@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { skusAPI } from '../utils/api';
+import { skusAPI, childSkusAPI } from '../utils/api';
+import { ChildSkuManager } from '../components/ChildSkuManager';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -12,7 +13,7 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { 
   Package, Plus, Pencil, Trash2, Loader2, Save, X, 
-  Search, Filter, ArrowUpDown, Check, RefreshCcw, Link2
+  Search, Filter, ArrowUpDown, Check, RefreshCcw, Link2, GitBranch
 } from 'lucide-react';
 import {
   Select,
@@ -88,6 +89,10 @@ export default function SKUManagement() {
   const [showModal, setShowModal] = useState(false);
   const [editingSku, setEditingSku] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  // Child SKU manager state
+  const [childCounts, setChildCounts] = useState({});
+  const [childSkuTarget, setChildSkuTarget] = useState(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -103,6 +108,7 @@ export default function SKUManagement() {
     standard_price: '',
     return_bottle_credit: '',
     allow_custom_mrp: false,
+    allows_child_skus: false,
     is_active: true,
     sort_order: 0,
     packaging_config: { master: [], production: [], stock_in: [], stock_out: [], promo_stock_out: [] },
@@ -136,7 +142,19 @@ export default function SKUManagement() {
     fetchCategories();
     fetchPackagingTypes();
     fetchCogsComponents();
+    fetchChildCounts();
   }, [showInactive]);
+
+  const fetchChildCounts = async () => {
+    try {
+      const res = await childSkusAPI.getAll(null, true);
+      const counts = {};
+      (res.data.child_skus || []).forEach((c) => {
+        counts[c.parent_sku_id] = (counts[c.parent_sku_id] || 0) + 1;
+      });
+      setChildCounts(counts);
+    } catch { /* ignore */ }
+  };
 
   const fetchSkus = async () => {
     setLoading(true);
@@ -186,6 +204,7 @@ export default function SKUManagement() {
       standard_price: '',
       return_bottle_credit: '',
       allow_custom_mrp: false,
+      allows_child_skus: false,
       is_active: true, sort_order: skus.length + 1,
       packaging_config: { master: [], production: [], stock_in: [], stock_out: [], promo_stock_out: [] },
       cogs_components_values: {},
@@ -208,6 +227,7 @@ export default function SKUManagement() {
       standard_price: sku.standard_price != null ? String(sku.standard_price) : '',
       return_bottle_credit: sku.return_bottle_credit != null ? String(sku.return_bottle_credit) : '',
       allow_custom_mrp: !!sku.allow_custom_mrp,
+      allows_child_skus: !!sku.allows_child_skus,
       is_active: sku.is_active !== false,
       sort_order: sku.sort_order || 0,
       packaging_config: normalizePkgConfig(sku.packaging_config),
@@ -566,6 +586,15 @@ export default function SKUManagement() {
                             ext: {sku.external_sku_id}
                           </span>
                         )}
+                        {sku.allows_child_skus && (
+                          <Badge
+                            className="bg-orange-100 text-orange-800 hover:bg-orange-100 text-[10px]"
+                            title="Parent master SKU — customer-specific child SKUs allowed"
+                            data-testid={`sku-parent-badge-${sku.id}`}
+                          >
+                            Parent
+                          </Badge>
+                        )}
                         {sku.is_active === false && (
                           <Badge variant="outline" className="text-red-600 border-red-300">
                             Inactive
@@ -611,6 +640,18 @@ export default function SKUManagement() {
                         </>
                       ) : (
                         <>
+                          {sku.allows_child_skus && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setChildSkuTarget(sku)}
+                              className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+                              data-testid={`manage-child-skus-${sku.id}`}
+                            >
+                              <GitBranch className="h-4 w-4 mr-1" />
+                              Child SKUs ({childCounts[sku.id] || 0})
+                            </Button>
+                          )}
                           <Button
                             size="icon"
                             variant="ghost"
@@ -989,6 +1030,24 @@ export default function SKUManagement() {
                 </p>
               </div>
             </div>
+
+            {/* Allows customer-specific child SKUs (parent master SKU) */}
+            <div className="rounded-lg border border-orange-200 bg-orange-50/60 px-3 py-2.5 flex items-start gap-3">
+              <Switch
+                checked={formData.allows_child_skus}
+                onCheckedChange={(checked) => setFormData({ ...formData, allows_child_skus: checked })}
+                data-testid="sku-allows-child-skus-toggle"
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <Label className="text-sm font-medium cursor-pointer" onClick={() => setFormData({ ...formData, allows_child_skus: !formData.allows_child_skus })}>
+                  Allows Customer-Specific Child SKUs
+                </Label>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  When on, this SKU acts as the parent master SKU — customer-specific (or one generic) child SKUs can be created under it for inventory classification, fulfilment and traceability. Pricing and production always stay on this parent SKU. Cannot be turned off while child SKUs exist.
+                </p>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>
@@ -1005,6 +1064,14 @@ export default function SKUManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Child SKU manager */}
+      <ChildSkuManager
+        sku={childSkuTarget}
+        open={!!childSkuTarget}
+        onClose={() => setChildSkuTarget(null)}
+        onChanged={fetchChildCounts}
+      />
       </div>
     </div>
   );

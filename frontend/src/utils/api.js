@@ -130,6 +130,25 @@ export const skusAPI = {
   getCategories: () => axios.get(`${API_URL}/sku-categories`, { headers: getAuthHeaders() }),
 };
 
+// Customer-Specific Child SKUs (parent/child SKU classification)
+export const childSkusAPI = {
+  getAll: (parentSkuId = null, includeInactive = true) => {
+    const qp = new URLSearchParams();
+    if (parentSkuId) qp.append('parent_sku_id', parentSkuId);
+    qp.append('include_inactive', includeInactive);
+    return axios.get(`${API_URL}/child-skus?${qp.toString()}`, { headers: getAuthHeaders() });
+  },
+  create: (data) => axios.post(`${API_URL}/child-skus`, data, { headers: getAuthHeaders() }),
+  update: (id, data) => axios.put(`${API_URL}/child-skus/${id}`, data, { headers: getAuthHeaders() }),
+  delete: (id) => axios.delete(`${API_URL}/child-skus/${id}`, { headers: getAuthHeaders() }),
+  uploadArtwork: (id, file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return axios.post(`${API_URL}/child-skus/${id}/artwork`, fd, { headers: getAuthHeaders() });
+  },
+  downloadArtwork: (id) => axios.get(`${API_URL}/child-skus/${id}/artwork`, { headers: getAuthHeaders(), responseType: 'blob' }),
+};
+
 // Files & Documents API
 export const filesAPI = {
   // Categories

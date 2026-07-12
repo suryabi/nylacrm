@@ -1,0 +1,413 @@
+import React, { useEffect, useState } from 'react';
+import { childSkusAPI, accountsAPI } from '../utils/api';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Badge } from './ui/badge';
+import { Switch } from './ui/switch';
+import { toast } from 'sonner';
+import {
+  Loader2, Plus, Pencil, Trash2, Save, ArrowLeft, GitBranch,
+  Upload, Download, FileCheck2, Check,
+} from 'lucide-react';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from './ui/select';
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from './ui/dialog';
+
+const emptyForm = {
+  child_sku_name: '',
+  child_sku_code: '',
+  child_type: 'customer',
+  customer_account_id: '',
+  customer_brand_name: '',
+  branding_type: '',
+  label_version: '',
+  is_active: true,
+};
+
+export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
+  const [children, setChildren] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [view, setView] = useState('list'); // 'list' | 'form'
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+  const [accountSearch, setAccountSearch] = useState('');
+  const [uploadingId, setUploadingId] = useState(null);
+
+  useEffect(() => {
+    if (open && sku) {
+      fetchChildren();
+      fetchAccounts('');
+      setView('list');
+    }
+  }, [open, sku?.id]);
+
+  const fetchChildren = async () => {
+    setLoading(true);
+    try {
+      const res = await childSkusAPI.getAll(sku.id, true);
+      setChildren(res.data.child_skus || []);
+    } catch {
+      toast.error('Failed to load child SKUs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchAccounts = async (search) => {
+    try {
+      const res = await accountsAPI.getAll({ page: 1, pageSize: 100, search: search || undefined });
+      setAccounts(res.data.data || []);
+    } catch { /* ignore */ }
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ ...emptyForm, child_sku_name: `${sku.sku_name} – ` });
+    setView('form');
+  };
+
+  const openEdit = (child) => {
+    setEditing(child);
+    setForm({
+      child_sku_name: child.child_sku_name || '',
+      child_sku_code: child.child_sku_code || '',
+      child_type: child.child_type || 'customer',
+      customer_account_id: child.customer_account_id || '',
+      customer_brand_name: child.customer_brand_name || '',
+      branding_type: child.branding_type || '',
+      label_version: child.label_version || '',
+      is_active: child.is_active !== false,
+    });
+    setView('form');
+  };
+
+  const handleSave = async () => {
+    if (!form.child_sku_name.trim()) { toast.error('Child SKU name is required'); return; }
+    if (!form.child_sku_code.trim()) { toast.error('Child SKU code is required'); return; }
+    if (form.child_type === 'customer' && !form.customer_account_id) {
+      toast.error('Select the customer account for this child SKU');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editing) {
+        const payload = {
+          child_sku_name: form.child_sku_name,
+          child_sku_code: form.child_sku_code,
+          customer_brand_name: form.customer_brand_name || null,
+          branding_type: form.branding_type || null,
+          label_version: form.label_version || null,
+          is_active: form.is_active,
+        };
+        if (form.child_type === 'customer' && form.customer_account_id !== editing.customer_account_id) {
+          payload.customer_account_id = form.customer_account_id;
+        }
+        await childSkusAPI.update(editing.id, payload);
+        toast.success('Child SKU updated');
+      } else {
+        await childSkusAPI.create({
+          parent_sku_id: sku.id,
+          child_sku_name: form.child_sku_name,
+          child_sku_code: form.child_sku_code,
+          child_type: form.child_type,
+          customer_account_id: form.child_type === 'customer' ? form.customer_account_id : null,
+          customer_brand_name: form.customer_brand_name || null,
+          branding_type: form.branding_type || null,
+          label_version: form.label_version || null,
+          is_active: form.is_active,
+        });
+        toast.success('Child SKU created');
+      }
+      setView('list');
+      fetchChildren();
+      onChanged?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to save child SKU');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (child) => {
+    if (!window.confirm(`Delete child SKU "${child.child_sku_name}"?\n\nIf it has transaction history it will be deactivated instead.`)) return;
+    try {
+      const res = await childSkusAPI.delete(child.id);
+      toast.success(res.data.message);
+      fetchChildren();
+      onChanged?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to delete child SKU');
+    }
+  };
+
+  const handleReactivate = async (child) => {
+    try {
+      await childSkusAPI.update(child.id, { is_active: true });
+      toast.success('Child SKU reactivated');
+      fetchChildren();
+      onChanged?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to reactivate');
+    }
+  };
+
+  const handleArtworkUpload = async (child, file) => {
+    if (!file) return;
+    setUploadingId(child.id);
+    try {
+      await childSkusAPI.uploadArtwork(child.id, file);
+      toast.success('Artwork uploaded');
+      fetchChildren();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to upload artwork');
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  const handleArtworkDownload = async (child) => {
+    try {
+      const res = await childSkusAPI.downloadArtwork(child.id);
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = child.artwork_file_name || 'artwork';
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to download artwork');
+    }
+  };
+
+  const filteredAccounts = accounts;
+
+  if (!sku) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="sm:max-w-[680px] max-h-[90vh] overflow-y-auto" data-testid="child-sku-manager-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <GitBranch className="h-5 w-5 text-orange-600" />
+            Child SKUs — {sku.sku_name}
+          </DialogTitle>
+          <DialogDescription>
+            Customer-specific classifications under this parent SKU. Pricing &amp; production always stay on the parent; children are used for inventory classification, fulfilment and traceability.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Inherited info from parent */}
+        <div className="rounded-lg border border-orange-200/70 bg-orange-50/50 dark:bg-orange-900/10 px-3 py-2 text-xs text-slate-600 dark:text-slate-300 flex flex-wrap gap-x-4 gap-y-1" data-testid="child-sku-inherited-info">
+          <span className="font-semibold text-orange-700 dark:text-orange-400">Inherited from parent:</span>
+          <span>Category: {sku.category}</span>
+          <span>Unit: {sku.unit}</span>
+          <span>Base UOM: {sku.base_uom || 'Bottle'}</span>
+          {sku.hsn_code && <span>HSN: {sku.hsn_code}</span>}
+          <span>Pricing source: {sku.sku_name}</span>
+        </div>
+
+        {view === 'list' ? (
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              <Button size="sm" onClick={openCreate} data-testid="add-child-sku-btn" className="bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white">
+                <Plus className="h-4 w-4 mr-1" /> Add Child SKU
+              </Button>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-orange-500" /></div>
+            ) : children.length === 0 ? (
+              <div className="text-center py-8 text-sm text-muted-foreground border rounded-lg" data-testid="no-child-skus">
+                No child SKUs yet. Create a generic or customer-specific child under {sku.sku_name}.
+              </div>
+            ) : (
+              <div className="border rounded-lg divide-y">
+                {children.map((c) => (
+                  <div key={c.id} className={`px-3 py-2.5 flex items-center justify-between gap-2 ${c.is_active === false ? 'opacity-50 bg-red-50/30' : ''}`} data-testid={`child-sku-row-${c.id}`}>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{c.child_sku_name}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border">{c.child_sku_code}</span>
+                        {c.child_type === 'generic' ? (
+                          <Badge variant="outline" className="text-[10px] text-slate-600">Generic</Badge>
+                        ) : (
+                          <Badge className="text-[10px] bg-blue-100 text-blue-800 hover:bg-blue-100">{c.customer_account_name || 'Customer'}</Badge>
+                        )}
+                        {c.is_active === false && <Badge variant="outline" className="text-red-600 border-red-300 text-[10px]">Inactive</Badge>}
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5 flex-wrap">
+                        {c.customer_brand_name && <span>Brand: {c.customer_brand_name}</span>}
+                        {c.branding_type && <span>Branding: {c.branding_type}</span>}
+                        {c.label_version && <span>Label v: {c.label_version}</span>}
+                        {c.artwork_file_name && (
+                          <button type="button" onClick={() => handleArtworkDownload(c)} className="inline-flex items-center gap-1 text-emerald-700 hover:underline" data-testid={`download-artwork-${c.id}`}>
+                            <FileCheck2 className="h-3 w-3" /> {c.artwork_file_name}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <label className="cursor-pointer p-1.5 rounded hover:bg-muted text-slate-500" title={c.artwork_file_name ? 'Replace artwork / CDR file' : 'Upload artwork / CDR file'}>
+                        {uploadingId === c.id ? <Loader2 className="h-4 w-4 animate-spin" /> : c.artwork_file_name ? <Download className="h-4 w-4 hidden" /> : <Upload className="h-4 w-4" />}
+                        {uploadingId !== c.id && c.artwork_file_name && <Upload className="h-4 w-4" />}
+                        <input type="file" className="hidden" onChange={(e) => { handleArtworkUpload(c, e.target.files?.[0]); e.target.value = ''; }} data-testid={`upload-artwork-${c.id}`} />
+                      </label>
+                      {c.is_active === false ? (
+                        <Button size="sm" variant="outline" className="h-7 text-green-600" onClick={() => handleReactivate(c)} data-testid={`reactivate-child-sku-${c.id}`}>
+                          <Check className="h-3.5 w-3.5 mr-1" /> Reactivate
+                        </Button>
+                      ) : (
+                        <>
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(c)} data-testid={`edit-child-sku-${c.id}`}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => handleDelete(c)} data-testid={`delete-child-sku-${c.id}`}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Button variant="ghost" size="sm" onClick={() => setView('list')} className="-ml-2" data-testid="back-to-child-list-btn">
+              <ArrowLeft className="h-4 w-4 mr-1" /> Back to list
+            </Button>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Child SKU Name *</Label>
+                <Input
+                  value={form.child_sku_name}
+                  onChange={(e) => setForm({ ...form, child_sku_name: e.target.value })}
+                  placeholder={`e.g. ${sku.sku_name} – Customer A`}
+                  data-testid="child-sku-name-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Child SKU Code *</Label>
+                <Input
+                  value={form.child_sku_code}
+                  onChange={(e) => setForm({ ...form, child_sku_code: e.target.value })}
+                  placeholder="e.g. 24B-CUSTA"
+                  className="font-mono text-sm"
+                  data-testid="child-sku-code-input"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Type *</Label>
+                <Select
+                  value={form.child_type}
+                  onValueChange={(v) => setForm({ ...form, child_type: v, customer_account_id: v === 'generic' ? '' : form.customer_account_id })}
+                  disabled={!!editing}
+                >
+                  <SelectTrigger data-testid="child-sku-type-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="customer">Customer-specific</SelectItem>
+                    <SelectItem value="generic">Generic</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.child_type === 'customer' && (
+                <div className="space-y-2">
+                  <Label>Customer Account *</Label>
+                  <Select
+                    value={form.customer_account_id}
+                    onValueChange={(v) => setForm({ ...form, customer_account_id: v })}
+                  >
+                    <SelectTrigger data-testid="child-sku-account-select">
+                      <SelectValue placeholder="Select customer account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="p-2 sticky top-0 bg-popover">
+                        <Input
+                          placeholder="Search accounts..."
+                          value={accountSearch}
+                          onChange={(e) => { setAccountSearch(e.target.value); fetchAccounts(e.target.value); }}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          className="h-8"
+                          data-testid="child-sku-account-search"
+                        />
+                      </div>
+                      {filteredAccounts.map((a) => (
+                        <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>
+                      ))}
+                      {filteredAccounts.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">No accounts found</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Customer Brand Name</Label>
+                <Input
+                  value={form.customer_brand_name}
+                  onChange={(e) => setForm({ ...form, customer_brand_name: e.target.value })}
+                  placeholder="e.g. AquaFresh"
+                  data-testid="child-sku-brand-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Branding Type</Label>
+                <Input
+                  value={form.branding_type}
+                  onChange={(e) => setForm({ ...form, branding_type: e.target.value })}
+                  placeholder="e.g. Label / Shrink sleeve"
+                  data-testid="child-sku-branding-type-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Label Version</Label>
+                <Input
+                  value={form.label_version}
+                  onChange={(e) => setForm({ ...form, label_version: e.target.value })}
+                  placeholder="e.g. v2.1"
+                  data-testid="child-sku-label-version-input"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={form.is_active}
+                onCheckedChange={(v) => setForm({ ...form, is_active: v })}
+                data-testid="child-sku-active-toggle"
+              />
+              <span className="text-sm">{form.is_active ? 'Active' : 'Inactive'}</span>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground">
+              Artwork / CDR files can be attached from the list after saving. Child SKUs never carry their own pricing — all commercial documents use the parent SKU.
+            </p>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setView('list')}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving} data-testid="save-child-sku-btn">
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : <><Save className="h-4 w-4 mr-2" /> {editing ? 'Update' : 'Create'}</>}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};

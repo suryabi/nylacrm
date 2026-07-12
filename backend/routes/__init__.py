@@ -248,6 +248,14 @@ routes_router.include_router(
     tags=["Admin · Migrations · SKU"],
 )
 
+# Customer-Specific Child SKUs (parent/child SKU classification, Phase 1)
+from .child_skus import router as child_skus_router
+routes_router.include_router(
+    child_skus_router,
+    prefix="/child-skus",
+    tags=["Child SKUs"],
+)
+
 # Admin → SKU Aliases (map retired SKU codes/names to current master SKUs)
 from .sku_aliases import router as sku_aliases_router
 routes_router.include_router(

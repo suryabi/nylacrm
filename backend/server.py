@@ -1972,6 +1972,10 @@ class SKUModel(BaseModel):
     # False (default), the MRP field is hidden in account SKU pricing and
     # activation does not check MRP for rows referencing this SKU.
     allow_custom_mrp: bool = False
+    # When True, this SKU acts as a PARENT master SKU: customer-specific child
+    # SKUs can be created under it (inventory classification / fulfilment /
+    # traceability). Pricing & production always stay on this parent SKU.
+    allows_child_skus: bool = False
     is_active: bool = True
     sort_order: int = 0  # For custom ordering in dropdowns
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -1991,6 +1995,7 @@ class SKUCreate(BaseModel):
     standard_price: Optional[float] = None  # ₹ list/standard price shown struck-through in lead proposals
     return_bottle_credit: Optional[float] = None  # ₹ default credit per returned bottle (used in proposals)
     allow_custom_mrp: bool = False
+    allows_child_skus: bool = False
     is_active: bool = True
     sort_order: int = 0
     packaging_config: Optional[dict] = None  # {production: [{id,name,units,is_default}], stock_in: [...], stock_out: [...]}
@@ -2009,6 +2014,7 @@ class SKUUpdate(BaseModel):
     standard_price: Optional[float] = None  # ₹ list/standard price shown struck-through in lead proposals
     return_bottle_credit: Optional[float] = None  # ₹ default credit per returned bottle (used in proposals)
     allow_custom_mrp: Optional[bool] = None
+    allows_child_skus: Optional[bool] = None
     is_active: Optional[bool] = None
     sort_order: Optional[int] = None
     packaging_config: Optional[dict] = None
@@ -2074,6 +2080,7 @@ async def get_master_skus(
             'standard_price': sku.get('standard_price'),
             'return_bottle_credit': sku.get('return_bottle_credit'),
             'allow_custom_mrp': bool(sku.get('allow_custom_mrp', False)),
+            'allows_child_skus': bool(sku.get('allows_child_skus', False)),
             'is_active': sku.get('is_active', True),
             'sort_order': sku.get('sort_order', 0),
             'packaging_config': sku.get('packaging_config'),
@@ -2124,6 +2131,7 @@ async def create_sku(
         'standard_price': doc.get('standard_price'),
         'return_bottle_credit': doc.get('return_bottle_credit'),
         'allow_custom_mrp': bool(doc.get('allow_custom_mrp', False)),
+        'allows_child_skus': bool(doc.get('allows_child_skus', False)),
         'is_active': sku.is_active,
         'sort_order': sku.sort_order,
         'packaging_config': doc.get('packaging_config'),
@@ -2152,6 +2160,15 @@ async def update_sku(
         ext_dup = await db.master_skus.find_one({'external_sku_id': sku_data.external_sku_id, 'id': {'$ne': sku_id}})
         if ext_dup:
             raise HTTPException(status_code=400, detail=f"External SKU ID '{sku_data.external_sku_id}' is already used by another SKU")
+
+    # Block turning OFF "allows child SKUs" while child SKUs exist (any tenant)
+    if sku_data.allows_child_skus is False and existing.get('allows_child_skus'):
+        child_count = await db.child_skus.count_documents({'parent_sku_id': sku_id})
+        if child_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot disable child SKUs: {child_count} child SKU(s) exist under this parent. Delete or deactivate them first."
+            )
 
     update_dict = {k: v for k, v in sku_data.model_dump().items() if v is not None}
     # Merge (not replace) cogs_components_values dict
@@ -2225,6 +2242,7 @@ async def update_sku(
         'standard_price': updated.get('standard_price'),
         'return_bottle_credit': updated.get('return_bottle_credit'),
         'allow_custom_mrp': bool(updated.get('allow_custom_mrp', False)),
+        'allows_child_skus': bool(updated.get('allows_child_skus', False)),
         'is_active': updated.get('is_active', True),
         'sort_order': updated.get('sort_order', 0),
         'packaging_config': updated.get('packaging_config'),
