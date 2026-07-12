@@ -1527,6 +1527,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Best-effort: Zoho failure does not block the user's save; warning is logged. Manual edits flow to the Zoho contact in the background → next invoice picks up new Bill To / Ship To automatically.
 - Bonus fix in same session: removed per-invoice `billing_address` / `shipping_address` override from `create_invoice_for_delivery` so Zoho falls back to the contact defaults (eliminates the recurring "billing_address < 100 chars" 400).
 
+### 2026-06 (current) — SKU Hierarchy Phase 1: Parent & Customer-Specific Child SKUs ✅ DONE
+- Master SKUs now have an "Allows Customer-Specific Child SKUs" toggle (`allows_child_skus`, default No). Enabled for `24 Brand`.
+- New tenant-scoped `child_skus` collection + `/api/child-skus` CRUD (`routes/child_skus.py`): generic (max 1/parent) or customer children linked to Accounts; fields: name, code, type, customer, brand name, branding type, label version, artwork (Emergent object storage upload/download), active status.
+- Children inherit product info dynamically from parent and structurally carry NO pricing; pricing/production/invoicing stay on the parent master SKU.
+- Validations: children only when toggle on; toggle can't turn off while children exist; unique code per tenant; unique name per parent; customer required for customer type; delete → deactivate when transaction history exists (future-proofed for Phase 2/3).
+- Frontend: toggle in SKU form + Parent badge + "Child SKUs (n)" button opening `ChildSkuManager.js` dialog (list, create/edit, artwork upload/download, deactivate/reactivate) on `/sku-management`.
+- Tested: iteration_319 — backend 9/9 pytest, frontend E2E 100%. Regression file: `/app/backend/tests/test_iteration_319_child_skus.py`.
+- User decisions: Phase 1 only for now; rebranding approval flow NOT wanted yet; fulfilment (Phase 3) may use customer child OR generic OR unbranded stock (all three allowed).
+
 ### 2026-05-17 — P0 Fix: Tax & Billing manual edits no longer revert ✅ DONE
 - Root cause: `server.py` had a duplicate `@api_router.put("/accounts/{account_id}")` route registered BEFORE `routes/accounts.py`'s router was included, so it shadowed the newer endpoint. Its outdated `AccountUpdate` model did not list `gst_legal_name`, `gst_trade_name`, `pan_number`, `billing_address`, `delivery_contact_name`, `delivery_contact_phone` — Pydantic silently dropped them and the GST-cert parsed values stayed in Mongo.
 - Fix: Removed the duplicate route + obsolete `AccountUpdate` class from `server.py`. The full-featured route in `routes/accounts.py` now handles all PUT updates.
@@ -1543,6 +1552,10 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Zoho Template dropdown remount fix; Geo-fenced check-in; Account billed-by toggle; Zoho CN deferred-push; Account Detail invoice match; Revenue Report fix; Distributor CN deep-links; Account activation gating; Old Marketing Requests purge.
 
 ## Active backlog
+
+### P1 (SKU Hierarchy next phases — user approved design)
+- Phase 2: stock classification (child_sku_id on factory/distributor stock rows), Branding Entry screen (Unbranded → child), auto roll-up stock views with drill-down
+- Phase 3: delivery-order fulfilment classification (fulfilment_child_sku_id on items, customer-match validation, deduct from child stock; customer child / generic / unbranded all allowed)
 
 ### P1
 - Standardize `master_locations` as single source of truth for city spellings (recurring bug)
