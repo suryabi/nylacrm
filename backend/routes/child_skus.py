@@ -71,6 +71,46 @@ async def _get_parent(parent_sku_id: str) -> dict:
     return parent
 
 
+def _sku_association_filter(parent: dict) -> dict:
+    # Accounts are associated with a SKU via their sku_pricing rows
+    return {"$or": [
+        {"sku_pricing.sku_id": parent["id"]},
+        {"sku_pricing.sku": parent.get("sku_name")},
+    ]}
+
+
+async def _ensure_account_linked_to_parent(tdb, account_ref: str, parent: dict) -> dict:
+    account = await tdb.accounts.find_one(
+        {"$or": [{"id": account_ref}, {"account_id": account_ref}]},
+        {"_id": 0, "id": 1, "account_name": 1, "sku_pricing": 1},
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail="Customer account not found")
+    rows = account.get("sku_pricing") or []
+    linked = any(
+        r.get("sku_id") == parent["id"] or (r.get("sku") and r.get("sku") == parent.get("sku_name"))
+        for r in rows
+    )
+    if not linked:
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{account.get('account_name')}' is not associated with parent SKU '{parent.get('sku_name')}'. Add this SKU under Account Detail → SKU Pricing first.",
+        )
+    return account
+
+
+@router.get("/eligible-accounts")
+async def list_eligible_accounts(parent_sku_id: str, current_user: dict = Depends(get_current_user)):
+    """Accounts that already have the parent SKU in their SKU pricing."""
+    parent = await _get_parent(parent_sku_id)
+    tdb = get_tenant_db()
+    rows = await tdb.accounts.find(
+        _sku_association_filter(parent),
+        {"_id": 0, "id": 1, "account_name": 1, "city": 1, "state": 1, "territory": 1},
+    ).sort("account_name", 1).to_list(1000)
+    return {"accounts": rows}
+
+
 @router.get("")
 async def list_child_skus(
     parent_sku_id: Optional[str] = None,
@@ -124,12 +164,7 @@ async def create_child_sku(payload: ChildSkuCreate, current_user: dict = Depends
     if payload.child_type == "customer":
         if not payload.customer_account_id:
             raise HTTPException(status_code=400, detail="A customer account is required for a customer-specific child SKU")
-        account = await tdb.accounts.find_one(
-            {"$or": [{"id": payload.customer_account_id}, {"account_id": payload.customer_account_id}]},
-            {"_id": 0, "id": 1, "account_name": 1},
-        )
-        if not account:
-            raise HTTPException(status_code=404, detail="Customer account not found")
+        account = await _ensure_account_linked_to_parent(tdb, payload.customer_account_id, parent)
         customer_name = account.get("account_name")
     else:
         # Only one generic child per parent
@@ -198,12 +233,8 @@ async def update_child_sku(child_id: str, payload: ChildSkuUpdate, current_user:
                 status_code=400,
                 detail="This child SKU has transaction history — its customer cannot be changed. Use a rebranding process instead.",
             )
-        account = await tdb.accounts.find_one(
-            {"$or": [{"id": update["customer_account_id"]}, {"account_id": update["customer_account_id"]}]},
-            {"_id": 0, "id": 1, "account_name": 1},
-        )
-        if not account:
-            raise HTTPException(status_code=404, detail="Customer account not found")
+        parent = await _get_parent(existing["parent_sku_id"])
+        account = await _ensure_account_linked_to_parent(tdb, update["customer_account_id"], parent)
         update["customer_account_name"] = account.get("account_name")
 
     update["updated_at"] = _now_iso()

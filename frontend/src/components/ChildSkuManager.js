@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { childSkusAPI, accountsAPI } from '../utils/api';
+import { childSkusAPI } from '../utils/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -8,11 +8,17 @@ import { Switch } from './ui/switch';
 import { toast } from 'sonner';
 import {
   Loader2, Plus, Pencil, Trash2, Save, ArrowLeft, GitBranch,
-  Upload, Download, FileCheck2, Check,
+  Upload, Download, FileCheck2, Check, ChevronDown,
 } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from './ui/select';
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from './ui/popover';
+import {
+  Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem,
+} from './ui/command';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from './ui/dialog';
@@ -36,13 +42,13 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [accounts, setAccounts] = useState([]);
-  const [accountSearch, setAccountSearch] = useState('');
+  const [accountPickerOpen, setAccountPickerOpen] = useState(false);
   const [uploadingId, setUploadingId] = useState(null);
 
   useEffect(() => {
     if (open && sku) {
       fetchChildren();
-      fetchAccounts('');
+      fetchEligibleAccounts();
       setView('list');
     }
   }, [open, sku?.id]);
@@ -59,10 +65,10 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
     }
   };
 
-  const fetchAccounts = async (search) => {
+  const fetchEligibleAccounts = async () => {
     try {
-      const res = await accountsAPI.getAll({ page: 1, pageSize: 100, search: search || undefined });
-      setAccounts(res.data.data || []);
+      const res = await childSkusAPI.eligibleAccounts(sku.id);
+      setAccounts(res.data.accounts || []);
     } catch { /* ignore */ }
   };
 
@@ -184,8 +190,6 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
       toast.error('Failed to download artwork');
     }
   };
-
-  const filteredAccounts = accounts;
 
   if (!sku) return null;
 
@@ -326,32 +330,56 @@ export const ChildSkuManager = ({ sku, open, onClose, onChanged }) => {
               {form.child_type === 'customer' && (
                 <div className="space-y-2">
                   <Label>Customer Account *</Label>
-                  <Select
-                    value={form.customer_account_id}
-                    onValueChange={(v) => setForm({ ...form, customer_account_id: v })}
-                  >
-                    <SelectTrigger data-testid="child-sku-account-select">
-                      <SelectValue placeholder="Select customer account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <div className="p-2 sticky top-0 bg-popover">
-                        <Input
-                          placeholder="Search accounts..."
-                          value={accountSearch}
-                          onChange={(e) => { setAccountSearch(e.target.value); fetchAccounts(e.target.value); }}
-                          onKeyDown={(e) => e.stopPropagation()}
-                          className="h-8"
-                          data-testid="child-sku-account-search"
-                        />
-                      </div>
-                      {filteredAccounts.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>{a.account_name}</SelectItem>
-                      ))}
-                      {filteredAccounts.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-muted-foreground">No accounts found</div>
-                      )}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={accountPickerOpen} onOpenChange={setAccountPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between font-normal"
+                        data-testid="child-sku-account-select"
+                      >
+                        <span className={`truncate text-left ${!form.customer_account_id ? 'text-muted-foreground' : ''}`}>
+                          {accounts.find((a) => a.id === form.customer_account_id)?.account_name
+                            || (editing && form.customer_account_id === editing.customer_account_id ? editing.customer_account_name : null)
+                            || 'Select customer account'}
+                        </span>
+                        <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                      <Command filter={(value, search) => (value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}>
+                        <CommandInput placeholder="Search accounts..." data-testid="child-sku-account-search" />
+                        <CommandList className="max-h-[240px]">
+                          <CommandEmpty>
+                            <div className="px-3 py-2 text-xs text-muted-foreground text-left">
+                              No accounts are associated with <span className="font-medium">{sku.sku_name}</span>. Add this SKU under Account Detail → SKU Pricing first.
+                            </div>
+                          </CommandEmpty>
+                          <CommandGroup>
+                            {accounts.map((a) => {
+                              const subtitle = [a.city, a.state].filter(Boolean).join(', ');
+                              return (
+                                <CommandItem
+                                  key={a.id}
+                                  value={`${a.account_name} ${a.city || ''} ${a.territory || ''}`}
+                                  onSelect={() => { setForm({ ...form, customer_account_id: a.id }); setAccountPickerOpen(false); }}
+                                  className="flex items-start gap-2"
+                                  data-testid={`child-sku-account-option-${a.id}`}
+                                >
+                                  <Check className={`mt-0.5 h-4 w-4 shrink-0 ${form.customer_account_id === a.id ? 'opacity-100 text-emerald-600' : 'opacity-0'}`} />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium truncate">{a.account_name}</p>
+                                    {subtitle && <p className="text-xs text-muted-foreground truncate">{subtitle}</p>}
+                                  </div>
+                                </CommandItem>
+                              );
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-[10px] text-muted-foreground">Only accounts that already have {sku.sku_name} in their SKU pricing are listed.</p>
                 </div>
               )}
             </div>

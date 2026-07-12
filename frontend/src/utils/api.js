@@ -141,6 +141,7 @@ export const childSkusAPI = {
   create: (data) => axios.post(`${API_URL}/child-skus`, data, { headers: getAuthHeaders() }),
   update: (id, data) => axios.put(`${API_URL}/child-skus/${id}`, data, { headers: getAuthHeaders() }),
   delete: (id) => axios.delete(`${API_URL}/child-skus/${id}`, { headers: getAuthHeaders() }),
+  eligibleAccounts: (parentSkuId) => axios.get(`${API_URL}/child-skus/eligible-accounts?parent_sku_id=${parentSkuId}`, { headers: getAuthHeaders() }),
   uploadArtwork: (id, file) => {
     const fd = new FormData();
     fd.append('file', file);
