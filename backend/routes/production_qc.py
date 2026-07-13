@@ -78,6 +78,10 @@ class BatchCreate(BaseModel):
     # are populated for later reporting.
     skip_qc: bool = False
     skip_qc_reason: Optional[str] = None
+    # Optional Model-C branding target: production runs can pre-declare which
+    # child SKU (customer branding) the output is destined for. Used as the
+    # DEFAULT classification when transferring to the master warehouse.
+    target_child_sku_id: Optional[str] = None
 
 class WarehouseReset(BaseModel):
     """Payload for resetting all stock at master factory warehouses."""
@@ -98,6 +102,8 @@ class BatchUpdate(BaseModel):
     status: Optional[str] = None
     sku_id: Optional[str] = None
     sku_name: Optional[str] = None
+    # "" clears the target (back to Generic); a child id sets it; None = no change.
+    target_child_sku_id: Optional[str] = None
 
 class RejectionCostMappingUpsert(BaseModel):
     sku_id: str
@@ -119,6 +125,26 @@ class WarehouseTransfer(BaseModel):
     warehouse_location_id: str
     quantity: int  # crates to transfer
     notes: Optional[str] = None
+    # Classification of the transferred stock (Model C):
+    #   None (absent) → fall back to the batch's target_child_sku_id
+    #   ""            → force Generic (unbranded)
+    #   "<child_id>"  → that customer-branded child SKU
+    child_sku_id: Optional[str] = None
+
+
+async def _resolve_child_for_sku(tdb, child_sku_id: str, sku_id: str) -> dict:
+    """Validate a child SKU id: must exist, be active, and belong to `sku_id`."""
+    child = await tdb.child_skus.find_one({"id": child_sku_id}, {"_id": 0})
+    if not child:
+        raise HTTPException(status_code=404, detail="Child SKU not found")
+    if child.get("parent_sku_id") != sku_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Child SKU '{child.get('child_sku_name')}' does not belong to this batch's SKU.",
+        )
+    if child.get("is_active") is False:
+        raise HTTPException(status_code=400, detail=f"Child SKU '{child.get('child_sku_name')}' is inactive.")
+    return child
 
 
 # ──────────────────────────────────────────────
@@ -637,6 +663,11 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
     # Get QC route for this SKU
     qc_route = await tdb.qc_routes.find_one({"sku_id": sku_id, "tenant_id": tenant_id}, {"_id": 0})
 
+    # Optional Model-C branding target
+    target_child = None
+    if data.target_child_sku_id:
+        target_child = await _resolve_child_for_sku(tdb, data.target_child_sku_id, sku_id)
+
     total_bottles = data.total_crates * bottles_per_crate
     now = datetime.now(timezone.utc).isoformat()
 
@@ -680,6 +711,9 @@ async def create_batch(data: BatchCreate, current_user: dict = Depends(get_user_
         "total_rejected": 0,
         "total_passed_final": 0,
         "qc_bypassed": False,
+        "target_child_sku_id": target_child.get("id") if target_child else None,
+        "target_child_sku_name": target_child.get("child_sku_name") if target_child else None,
+        "target_child_sku_code": target_child.get("child_sku_code") if target_child else None,
         "created_by": current_user.get("id"),
         "created_by_name": current_user.get("name"),
         "created_at": now,
@@ -739,6 +773,19 @@ async def update_batch(batch_id: str, data: BatchUpdate, current_user: dict = De
             raise HTTPException(status_code=404, detail="Selected SKU not found")
         updates["sku_id"] = data.sku_id
         updates["sku_name"] = sku.get("sku_name") or sku.get("name") or data.sku_name or existing.get("sku_name")
+
+    # Target child SKU (Model C branding default): "" clears, id sets.
+    if data.target_child_sku_id is not None:
+        if data.target_child_sku_id == "":
+            updates["target_child_sku_id"] = None
+            updates["target_child_sku_name"] = None
+            updates["target_child_sku_code"] = None
+        else:
+            effective_sku_id = updates.get("sku_id") or existing.get("sku_id")
+            child = await _resolve_child_for_sku(tdb, data.target_child_sku_id, effective_sku_id)
+            updates["target_child_sku_id"] = child["id"]
+            updates["target_child_sku_name"] = child.get("child_sku_name")
+            updates["target_child_sku_code"] = child.get("child_sku_code")
 
     # Bottles-per-crate stays locked once QC has started (it changes bottle-level
     # math + warehouse transfers). Total crates, however, can be corrected at any
@@ -1994,6 +2041,17 @@ async def transfer_to_warehouse(
     # Trustworthy crate size (derives from SKU packaging if the batch lacks it)
     effective_bpc = await _effective_bottles_per_crate(tdb, batch)
 
+    # ── Resolve stock classification (Model C) ──
+    # None (absent) → batch's target child SKU; "" → force Generic; id → that child.
+    sku_id = batch.get("sku_id")
+    child = None
+    if data.child_sku_id is None:
+        if batch.get("target_child_sku_id"):
+            child = await _resolve_child_for_sku(tdb, batch["target_child_sku_id"], sku_id)
+    elif data.child_sku_id != "":
+        child = await _resolve_child_for_sku(tdb, data.child_sku_id, sku_id)
+    child_sku_id = child.get("id") if child else None
+
     # 1. Update batch: increment transferred_to_warehouse
     new_transferred = (batch.get("transferred_to_warehouse", 0) or 0) + data.quantity
     await tdb.production_batches.update_one(
@@ -2002,15 +2060,17 @@ async def transfer_to_warehouse(
     )
 
     # 2. Upsert factory_warehouse_stock (per warehouse + sku [+ batch when
-    #    the destination warehouse tracks batches]). Batch-keyed rows are
-    #    REQUIRED for shipments-out + deliveries to pick the right lineage.
-    sku_id = batch.get("sku_id")
+    #    the destination warehouse tracks batches] [+ child classification]).
+    #    Batch-keyed rows are REQUIRED for shipments-out + deliveries to pick
+    #    the right lineage. Child-keyed rows keep Generic vs customer-branded
+    #    stock separately traceable (Model C).
     sku_name = batch.get("sku_name")
     wh_tracks_batches = bool(warehouse.get("track_batches"))
     stock_query = {
         "tenant_id": tenant_id,
         "warehouse_location_id": data.warehouse_location_id,
         "sku_id": sku_id,
+        "child_sku_id": child_sku_id if child_sku_id else {"$in": [None]},
     }
     if wh_tracks_batches:
         stock_query["batch_id"] = batch_id
@@ -2023,6 +2083,9 @@ async def transfer_to_warehouse(
             # Keep bottles_per_crate in sync with the most recent batch so
             # the dashboard can convert bottles → crates accurately.
             "bottles_per_crate": batch.get("bottles_per_crate") or existing_stock.get("bottles_per_crate") or effective_bpc,
+            "child_sku_id": child_sku_id,
+            "child_sku_name": child.get("child_sku_name") if child else None,
+            "child_sku_code": child.get("child_sku_code") if child else None,
             "updated_at": now,
         }
         if wh_tracks_batches:
@@ -2042,6 +2105,9 @@ async def transfer_to_warehouse(
             "sku_name": sku_name,
             "quantity": data.quantity,  # stored in BOTTLES
             "bottles_per_crate": batch.get("bottles_per_crate") or effective_bpc,
+            "child_sku_id": child_sku_id,
+            "child_sku_name": child.get("child_sku_name") if child else None,
+            "child_sku_code": child.get("child_sku_code") if child else None,
             "created_at": now,
             "updated_at": now,
         }
@@ -2061,6 +2127,9 @@ async def transfer_to_warehouse(
         "warehouse_location_id": data.warehouse_location_id,
         "warehouse_name": warehouse.get("location_name"),
         "quantity": data.quantity,
+        "child_sku_id": child_sku_id,
+        "child_sku_name": child.get("child_sku_name") if child else None,
+        "child_sku_code": child.get("child_sku_code") if child else None,
         "notes": data.notes or "",
         "transferred_by": current_user.get("id"),
         "transferred_by_name": current_user.get("name"),

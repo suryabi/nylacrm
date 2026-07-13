@@ -71,6 +71,11 @@ class TransferItem(BaseModel):
     # tracks batches (so the chain of custody never breaks downstream).
     batch_id: Optional[str] = None
     batch_code: Optional[str] = None
+    # Stock classification (Model C parent/child SKU hierarchy). None = Generic
+    # (unbranded) stock; an id = that customer-branded child SKU. Deductions and
+    # credits are keyed per classification so branded stock stays traceable.
+    child_sku_id: Optional[str] = None
+    child_sku_name: Optional[str] = None
     # NOTE: Per-package rate is auto-derived from `master_skus.base_price`.
     # Any client-supplied value here is ignored — the server is the source of truth.
     rate: float = 0.0
@@ -211,6 +216,7 @@ async def _adjust_distributor_stock(tenant_id: str, distributor_id: str, locatio
     else:
         # Match the legacy row (no batch_id field set OR null)
         key["batch_id"] = {"$in": [None]}
+    key["child_sku_id"] = item.child_sku_id if item.child_sku_id else {"$in": [None]}
     on_insert = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -222,6 +228,8 @@ async def _adjust_distributor_stock(tenant_id: str, distributor_id: str, locatio
         "location_name": location_name,
         "batch_id": item.batch_id,
         "batch_code": item.batch_code,
+        "child_sku_id": item.child_sku_id,
+        "child_sku_name": item.child_sku_name,
         "created_at": now,
     }
     res = await db.distributor_stock.update_one(
@@ -249,6 +257,7 @@ async def _adjust_factory_stock(tenant_id: str, warehouse_location_id: str,
         key["batch_id"] = item.batch_id
     else:
         key["batch_id"] = {"$in": [None]}
+    key["child_sku_id"] = item.child_sku_id if item.child_sku_id else {"$in": [None]}
     on_insert = {
         "id": str(uuid.uuid4()),
         "tenant_id": tenant_id,
@@ -258,6 +267,8 @@ async def _adjust_factory_stock(tenant_id: str, warehouse_location_id: str,
         "sku_name": item.sku_name,
         "batch_id": item.batch_id,
         "batch_code": item.batch_code,
+        "child_sku_id": item.child_sku_id,
+        "child_sku_name": item.child_sku_name,
         "bottles_per_crate": int(item.units_per_package) if item.units_per_package else None,
         "created_at": now,
     }
@@ -285,14 +296,16 @@ async def _adjust_stock_for_location(tenant_id: str, location: dict, item: Trans
 
 async def _read_source_stock(tenant_id: str, source_loc: dict, sku_ids: list,
                               batch_ids: Optional[list] = None) -> dict:
-    """Return `{(sku_id, batch_id): {sku_name, batch_code, quantity}}` for the
-    source warehouse. Reads from `factory_warehouse_stock` for factory
-    warehouses, otherwise `distributor_stock`.
+    """Return stock keyed for availability checks at the source warehouse.
+    Reads from `factory_warehouse_stock` for factory warehouses, otherwise
+    `distributor_stock`.
 
-    When `batch_ids` is provided the result is keyed by (sku_id, batch_id);
-    otherwise the key is sku_id (legacy aggregate) — the caller decides which
-    shape it needs based on the source warehouse's `track_batches` flag.
+    Keys always include the child-SKU classification (None = Generic):
+      • with `batch_ids`     → {(sku_id, batch_id, child_sku_id): row}
+      • without (aggregate)  → {(sku_id, child_sku_id): row}
     """
+    proj = {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1,
+            "batch_code": 1, "child_sku_id": 1, "child_sku_name": 1}
     if source_loc.get("is_factory"):
         q: dict = {
             "tenant_id": tenant_id,
@@ -301,9 +314,7 @@ async def _read_source_stock(tenant_id: str, source_loc: dict, sku_ids: list,
         }
         if batch_ids:
             q["batch_id"] = {"$in": batch_ids}
-        rows = await db.factory_warehouse_stock.find(
-            q, {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1, "batch_code": 1},
-        ).to_list(len(sku_ids) * 50 + 1)
+        rows = await db.factory_warehouse_stock.find(q, proj).to_list(len(sku_ids) * 50 + 1)
     else:
         q = {
             "tenant_id": tenant_id,
@@ -313,17 +324,23 @@ async def _read_source_stock(tenant_id: str, source_loc: dict, sku_ids: list,
         }
         if batch_ids:
             q["batch_id"] = {"$in": batch_ids}
-        rows = await db.distributor_stock.find(
-            q, {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1, "batch_code": 1},
-        ).to_list(len(sku_ids) * 50 + 1)
+        rows = await db.distributor_stock.find(q, proj).to_list(len(sku_ids) * 50 + 1)
     if batch_ids:
-        return {(r["sku_id"], r.get("batch_id")): r for r in rows}
-    # Legacy aggregate: collapse all batches for the sku
+        out: dict = {}
+        for r in rows:
+            k = (r["sku_id"], r.get("batch_id"), r.get("child_sku_id") or None)
+            b = out.setdefault(k, {**r, "quantity": 0})
+            b["quantity"] += int(r.get("quantity") or 0)
+        return out
+    # Aggregate mode: collapse batches, keep classification separate
     aggregated: dict = {}
     for r in rows:
-        b = aggregated.setdefault(r["sku_id"], {"sku_id": r["sku_id"],
-                                                 "sku_name": r.get("sku_name"),
-                                                 "quantity": 0})
+        k = (r["sku_id"], r.get("child_sku_id") or None)
+        b = aggregated.setdefault(k, {"sku_id": r["sku_id"],
+                                      "sku_name": r.get("sku_name"),
+                                      "child_sku_id": r.get("child_sku_id"),
+                                      "child_sku_name": r.get("child_sku_name"),
+                                      "quantity": 0})
         b["quantity"] += int(r.get("quantity") or 0)
     return aggregated
 
@@ -550,13 +567,15 @@ async def list_batches_available(
         rows = await db.factory_warehouse_stock.find(
             {"tenant_id": tenant_id, "warehouse_location_id": location_id,
              "sku_id": sku_id, "quantity": {"$gt": 0}},
-            {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1},
+            {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1,
+             "child_sku_id": 1, "child_sku_name": 1},
         ).to_list(500)
     else:
         rows = await db.distributor_stock.find(
             {"tenant_id": tenant_id, "distributor_id": loc.get("distributor_id"),
              "distributor_location_id": location_id, "sku_id": sku_id, "quantity": {"$gt": 0}},
-            {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1},
+            {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1,
+             "child_sku_id": 1, "child_sku_name": 1},
         ).to_list(500)
 
     # Hydrate batch_code + production_date from production_batches. We need
@@ -584,10 +603,17 @@ async def list_batches_available(
     # the picker never offers stock that's already spoken for.
     reserved_by_batch = await _reserved_qty_by_batch(tenant_id, location_id, sku_id)
 
+    # Rows are (batch, classification) grained. Reservations are batch-level
+    # (open deliveries don't carry a child classification yet), so distribute
+    # each batch's reserved qty across its rows — Generic rows first.
+    rows.sort(key=lambda r: (r.get("batch_id") or "", 0 if not r.get("child_sku_id") else 1))
+    reserved_left = dict(reserved_by_batch)
     out = []
     for r in rows:
         on_hand = int(r.get("quantity") or 0)
-        reserved = reserved_by_batch.get(r.get("batch_id"), 0)
+        pool = reserved_left.get(r.get("batch_id"), 0)
+        reserved = min(on_hand, pool)
+        reserved_left[r.get("batch_id")] = pool - reserved
         available = on_hand - reserved
         if available <= 0:
             # Fully reserved — nothing left to allocate from this batch.
@@ -595,6 +621,8 @@ async def list_batches_available(
         out.append({
             "batch_id": r.get("batch_id"),
             "batch_code": r.get("batch_code") or ("(legacy / no batch)" if not r.get("batch_id") else r.get("batch_id")),
+            "child_sku_id": r.get("child_sku_id") or None,
+            "child_sku_name": r.get("child_sku_name"),
             "quantity": available,
             "on_hand": on_hand,
             "reserved": reserved,
@@ -654,10 +682,10 @@ async def get_location_stock(
     """
     tenant_id = get_current_tenant_id()
     loc = await _load_location(tenant_id, location_id)
+    proj = {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "child_sku_id": 1, "child_sku_name": 1}
     if loc.get("is_factory"):
         rows = await db.factory_warehouse_stock.find(
-            {"tenant_id": tenant_id, "warehouse_location_id": location_id},
-            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
+            {"tenant_id": tenant_id, "warehouse_location_id": location_id}, proj,
         ).to_list(2000)
     else:
         rows = await db.distributor_stock.find(
@@ -665,10 +693,29 @@ async def get_location_stock(
                 "tenant_id": tenant_id,
                 "distributor_id": loc.get("distributor_id"),
                 "distributor_location_id": location_id,
-            },
-            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1},
+            }, proj,
         ).to_list(2000)
-    return {"stock": rows, "is_factory": bool(loc.get("is_factory"))}
+    # Aggregate per SKU (backward-compatible shape) + per (SKU, classification)
+    by_sku: dict = {}
+    by_child: dict = {}
+    for r in rows:
+        sid = r.get("sku_id")
+        q = int(r.get("quantity") or 0)
+        s = by_sku.setdefault(sid, {"sku_id": sid, "sku_name": r.get("sku_name"), "quantity": 0})
+        s["quantity"] += q
+        ck = (sid, r.get("child_sku_id") or None)
+        c = by_child.setdefault(ck, {
+            "sku_id": sid, "sku_name": r.get("sku_name"),
+            "child_sku_id": r.get("child_sku_id") or None,
+            "child_sku_name": r.get("child_sku_name"),
+            "quantity": 0,
+        })
+        c["quantity"] += q
+    return {
+        "stock": list(by_sku.values()),
+        "stock_by_child": list(by_child.values()),
+        "is_factory": bool(loc.get("is_factory")),
+    }
 
 
 @router.get("/eligible-sources")
@@ -1089,40 +1136,64 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     # The source warehouse may be either a regular distributor warehouse
     # (`distributor_stock`) or a factory warehouse (`factory_warehouse_stock`).
     sku_ids = [it.sku_id for it in payload.items]
+
+    # Validate + hydrate child SKU classification on every line (Model C).
+    child_ids = list({it.child_sku_id for it in payload.items if it.child_sku_id})
+    if child_ids:
+        from database import get_tenant_db
+        tdb = get_tenant_db()
+        children = {c["id"]: c for c in await tdb.child_skus.find(
+            {"id": {"$in": child_ids}},
+            {"_id": 0, "id": 1, "parent_sku_id": 1, "child_sku_name": 1, "is_active": 1},
+        ).to_list(len(child_ids) + 1)}
+        for it in payload.items:
+            if not it.child_sku_id:
+                continue
+            c = children.get(it.child_sku_id)
+            if not c:
+                raise HTTPException(400, f"Child SKU {it.child_sku_id} not found.")
+            if c.get("parent_sku_id") != it.sku_id:
+                raise HTTPException(400, f"Child SKU '{c.get('child_sku_name')}' does not belong to SKU '{it.sku_name or it.sku_id}'.")
+            it.child_sku_name = c.get("child_sku_name")
+
+    def _cls_label(it) -> str:
+        return f" [{it.child_sku_name}]" if it.child_sku_id else ""
+
     if src_tracks_batches:
         batch_ids = [it.batch_id for it in payload.items if it.batch_id]
         stock_map = await _read_source_stock(tenant_id, src_loc, sku_ids, batch_ids=batch_ids)
-        # stock_map keys are (sku_id, batch_id) when batch-tracked
+        # stock_map keys are (sku_id, batch_id, child_sku_id) when batch-tracked
         avail = {k: int(v.get("quantity") or 0) for k, v in stock_map.items()}
         sku_name_lookup = {k[0]: v.get("sku_name") for k, v in stock_map.items()}
         # Hydrate batch_code from the stock row so the persisted transfer line is complete
         for it in payload.items:
             if it.batch_id and not it.batch_code:
-                row = stock_map.get((it.sku_id, it.batch_id))
+                row = stock_map.get((it.sku_id, it.batch_id, it.child_sku_id or None))
                 if row and row.get("batch_code"):
                     it.batch_code = row["batch_code"]
         insufficient = []
         for it in payload.items:
-            a_units = avail.get((it.sku_id, it.batch_id), 0)
+            a_units = avail.get((it.sku_id, it.batch_id, it.child_sku_id or None), 0)
             avail_pkgs = a_units // it.units_per_package if it.units_per_package > 0 else 0
             if it.quantity > avail_pkgs:
                 insufficient.append(
-                    f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)} "
+                    f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)}{_cls_label(it)} "
                     f"(batch {it.batch_code or it.batch_id}): "
                     f"requested {it.quantity} {it.packaging_type_name}, "
                     f"available {avail_pkgs} {it.packaging_type_name}"
                 )
     else:
         stock_map = await _read_source_stock(tenant_id, src_loc, sku_ids)
-        avail = {sku_id: int(r.get("quantity") or 0) for sku_id, r in stock_map.items()}
-        sku_name_lookup = {sku_id: r.get("sku_name") for sku_id, r in stock_map.items()}
+        # keys are (sku_id, child_sku_id)
+        avail = {k: int(r.get("quantity") or 0) for k, r in stock_map.items()}
+        sku_name_lookup = {k[0]: r.get("sku_name") for k, r in stock_map.items()}
         insufficient = []
         for it in payload.items:
-            a_units = avail.get(it.sku_id, 0)
+            a_units = avail.get((it.sku_id, it.child_sku_id or None), 0)
             avail_pkgs = a_units // it.units_per_package if it.units_per_package > 0 else 0
             if it.quantity > avail_pkgs:
                 insufficient.append(
-                    f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)}: "
+                    f"{(it.sku_name or sku_name_lookup.get(it.sku_id) or it.sku_id)}{_cls_label(it)}: "
                     f"requested {it.quantity} {it.packaging_type_name}, "
                     f"available {avail_pkgs} {it.packaging_type_name}"
                 )
@@ -1176,6 +1247,8 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
             "quantity_units": quantity_units,           # bottles / raw units (for stock storage)
             "batch_id": it.batch_id,
             "batch_code": it.batch_code,
+            "child_sku_id": it.child_sku_id or None,
+            "child_sku_name": it.child_sku_name if it.child_sku_id else None,
             "rate": per_pkg_rate,                       # per-package rate (auto from master_skus.base_price)
             "rate_per_bottle": round(float(rinfo["rate_per_bottle"]), 4),
             "rate_source": "master_sku.base_price",
@@ -1362,6 +1435,8 @@ async def delete_stock_transfer(
                 quantity=int(it.get("quantity") or 1),
                 batch_id=it.get("batch_id"),
                 batch_code=it.get("batch_code"),
+                child_sku_id=it.get("child_sku_id"),
+                child_sku_name=it.get("child_sku_name"),
             )
             await _adjust_stock_for_location(
                 tenant_id, src_loc, ti, units,
@@ -1468,6 +1543,8 @@ async def edit_transfer_quantities(
                     quantity=max(1, new_qty),
                     batch_id=old.get("batch_id"),
                     batch_code=old.get("batch_code"),
+                    child_sku_id=old.get("child_sku_id"),
+                    child_sku_name=old.get("child_sku_name"),
                 )
                 # Source loses the extra (deduct delta); destination gains it.
                 await _adjust_stock_for_location(tenant_id, src_loc, ti, -delta_units, distributor_name=src_name)
@@ -1554,6 +1631,8 @@ async def _restore_transfer_inventory(tenant_id: str, doc: dict) -> None:
             quantity=int(it.get("quantity") or 1),
             batch_id=it.get("batch_id"),
             batch_code=it.get("batch_code"),
+            child_sku_id=it.get("child_sku_id"),
+            child_sku_name=it.get("child_sku_name"),
         )
         await _adjust_stock_for_location(
             tenant_id, src_loc, ti, units,

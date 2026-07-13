@@ -68,9 +68,11 @@ function NewTransferDialog({ open, onClose, onCreated }) {
     sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
     rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
     batch_id: '', batch_code: '', batches_available: [], batches_loading: false,
+    child_sku_id: '', child_sku_name: '',
   }]);
   const [saving, setSaving] = useState(false);
   const [stockBySku, setStockBySku] = useState({}); // sku_id -> available units (at chosen source)
+  const [stockByChild, setStockByChild] = useState({}); // sku_id -> [{child_sku_id, child_sku_name, quantity}]
 
   useEffect(() => {
     if (!open) return;
@@ -85,8 +87,10 @@ function NewTransferDialog({ open, onClose, onCreated }) {
       sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
       rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
       batch_id: '', batch_code: '', batches_available: [], batches_loading: false,
+      child_sku_id: '', child_sku_name: '',
     }]);
     setStockBySku({});
+    setStockByChild({});
     (async () => {
       try {
         const [srcRes, skusRes] = await Promise.all([
@@ -102,7 +106,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
   }, [open]);
 
   useEffect(() => {
-    if (!form.source_location_id) { setTargets([]); setStockBySku({}); return; }
+    if (!form.source_location_id) { setTargets([]); setStockBySku({}); setStockByChild({}); return; }
     (async () => {
       try {
         const t = await axios.get(`${API}/distributor/stock-transfers/eligible-targets?exclude_location_id=${form.source_location_id}`, { headers: HEAD() });
@@ -116,6 +120,13 @@ function NewTransferDialog({ open, onClose, onCreated }) {
             map[s.sku_id] = s.quantity ?? s.qty ?? 0;
           });
           setStockBySku(map);
+          const childMap = {};
+          (stockRes?.data?.stock_by_child || []).forEach((s) => {
+            (childMap[s.sku_id] = childMap[s.sku_id] || []).push(s);
+          });
+          setStockByChild(childMap);
+          // Classification is per-warehouse — reset any stale selections.
+          setItems((p) => p.map((it) => ({ ...it, child_sku_id: '', child_sku_name: '' })));
         }
       } catch { /* no-op */ }
     })();
@@ -125,7 +136,8 @@ function NewTransferDialog({ open, onClose, onCreated }) {
     ...p,
     { sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '',
       rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
-      batch_id: '', batch_code: '', batches_available: [], batches_loading: false },
+      batch_id: '', batch_code: '', batches_available: [], batches_loading: false,
+      child_sku_id: '', child_sku_name: '' },
   ]);
   const updateItem = (i, patch) => setItems((p) => p.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   const removeItem = (i) => setItems((p) => p.filter((_, idx) => idx !== i));
@@ -140,6 +152,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
       packaging_type_id: defaultPkg?.packaging_type_id || '',
       packaging_type_name: defaultPkg?.packaging_type_name || '',
       units_per_package: defaultPkg?.units_per_package || 0,
+      child_sku_id: '', child_sku_name: '',
       // Reset rate so the resolver re-runs.
       rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
     });
@@ -189,13 +202,16 @@ function NewTransferDialog({ open, onClose, onCreated }) {
       const batches = data?.batches || [];
       // FIFO default: pre-select the oldest batch (first in the list)
       const first = batches[0];
+      const currentValid = it => batches.some((b) => b.batch_id === it.batch_id && (b.child_sku_id || '') === (it.child_sku_id || ''));
       updateItem(idx, {
         batches_available: batches,
         batches_loading: false,
         // Only auto-pick if user hasn't already chosen something valid.
-        ...(item.batch_id && batches.some((b) => b.batch_id === item.batch_id) ? {} : {
+        ...(item.batch_id && currentValid(item) ? {} : {
           batch_id: first?.batch_id || '',
           batch_code: first?.batch_code || '',
+          child_sku_id: first?.child_sku_id || '',
+          child_sku_name: first?.child_sku_name || '',
         }),
       });
     } catch (e) {
@@ -315,6 +331,11 @@ function NewTransferDialog({ open, onClose, onCreated }) {
               batch_id: it.batch_id,
               batch_code: it.batch_code || null,
             } : {}),
+            // Classification (Model C): null/absent = Generic.
+            ...(it.child_sku_id ? {
+              child_sku_id: it.child_sku_id,
+              child_sku_name: it.child_sku_name || null,
+            } : {}),
             // Rate is intentionally NOT sent — backend looks it up from the
             // destination distributor's commercials (distributor_margin_matrix).
           };
@@ -408,7 +429,21 @@ function NewTransferDialog({ open, onClose, onCreated }) {
               {items.map((it, i) => {
                 const sku = skus.find((s) => s.id === it.sku_id);
                 const stockOutPkgs = sku?.packaging_config?.stock_out || [];
-                const availUnits = stockBySku[it.sku_id] ?? 0;
+                // Classification-aware availability (Model C). When the source
+                // holds customer-branded child stock for this SKU, the user picks
+                // a classification and availability is scoped to it.
+                const childRows = stockByChild[it.sku_id] || [];
+                const hasBrandedStock = childRows.some((c) => c.child_sku_id);
+                let availUnits;
+                if (sourceTracksBatches && it.batch_id !== undefined && it.batches_available.length > 0) {
+                  const selRow = it.batches_available.find((b) => (b.batch_id || '') === (it.batch_id || '') && (b.child_sku_id || '') === (it.child_sku_id || ''));
+                  availUnits = selRow ? selRow.quantity : 0;
+                } else if (hasBrandedStock) {
+                  const selCls = childRows.find((c) => (c.child_sku_id || '') === (it.child_sku_id || ''));
+                  availUnits = selCls?.quantity ?? 0;
+                } else {
+                  availUnits = stockBySku[it.sku_id] ?? 0;
+                }
                 const availPackages = it.units_per_package > 0 ? Math.floor(availUnits / it.units_per_package) : 0;
                 const over = it.units_per_package > 0 && Number(it.quantity) > availPackages;
                 const totalUnits = (parseInt(it.quantity) || 0) * (parseInt(it.units_per_package) || 0);
@@ -472,20 +507,49 @@ function NewTransferDialog({ open, onClose, onCreated }) {
                           ) : (
                             <select
                               className="w-full h-9 px-2 border rounded-md text-xs bg-white"
-                              value={it.batch_id || ''}
+                              value={`${it.batch_id || ''}||${it.child_sku_id || ''}`}
                               onChange={(e) => {
-                                const b = it.batches_available.find((x) => x.batch_id === e.target.value);
-                                updateItem(i, { batch_id: e.target.value, batch_code: b?.batch_code || '' });
+                                const [bid, cid] = e.target.value.split('||');
+                                const b = it.batches_available.find((x) => (x.batch_id || '') === bid && (x.child_sku_id || '') === cid);
+                                updateItem(i, {
+                                  batch_id: bid, batch_code: b?.batch_code || '',
+                                  child_sku_id: b?.child_sku_id || '', child_sku_name: b?.child_sku_name || '',
+                                });
                               }}
                               data-testid={`item-batch-${i}`}
                             >
                               {it.batches_available.map((b) => (
-                                <option key={b.batch_id || 'legacy'} value={b.batch_id || ''}>
-                                  {b.batch_code} — {b.quantity} bottles{b.received_at ? ` · ${(b.received_at || '').slice(0, 10)}` : ''}
+                                <option key={`${b.batch_id || 'legacy'}-${b.child_sku_id || 'gen'}`} value={`${b.batch_id || ''}||${b.child_sku_id || ''}`}>
+                                  {b.batch_code}{b.child_sku_id ? ` [${b.child_sku_name}]` : ' [Generic]'} — {b.quantity} bottles{b.received_at ? ` · ${(b.received_at || '').slice(0, 10)}` : ''}
                                 </option>
                               ))}
                             </select>
                           )}
+                        </div>
+                      </div>
+                    )}
+                    {/* Row 1.6: Classification picker — when the source holds customer-branded
+                        child stock for this SKU and batches aren't tracked (batch rows already
+                        carry the classification). Generic is the default. */}
+                    {!sourceTracksBatches && it.sku_id && hasBrandedStock && (
+                      <div className="flex items-start gap-3 mt-2">
+                        <div className="flex-1">
+                          <Label className="text-[10px] text-slate-500">Classification</Label>
+                          <select
+                            className="w-full h-9 px-2 border rounded-md text-xs bg-white"
+                            value={it.child_sku_id || ''}
+                            onChange={(e) => {
+                              const c = childRows.find((x) => (x.child_sku_id || '') === e.target.value);
+                              updateItem(i, { child_sku_id: e.target.value, child_sku_name: c?.child_sku_name || '' });
+                            }}
+                            data-testid={`item-classification-${i}`}
+                          >
+                            {childRows.map((c) => (
+                              <option key={c.child_sku_id || 'gen'} value={c.child_sku_id || ''}>
+                                {c.child_sku_id ? c.child_sku_name : 'Generic (unbranded)'} — {c.quantity} bottles
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     )}
@@ -983,7 +1047,7 @@ export default function StockTransfers() {
                       <div className="flex items-center gap-1"><Package className="h-3.5 w-3.5 text-slate-400" /><b>{t.total_packages ?? t.total_quantity ?? 0}</b> packages · {t.items?.length || 0} SKU{(t.items?.length || 0) !== 1 ? 's' : ''}</div>
                       <div className="text-[10px] text-slate-500 ml-5">
                         {(t.items || []).slice(0, 2).map((it, idx) => (
-                          <div key={idx}>{it.quantity} {it.packaging_type_name || 'units'} · {it.sku_name}</div>
+                          <div key={idx}>{it.quantity} {it.packaging_type_name || 'units'} · {it.sku_name}{it.child_sku_name ? <span className="text-indigo-600 font-medium"> [{it.child_sku_name}]</span> : ''}</div>
                         ))}
                         {(t.items || []).length > 2 && <div>+{t.items.length - 2} more…</div>}
                       </div>

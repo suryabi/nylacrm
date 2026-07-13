@@ -381,6 +381,9 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
   const [saving, setSaving] = useState(false);
   const [hasQCRoute, setHasQCRoute] = useState(null);
   const [packagingTypes, setPackagingTypes] = useState([]);
+  // Model C: optional branding target for SKUs that allow child SKUs
+  const [childSkus, setChildSkus] = useState([]);
+  const [targetChild, setTargetChild] = useState('');
 
   useEffect(() => {
     axios.get(`${API_URL}/packaging-types`, { headers: getAuthHeaders() })
@@ -406,6 +409,15 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
     setForm(p => ({ ...p, sku_id: skuId, sku_name: sku?.sku_name || '', bottles_per_crate: bpc ? String(bpc) : '' }));
     if (skuId) checkQCRoute(skuId);
     else setHasQCRoute(null);
+    // Refresh child SKU (branding) options
+    setTargetChild('');
+    if (skuId && sku?.allows_child_skus) {
+      axios.get(`${API_URL}/child-skus?parent_sku_id=${skuId}`, { headers: getAuthHeaders() })
+        .then(res => setChildSkus(res.data.child_skus || []))
+        .catch(() => setChildSkus([]));
+    } else {
+      setChildSkus([]);
+    }
   };
 
   const handleSubmit = async () => {
@@ -423,6 +435,7 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
         ph_value: form.ph_value ? parseFloat(form.ph_value) : null,
         skip_qc: !!form.skip_qc,
         skip_qc_reason: form.skip_qc ? (form.skip_qc_reason || '').trim() || null : null,
+        target_child_sku_id: targetChild || null,
       }, { headers: getAuthHeaders() });
       toast.success(form.skip_qc ? 'Batch created and marked warehouse-ready (QC bypassed)' : 'Batch created successfully');
       onSuccess();
@@ -501,6 +514,21 @@ function CreateBatchModal({ skus, user, onClose, onSuccess }) {
               })()}
             </div>
           </div>
+          {childSkus.length > 0 && (
+            <div>
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Target Child SKU (branding) — optional</label>
+              <select value={targetChild} onChange={e => setTargetChild(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-white" data-testid="batch-target-child-select">
+                <option value="">Generic (unbranded)</option>
+                {childSkus.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.child_sku_name} ({c.child_sku_code}){c.customer_account_name ? ` · ${c.customer_account_name}` : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-slate-400">Pre-declares which customer branding this run is for. Used as the default classification when transferring to the master warehouse.</p>
+            </div>
+          )}
           {form.total_crates && form.bottles_per_crate && (
             <div className="bg-blue-50 rounded-lg p-3 text-center">
               <span className="text-sm text-blue-700 font-medium">

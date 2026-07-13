@@ -3883,6 +3883,8 @@ async def get_stock_dashboard_summary(
             "sku_id": s.get("sku_id"),
             "sku_name": s.get("sku_name") or "Unknown",
             "quantity": crates(s.get("sku_id", ""), s.get("quantity", 0)),
+            "child_sku_id": s.get("child_sku_id") or None,
+            "child_sku_name": s.get("child_sku_name"),
             "is_factory": False,
         })
     for s in factory_rows:
@@ -3897,6 +3899,8 @@ async def get_stock_dashboard_summary(
             "sku_id": s.get("sku_id"),
             "sku_name": s.get("sku_name") or "Unknown",
             "quantity": crates(s.get("sku_id", ""), s.get("quantity", 0)),
+            "child_sku_id": s.get("child_sku_id") or None,
+            "child_sku_name": s.get("child_sku_name"),
             "is_factory": True,
         })
 
@@ -3968,10 +3972,14 @@ async def get_stock_dashboard_summary(
             "sku_id": r.get("sku_id"),
             "sku_name": r.get("sku_name"),
             "quantity": r["quantity"],
+            "child_sku_id": r.get("child_sku_id"),
+            "child_sku_name": r.get("child_sku_name"),
         })
     # Aggregate duplicate SKU lines within a location (when the same SKU
     # appears in both distributor_stock and factory_warehouse_stock — yes,
     # this happens for self-managed factories — or across multiple batches).
+    # Each parent-SKU line also carries a `children` classification breakdown
+    # (Generic + customer-branded child SKUs) for the dashboard drill-down.
     location_summary = []
     for v in by_loc.values():
         items_by_sku: dict = {}
@@ -3979,8 +3987,22 @@ async def get_stock_dashboard_summary(
             sid = it.get("sku_id")
             if not sid:
                 continue
-            items_by_sku.setdefault(sid, {"sku_id": sid, "sku_name": it.get("sku_name"), "quantity": 0})
-            items_by_sku[sid]["quantity"] += int(it.get("quantity") or 0)
+            bucket_i = items_by_sku.setdefault(sid, {"sku_id": sid, "sku_name": it.get("sku_name"), "quantity": 0, "_children": {}})
+            bucket_i["quantity"] += int(it.get("quantity") or 0)
+            ck = it.get("child_sku_id") or None
+            ch = bucket_i["_children"].setdefault(ck, {
+                "child_sku_id": ck,
+                "child_sku_name": it.get("child_sku_name") if ck else "Generic",
+                "quantity": 0,
+            })
+            ch["quantity"] += int(it.get("quantity") or 0)
+        items_out = []
+        for bucket_i in items_by_sku.values():
+            children = sorted(bucket_i.pop("_children").values(),
+                              key=lambda c: (c["child_sku_id"] is not None, c.get("child_sku_name") or ""))
+            # Only expose a breakdown when there is at least one branded row.
+            bucket_i["children"] = children if any(c["child_sku_id"] for c in children) else []
+            items_out.append(bucket_i)
         location_summary.append({
             "location_id": v["location_id"],
             "location_name": v["location_name"],
@@ -3988,7 +4010,7 @@ async def get_stock_dashboard_summary(
             "is_factory": v["is_factory"],
             "total_quantity": v["total_quantity"],
             "sku_count": len([s for s in v["sku_count"] if s]),
-            "items": sorted(items_by_sku.values(), key=lambda x: (x.get("sku_name") or "").lower()),
+            "items": sorted(items_out, key=lambda x: (x.get("sku_name") or "").lower()),
         })
     location_summary.sort(key=lambda x: x["total_quantity"], reverse=True)
 

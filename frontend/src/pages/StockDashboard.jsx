@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { 
   Package, Warehouse, Building2, MapPin, RefreshCw, 
   TrendingUp, TrendingDown, Search, Filter, BarChart3,
-  Boxes, ChevronDown, ChevronUp, ShieldAlert, Factory,
+  Boxes, ChevronDown, ChevronUp, ChevronRight, ShieldAlert, Factory, Tags,
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { BrandingEntryDialog } from '../components/BrandingEntryDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -33,6 +34,8 @@ export default function StockDashboard() {
   const [selectedDistributor, setSelectedDistributor] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedLocations, setExpandedLocations] = useState({});
+  const [expandedSkus, setExpandedSkus] = useState({}); // `${locationId}:${skuId}` → bool (child classification drill-down)
+  const [showBranding, setShowBranding] = useState(false);
   const [distributors, setDistributors] = useState([]);
   const [safetyData, setSafetyData] = useState(null);
   const [safetyLoading, setSafetyLoading] = useState(false);
@@ -168,10 +171,16 @@ export default function StockDashboard() {
           </h1>
           <p className="text-muted-foreground">Real-time inventory levels across distributor locations</p>
         </div>
-        <Button onClick={fetchStockData} variant="outline" disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowBranding(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="branding-entry-btn">
+            <Tags className="h-4 w-4 mr-2" />
+            Branding Entry
+          </Button>
+          <Button onClick={fetchStockData} variant="outline" disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -407,13 +416,34 @@ export default function StockDashboard() {
                             {location.items?.sort((a, b) => b.quantity - a.quantity).map((item, idx) => {
                               const q = toUnit(item, item.quantity);
                               const lbl = unitLabelFor(item);
+                              const skuKey = `${location.location_id}:${item.sku_id || idx}`;
+                              const hasChildren = (item.children || []).length > 0;
+                              const isSkuExpanded = !!expandedSkus[skuKey];
                               return (
-                              <tr key={item.sku_id || idx} className="border-b last:border-b-0 hover:bg-muted/30">
+                              <React.Fragment key={item.sku_id || idx}>
+                              <tr
+                                className={`border-b last:border-b-0 hover:bg-muted/30 ${hasChildren ? 'cursor-pointer' : ''}`}
+                                onClick={hasChildren ? () => setExpandedSkus((p) => ({ ...p, [skuKey]: !p[skuKey] })) : undefined}
+                                data-testid={hasChildren ? `sku-parent-row-${item.sku_id}` : undefined}
+                              >
                                 <td className="p-3">
                                   <div className="flex items-center gap-2">
-                                    <Package className="h-4 w-4 text-muted-foreground" />
+                                    {hasChildren ? (
+                                      isSkuExpanded
+                                        ? <ChevronDown className="h-4 w-4 text-indigo-500" />
+                                        : <ChevronRight className="h-4 w-4 text-indigo-500" />
+                                    ) : (
+                                      <Package className="h-4 w-4 text-muted-foreground" />
+                                    )}
                                     <div>
-                                      <div>{item.sku_name}</div>
+                                      <div className="flex items-center gap-2">
+                                        {item.sku_name}
+                                        {hasChildren && (
+                                          <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-indigo-50 text-indigo-700 border-indigo-200">
+                                            {item.children.filter(c => c.child_sku_id).length} branded
+                                          </Badge>
+                                        )}
+                                      </div>
                                       {unitMode === 'default_crate' && item.default_packaging_name && (
                                         <div className="text-[10px] text-muted-foreground">in {item.default_packaging_name}</div>
                                       )}
@@ -438,6 +468,33 @@ export default function StockDashboard() {
                                   </div>
                                 </td>
                               </tr>
+                              {hasChildren && isSkuExpanded && item.children.map((child, cIdx) => (
+                                <tr key={`${skuKey}-child-${child.child_sku_id || 'generic'}-${cIdx}`} className="border-b last:border-b-0 bg-indigo-50/30" data-testid={`sku-child-row-${item.sku_id}-${child.child_sku_id || 'generic'}`}>
+                                  <td className="p-2 pl-12">
+                                    <div className="flex items-center gap-2 text-xs">
+                                      {child.child_sku_id ? (
+                                        <>
+                                          <Tags className="h-3 w-3 text-indigo-500" />
+                                          <span className="text-indigo-700 font-medium">{child.child_sku_name}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Package className="h-3 w-3 text-slate-400" />
+                                          <span className="text-slate-500">Generic (unbranded)</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="p-2 text-right">
+                                    <span className="text-xs font-medium tabular-nums">{toUnit(item, child.quantity).toLocaleString()}</span>
+                                    <span className="ml-1 text-[9px] uppercase tracking-wider text-muted-foreground">{lbl}</span>
+                                  </td>
+                                  <td className="p-2 text-right">
+                                    <span className="text-[10px] text-muted-foreground">{safePct(child.quantity, item.quantity, 0)}% of SKU</span>
+                                  </td>
+                                </tr>
+                              ))}
+                              </React.Fragment>
                               );
                             })}
                           </tbody>
@@ -685,6 +742,12 @@ export default function StockDashboard() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <BrandingEntryDialog
+        open={showBranding}
+        onClose={() => setShowBranding(false)}
+        onCreated={() => { fetchStockData(); fetchSafetyData(); }}
+      />
     </div>
   );
 }

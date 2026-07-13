@@ -1105,10 +1105,21 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
   const [transferNotes, setTransferNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingTransfers, setLoadingTransfers] = useState(false);
+  // Model C stock classification: '' = Generic, otherwise a child SKU id.
+  const [childSkus, setChildSkus] = useState([]);
+  const [selectedChild, setSelectedChild] = useState('');
 
   const available = (batch?.total_passed_final || 0) - (batch?.transferred_to_warehouse || 0);
   const bottlesPerCrate = batch?.bottles_per_crate || 1;
   const availableCrates = Math.floor(available / bottlesPerCrate);
+
+  useEffect(() => {
+    if (!batch?.sku_id) return;
+    axios.get(`${API_URL}/child-skus?parent_sku_id=${batch.sku_id}`, { headers: getAuthHeaders() })
+      .then(res => setChildSkus(res.data.child_skus || []))
+      .catch(() => setChildSkus([]));
+    setSelectedChild(batch?.target_child_sku_id || '');
+  }, [batch?.sku_id, batch?.target_child_sku_id]);
 
   useEffect(() => {
     const headers = getAuthHeaders();
@@ -1145,8 +1156,10 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
       const headers = getAuthHeaders();
       await axios.post(`${API_URL}/production/batches/${batchId}/transfer-to-warehouse`, {
         warehouse_location_id: selectedWarehouse, quantity: bottlesPayload, notes: transferNotes,
+        child_sku_id: selectedChild,
       }, { headers });
-      toast.success(`${crates} crate${crates === 1 ? '' : 's'} (${bottlesPayload.toLocaleString()} bottles) transferred to warehouse`);
+      const childLabel = selectedChild ? (childSkus.find(c => c.id === selectedChild)?.child_sku_name || 'branded') : 'Generic';
+      toast.success(`${crates} crate${crates === 1 ? '' : 's'} (${bottlesPayload.toLocaleString()} bottles · ${childLabel}) transferred to warehouse`);
       setTransferQty(''); setTransferNotes(''); setShowTransfer(false);
       onUpdate();
       // Refresh transfers
@@ -1239,6 +1252,30 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
               />
             </div>
           </div>
+          {childSkus.length > 0 && (
+            <div className="max-w-md">
+              <label className="text-xs font-medium text-slate-600 mb-1 block">
+                Stock Classification
+                {batch?.target_child_sku_id && (
+                  <span className="ml-1.5 text-[10px] text-indigo-600 font-semibold">(batch target: {batch.target_child_sku_name})</span>
+                )}
+              </label>
+              <Select value={selectedChild || '__generic__'} onValueChange={v => setSelectedChild(v === '__generic__' ? '' : v)}>
+                <SelectTrigger className="h-10" data-testid="transfer-classification-select">
+                  <SelectValue placeholder="Generic (unbranded)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__generic__">Generic (unbranded)</SelectItem>
+                  {childSkus.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.child_sku_name} ({c.child_sku_code}){c.customer_account_name ? ` · ${c.customer_account_name}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[10px] text-slate-400">Customer-branded stock is tracked separately in the warehouse. You can reclassify later via a Branding Entry.</p>
+            </div>
+          )}
           <div className="flex gap-2">
             <button onClick={handleTransfer} disabled={saving}
               className="px-4 py-2 text-sm font-medium bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1.5"
@@ -1261,6 +1298,7 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
                 <tr className="bg-slate-50 text-xs text-slate-500">
                   <th className="text-left p-2 font-medium">Date</th>
                   <th className="text-left p-2 font-medium">Warehouse</th>
+                  <th className="text-left p-2 font-medium">Classification</th>
                   <th className="text-right p-2 font-medium">Bottles</th>
                   <th className="text-right p-2 font-medium">Crates</th>
                   <th className="text-left p-2 font-medium">By</th>
@@ -1276,6 +1314,13 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
                     <tr key={t.id} className="border-t border-slate-100 hover:bg-slate-50/50">
                       <td className="p-2 text-xs text-slate-600">{new Date(t.transferred_at).toLocaleDateString()}</td>
                       <td className="p-2 text-xs font-medium text-slate-700">{t.warehouse_name}</td>
+                      <td className="p-2 text-xs">
+                        {t.child_sku_name ? (
+                          <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-medium">{t.child_sku_name}</span>
+                        ) : (
+                          <span className="text-slate-400 text-[10px]">Generic</span>
+                        )}
+                      </td>
                       <td className="p-2 text-xs font-bold text-teal-700 text-right">{t.quantity}</td>
                       <td className="p-2 text-xs text-slate-600 text-right">
                         {crates}{remainder > 0 && <span className="text-slate-400"> +{remainder}b</span>}

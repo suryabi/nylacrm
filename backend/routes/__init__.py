@@ -256,6 +256,14 @@ routes_router.include_router(
     tags=["Child SKUs"],
 )
 
+# Branding Entries (Phase 2 — reclassify Generic ↔ customer-branded stock, no approval)
+from .branding_entries import router as branding_entries_router
+routes_router.include_router(
+    branding_entries_router,
+    prefix="/branding-entries",
+    tags=["Branding Entries"],
+)
+
 # Admin → SKU Aliases (map retired SKU codes/names to current master SKUs)
 from .sku_aliases import router as sku_aliases_router
 routes_router.include_router(
