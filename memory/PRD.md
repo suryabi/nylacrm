@@ -11,6 +11,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ## Test credentials (see /app/memory/test_credentials.md)
 
+### 2026-02-08 — Child SKU form: account-first + auto-populated name ✅ DONE
+- `ChildSkuManager.js`: reordered the create form so **Type + Customer Account are the first row**, followed by the auto-populated Name + auto-generated Code.
+- Selecting an account (or switching to Generic) now auto-fills `Child SKU Name` as `{Parent SKU Name} – {Account Name}` (or `… – Generic`). The value stays editable; manual overrides are preserved and never clobbered.
+- Placeholder guides the user to pick an account first (`"Select a customer account above to auto-fill"`). Existing children remain untouched (`applyAutoName` no-ops when editing).
+
 ### 2026-07-02 — Bottle Preview: real-size logo scaling + preview-dominant layout ✅ DONE
 - `BottlePreview.js`: preview now occupies the left `lg:col-span-8`; controls on right `lg:col-span-4`; page `max-w-7xl`; bottle enlarged.
 - Logo sized to real bottle dimensions (body Ø68.6 mm, height 286.4 mm ≈ 80% of the 1600×1361 template height) via `logoBoxWidthPct` — a 35 mm logo ≈ half the body width. `BOTTLE_HEIGHT_FRAC` per template is fine-tunable. Self-tested via screenshot at 35/50 mm.
