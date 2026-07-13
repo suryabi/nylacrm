@@ -6,10 +6,13 @@ import {
   ArrowLeft, Package, Calendar, Boxes, Tag,
   Loader2, FlaskConical, Paintbrush, ShieldCheck,
   Trash2, ArrowRight, MoveRight, ClipboardCheck,
-  Clock, User, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Plus, Warehouse, Send, Pencil,
+  Clock, User, AlertTriangle, AlertCircle, ChevronDown, ChevronUp, Plus, Warehouse, Send, Pencil, Check,
 } from 'lucide-react';
 import Breadcrumbs from '../components/Breadcrumbs';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '../components/ui/command';
+import { Button } from '../components/ui/button';
 import { useAuth } from '../context/AuthContext';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -1108,6 +1111,12 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
   // Model C stock classification: '' = Generic, otherwise a child SKU id.
   const [childSkus, setChildSkus] = useState([]);
   const [selectedChild, setSelectedChild] = useState('');
+  const [classificationOpen, setClassificationOpen] = useState(false);
+
+  const selectedChildObj = childSkus.find(c => c.id === selectedChild);
+  const classificationLabel = selectedChild
+    ? `${selectedChildObj?.child_sku_name || 'Branded'}${selectedChildObj?.child_sku_code ? ` (${selectedChildObj.child_sku_code})` : ''}${selectedChildObj?.customer_account_name ? ` · ${selectedChildObj.customer_account_name}` : ''}`
+    : 'Generic (unbranded)';
 
   const available = (batch?.total_passed_final || 0) - (batch?.transferred_to_warehouse || 0);
   const bottlesPerCrate = batch?.bottles_per_crate || 1;
@@ -1260,19 +1269,73 @@ function WarehouseTransferSection({ batch, batchId, onUpdate }) {
                   <span className="ml-1.5 text-[10px] text-indigo-600 font-semibold">(batch target: {batch.target_child_sku_name})</span>
                 )}
               </label>
-              <Select value={selectedChild || '__generic__'} onValueChange={v => setSelectedChild(v === '__generic__' ? '' : v)}>
-                <SelectTrigger className="h-10" data-testid="transfer-classification-select">
-                  <SelectValue placeholder="Generic (unbranded)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__generic__">Generic (unbranded)</SelectItem>
-                  {childSkus.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.child_sku_name} ({c.child_sku_code}){c.customer_account_name ? ` · ${c.customer_account_name}` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={classificationOpen} onOpenChange={setClassificationOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={classificationOpen}
+                    className="h-10 w-full justify-between font-normal bg-white"
+                    data-testid="transfer-classification-select"
+                  >
+                    <span className={`truncate text-left ${selectedChild ? 'text-slate-900' : 'text-slate-500'}`}>
+                      {classificationLabel}
+                    </span>
+                    <ChevronDown className="h-4 w-4 opacity-50 shrink-0 ml-2" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[320px] p-0" align="start">
+                  <Command
+                    filter={(value, search) => (value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
+                  >
+                    <CommandInput
+                      placeholder="Search classification by brand, code or customer..."
+                      data-testid="transfer-classification-search"
+                    />
+                    <CommandList className="max-h-[320px]">
+                      <CommandEmpty>No classifications found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="Generic unbranded"
+                          onSelect={() => { setSelectedChild(''); setClassificationOpen(false); }}
+                          data-testid="transfer-classification-option-generic"
+                          className="flex items-start gap-2"
+                        >
+                          <Check className={`mt-0.5 h-4 w-4 shrink-0 ${!selectedChild ? 'opacity-100 text-emerald-600' : 'opacity-0'}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">Generic (unbranded)</p>
+                            <p className="text-xs text-muted-foreground truncate">Not tied to any customer</p>
+                          </div>
+                        </CommandItem>
+                        {childSkus.map(c => {
+                          const isSel = selectedChild === c.id;
+                          return (
+                            <CommandItem
+                              key={c.id}
+                              value={`${c.child_sku_name || ''} ${c.child_sku_code || ''} ${c.customer_account_name || ''}`}
+                              onSelect={() => { setSelectedChild(c.id); setClassificationOpen(false); }}
+                              data-testid={`transfer-classification-option-${c.id}`}
+                              className="flex items-start gap-2"
+                            >
+                              <Check className={`mt-0.5 h-4 w-4 shrink-0 ${isSel ? 'opacity-100 text-emerald-600' : 'opacity-0'}`} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate">
+                                  {c.child_sku_name}
+                                  {c.child_sku_code && <span className="text-slate-400 font-normal"> ({c.child_sku_code})</span>}
+                                </p>
+                                {c.customer_account_name && (
+                                  <p className="text-xs text-muted-foreground truncate">{c.customer_account_name}</p>
+                                )}
+                              </div>
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <p className="mt-1 text-[10px] text-slate-400">Customer-branded stock is tracked separately in the warehouse. You can reclassify later via a Branding Entry.</p>
             </div>
           )}
