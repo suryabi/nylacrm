@@ -450,14 +450,16 @@ async def confirm_factory_return(
     if fr.get('status') != 'draft':
         raise HTTPException(status_code=400, detail="Only draft factory returns can be confirmed")
 
-    # Deduct stock from distributor warehouse
+    # Deduct stock from distributor warehouse (Generic/unbranded rows only —
+    # factory returns are classification-less)
     for item in fr.get('items', []):
         await db.distributor_stock.update_one(
             {
                 "tenant_id": tenant_id,
                 "distributor_id": distributor_id,
                 "distributor_location_id": fr.get('distributor_location_id'),
-                "sku_id": item.get('sku_id')
+                "sku_id": item.get('sku_id'),
+                "child_sku_id": {"$in": [None]}
             },
             {
                 "$inc": {"quantity": -item.get('quantity', 0)},
@@ -547,7 +549,7 @@ async def cancel_factory_return(
     if fr.get('status') in ['received', 'cancelled']:
         raise HTTPException(status_code=400, detail=f"Cannot cancel a {fr['status']} factory return")
 
-    # If was confirmed, restore stock
+    # If was confirmed, restore stock (Generic rows — matching the deduction)
     if fr.get('status') == 'confirmed':
         for item in fr.get('items', []):
             await db.distributor_stock.update_one(
@@ -555,7 +557,8 @@ async def cancel_factory_return(
                     "tenant_id": tenant_id,
                     "distributor_id": distributor_id,
                     "distributor_location_id": fr.get('distributor_location_id'),
-                    "sku_id": item.get('sku_id')
+                    "sku_id": item.get('sku_id'),
+                    "child_sku_id": {"$in": [None]}
                 },
                 {
                     "$inc": {"quantity": item.get('quantity', 0)},

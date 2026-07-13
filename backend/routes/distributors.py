@@ -2817,6 +2817,7 @@ async def confirm_shipment(
                 "tenant_id": tenant_id,
                 "warehouse_location_id": source_warehouse_id,
                 "sku_id": item["sku_id"],
+                "child_sku_id": {"$in": [None]},
             }
             if src_tracks_batches and item.get("batch_id"):
                 stock_query["batch_id"] = item["batch_id"]
@@ -2835,12 +2836,14 @@ async def confirm_shipment(
             )
 
         # Deduct stock for each line. Same key shape as the validation — when
-        # tracking batches, deduct from the specific batch row only.
+        # tracking batches, deduct from the specific batch row only. Shipments
+        # are classification-less → they consume Generic (unbranded) rows only.
         for item in items:
             update_query = {
                 "tenant_id": tenant_id,
                 "warehouse_location_id": source_warehouse_id,
                 "sku_id": item["sku_id"],
+                "child_sku_id": {"$in": [None]},
             }
             if src_tracks_batches and item.get("batch_id"):
                 update_query["batch_id"] = item["batch_id"]
@@ -2981,8 +2984,10 @@ async def mark_shipment_delivered(
         }
         # Add batch to the key so batched and legacy aggregate rows stay separate.
         # `{"$in": [None]}` matches a stored None OR missing field, which is
-        # what aggregate-only legacy rows have.
+        # what aggregate-only legacy rows have. Shipments are classification-less
+        # → they credit the Generic (unbranded) row only.
         stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+        stock_key["child_sku_id"] = {"$in": [None]}
 
         set_on_insert = {
             "id": str(uuid.uuid4()),
@@ -3043,6 +3048,7 @@ def _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, qty_fie
             "sku_id": item.get('sku_id'),
         }
         stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+        stock_key["child_sku_id"] = {"$in": [None]}
         set_fields = {
             "sku_name": item.get('sku_name'),
             "sku_code": item.get('sku_code'),
@@ -3241,7 +3247,8 @@ async def approve_shipment_receipt(
                     {
                         "tenant_id": tenant_id,
                         "warehouse_location_id": source_warehouse_id,
-                        "sku_id": it["sku_id"]
+                        "sku_id": it["sku_id"],
+                        "child_sku_id": {"$in": [None]}
                     },
                     {"$inc": {"quantity": delta}, "$set": {"updated_at": now}}
                 )
@@ -3535,6 +3542,7 @@ async def _readd_shipment_source_stock(tenant_id: str, shipment: dict) -> None:
             "tenant_id": tenant_id,
             "warehouse_location_id": source_warehouse_id,
             "sku_id": item.get("sku_id"),
+            "child_sku_id": {"$in": [None]},
         }
         if src_tracks_batches and item.get("batch_id"):
             stock_query["batch_id"] = item.get("batch_id")
@@ -3565,6 +3573,7 @@ async def _remove_shipment_destination_stock(tenant_id: str, distributor_id: str
             "sku_id": item.get("sku_id"),
         }
         stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
+        stock_key["child_sku_id"] = {"$in": [None]}
         await db.distributor_stock.update_one(
             stock_key,
             {"$inc": {"quantity": -qty}, "$set": {"updated_at": now}},
@@ -4800,11 +4809,14 @@ RESERVED_DELIVERY_STATUSES = [
 ]
 
 
-async def _reserved_qty_map(tenant_id, distributor_id, location_id, tracks_batches, exclude_delivery_id=None):
+async def _reserved_qty_map(tenant_id, distributor_id, location_id, tracks_batches, exclude_delivery_id=None, by_child=False):
     """Reserved (committed) quantity per (sku_id, batch_id|None) at a source
     location, summed across all OPEN Stock Out orders. Fully derived from the
     deliveries themselves, so cancel/complete/delete need no extra bookkeeping —
-    the reservation simply disappears once the order leaves the open set."""
+    the reservation simply disappears once the order leaves the open set.
+
+    With `by_child=True` keys become (sku_id, batch_id|None, child_sku_id|None)
+    so availability can be netted per stock classification (Phase 3)."""
     open_ids = await db.distributor_deliveries.distinct(
         "id",
         {
@@ -4821,9 +4833,12 @@ async def _reserved_qty_map(tenant_id, distributor_id, location_id, tracks_batch
     reserved: dict = {}
     async for it in db.distributor_delivery_items.find(
         {"tenant_id": tenant_id, "delivery_id": {"$in": open_ids}},
-        {"_id": 0, "sku_id": 1, "batch_id": 1, "quantity": 1},
+        {"_id": 0, "sku_id": 1, "batch_id": 1, "quantity": 1, "child_sku_id": 1},
     ):
-        key = (it.get("sku_id"), it.get("batch_id") if tracks_batches else None)
+        if by_child:
+            key = (it.get("sku_id"), it.get("batch_id") if tracks_batches else None, it.get("child_sku_id") or None)
+        else:
+            key = (it.get("sku_id"), it.get("batch_id") if tracks_batches else None)
         reserved[key] = reserved.get(key, 0) + int(it.get("quantity") or 0)
     return reserved
 
@@ -4904,14 +4919,50 @@ async def create_delivery(
     #   • track_batches=True   → row keyed by batch_id
     #   • track_batches=False  → aggregated row
     #
-    # Aggregate per (sku_id, batch_id) so multi-line deliveries of the same
-    # SKU/batch are summed before checking.
+    # ── Phase 3: fulfilment stock classification validation ───────────────
+    # Each line may carry a `child_sku_id` (None = Generic/unbranded). Rules:
+    #   • child must exist, be active, and belong to the line's parent SKU
+    #   • a customer-type child may ONLY be delivered to its own account
+    #   • generic-type children and unbranded stock may go to anyone
+    child_ids = list({item.child_sku_id for item in data.items if item.child_sku_id})
+    if child_ids:
+        children_map = {c["id"]: c for c in await db.child_skus.find(
+            {"id": {"$in": child_ids}, "tenant_id": tenant_id},
+            {"_id": 0, "id": 1, "parent_sku_id": 1, "child_sku_name": 1, "child_type": 1,
+             "customer_account_id": 1, "customer_account_name": 1, "is_active": 1},
+        ).to_list(len(child_ids) + 1)}
+        for item in data.items:
+            if not item.child_sku_id:
+                continue
+            c = children_map.get(item.child_sku_id)
+            if not c:
+                raise HTTPException(status_code=400, detail=f"Child SKU {item.child_sku_id} not found")
+            if c.get("parent_sku_id") != item.sku_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Child SKU '{c.get('child_sku_name')}' does not belong to SKU '{item.sku_name or item.sku_id}'",
+                )
+            if c.get("is_active") is False:
+                raise HTTPException(status_code=400, detail=f"Child SKU '{c.get('child_sku_name')}' is inactive")
+            if c.get("child_type") == "customer" and c.get("customer_account_id") != data.account_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"'{c.get('child_sku_name')}' is branded for "
+                        f"'{c.get('customer_account_name') or 'another customer'}' — it cannot be "
+                        f"delivered to '{account.get('account_name') or account.get('company') or 'this account'}'."
+                    ),
+                )
+            item.child_sku_name = c.get("child_sku_name")
+
+    # Aggregate per (sku_id, batch_id, classification) so multi-line deliveries
+    # of the same SKU/batch/classification are summed before checking.
     stock_demand: dict = {}
     for item in data.items:
         qty = int(item.quantity or 0)
         if qty <= 0:
             continue
-        key = (item.sku_id, item.batch_id if source_tracks_batches else None)
+        key = (item.sku_id, item.batch_id if source_tracks_batches else None, item.child_sku_id or None)
         stock_demand[key] = stock_demand.get(key, 0) + qty
 
     shortages: list = []
@@ -4981,10 +5032,10 @@ async def create_delivery(
     # source location. Available = on-hand − reserved. Reserving here makes that
     # stock unavailable for allocation to any other customer/order.
     reserved_map = await _reserved_qty_map(
-        tenant_id, distributor_id, data.distributor_location_id, source_tracks_batches
+        tenant_id, distributor_id, data.distributor_location_id, source_tracks_batches, by_child=True
     )
 
-    for (sku_id, batch_id), demand in stock_demand.items():
+    for (sku_id, batch_id, child_sku_id), demand in stock_demand.items():
         if source_is_factory:
             stock_query = {
                 "tenant_id": tenant_id,
@@ -5005,9 +5056,12 @@ async def create_delivery(
         elif source_tracks_batches:
             # Legacy aggregate row (no batch_id stored).
             stock_query["batch_id"] = {"$in": [None]}
+        # Phase 3: availability is scoped to the line's stock classification.
+        # None = Generic (also matches legacy rows lacking the field).
+        stock_query["child_sku_id"] = child_sku_id if child_sku_id else {"$in": [None]}
 
         rows = await stock_collection.find(
-            stock_query, {"_id": 0, "quantity": 1, "sku_name": 1, "batch_code": 1}
+            stock_query, {"_id": 0, "quantity": 1, "sku_name": 1, "batch_code": 1, "child_sku_name": 1}
         ).to_list(50)
         on_hand_rows = sum((r.get("quantity") or 0) for r in rows)
 
@@ -5020,16 +5074,21 @@ async def create_delivery(
         #      the user just saw on the dashboard. Otherwise the UX is "you
         #      have 3,468 crates" and the API says "you have 0", which we
         #      hit in production on 2026-05-28.
-        if not source_is_factory and not source_tracks_batches:
+        # Branded (child-classified) lines skip the derived fallback — that
+        # history has no classification, so only actual stock rows count.
+        if not source_is_factory and not source_tracks_batches and not child_sku_id:
             on_hand = max(on_hand_rows, derived_on_hand_by_sku.get(sku_id, 0))
         else:
             on_hand = on_hand_rows
 
-        reserved = reserved_map.get((sku_id, batch_id if source_tracks_batches else None), 0)
+        reserved = reserved_map.get((sku_id, batch_id if source_tracks_batches else None, child_sku_id), 0)
         available = on_hand - reserved
 
         if demand > available:
             label = (rows[0].get("sku_name") if rows else None) or sku_id
+            if child_sku_id:
+                cname = (rows[0].get("child_sku_name") if rows else None)
+                label = f"{label} [{cname or 'branded'}]"
             batch_label = ""
             if source_tracks_batches and batch_id:
                 bc = (rows[0].get("batch_code") if rows else None) or batch_id[:8]
@@ -5138,6 +5197,9 @@ async def create_delivery(
             # on the field existing.
             'batch_id': item_data.batch_id,
             'batch_code': item_data.batch_code,
+            # Phase 3 fulfilment classification — None = Generic (unbranded).
+            'child_sku_id': item_data.child_sku_id or None,
+            'child_sku_name': item_data.child_sku_name if item_data.child_sku_id else None,
             # Packaging breakdown for the delivery detail popup.
             'packaging_type_name': item_data.packaging_type_name,
             'packaging_units': item_data.packaging_units,
@@ -5739,12 +5801,14 @@ async def complete_delivery(
     for item in items:
         batch_id = item.get('batch_id')
         qty = item.get('quantity', 0)
+        child_key = item.get('child_sku_id') if item.get('child_sku_id') else {"$in": [None]}
 
         if src_is_factory:
             stock_key = {
                 "tenant_id": tenant_id,
                 "warehouse_location_id": delivery.get('distributor_location_id'),
                 "sku_id": item.get('sku_id'),
+                "child_sku_id": child_key,
             }
             if src_tracks_batches and batch_id:
                 stock_key["batch_id"] = batch_id
@@ -5758,6 +5822,7 @@ async def complete_delivery(
                 "distributor_id": distributor_id,
                 "distributor_location_id": delivery.get('distributor_location_id'),
                 "sku_id": item.get('sku_id'),
+                "child_sku_id": child_key,
             }
             # Tracked batches deduct from the specific batch row; legacy aggregate
             # rows (no batch_id stored) match `{"$in": [None]}`.
@@ -6067,11 +6132,13 @@ async def _readd_completed_delivery_stock(tenant_id: str, distributor_id: str, d
         qty = item.get("quantity", 0) or 0
         if not qty:
             continue
+        child_key = item.get("child_sku_id") if item.get("child_sku_id") else {"$in": [None]}
         if src_is_factory:
             stock_key = {
                 "tenant_id": tenant_id,
                 "warehouse_location_id": delivery.get("distributor_location_id"),
                 "sku_id": item.get("sku_id"),
+                "child_sku_id": child_key,
             }
             if src_tracks_batches and batch_id:
                 stock_key["batch_id"] = batch_id
@@ -6084,6 +6151,7 @@ async def _readd_completed_delivery_stock(tenant_id: str, distributor_id: str, d
                 "distributor_id": distributor_id,
                 "distributor_location_id": delivery.get("distributor_location_id"),
                 "sku_id": item.get("sku_id"),
+                "child_sku_id": child_key,
             }
             stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
             await db.distributor_stock.update_one(

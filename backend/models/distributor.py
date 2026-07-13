@@ -511,9 +511,12 @@ class DeliveryItemCreate(BaseModel):
     # surface batch lineage on customer invoices.
     batch_id: Optional[str] = None
     batch_code: Optional[str] = None
-    # Packaging breakdown captured from the stock-out form so the delivery
-    # detail popup can show "5 × Crate-12 (60 bottles)". `quantity` above is
-    # always in bottles; `packages` × `packaging_units` == quantity.
+    # Phase 3 fulfilment classification (parent/child SKU hierarchy, Model C).
+    # None = Generic (unbranded) stock. A customer-type child SKU may only be
+    # delivered to ITS OWN account (validated server-side); generic-type
+    # children and unbranded stock may go to anyone.
+    child_sku_id: Optional[str] = None
+    child_sku_name: Optional[str] = None
     packaging_type_name: Optional[str] = None
     packaging_units: Optional[int] = None
     packages: Optional[int] = None

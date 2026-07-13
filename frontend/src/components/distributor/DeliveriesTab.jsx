@@ -122,8 +122,24 @@ export default function DeliveriesTab({
   // distributor warehouse doesn't track batches.
   sourceTracksBatches = false,
   batchesBySku = {},
+  // Phase 3 fulfilment classification — per-classification stock at the source
+  // ({sku_id: [{child_sku_id, child_sku_name, quantity}]}) + child SKU metadata
+  // ({id: {child_type, customer_account_id, ...}}) for customer matching.
+  childStockBySku = {},
+  childSkuMeta = {},
 }) {
   const [downloading, setDownloading] = useState(false);
+
+  // A classification is deliverable to the selected account when it is
+  // Generic (no child), a generic-type child, or a customer-type child
+  // branded for THIS account.
+  const classificationAllowed = (childId) => {
+    if (!childId) return true;
+    const meta = childSkuMeta[childId];
+    if (!meta) return true; // metadata not loaded — backend still validates
+    if (meta.child_type !== 'customer') return true;
+    return meta.customer_account_id === (selectedDeliveryAccount?.id || selectedDeliveryAccount?.account_id);
+  };
 
   // Deletion history (audit) viewer
   const [showDeletionHistory, setShowDeletionHistory] = useState(false);
@@ -1185,7 +1201,9 @@ export default function DeliveriesTab({
                           {sourceTracksBatches && item.sku_id && (() => {
                             // FIFO: oldest batch first. Prefer production_date,
                             // fall back to received_at, finally batch_code.
-                            const rawBatches = batchesBySku[item.sku_id] || [];
+                            // Phase 3: rows come per (batch, classification) — hide
+                            // rows branded for a DIFFERENT customer account.
+                            const rawBatches = (batchesBySku[item.sku_id] || []).filter(b => classificationAllowed(b.child_sku_id));
                             const ageKey = (b) => b.production_date || b.received_at || '';
                             const sorted = [...rawBatches].sort((a, b) => {
                               const ka = ageKey(a);
@@ -1238,7 +1256,7 @@ export default function DeliveriesTab({
                                 ) : (
                                   <div className="flex flex-wrap gap-2" data-testid={`delivery-batch-cards-${item.id}`}>
                                     {sorted.map((b, bi) => {
-                                      const selected = item.batch_id === b.batch_id;
+                                      const selected = item.batch_id === b.batch_id && (item.child_sku_id || '') === (b.child_sku_id || '');
                                       const days = ageDays(ageKey(b));
                                       const chip = ageChip(days);
                                       const ageSource = b.production_date ? 'Produced' : 'Received';
@@ -1246,10 +1264,12 @@ export default function DeliveriesTab({
                                       return (
                                         <button
                                           type="button"
-                                          key={b.batch_id}
+                                          key={`${b.batch_id}-${b.child_sku_id || 'gen'}`}
                                           onClick={() => {
                                             updateDeliveryItem(item.id, 'batch_id', b.batch_id);
                                             updateDeliveryItem(item.id, 'batch_code', b.batch_code);
+                                            updateDeliveryItem(item.id, 'child_sku_id', b.child_sku_id || '');
+                                            updateDeliveryItem(item.id, 'child_sku_name', b.child_sku_name || '');
                                           }}
                                           data-testid={`delivery-batch-card-${item.id}-${bi}`}
                                           className={[
@@ -1271,6 +1291,11 @@ export default function DeliveriesTab({
                                           >
                                             {chip.label}
                                           </span>
+                                          {b.child_sku_id && (
+                                            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border mb-1 ml-1 text-indigo-700 bg-indigo-50 border-indigo-200" data-testid={`delivery-batch-branding-${item.id}-${bi}`}>
+                                              {b.child_sku_name || 'Branded'}
+                                            </span>
+                                          )}
                                           <div className="font-mono text-[13px] font-bold text-slate-900 leading-tight tracking-tight break-all">
                                             {b.batch_code}
                                           </div>
@@ -1319,6 +1344,38 @@ export default function DeliveriesTab({
                               </div>
                             );
                           })()}
+                          {/* Phase 3: classification picker for NON-batch-tracked sources.
+                              Rendered when the source warehouse holds customer-branded child
+                              stock for this SKU. Only classifications deliverable to the
+                              selected account are offered (Generic, generic-type children,
+                              and THIS account's branded stock). */}
+                          {!sourceTracksBatches && item.sku_id && (() => {
+                            const rows = (childStockBySku[item.sku_id] || []).filter(r => classificationAllowed(r.child_sku_id));
+                            const hasBranded = rows.some(r => r.child_sku_id);
+                            if (!hasBranded) return null;
+                            const options = rows.length ? rows : [{ child_sku_id: null, child_sku_name: null, quantity: 0 }];
+                            return (
+                              <div className="mt-3 max-w-md">
+                                <Label className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">Stock Classification</Label>
+                                <select
+                                  className="w-full h-9 mt-1 px-2 border rounded-md text-xs bg-white"
+                                  value={item.child_sku_id || ''}
+                                  onChange={(e) => {
+                                    const sel = options.find(r => (r.child_sku_id || '') === e.target.value);
+                                    updateDeliveryItem(item.id, 'child_sku_id', e.target.value);
+                                    updateDeliveryItem(item.id, 'child_sku_name', sel?.child_sku_name || '');
+                                  }}
+                                  data-testid={`delivery-classification-${index}`}
+                                >
+                                  {options.map(r => (
+                                    <option key={r.child_sku_id || 'gen'} value={r.child_sku_id || ''}>
+                                      {r.child_sku_id ? r.child_sku_name : 'Generic (unbranded)'} — {(r.quantity || 0).toLocaleString()} bottles
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          })()}
                           {/* Row 2: Qty | Price | Disc | Amount — top-aligned with fixed spacers */}
                           <div className="flex items-start gap-3 mt-3">
                             <div className="w-24 flex-shrink-0">
@@ -1328,11 +1385,12 @@ export default function DeliveriesTab({
                                 onChange={(e) => {
                                   updateDeliveryItem(item.id, 'quantity', e.target.value);
                                   // FIFO auto-select: when the user types a quantity and no
-                                  // batch is picked yet, default to the oldest batch in stock.
-                                  // Mirrors the same sort the picker uses (production_date →
-                                  // received_at → batch_code). Saves a click on every line.
+                                  // batch is picked yet, default to the oldest ALLOWED batch
+                                  // row (Phase 3: rows are per batch+classification; rows
+                                  // branded for other customers are excluded). Mirrors the
+                                  // same sort the picker uses.
                                   if (sourceTracksBatches && !item.batch_id && item.sku_id) {
-                                    const rb = batchesBySku[item.sku_id] || [];
+                                    const rb = (batchesBySku[item.sku_id] || []).filter(b => classificationAllowed(b.child_sku_id));
                                     const ak = (b) => b.production_date || b.received_at || '';
                                     const oldest = [...rb].sort((a, b) => {
                                       const ka = ak(a), kb = ak(b);
@@ -1344,6 +1402,8 @@ export default function DeliveriesTab({
                                     if (oldest) {
                                       updateDeliveryItem(item.id, 'batch_id', oldest.batch_id);
                                       updateDeliveryItem(item.id, 'batch_code', oldest.batch_code);
+                                      updateDeliveryItem(item.id, 'child_sku_id', oldest.child_sku_id || '');
+                                      updateDeliveryItem(item.id, 'child_sku_name', oldest.child_sku_name || '');
                                     }
                                   }
                                 }}
@@ -1353,7 +1413,7 @@ export default function DeliveriesTab({
                                 // pick ANY batch (FIFO is only a default suggestion). Shows
                                 // qty-used / selected-batch-available so over-stock is obvious.
                                 const selectedBatch = sourceTracksBatches && item.batch_id
-                                  ? (batchesBySku[item.sku_id] || []).find(b => b.batch_id === item.batch_id)
+                                  ? (batchesBySku[item.sku_id] || []).find(b => b.batch_id === item.batch_id && (b.child_sku_id || '') === (item.child_sku_id || ''))
                                   : null;
                                 const availableUnits = selectedBatch ? (selectedBatch.quantity || 0) : null;
                                 const over = availableUnits != null && totalUnits > availableUnits;

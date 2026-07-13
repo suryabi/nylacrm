@@ -164,14 +164,16 @@ async def _adjust_stock_for_dispatch(tenant_id: str, dispatch: dict, items: list
             continue
         batch_id = it.get("batch_id")
         if src_is_factory:
-            stock_key = {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": it.get("sku_id")}
+            stock_key = {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": it.get("sku_id"),
+                         "child_sku_id": {"$in": [None]}}
             if batch_id and batch_id != "__legacy__":
                 stock_key["batch_id"] = batch_id
             await db.factory_warehouse_stock.update_one(
                 stock_key, {"$inc": {"quantity": sign * qty}, "$set": {"updated_at": now}})
         else:
             stock_key = {"tenant_id": tenant_id, "distributor_id": distributor_id,
-                         "distributor_location_id": loc_id, "sku_id": it.get("sku_id")}
+                         "distributor_location_id": loc_id, "sku_id": it.get("sku_id"),
+                         "child_sku_id": {"$in": [None]}}
             stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
             await db.distributor_stock.update_one(
                 stock_key, {"$inc": {"quantity": sign * qty}, "$set": {"updated_at": now}})
@@ -190,13 +192,15 @@ async def _check_stock_availability(tenant_id: str, *, src_is_factory: bool, src
         if src_is_factory and src_tracks_batches and not batch_id:
             raise HTTPException(status_code=400, detail=f"Batch is required for SKU {sku_name or sku_id}.")
         if src_is_factory:
-            key = {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": sku_id}
+            key = {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": sku_id,
+                   "child_sku_id": {"$in": [None]}}
             if batch_id and batch_id != "__legacy__":
                 key["batch_id"] = batch_id
             rows = await db.factory_warehouse_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
         else:
             key = {"tenant_id": tenant_id, "distributor_id": distributor_id,
-                   "distributor_location_id": loc_id, "sku_id": sku_id}
+                   "distributor_location_id": loc_id, "sku_id": sku_id,
+                   "child_sku_id": {"$in": [None]}}
             key["batch_id"] = batch_id if batch_id else {"$in": [None]}
             rows = await db.distributor_stock.find(key, {"_id": 0, "quantity": 1}).to_list(1000)
         available = sum((r.get("quantity") or 0) for r in rows)
@@ -233,13 +237,13 @@ async def _allocate_batches_if_needed(tenant_id: str, d: dict, items: list, disp
         if src_is_factory:
             rows = await db.factory_warehouse_stock.find(
                 {"tenant_id": tenant_id, "warehouse_location_id": loc_id, "sku_id": sku_id,
-                 "batch_id": {"$ne": None}, "quantity": {"$gt": 0}},
+                 "batch_id": {"$ne": None}, "quantity": {"$gt": 0}, "child_sku_id": {"$in": [None]}},
                 {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "production_date": 1, "created_at": 1}).to_list(2000)
             rows.sort(key=lambda r: (r.get("production_date") or r.get("created_at") or "9999"))
         else:
             rows = await db.distributor_stock.find(
                 {"tenant_id": tenant_id, "distributor_id": distributor_id, "distributor_location_id": loc_id,
-                 "sku_id": sku_id, "batch_id": {"$ne": None}, "quantity": {"$gt": 0}},
+                 "sku_id": sku_id, "batch_id": {"$ne": None}, "quantity": {"$gt": 0}, "child_sku_id": {"$in": [None]}},
                 {"_id": 0, "batch_id": 1, "batch_code": 1, "quantity": 1, "created_at": 1}).to_list(2000)
             rows.sort(key=lambda r: (r.get("created_at") or "9999"))
         remaining = need

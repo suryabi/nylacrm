@@ -217,6 +217,10 @@ export default function DistributorDetail() {
   // Populated on-demand whenever a tracked source + an item's sku_id is set.
   const [shipmentBatchesBySku, setShipmentBatchesBySku] = useState({});
   const [deliveryBatchesBySku, setDeliveryBatchesBySku] = useState({});
+  // Phase 3 fulfilment classification — per-classification stock at the
+  // selected Stock Out source + metadata for every child SKU (customer match).
+  const [deliveryChildStockBySku, setDeliveryChildStockBySku] = useState({});
+  const [childSkuMeta, setChildSkuMeta] = useState({});
   
   // Delivery state
   const [deliveries, setDeliveries] = useState([]);
@@ -610,6 +614,31 @@ export default function DistributorDetail() {
   useEffect(() => {
     setDeliveryBatchesBySku({});
   }, [deliveryForm.distributor_location_id]);
+  // Phase 3: per-classification stock at the Stock Out source (Generic vs
+  // customer-branded child rows) + child SKU metadata for customer matching.
+  useEffect(() => {
+    setDeliveryChildStockBySku({});
+    if (!deliveryForm.distributor_location_id) return;
+    axios.get(
+      `${API_URL}/api/distributor/stock-transfers/location-stock?location_id=${deliveryForm.distributor_location_id}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    ).then(res => {
+      const map = {};
+      (res.data?.stock_by_child || []).forEach(r => {
+        (map[r.sku_id] = map[r.sku_id] || []).push(r);
+      });
+      setDeliveryChildStockBySku(map);
+    }).catch(() => setDeliveryChildStockBySku({}));
+  }, [deliveryForm.distributor_location_id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!showDeliveryDialog || Object.keys(childSkuMeta).length > 0) return;
+    axios.get(`${API_URL}/api/child-skus`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => {
+        const meta = {};
+        (res.data?.child_skus || []).forEach(c => { meta[c.id] = c; });
+        setChildSkuMeta(meta);
+      }).catch(() => {});
+  }, [showDeliveryDialog]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!sourceDistributorTracksBatches || !deliveryForm.distributor_location_id) {
       setDeliveryBatchesBySku({});
@@ -1872,6 +1901,9 @@ export default function DistributorDetail() {
             // Phase 2 batch identity — the user picks the batch per line.
             batch_id: item.batch_id || null,
             batch_code: item.batch_code || null,
+            // Phase 3 fulfilment classification — null = Generic (unbranded).
+            child_sku_id: item.child_sku_id || null,
+            child_sku_name: item.child_sku_id ? (item.child_sku_name || null) : null,
           };
         }),
         // Include credit notes if any
@@ -1937,6 +1969,8 @@ export default function DistributorDetail() {
       tax_percent: 0,
       batch_id: '',
       batch_code: '',
+      child_sku_id: '',
+      child_sku_name: '',
     }, ...prev]);
   };
 
@@ -3016,6 +3050,8 @@ export default function DistributorDetail() {
             token={token}
             sourceTracksBatches={sourceDistributorTracksBatches}
             batchesBySku={deliveryBatchesBySku}
+            childStockBySku={deliveryChildStockBySku}
+            childSkuMeta={childSkuMeta}
           />
         </TabsContent>
 
@@ -3753,6 +3789,11 @@ export default function DistributorDetail() {
                               <div className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-mono font-medium text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded" data-testid={`delivery-detail-item-batch-${idx}`}>
                                 <Package className="h-2.5 w-2.5" />
                                 {item.batch_code}
+                              </div>
+                            )}
+                            {item.child_sku_name && (
+                              <div className="mt-0.5 ml-1 inline-flex items-center gap-1 text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded" data-testid={`delivery-detail-item-branding-${idx}`}>
+                                {item.child_sku_name}
                               </div>
                             )}
                           </td>

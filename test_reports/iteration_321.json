@@ -1,0 +1,34 @@
+{
+  "summary": "SKU Hierarchy Phase 3 (P0) — delivery-order fulfilment classification. Full backend regression pytest suite created (11/11 passing) + frontend integration verified. Backend covers: item child_sku_id persistence, GET returns child fields, customer-match guard (400 'branded for'), wrong-parent guard (400 'does not belong to'), classification-scoped availability with reserved netting, generic lines validated only against generic stock, complete deducts only branded row, reverse restores branded exactly, and classification-less regression (plain generic create+complete+reverse touches only Generic rows). Frontend covers: classification select renders for Toopa with both Generic and branded options, delivery creates successfully with branded child, DIFFERENT account (Lead Seventeen) with same SKU does NOT expose the Toopa-branded option (select doesn't render since only Generic is allowed), and delivery detail dialog shows the indigo branding badge. All fixtures cleaned up — tenant restored to pre-test state (base_price unset, Toopa & Lead17 sku_pricing restored, Noida generic back to exactly 9 bottles, no leftover child_skus / batches / warehouse_transfers / stock rows / deliveries / margin rows / temp account assignments).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_321_phase3_delivery_classification.py",
+    "/app/test_reports/pytest/iteration_321.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "distributors.py create_delivery is now ~5000 lines in a single file — consider extracting delivery/reservation logic into a dedicated service module for maintainability (file size >700 lines rule).",
+    "DeliveriesTab.jsx is 2772 lines — recommend splitting the modal, item-row, batch-picker and detail-dialog into separate components for readability and easier test-id coverage.",
+    "The classification select is a native <select> without data-testid on each <option>; the option label uses '—' separator which is fine, but consider adding data-testid={`delivery-classification-option-${childId||'generic'}`} to allow more precise Playwright asserts.",
+    "'has_branded' gate on line 1354 hides the classification select entirely for wrong-account cases. This is intentional (Generic-only is implicit) but could confuse ops users who expect to see 'Only Generic available for this account'. Consider always rendering the select with a hint when branded stock exists at the warehouse but is not deliverable to the chosen account."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_321_phase3_delivery_classification.py (new — 11 pytest cases: fixture sanity, branded create, GET child fields, customer-match 400, wrong-parent 400, branded over-qty with reserved netting, generic scoped ok, generic over-qty ignores branded, complete deducts only branded, reverse restores exact, plain-generic regression complete+reverse)"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% (3/3 core UI flows)"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (Nyla Air Water). Login field: session_token.",
+  "seed_data_creation": "During tests (all cleaned up): base_price=10 on 24 Brand, Toopa sku_pricing added 24 Brand@₹100, temp Lead Seventeen sku_pricing added 24 Brand (for FE negative test), 1 customer child SKU TEST_P3_*, 2 skip_qc batches TEST-P3-* (branded+generic) each transferred 60 bottles to Noida Factory Warehouse, temp Toopa→DIST-0002 assignment for FE flow. Backend pytest self-manages its own fixture lifecycle; FE fixtures scripted separately via /tmp/p3_fe_state.json. Verified final Noida stock = exactly [(None, 9)] baseline.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 3 endpoints all working. Reusable pytest at /app/backend/tests/test_iteration_321_phase3_delivery_classification.py sets up its OWN fixtures (base_price, sku_pricing, child_sku, 2 batches, warehouse_transfers, margin row if missing) and tears them all down — safe to re-run any time. It accounts for the BASELINE_GENERIC=9 pre-existing bottles at Noida. To adjust for a different tenant, tweak the top-of-file constants (PARENT_SKU_ID, NOIDA_WH_ID, DIST_ID, ACCOUNT_ID_TOOPA, BASELINE_GENERIC). FE data-testids in DeliveriesTab.jsx that are verified working: create-delivery-btn, delivery-account-search, delivery-account-option-{id}, delivery-location-select, add-delivery-item-btn, delivery-item-{i}, delivery-classification-{index}, delivery-qty-{itemId}, delivery-detail-item-branding-{idx}. Note the FE dialog only lists accounts assigned to the distributor — if your fixture account is not assigned, insert a temp row into account_distributor_assignments (id, tenant_id, account_id, account_name, distributor_id, distributor_name, servicing_state, servicing_city, distributor_location_id, distributor_location_name, is_primary/is_backup, status='active'). Batch-tracked branding chip (delivery-batch-branding-{itemId}-{i}) selector exists in code (DeliveriesTab.jsx L1295) but was not exercised in this run since Noida is factory/non-batch-tracked — separate fixture at a track_batches warehouse would be needed to test it.",
+  "rca of the issue": "N/A — no issues found. Phase 3 backend + frontend behave per spec."
+}
