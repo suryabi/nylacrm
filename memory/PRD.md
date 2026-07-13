@@ -1542,6 +1542,17 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Tested: iteration_319 — backend 9/9 pytest, frontend E2E 100%. Regression file: `/app/backend/tests/test_iteration_319_child_skus.py`.
 - User decisions: Phase 1 only for now; rebranding approval flow NOT wanted yet; fulfilment (Phase 3) may use customer child OR generic OR unbranded stock (all three allowed).
 
+### 2026-06 (current) — SKU Hierarchy Phase 3: Delivery Fulfilment Classification ✅ DONE (tested 11/11 backend + 3/3 frontend flows, iteration_321)
+- **Scope**: Stock Out deliveries carry per-line `child_sku_id` (None = Generic). Rules enforced server-side: customer-type child SKUs may ONLY be delivered to their own account; generic-type children + unbranded go to anyone.
+- Backend (`distributors.py`, `models/distributor.py`):
+  - `DeliveryItemCreate.child_sku_id/child_sku_name`; create_delivery validates child (exists/active/parent-match/customer-match) and hydrates name; demand keyed (sku, batch, child); availability + shortage messages classification-scoped (`[child name]`); derived-on-hand dashboard fallback applies to Generic lines only; `_reserved_qty_map(by_child=True)` nets reservations per classification; items persist child fields.
+  - `complete_delivery` deducts and `_readd_completed_delivery_stock` (reverse) restores per classification.
+  - **Hardened all classification-less stock flows to Generic-only rows** (`child_sku_id: {"$in":[None]}`): factory shipment confirm/deliver/reverse (+under-received refund, destination removal, `_apply_stock_on_delivery`), promo dispatch adjust/availability/FIFO batch allocation, factory returns confirm/cancel. Branded stock can never be consumed by classification-less flows.
+- Frontend:
+  - `DeliveriesTab.jsx`: `classificationAllowed()` (customer matching via child meta); non-batch sources show a "Stock Classification" select per line (data-testid `delivery-classification-{i}`) with per-classification bottle availability, only when branded stock exists; batch cards split per (batch, classification), indigo branding chips, other customers' branded rows hidden, selection + FIFO auto-select set child; delivery detail dialog shows branding badge.
+  - `DistributorDetail.js`: fetches `stock_by_child` for source + child SKU metadata; payload includes child fields.
+- Testing: iteration_321 — 11/11 backend pytest + 3/3 frontend UI flows, no issues; all fixtures cleaned (Noida generic restored to 9 bottles).
+
 ### 2026-06 (current) — SKU Hierarchy Phase 2: Stock Classification + Branding Entry (Model C) ✅ DONE (tested 17/17 backend + frontend smoke)
 - **Scope locked by user**: Model C — production runs optionally declare a target child SKU; transfers default to it or override per line; Branding Entry reclassifies Generic ↔ branded with **NO approval**.
 - Backend:
@@ -1577,7 +1588,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 
 ### P1 (SKU Hierarchy next phases — user approved design)
 - ~~Phase 2: stock classification (child_sku_id on factory/distributor stock rows), Branding Entry screen (Unbranded → child), auto roll-up stock views with drill-down~~ ✅ DONE 2026-06 (Model C, no approval)
-- Phase 3: delivery-order fulfilment classification (fulfilment_child_sku_id on items, customer-match validation, deduct from child stock; customer child / generic / unbranded all allowed)
+- ~~Phase 3: delivery-order fulfilment classification (fulfilment child_sku_id on items, customer-match validation, deduct from child stock; customer child / generic / unbranded all allowed)~~ ✅ DONE 2026-06 (iteration_321)
 
 ### P1
 - Standardize `master_locations` as single source of truth for city spellings (recurring bug)
