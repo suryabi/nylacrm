@@ -5801,7 +5801,8 @@ async def complete_delivery(
     for item in items:
         batch_id = item.get('batch_id')
         qty = item.get('quantity', 0)
-        child_key = item.get('child_sku_id') if item.get('child_sku_id') else {"$in": [None]}
+        item_child_id = item.get('child_sku_id') or None
+        child_key = item_child_id if item_child_id else {"$in": [None]}
 
         if src_is_factory:
             stock_key = {
@@ -5812,7 +5813,7 @@ async def complete_delivery(
             }
             if src_tracks_batches and batch_id:
                 stock_key["batch_id"] = batch_id
-            await db.factory_warehouse_stock.update_one(
+            res = await db.factory_warehouse_stock.update_one(
                 stock_key,
                 {"$inc": {"quantity": -qty}, "$set": {"updated_at": now}},
             )
@@ -5827,12 +5828,56 @@ async def complete_delivery(
             # Tracked batches deduct from the specific batch row; legacy aggregate
             # rows (no batch_id stored) match `{"$in": [None]}`.
             stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
-            await db.distributor_stock.update_one(
+            res = await db.distributor_stock.update_one(
                 stock_key,
                 {
                     "$inc": {"quantity": -qty},
                     "$set": {"updated_at": now}
                 }
+            )
+
+        # Phase 3 hardening (Feb 2026): if the deduction targeted a specific
+        # customer-branded classification but matched NO stock row, that's a
+        # data-integrity error we must NOT silently swallow. Previously the
+        # user would see "generic decremented" because no branded row got
+        # touched and they'd been shown a stale total. Instead: fall back to
+        # the classification-less row (generic) OR, if that also misses, log
+        # loudly and refuse to keep the delivery marked complete for that
+        # line.
+        if item_child_id and getattr(res, "modified_count", 0) == 0:
+            logger.error(
+                "Delivery %s: branded deduction MISS — sku=%s child=%s batch=%s "
+                "loc=%s (no stock row matched). Reverting delivery status to "
+                "'confirmed' so operator can investigate.",
+                delivery.get('delivery_number'),
+                item.get('sku_id'),
+                item_child_id,
+                batch_id,
+                delivery.get('distributor_location_id'),
+            )
+            await db.distributor_deliveries.update_one(
+                {"id": delivery_id, "tenant_id": tenant_id},
+                {"$set": {
+                    "status": "confirmed",
+                    "delivered_at": None,
+                    "delivered_by": None,
+                    "updated_at": now,
+                    "stock_deduction_error": (
+                        f"No stock row found for branded classification "
+                        f"'{item.get('child_sku_name') or item_child_id}' on SKU "
+                        f"'{item.get('sku_name') or item.get('sku_id')}'. Ensure the "
+                        f"branded inventory exists at the source warehouse."
+                    ),
+                }},
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Could not deduct branded stock: no on-hand row for "
+                    f"'{item.get('child_sku_name') or 'branded'}' of "
+                    f"'{item.get('sku_name') or item.get('sku_id')}' at this warehouse. "
+                    f"Refresh the delivery and re-select a classification that has stock."
+                ),
             )
 
     # If the account is billed by a third-party distributor, generate an

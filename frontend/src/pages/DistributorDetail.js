@@ -608,19 +608,25 @@ export default function DistributorDetail() {
   const sourceDistributorTracksBatches = !!(
     (distributor?.locations || []).find(loc => loc.id === deliveryForm.distributor_location_id)?.track_batches
   );
-  // 🐛 FIX: batches are scoped to the source location. Reset the cache
-  // whenever the user switches `distributor_location_id`, otherwise the
-  // picker keeps showing the previous warehouse's batches and quantities.
+  // 🐛 FIX: batches are scoped to the source location AND the delivery's
+  // account (Phase 3 branded-stock filter). Reset the cache whenever either
+  // changes, otherwise the picker keeps showing the previous warehouse's or
+  // previous account's batches.
   useEffect(() => {
     setDeliveryBatchesBySku({});
-  }, [deliveryForm.distributor_location_id]);
+  }, [deliveryForm.distributor_location_id, deliveryForm.account_id]);
   // Phase 3: per-classification stock at the Stock Out source (Generic vs
   // customer-branded child rows) + child SKU metadata for customer matching.
+  // The `account_id` query param scopes customer-branded rows to THIS delivery's
+  // account so a distributor holding branded stock for Customer A never sees
+  // A's rows in a delivery being built for Customer B (server-side guard).
   useEffect(() => {
     setDeliveryChildStockBySku({});
     if (!deliveryForm.distributor_location_id) return;
+    const params = new URLSearchParams({ location_id: deliveryForm.distributor_location_id });
+    if (deliveryForm.account_id) params.append('account_id', deliveryForm.account_id);
     axios.get(
-      `${API_URL}/api/distributor/stock-transfers/location-stock?location_id=${deliveryForm.distributor_location_id}`,
+      `${API_URL}/api/distributor/stock-transfers/location-stock?${params.toString()}`,
       { headers: { Authorization: `Bearer ${token}` } }
     ).then(res => {
       const map = {};
@@ -629,7 +635,7 @@ export default function DistributorDetail() {
       });
       setDeliveryChildStockBySku(map);
     }).catch(() => setDeliveryChildStockBySku({}));
-  }, [deliveryForm.distributor_location_id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deliveryForm.distributor_location_id, deliveryForm.account_id]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!showDeliveryDialog || Object.keys(childSkuMeta).length > 0) return;
     axios.get(`${API_URL}/api/child-skus`, { headers: { Authorization: `Bearer ${token}` } })
@@ -651,8 +657,13 @@ export default function DistributorDetail() {
     ));
     if (!needed.length) return;
     needed.forEach(sid => {
+      const params = new URLSearchParams({
+        location_id: deliveryForm.distributor_location_id,
+        sku_id: sid,
+      });
+      if (deliveryForm.account_id) params.append('account_id', deliveryForm.account_id);
       axios.get(
-        `${API_URL}/api/distributor/stock-transfers/batches-available?location_id=${deliveryForm.distributor_location_id}&sku_id=${sid}`,
+        `${API_URL}/api/distributor/stock-transfers/batches-available?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}` } }
       ).then(res => {
         setDeliveryBatchesBySku(prev => ({ ...prev, [sid]: res.data.batches || [] }));
@@ -660,7 +671,7 @@ export default function DistributorDetail() {
         setDeliveryBatchesBySku(prev => ({ ...prev, [sid]: [] }));
       });
     });
-  }, [deliveryForm.distributor_location_id, deliveryItems, sourceDistributorTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [deliveryForm.distributor_location_id, deliveryForm.account_id, deliveryItems, sourceDistributorTracksBatches]);  // eslint-disable-line react-hooks/exhaustive-deps
 
 
   // Fetch deliveries

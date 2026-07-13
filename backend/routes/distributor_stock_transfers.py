@@ -548,6 +548,14 @@ async def warehouse_stock_overview(current_user: dict = Depends(get_current_user
 async def list_batches_available(
     location_id: str = Query(..., description="Source warehouse location id"),
     sku_id: str = Query(..., description="SKU whose batches we want to list"),
+    account_id: Optional[str] = Query(
+        None,
+        description=(
+            "When set, excludes customer-branded batches whose child SKU belongs to a "
+            "DIFFERENT customer account (Phase 3 fulfilment scoping). Generic rows and "
+            "generic-type children are always included."
+        ),
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """Return batches with positive stock at this warehouse for the given SKU.
@@ -602,6 +610,27 @@ async def list_batches_available(
     # available to allocate again. We show available = on-hand − reserved so
     # the picker never offers stock that's already spoken for.
     reserved_by_batch = await _reserved_qty_by_batch(tenant_id, location_id, sku_id)
+
+    # Phase 3 (Bug fix — Feb 2026): scope customer-branded rows to the target
+    # customer account. Without this, a distributor holding branded stock for
+    # Customer A would see A's rows offered when creating a delivery for B —
+    # and (worse) the client-side filter falls back to "show" whenever the
+    # child SKU metadata hasn't fully loaded, which was leaking other
+    # customers' branded stock into the picker on production.
+    allowed_children = None
+    if account_id:
+        child_docs = await db.child_skus.find(
+            {"tenant_id": tenant_id, "parent_sku_id": sku_id},
+            {"_id": 0, "id": 1, "child_type": 1, "customer_account_id": 1},
+        ).to_list(2000)
+        allowed_children = set()
+        for c in child_docs:
+            if c.get("child_type") != "customer":
+                # Generic-type children are deliverable to anyone.
+                allowed_children.add(c.get("id"))
+            elif c.get("customer_account_id") == account_id:
+                allowed_children.add(c.get("id"))
+        rows = [r for r in rows if (not r.get("child_sku_id")) or r.get("child_sku_id") in allowed_children]
 
     # Rows are (batch, classification) grained. Reservations are batch-level
     # (open deliveries don't carry a child classification yet), so distribute
@@ -673,6 +702,14 @@ async def list_production_batches_for_sku(
 @router.get("/location-stock")
 async def get_location_stock(
     location_id: str = Query(..., description="Source warehouse location id"),
+    account_id: Optional[str] = Query(
+        None,
+        description=(
+            "When set, excludes customer-branded stock whose child SKU belongs to a "
+            "DIFFERENT customer account (Phase 3 fulfilment scoping). Generic rows and "
+            "generic-type children are always included."
+        ),
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """Return per-SKU on-hand stock (bottles) for a warehouse, transparently
@@ -695,6 +732,24 @@ async def get_location_stock(
                 "distributor_location_id": location_id,
             }, proj,
         ).to_list(2000)
+
+    # Phase 3 (Bug fix — Feb 2026): when the caller specifies an account, drop
+    # customer-branded rows whose child SKU is NOT branded for this account.
+    # See /batches-available for the same guard.
+    if account_id:
+        child_ids = list({r.get("child_sku_id") for r in rows if r.get("child_sku_id")})
+        allowed = set()
+        if child_ids:
+            child_docs = await db.child_skus.find(
+                {"tenant_id": tenant_id, "id": {"$in": child_ids}},
+                {"_id": 0, "id": 1, "child_type": 1, "customer_account_id": 1},
+            ).to_list(len(child_ids))
+            for c in child_docs:
+                if c.get("child_type") != "customer":
+                    allowed.add(c.get("id"))
+                elif c.get("customer_account_id") == account_id:
+                    allowed.add(c.get("id"))
+        rows = [r for r in rows if (not r.get("child_sku_id")) or r.get("child_sku_id") in allowed]
     # Aggregate per SKU (backward-compatible shape) + per (SKU, classification)
     by_sku: dict = {}
     by_child: dict = {}

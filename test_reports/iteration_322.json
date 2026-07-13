@@ -1,0 +1,37 @@
+{
+  "summary": "Backend-only verification of Feb 2026 delivery branded-stock scoping bug fixes. Wrote /app/backend/tests/test_iteration_322_delivery_branded_scoping.py (10 pytest cases, all PASSING) covering: (1) /api/distributor/stock-transfers/location-stock account_id filter — no account returns all rows, owner account sees branded+generic, DIFFERENT account excludes branded (200 bottles filtered) while generic remains; aggregate `stock` sum is correspondingly reduced; (2) /api/distributor/stock-transfers/batches-available with the same three account_id scenarios; branded batch hidden from foreign account; (3) Defensive complete_delivery guard — seeded a synthetic 'confirmed' delivery pointing at a phantom branded child_sku_id with no factory_warehouse_stock row; POST /complete returns HTTP 400 with descriptive 'branded/stock' detail, delivery status reverts to 'confirmed', delivered_at & delivered_by cleared, stock_deduction_error field populated; (4) Regression sanity — omitting account_id preserves legacy shape ({stock, stock_by_child, is_factory}). Also re-ran iteration_321 phase-3 pytest (11/11 still passing) — branded classification create/complete/reverse, wrong-account 400, wrong-parent 400, generic-only regression all intact. Combined 21/21 tests green. Tenant state fully cleaned (no TEST_ residue; seed 200+200 bottles at Default master intact).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_322_delivery_branded_scoping.py",
+    "/app/test_reports/pytest/iteration_322.xml",
+    "/app/backend/tests/test_iteration_321_phase3_delivery_classification.py",
+    "/app/test_reports/pytest/iteration_322_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "distributor_stock_transfers.py filter is applied in-Python after the DB fetch — fine at current row counts, but could be pushed into the Mongo query (`child_sku_id: {$in: allowed_or_None}`) if a tenant ever grows to 10k+ rows per warehouse.",
+    "In complete_delivery (distributors.py L5847-5881), the revert path clears delivered_at/delivered_by only for the FIRST offending item and then raises — subsequent items are not processed. This is the correct fail-fast behaviour, but note the delivery status was already flipped to 'complete' at L5779 before the loop; the revert query correctly resets it, so no data-integrity issue, just a small inefficiency (a double write). Consider deferring the status flip until AFTER all items succeed to avoid the write-then-revert round-trip.",
+    "The batches-available account_id filter loads all child_skus for the parent SKU (up to 2000). For SKUs with many child SKUs this is fine, but a projected index on (tenant_id, parent_sku_id, customer_account_id) would keep it fast.",
+    "distributors.py is now 10301 lines — well past the 700-line guideline. Extract delivery/reservation/completion logic into a dedicated service module.",
+    "The `stock_deduction_error` field is a free-text string — no schema/enum. Consider a structured shape ({code, item_id, sku_id, child_sku_id, message}) so the FE can render a targeted UI cue rather than parsing the sentence."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_322_delivery_branded_scoping.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10 new + 11/11 regression = 21/21)", "frontend": "n/a (backend-only per request)"},
+  "test_credentials": "CEO: surya.yadavalli@nylaairwater.earth / test123 (Nyla Air Water). Login endpoint returns session_token; used as Bearer.",
+  "seed_data_creation": "All tests use existing seeded stock (child SKU ba79db11 @ location 6eb87219 with 200 branded + 200 generic bottles). Defensive-guard test inserts a temp TEST_PHANTOM_* child_sku + TEST_DEL_* delivery + TEST_ITEM_* row, all removed in fixture teardown. No stock rows touched. Verified: 0 leftovers, 200+200 seed intact post-run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both filter endpoints and the defensive complete guard are working per spec. The pytest at /app/backend/tests/test_iteration_322_delivery_branded_scoping.py is idempotent and self-cleans — safe to re-run. Constants at top of file: PARENT_SKU_ID / BRANDED_CHILD_ID / OWNER_ACCOUNT_ID / OTHER_ACCOUNT_ID / FACTORY_LOC_ID / BRANDED_BATCH_ID (adjust if the referenced seed rows are ever purged; verify with `db.factory_warehouse_stock.find({warehouse_location_id: FACTORY_LOC_ID, sku_id: PARENT_SKU_ID})`).",
+  "rca of the issue": "N/A — no defects. Bug fixes verified in scope."
+}
