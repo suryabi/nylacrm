@@ -879,6 +879,7 @@ async def delete_batch(
             "tenant_id": tenant_id,
             "warehouse_location_id": wh_id,
             "sku_id": sku_id,
+            "child_sku_id": t.get("child_sku_id") if t.get("child_sku_id") else {"$in": [None]},
         })
         if not stock_row:
             continue

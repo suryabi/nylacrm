@@ -1542,6 +1542,22 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - Tested: iteration_319 — backend 9/9 pytest, frontend E2E 100%. Regression file: `/app/backend/tests/test_iteration_319_child_skus.py`.
 - User decisions: Phase 1 only for now; rebranding approval flow NOT wanted yet; fulfilment (Phase 3) may use customer child OR generic OR unbranded stock (all three allowed).
 
+### 2026-06 (current) — SKU Hierarchy Phase 2: Stock Classification + Branding Entry (Model C) ✅ DONE (tested 17/17 backend + frontend smoke)
+- **Scope locked by user**: Model C — production runs optionally declare a target child SKU; transfers default to it or override per line; Branding Entry reclassifies Generic ↔ branded with **NO approval**.
+- Backend:
+  - `production_qc.py`: `BatchCreate`/`BatchUpdate` gained `target_child_sku_id` (denormalised name/code on batch; `""` clears). `transfer-to-warehouse` gained `child_sku_id` (absent → batch target, `""` → Generic, id → child); `factory_warehouse_stock` rows + `warehouse_transfers` history now keyed/stamped with `child_sku_id/name/code`. Force-delete cascade rollback is classification-aware.
+  - `distributor_stock_transfers.py`: `TransferItem.child_sku_id/name`; `_adjust_*` stock keys include `child_sku_id` (`{"$in":[None]}` = Generic/legacy); `_read_source_stock` keys are (sku,batch,child)/(sku,child); create validates availability **per classification** with `[child name]` in errors; items persist child fields; delete/edit-qty/reverse all classification-aware. `/location-stock` returns `stock` + `stock_by_child`; `/batches-available` rows split per (batch, classification) with batch-level reservations distributed Generic-first.
+  - NEW `routes/branding_entries.py` mounted at `/api/branding-entries`: `GET /stock-breakdown`, `GET /` (audit list), `POST /` — FIFO across batches, moves qty between classifications (total unchanged), `BRD-YYYY-NNNN` numbering, insufficient-stock guard, works for factory AND distributor warehouses. Collection: `branding_entries`.
+  - `distributors.py` stock-summary: each by-location SKU item now carries `children` classification breakdown (empty when no branded rows).
+- Frontend:
+  - `BrandingEntryDialog.js` (NEW): warehouse → SKU (child-enabled with stock) → From/To classification with live availability → qty → notes.
+  - `StockDashboard.jsx`: "Branding Entry" button; By-Location SKU rows show "N branded" badge + **collapsed click-to-expand** child breakdown rows (user never answered expanded-vs-collapsed → defaulted collapsed).
+  - `StockTransfers.js`: per-line Classification select (non-batch sources with branded stock), batch picker options labelled `[Generic]`/`[child]` with composite batch+classification value, availability scoped to selection.
+  - `BatchDetail.js`: transfer panel Stock Classification select (pre-filled from batch target) + Classification column in history.
+  - `ProductionBatches.js`: create-batch modal "Target Child SKU (branding)" select for `allows_child_skus` SKUs.
+- Testing: iteration_320 — 17/17 backend pytest pass, frontend smoke verified, all test fixtures cleaned up.
+- ⚠️ Lesson recorded: parallel `search_replace` calls to the SAME file can clobber each other (last-writer-wins) — two edits were silently lost and re-applied. Edit the same file sequentially.
+
 ### 2026-05-17 — P0 Fix: Tax & Billing manual edits no longer revert ✅ DONE
 - Root cause: `server.py` had a duplicate `@api_router.put("/accounts/{account_id}")` route registered BEFORE `routes/accounts.py`'s router was included, so it shadowed the newer endpoint. Its outdated `AccountUpdate` model did not list `gst_legal_name`, `gst_trade_name`, `pan_number`, `billing_address`, `delivery_contact_name`, `delivery_contact_phone` — Pydantic silently dropped them and the GST-cert parsed values stayed in Mongo.
 - Fix: Removed the duplicate route + obsolete `AccountUpdate` class from `server.py`. The full-featured route in `routes/accounts.py` now handles all PUT updates.
@@ -1560,7 +1576,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ## Active backlog
 
 ### P1 (SKU Hierarchy next phases — user approved design)
-- Phase 2: stock classification (child_sku_id on factory/distributor stock rows), Branding Entry screen (Unbranded → child), auto roll-up stock views with drill-down
+- ~~Phase 2: stock classification (child_sku_id on factory/distributor stock rows), Branding Entry screen (Unbranded → child), auto roll-up stock views with drill-down~~ ✅ DONE 2026-06 (Model C, no approval)
 - Phase 3: delivery-order fulfilment classification (fulfilment_child_sku_id on items, customer-match validation, deduct from child stock; customer child / generic / unbranded all allowed)
 
 ### P1
