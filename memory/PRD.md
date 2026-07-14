@@ -23,6 +23,16 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-14 — 🏷️ Stock In: customer-branded child SKU now visible + carried end-to-end ✅ DONE (tested)
+- **Reported**: In Stock In entry, the child SKU batch appeared but the customer-branded child SKU associated with the batch was not visible — user couldn't tell which customer's branded SKU was being sent.
+- **Fix (user chose full carry-through, option a)**:
+  - `BatchPickerCards.jsx`: batch cards now show a **violet chip with the child SKU name** (branded) or a "Generic" chip when the list mixes classifications; cards keyed by `(batch_id, child_sku_id)`; new `selectedChildId` prop so two rows of the same batch are individually selectable; `onSelect` now passes the full batch object (3rd arg, backward compatible for Stock Out / Promo pickers).
+  - `ShipmentsTab.jsx` + `DistributorDetail.js`: picking a branded card stores `child_sku_id`/`child_sku_name` on the shipment item; payload sends them; SKU change clears stale batch/child; **shipment detail dialog** shows `Batch <code>` + violet child badge per item.
+  - Backend `models/distributor.py::ShipmentItemCreate` + `routes/distributors.py`: `create_shipment` validates (child belongs to parent SKU) and persists the classification; **confirm** deducts the matching branded factory row (was Generic-only → would fail/corrupt for branded batches); **deliver/acknowledge/approve-receipt refund/reverse** all move the branded row correctly, so distributor stock lands as branded for that customer (keeps "Branded Stock by Customer" report accurate).
+  - `distributor_stock_transfers.py::/production-batches` now returns `child_sku_id/child_sku_name` (from batch `target_child_sku_*`) for the dest-only-tracks-batches case.
+- **Verified**: backend E2E script `/app/test_stockin_child.py` (6/6: batches-available + production-batches expose child, create carries it, confirm deducts branded row 500→400, deliver credits branded distributor row, reverse restores both) + testing_agent iteration_324 (frontend 100%: chip render, exclusive selection, save, detail badge, Stock Out regression clean).
+- Minor known: Radix `aria-describedby` warning on shipment dialogs (a11y-only, pre-existing).
+
 ### 2026-07-14 — 🐛 Fix: 500 on create delivery for non-factory, non-batch warehouses ✅ DONE
 - `routes/distributors.py` `create_delivery`: the derived on-hand pre-aggregation (used only when the source warehouse is non-factory & non-batch-tracked — e.g. "non self-managed" third-party distributors like Pickval Traders) unpacked `stock_demand.keys()` as 2-tuples after Phase 3 changed the key to a 3-tuple `(sku_id, batch_id, child_sku_id)`. Every stock-out delivery from such a warehouse returned HTTP 500 (`ValueError: too many values to unpack (expected 2)`).
 - Fix: switched to index-based access `{k[0] for k in stock_demand.keys() if k[0]}`. Verified via curl: previously 500 → now correctly reaches the margin-matrix check.
