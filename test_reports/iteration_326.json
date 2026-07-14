@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only re-test of the RETROCATEGORIZATION UX REWORK (city-scoped, searchable, autocomplete Command picker with violet chip). All 6 tests PASSED end-to-end against live preview URL, logged in as CEO surya.yadavalli@nylaairwater.earth.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_results": {
+    "TEST_1_city_scoping_stock_in": "PASS — /distributors/99fb…04?tab=stockin → clicked SHP-UIRETRO-1 → retro-categorize-shipment-item-0. Dialog rendered retro-city-scope badge 'Accounts in Margao'. retro-selected-child violet chip AUTO-SELECTED showing 'UIRetro Margao Branded' + 'UIRetro Margao Cafe · Margao'. Hyderabad children 'UIRetro BrandedCo' and 'UIRetro OtherCity' NOT present anywhere in dialog.",
+    "TEST_2_search_autocomplete": "PASS — Clicked retro-clear-child X → retro-child-picker + retro-child-search appear. Typing 'margao' shows the option (retro-child-option-0 = 'UIRetro Margao Branded / UIRetro Margao Cafe · Margao'). Typing 'zzz' shows 'No match — try a different name.' Clearing search + clicking option-0 restores the violet chip.",
+    "TEST_3_submit_end_to_end": "PASS — With Margao child selected, qty set to 5 crates (partial). Submit produced toast: 'Categorized as UIRetro Margao Branded — 60 units reclassified at destination (BRD-2026-0001)'. Reopened shipment detail shows split: 180 units Generic + 60 units with violet 'UIRetro Margao Branded' badge (Grand Total unchanged ₹2,400).",
+    "TEST_4_delivery_account_scoped_not_city": "PASS — /distributors/99fb…04?tab=stockout, set Time Period=Last 3 Months, expanded 21 JUN 2026 group, opened DEL-UIRETRO-1, clicked retro-categorize-delivery-item-0. retro-city-scope badge is ABSENT (as required). Picker has exactly 2 options both for account Toopa Ice-creamery (Hyderabad): 'UIRetro BrandedCo' and 'UIRetro OtherCity'. 'UIRetro Margao Branded' does NOT appear. Dialog closed without submitting.",
+    "TEST_5_transfer_city_scoped": "PASS — /distributor/stock-transfers → row for ST-UIRETRO-1 → retro-categorize-transfer-btn-uiretro-tr. Dialog shows retro-city-scope 'Accounts in Margao' badge + AUTO-SELECTED violet chip 'UIRetro Margao Branded / UIRetro Margao Cafe · Margao'. Dialog closed without submitting.",
+    "TEST_6_console": "PASS — Only 2 pre-existing warnings (Radix DialogContent missing aria-describedby). No new React errors/warnings emitted in any of the flows. No 500s. Two 401s are pre-existing (refresh-token before X-Tenant-ID set) and ignored per task spec."
+  },
+  "seed_data_creation": "IMPORTANT: Task note claimed the extra children 'uiretro-samecity' (UIRetro Margao Branded on account UIRetro Margao Cafe / Margao) and 'uiretro-othercity' (UIRetro OtherCity on Toopa / Hyderabad) 'exist already, do not delete'. In reality the DB only had the base child 'UIRetro BrandedCo' (Toopa) and NEITHER of these two extras. Account 'UIRetro Margao Cafe' (id uiretro-acct-margao) DID exist. I manually inserted the two missing child_skus so the city-scoping scenario could be tested (see rca). Without them TEST 1 would have failed because the Margao-filtered eligible-children API returns [] and the dialog would show retro-no-children warning instead of the auto-selected chip.",
+  "test_report_links": ["/app/test_retro_categorization.py"],
+  "action_items": [
+    "OPTIONAL: Update seed_uiretro.py (or the dedicated UX-rework seeder) to also create uiretro-samecity + uiretro-othercity child SKUs so the city-scoping demo/test is reproducible without manual DB fixup. Right now the DB was one manual reset away from a broken TEST 1.",
+    "OPTIONAL (nit, pre-existing): RetroCategorizeDialog's DialogContent is still missing aria-describedby → Radix warns twice per open. DialogDescription is present but not linked because DialogContent doesn't set aria-describedby explicitly. Non-blocking."
+  ],
+  "critical_code_review_comments": [
+    "RetroCategorizeDialog.jsx (252 lines): clean, focused, all interactive elements have data-testids used in this test (retro-categorize-dialog, retro-city-scope, retro-selected-child, retro-clear-child, retro-child-picker, retro-child-search, retro-child-option-N, retro-qty-input, retro-submit-btn, retro-no-children, retro-item-select).",
+    "The account_id vs location_id fallback in the useEffect (line 60-62) is exactly right — deliveries pass accountId only, stock-in/transfers pass locationId only, so the API decides between account-scoping and city-scoping. Behavior verified end-to-end.",
+    "Command picker uses cmdk value = `${child_sku_name} ${customer_account_name} ${account_city}` so search matches customer name and city in addition to SKU name — great UX, confirmed via 'margao' search hit.",
+    "Auto-select-when-single logic (line 70) works and yields the chip-only view; still allows clearing via X for change.",
+    "No new console errors introduced. Legacy Radix aria-describedby warning is pre-existing and non-blocking (already noted in prior iterations)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (API contract spot-verified via curl: filtered_by_city=true and destination_city=Margao with location_id, unscoped returns 3 children, account-scoped Toopa returns 2 children)", "frontend": "100% (6/6)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Retro UX rework (city-scoped, searchable Command picker with violet chip) is fully working. If re-testing: after `python /app/seed_uiretro.py`, ALSO insert child_skus 'uiretro-samecity' (parent_sku_id=51cbec53-a1d5-4e23-b708-a1fd0c014059, customer_account_id='uiretro-acct-margao', child_sku_name='UIRetro Margao Branded') and 'uiretro-othercity' (customer_account_id='81263309-2118-4d51-b1d9-fe9549da07b7', child_sku_name='UIRetro OtherCity') into MongoDB — the base seeder does NOT create these but the tests need them. Also remember TEST 3 permanently splits SHP-UIRETRO-1 into 180 generic + 60 branded; re-run seed_uiretro.py to reset before another TEST 3.",
+  "rca_of_the_issue": "N/A — feature works. Only friction was the seed data gap noted above."
+}

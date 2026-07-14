@@ -869,6 +869,7 @@ export default function StockTransfers() {
     setRetroTarget({
       txType: 'transfer',
       txNumber: `Transfer ${t.transfer_number}`,
+      locationId: t.dest_location_id,
       items,
       onSubmit: submitTransferRetro(t.id),
     });
