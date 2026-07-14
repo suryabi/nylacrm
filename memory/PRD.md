@@ -23,6 +23,18 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-14 — ✨ Retrospective categorization: Generic transaction lines → customer child SKUs ✅ DONE (tested)
+- **Request**: Existing Stock In / Stock Transfer / Stock Out transactions may hold customer-branded stock recorded as parent-SKU Generic. Provide an option to retrospectively categorize quantities into the appropriate customer-specific child SKU, only when such a child exists for the parent SKU (and the delivery's account), preserving original quantities and movement history.
+- **User choices**: (1) move whatever Generic stock is still on hand at destination (capped), relabel line fully either way; (2) Stock Out relabels only; (3) partial split allowed; (4) roles CEO/Admin/System Admin.
+- **Backend NEW** (`routes/retro_categorization.py`, mounted `/api/retro-categorize`):
+  - `GET /eligible-children?sku_id=&account_id=` — active customer-type children (account-scoped for deliveries).
+  - `POST /shipment-item`, `POST /delivery-item`, `POST /transfer-item` — relabel or split the line (amounts prorated / recomputed; transaction totals unchanged), stamp `retro_categorized*` audit fields. Delivered Stock In & completed Transfers additionally move Generic on-hand at the DESTINATION into the child bucket (batch-restricted when the line carries a batch, else FIFO across generic rows, capped at available) and write a **Branding Entry** (`source: retro_categorization`) for audit. Guards: only Generic lines, active customer children of the same parent, delivery child must match delivery account, no cancelled/reversed txns, split blocked on receipt-discrepancy shipment lines, qty must be a package multiple when splitting.
+- **Frontend NEW** (`components/distributor/RetroCategorizeDialog.jsx`) + hooks:
+  - `DistributorDetail.js`: violet "Categorize" button on Generic item rows in the Stock In shipment detail (`retro-categorize-shipment-item-{idx}`) and Stock Out delivery detail (`retro-categorize-delivery-item-{idx}`), shown only for CEO/Admin/System Admin when an eligible child exists (delivery: for that account). Child SKU meta loaded when detail dialogs open.
+  - `StockTransfers.js` (route `/distributor/stock-transfers`): per-row "Categorize" button (`retro-categorize-transfer-btn-{id}`) for completed transfers with eligible Generic lines.
+  - Dialog: line picker (transfers), child select, qty in packages with split hint, per-type stock-effect explainer.
+- **Verified**: backend E2E `/app/test_retro_categorization.py` (18/18: eligible-children scoping, shipment partial split + 120-unit stock move + BRD entry + amounts prorated, re-categorize blocked, wrong-account child blocked, delivery relabel-only, transfer full categorize + FIFO sweep with batch lineage, RBAC 403) + testing_agent iteration_325 (frontend 100%: all 3 flows, gating, no new console errors). UI seed data cleaned after testing.
+
 ### 2026-07-14 — 🏷️ Stock In: customer-branded child SKU now visible + carried end-to-end ✅ DONE (tested)
 - **Reported**: In Stock In entry, the child SKU batch appeared but the customer-branded child SKU associated with the batch was not visible — user couldn't tell which customer's branded SKU was being sent.
 - **Fix (user chose full carry-through, option a)**:

@@ -17,7 +17,7 @@ async def main(clean_only=False):
     await db.distributor_delivery_items.delete_many({"delivery_id": {"$regex": f"^{TAG}"}})
     await db.distributor_stock_transfers.delete_many({"id": {"$regex": f"^{TAG}"}})
     await db.distributor_stock.delete_many({"id": {"$regex": f"^{TAG}"}})
-    ships = await db.distributor_shipments.find({"tenant_id": TENANT, "reference_number": TAG}, {"_id": 0, "id": 1}).to_list(20)
+    ships = await db.distributor_shipments.find({"tenant_id": TENANT, "$or": [{"id": {"$regex": f"^{TAG}"}}, {"shipment_number": "SHP-UIRETRO-1"}]}, {"_id": 0, "id": 1}).to_list(20)
     for s in ships:
         await db.distributor_shipments.delete_one({"id": s["id"]})
         await db.distributor_shipment_items.delete_many({"shipment_id": s["id"]})
