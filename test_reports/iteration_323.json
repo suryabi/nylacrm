@@ -1,0 +1,42 @@
+{
+  "summary": "Full-stack verification of the new Branded Stock by Customer report (per-distributor Stock Dashboard tab + global /stock-dashboard 'Branded Stock' tab). Backend: 17/17 pytest cases pass in test_iteration_323_branded_stock_sections.py — validates (a) global GET /api/distributors/dashboard/stock-summary returns branded_stock with the 24 Brand section (total=409, generic=209, customer=200; Drive Folder Test Lead 200); (b) per-distributor GET /api/distributors/b8876367.../stock-dashboard returns exactly 1 branded_stock section (total=400, generic=200 'Generic (unclassified)' @ Default master, customer 200 for Drive Folder Test Lead referencing branded child ba79db11); (c) regression — all legacy keys (summary/by_distributor/by_sku/by_location/cities and totals/skus/factory_warehouses/bottle_tracking) still present, populated, unchanged in shape; (d) cross-endpoint section shape consistency. Frontend: Playwright verified the distributor detail tab renders sku-stock-table AND branded-stock-by-customer with the correct testids (branded-stock-section-{sku_id}, branded-generic-{sku_id}, branded-customers-{sku_id}, branded-loc-chip-*), showing 400 Bottle total, generic 200 Bottle @ Default master, Drive Folder Test Lead 200 Bottle w/ child SKU + location chip. Bottles↔Default Crates toggle switches without breaking either table (24 Brand packaging has units=1 so numbers stay same, which matches the parent SKU table). Global /stock-dashboard 'Branded Stock' tab (tab-branded-stock badge=1) opens branded-stock-panel showing '24 Brand — 409 units total', Generic 209 (Default master 200 + Noida Factory Warehouse 9), Customer 'Drive Folder Test Lead' 200. Legacy tabs By Location / By SKU / By Distributor / Safety Overview all click through without visible errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/stock-dashboard → Branded Stock tab",
+        "issues": [
+          "Quantity labels render as generic 'units' (fallback) on the global Branded Stock panel (e.g. '409 units total', '200 units'), whereas the per-distributor Stock Dashboard tab shows the SKU's baseUnit ('Bottle') for the identical data. Cosmetic inconsistency — likely a pkgBySku lookup that supplies baseUnit only on the per-distributor page. Consider wiring the same lookup on StockDashboard.jsx so global users see 'Bottle' instead of the fallback 'units'."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_323_branded_stock_sections.py",
+    "/app/test_reports/pytest/iteration_323.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (cosmetic): populate pkgBySku on /stock-dashboard so the global Branded Stock panel renders the SKU's baseUnit (e.g. 'Bottle') instead of the generic 'units' fallback — brings it in line with the per-distributor tab."
+  ],
+  "critical_code_review_comments": [
+    "_build_branded_stock_sections (distributors.py:3798) iterates children twice (once to collect branded_parents, again per-section to filter by parent) — O(N_children * N_parents). Fine for current tenants but a pre-computed dict-by-parent would be O(N).",
+    "Frontend BrandedStockSections keys child rows on `entry.child_sku_id || \\`un-${i}\\`` — ok for a single generic-unclassified row, but if a section ever has multiple 'unrecognised classification' entries at the same time (all with child_sku_id=null shape but different real ids), the fallback list-index key is fine because null-id entries are guaranteed single per section (only the None key). Not an issue today.",
+    "distributors.py is now 10457 lines — carried forward from iteration_322: extract stock dashboard aggregation helpers into a service module."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_323_branded_stock_sections.py (new)"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (all acceptance criteria met)"},
+  "test_credentials": "CEO surya.yadavalli@nylaairwater.earth / test123 (X-Tenant-ID: nyla-air-water). Login endpoint returns `session_token` used as Bearer token.",
+  "seed_data_creation": "No writes. Read-only assertions against existing seed (24 Brand parent 8bc87348 has 200 branded to Drive Folder Test Lead + 200 generic at Default master @ distributor b8876367, plus 9 additional generic at Noida Factory Warehouse tenant-wide).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both branded_stock endpoints and both UI surfaces are working per spec. Pytest at /app/backend/tests/test_iteration_323_branded_stock_sections.py is read-only and idempotent — safe to re-run. Key seed constants (nyla-air-water): PARENT_SKU_ID=8bc87348..., BRANDED_CHILD_ID=ba79db11..., OWNER_ACCOUNT_ID=56b872b1... (Drive Folder Test Lead), DIST_ID=b8876367... (Main). Expected tenant totals: 24 Brand section total=409, generic=209, customer=200. Expected per-distributor totals: 400 / 200 / 200. The frontend cosmetic finding (global panel labels 'units' vs per-distributor 'Bottle') is the only note — everything else is green.",
+  "rca of the issue": "N/A — feature verified. Only minor cosmetic label inconsistency on the global page (documented under design_issues)."
+}

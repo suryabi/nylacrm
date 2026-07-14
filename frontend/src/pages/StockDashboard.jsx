@@ -14,6 +14,7 @@ import {
 import axios from 'axios';
 import { toast } from 'sonner';
 import { BrandingEntryDialog } from '../components/BrandingEntryDialog';
+import { BrandedStockSections } from '../components/distributor/BrandedStockSections';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -304,6 +305,15 @@ export default function StockDashboard() {
           <TabsTrigger value="by-distributor" data-testid="tab-by-distributor">
             <Building2 className="h-4 w-4 mr-2" />
             By Distributor
+          </TabsTrigger>
+          <TabsTrigger value="branded-stock" data-testid="tab-branded-stock">
+            <Tags className="h-4 w-4 mr-2" />
+            Branded Stock
+            {(stockData?.branded_stock?.length || 0) > 0 && (
+              <Badge variant="outline" className="ml-2 h-5 px-1.5 text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200">
+                {stockData.branded_stock.length}
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="safety-overview" data-testid="tab-safety-overview">
             <ShieldAlert className="h-4 w-4 mr-2" />
@@ -627,6 +637,28 @@ export default function StockDashboard() {
               ))
             )}
           </div>
+        </TabsContent>
+
+        {/* Branded Stock — Generic vs customer-branded classification per SKU */}
+        <TabsContent value="branded-stock" data-testid="branded-stock-panel">
+          {(stockData?.branded_stock?.length || 0) === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <Tags className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No customer-branded stock found</p>
+                <p className="text-sm">Sections appear here for each SKU with customer branding enabled</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <BrandedStockSections
+              sections={stockData.branded_stock}
+              pkgBySku={(stockData?.by_sku || []).reduce((m, s) => {
+                m[s.sku_id] = { units: s.default_units_per_package, name: s.default_packaging_name, baseUnit: 'units' };
+                return m;
+              }, {})}
+              viewCrates={unitMode === 'default_crate'}
+            />
+          )}
         </TabsContent>
 
         {/* Safety Overview — cross-collection (factory_warehouse_stock + distributor_stock) */}

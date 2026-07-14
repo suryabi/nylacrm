@@ -4,10 +4,11 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import {
   RefreshCw, Package, Truck, RotateCcw, Factory,
-  TrendingUp, Clock, Droplets, ChevronDown, ChevronRight, BarChart3, Lock
+  TrendingUp, Clock, Droplets, ChevronDown, ChevronRight, BarChart3, Lock, Tags
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
+import { BrandedStockSections } from './BrandedStockSections';
 
 const fmt = (v) => (v || 0).toLocaleString('en-IN');
 
@@ -198,6 +199,15 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
   const t = data.totals || {};
   const bt = data.bottle_tracking || {};
   const skus = data.skus || [];
+  const brandedSections = data.branded_stock || [];
+  const brandedPkgLookup = {};
+  skus.forEach(s => {
+    brandedPkgLookup[s.sku_id] = {
+      units: s.default_packaging_units,
+      name: s.default_packaging_name,
+      baseUnit: s.base_unit_name || 'units',
+    };
+  });
 
   // Stock-by-SKU unit view: show each quantity either in the SKU's base unit
   // (bottles) or converted to that SKU's own default crate. The crate size is
@@ -683,6 +693,27 @@ export default function StockDashboardTab({ distributor, API_URL, token }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Branded Stock by Customer — one section per parent SKU with customer branding enabled */}
+      {brandedSections.length > 0 && (
+        <div className="space-y-4" data-testid="branded-stock-by-customer">
+          <div>
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <Tags className="h-4 w-4 text-indigo-600" />
+              Branded Stock by Customer
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Live warehouse stock split into Generic vs customer-branded classifications — one section per SKU with customer branding enabled.
+              Quantities in {viewCrates ? 'default crates' : 'base units'}.
+            </p>
+          </div>
+          <BrandedStockSections
+            sections={brandedSections}
+            pkgBySku={brandedPkgLookup}
+            viewCrates={viewCrates}
+          />
+        </div>
+      )}
 
       {/* Reset Factory Warehouse Stock — confirmation dialog (CEO / System Admin) */}
       {resetOpen && (

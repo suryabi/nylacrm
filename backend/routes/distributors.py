@@ -3795,6 +3795,130 @@ async def recalculate_shipment_totals(shipment_id: str, tenant_id: str):
 
 # ============ Stock Dashboard ============
 
+async def _build_branded_stock_sections(tenant_id: str, stock_rows: list) -> list:
+    """Branded Stock by Customer sections.
+
+    `stock_rows`: live stock rows with keys
+      sku_id, sku_name, quantity, child_sku_id, child_sku_name,
+      location_id, location_name, is_factory.
+
+    Returns ONE section per parent SKU that has customer branding enabled
+    (≥1 customer-type child SKU) and is present in the given stock scope,
+    splitting the live on-hand quantity into a Generic bucket and
+    per-customer branded buckets (each with a per-location breakdown)."""
+    sku_ids = list({r.get("sku_id") for r in stock_rows if r.get("sku_id")})
+    if not sku_ids:
+        return []
+    children = await db.child_skus.find(
+        {"tenant_id": tenant_id, "parent_sku_id": {"$in": sku_ids}, "is_active": {"$ne": False}},
+        {"_id": 0, "id": 1, "parent_sku_id": 1, "child_sku_name": 1, "child_sku_code": 1,
+         "child_type": 1, "customer_account_id": 1, "customer_account_name": 1},
+    ).to_list(5000)
+    branded_parents = {c["parent_sku_id"] for c in children if c.get("child_type") == "customer"}
+    if not branded_parents:
+        return []
+    child_by_id = {c["id"]: c for c in children}
+
+    # Tally live stock per (parent, classification) with location breakdown.
+    tally: dict = {}
+    sku_names: dict = {}
+    for r in stock_rows:
+        sid = r.get("sku_id")
+        if sid not in branded_parents:
+            continue
+        sku_names.setdefault(sid, r.get("sku_name") or "Unknown")
+        qty = int(r.get("quantity") or 0)
+        if qty == 0:
+            continue
+        key = (sid, r.get("child_sku_id") or None)
+        b = tally.setdefault(key, {"quantity": 0, "child_sku_name": r.get("child_sku_name"), "locations": {}})
+        b["quantity"] += qty
+        lid = r.get("location_id")
+        loc = b["locations"].setdefault(lid, {
+            "location_id": lid,
+            "location_name": r.get("location_name") or "Unknown",
+            "is_factory": bool(r.get("is_factory")),
+            "quantity": 0,
+        })
+        loc["quantity"] += qty
+
+    def _rows_for(sid, cid):
+        b = tally.get((sid, cid))
+        if not b:
+            return 0, []
+        return b["quantity"], sorted(b["locations"].values(), key=lambda l: -l["quantity"])
+
+    sections = []
+    for sid in branded_parents:
+        if sid not in sku_names:
+            continue  # this stock scope holds no rows for the parent — skip
+        section_children = [c for c in children if c["parent_sku_id"] == sid]
+
+        # Generic bucket = unclassified rows + generic-type children with stock
+        # + rows pointing at a classification we no longer recognize.
+        generic_entries = []
+        un_qty, un_locs = _rows_for(sid, None)
+        if un_qty:
+            generic_entries.append({
+                "child_sku_id": None, "child_sku_name": "Generic (unclassified)",
+                "child_sku_code": None, "quantity": un_qty, "locations": un_locs,
+            })
+        for c in section_children:
+            if c.get("child_type") == "customer":
+                continue
+            q, locs = _rows_for(sid, c["id"])
+            if q:
+                generic_entries.append({
+                    "child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"),
+                    "child_sku_code": c.get("child_sku_code"), "quantity": q, "locations": locs,
+                })
+        for (s2, cid), b in tally.items():
+            if s2 == sid and cid and cid not in child_by_id:
+                generic_entries.append({
+                    "child_sku_id": cid, "child_sku_name": b.get("child_sku_name") or "Unknown classification",
+                    "child_sku_code": None, "quantity": b["quantity"],
+                    "locations": sorted(b["locations"].values(), key=lambda l: -l["quantity"]),
+                })
+        generic_total = sum(e["quantity"] for e in generic_entries)
+
+        # Customer buckets — every customer-type child is listed (0 qty
+        # included) so the report shows the complete branded catalogue.
+        cust_buckets: dict = {}
+        for c in section_children:
+            if c.get("child_type") != "customer":
+                continue
+            q, locs = _rows_for(sid, c["id"])
+            key = c.get("customer_account_id") or "__unknown__"
+            bucket = cust_buckets.setdefault(key, {
+                "customer_account_id": c.get("customer_account_id"),
+                "customer_name": c.get("customer_account_name") or "Customer",
+                "total_quantity": 0,
+                "children": [],
+            })
+            bucket["total_quantity"] += q
+            bucket["children"].append({
+                "child_sku_id": c["id"], "child_sku_name": c.get("child_sku_name"),
+                "child_sku_code": c.get("child_sku_code"), "quantity": q, "locations": locs,
+            })
+        customers = sorted(cust_buckets.values(),
+                           key=lambda b: (-b["total_quantity"], (b["customer_name"] or "").lower()))
+        for b in customers:
+            b["children"].sort(key=lambda c: (-c["quantity"], (c["child_sku_name"] or "").lower()))
+        customer_total = sum(b["total_quantity"] for b in customers)
+
+        sections.append({
+            "sku_id": sid,
+            "sku_name": sku_names[sid],
+            "total_quantity": generic_total + customer_total,
+            "generic_total": generic_total,
+            "customer_total": customer_total,
+            "generic": generic_entries,
+            "customers": customers,
+        })
+    sections.sort(key=lambda s: (-s["total_quantity"], (s["sku_name"] or "").lower()))
+    return sections
+
+
 @router.get("/dashboard/stock-summary")
 async def get_stock_dashboard_summary(
     city: Optional[str] = None,
@@ -4080,7 +4204,10 @@ async def get_stock_dashboard_summary(
         {"tenant_id": tenant_id, "id": {"$in": list({r.get("location_id") for r in unified if r.get("location_id")})}}
     )
 
+    branded_stock = await _build_branded_stock_sections(tenant_id, unified)
+
     return {
+        "branded_stock": branded_stock,
         "summary": {
             "total_quantity": total_quantity,
             "total_skus": total_skus,
@@ -9004,6 +9131,7 @@ async def get_stock_dashboard(
     factory_wh_stock_by_sku = {}
     factory_wh_by_location = {}  # location_id -> {location_name, skus: [...]}
     total_factory_wh_stock = 0
+    fws_docs = []
 
     if factory_location_ids:
         fws_docs = await tdb.factory_warehouse_stock.find(
@@ -9532,6 +9660,33 @@ async def get_stock_dashboard(
     total_promotional = sum(cr_data.get('promotional', 0) for cr_data in cust_return_by_sku.values())
     total_pending_factory = sum(cr_data.get('pending_factory', 0) for cr_data in cust_return_by_sku.values())
     
+    # === BRANDED STOCK BY CUSTOMER (live classification rows) ===
+    # Classification truth lives on the live stock rows (distributor_stock +
+    # factory_warehouse_stock), not on the flow-derived numbers above.
+    live_rows = []
+    d_stock_rows = await db.distributor_stock.find(
+        {"tenant_id": tenant_id, "distributor_id": distributor_id},
+        {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "child_sku_id": 1,
+         "child_sku_name": 1, "distributor_location_id": 1, "location_name": 1},
+    ).to_list(5000)
+    for s in d_stock_rows:
+        live_rows.append({
+            "sku_id": s.get("sku_id"), "sku_name": s.get("sku_name"),
+            "quantity": s.get("quantity"), "child_sku_id": s.get("child_sku_id"),
+            "child_sku_name": s.get("child_sku_name"),
+            "location_id": s.get("distributor_location_id"),
+            "location_name": s.get("location_name"), "is_factory": False,
+        })
+    for fws in fws_docs:
+        live_rows.append({
+            "sku_id": fws.get("sku_id"), "sku_name": fws.get("sku_name"),
+            "quantity": fws.get("quantity"), "child_sku_id": fws.get("child_sku_id"),
+            "child_sku_name": fws.get("child_sku_name"),
+            "location_id": fws.get("warehouse_location_id"),
+            "location_name": fws.get("warehouse_name"), "is_factory": True,
+        })
+    branded_stock = await _build_branded_stock_sections(tenant_id, live_rows)
+
     return {
         "distributor_id": distributor_id,
         "distributor_name": distributor.get('distributor_name', ''),
@@ -9585,6 +9740,7 @@ async def get_stock_dashboard(
         ],
         "sku_count": len(sku_summaries),
         "skus": sku_summaries,
+        "branded_stock": branded_stock,
     }
 
 
