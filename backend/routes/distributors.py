@@ -3915,6 +3915,18 @@ async def _build_branded_stock_sections(tenant_id: str, stock_rows: list) -> lis
             "generic": generic_entries,
             "customers": customers,
         })
+    # Base UOM label per section (e.g. "Bottle") so both dashboards show the
+    # same unit name instead of the generic "units" fallback.
+    if sections:
+        base_units = {}
+        async for ms in db.master_skus.find(
+            {"id": {"$in": [s["sku_id"] for s in sections]}},
+            {"_id": 0, "id": 1, "base_uom": 1},
+        ):
+            if ms.get("base_uom"):
+                base_units[ms["id"]] = ms["base_uom"]
+        for s in sections:
+            s["base_unit_name"] = base_units.get(s["sku_id"]) or "units"
     sections.sort(key=lambda s: (-s["total_quantity"], (s["sku_name"] or "").lower()))
     return sections
 

@@ -1397,3 +1397,11 @@ Built the foundation of a new Inventory Management module (greenfield; the old
 - CEO/Admin delete from Print Requests list (print-delete-<id> + AlertDialog print-delete-dialog); detail page delete already existed.
 - Incidental fix (by testing agent): removed an orphan ")}" rendering as literal text near Notes on PrintRequestDetail.js.
 - VERIFIED: curl (terminal fallback True for stale-machine req; design_file_links live from both collections) + testing_agent iteration_299 (100% frontend on all 4). Test data cleaned up.
+
+## 2026-06-14 — Branded Stock by Customer report (P1) ✅
+- New backend helper `_build_branded_stock_sections` in `routes/distributors.py`: aggregates live stock rows (`distributor_stock` + `factory_warehouse_stock`) by classification, joins `child_skus`; one section per parent SKU with customer branding enabled (Generic bucket vs per-customer branded buckets, per-location breakdown, `base_unit_name`).
+- `GET /api/distributors/dashboard/stock-summary` and `GET /api/distributors/{id}/stock-dashboard` both now return `branded_stock`.
+- Shared component `components/distributor/BrandedStockSections.jsx`.
+- Per-distributor Stock Dashboard tab: new "Branded Stock by Customer" section below Stock by SKU (parent table unchanged; respects Bottles/Default-Crates toggle).
+- Global `/stock-dashboard`: new "Branded Stock" tab with section-count badge.
+- Tested: iteration_323 — backend 17/17 pytest, frontend all criteria pass (`/app/backend/tests/test_iteration_323_branded_stock_sections.py`).

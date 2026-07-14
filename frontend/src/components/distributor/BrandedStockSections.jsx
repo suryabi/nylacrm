@@ -52,20 +52,21 @@ function ChildRow({ entry, qty }) {
 export function BrandedStockSections({ sections = [], pkgBySku = {}, viewCrates = false }) {
   if (!sections.length) return null;
 
-  const qtyFor = (skuId) => (q) => {
-    const pkg = pkgBySku[skuId];
+  const qtyFor = (sec) => (q) => {
+    const pkg = pkgBySku[sec.sku_id];
     const b = Number(q) || 0;
     if (viewCrates && pkg && Number(pkg.units) > 1) {
       const n = b / Number(pkg.units);
       return `${(Number.isInteger(n) ? n : Number(n.toFixed(1))).toLocaleString('en-IN')} ${pkg.name || 'crates'}`;
     }
-    return `${fmt(b)} ${pkg?.baseUnit || 'units'}`;
+    const baseUnit = (pkg?.baseUnit && pkg.baseUnit !== 'units') ? pkg.baseUnit : (sec.base_unit_name || pkg?.baseUnit || 'units');
+    return `${fmt(b)} ${baseUnit}`;
   };
 
   return (
     <div className="space-y-4">
       {sections.map((sec) => {
-        const qty = qtyFor(sec.sku_id);
+        const qty = qtyFor(sec);
         return (
           <Card key={sec.sku_id} data-testid={`branded-stock-section-${sec.sku_id}`}>
             <CardHeader className="pb-3">

@@ -1589,6 +1589,7 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 ### P1 (SKU Hierarchy next phases — user approved design)
 - ~~Phase 2: stock classification (child_sku_id on factory/distributor stock rows), Branding Entry screen (Unbranded → child), auto roll-up stock views with drill-down~~ ✅ DONE 2026-06 (Model C, no approval)
 - ~~Phase 3: delivery-order fulfilment classification (fulfilment child_sku_id on items, customer-match validation, deduct from child stock; customer child / generic / unbranded all allowed)~~ ✅ DONE 2026-06 (iteration_321)
+- ~~"Branded Stock by Customer" report + classification sections on both stock dashboards~~ ✅ DONE 2026-06-14 (iteration_323)
 
 ### P1
 - Standardize `master_locations` as single source of truth for city spellings (recurring bug)
