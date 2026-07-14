@@ -23,6 +23,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-14 — 🎨 Retro categorization UX rework: city-scoped + searchable picker ✅ DONE (tested)
+- **User feedback**: "not user friendly — depending on the destination, show only accounts belonging to the city; searchable, autocomplete, clean UX".
+- Backend `GET /api/retro-categorize/eligible-children` now accepts `location_id`: children are enriched with the customer account's city and, for Stock In/Transfers, filtered to accounts in the SAME CITY as the destination warehouse (alias-aware via `normalize_city`). Returns `destination_city` + `filtered_by_city`. Deliveries stay strictly account-scoped (no city filter).
+- `RetroCategorizeDialog.jsx` reworked: cmdk `Command` searchable picker (matches SKU name, account name AND city), each option shows account + city; auto-selects when exactly one match and renders as a violet chip with X-to-change; green "Accounts in {City}" scope badge; line summary card; cleaner qty/split hints. Callers pass `locationId` (shipment: `distributor_location_id`; transfer: `dest_location_id`).
+- **Verified**: curl (Margao dest → only same-city child, unscoped → all 3, account-scoped → account's only) + testing_agent iteration_326 (6/6: city scoping, search/empty state, partial submit split still works end-to-end, delivery account-scope w/o city badge, transfer scoping, no new console errors).
+
 ### 2026-07-14 — ✨ Retrospective categorization: Generic transaction lines → customer child SKUs ✅ DONE (tested)
 - **Request**: Existing Stock In / Stock Transfer / Stock Out transactions may hold customer-branded stock recorded as parent-SKU Generic. Provide an option to retrospectively categorize quantities into the appropriate customer-specific child SKU, only when such a child exists for the parent SKU (and the delivery's account), preserving original quantities and movement history.
 - **User choices**: (1) move whatever Generic stock is still on hand at destination (capped), relabel line fully either way; (2) Stock Out relabels only; (3) partial split allowed; (4) roles CEO/Admin/System Admin.
