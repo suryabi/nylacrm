@@ -8,15 +8,19 @@
  *
  * Props:
  *   batches        — list from /batches-available or /production-batches
- *                    (objects with batch_id, batch_code, quantity, production_date?, received_at?)
+ *                    (objects with batch_id, batch_code, quantity, production_date?,
+ *                    received_at?, child_sku_id?, child_sku_name?)
  *   selectedId     — current item.batch_id
- *   onSelect       — (batch_id, batch_code) => void
+ *   selectedChildId — optional; when provided (even null), a card is only
+ *                    "selected" if BOTH batch_id and child_sku_id match. Needed
+ *                    because branded stock produces multiple rows per batch.
+ *   onSelect       — (batch_id, batch_code, batch) => void
  *   testIdPrefix   — base id used for data-testid attributes on each card
  *   emptyMessage   — copy shown when no batches exist
  */
 import React from 'react';
 import { Label } from '../ui/label';
-import { Package, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Package, AlertCircle, CheckCircle2, Tag } from 'lucide-react';
 
 const ageKey = (b) => b.production_date || b.received_at || '';
 
@@ -38,6 +42,7 @@ const ageChip = (days) => {
 export default function BatchPickerCards({
   batches = [],
   selectedId = '',
+  selectedChildId,
   onSelect,
   testIdPrefix = 'batch',
   emptyMessage = 'No batches available for this SKU.',
@@ -84,8 +89,11 @@ export default function BatchPickerCards({
         </div>
       ) : (
         <div className="flex flex-wrap gap-2" data-testid={`${testIdPrefix}-cards`}>
-          {sorted.map((b, bi) => {
-            const selected = selectedId === b.batch_id;
+          {(() => {
+            const anyBranded = sorted.some(x => x.child_sku_id);
+            return sorted.map((b, bi) => {
+            const selected = selectedId === b.batch_id
+              && (selectedChildId === undefined || (b.child_sku_id || null) === (selectedChildId || null));
             const days = ageDays(ageKey(b));
             const chip = ageChip(days);
             const ageSource = b.production_date ? 'Produced' : 'Received';
@@ -93,8 +101,8 @@ export default function BatchPickerCards({
             return (
               <button
                 type="button"
-                key={b.batch_id || `legacy-${bi}`}
-                onClick={() => onSelect?.(b.batch_id, b.batch_code)}
+                key={`${b.batch_id || `legacy-${bi}`}::${b.child_sku_id || 'generic'}`}
+                onClick={() => onSelect?.(b.batch_id, b.batch_code, b)}
                 data-testid={`${testIdPrefix}-card-${bi}`}
                 className={[
                   'group relative flex flex-col items-start text-left rounded-xl border px-3 py-2 transition-all',
@@ -118,6 +126,23 @@ export default function BatchPickerCards({
                 <div className="font-mono text-[13px] font-bold text-slate-900 leading-tight tracking-tight break-all">
                   {b.batch_code}
                 </div>
+                {b.child_sku_name ? (
+                  <span
+                    className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border text-violet-700 bg-violet-50 border-violet-200 max-w-full"
+                    data-testid={`${testIdPrefix}-child-${bi}`}
+                    title={`Customer-branded stock: ${b.child_sku_name}`}
+                  >
+                    <Tag className="h-2.5 w-2.5 flex-shrink-0" />
+                    <span className="truncate">{b.child_sku_name}</span>
+                  </span>
+                ) : anyBranded ? (
+                  <span
+                    className="mt-1 inline-flex items-center text-[10px] font-medium px-1.5 py-0.5 rounded border text-slate-500 bg-slate-50 border-slate-200"
+                    data-testid={`${testIdPrefix}-child-${bi}`}
+                  >
+                    Generic
+                  </span>
+                ) : null}
                 <div className="text-[10px] text-slate-500 mt-0.5">
                   {ageDate ? `${ageSource} ${ageDate}` : 'Date unavailable'}
                 </div>
@@ -149,7 +174,8 @@ export default function BatchPickerCards({
                 )}
               </button>
             );
-          })}
+            });
+          })()}
         </div>
       )}
     </div>

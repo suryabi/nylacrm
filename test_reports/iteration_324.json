@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend E2E verified: Stock In (Factory -> Distributor) branded batch UI works end-to-end. Logged in as admin, navigated to distributor Test /distributors/99fb55dc-.../?tab=stockin, opened Create Shipment, selected source 'Bangalore Warehouse', selected destination location, added SKU '20L Premium'. Batch picker rendered 2 cards; the branded batch 'UI-BR-01' shows the violet chip 'UI Demo BrandedCo 20L' (data-testid=shipment-batch-0-child-1), the other batch 'TB-CHILD-01' also shows its child chip. Clicking UI-BR-01 selects EXACTLY that card (amber highlight+checkmark). Set Qty=2, price=10, saved. Toast 'Shipment SHP-2026-0075 created successfully' appeared. Opened new shipment from list; detail dialog shows item row 'Batch UI-BR-01' with the violet badge 'UI Demo BrandedCo 20L' at data-testid=shipment-detail-item-child-0. Regression: Stock Out tab opens without console errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Create/Detail Dialogs", "issues": ["Radix warning: 'Missing Description or aria-describedby={undefined} for {DialogContent}' — a11y-only warning, not a functional bug. Add DialogDescription (or aria-describedby) to Create Primary Shipment and Shipment Detail DialogContent components."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_324.json"],
+  "action_items": [
+    "SEED DATA GAP (pre-existing): parent SKU '20L Premium' (id 51cbec53-a1d5-4e23-b708-a1fd0c014059) was is_active:false in master_skus for tenant nyla-air-water, so it did not appear in the Create Shipment SKU dropdown, blocking initial test. I set is_active=true in DB to unblock — main agent should update the demo seeder (/app/scripts or wherever ui-batch-demo1 / ui-child-demo1 is seeded) to also flip the parent SKU to active, so tests do not depend on this manual step.",
+    "Minor a11y: add DialogDescription to Create Primary Shipment dialog and Shipment Detail dialog to silence Radix aria-describedby warnings."
+  ],
+  "critical_code_review_comments": [
+    "BatchPickerCards.jsx correctly differentiates cards using key `${batch_id}::${child_sku_id||'generic'}` and the selectedChildId gate (line 95-96) — verified two branded rows for same batch would be distinguishable.",
+    "ShipmentsTab.jsx onSelect writes both child_sku_id and child_sku_name into the item (~line 305-306) — payload correctly carries classification.",
+    "Detail dialog (DistributorDetail.js ~line 3233) renders violet badge with the child_sku_name field — confirmed 'UI Demo BrandedCo 20L' shown post-save.",
+    "SKU dropdown in ShipmentsTab (~line 265-268) uses only `skus` prop, which is presumably filtered to is_active=true SKUs. If a batch/factory_warehouse_stock row exists for an inactive parent SKU, users cannot ship that stock. Consider auto-including inactive parent SKUs when they still have on-hand stock, or ensure seeders/reactivations keep them active."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 / tenant nyla-air-water (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "One-time DB fix: db.master_skus.update({id:'51cbec53-a1d5-4e23-b708-a1fd0c014059'},{$set:{is_active:true}}) to make parent SKU '20L Premium' visible in shipment dialog. Created draft shipment SHP-2026-0075 (2 UI Demo BrandedCo 20L bottles, ₹21 grand total) — left in place per request.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug-fix verified. Draft shipment SHP-2026-0075 exists for distributor 'Test' referencing batch UI-BR-01/ui-child-demo1. To re-run this flow, ensure master_skus.is_active=true for parent SKU 51cbec53-a1d5-4e23-b708-a1fd0c014059 (or update seeder). All required data-testid selectors (create-shipment-btn, shipment-source-warehouse-select, shipment-location-select, add-item-btn, shipment-item-0, shipment-batch-0-picker, shipment-batch-0-card-N, shipment-batch-0-child-N, shipment-qty-0, save-shipment-btn, shipment-detail-item-child-0) all resolve correctly.",
+  "rca of the issue": "Only pre-existing seed issue: parent SKU inactive flag hid it from Create Shipment. Not a bug in the branded-batch feature under test."
+}

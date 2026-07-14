@@ -685,7 +685,8 @@ async def list_production_batches_for_sku(
     batches = await db.production_batches.find(
         {"tenant_id": tenant_id, "sku_id": sku_id},
         {"_id": 0, "id": 1, "batch_code": 1, "total_bottles": 1,
-         "production_date": 1, "created_at": 1, "status": 1},
+         "production_date": 1, "created_at": 1, "status": 1,
+         "target_child_sku_id": 1, "target_child_sku_name": 1},
     ).to_list(2000)
     out = [{
         "batch_id": b.get("id"),
@@ -694,6 +695,8 @@ async def list_production_batches_for_sku(
         "received_at": b.get("created_at"),
         "production_date": b.get("production_date"),
         "status": b.get("status"),
+        "child_sku_id": b.get("target_child_sku_id") or None,
+        "child_sku_name": b.get("target_child_sku_name"),
     } for b in batches]
     out.sort(key=lambda r: (r.get("production_date") or r.get("received_at") or "9999"))
     return {"batches": out}

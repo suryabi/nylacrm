@@ -378,6 +378,10 @@ class ShipmentItemCreate(BaseModel):
     # callers / warehouses that don't track batches.
     batch_id: Optional[str] = None
     batch_code: Optional[str] = None
+    # Child SKU classification — set when the picked batch is customer-branded
+    # (or generic-classified) so the branded identity travels factory → distributor.
+    child_sku_id: Optional[str] = None
+    child_sku_name: Optional[str] = None
     # Packaging breakdown so stock-in detail views / invoices can show
     # "5 × Crate-12 (60 bottles)". `quantity` is always in base units.
     packaging_type_name: Optional[str] = None

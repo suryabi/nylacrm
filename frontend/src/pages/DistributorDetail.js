@@ -1481,6 +1481,10 @@ export default function DistributorDetail() {
             // line is missing batch_id.
             batch_id: item.batch_id || null,
             batch_code: item.batch_code || null,
+            // Child SKU classification carried by the picked batch card so the
+            // customer-branded identity travels factory → distributor.
+            child_sku_id: item.child_sku_id || null,
+            child_sku_name: item.child_sku_name || null,
           };
         })
       };
@@ -1535,6 +1539,8 @@ export default function DistributorDetail() {
       tax_percent: defaultGstPercent,
       batch_id: '',
       batch_code: '',
+      child_sku_id: '',
+      child_sku_name: '',
     }]);
   };
 
@@ -1594,9 +1600,10 @@ export default function DistributorDetail() {
     const pkgUnits = defaultPkg?.units_per_package || '';
     const pkgName = defaultPkg?.packaging_type_name || '';
 
-    // First update the SKU info + packaging immediately
+    // First update the SKU info + packaging immediately (and clear any batch /
+    // child classification picked for the previously selected SKU)
     setShipmentItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName, packaging_units: pkgUnits ? String(pkgUnits) : '', packaging_type_name: pkgName } : item
+      item.id === itemId ? { ...item, sku_id: skuId, sku_name: skuName, packaging_units: pkgUnits ? String(pkgUnits) : '', packaging_type_name: pkgName, batch_id: '', batch_code: '', child_sku_id: '', child_sku_name: '' } : item
     ));
     
     // Then look up the transfer price if we have a location selected
@@ -3216,7 +3223,19 @@ export default function DistributorDetail() {
                       return (
                       <React.Fragment key={idx}>
                       <tr className={`border-b ${idx % 2 === 1 ? 'bg-muted/20' : ''}`}>
-                        <td className="p-2.5">{item.sku_name || item.sku_id}</td>
+                        <td className="p-2.5">
+                          {item.sku_name || item.sku_id}
+                          {item.batch_code && (
+                            <div className="text-[10px] font-mono text-muted-foreground mt-0.5">Batch {item.batch_code}</div>
+                          )}
+                          {item.child_sku_name && (
+                            <div className="mt-0.5">
+                              <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded border text-violet-700 bg-violet-50 border-violet-200" data-testid={`shipment-detail-item-child-${idx}`}>
+                                {item.child_sku_name}
+                              </span>
+                            </div>
+                          )}
+                        </td>
                         <td className="p-2.5 text-right tabular-nums">
                           {item.quantity}
                           {(() => {

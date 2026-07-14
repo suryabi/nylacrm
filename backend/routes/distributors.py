@@ -2549,6 +2549,27 @@ async def create_shipment(
                 ),
             )
     
+    # Child SKU classification — validate any branded lines so the customer
+    # identity carried by the picked batch is correct and persisted.
+    child_ids = list({it.child_sku_id for it in data.items if it.child_sku_id})
+    if child_ids:
+        children_map = {c["id"]: c for c in await db.child_skus.find(
+            {"tenant_id": tenant_id, "id": {"$in": child_ids}},
+            {"_id": 0, "id": 1, "parent_sku_id": 1, "child_sku_name": 1, "is_active": 1},
+        ).to_list(len(child_ids) + 1)}
+        for it in data.items:
+            if not it.child_sku_id:
+                continue
+            c = children_map.get(it.child_sku_id)
+            if not c:
+                raise HTTPException(status_code=400, detail=f"Child SKU {it.child_sku_id} not found")
+            if c.get("parent_sku_id") != it.sku_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Child SKU '{c.get('child_sku_name')}' does not belong to SKU '{it.sku_name or it.sku_id}'",
+                )
+            it.child_sku_name = c.get("child_sku_name")
+
     # Generate shipment number
     shipment_number = await generate_shipment_number(tenant_id)
     shipment_id = str(uuid.uuid4())
@@ -2596,6 +2617,9 @@ async def create_shipment(
             # rely on the field existing — None when source doesn't track batches.
             'batch_id': item_data.batch_id,
             'batch_code': item_data.batch_code,
+            # Child SKU classification (customer-branded identity of the batch).
+            'child_sku_id': item_data.child_sku_id or None,
+            'child_sku_name': item_data.child_sku_name if item_data.child_sku_id else None,
             # Packaging breakdown for stock-in detail view + invoice description.
             'packaging_type_name': item_data.packaging_type_name,
             'packaging_units': item_data.packaging_units,
@@ -2804,7 +2828,8 @@ async def confirm_shipment(
         # Get shipment items (now also batch_id / batch_code)
         items = await db.distributor_shipment_items.find(
             {"shipment_id": shipment_id, "tenant_id": tenant_id},
-            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1, "batch_code": 1}
+            {"_id": 0, "sku_id": 1, "sku_name": 1, "quantity": 1, "batch_id": 1, "batch_code": 1,
+             "child_sku_id": 1, "child_sku_name": 1}
         ).to_list(500)
 
         # Validate stock availability before deducting.
@@ -2817,7 +2842,7 @@ async def confirm_shipment(
                 "tenant_id": tenant_id,
                 "warehouse_location_id": source_warehouse_id,
                 "sku_id": item["sku_id"],
-                "child_sku_id": {"$in": [None]},
+                "child_sku_id": item.get("child_sku_id") or {"$in": [None]},
             }
             if src_tracks_batches and item.get("batch_id"):
                 stock_query["batch_id"] = item["batch_id"]
@@ -2827,6 +2852,8 @@ async def confirm_shipment(
                 label = item.get("sku_name") or item["sku_id"]
                 if item.get("batch_code"):
                     label = f"{label} (batch {item['batch_code']})"
+                if item.get("child_sku_name"):
+                    label = f"{label} [{item['child_sku_name']}]"
                 insufficient.append(f"{label}: need {item['quantity']}, have {available}")
 
         if insufficient:
@@ -2836,14 +2863,15 @@ async def confirm_shipment(
             )
 
         # Deduct stock for each line. Same key shape as the validation — when
-        # tracking batches, deduct from the specific batch row only. Shipments
-        # are classification-less → they consume Generic (unbranded) rows only.
+        # tracking batches, deduct from the specific batch row only. Lines
+        # carrying a child classification consume the matching branded row;
+        # unclassified lines consume the Generic (unbranded) row.
         for item in items:
             update_query = {
                 "tenant_id": tenant_id,
                 "warehouse_location_id": source_warehouse_id,
                 "sku_id": item["sku_id"],
-                "child_sku_id": {"$in": [None]},
+                "child_sku_id": item.get("child_sku_id") or {"$in": [None]},
             }
             if src_tracks_batches and item.get("batch_id"):
                 update_query["batch_id"] = item["batch_id"]
@@ -2976,6 +3004,7 @@ async def mark_shipment_delivered(
 
     for item in items:
         batch_id = item.get('batch_id')
+        item_child_id = item.get('child_sku_id') or None
         stock_key = {
             "tenant_id": tenant_id,
             "distributor_id": distributor_id,
@@ -2984,10 +3013,11 @@ async def mark_shipment_delivered(
         }
         # Add batch to the key so batched and legacy aggregate rows stay separate.
         # `{"$in": [None]}` matches a stored None OR missing field, which is
-        # what aggregate-only legacy rows have. Shipments are classification-less
-        # → they credit the Generic (unbranded) row only.
+        # what aggregate-only legacy rows have. Lines carrying a child
+        # classification credit the matching branded row; unclassified lines
+        # credit the Generic (unbranded) row.
         stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
-        stock_key["child_sku_id"] = {"$in": [None]}
+        stock_key["child_sku_id"] = item_child_id if item_child_id else {"$in": [None]}
 
         set_on_insert = {
             "id": str(uuid.uuid4()),
@@ -2996,6 +3026,7 @@ async def mark_shipment_delivered(
             "distributor_location_id": shipment.get('distributor_location_id'),
             "sku_id": item.get('sku_id'),
             "batch_id": batch_id,
+            "child_sku_id": item_child_id,
             "created_at": now,
         }
         set_fields = {
@@ -3007,6 +3038,8 @@ async def mark_shipment_delivered(
         }
         if item.get('batch_code'):
             set_fields["batch_code"] = item.get('batch_code')
+        if item_child_id:
+            set_fields["child_sku_name"] = item.get('child_sku_name')
 
         await db.distributor_stock.update_one(
             stock_key,
@@ -3041,6 +3074,7 @@ def _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, qty_fie
     ops = []
     for item in items:
         batch_id = item.get('batch_id')
+        item_child_id = item.get('child_sku_id') or None
         stock_key = {
             "tenant_id": tenant_id,
             "distributor_id": distributor_id,
@@ -3048,7 +3082,7 @@ def _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, qty_fie
             "sku_id": item.get('sku_id'),
         }
         stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
-        stock_key["child_sku_id"] = {"$in": [None]}
+        stock_key["child_sku_id"] = item_child_id if item_child_id else {"$in": [None]}
         set_fields = {
             "sku_name": item.get('sku_name'),
             "sku_code": item.get('sku_code'),
@@ -3058,6 +3092,8 @@ def _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, qty_fie
         }
         if item.get('batch_code'):
             set_fields["batch_code"] = item.get('batch_code')
+        if item_child_id:
+            set_fields["child_sku_name"] = item.get('child_sku_name')
         ops.append(db.distributor_stock.update_one(
             stock_key,
             {
@@ -3070,6 +3106,7 @@ def _apply_stock_on_delivery(tenant_id, distributor_id, shipment, items, qty_fie
                     "distributor_location_id": shipment.get('distributor_location_id'),
                     "sku_id": item.get('sku_id'),
                     "batch_id": batch_id,
+                    "child_sku_id": item_child_id,
                     "created_at": now,
                 },
             },
@@ -3243,13 +3280,16 @@ async def approve_shipment_receipt(
             recv_qty = int(it.get('received_quantity', sent_qty) or 0)
             delta = sent_qty - recv_qty
             if delta > 0:
+                refund_key = {
+                    "tenant_id": tenant_id,
+                    "warehouse_location_id": source_warehouse_id,
+                    "sku_id": it["sku_id"],
+                    "child_sku_id": it.get("child_sku_id") or {"$in": [None]},
+                }
+                if it.get("batch_id"):
+                    refund_key["batch_id"] = it["batch_id"]
                 await tdb.factory_warehouse_stock.update_one(
-                    {
-                        "tenant_id": tenant_id,
-                        "warehouse_location_id": source_warehouse_id,
-                        "sku_id": it["sku_id"],
-                        "child_sku_id": {"$in": [None]}
-                    },
+                    refund_key,
                     {"$inc": {"quantity": delta}, "$set": {"updated_at": now}}
                 )
 
@@ -3542,7 +3582,7 @@ async def _readd_shipment_source_stock(tenant_id: str, shipment: dict) -> None:
             "tenant_id": tenant_id,
             "warehouse_location_id": source_warehouse_id,
             "sku_id": item.get("sku_id"),
-            "child_sku_id": {"$in": [None]},
+            "child_sku_id": item.get("child_sku_id") or {"$in": [None]},
         }
         if src_tracks_batches and item.get("batch_id"):
             stock_query["batch_id"] = item.get("batch_id")
@@ -3566,6 +3606,7 @@ async def _remove_shipment_destination_stock(tenant_id: str, distributor_id: str
         if not qty:
             continue
         batch_id = item.get("batch_id")
+        item_child_id = item.get("child_sku_id") or None
         stock_key = {
             "tenant_id": tenant_id,
             "distributor_id": distributor_id,
@@ -3573,7 +3614,7 @@ async def _remove_shipment_destination_stock(tenant_id: str, distributor_id: str
             "sku_id": item.get("sku_id"),
         }
         stock_key["batch_id"] = batch_id if batch_id else {"$in": [None]}
-        stock_key["child_sku_id"] = {"$in": [None]}
+        stock_key["child_sku_id"] = item_child_id if item_child_id else {"$in": [None]}
         await db.distributor_stock.update_one(
             stock_key,
             {"$inc": {"quantity": -qty}, "$set": {"updated_at": now}},

@@ -233,7 +233,7 @@ export default function ShipmentsTab({
                       {shipmentItems.map((item, index) => {
                         const allBatches = batchesBySku[item.sku_id] || [];
                         const selBatch = (sourceTracksBatches && item.batch_id)
-                          ? allBatches.find(b => b.batch_id === item.batch_id)
+                          ? allBatches.find(b => b.batch_id === item.batch_id && (b.child_sku_id || null) === (item.child_sku_id || null))
                           : null;
                         const stockEntry = (warehouseStock || []).find(s => s.sku_id === item.sku_id);
                         // When the source warehouse tracks batches, availability follows the
@@ -298,9 +298,12 @@ export default function ShipmentsTab({
                               <BatchPickerCards
                                 batches={batchesBySku[item.sku_id] || []}
                                 selectedId={item.batch_id || ''}
-                                onSelect={(bid, bcode) => {
+                                selectedChildId={item.child_sku_id || null}
+                                onSelect={(bid, bcode, b) => {
                                   updateShipmentItem(item.id, 'batch_id', bid);
                                   updateShipmentItem(item.id, 'batch_code', bcode || '');
+                                  updateShipmentItem(item.id, 'child_sku_id', b?.child_sku_id || '');
+                                  updateShipmentItem(item.id, 'child_sku_name', b?.child_sku_name || '');
                                 }}
                                 testIdPrefix={`shipment-batch-${index}`}
                                 emptyMessage={sourceTracksBatches
