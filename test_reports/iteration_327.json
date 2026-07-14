@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only focused re-test of the distributor-scoped retro-categorization change (was city-scoped). Single flow tested end-to-end against live preview URL as CEO. All assertions passed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_results": {
+    "TEST_distributor_scoped_stock_in": "PASS — Ran seed_uiretro.py first to reset SHP-UIRETRO-1. Logged in as surya.yadavalli@nylaairwater.earth on tenant nyla-air-water. Navigated to /distributors/99fb55dc-532c-4e85-b618-6b8a5e552c04?tab=stockin → clicked SHP-UIRETRO-1 → clicked retro-categorize-shipment-item-0. Verified: (1) retro-scope-badge text == 'Accounts of Test' (matches spec exactly), (2) retro-selected-child violet chip AUTO-SELECTED with 'DistTest Assigned' + 'Lead Seventeen Test · Hyderabad' (single-match auto-select works), (3) DistTest Outside and UIRetro BrandedCo NOT present in dialog chip view NOR in the searchable picker after clicking X (retro-clear-child); picker has exactly ONE option (retro-child-option-0 = DistTest Assigned), (4) no NEW console errors — only 2 pre-existing 401s from token-refresh before X-Tenant-ID is set and 2 pre-existing Radix aria-describedby warnings, both documented in iteration_326. Dialog closed via Cancel without submitting as instructed."
+  },
+  "seed_data_creation": "Ran /app/seed_uiretro.py once at start to (re)create SHP-UIRETRO-1 / DEL-UIRETRO-1 / ST-UIRETRO-1 fresh. Task-provided child SKUs 'DistTest Assigned' (Lead Seventeen Test — assigned to distributor Test) and 'DistTest Outside' (Toopa — not assigned) plus 'UIRetro BrandedCo' (Toopa — not assigned) were already in the DB, no manual insert required this run.",
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RetroCategorizeDialog.jsx: distributor_id vs account_id branching (lines 60-62) is clean — deliveries pass accountId only, stock-in/transfers pass distributorId only. Backend response fields distributor_name + filtered_by_distributor drive the emerald badge correctly.",
+    "Badge copy 'Accounts of {distributor name}' matches PRD wording exactly (RetroCategorizeDialog.jsx line 141).",
+    "Single-child auto-select logic (line 70) still yields the chip-only UX and X (retro-clear-child) reveals the Command picker with the same single option — behavior consistent with iteration_326 semantics.",
+    "No regressions: the 2 pre-existing Radix aria-describedby warnings are still emitted per dialog open. Non-blocking, already flagged in iteration_326 as optional."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not-tested (frontend-only per request)", "frontend": "100% (1/1)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Retro categorization is now distributor-scoped (via account_distributor_assignments) instead of city-scoped. Test data setup: seed_uiretro.py creates the baseline SHP/DEL/ST-UIRETRO-1 fixtures. The extra child SKUs needed for scope-filtering scenarios ('DistTest Assigned' on Lead Seventeen Test with ACTIVE assignment to distributor 'Test', 'DistTest Outside' on Toopa without assignment) are persistent — do NOT delete them. If SHP-UIRETRO-1 gets categorized between runs, just re-run `python /app/seed_uiretro.py`. Badge text pattern is now 'Accounts of {distributor name}' — no more city references in stock-in/transfer flows.",
+  "rca_of_the_issue": "N/A — feature works end-to-end."
+}

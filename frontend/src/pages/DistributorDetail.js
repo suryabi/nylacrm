@@ -3271,7 +3271,7 @@ export default function DistributorDetail() {
                                 onClick={() => setRetroTarget({
                                   txType: 'shipment',
                                   txNumber: `Shipment ${selectedShipment.shipment_number}`,
-                                  locationId: selectedShipment.distributor_location_id,
+                                  distributorId: id,
                                   items: [{
                                     key: item.id, sku_id: item.sku_id, sku_name: item.sku_name,
                                     quantity_units: item.quantity, packaging_units: item.packaging_units,

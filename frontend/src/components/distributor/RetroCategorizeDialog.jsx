@@ -9,8 +9,8 @@
  *   items      — Generic-only lines: [{key, sku_id, sku_name, quantity_units,
  *                packaging_units, packaging_type_name, batch_code}]
  *   accountId / accountName — set for deliveries (children scoped to this account)
- *   locationId — destination warehouse (stock in / transfers): children are
- *                scoped to customer accounts in the SAME CITY as this warehouse
+ *   distributorId — destination distributor (stock in / transfers): children are
+ *                scoped to customer accounts ASSIGNED to this distributor
  *   onSubmit   — async ({itemKey, child_sku_id, quantity}) => void (base units)
  */
 import React, { useState, useEffect } from 'react';
@@ -28,13 +28,13 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function RetroCategorizeDialog({
   open, onOpenChange, txType, txNumber,
-  items = [], accountId, accountName, locationId, onSubmit,
+  items = [], accountId, accountName, distributorId, onSubmit,
 }) {
   const token = localStorage.getItem('token');
   const [itemKey, setItemKey] = useState('');
   const [children, setChildren] = useState(null); // null = loading
-  const [destCity, setDestCity] = useState(null);
-  const [cityFiltered, setCityFiltered] = useState(false);
+  const [scopeName, setScopeName] = useState(null);
+  const [scoped, setScoped] = useState(false);
   const [childId, setChildId] = useState('');
   const [qtyPkgs, setQtyPkgs] = useState('');
   const [saving, setSaving] = useState(false);
@@ -59,14 +59,14 @@ export default function RetroCategorizeDialog({
     setQtyPkgs(String(Math.floor((item.quantity_units || 0) / Math.max(1, Number(item.packaging_units) || 1))));
     const params = new URLSearchParams({ sku_id: item.sku_id });
     if (accountId) params.append('account_id', accountId);
-    else if (locationId) params.append('location_id', locationId);
+    else if (distributorId) params.append('distributor_id', distributorId);
     axios.get(`${API_URL}/api/retro-categorize/eligible-children?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
     }).then(res => {
       const list = res.data.children || [];
       setChildren(list);
-      setDestCity(res.data.destination_city || null);
-      setCityFiltered(!!res.data.filtered_by_city);
+      setScopeName(res.data.distributor_name || null);
+      setScoped(!!res.data.filtered_by_distributor);
       if (list.length === 1) setChildId(list[0].id);
     }).catch(() => setChildren([]));
   }, [open, itemKey]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -136,9 +136,9 @@ export default function RetroCategorizeDialog({
               <div className="space-y-1.5">
                 <div className="flex items-baseline justify-between">
                   <Label className="text-xs">Customer child SKU <span className="text-red-500">*</span></Label>
-                  {cityFiltered && destCity && (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700" data-testid="retro-city-scope">
-                      <MapPin className="h-2.5 w-2.5" /> Accounts in {destCity}
+                  {scoped && scopeName && (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700" data-testid="retro-scope-badge">
+                      <MapPin className="h-2.5 w-2.5" /> Accounts of {scopeName}
                     </span>
                   )}
                 </div>
@@ -149,7 +149,7 @@ export default function RetroCategorizeDialog({
                 ) : children.length === 0 ? (
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="retro-no-children">
                     No customer-specific child SKU found for this parent SKU
-                    {accountName ? ` and account '${accountName}'` : cityFiltered && destCity ? ` for accounts in ${destCity}` : ''}.
+                    {accountName ? ` and account '${accountName}'` : scoped && scopeName ? ` among accounts assigned to ${scopeName}` : ''}.
                     Create one under SKU Management first.
                   </div>
                 ) : selectedChild ? (

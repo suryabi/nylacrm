@@ -165,14 +165,15 @@ async def _move_generic_to_child(tenant_id: str, user: dict, location_id: str, s
 async def eligible_children(
     sku_id: str = Query(...),
     account_id: Optional[str] = Query(None),
-    location_id: Optional[str] = Query(
+    distributor_id: Optional[str] = Query(
         None,
-        description="Destination warehouse — when set (and no account_id), children are "
-                    "filtered to accounts in the SAME CITY as this warehouse."),
+        description="Destination distributor — when set (and no account_id), children are "
+                    "filtered to accounts ASSIGNED to this distributor."),
     current_user: dict = Depends(get_current_user),
 ):
     """Active customer-type child SKUs for a parent SKU, scoped to one account
-    (deliveries) or to the destination warehouse's city (stock in / transfers)."""
+    (deliveries) or to the destination distributor's assigned accounts
+    (stock in / transfers)."""
     _ = current_user
     tenant_id = get_current_tenant_id()
     q = {"tenant_id": tenant_id, "parent_sku_id": sku_id, "child_type": "customer",
@@ -184,7 +185,7 @@ async def eligible_children(
             "customer_account_id": 1, "customer_account_name": 1},
     ).to_list(500)
 
-    # Enrich with the customer account's city (for display + city scoping).
+    # Enrich with the customer account's city (display only).
     acct_ids = list({r.get("customer_account_id") for r in rows if r.get("customer_account_id")})
     acct_map = {}
     if acct_ids:
@@ -198,20 +199,23 @@ async def eligible_children(
         if not r.get("customer_account_name"):
             r["customer_account_name"] = a.get("account_name")
 
-    destination_city = None
-    filtered_by_city = False
-    if location_id and not account_id:
-        from .distributors import normalize_city
-        loc = await db.distributor_locations.find_one(
-            {"id": location_id, "tenant_id": tenant_id}, {"_id": 0, "city": 1})
-        destination_city = (loc or {}).get("city")
-        if destination_city:
-            norm = normalize_city(destination_city)
-            rows = [r for r in rows if normalize_city(r.get("account_city") or "") == norm]
-            filtered_by_city = True
+    distributor_name = None
+    filtered_by_distributor = False
+    if distributor_id and not account_id:
+        assigned = await db.account_distributor_assignments.find(
+            {"tenant_id": tenant_id, "distributor_id": distributor_id, "status": "active"},
+            {"_id": 0, "account_id": 1},
+        ).to_list(2000)
+        assigned_ids = {a["account_id"] for a in assigned}
+        rows = [r for r in rows if r.get("customer_account_id") in assigned_ids]
+        filtered_by_distributor = True
+        dist = await db.distributors.find_one(
+            {"id": distributor_id, "tenant_id": tenant_id}, {"_id": 0, "distributor_name": 1})
+        distributor_name = (dist or {}).get("distributor_name")
 
     rows.sort(key=lambda c: (c.get("child_sku_name") or "").lower())
-    return {"children": rows, "destination_city": destination_city, "filtered_by_city": filtered_by_city}
+    return {"children": rows, "distributor_name": distributor_name,
+            "filtered_by_distributor": filtered_by_distributor}
 
 
 # ─────────────────────────── Stock In (shipment) ───────────────────────────
