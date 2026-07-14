@@ -5114,7 +5114,7 @@ async def create_delivery(
     # migrations) but the shipment/delivery history is intact.
     derived_on_hand_by_sku: dict = {}
     if not source_is_factory and not source_tracks_batches:
-        sku_ids_needed = list({sku for (sku, _) in stock_demand.keys() if sku})
+        sku_ids_needed = list({k[0] for k in stock_demand.keys() if k[0]})
         if sku_ids_needed:
             # Single-location distributors (e.g. third-party / "not self-managed"
             # distributors with one default warehouse): scope the derived view to

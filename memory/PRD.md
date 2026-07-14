@@ -23,6 +23,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-14 — 🐛 Fix: 500 on create delivery for non-factory, non-batch warehouses ✅ DONE
+- `routes/distributors.py` `create_delivery`: the derived on-hand pre-aggregation (used only when the source warehouse is non-factory & non-batch-tracked — e.g. "non self-managed" third-party distributors like Pickval Traders) unpacked `stock_demand.keys()` as 2-tuples after Phase 3 changed the key to a 3-tuple `(sku_id, batch_id, child_sku_id)`. Every stock-out delivery from such a warehouse returned HTTP 500 (`ValueError: too many values to unpack (expected 2)`).
+- Fix: switched to index-based access `{k[0] for k in stock_demand.keys() if k[0]}`. Verified via curl: previously 500 → now correctly reaches the margin-matrix check.
+- Prod redeploy required.
+
+
 
 ### 2026-07-11 — 🔐 RBAC unification: all menu items + routes now Role-Management controllable ✅ DONE
 - **Backend** (`/app/backend/models/role.py`): added 25 missing module keys to `DEFAULT_MODULE_PERMISSIONS`, `MODULE_LABELS`, and `MODULE_CATEGORIES` — `mail`, `email_templates`, `notification_settings`, `proposal_template`, `fleet_vehicles`, `fleet_drivers`, `batch_genealogy`, `vendor_types`, `reversals_log`, `zoho_integration`, `slack_integration`, `google_drive_integration`, `state_machines`, `notification_templates`, `share_recipients`, `accounting_transactions`, `accounting_masters`, `accounting_income_masters`, `accounting_vendors`, `accounting_employees`, `delivery_orders`, `knowledge_base`, `customer_returns`, `stock_transfers`. Added 6 new categories (Fleet, Integrations, Communication, Presentation, Accounting, Sales Operations Extras). Added an import-time drift-guard assertion so any future label added without a matching permission entry fails fast.
