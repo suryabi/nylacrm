@@ -15,13 +15,15 @@ import {
 } from '../components/ui/select';
 import {
   ArrowLeftRight, Plus, Search, X, Loader2, Truck, AlertTriangle, ExternalLink,
-  RefreshCw, FileText, Package, Building2, Download, Undo2, Pencil, ShieldCheck,
+  RefreshCw, FileText, Package, Building2, Download, Undo2, Pencil, ShieldCheck, Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ShareButton } from '../components/share/ShareButton';
+import RetroCategorizeDialog from '../components/distributor/RetroCategorizeDialog';
 import { useAuth } from '../context/AuthContext';
 
 const QTY_EDIT_ROLES = ['CEO', 'System Admin'];
+const RETRO_ROLES = ['CEO', 'Admin', 'System Admin'];
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const HEAD = () => {
@@ -805,7 +807,11 @@ function EditQtyDialog({ transfer, onClose, onSaved }) {
 export default function StockTransfers() {
   const { user } = useAuth();
   const canEditQty = QTY_EDIT_ROLES.includes(user?.role);
+  const canRetro = RETRO_ROLES.includes(user?.role);
   const [editTransfer, setEditTransfer] = useState(null);
+  const [retroTarget, setRetroTarget] = useState(null);
+  // parent_sku_id set of SKUs that have at least one active customer child SKU
+  const [customerParents, setCustomerParents] = useState(null);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -826,6 +832,47 @@ export default function StockTransfers() {
   }, [page, search]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!canRetro || customerParents !== null) return;
+    axios.get(`${API}/child-skus`, { headers: HEAD() }).then(res => {
+      const set = new Set();
+      (res.data?.child_skus || []).forEach(c => {
+        if (c.child_type === 'customer' && c.is_active !== false) set.add(c.parent_sku_id);
+      });
+      setCustomerParents(set);
+    }).catch(() => setCustomerParents(new Set()));
+  }, [canRetro, customerParents]);
+
+  const submitTransferRetro = (transferId) => async ({ itemKey, child_sku_id, quantity }) => {
+    const res = await axios.post(`${API}/retro-categorize/transfer-item`, {
+      transfer_id: transferId, item_index: Number(itemKey), child_sku_id, quantity,
+    }, { headers: HEAD() });
+    const d = res.data;
+    toast.success(`Categorized as ${d.child_sku_name}${d.stock_moved_units ? ` — ${d.stock_moved_units} units reclassified at destination (${d.branding_entry_number})` : ''}`);
+    load();
+  };
+
+  const openRetroDialog = (t) => {
+    const items = (t.items || [])
+      .map((it, idx) => ({ it, idx }))
+      .filter(({ it }) => !it.child_sku_id && customerParents?.has(it.sku_id))
+      .map(({ it, idx }) => ({
+        key: idx,
+        sku_id: it.sku_id,
+        sku_name: it.sku_name,
+        quantity_units: it.quantity_units || (Number(it.quantity) || 0) * (Number(it.units_per_package) || 1),
+        packaging_units: it.units_per_package,
+        packaging_type_name: it.packaging_type_name,
+        batch_code: it.batch_code,
+      }));
+    setRetroTarget({
+      txType: 'transfer',
+      txNumber: `Transfer ${t.transfer_number}`,
+      items,
+      onSubmit: submitTransferRetro(t.id),
+    });
+  };
 
   const exportTransfers = async () => {
     setExporting(true);
@@ -1130,6 +1177,17 @@ export default function StockTransfers() {
                                 <Pencil className="h-3 w-3 mr-1" /> Edit Qty
                               </Button>
                             )}
+                            {canRetro && t.status === 'completed' && (t.items || []).some(it => !it.child_sku_id && customerParents?.has(it.sku_id)) && (
+                              <Button
+                                size="sm" variant="ghost"
+                                className="h-7 px-2 text-[10px] text-violet-700 hover:text-violet-800 hover:bg-violet-50"
+                                onClick={() => openRetroDialog(t)}
+                                title="Retrospectively categorize a Generic line into a customer-specific child SKU"
+                                data-testid={`retro-categorize-transfer-btn-${t.id}`}
+                              >
+                                <Tag className="h-3 w-3 mr-1" /> Categorize
+                              </Button>
+                            )}
                             <Button
                               size="sm" variant="ghost"
                               className="h-7 px-2 text-[10px] text-rose-700 hover:text-rose-800 hover:bg-rose-50"
@@ -1158,6 +1216,13 @@ export default function StockTransfers() {
 
       <NewTransferDialog open={showNew} onClose={() => setShowNew(false)} onCreated={() => { setPage(1); load(); }} />
       <EditQtyDialog transfer={editTransfer} onClose={() => setEditTransfer(null)} onSaved={load} />
+      {retroTarget && (
+        <RetroCategorizeDialog
+          open={!!retroTarget}
+          onOpenChange={(o) => { if (!o) setRetroTarget(null); }}
+          {...retroTarget}
+        />
+      )}
     </div>
   );
 }

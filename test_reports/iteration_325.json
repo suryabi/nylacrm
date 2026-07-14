@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend-only testing of Retro-Categorization feature (Stock In / Stock Out / Stock Transfer). All 5 tests PASSED end-to-end against the live preview URL, logged in as CEO surya.yadavalli@nylaairwater.earth.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "TEST_1_stock_in_partial_categorize": "PASS — retro-categorize-shipment-item-0 present; dialog opened with default qty 20 (crates, max 20); set to 10; UIRetro BrandedCo option present and selected; submit produced toast 'Categorized as UIRetro BrandedCo — 120 units reclassified at destination (BRD-2026-0001)'; detail refreshed to two 20L Premium rows (120 each) — one with violet 'UIRetro BrandedCo' badge, the other still Generic with Categorize button. Grand total unchanged at ₹2,400 / 240 units.",
+    "TEST_2_stock_out_full_relabel": "PASS — After expanding the SUN 21 JUN 2026 group and opening DEL-UIRETRO-1, retro-categorize-delivery-item-0 was present; dialog description contained account name 'Toopa Ice-creamery'; child select ONLY listed 'UIRetro BrandedCo — Toopa Ice-creamery'; default qty 10 (crates); submit produced toast 'Categorized as UIRetro BrandedCo'; item row refreshed with indigo 'UIRetro BrandedCo' badge; Categorize button no longer present.",
+    "TEST_3_stock_transfer_full_categorize": "PASS — Correct route is /distributor/stock-transfers (task spec said /stock-transfers — old path from earlier iteration). Row for ST-UIRETRO-1 showed the violet 'Categorize' button with data-testid retro-categorize-transfer-btn-uiretro-tr; dialog opened with item auto-selected (single Generic line), default qty 10, max 10; UIRetro BrandedCo selected; submit produced toast 'Categorized as UIRetro BrandedCo — 120 units reclassified at destination (BRD-2026-0002)'; row now reads '10 Crate - 12 · 20L Premium [UIRetro BrandedCo]'; Categorize button disappeared.",
+    "TEST_4_gating_no_button_for_already_categorized": "PASS — In TEST 1 aftermath the branded 120-unit line had no Categorize button; the remaining Generic 120-unit line still had one. In TEST 2 & TEST 3 aftermath the categorized rows lost their Categorize buttons entirely.",
+    "TEST_5_console": "PASS — After ignoring pre-existing Radix aria-describedby warnings and the pre-existing 401 refresh calls on login (X-Tenant-ID absent), no new React errors/warnings were emitted by these flows."
+  },
+  "minor_observations": [
+    "Task spec listed the transfers page path as /stock-transfers, but App.js registers it at /distributor/stock-transfers. Existing sidebar links likely use the correct path — this is a doc mismatch, not a bug.",
+    "seed_uiretro.py is not fully idempotent for the shipment record: cleanup filters distributor_shipments on reference_number == 'uiretro', but the insert never sets reference_number, so a second run leaves the previous shipment behind (creates a duplicate document with the same id 'uiretro-ship'). On my first browser load this caused two SHP-UIRETRO-1 rows and a React 'duplicate key uiretro-ship' console error. I cleaned the DB manually (deleting by shipment_number=SHP-UIRETRO-1) and re-seeded — everything worked cleanly afterwards. Recommend fixing the cleanup to filter distributor_shipments on shipment_number ('SHP-UIRETRO-1') or on id: {'$regex': '^uiretro'} so future runs are safely idempotent."
+  ],
+  "test_report_links": ["/app/test_retro_categorization.py"],
+  "action_items": [
+    "OPTIONAL: Make seed_uiretro.py fully idempotent for the shipment record (see minor_observations)."
+  ],
+  "critical_code_review_comments": [
+    "RetroCategorizeDialog.jsx is clean, uses data-testid on all interactive elements (retro-categorize-dialog, retro-child-select, retro-qty-input, retro-submit-btn, retro-item-select, retro-no-children), handles loading / empty / error states, and shows account-scoping copy for deliveries. No changes needed.",
+    "Consider adding data-testid on the DistributorDetail delivery listing rows for easier future testing (currently we rely on tr:has-text)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (18/18 already passing per main agent)", "frontend": "100%"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water)",
+  "seed_data_creation": "Used pre-existing /app/seed_uiretro.py; had to manually clean the duplicated shipment once before re-seeding.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "For the delivery detail (Stock Out), the deliveries are grouped by date and the delivery date filter defaults to This Month; DEL-UIRETRO-1 is dated 21 Jun 2026 so you must change the Time Period to Last 3 Months (or Last Month / Lifetime) and expand the 'SUN, 21 JUN, 2026' group before you can click into DEL-UIRETRO-1. The stock transfers page is at /distributor/stock-transfers, NOT /stock-transfers.",
+  "rca_of_the_issue": "None — all five acceptance tests pass. Only nit: seed script's non-idempotent shipment cleanup can produce duplicate rows if re-run without a manual DB clean."
+}

@@ -24,7 +24,7 @@ import {
   ArrowLeft, Building2, MapPin, Phone, Mail, Edit2, Trash2,
   RefreshCw, Plus, Package, Truck, CreditCard, Calendar,
   User, FileText, Check, X, Save, Percent, DollarSign, Copy,
-  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2, MoreVertical, ChevronDown, ChevronRight, Cable
+  Settings, Eye, Receipt, Calculator, Warehouse, Download, RotateCcw, BarChart3, ArrowDown, ExternalLink, Loader2, MoreVertical, ChevronDown, ChevronRight, Cable, Tag
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -36,6 +36,7 @@ import LocationsTab from '../components/distributor/LocationsTab';
 import MarginsTab from '../components/distributor/MarginsTab';
 import AssignmentsTab from '../components/distributor/AssignmentsTab';
 import ShipmentsTab from '../components/distributor/ShipmentsTab';
+import RetroCategorizeDialog from '../components/distributor/RetroCategorizeDialog';
 import DeliveriesTab from '../components/distributor/DeliveriesTab';
 import ReturnsTab from '../components/distributor/ReturnsTab';
 import SettlementsTab from '../components/distributor/SettlementsTab';
@@ -333,6 +334,8 @@ export default function DistributorDetail() {
     (isDistributorRole && distributorWritableTab)
   );
   const canDelete = user && ['CEO', 'Admin', 'System Admin'].includes(user.role);
+  // Retro categorization of Generic transaction lines into customer child SKUs
+  const canRetroCategorize = user && ['CEO', 'Admin', 'System Admin'].includes(user.role);
   const canRegenerate = user && ['CEO', 'Director', 'Admin', 'System Admin', 'Vice President', 'National Sales Head', 'Regional Sales Manager', 'Head of Business'].includes(user.role);
   const canApprove = user && ['CEO', 'Director', 'Vice President'].includes(user.role);
   const canUpdateProfile = user && (
@@ -637,14 +640,14 @@ export default function DistributorDetail() {
     }).catch(() => setDeliveryChildStockBySku({}));
   }, [deliveryForm.distributor_location_id, deliveryForm.account_id]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!showDeliveryDialog || Object.keys(childSkuMeta).length > 0) return;
+    if (!(showDeliveryDialog || showShipmentDetail || showDeliveryDetail) || Object.keys(childSkuMeta).length > 0) return;
     axios.get(`${API_URL}/api/child-skus`, { headers: { Authorization: `Bearer ${token}` } })
       .then(res => {
         const meta = {};
         (res.data?.child_skus || []).forEach(c => { meta[c.id] = c; });
         setChildSkuMeta(meta);
       }).catch(() => {});
-  }, [showDeliveryDialog]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showDeliveryDialog, showShipmentDetail, showDeliveryDetail]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!sourceDistributorTracksBatches || !deliveryForm.distributor_location_id) {
       setDeliveryBatchesBySku({});
@@ -1851,6 +1854,31 @@ export default function DistributorDetail() {
     } catch (error) {
       toast.error('Failed to load shipment details');
     }
+  };
+
+  // ============ Retro categorization (Generic line → customer child SKU) ============
+  const [retroTarget, setRetroTarget] = useState(null);
+  const childrenForSku = (skuId, accountId) => Object.values(childSkuMeta).filter(c =>
+    c.parent_sku_id === skuId && c.child_type === 'customer' && c.is_active !== false &&
+    (!accountId || c.customer_account_id === accountId));
+
+  const submitShipmentRetro = async ({ itemKey, child_sku_id, quantity }) => {
+    const res = await axios.post(`${API_URL}/api/retro-categorize/shipment-item`, {
+      distributor_id: id, shipment_id: selectedShipment.id, item_id: itemKey, child_sku_id, quantity,
+    }, { headers: { Authorization: `Bearer ${token}` } });
+    const d = res.data;
+    toast.success(`Categorized as ${d.child_sku_name}${d.stock_moved_units ? ` — ${d.stock_moved_units} units reclassified at destination (${d.branding_entry_number})` : ''}`);
+    viewShipmentDetail(selectedShipment.id);
+    fetchShipments();
+  };
+
+  const submitDeliveryRetro = async ({ itemKey, child_sku_id, quantity }) => {
+    const res = await axios.post(`${API_URL}/api/retro-categorize/delivery-item`, {
+      distributor_id: id, delivery_id: selectedDelivery.id, item_id: itemKey, child_sku_id, quantity,
+    }, { headers: { Authorization: `Bearer ${token}` } });
+    toast.success(`Categorized as ${res.data.child_sku_name}`);
+    viewDeliveryDetail(selectedDelivery.id);
+    fetchDeliveries();
   };
 
   const getShipmentStatusBadge = (status) => {
@@ -3235,6 +3263,28 @@ export default function DistributorDetail() {
                               </span>
                             </div>
                           )}
+                          {canRetroCategorize && !item.child_sku_id && !['cancelled', 'reversed'].includes(selectedShipment.status) && childrenForSku(item.sku_id).length > 0 && (
+                            <div className="mt-1">
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-700 border border-violet-300 bg-white hover:bg-violet-50 rounded px-1.5 py-0.5 transition-colors"
+                                onClick={() => setRetroTarget({
+                                  txType: 'shipment',
+                                  txNumber: `Shipment ${selectedShipment.shipment_number}`,
+                                  items: [{
+                                    key: item.id, sku_id: item.sku_id, sku_name: item.sku_name,
+                                    quantity_units: item.quantity, packaging_units: item.packaging_units,
+                                    packaging_type_name: item.packaging_type_name, batch_code: item.batch_code,
+                                  }],
+                                  onSubmit: submitShipmentRetro,
+                                })}
+                                title="Retrospectively categorize this Generic line into a customer-specific child SKU"
+                                data-testid={`retro-categorize-shipment-item-${idx}`}
+                              >
+                                <Tag className="h-2.5 w-2.5" /> Categorize
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="p-2.5 text-right tabular-nums">
                           {item.quantity}
@@ -3824,6 +3874,30 @@ export default function DistributorDetail() {
                             {item.child_sku_name && (
                               <div className="mt-0.5 ml-1 inline-flex items-center gap-1 text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded" data-testid={`delivery-detail-item-branding-${idx}`}>
                                 {item.child_sku_name}
+                              </div>
+                            )}
+                            {canRetroCategorize && !item.child_sku_id && !['cancelled', 'reversed'].includes(selectedDelivery.status) && childrenForSku(item.sku_id, selectedDelivery.account_id).length > 0 && (
+                              <div className="mt-1">
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 text-[10px] font-medium text-violet-700 border border-violet-300 bg-white hover:bg-violet-50 rounded px-1.5 py-0.5 transition-colors"
+                                  onClick={() => setRetroTarget({
+                                    txType: 'delivery',
+                                    txNumber: `Delivery ${selectedDelivery.delivery_number}`,
+                                    accountId: selectedDelivery.account_id,
+                                    accountName: selectedDelivery.account_name,
+                                    items: [{
+                                      key: item.id, sku_id: item.sku_id, sku_name: item.sku_name,
+                                      quantity_units: item.quantity, packaging_units: item.packaging_units,
+                                      packaging_type_name: item.packaging_type_name, batch_code: item.batch_code,
+                                    }],
+                                    onSubmit: submitDeliveryRetro,
+                                  })}
+                                  title="Retrospectively categorize this Generic line into this customer's branded child SKU"
+                                  data-testid={`retro-categorize-delivery-item-${idx}`}
+                                >
+                                  <Tag className="h-2.5 w-2.5" /> Categorize
+                                </button>
                               </div>
                             )}
                           </td>
@@ -5079,6 +5153,15 @@ export default function DistributorDetail() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Retro categorization dialog (Generic line → customer child SKU) */}
+      {retroTarget && (
+        <RetroCategorizeDialog
+          open={!!retroTarget}
+          onOpenChange={(o) => { if (!o) setRetroTarget(null); }}
+          {...retroTarget}
+        />
+      )}
     </div>
   );
 }

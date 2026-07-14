@@ -264,6 +264,14 @@ routes_router.include_router(
     tags=["Branding Entries"],
 )
 
+# Retro categorization (relabel Generic transaction lines into customer child SKUs)
+from .retro_categorization import router as retro_categorization_router
+routes_router.include_router(
+    retro_categorization_router,
+    prefix="/retro-categorize",
+    tags=["Retro Categorization"],
+)
+
 # Admin → SKU Aliases (map retired SKU codes/names to current master SKUs)
 from .sku_aliases import router as sku_aliases_router
 routes_router.include_router(
