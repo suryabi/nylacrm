@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from datetime import datetime, timezone
 from typing import List
 import logging
+import uuid
 
 from database import db
 from models.role import (
@@ -44,6 +45,24 @@ async def list_roles(current_user: dict = Depends(get_current_user)):
             {"tenant_id": tenant_id},
             {"_id": 0}
         ).sort("name", 1).to_list(100)
+
+    # Backfill: create role docs for role NAMES that exist on users but have no
+    # roles entry, so admins can grant module permissions to them in settings.
+    existing_names = {r.get("name") for r in roles}
+    user_role_names = await db.users.distinct("role", {"tenant_id": tenant_id})
+    missing_names = [n for n in user_role_names if n and n not in existing_names]
+    if missing_names:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.roles.insert_many([{
+            "id": str(uuid.uuid4()), "tenant_id": tenant_id, "name": n,
+            "description": "Auto-created from existing user role",
+            "permissions": {k: dict(v) for k, v in DEFAULT_MODULE_PERMISSIONS.items()},
+            "is_system_role": False, "is_default": False,
+            "created_at": now_iso, "updated_at": now_iso,
+        } for n in missing_names])
+        roles = await db.roles.find(
+            {"tenant_id": tenant_id}, {"_id": 0}
+        ).sort("name", 1).to_list(200)
     
     # Backfill: ensure every role has all currently-known module keys.
     # New keys default to view=False (admin-style roles get full access via name match).

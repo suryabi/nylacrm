@@ -416,7 +416,11 @@ function NewTransferDialog({ open, onClose, onCreated, prefill }) {
             <div>
               <Label>Destination warehouse *</Label>
               <Select value={form.dest_location_id} onValueChange={(v) => setForm({ ...form, dest_location_id: v })} disabled={!form.source_location_id}>
-                <SelectTrigger data-testid="dest-warehouse-select"><SelectValue placeholder={form.source_location_id ? 'Pick destination' : 'Pick source first'} /></SelectTrigger>
+                <SelectTrigger data-testid="dest-warehouse-select">
+                  {prefill && form.dest_location_id === prefill.dest_location_id
+                    ? <span>{prefill.dest_location_name}</span>
+                    : <SelectValue placeholder={form.source_location_id ? 'Pick destination' : 'Pick source first'} />}
+                </SelectTrigger>
                 <SelectContent>
                   {filteredTargets.length === 0 && (
                     <SelectItem value="__none__" disabled>

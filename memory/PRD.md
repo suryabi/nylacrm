@@ -23,6 +23,15 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-15 — 📦 Stock Transfer Requests: request → approval → fulfillment workflow ✅ DONE (tested)
+- **Requirement**: other users can request transfers (SKUs + quantities only — no batches/source; warehouse team handles those); approval step; then transfer initiated via existing flow.
+- **User decisions**: requester roles granted in Roles & Permissions (new module key `stock_transfer_requests`); requester picks destination only; approvers = anyone who can create stock transfers (`stock_transfers.create` perm, fallback hardcoded transfer roles, admins always); quantities editable at fulfillment; bell notifications both ways.
+- **Backend NEW** (`routes/stock_transfer_requests.py`, `/api/stock-transfer-requests`): create (STR-YYYY-NNNN, pending), list (approvers see all, requesters own; pending_count), approve/reject (remark), cancel (requester), `my-permissions`, `mark_request_fulfilled` helper. Notifications via `utils/notify.notify_users`. `distributor_stock_transfers.py`: `StockTransferCreate.request_id` + fail-fast guard (only approved requests) + auto-fulfil link (status fulfilled + transfer_number, notify requester) after transfer insert.
+- **Permissions plumbing**: `models/role.py` adds module key (Distribution category, label "Stock Transfer Requests"); `routes/roles.py` list endpoint now ALSO backfills role docs for role names that exist on users but had no roles entry (e.g. Head of Business, Partner - Sales) so admins can grant the permission in settings.
+- **Frontend** (`pages/StockTransfers.js`): Transfers | Requests tabs (pending badge, `?tab=requests` deep link), "Request Transfer" dialog (destination + SKU/qty bottles rows + reason), requests table with status badges + Approve/Reject (remark dialog) / Cancel / **Initiate Transfer** (opens NewTransferDialog prefilled: violet fulfilling-request banner, dest pre-set with name shown in trigger, items prefilled in packages, request_id sent on create).
+- **Verified**: testing_agent iteration_330 — backend 12/12 pytest (permissions matrix, 403 hint, grant flow, full lifecycle, notifications, fulfil guards), frontend 100% (request→approve→initiate incl. prefill + deep link). Post-test fixes: role-doc backfill (above) + dest name display on prefill. Test data cleaned; `noida.sales3@nylaairwater.earth/test123` (Head of Business) kept active as requester test account with `stock_transfer_requests.create` granted.
+- Known minor: duplicate success toast on request submit (cosmetic, sonner) — not fixed yet.
+
 ### 2026-07-14 — 🤖 ChatGPT AI integration (Emergent Universal Key, OpenAI gpt-5.4) ✅ DONE (tested)
 - **User request**: integrate ChatGPT with (a) AI assistant chat, (b) smart drafting, (c) data insights, (d) lead intelligence — Emergent key.
 - **Backend NEW** (`routes/ai_assistant.py`, mounted `/api/ai`, emergentintegrations 0.2.0 streaming API, model openai/gpt-5.4):

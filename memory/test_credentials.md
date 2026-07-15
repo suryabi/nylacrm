@@ -44,3 +44,9 @@
 - Test Contact: "Promo Test Contact" (company Acme Promo, Bengaluru) — use as recipient in the Promo Stock-Out dialog.
 - UI location: Distributor Detail → "Stock Out" tab → "Promotional Stock-Out (Delivery Challan)" section.
 - Existing test challan: DC-2606-0001 (Sampling, 3 units, ₹60).
+
+## Stock Transfer Requester (non-admin test account)
+- Email: noida.sales3@nylaairwater.earth
+- Password: test123
+- Role: Head of Business (granted `stock_transfer_requests.create` via Roles & Permissions; cannot approve)
+- Note: account was activated (is_active=true) for testing on 2026-07-15
