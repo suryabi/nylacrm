@@ -7637,6 +7637,89 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
 
     return {'message': 'Logo deleted successfully'}
 
+# ============= ACCOUNT APPROVED BOTTLE DESIGN ROUTES =============
+
+class BottleDesignUploadRequest(BaseModel):
+    image: str  # Base64 data URL
+
+@api_router.post("/accounts/{account_id}/bottle-design")
+async def upload_account_bottle_design(account_id: str, request: BottleDesignUploadRequest, current_user: dict = Depends(get_current_user)):
+    """Upload the approved bottle design for an account (durable object storage)."""
+    import base64
+    import time
+    from object_storage import store_image
+
+    account = await get_tdb().accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0, 'id': 1}
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    try:
+        data = request.image
+        content_type = 'image/png'
+        ext = 'png'
+        if ',' in data:
+            header, data = data.split(',', 1)
+            if header.startswith('data:') and ';' in header:
+                content_type = header[5:].split(';')[0] or 'image/png'
+                ext = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}.get(content_type, 'png')
+        image_bytes = base64.b64decode(data)
+        if not image_bytes:
+            raise ValueError('empty image')
+
+        acc_id = account.get('id', account_id)
+        storage_path = store_image(f"accounts/{acc_id}/bottle-design", image_bytes, content_type, ext)
+        design_url = f"/api/accounts/{acc_id}/bottle-design-image?v={int(time.time())}"
+
+        await get_tdb().accounts.update_one(
+            {'$or': [{'id': account_id}, {'account_id': account_id}]},
+            {'$set': {
+                'bottle_design_url': design_url,
+                'bottle_design_storage_path': storage_path,
+                'bottle_design_content_type': content_type,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        return {'bottle_design_url': design_url, 'message': 'Bottle design uploaded successfully'}
+    except Exception as e:
+        logger.error(f"Error uploading bottle design: {str(e)}")
+        raise HTTPException(status_code=500, detail=f'Failed to upload bottle design: {str(e)}')
+
+
+@api_router.get("/accounts/{account_id}/bottle-design-image")
+async def get_account_bottle_design_image(account_id: str):
+    """Public: stream an account's approved bottle design bytes (used by <img src>)."""
+    from object_storage import get_object
+
+    account = await get_tdb().accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0, 'bottle_design_storage_path': 1, 'bottle_design_content_type': 1}
+    )
+    if not account or not account.get('bottle_design_storage_path'):
+        raise HTTPException(status_code=404, detail='Bottle design not found')
+    data, ct = get_object(account['bottle_design_storage_path'])
+    return Response(content=data, media_type=account.get('bottle_design_content_type') or ct or 'image/png')
+
+
+@api_router.delete("/accounts/{account_id}/bottle-design")
+async def delete_account_bottle_design(account_id: str, current_user: dict = Depends(get_current_user)):
+    """Remove the approved bottle design reference from an account."""
+    account = await get_tdb().accounts.find_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'_id': 0, 'id': 1}
+    )
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    await get_tdb().accounts.update_one(
+        {'$or': [{'id': account_id}, {'account_id': account_id}]},
+        {'$unset': {'bottle_design_url': '', 'bottle_design_storage_path': '', 'bottle_design_content_type': ''},
+         '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}}
+    )
+    return {'message': 'Bottle design deleted successfully'}
+
 # NOTE: Lead logo routes are now in routes/leads.py to support FormData uploads
 # The routes below are kept for backwards compatibility with base64 uploads from LogoUploader component
 # TODO: Remove these once all logo uploads use FormData

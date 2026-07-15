@@ -23,6 +23,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-15 — 🍾 Approved Bottle Design on Account (section split) ✅ DONE (tested)
+- **User request**: split the "Account Logo" section into 2 and add an upload for the approved bottle design just like the logo (thumbnail + preview).
+- **Backend** (`server.py`, next to account logo routes): `POST /api/accounts/{id}/bottle-design` (base64 data URL → object storage, sets `bottle_design_url/_storage_path/_content_type`), `GET .../bottle-design-image` (public stream for <img>), `DELETE .../bottle-design`.
+- **Frontend**: new `components/BottleDesignUploader.js` (upload jpg/png/webp ≤5MB, thumbnail, click-to-preview dialog, Change/Remove — no crop). `AccountDetail.js`: edit mode shows LogoUploader + BottleDesignUploader in a 2-col grid; view mode splits into 2 columns (Account Logo | Approved Bottle Design), each with 44×44 thumbnail + Preview + Download buttons ("Not uploaded yet" placeholder when empty); dedicated fullscreen preview dialog with download.
+- **Verified**: curl (upload → 200 stream → delete → 404) + screenshots (view-mode split, preview dialog opens, edit-mode both uploaders present).
+
 ### 2026-07-15 — 📦 Packaging options in Stock Transfer Requests ✅ DONE (tested)
 - **User request**: "need to have all the packaging options that are attached to the SKU in the sku management just like in stock out etc" for the new Transfer Request form.
 - **Backend** (`routes/stock_transfer_requests.py`): `RequestItem` gained optional `packaging_type_id/packaging_type_name/units_per_package/packages` (units-only payloads still validate — backwards compatible); notification summary shows "SKU × 5 Crate - 12" when packaging present.
