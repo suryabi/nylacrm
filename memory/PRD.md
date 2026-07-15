@@ -23,11 +23,12 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
-### 2026-07-15 — 🍾 Approved Bottle Design on Account (section split) ✅ DONE (tested)
-- **User request**: split the "Account Logo" section into 2 and add an upload for the approved bottle design just like the logo (thumbnail + preview).
-- **Backend** (`server.py`, next to account logo routes): `POST /api/accounts/{id}/bottle-design` (base64 data URL → object storage, sets `bottle_design_url/_storage_path/_content_type`), `GET .../bottle-design-image` (public stream for <img>), `DELETE .../bottle-design`.
-- **Frontend**: new `components/BottleDesignUploader.js` (upload jpg/png/webp ≤5MB, thumbnail, click-to-preview dialog, Change/Remove — no crop). `AccountDetail.js`: edit mode shows LogoUploader + BottleDesignUploader in a 2-col grid; view mode splits into 2 columns (Account Logo | Approved Bottle Design), each with 44×44 thumbnail + Preview + Download buttons ("Not uploaded yet" placeholder when empty); dedicated fullscreen preview dialog with download.
-- **Verified**: curl (upload → 200 stream → delete → 404) + screenshots (view-mode split, preview dialog opens, edit-mode both uploaders present).
+### 2026-07-15 — 🍾 Bottle design moved to SKU rows + "SKU Details" rename ✅ DONE (tested)
+- **User request**: revert the account-level Approved Bottle Design upload; instead (1) rename "SKU Pricing" section → "SKU Details", (2) allow uploading the approved bottle design per SKU row (edit mode, alongside price/MRP/active from-to).
+- **Reverted**: account-level `bottle_design` routes in server.py, AccountDetail logo-section split, `BottleDesignUploader.js` (deleted).
+- **Backend** (`routes/accounts.py`): `AccountSKUPricing` gained `bottle_design_url/_storage_path/_content_type`; new routes `POST/GET/DELETE /api/accounts/{id}/sku-pricing/{sku_id}/bottle-design[-image]` (object storage, arrayFilters update of the matching row; unsaved rows carry fields client-side until pricing save — PUT preserves them).
+- **Frontend**: new `components/SkuBottleDesignCell.js` (compact: 10×10 thumbnail w/ fullscreen preview dialog; edit mode Upload/Change + remove, disabled until SKU picked). `AccountDetail.js`: "Bottle Design" column between Bottle Credit and Active From; `handleSkuDesignChange` merges fields into row state; section title now "SKU Details".
+- **Verified**: curl (upload → row persisted → stream 200 → PUT roundtrip keeps fields → delete → 404; old account-level route 404) + screenshots (view thumbnail + preview dialog, edit-mode Change/remove controls).
 
 ### 2026-07-15 — 📦 Packaging options in Stock Transfer Requests ✅ DONE (tested)
 - **User request**: "need to have all the packaging options that are attached to the SKU in the sku management just like in stock out etc" for the new Transfer Request form.

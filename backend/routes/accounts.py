@@ -2,7 +2,7 @@
 Accounts routes - Account CRUD, invoices, SKU pricing, contracts
 Multi-tenant aware - all queries automatically filter by tenant_id
 """
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query, Response
 from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field, field_validator
@@ -74,6 +74,11 @@ class AccountSKUPricing(BaseModel):
     # that already exist without these fields.
     active_from: Optional[str] = None
     active_to: Optional[str] = None
+
+    # Approved bottle design for this account+SKU (object storage reference).
+    bottle_design_url: Optional[str] = None
+    bottle_design_storage_path: Optional[str] = None
+    bottle_design_content_type: Optional[str] = None
 
     # The Account Detail page sends '' (empty string) for an untouched MRP /
     # numeric field when a new SKU row is added. Coerce blanks BEFORE float
@@ -1343,6 +1348,97 @@ async def delete_account_logo(account_id: str, current_user: dict = Depends(get_
         raise HTTPException(status_code=404, detail='Account not found')
     
     return {'message': 'Logo deleted successfully'}
+
+
+# ============= SKU APPROVED BOTTLE DESIGN ROUTES =============
+
+class SkuBottleDesignUpload(BaseModel):
+    image: str  # Base64 data URL
+
+
+@router.post("/{account_id}/sku-pricing/{sku_id}/bottle-design")
+async def upload_sku_bottle_design(
+    account_id: str, sku_id: str, payload: SkuBottleDesignUpload,
+    current_user: dict = Depends(get_current_user),
+):
+    """Upload the approved bottle design for one SKU pricing row (object storage)."""
+    import time
+    from object_storage import store_image
+
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'id': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+
+    data = payload.image
+    content_type, ext = 'image/png', 'png'
+    if ',' in data:
+        header, data = data.split(',', 1)
+        if header.startswith('data:') and ';' in header:
+            content_type = header[5:].split(';')[0] or 'image/png'
+            ext = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'}.get(content_type, 'png')
+    try:
+        image_bytes = base64.b64decode(data)
+    except Exception:
+        raise HTTPException(status_code=400, detail='Invalid image data')
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail='Empty image')
+
+    acc_id = account.get('id', account_id)
+    storage_path = store_image(f"accounts/{acc_id}/sku-designs/{sku_id}", image_bytes, content_type, ext)
+    fields = {
+        'bottle_design_url': f"/api/accounts/{acc_id}/sku-pricing/{sku_id}/bottle-design-image?v={int(time.time())}",
+        'bottle_design_storage_path': storage_path,
+        'bottle_design_content_type': content_type,
+    }
+    # Persist onto the matching (already-saved) pricing row. New unsaved rows
+    # carry the fields client-side and are persisted on the pricing save.
+    try:
+        await tdb.accounts.update_one(
+            _account_match(account_id),
+            {'$set': {**{f'sku_pricing.$[row].{k}': v for k, v in fields.items()},
+                      'updated_at': datetime.now(timezone.utc).isoformat()}},
+            array_filters=[{'row.sku_id': sku_id}],
+        )
+    except Exception:
+        pass
+    return {**fields, 'message': 'Bottle design uploaded successfully'}
+
+
+@router.get("/{account_id}/sku-pricing/{sku_id}/bottle-design-image")
+async def get_sku_bottle_design_image(account_id: str, sku_id: str):
+    """Public: stream a SKU row's approved bottle design bytes (used by <img src>)."""
+    from object_storage import get_object
+
+    account = await get_tdb().accounts.find_one(_account_match(account_id), {'_id': 0, 'sku_pricing': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    row = next((r for r in (account.get('sku_pricing') or []) if r.get('sku_id') == sku_id), None)
+    if not row or not row.get('bottle_design_storage_path'):
+        raise HTTPException(status_code=404, detail='Bottle design not found')
+    data, ct = get_object(row['bottle_design_storage_path'])
+    return Response(content=data, media_type=row.get('bottle_design_content_type') or ct or 'image/png')
+
+
+@router.delete("/{account_id}/sku-pricing/{sku_id}/bottle-design")
+async def delete_sku_bottle_design(account_id: str, sku_id: str, current_user: dict = Depends(get_current_user)):
+    """Remove the approved bottle design reference from one SKU pricing row."""
+    tdb = get_tdb()
+    account = await tdb.accounts.find_one(_account_match(account_id), {'_id': 0, 'id': 1})
+    if not account:
+        raise HTTPException(status_code=404, detail='Account not found')
+    try:
+        await tdb.accounts.update_one(
+            _account_match(account_id),
+            {'$unset': {'sku_pricing.$[row].bottle_design_url': '',
+                        'sku_pricing.$[row].bottle_design_storage_path': '',
+                        'sku_pricing.$[row].bottle_design_content_type': ''},
+             '$set': {'updated_at': datetime.now(timezone.utc).isoformat()}},
+            array_filters=[{'row.sku_id': sku_id}],
+        )
+    except Exception:
+        pass
+    return {'message': 'Bottle design deleted successfully'}
 
 
 # ============= ACCOUNT ACTIVATION =============

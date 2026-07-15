@@ -39,7 +39,7 @@ import {
 } from '../components/ui/dialog';
 import { Checkbox } from '../components/ui/checkbox';
 import LogoUploader from '../components/LogoUploader';
-import BottleDesignUploader from '../components/BottleDesignUploader';
+import SkuBottleDesignCell from '../components/SkuBottleDesignCell';
 import ExpenseRequestSection from '../components/ExpenseRequestSection';
 import EntityDeliveryOrders from '../components/EntityDeliveryOrders';
 import EntityCommentThread from '../components/EntityCommentThread';
@@ -380,7 +380,6 @@ export default function AccountDetail() {
 
   // Fullscreen preview for the read-only logo thumbnail.
   const [logoPreviewOpen, setLogoPreviewOpen] = useState(false);
-  const [bottleDesignPreviewOpen, setBottleDesignPreviewOpen] = useState(false);
 
   // Resolve the account logo source, supporting both the stored path (logo_url)
   // and any legacy inline base64 (logo).
@@ -413,34 +412,6 @@ export default function AccountDetail() {
       URL.revokeObjectURL(url);
     } catch (e) {
       toast.error('Failed to download logo');
-    }
-  };
-
-  // Approved bottle design source (stored path + cache-bust on updates).
-  const getBottleDesignSrc = () => {
-    if (!account?.bottle_design_url) return null;
-    const base = `${process.env.REACT_APP_BACKEND_URL}${account.bottle_design_url}`;
-    if (!account.updated_at) return base;
-    const sep = account.bottle_design_url.includes('?') ? '&' : '?';
-    return `${base}${sep}v=${encodeURIComponent(account.updated_at)}`;
-  };
-
-  const handleDownloadBottleDesign = async () => {
-    const src = getBottleDesignSrc();
-    if (!src) return;
-    try {
-      const resp = await fetch(src);
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${(account.account_name || 'account').replace(/\s+/g, '-')}-bottle-design.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      toast.error('Failed to download bottle design');
     }
   };
 
@@ -1329,6 +1300,12 @@ ${googleMapsLink}`;
     setSkuPricing(skuPricing.filter((_, i) => i !== index));
   };
 
+  // Merge approved-bottle-design fields into a pricing row (string fields —
+  // must bypass handleSKUChange's numeric coercion).
+  const handleSkuDesignChange = (index, fields) => {
+    setSkuPricing((prev) => prev.map((r, i) => (i === index ? { ...r, ...fields } : r)));
+  };
+
   const handleSKUChange = (index, field, value) => {
     const updated = [...skuPricing];
     // String-valued fields (id, name, date strings) must pass through
@@ -2003,7 +1980,7 @@ ${googleMapsLink}`;
                     data-testid="toggle-include-in-gop"
                   />
                 </div>
-                <div className="md:col-span-2 pt-4 border-t grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2 pt-4 border-t">
                   <LogoUploader
                     entityType="accounts"
                     entityId={account.id || account.account_id}
@@ -2012,11 +1989,6 @@ ${googleMapsLink}`;
                       fetchAccount();
                     }}
                     label="Account Logo"
-                  />
-                  <BottleDesignUploader
-                    entityId={account.id || account.account_id}
-                    currentImage={getBottleDesignSrc()}
-                    onUpdate={() => fetchAccount()}
                   />
                 </div>
               </div>
@@ -2064,11 +2036,9 @@ ${googleMapsLink}`;
                       : '-'}
                   </p>
                 </div>
-                {(getAccountLogoSrc() || getBottleDesignSrc()) && (
-                  <div className="md:col-span-2 pt-4 border-t grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
+                {getAccountLogoSrc() && (
+                  <div className="md:col-span-2 pt-4 border-t">
                     <p className="text-sm text-muted-foreground mb-2">Account Logo</p>
-                    {getAccountLogoSrc() ? (
                     <div className="flex items-start gap-4 flex-wrap">
                       <button
                         type="button"
@@ -2108,52 +2078,6 @@ ${googleMapsLink}`;
                           </p>
                         )}
                       </div>
-                    </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground italic">Not uploaded yet — use Edit to add it.</p>
-                    )}
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">Approved Bottle Design</p>
-                      {getBottleDesignSrc() ? (
-                        <div className="flex items-start gap-4 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => setBottleDesignPreviewOpen(true)}
-                            className="w-44 h-44 border rounded-xl overflow-hidden bg-gray-50 cursor-zoom-in hover:border-blue-400 hover:shadow-md transition-all p-2"
-                            data-testid="account-bottle-design-thumbnail"
-                            title="Click to preview"
-                          >
-                            <img
-                              src={getBottleDesignSrc()}
-                              alt="Approved bottle design"
-                              className="w-full h-full object-contain"
-                            />
-                          </button>
-                          <div className="flex flex-col gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setBottleDesignPreviewOpen(true)}
-                              data-testid="account-bottle-design-preview-btn"
-                            >
-                              <Eye className="h-4 w-4 mr-2" /> Preview
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleDownloadBottleDesign}
-                              data-testid="account-bottle-design-download-btn"
-                            >
-                              <Download className="h-4 w-4 mr-2" /> Download
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic">Not uploaded yet — use Edit to add it.</p>
-                      )}
                     </div>
                   </div>
                 )}
@@ -2360,7 +2284,7 @@ ${googleMapsLink}`;
           <Card id="acc-pricing" className="p-4 sm:p-6 scroll-mt-24">
             <SectionHeader
               eyebrow="Pricing"
-              title="SKU Pricing"
+              title="SKU Details"
               icon={Package}
               testid="header-acc-pricing"
               actions={
@@ -2418,6 +2342,7 @@ ${googleMapsLink}`;
                         <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap" title="Maximum Retail Price printed on the invoice for this customer. Required only for SKUs that allow custom MRP.">MRP (₹) *</th>
                       )}
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Bottle Credit (₹)</th>
+                      <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Bottle Design</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active From</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Active To</th>
                       <th className="text-left px-3 py-2 text-xs sm:text-sm font-medium whitespace-nowrap">Status</th>
@@ -2513,6 +2438,16 @@ ${googleMapsLink}`;
                           ) : (
                             <span>₹{item.return_bottle_credit?.toLocaleString()}</span>
                           )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <SkuBottleDesignCell
+                            accountId={account.id || account.account_id}
+                            skuId={item.sku_id}
+                            designUrl={item.bottle_design_url}
+                            editing={skuEditing}
+                            onChange={(fields) => handleSkuDesignChange(index, fields)}
+                            testId={`sku-bottle-design-${index}`}
+                          />
                         </td>
                         <td className="px-3 py-2">
                           {skuEditing ? (
@@ -3998,33 +3933,6 @@ ${googleMapsLink}`;
               variant="outline"
               onClick={handleDownloadLogo}
               data-testid="account-logo-preview-download-btn"
-            >
-              <Download className="h-4 w-4 mr-2" /> Download
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Approved bottle design fullscreen preview */}
-      <Dialog open={bottleDesignPreviewOpen} onOpenChange={setBottleDesignPreviewOpen}>
-        <DialogContent className="max-w-3xl" data-testid="account-bottle-design-preview-dialog">
-          <DialogHeader>
-            <DialogTitle>Approved Bottle Design</DialogTitle>
-          </DialogHeader>
-          <div className="flex justify-center items-center bg-slate-50 rounded-lg p-4 min-h-[260px]">
-            {getBottleDesignSrc() && (
-              <img
-                src={getBottleDesignSrc()}
-                alt="Approved bottle design"
-                className="max-h-[60vh] max-w-full object-contain"
-              />
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={handleDownloadBottleDesign}
-              data-testid="account-bottle-design-preview-download-btn"
             >
               <Download className="h-4 w-4 mr-2" /> Download
             </Button>
