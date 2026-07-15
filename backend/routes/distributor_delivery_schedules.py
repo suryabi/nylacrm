@@ -1422,13 +1422,18 @@ async def delete_schedule(schedule_id: str, current_user: dict = Depends(get_cur
 
 # ============ PDF =================================================================
 
+def _norm_sku_name(name) -> str:
+    return " ".join(str(name or "").split()).lower()
+
+
 async def _collect_sku_bottle_designs(schedule: dict, tenant_id: str) -> dict:
     """Map (account_ref, sku_ref) → approved bottle design image bytes for every
     SKU on the schedule, sourced from the account's SKU Details (sku_pricing).
 
     Robust to legacy data: account_ref keys include BOTH the UUID and the human
-    account code; sku_ref keys include the sku_id AND a name-based fallback
-    ('name:<lowercased sku name>') for rows/items that predate sku_id."""
+    account code; sku_ref keys include the sku_id AND name-based fallbacks
+    ('name:<normalized name>') built from the row's stored name AND the current
+    master SKU name (covers renames + items that predate sku_id)."""
     account_refs: set = set()
     for delv in schedule.get("deliveries") or []:
         if delv.get("account_id") and (delv.get("items") or []):
@@ -1436,31 +1441,50 @@ async def _collect_sku_bottle_designs(schedule: dict, tenant_id: str) -> dict:
     if not account_refs:
         return {}
     from object_storage import get_object
-    designs: dict = {}
+
+    # (account doc, design rows) pairs + master ids for current-name resolution
+    design_rows: list = []
+    master_ids: set = set()
     async for a in db.accounts.find(
         {"tenant_id": tenant_id,
          "$or": [{"id": {"$in": list(account_refs)}}, {"account_id": {"$in": list(account_refs)}}]},
         {"_id": 0, "id": 1, "account_id": 1, "sku_pricing": 1},
     ):
         for row in a.get("sku_pricing") or []:
-            path = row.get("bottle_design_storage_path")
-            if not path:
-                continue
-            try:
-                data, _ct = get_object(path)
-            except Exception:
-                logger.warning(f"Bottle design fetch failed: {path}")
-                continue
-            if not data:
-                continue
-            for acc_key in (a.get("id"), a.get("account_id")):
-                if not acc_key:
-                    continue
+            if row.get("bottle_design_storage_path"):
+                design_rows.append((a, row))
                 if row.get("sku_id"):
-                    designs[(acc_key, row["sku_id"])] = data
-                name = (row.get("sku") or "").strip().lower()
-                if name:
-                    designs[(acc_key, f"name:{name}")] = data
+                    master_ids.add(row["sku_id"])
+    if not design_rows:
+        return {}
+
+    master_names: dict = {}
+    if master_ids:
+        async for m in db.master_skus.find(
+            {"id": {"$in": list(master_ids)}}, {"_id": 0, "id": 1, "sku_name": 1}
+        ):
+            master_names[m["id"]] = m.get("sku_name")
+
+    designs: dict = {}
+    for a, row in design_rows:
+        try:
+            data, _ct = get_object(row["bottle_design_storage_path"])
+        except Exception:
+            logger.warning(f"Bottle design fetch failed: {row['bottle_design_storage_path']}")
+            continue
+        if not data:
+            continue
+        sku_id = row.get("sku_id")
+        names = {_norm_sku_name(row.get("sku")), _norm_sku_name(master_names.get(sku_id))}
+        names.discard("")
+        for acc_key in (a.get("id"), a.get("account_id")):
+            if not acc_key:
+                continue
+            if sku_id:
+                designs[(acc_key, sku_id)] = data
+            for nm in names:
+                designs[(acc_key, f"name:{nm}")] = data
+    logger.info(f"Schedule bundle: {len(design_rows)} bottle design row(s) resolved for accounts {sorted(account_refs)}")
     return designs
 
 
@@ -1766,7 +1790,7 @@ def _build_schedule_pdf(schedule: dict, dist: dict, sku_designs: dict = None) ->
             if sku_designs and delv.get("account_id"):
                 acc_key = delv["account_id"]
                 img_bytes = (sku_designs.get((acc_key, it.get("sku_id")))
-                             or sku_designs.get((acc_key, f"name:{str(it.get('sku_name') or '').strip().lower()}")))
+                             or sku_designs.get((acc_key, f"name:{_norm_sku_name(it.get('sku_name'))}")))
             if img_bytes:
                 try:
                     reader = ImageReader(io.BytesIO(img_bytes))
