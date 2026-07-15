@@ -23,6 +23,13 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-15 — 📦 Packaging options in Stock Transfer Requests ✅ DONE (tested)
+- **User request**: "need to have all the packaging options that are attached to the SKU in the sku management just like in stock out etc" for the new Transfer Request form.
+- **Backend** (`routes/stock_transfer_requests.py`): `RequestItem` gained optional `packaging_type_id/packaging_type_name/units_per_package/packages` (units-only payloads still validate — backwards compatible); notification summary shows "SKU × 5 Crate - 12" when packaging present.
+- **Frontend** (`pages/StockTransfers.js` `NewRequestDialog`): after SKU pick, packaging dropdown from `packaging_config.stock_out` (default pre-selected, "· default" marker), qty entered in packs with live "= N bottles" hint; payload sends packages + computed quantity_units. Requests list + approve/reject dialog show "SKU × 5 Crate - 12 (60 bottles)". Initiate-Transfer prefill prefers the requester's exact packaging (falls back to default, ceil(units/upp)).
+- **Verified**: testing_agent iteration_331 — backend 6/6 pytest (`backend/tests/test_stock_transfer_requests_packaging.py`), frontend 100% (dialog, hint, list format, approve dialog, prefill, direct-transfer regression). Test requests cleaned from DB.
+- ⚠️ Env note from testing: CEO role perms for Distribution modules were found revoked in `db.roles` (likely a prior test PUT a partial permissions object); testing agent re-granted them. Consider hardening PUT /api/roles against lowering admin-like role perms.
+
 ### 2026-07-15 — 📦 Stock Transfer Requests: request → approval → fulfillment workflow ✅ DONE (tested)
 - **Requirement**: other users can request transfers (SKUs + quantities only — no batches/source; warehouse team handles those); approval step; then transfer initiated via existing flow.
 - **User decisions**: requester roles granted in Roles & Permissions (new module key `stock_transfer_requests`); requester picks destination only; approvers = anyone who can create stock transfers (`stock_transfers.create` perm, fallback hardcoded transfer roles, admins always); quantities editable at fulfillment; bell notifications both ways.
