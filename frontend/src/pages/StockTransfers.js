@@ -108,12 +108,17 @@ function NewTransferDialog({ open, onClose, onCreated, prefill }) {
           const rows = (prefill.items || []).map((ri) => {
             const sku = skuList.find((s) => s.id === ri.sku_id);
             const stockOutPkgs = sku?.packaging_config?.stock_out || [];
-            const defaultPkg = stockOutPkgs.find((p) => p.is_default) || stockOutPkgs[0];
+            // Prefer the exact packaging the requester picked; fall back to default.
+            const reqPkg = ri.packaging_type_id
+              ? stockOutPkgs.find((p) => p.packaging_type_id === ri.packaging_type_id)
+              : null;
+            const defaultPkg = reqPkg || stockOutPkgs.find((p) => p.is_default) || stockOutPkgs[0];
             const upp = defaultPkg?.units_per_package || 0;
             return {
               sku_id: ri.sku_id, packaging_type_id: defaultPkg?.packaging_type_id || '',
               packaging_type_name: defaultPkg?.packaging_type_name || '', units_per_package: upp,
-              quantity: upp ? String(Math.ceil(ri.quantity_units / upp)) : '',
+              quantity: reqPkg && ri.packages ? String(ri.packages)
+                : (upp ? String(Math.ceil(ri.quantity_units / upp)) : ''),
               rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
               batch_id: '', batch_code: '', batches_available: [], batches_loading: false,
               child_sku_id: '', child_sku_name: '',
@@ -850,12 +855,13 @@ function NewRequestDialog({ open, onClose, onCreated }) {
   const [skus, setSkus] = useState([]);
   const [destId, setDestId] = useState('');
   const [reason, setReason] = useState('');
-  const [rows, setRows] = useState([{ sku_id: '', quantity_units: '' }]);
+  const emptyRow = { sku_id: '', packaging_type_id: '', packaging_type_name: '', units_per_package: 0, quantity: '' };
+  const [rows, setRows] = useState([{ ...emptyRow }]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    setDestId(''); setReason(''); setRows([{ sku_id: '', quantity_units: '' }]);
+    setDestId(''); setReason(''); setRows([{ ...emptyRow }]);
     (async () => {
       try {
         const [tRes, sRes] = await Promise.all([
@@ -868,8 +874,31 @@ function NewRequestDialog({ open, onClose, onCreated }) {
     })();
   }, [open]);
 
-  const canSubmit = destId && rows.some((r) => r.sku_id && Number(r.quantity_units) > 0)
-    && rows.every((r) => !r.sku_id || Number(r.quantity_units) > 0);
+  const setRowSku = (i, skuId) => {
+    const sku = skus.find((s) => s.id === skuId);
+    const pkgs = sku?.packaging_config?.stock_out || [];
+    const def = pkgs.find((p) => p.is_default) || pkgs[0];
+    setRows((p) => p.map((x, xi) => xi === i ? {
+      ...x, sku_id: skuId,
+      packaging_type_id: def?.packaging_type_id || '',
+      packaging_type_name: def?.packaging_type_name || '',
+      units_per_package: def?.units_per_package || 0,
+    } : x));
+  };
+
+  const setRowPkg = (i, pkgId) => {
+    setRows((p) => p.map((x, xi) => {
+      if (xi !== i) return x;
+      const sku = skus.find((s) => s.id === x.sku_id);
+      const pkg = (sku?.packaging_config?.stock_out || []).find((pp) => pp.packaging_type_id === pkgId);
+      return { ...x, packaging_type_id: pkgId, packaging_type_name: pkg?.packaging_type_name || '', units_per_package: pkg?.units_per_package || 0 };
+    }));
+  };
+
+  const rowUnits = (r) => (parseInt(r.quantity) || 0) * (r.units_per_package || 1);
+
+  const canSubmit = destId && rows.some((r) => r.sku_id && Number(r.quantity) > 0)
+    && rows.every((r) => !r.sku_id || Number(r.quantity) > 0);
 
   const submit = async () => {
     setSaving(true);
@@ -877,8 +906,15 @@ function NewRequestDialog({ open, onClose, onCreated }) {
       const payload = {
         dest_location_id: destId,
         reason: reason || null,
-        items: rows.filter((r) => r.sku_id && Number(r.quantity_units) > 0)
-          .map((r) => ({ sku_id: r.sku_id, quantity_units: parseInt(r.quantity_units) })),
+        items: rows.filter((r) => r.sku_id && Number(r.quantity) > 0)
+          .map((r) => ({
+            sku_id: r.sku_id,
+            quantity_units: rowUnits(r),
+            packaging_type_id: r.packaging_type_id || null,
+            packaging_type_name: r.packaging_type_name || null,
+            units_per_package: r.units_per_package || null,
+            packages: r.units_per_package ? parseInt(r.quantity) : null,
+          })),
       };
       const res = await axios.post(`${API}/stock-transfer-requests`, payload, { headers: HEAD() });
       toast.success(`Request ${res.data.request_number} submitted for approval`);
@@ -914,35 +950,68 @@ function NewRequestDialog({ open, onClose, onCreated }) {
           </div>
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <Label>SKUs & quantities (bottles) *</Label>
-              <Button size="sm" variant="outline" onClick={() => setRows((p) => [...p, { sku_id: '', quantity_units: '' }])} data-testid="request-add-row-btn">
+              <Label>SKUs & quantities *</Label>
+              <Button size="sm" variant="outline" onClick={() => setRows((p) => [...p, { ...emptyRow }])} data-testid="request-add-row-btn">
                 <Plus className="h-3.5 w-3.5 mr-1" />Add
               </Button>
             </div>
             <div className="space-y-2">
-              {rows.map((r, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <Select value={r.sku_id} onValueChange={(v) => setRows((p) => p.map((x, xi) => xi === i ? { ...x, sku_id: v } : x))}>
-                      <SelectTrigger className="h-9 text-xs" data-testid={`request-sku-${i}`}><SelectValue placeholder="Pick SKU" /></SelectTrigger>
-                      <SelectContent className="max-h-60 overflow-y-auto">
-                        {skus.map((s) => <SelectItem key={s.id} value={s.id}>{s.sku_name || s.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+              {rows.map((r, i) => {
+                const sku = skus.find((s) => s.id === r.sku_id);
+                const pkgOptions = sku?.packaging_config?.stock_out || [];
+                return (
+                  <div key={i} className="rounded-lg border border-slate-200 p-2 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <Select value={r.sku_id} onValueChange={(v) => setRowSku(i, v)}>
+                          <SelectTrigger className="h-9 text-xs" data-testid={`request-sku-${i}`}><SelectValue placeholder="Pick SKU" /></SelectTrigger>
+                          <SelectContent className="max-h-60 overflow-y-auto">
+                            {skus.map((s) => <SelectItem key={s.id} value={s.id}>{s.sku_name || s.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {rows.length > 1 && (
+                        <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-red-600" onClick={() => setRows((p) => p.filter((_, xi) => xi !== i))}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                    {r.sku_id && (
+                      <div className="flex items-center gap-2">
+                        {pkgOptions.length > 0 ? (
+                          <div className="flex-1">
+                            <Select value={r.packaging_type_id} onValueChange={(v) => setRowPkg(i, v)}>
+                              <SelectTrigger className="h-9 text-xs" data-testid={`request-packaging-${i}`}><SelectValue placeholder="Packaging" /></SelectTrigger>
+                              <SelectContent>
+                                {pkgOptions.map((p) => (
+                                  <SelectItem key={p.packaging_type_id} value={p.packaging_type_id}>
+                                    {p.packaging_type_name} ({p.units_per_package}/pack){p.is_default ? ' · default' : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <span className="flex-1 text-[11px] text-slate-400 px-1">No packaging configured — quantity in bottles</span>
+                        )}
+                        <Input
+                          type="number" min="1"
+                          placeholder={r.units_per_package ? 'Qty (packs)' : 'Qty (bottles)'}
+                          value={r.quantity}
+                          onChange={(e) => setRows((p) => p.map((x, xi) => xi === i ? { ...x, quantity: e.target.value } : x))}
+                          className="h-9 w-28 text-sm"
+                          data-testid={`request-qty-${i}`}
+                        />
+                      </div>
+                    )}
+                    {r.sku_id && Number(r.quantity) > 0 && r.units_per_package > 0 && (
+                      <p className="text-[11px] text-blue-600 px-1" data-testid={`request-units-hint-${i}`}>
+                        = {rowUnits(r)} bottles
+                      </p>
+                    )}
                   </div>
-                  <Input
-                    type="number" min="1" placeholder="Qty (bottles)" value={r.quantity_units}
-                    onChange={(e) => setRows((p) => p.map((x, xi) => xi === i ? { ...x, quantity_units: e.target.value } : x))}
-                    className="h-9 w-32 text-sm"
-                    data-testid={`request-qty-${i}`}
-                  />
-                  {rows.length > 1 && (
-                    <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-red-600" onClick={() => setRows((p) => p.filter((_, xi) => xi !== i))}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           <div>
@@ -985,7 +1054,9 @@ function RequestActionDialog({ action, onClose, onDone }) {
         <DialogHeader>
           <DialogTitle>{type === 'approve' ? 'Approve' : 'Reject'} {req.request_number}?</DialogTitle>
           <DialogDescription>
-            {(req.items || []).map((it) => `${it.sku_name} × ${it.quantity_units}`).join(', ')} → {req.dest_location_name}
+            {(req.items || []).map((it) => it.packages && it.packaging_type_name
+              ? `${it.sku_name} × ${it.packages} ${it.packaging_type_name} (${it.quantity_units} bottles)`
+              : `${it.sku_name} × ${it.quantity_units}`).join(', ')} → {req.dest_location_name}
           </DialogDescription>
         </DialogHeader>
         <div>
@@ -1321,7 +1392,10 @@ export default function StockTransfers() {
                       </td>
                       <td className="p-3 text-xs text-slate-600">
                         {(r.items || []).map((it, ii) => (
-                          <div key={ii}>{it.sku_name} × <b>{it.quantity_units}</b></div>
+                          <div key={ii}>
+                            {it.sku_name} × <b>{it.packages && it.packaging_type_name ? `${it.packages} ${it.packaging_type_name}` : it.quantity_units}</b>
+                            {it.packages && it.packaging_type_name ? <span className="text-slate-400"> ({it.quantity_units} bottles)</span> : null}
+                          </div>
                         ))}
                       </td>
                       <td className="p-3 text-xs text-slate-500 max-w-[180px]">

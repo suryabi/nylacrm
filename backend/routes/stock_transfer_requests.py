@@ -96,6 +96,11 @@ class RequestItem(BaseModel):
     sku_id: str
     sku_name: Optional[str] = None
     quantity_units: int = Field(..., gt=0, description="Requested quantity in base units")
+    # Packaging breakdown (from the SKU's stock-out packaging config)
+    packaging_type_id: Optional[str] = None
+    packaging_type_name: Optional[str] = None
+    units_per_package: Optional[int] = None
+    packages: Optional[int] = None
     note: Optional[str] = None
 
 
@@ -177,7 +182,10 @@ async def create_request(payload: RequestCreate, current_user: dict = Depends(ge
     await db.stock_transfer_requests.insert_one(dict(doc))
     doc.pop("_id", None)
 
-    items_summary = ", ".join(f"{it.sku_name} × {it.quantity_units}" for it in payload.items[:4])
+    items_summary = ", ".join(
+        (f"{it.sku_name} × {it.packages} {it.packaging_type_name}" if it.packages and it.packaging_type_name
+         else f"{it.sku_name} × {it.quantity_units}")
+        for it in payload.items[:4])
     approvers = [uid for uid in await _approver_user_ids(tenant_id) if uid != current_user["id"]]
     await notify_users(
         tenant_id, approvers,
