@@ -1,0 +1,57 @@
+{
+  "summary": "Frontend-only layout test of the new INLINE side panel AIAssistant (was previously floating popup). Logged in as CEO on tenant nyla-air-water, went to /dashboard, exercised open/close/scroll behaviour. 14 of 15 sub-checks PASS across the 3 tests. Only observation: the right-edge 'Ask Nyla' vertical tab (fixed at right:0, ~32px wide, mid-viewport) visually overlaps the AI Assistant panel's right border because both are pinned to the same right edge — both remain visible and clickable, but there is a minor z-order clash worth polishing. No LLM calls were made (only UI checked).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "/dashboard with AI Assistant panel open",
+        "issues": [
+          "Right-edge 'Ask Nyla' vertical tab (fixed position, right:0, y≈336, w=32, h=128) visually overlays the AI Assistant panel's right border (panel right=1920, AskNyla right=1920). Since the panel is inline/sticky, AskNyla should ideally shift left with the reflow OR be temporarily hidden while the panel is open. Currently both are visible but AskNyla sits on top of the panel's edge (both usable, but visual clash). Priority: LOW."
+        ]
+      }
+    ]
+  },
+  "test_results": {
+    "TEST_1_launcher_opens_inline_panel": "PASS — Launcher (ai-assistant-launcher) at x=1848, y=728 (bottom-right corner of 1920x800 viewport). Click opens ai-assistant-panel at x=1500, y=0, width=420, height=800 (right-docked, full-height, correct xl:w-[420px] class active). Main content narrowed from 1664px → 1244px (delta 420px = exactly the panel width — perfect reflow, no overlap). Main's right edge (1500) == panel's left edge (1500) — content is INLINE, not overlapped. Launcher hidden while panel open. Panel structure verified: header 'AI Assistant', ai-empty-state visible, 3 suggestion chips (ai-suggestion-0/1/2), ai-chat-input textarea, ai-close-panel X button all present.",
+    "TEST_2_sticky_and_close": "PASS — After scrolling window + main + any overflow-y ancestors to scrollTop=500-600, panel remained at y=0, height=800 (fully pinned to viewport, sticky sm:sticky sm:top-0 sm:h-screen working). Clicked ai-close-panel X → panel unmounts, launcher reappears (bottom-right), main content width restored 1244 → 1664 (diff=0 vs original) — perfect restore.",
+    "TEST_3_console_and_asknyla_coexistence": "PASS (with 1 minor note). Opened/closed panel twice more: zero console errors captured after filtering known pre-existing noise (401 auth-refresh, ResizeObserver, aria-describedby, Meta Pixel, GSAP, Sherpa). AskNyla vertical right-edge tab remains visible when panel is open (element found at x=1888, right=1920). Panel occupies x=1500..1920 → AskNyla (right=1920) sits ON TOP of the panel's right border — visual overlap but both remain interactive. Noted as a minor design polish item, not a blocker."
+  },
+  "checks_passed": {
+    "launcher_bottom_right": true,
+    "panel_full_height": true,
+    "panel_right_docked": true,
+    "panel_width_ok_380_to_420": true,
+    "content_reflowed_not_overlapped": true,
+    "main_right_edge_meets_panel_left": true,
+    "launcher_hidden_while_panel_open": true,
+    "panel_structure_complete": true,
+    "panel_sticky_on_scroll": true,
+    "close_x_works": true,
+    "launcher_reappears_after_close": true,
+    "content_width_restored_after_close": true,
+    "no_new_console_errors": true,
+    "ask_nyla_still_visible_with_panel_open": true,
+    "ask_nyla_no_positional_overlap_with_panel": false
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL polish: when AIAssistant panel is open, either shift AskNyla's fixed-right widget to the left of the panel (right: 420px) or temporarily hide it, to avoid the current z-index overlap on the panel's right border. Both are usable now, so this is a P3/low-priority polish, not a blocker."
+  ],
+  "critical_code_review_comments": [
+    "AIAssistant.jsx panel container classes 'fixed inset-0 h-full ... sm:sticky sm:top-0 sm:h-screen sm:w-[380px] xl:w-[420px] sm:shrink-0' correctly delivers mobile full-screen overlay + desktop inline sticky side panel. Verified with real viewport measurements (420px on 1920 wide).",
+    "Launcher conditional {!open && <button ...>} correctly hides launcher while panel is open, so no duplicate control appears.",
+    "Panel mounted as a sibling flex child of the main content wrapper inside DashboardLayout's outer flex → clean reflow via flexbox (shrink-0 on panel, flex-1 on main). No absolute-positioning hack needed.",
+    "New data-testid=ai-close-panel present and wired to setOpen(false). Deletes/new-chat/history controls unchanged.",
+    "Minor UX polish (already noted): AskNyla vertical tab (rendered by <AskNyla />) is fixed to right:0 outside the flex, so it does not shift with the reflow. Consider giving AskNyla a right offset that reacts to AIAssistant open state, or z-order it below the panel and hide when the panel covers its column."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (frontend-only per request)", "frontend": "93% (14 of 15 sub-checks; the 1 fail is a minor visual overlap between panel and AskNyla tab)"},
+  "test_credentials": "surya.yadavalli@nylaairwater.earth / test123 (CEO, tenant nyla-air-water) — from /app/memory/test_credentials.md",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "AIAssistant.jsx is now an INLINE side panel (not a floating popup). Panel testid: ai-assistant-panel, close X testid: ai-close-panel, launcher testid: ai-assistant-launcher. On desktop (>= sm) it becomes a flex sibling of the main content and reflows the layout (width 380/420 xl); on mobile it's a full-screen fixed overlay. Verified against 1920x800 viewport. The one remaining polish is AskNyla widget overlapping the panel's right edge — reported as design issue with priority LOW.",
+  "rca_of_the_issue": "N/A — feature working as designed. Ask Nyla overlap: AskNyla widget is a separate <AskNyla /> component rendered inside DashboardLayout (line 765) with its own fixed positioning at the right edge (right:0). Because it uses position:fixed relative to the viewport, it does not participate in the flex reflow that shrinks the main content when AIAssistant panel opens as a flex sibling. Solution options for main agent (optional): (a) hide AskNyla via display:none when AI Assistant panel is open by lifting open-state into DashboardLayout, (b) offset AskNyla's right by the panel width when open, or (c) accept the current behavior since both are functional."
+}

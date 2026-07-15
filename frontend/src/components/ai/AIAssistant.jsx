@@ -88,20 +88,22 @@ export default function AIAssistant() {
 
   return (
     <>
-      {/* Launcher */}
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="fixed bottom-6 right-6 z-[70] h-12 w-12 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-300/40 hover:scale-105 transition-transform flex items-center justify-center"
-        title="AI Assistant"
-        data-testid="ai-assistant-launcher"
-      >
-        {open ? <X className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
-      </button>
+      {/* Launcher (hidden while the panel is docked open) */}
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="fixed bottom-6 right-6 z-[70] h-12 w-12 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-300/40 hover:scale-105 transition-transform flex items-center justify-center"
+          title="AI Assistant"
+          data-testid="ai-assistant-launcher"
+        >
+          <Sparkles className="h-5 w-5" />
+        </button>
+      )}
 
       {open && (
         <div
-          className="fixed bottom-20 right-6 z-[70] w-[380px] sm:w-[420px] h-[560px] max-h-[75vh] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden"
+          className="fixed inset-0 h-full z-[70] sm:z-30 sm:inset-auto sm:sticky sm:top-0 sm:h-screen w-full sm:w-[380px] xl:w-[420px] sm:shrink-0 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-xl sm:shadow-none flex flex-col overflow-hidden"
           data-testid="ai-assistant-panel"
         >
           {/* Header */}
@@ -129,6 +131,9 @@ export default function AIAssistant() {
             )}
             <button onClick={newChat} className="text-white/80 hover:text-white" title="New chat" data-testid="ai-new-chat">
               <Plus className="h-4 w-4" />
+            </button>
+            <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white ml-0.5" title="Close panel" data-testid="ai-close-panel">
+              <X className="h-4 w-4" />
             </button>
           </div>
 
