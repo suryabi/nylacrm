@@ -90,6 +90,8 @@ class StockTransferCreate(BaseModel):
     transfer_date: Optional[str] = None  # ISO date — defaults to today
     notes: Optional[str] = None
     vehicle_number: Optional[str] = None
+    # Optional link to an approved stock transfer request being fulfilled.
+    request_id: Optional[str] = None
 
 
 # ──────────────────────────────────────────────────────────────
@@ -1151,6 +1153,15 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     if not payload.items:
         raise HTTPException(400, "At least one item is required.")
 
+    # Fail fast when fulfilling a request that isn't approved.
+    if payload.request_id:
+        req = await db.stock_transfer_requests.find_one(
+            {"id": payload.request_id, "tenant_id": tenant_id}, {"_id": 0, "status": 1})
+        if not req:
+            raise HTTPException(404, "Linked stock transfer request not found.")
+        if req.get("status") != "approved":
+            raise HTTPException(400, f"Linked request is {req.get('status')} — only approved requests can be fulfilled.")
+
     # Resolve all four entities up-front so we can fail-fast on bad IDs.
     src_dist = await _load_distributor(tenant_id, payload.source_distributor_id)
     dst_dist = await _load_distributor(tenant_id, payload.dest_distributor_id)
@@ -1381,6 +1392,14 @@ async def create_stock_transfer(payload: StockTransferCreate, current_user: dict
     transfer_doc["status"] = "completed"
     await db.distributor_stock_transfers.insert_one(dict(transfer_doc))
     transfer_doc.pop("_id", None)
+
+    # ── Fulfil the linked stock transfer request (if any) ──
+    if payload.request_id:
+        from .stock_transfer_requests import mark_request_fulfilled
+        try:
+            await mark_request_fulfilled(tenant_id, payload.request_id, transfer_doc, current_user)
+        except HTTPException:
+            pass  # transfer already created — a bad link must not fail it
 
     # ── Zoho push (best-effort; non-fatal — user can retry via /retry-zoho) ──
     await _try_push_to_zoho(transfer_doc, src_dist, dst_dist)

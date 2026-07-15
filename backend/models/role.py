@@ -159,6 +159,7 @@ DEFAULT_MODULE_PERMISSIONS = {
     "knowledge_base": {"view": True, "create": False, "edit": False, "delete": False},
     "customer_returns": {"view": True, "create": True, "edit": True, "delete": False},
     "stock_transfers": {"view": False, "create": False, "edit": False, "delete": False},
+    "stock_transfer_requests": {"view": False, "create": False, "edit": False, "delete": False},
 }
 
 # Full access permissions (for Admin role)
@@ -314,7 +315,7 @@ MODULE_CATEGORIES = {
     "Presentation": ["proposal_template"],
     "Accounting": ["accounting_transactions", "accounting_masters", "accounting_income_masters", "accounting_vendors", "accounting_employees"],
     "Sales Operations Extras": ["delivery_orders", "customer_returns", "knowledge_base"],
-    "Distribution": ["distributors", "stock_dashboard", "cost_cards", "stock_transfers", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
+    "Distribution": ["distributors", "stock_dashboard", "cost_cards", "stock_transfers", "stock_transfer_requests", "distributor_coverage", "distributor_locations", "distributor_margins", "distributor_assignments", "distributor_shipments", "distributor_deliveries", "distributor_stock"],
     "Production": ["production_dashboard", "production_batches", "qc_routes", "qc_team", "rejection_reasons", "rejection_report", "rejection_cost_config", "packaging_types", "maintenance", "inventory", "quality_control", "assets", "vendors", "batch_genealogy"],
     "Inventory & Procurement": ["purchase_orders", "goods_receipt"],
     "Task Management": ["task_management", "task_milestones", "task_labels"],
@@ -427,6 +428,7 @@ MODULE_LABELS = {
     "knowledge_base": "Knowledge Base",
     "customer_returns": "Customer Returns",
     "stock_transfers": "Stock Transfers",
+    "stock_transfer_requests": "Stock Transfer Requests",
 }
 
 

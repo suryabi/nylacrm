@@ -52,7 +52,7 @@ const StatusBadge = ({ status, error }) => {
   );
 };
 
-function NewTransferDialog({ open, onClose, onCreated }) {
+function NewTransferDialog({ open, onClose, onCreated, prefill }) {
   const [sources, setSources] = useState([]);
   const [targets, setTargets] = useState([]);
   const [skus, setSkus] = useState([]);
@@ -100,7 +100,27 @@ function NewTransferDialog({ open, onClose, onCreated }) {
           axios.get(`${API}/master-skus`, { headers: HEAD() }).catch(() => ({ data: { skus: [] } })),
         ]);
         setSources(srcRes.data?.sources || []);
-        setSkus(skusRes.data?.skus || skusRes.data || []);
+        const skuList = skusRes.data?.skus || skusRes.data || [];
+        setSkus(skuList);
+        // Prefill from an approved stock transfer request (warehouse picks source + batches).
+        if (prefill) {
+          setForm((f) => ({ ...f, dest_location_id: prefill.dest_location_id || '' }));
+          const rows = (prefill.items || []).map((ri) => {
+            const sku = skuList.find((s) => s.id === ri.sku_id);
+            const stockOutPkgs = sku?.packaging_config?.stock_out || [];
+            const defaultPkg = stockOutPkgs.find((p) => p.is_default) || stockOutPkgs[0];
+            const upp = defaultPkg?.units_per_package || 0;
+            return {
+              sku_id: ri.sku_id, packaging_type_id: defaultPkg?.packaging_type_id || '',
+              packaging_type_name: defaultPkg?.packaging_type_name || '', units_per_package: upp,
+              quantity: upp ? String(Math.ceil(ri.quantity_units / upp)) : '',
+              rate: 0, rate_per_bottle: 0, rate_status: 'idle', rate_reason: '', rate_details: null,
+              batch_id: '', batch_code: '', batches_available: [], batches_loading: false,
+              child_sku_id: '', child_sku_name: '',
+            };
+          });
+          if (rows.length) setItems(rows);
+        }
       } catch (e) {
         toast.error('Failed to load eligible warehouses');
       }
@@ -317,6 +337,7 @@ function NewTransferDialog({ open, onClose, onCreated }) {
         transfer_date: form.transfer_date,
         notes: form.notes || null,
         vehicle_number: form.vehicle_number || null,
+        request_id: prefill?.request_id || null,
         items: items.filter((it) => it.sku_id && Number(it.quantity) > 0).map((it) => {
           const sku = skus.find((s) => s.id === it.sku_id);
           return {
@@ -370,11 +391,17 @@ function NewTransferDialog({ open, onClose, onCreated }) {
         </DialogHeader>
 
         <div className="space-y-4">
+          {prefill && (
+            <div className="text-xs px-3 py-2 rounded-md border bg-violet-50 border-violet-200 text-violet-800 flex items-center gap-2" data-testid="fulfilling-request-banner">
+              <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0" />
+              Fulfilling request <b>{prefill.request_number}</b> → {prefill.dest_location_name}. Quantities are editable; pick the source warehouse and batches.
+            </div>
+          )}
           {/* Source + Destination */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>Source warehouse *</Label>
-              <Select value={form.source_location_id} onValueChange={(v) => setForm({ ...form, source_location_id: v, dest_location_id: '' })}>
+              <Select value={form.source_location_id} onValueChange={(v) => setForm({ ...form, source_location_id: v, dest_location_id: prefill?.dest_location_id || '' })}>
                 <SelectTrigger data-testid="source-warehouse-select"><SelectValue placeholder="Pick a warehouse with stock" /></SelectTrigger>
                 <SelectContent>
                   {filteredSources.length === 0 && <SelectItem value="__none__" disabled>No self-managed warehouses with stock</SelectItem>}
@@ -804,12 +831,194 @@ function EditQtyDialog({ transfer, onClose, onSaved }) {
   );
 }
 
+// ─────────────────────── Stock Transfer Requests ───────────────────────
+
+const REQ_STATUS_STYLES = {
+  pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  approved: 'bg-blue-50 text-blue-700 border-blue-200',
+  rejected: 'bg-red-50 text-red-700 border-red-200',
+  fulfilled: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  cancelled: 'bg-slate-100 text-slate-500 border-slate-200',
+};
+
+function NewRequestDialog({ open, onClose, onCreated }) {
+  const [dests, setDests] = useState([]);
+  const [skus, setSkus] = useState([]);
+  const [destId, setDestId] = useState('');
+  const [reason, setReason] = useState('');
+  const [rows, setRows] = useState([{ sku_id: '', quantity_units: '' }]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setDestId(''); setReason(''); setRows([{ sku_id: '', quantity_units: '' }]);
+    (async () => {
+      try {
+        const [tRes, sRes] = await Promise.all([
+          axios.get(`${API}/distributor/stock-transfers/eligible-targets`, { headers: HEAD() }),
+          axios.get(`${API}/master-skus`, { headers: HEAD() }).catch(() => ({ data: { skus: [] } })),
+        ]);
+        setDests((tRes.data?.targets || []).filter((t) => t.is_self_managed));
+        setSkus(sRes.data?.skus || sRes.data || []);
+      } catch { toast.error('Failed to load warehouses'); }
+    })();
+  }, [open]);
+
+  const canSubmit = destId && rows.some((r) => r.sku_id && Number(r.quantity_units) > 0)
+    && rows.every((r) => !r.sku_id || Number(r.quantity_units) > 0);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        dest_location_id: destId,
+        reason: reason || null,
+        items: rows.filter((r) => r.sku_id && Number(r.quantity_units) > 0)
+          .map((r) => ({ sku_id: r.sku_id, quantity_units: parseInt(r.quantity_units) })),
+      };
+      const res = await axios.post(`${API}/stock-transfer-requests`, payload, { headers: HEAD() });
+      toast.success(`Request ${res.data.request_number} submitted for approval`);
+      onCreated();
+      onClose();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to submit request');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg" data-testid="new-transfer-request-dialog">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-violet-600" /> Request Stock Transfer</DialogTitle>
+          <DialogDescription>
+            Pick the destination warehouse and the SKUs + quantities you need. The warehouse team decides the source and batches after approval.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <Label>Destination warehouse *</Label>
+            <Select value={destId} onValueChange={setDestId}>
+              <SelectTrigger data-testid="request-dest-select"><SelectValue placeholder="Where do you need the stock?" /></SelectTrigger>
+              <SelectContent>
+                {dests.map((t) => (
+                  <SelectItem key={t.location_id} value={t.location_id}>
+                    {t.distributor_name} — {t.location_name}{t.is_factory ? ' · Factory' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <Label>SKUs & quantities (bottles) *</Label>
+              <Button size="sm" variant="outline" onClick={() => setRows((p) => [...p, { sku_id: '', quantity_units: '' }])} data-testid="request-add-row-btn">
+                <Plus className="h-3.5 w-3.5 mr-1" />Add
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {rows.map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <Select value={r.sku_id} onValueChange={(v) => setRows((p) => p.map((x, xi) => xi === i ? { ...x, sku_id: v } : x))}>
+                      <SelectTrigger className="h-9 text-xs" data-testid={`request-sku-${i}`}><SelectValue placeholder="Pick SKU" /></SelectTrigger>
+                      <SelectContent className="max-h-60 overflow-y-auto">
+                        {skus.map((s) => <SelectItem key={s.id} value={s.id}>{s.sku_name || s.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Input
+                    type="number" min="1" placeholder="Qty (bottles)" value={r.quantity_units}
+                    onChange={(e) => setRows((p) => p.map((x, xi) => xi === i ? { ...x, quantity_units: e.target.value } : x))}
+                    className="h-9 w-32 text-sm"
+                    data-testid={`request-qty-${i}`}
+                  />
+                  {rows.length > 1 && (
+                    <Button size="sm" variant="ghost" className="h-9 w-9 p-0 text-red-600" onClick={() => setRows((p) => p.filter((_, xi) => xi !== i))}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label>Reason / notes</Label>
+            <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this stock needed?" data-testid="request-reason" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={submit} disabled={!canSubmit || saving} className="bg-violet-600 hover:bg-violet-700" data-testid="submit-request-btn">
+            {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting…</> : 'Submit Request'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RequestActionDialog({ action, onClose, onDone }) {
+  // action: { type: 'approve'|'reject', req } | null
+  const [remark, setRemark] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setRemark(''); }, [action]);
+  if (!action) return null;
+  const { type, req } = action;
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await axios.post(`${API}/stock-transfer-requests/${req.id}/${type}`, { remark: remark || null }, { headers: HEAD() });
+      toast.success(`Request ${req.request_number} ${type === 'approve' ? 'approved' : 'rejected'}`);
+      onDone();
+      onClose();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Action failed');
+    } finally { setSaving(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-sm" data-testid="request-action-dialog">
+        <DialogHeader>
+          <DialogTitle>{type === 'approve' ? 'Approve' : 'Reject'} {req.request_number}?</DialogTitle>
+          <DialogDescription>
+            {(req.items || []).map((it) => `${it.sku_name} × ${it.quantity_units}`).join(', ')} → {req.dest_location_name}
+          </DialogDescription>
+        </DialogHeader>
+        <div>
+          <Label className="text-xs">Remark {type === 'reject' ? '(recommended)' : '(optional)'}</Label>
+          <Textarea rows={2} value={remark} onChange={(e) => setRemark(e.target.value)} data-testid="request-action-remark" />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            onClick={submit} disabled={saving}
+            className={type === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}
+            data-testid="request-action-confirm"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : (type === 'approve' ? 'Approve' : 'Reject')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function StockTransfers() {
   const { user } = useAuth();
   const canEditQty = QTY_EDIT_ROLES.includes(user?.role);
   const canRetro = RETRO_ROLES.includes(user?.role);
   const [editTransfer, setEditTransfer] = useState(null);
   const [retroTarget, setRetroTarget] = useState(null);
+  // ── Stock transfer requests (request → approval → fulfillment) ──
+  const [view, setView] = useState(() =>
+    new URLSearchParams(window.location.search).get('tab') === 'requests' ? 'requests' : 'transfers');
+  const [requests, setRequests] = useState([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [reqLoading, setReqLoading] = useState(false);
+  const [reqPerms, setReqPerms] = useState({ can_request: false, can_approve: false });
+  const [showRequestDialog, setShowRequestDialog] = useState(false);
+  const [reqAction, setReqAction] = useState(null); // {type, req}
+  const [prefillReq, setPrefillReq] = useState(null);
   // parent_sku_id set of SKUs that have at least one active customer child SKU
   const [customerParents, setCustomerParents] = useState(null);
   const [data, setData] = useState({ items: [], total: 0, pages: 0 });
@@ -832,6 +1041,22 @@ export default function StockTransfers() {
   }, [page, search]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadRequests = useCallback(async () => {
+    setReqLoading(true);
+    try {
+      const res = await axios.get(`${API}/stock-transfer-requests`, { headers: HEAD() });
+      setRequests(res.data?.requests || []);
+      setPendingCount(res.data?.pending_count || 0);
+    } catch { /* module may be permission-gated */ }
+    finally { setReqLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    axios.get(`${API}/stock-transfer-requests/my-permissions`, { headers: HEAD() })
+      .then((res) => setReqPerms(res.data || {})).catch(() => {});
+    loadRequests();
+  }, [loadRequests]);
 
   useEffect(() => {
     if (!canRetro || customerParents !== null) return;
@@ -1021,21 +1246,141 @@ export default function StockTransfers() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={exportTransfers}
-            disabled={exporting || (data.total || 0) === 0}
-            data-testid="export-transfers-btn"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {exporting ? 'Exporting…' : 'Download'}
-          </Button>
-          <Button onClick={() => setShowNew(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-stock-transfer-btn">
-            <Plus className="h-4 w-4 mr-2" /> New Stock Transfer
-          </Button>
+          {reqPerms.can_request && (
+            <Button variant="outline" onClick={() => setShowRequestDialog(true)} className="border-violet-300 text-violet-700 hover:bg-violet-50" data-testid="request-transfer-btn">
+              <ShieldCheck className="h-4 w-4 mr-2" /> Request Transfer
+            </Button>
+          )}
+          {view === 'transfers' && (
+            <>
+              <Button
+                variant="outline"
+                onClick={exportTransfers}
+                disabled={exporting || (data.total || 0) === 0}
+                data-testid="export-transfers-btn"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {exporting ? 'Exporting…' : 'Download'}
+              </Button>
+              <Button onClick={() => setShowNew(true)} className="bg-emerald-600 hover:bg-emerald-700" data-testid="new-stock-transfer-btn">
+                <Plus className="h-4 w-4 mr-2" /> New Stock Transfer
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
+      {/* Tabs: Transfers | Requests */}
+      <div className="flex items-center gap-1 border-b border-emerald-100">
+        {[['transfers', 'Transfers'], ['requests', 'Requests']].map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setView(k)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${view === k
+              ? 'border-emerald-600 text-emerald-700'
+              : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            data-testid={`transfers-tab-${k}`}
+          >
+            {label}
+            {k === 'requests' && pendingCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 rounded-full px-1.5 py-px" data-testid="pending-requests-badge">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {view === 'requests' && (
+        <Card className="border border-violet-100/60 rounded-xl">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="bg-violet-50/40 border-b border-violet-100/60">
+                    {['Request #', 'Date', 'Destination', 'Items (bottles)', 'Reason', 'Requested By', 'Status', 'Actions'].map((h) => (
+                      <th key={h} className="text-left p-3 text-[10px] uppercase tracking-wider font-semibold text-violet-800/70">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {reqLoading ? (
+                    <tr><td colSpan={8} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600 mx-auto" /></td></tr>
+                  ) : requests.length === 0 ? (
+                    <tr><td colSpan={8} className="p-10 text-center text-slate-500">No transfer requests yet{reqPerms.can_request ? <> — click <b>Request Transfer</b> above to raise one.</> : '.'}</td></tr>
+                  ) : requests.map((r, i) => (
+                    <tr key={r.id} className={`border-b border-violet-50 ${i % 2 === 1 ? 'bg-violet-50/30' : 'bg-white'}`} data-testid={`request-row-${r.request_number}`}>
+                      <td className="p-3 font-mono text-xs text-violet-700">{r.request_number}</td>
+                      <td className="p-3 text-xs text-slate-600">{fmtDate(r.created_at)}</td>
+                      <td className="p-3 text-xs">
+                        <div className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5 text-slate-400" />{r.dest_location_name}</div>
+                      </td>
+                      <td className="p-3 text-xs text-slate-600">
+                        {(r.items || []).map((it, ii) => (
+                          <div key={ii}>{it.sku_name} × <b>{it.quantity_units}</b></div>
+                        ))}
+                      </td>
+                      <td className="p-3 text-xs text-slate-500 max-w-[180px]">
+                        <div className="truncate" title={r.reason || ''}>{r.reason || '—'}</div>
+                        {r.rejection_remark && <div className="text-red-600 truncate" title={r.rejection_remark}>✗ {r.rejection_remark}</div>}
+                      </td>
+                      <td className="p-3 text-xs text-slate-600">{r.requested_by_name}</td>
+                      <td className="p-3">
+                        <Badge variant="outline" className={`text-[10px] capitalize ${REQ_STATUS_STYLES[r.status] || ''}`} data-testid={`request-status-${r.request_number}`}>
+                          {r.status}
+                        </Badge>
+                        {r.status === 'fulfilled' && r.transfer_number && (
+                          <div className="text-[10px] font-mono text-emerald-700 mt-0.5">{r.transfer_number}</div>
+                        )}
+                        {r.status === 'approved' && r.approved_by_name && (
+                          <div className="text-[10px] text-slate-400 mt-0.5">by {r.approved_by_name}</div>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {r.status === 'pending' && reqPerms.can_approve && (
+                            <>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-emerald-700 hover:bg-emerald-50" onClick={() => setReqAction({ type: 'approve', req: r })} data-testid={`approve-request-btn-${r.request_number}`}>
+                                Approve
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-red-600 hover:bg-red-50" onClick={() => setReqAction({ type: 'reject', req: r })} data-testid={`reject-request-btn-${r.request_number}`}>
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          {r.status === 'pending' && r.requested_by === user?.id && (
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-[10px] text-slate-500 hover:bg-slate-50"
+                              onClick={async () => {
+                                try {
+                                  await axios.post(`${API}/stock-transfer-requests/${r.id}/cancel`, {}, { headers: HEAD() });
+                                  toast.success('Request cancelled'); loadRequests();
+                                } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+                              }}
+                              data-testid={`cancel-request-btn-${r.request_number}`}
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                          {r.status === 'approved' && reqPerms.can_approve && (
+                            <Button size="sm" className="h-7 px-2 text-[10px] bg-emerald-600 hover:bg-emerald-700"
+                              onClick={() => { setPrefillReq({ request_id: r.id, request_number: r.request_number, dest_location_id: r.dest_location_id, dest_location_name: r.dest_location_name, items: r.items }); setShowNew(true); }}
+                              data-testid={`initiate-transfer-btn-${r.request_number}`}
+                            >
+                              <ArrowLeftRight className="h-3 w-3 mr-1" /> Initiate Transfer
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {view === 'transfers' && (<>
       <Card className="border border-emerald-100/60 rounded-xl shadow-[0_2px_8px_rgba(6,95,70,0.04)]">
         <CardContent className="p-4">
           <div className="flex items-center gap-2 flex-wrap">
@@ -1214,8 +1559,16 @@ export default function StockTransfers() {
           </div>
         </CardContent>
       </Card>
+      </>)}
 
-      <NewTransferDialog open={showNew} onClose={() => setShowNew(false)} onCreated={() => { setPage(1); load(); }} />
+      <NewTransferDialog
+        open={showNew}
+        onClose={() => { setShowNew(false); setPrefillReq(null); }}
+        onCreated={() => { setPage(1); load(); loadRequests(); }}
+        prefill={prefillReq}
+      />
+      <NewRequestDialog open={showRequestDialog} onClose={() => setShowRequestDialog(false)} onCreated={loadRequests} />
+      <RequestActionDialog action={reqAction} onClose={() => setReqAction(null)} onDone={loadRequests} />
       <EditQtyDialog transfer={editTransfer} onClose={() => setEditTransfer(null)} onSaved={load} />
       {retroTarget && (
         <RetroCategorizeDialog

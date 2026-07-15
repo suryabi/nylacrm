@@ -280,6 +280,14 @@ routes_router.include_router(
     tags=["AI Assistant"],
 )
 
+# Stock Transfer Requests (request → approval → fulfillment workflow)
+from .stock_transfer_requests import router as stock_transfer_requests_router
+routes_router.include_router(
+    stock_transfer_requests_router,
+    prefix="/stock-transfer-requests",
+    tags=["Stock Transfer Requests"],
+)
+
 # Admin → SKU Aliases (map retired SKU codes/names to current master SKUs)
 from .sku_aliases import router as sku_aliases_router
 routes_router.include_router(
