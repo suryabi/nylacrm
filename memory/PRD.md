@@ -23,6 +23,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-15 — 🚚 Bottle designs in the Delivery/Driver Bundle PDF ✅ DONE (tested)
+- **User request**: the Driver Bundle PDF must show each SKU's approved bottle design (full colour, from the account's SKU Details) so the delivery team picks the correct bottle at the warehouse.
+- **Backend** (`routes/distributor_delivery_schedules.py`): `_enrich_schedule` items now carry `sku_id`; new `_collect_sku_bottle_designs(schedule, tenant_id)` maps (account_id, sku_id) → design bytes from `sku_pricing[].bottle_design_storage_path` (object storage, failures logged not fatal); `_build_schedule_pdf(schedule, dist, sku_designs)` renders a full-colour RLImage (≤22mm h / ≤30mm w, aspect kept) under each SKU line in the Crates/packages column. Both `/pdf` (driver sheet) and `/bundle-pdf` (bundle page 1) call sites pass designs.
+- **Verified**: direct python test — design collected from account row, PDF embeds image (visual check: colour bottle under "24 Brand", plain SKU unaffected); regression on real approved schedule (0 designs) builds fine.
+
 ### 2026-07-15 — 🍾 Bottle design moved to SKU rows + "SKU Details" rename ✅ DONE (tested)
 - **User request**: revert the account-level Approved Bottle Design upload; instead (1) rename "SKU Pricing" section → "SKU Details", (2) allow uploading the approved bottle design per SKU row (edit mode, alongside price/MRP/active from-to).
 - **Reverted**: account-level `bottle_design` routes in server.py, AccountDetail logo-section split, `BottleDesignUploader.js` (deleted).

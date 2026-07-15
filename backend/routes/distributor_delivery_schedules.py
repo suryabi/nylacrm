@@ -557,6 +557,7 @@ async def _enrich_schedule(schedule: dict, tenant_id: str) -> dict:
                 total_units += qty_units
                 total_packages += pkg_count
                 items.append({
+                    "sku_id": line.get("sku_id"),
                     "sku_name": line.get("sku_name") or line.get("sku_code") or "Item",
                     "quantity_units": qty_units,
                     "quantity": pkg_count,
@@ -1421,6 +1422,40 @@ async def delete_schedule(schedule_id: str, current_user: dict = Depends(get_cur
 
 # ============ PDF =================================================================
 
+async def _collect_sku_bottle_designs(schedule: dict, tenant_id: str) -> dict:
+    """Map (account_id, sku_id) → approved bottle design image bytes for every
+    SKU on the schedule, sourced from the account's SKU Details (sku_pricing)."""
+    pairs: set = set()
+    account_ids: set = set()
+    for delv in schedule.get("deliveries") or []:
+        acc = delv.get("account_id")
+        if not acc:
+            continue
+        for it in delv.get("items") or []:
+            if it.get("sku_id"):
+                pairs.add((acc, it["sku_id"]))
+                account_ids.add(acc)
+    if not pairs:
+        return {}
+    from object_storage import get_object
+    designs: dict = {}
+    async for a in db.accounts.find(
+        {"id": {"$in": list(account_ids)}, "tenant_id": tenant_id},
+        {"_id": 0, "id": 1, "sku_pricing": 1},
+    ):
+        for row in a.get("sku_pricing") or []:
+            key = (a["id"], row.get("sku_id"))
+            path = row.get("bottle_design_storage_path")
+            if key in pairs and path:
+                try:
+                    data, _ct = get_object(path)
+                    if data:
+                        designs[key] = data
+                except Exception:
+                    logger.warning(f"Bottle design fetch failed for {key}: {path}")
+    return designs
+
+
 @router.get("/{schedule_id}/pdf")
 async def download_schedule_pdf(schedule_id: str, current_user: dict = Depends(get_current_user)):
     """Generate a driver-friendly delivery sheet PDF for a CONFIRMED schedule."""
@@ -1441,7 +1476,7 @@ async def download_schedule_pdf(schedule_id: str, current_user: dict = Depends(g
         {"_id": 0, "distributor_name": 1, "distributor_code": 1}
     ) or {}
 
-    pdf_bytes = _build_schedule_pdf(s, dist)
+    pdf_bytes = _build_schedule_pdf(s, dist, await _collect_sku_bottle_designs(s, tenant_id))
     filename = f"delivery-schedule-{s.get('schedule_date')}.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
@@ -1629,12 +1664,16 @@ def _address_cell(addr: dict, addr_str: str, body_style, small_style):
     return flowables
 
 
-def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
-    """Build the delivery sheet using ReportLab. Minimal, driver-friendly layout."""
+def _build_schedule_pdf(schedule: dict, dist: dict, sku_designs: dict = None) -> bytes:
+    """Build the delivery sheet using ReportLab. Minimal, driver-friendly layout.
+
+    `sku_designs` maps (account_id, sku_id) → approved bottle design image bytes
+    (from the account's SKU Details) so drivers can visually match the bottle."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.utils import ImageReader
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
     buf = io.BytesIO()
@@ -1709,11 +1748,30 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
         items_lines = []
         for it in (delv.get("items") or []):
             pkg = it.get("packaging_label") or "Crate"
-            items_lines.append(
+            items_lines.append(Paragraph(
                 f"{(it.get('sku_name') or '—')} — <b>{it.get('quantity') or 0}</b> "
-                f"<font color='grey' size='8'>{pkg}</font>"
-            )
-        items_str = "<br/>".join(items_lines) or "—"
+                f"<font color='grey' size='8'>{pkg}</font>", body
+            ))
+            # Approved bottle design (full colour) from the account's SKU Details —
+            # helps the driver pick the correct branded bottle from the warehouse.
+            img_bytes = (sku_designs or {}).get((delv.get("account_id"), it.get("sku_id")))
+            if img_bytes:
+                try:
+                    reader = ImageReader(io.BytesIO(img_bytes))
+                    iw, ih = reader.getSize()
+                    h = 22 * mm
+                    w = iw * h / float(ih or 1)
+                    if w > 30 * mm:
+                        w = 30 * mm
+                        h = ih * w / float(iw or 1)
+                    img = RLImage(io.BytesIO(img_bytes), width=w, height=h)
+                    img.hAlign = 'LEFT'
+                    items_lines.append(Spacer(1, 1.5 * mm))
+                    items_lines.append(img)
+                    items_lines.append(Spacer(1, 1.5 * mm))
+                except Exception:
+                    pass
+        items_cell = items_lines or Paragraph("—", body)
 
         # Delivery contact block: the account's "Delivery"-category contact
         # (resolved in _enrich_schedule), falling back to the account's
@@ -1744,7 +1802,7 @@ def _build_schedule_pdf(schedule: dict, dist: dict) -> bytes:
             Paragraph(str(idx), body),
             Paragraph("<br/>".join(contact_lines), body),
             _address_cell(addr, addr_str, body, small),
-            Paragraph(items_str, body),
+            items_cell,
         ])
     stops = Table(rows, colWidths=[10 * mm, 55 * mm, 65 * mm, None], repeatRows=1)
     stops.setStyle(TableStyle([
