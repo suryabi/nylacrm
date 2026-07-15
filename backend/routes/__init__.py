@@ -272,6 +272,14 @@ routes_router.include_router(
     tags=["Retro Categorization"],
 )
 
+# AI Assistant (ChatGPT via Emergent Universal Key — chat, drafting, insights)
+from .ai_assistant import router as ai_assistant_router
+routes_router.include_router(
+    ai_assistant_router,
+    prefix="/ai",
+    tags=["AI Assistant"],
+)
+
 # Admin → SKU Aliases (map retired SKU codes/names to current master SKUs)
 from .sku_aliases import router as sku_aliases_router
 routes_router.include_router(

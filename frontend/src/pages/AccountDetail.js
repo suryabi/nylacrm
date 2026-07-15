@@ -50,6 +50,7 @@ import AccountZohoLedger from '../components/account/AccountZohoLedger';
 import AccountDocumentsSection from '../components/account/AccountDocumentsSection';
 import InlineComposer from '../components/gmail/InlineComposer';
 import { DeleteConfirmDialog } from '../components/DeleteConfirmDialog';
+import AIDraftDialog, { AIAssistButton } from '../components/ai/AIDraftDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -278,6 +279,7 @@ export default function AccountDetail() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [showAIDraft, setShowAIDraft] = useState(false);
   const [pricingEditing, setPricingEditing] = useState(false); // inline edit of just the SKU Pricing section
   const [savingPricing, setSavingPricing] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
@@ -1565,6 +1567,9 @@ ${googleMapsLink}`;
                 <><Share2 className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Share Details</span></>
               )}
             </Button>
+          )}
+          {!isEditing && (
+            <AIAssistButton onClick={() => setShowAIDraft(true)} className="flex-1 sm:flex-none h-9 sm:h-10" />
           )}
           {isEditing && (
             <Button
@@ -3916,6 +3921,14 @@ ${googleMapsLink}`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AIDraftDialog
+        open={showAIDraft}
+        onOpenChange={setShowAIDraft}
+        contextType="account"
+        contextId={id}
+        contextName={`Account · ${account?.account_name || ''}`}
+      />
     </div>
   );
 }

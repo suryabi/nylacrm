@@ -17,6 +17,7 @@ import { useMasterLocations } from '../hooks/useMasterLocations';
 import { useLeadStatuses } from '../hooks/useLeadStatuses';
 import { useNavigation } from '../context/NavigationContext';
 import AppBreadcrumb from '../components/AppBreadcrumb';
+import AIInsightsCard from '../components/ai/AIInsightsCard';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -401,6 +402,9 @@ export default function Dashboard() {
             </div>
           </>
         )}
+
+        {/* AI business insights digest */}
+        <AIInsightsCard />
       </div>
     </div>
   );

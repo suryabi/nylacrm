@@ -55,6 +55,7 @@ import EntityContactsSection from '../components/EntityContactsSection';
 import ProposalCustomizeDialog from '../components/ProposalCustomizeDialog';
 import LeadBottleDesigns from '../components/LeadBottleDesigns';
 import { SectionHeader } from '../components/detail/SectionHeader';
+import AIDraftDialog, { AIAssistButton } from '../components/ai/AIDraftDialog';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -108,6 +109,7 @@ export default function LeadDetail() {
   const [comments, setComments] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showAIDraft, setShowAIDraft] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [invoiceData, setInvoiceData] = useState(null);
@@ -1189,6 +1191,7 @@ ${userEmail}`;
               <Building2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" /><span className="hidden sm:inline">Account</span>
             </Button>
           )}
+          <AIAssistButton onClick={() => setShowAIDraft(true)} />
           <Button onClick={() => navigate(`/leads/${id}/edit`)} data-testid="edit-lead-button" size="sm" className="text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3">
             <span className="hidden sm:inline">Edit Lead</span>
             <span className="sm:hidden">Edit</span>
@@ -2559,6 +2562,14 @@ ${userEmail}`;
         onComplete={() => setShowCelebration(false)}
         type={celebrationType}
         leadName={lead?.company_name || lead?.contact_name || ''}
+      />
+
+      <AIDraftDialog
+        open={showAIDraft}
+        onOpenChange={setShowAIDraft}
+        contextType="lead"
+        contextId={id}
+        contextName={`Lead · ${lead?.name || lead?.company || ''}`}
       />
     </div>
   );
