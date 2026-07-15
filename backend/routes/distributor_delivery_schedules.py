@@ -1423,36 +1423,44 @@ async def delete_schedule(schedule_id: str, current_user: dict = Depends(get_cur
 # ============ PDF =================================================================
 
 async def _collect_sku_bottle_designs(schedule: dict, tenant_id: str) -> dict:
-    """Map (account_id, sku_id) → approved bottle design image bytes for every
-    SKU on the schedule, sourced from the account's SKU Details (sku_pricing)."""
-    pairs: set = set()
-    account_ids: set = set()
+    """Map (account_ref, sku_ref) → approved bottle design image bytes for every
+    SKU on the schedule, sourced from the account's SKU Details (sku_pricing).
+
+    Robust to legacy data: account_ref keys include BOTH the UUID and the human
+    account code; sku_ref keys include the sku_id AND a name-based fallback
+    ('name:<lowercased sku name>') for rows/items that predate sku_id."""
+    account_refs: set = set()
     for delv in schedule.get("deliveries") or []:
-        acc = delv.get("account_id")
-        if not acc:
-            continue
-        for it in delv.get("items") or []:
-            if it.get("sku_id"):
-                pairs.add((acc, it["sku_id"]))
-                account_ids.add(acc)
-    if not pairs:
+        if delv.get("account_id") and (delv.get("items") or []):
+            account_refs.add(delv["account_id"])
+    if not account_refs:
         return {}
     from object_storage import get_object
     designs: dict = {}
     async for a in db.accounts.find(
-        {"id": {"$in": list(account_ids)}, "tenant_id": tenant_id},
-        {"_id": 0, "id": 1, "sku_pricing": 1},
+        {"tenant_id": tenant_id,
+         "$or": [{"id": {"$in": list(account_refs)}}, {"account_id": {"$in": list(account_refs)}}]},
+        {"_id": 0, "id": 1, "account_id": 1, "sku_pricing": 1},
     ):
         for row in a.get("sku_pricing") or []:
-            key = (a["id"], row.get("sku_id"))
             path = row.get("bottle_design_storage_path")
-            if key in pairs and path:
-                try:
-                    data, _ct = get_object(path)
-                    if data:
-                        designs[key] = data
-                except Exception:
-                    logger.warning(f"Bottle design fetch failed for {key}: {path}")
+            if not path:
+                continue
+            try:
+                data, _ct = get_object(path)
+            except Exception:
+                logger.warning(f"Bottle design fetch failed: {path}")
+                continue
+            if not data:
+                continue
+            for acc_key in (a.get("id"), a.get("account_id")):
+                if not acc_key:
+                    continue
+                if row.get("sku_id"):
+                    designs[(acc_key, row["sku_id"])] = data
+                name = (row.get("sku") or "").strip().lower()
+                if name:
+                    designs[(acc_key, f"name:{name}")] = data
     return designs
 
 
@@ -1754,7 +1762,11 @@ def _build_schedule_pdf(schedule: dict, dist: dict, sku_designs: dict = None) ->
             ))
             # Approved bottle design (full colour) from the account's SKU Details —
             # helps the driver pick the correct branded bottle from the warehouse.
-            img_bytes = (sku_designs or {}).get((delv.get("account_id"), it.get("sku_id")))
+            img_bytes = None
+            if sku_designs and delv.get("account_id"):
+                acc_key = delv["account_id"]
+                img_bytes = (sku_designs.get((acc_key, it.get("sku_id")))
+                             or sku_designs.get((acc_key, f"name:{str(it.get('sku_name') or '').strip().lower()}")))
             if img_bytes:
                 try:
                     reader = ImageReader(io.BytesIO(img_bytes))
