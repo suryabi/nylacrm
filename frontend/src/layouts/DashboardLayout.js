@@ -9,7 +9,6 @@ import { Button } from '../components/ui/button';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../components/ui/select';
 import AskNyla from '../components/widgets/AskNyla';
 import AIAssistant from '../components/ai/AIAssistant';
-import DistributorChatButton from '../components/DistributorChatButton';
 import NotificationBell from '../components/NotificationBell';
 import FacilitySwitcher from '../components/distributor/FacilitySwitcher';
 import { 
@@ -766,8 +765,6 @@ export default function DashboardLayout({ children }) {
       <AskNyla />
       {/* AI Assistant (ChatGPT) — global floating chat grounded in CRM data */}
       <AIAssistant />
-      {/* Distributor ↔ Supplier chat — auto-hides for non-distributor / non-supplier roles */}
-      <DistributorChatButton />
     </div>
   );
 }
