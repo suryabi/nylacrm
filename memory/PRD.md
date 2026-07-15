@@ -23,6 +23,17 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-14 — 🤖 ChatGPT AI integration (Emergent Universal Key, OpenAI gpt-5.4) ✅ DONE (tested)
+- **User request**: integrate ChatGPT with (a) AI assistant chat, (b) smart drafting, (c) data insights, (d) lead intelligence — Emergent key.
+- **Backend NEW** (`routes/ai_assistant.py`, mounted `/api/ai`, emergentintegrations 0.2.0 streaming API, model openai/gpt-5.4):
+  - `POST /chat` (SSE) — multi-turn assistant grounded in tenant CRM data: keyword-routed context injection (stock incl. branded split, shipments, deliveries, transfers, accounts, leads, issues, distributors + always a snapshot); history persisted in `ai_chat_sessions`/`ai_chat_messages`, last 12 messages replayed as transcript. Session CRUD: GET/POST `/sessions`, GET `/sessions/{id}/messages`, DELETE `/sessions/{id}`.
+  - `POST /draft` (SSE) — draft_type email|whatsapp|proposal|summary|issue_response for context_type account|lead|issue, with context fetched server-side (account + recent deliveries; lead + activity log; complaint doc) + optional user instructions.
+  - `POST /insights` (SSE) — management digest from MTD vs last-month deliveries, top accounts, lead pipeline, stock & open issues (sections: Highlights/Sales/Inventory/Pipeline/Risks).
+  - SSE responses use `X-Accel-Buffering: no`; tenant captured before generator (ContextVar-safe). `EMERGENT_LLM_KEY` in backend/.env.
+- **Frontend NEW** (`components/ai/`): `aiStream.js` (shared SSE fetch reader), `AIAssistant.jsx` (global bottom-right floating launcher + chat panel with sessions dropdown, suggestion chips, markdown streaming — mounted in `DashboardLayout`), `AIDraftDialog.jsx` (+ exported `AIAssistButton`; used on LeadDetail & AccountDetail headers), `AIInsightsCard.jsx` (bottom of `/dashboard`).
+- **Verified**: curl (chat streamed correct counts 13 accounts/17 distributors, multi-turn context answered follow-up, WhatsApp draft used real lead context, insights digest correct MTD numbers) + testing_agent iteration_328 (5/5 frontend: chat + follow-up + session persistence, insights digest, lead draft, account dialog, no new console errors; copy-button clipboard failure is headless-test-env only).
+- Note: upgraded `emergentintegrations` 0.1.0 → 0.2.0 (streaming API); requirements.txt refreshed.
+
 ### 2026-07-14 — 🎨 Retro categorization UX rework: distributor-scoped + searchable picker ✅ DONE (tested)
 - **User feedback v1**: "not user friendly — searchable, autocomplete, clean UX" → cmdk `Command` searchable picker (matches SKU name, account name AND city), options show account + city, auto-select single match as violet chip with X-to-change, line summary card, cleaner qty/split hints.
 - **User feedback v2 (correction)**: scope is NOT city — "show the accounts that belong to the destination distributor". `GET /api/retro-categorize/eligible-children` accepts `distributor_id` and filters children to accounts having an ACTIVE `account_distributor_assignments` row for that distributor; returns `distributor_name` + `filtered_by_distributor`. Green badge reads "Accounts of {distributor}". Deliveries stay strictly account-scoped. Callers: shipment passes the page distributor id, transfer passes `dest_distributor_id`.
