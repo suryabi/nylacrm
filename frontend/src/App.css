@@ -97,3 +97,8 @@ input[type="number"]::-webkit-outer-spin-button {
 input[type="number"] {
     -moz-appearance: textfield;
 }
+
+/* Hide the Ask Nyla right-edge tab while the AI Assistant inline panel is docked */
+body.ai-panel-open [data-testid="ask-nyla-button"] {
+  display: none;
+}

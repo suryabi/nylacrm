@@ -37,6 +37,12 @@ export default function AIAssistant() {
       .catch(() => {});
   }, [open]);  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Hide the Ask Nyla right-edge tab while the inline panel is docked (visual clash).
+  useEffect(() => {
+    document.body.classList.toggle('ai-panel-open', open);
+    return () => document.body.classList.remove('ai-panel-open');
+  }, [open]);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const loadSession = async (sid) => {
