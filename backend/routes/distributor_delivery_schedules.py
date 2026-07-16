@@ -1544,13 +1544,34 @@ async def debug_bottle_designs(delivery_number: str, current_user: dict = Depend
             "customer_name": dv.get("customer_name"), "items": items,
         })
 
+    matched_count = sum(
+        1 for dv in deliveries_report for it in dv["items"] if it["matched_via"]
+    )
     return {
         "schedule_id": schedule_id,
         "deliveries": deliveries_report,
         "accounts_checked": accounts_report,
         "design_keys_resolved": [f"{k[0]} | {k[1]}" for k in designs],
         "design_bytes": {f"{k[0]} | {k[1]}": len(v) for k, v in designs.items()},
+        # Full pipeline test: build the actual driver sheet in memory and report
+        # whether the design images really got embedded.
+        **_debug_pdf_probe(s, designs, matched_count),
     }
+
+
+def _debug_pdf_probe(schedule: dict, designs: dict, matched_count: int) -> dict:
+    embed_errors: list = []
+    try:
+        pdf = _build_schedule_pdf(schedule, {}, designs, embed_errors=embed_errors)
+        return {
+            "pdf_built": True,
+            "pdf_bytes": len(pdf),
+            "design_images_expected": matched_count,
+            "design_images_embedded": matched_count - len(embed_errors),
+            "image_embed_errors": embed_errors,
+        }
+    except Exception as e:
+        return {"pdf_built": False, "pdf_build_error": repr(e), "image_embed_errors": embed_errors}
 
 
 @router.get("/{schedule_id}/pdf")
@@ -1578,7 +1599,8 @@ async def download_schedule_pdf(schedule_id: str, current_user: dict = Depends(g
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        headers={"Content-Disposition": f'inline; filename="{filename}"',
+                 "Cache-Control": "no-store, no-cache, max-age=0"},
     )
 
 
@@ -1696,6 +1718,7 @@ async def download_schedule_bundle_pdf(
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'{disposition}; filename="{filename}"',
+            "Cache-Control": "no-store, no-cache, max-age=0",
             "X-Bundle-Schedule-Pages": "1",
             "X-Bundle-Invoice-Pages": str(doc_pages),
             "X-Bundle-Skipped": ("; ".join(skipped).encode("ascii", "replace").decode("ascii")) if skipped else "",
@@ -1761,7 +1784,7 @@ def _address_cell(addr: dict, addr_str: str, body_style, small_style):
     return flowables
 
 
-def _build_schedule_pdf(schedule: dict, dist: dict, sku_designs: dict = None) -> bytes:
+def _build_schedule_pdf(schedule: dict, dist: dict, sku_designs: dict = None, embed_errors: list = None) -> bytes:
     """Build the delivery sheet using ReportLab. Minimal, driver-friendly layout.
 
     `sku_designs` maps (account_id, sku_id) → approved bottle design image bytes
@@ -1870,8 +1893,10 @@ def _build_schedule_pdf(schedule: dict, dist: dict, sku_designs: dict = None) ->
                     items_lines.append(Spacer(1, 1.5 * mm))
                     items_lines.append(img)
                     items_lines.append(Spacer(1, 1.5 * mm))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Bottle design embed failed for {it.get('sku_name')}: {e!r}")
+                    if embed_errors is not None:
+                        embed_errors.append(f"{it.get('sku_name')}: {e!r}")
         items_cell = items_lines or Paragraph("—", body)
 
         # Delivery contact block: the account's "Delivery"-category contact

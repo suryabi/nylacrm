@@ -379,7 +379,7 @@ export default function DeliveryScheduleDetail() {
 
   const fetchBundleBlob = async () => {
     const response = await axios.get(
-      `${BASE}/${id}/bundle-pdf?inline=true`,
+      `${BASE}/${id}/bundle-pdf?inline=true&t=${Date.now()}`,
       { responseType: 'blob', withCredentials: true }
     );
     const skipped = response.headers['x-bundle-skipped'] || '';
