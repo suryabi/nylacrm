@@ -126,6 +126,121 @@ async def rebalance_negative_stock(
     return {"applied": apply, "total_moves": len(moves), "moves": moves}
 
 
+@router.get("/reconcile-batch-stock")
+async def reconcile_batch_stock(
+    batch_code: str,
+    apply: bool = False,
+    current_user: dict = Depends(get_current_user),
+):
+    """Compares the RAW factory_warehouse_stock rows for a batch against the
+    EXPECTED on-hand derived from movement evidence (warehouse transfers in −
+    confirmed shipments out − completed direct deliveries out ± completed stock
+    transfers). Reports the delta per warehouse; ?apply=true corrects the rows
+    to the evidence-based expected value (adjustment applied to the largest row)."""
+    _ensure_admin(current_user)
+    tenant_id = get_current_tenant_id()
+    now = datetime.now(timezone.utc).isoformat()
+
+    batch = await db.production_batches.find_one(
+        {"tenant_id": tenant_id, "batch_code": batch_code}, {"_id": 0, "id": 1, "sku_id": 1})
+    if not batch:
+        raise HTTPException(404, f"Batch {batch_code} not found")
+    batch_id = batch["id"]
+
+    # IN: QC → factory warehouse transfers
+    in_by_wh: dict = {}
+    async for t in db.warehouse_transfers.find(
+            {"tenant_id": tenant_id, "batch_id": batch_id}, {"_id": 0, "warehouse_location_id": 1, "quantity": 1}):
+        wid = t.get("warehouse_location_id")
+        if wid:
+            in_by_wh[wid] = in_by_wh.get(wid, 0) + int(t.get("quantity") or 0)
+
+    # OUT 1: confirmed Stock-In shipments leaving a factory warehouse
+    out_by_wh: dict = {}
+    ship_items = await db.distributor_shipment_items.find(
+        {"tenant_id": tenant_id, "batch_id": batch_id}, {"_id": 0, "shipment_id": 1, "quantity": 1}).to_list(2000)
+    ship_ids = list({i["shipment_id"] for i in ship_items if i.get("shipment_id")})
+    ships = {s["id"]: s for s in await db.distributor_shipments.find(
+        {"tenant_id": tenant_id, "id": {"$in": ship_ids},
+         "status": {"$nin": ["draft", "pending", "cancelled"]}},
+        {"_id": 0, "id": 1, "source_warehouse_id": 1, "shipment_number": 1}).to_list(2000)} if ship_ids else {}
+    for i in ship_items:
+        s = ships.get(i.get("shipment_id"))
+        if s and s.get("source_warehouse_id"):
+            wid = s["source_warehouse_id"]
+            out_by_wh[wid] = out_by_wh.get(wid, 0) + int(i.get("quantity") or 0)
+
+    # OUT 2: completed direct factory→account deliveries
+    delv_items = await db.distributor_delivery_items.find(
+        {"tenant_id": tenant_id, "batch_id": batch_id}, {"_id": 0, "delivery_id": 1, "quantity": 1}).to_list(2000)
+    delv_ids = list({i["delivery_id"] for i in delv_items if i.get("delivery_id")})
+    delvs = {d["id"]: d for d in await db.distributor_deliveries.find(
+        {"tenant_id": tenant_id, "id": {"$in": delv_ids},
+         "status": {"$in": ["complete", "completed", "delivered"]}},
+        {"_id": 0, "id": 1, "distributor_location_id": 1, "delivery_number": 1}).to_list(2000)} if delv_ids else {}
+    delivery_out_detail = []
+    for i in delv_items:
+        d = delvs.get(i.get("delivery_id"))
+        if d and d.get("distributor_location_id"):
+            wid = d["distributor_location_id"]
+            out_by_wh[wid] = out_by_wh.get(wid, 0) + int(i.get("quantity") or 0)
+            delivery_out_detail.append({"delivery_number": d.get("delivery_number"), "units": int(i.get("quantity") or 0)})
+
+    # OUT/IN 3: completed inter-warehouse stock transfers carrying this batch
+    async for x in db.distributor_stock_transfers.find(
+            {"tenant_id": tenant_id, "status": "completed", "items.batch_id": batch_id},
+            {"_id": 0, "source_location_id": 1, "dest_location_id": 1, "items": 1}):
+        for it in x.get("items") or []:
+            if it.get("batch_id") != batch_id:
+                continue
+            units = int(it.get("quantity_units") or it.get("quantity") or 0)
+            if x.get("source_location_id"):
+                out_by_wh[x["source_location_id"]] = out_by_wh.get(x["source_location_id"], 0) + units
+            if x.get("dest_location_id"):
+                in_by_wh[x["dest_location_id"]] = in_by_wh.get(x["dest_location_id"], 0) + units
+
+    # ACTUAL rows
+    rows = await db.factory_warehouse_stock.find(
+        {"tenant_id": tenant_id, "batch_id": batch_id}).to_list(500)
+    actual_by_wh: dict = {}
+    rows_by_wh: dict = {}
+    for r in rows:
+        wid = r.get("warehouse_location_id")
+        actual_by_wh[wid] = actual_by_wh.get(wid, 0) + int(r.get("quantity") or 0)
+        rows_by_wh.setdefault(wid, []).append(r)
+
+    report = []
+    for wid in set(list(in_by_wh) + list(out_by_wh) + list(actual_by_wh)):
+        expected = in_by_wh.get(wid, 0) - out_by_wh.get(wid, 0)
+        actual = actual_by_wh.get(wid, 0)
+        delta = actual - expected
+        corrected = False
+        if apply and delta != 0 and rows_by_wh.get(wid):
+            target = max(rows_by_wh[wid], key=lambda r: int(r.get("quantity") or 0))
+            await db.factory_warehouse_stock.update_one(
+                {"_id": target["_id"]},
+                {"$inc": {"quantity": -delta},
+                 "$set": {"updated_at": now,
+                          "reconcile_note": f"Reconciled {delta:+d} on {now} by {current_user.get('email')} (evidence-based)"}})
+            corrected = True
+        report.append({
+            "warehouse_location_id": wid,
+            "received_in": in_by_wh.get(wid, 0),
+            "moved_out": out_by_wh.get(wid, 0),
+            "expected_on_hand": expected,
+            "actual_rows_total": actual,
+            "delta_phantom_units": delta,
+            "row_quantities": [{"quantity": r.get("quantity"), "child_sku_name": r.get("child_sku_name") or "Generic"} for r in rows_by_wh.get(wid, [])],
+            "corrected": corrected,
+        })
+    return {
+        "batch_code": batch_code,
+        "applied": apply,
+        "warehouses": report,
+        "delivery_out_detail": delivery_out_detail,
+    }
+
+
 @router.get("/search")
 async def search_batches(
     q: str = "",
