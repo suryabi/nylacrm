@@ -1488,6 +1488,71 @@ async def _collect_sku_bottle_designs(schedule: dict, tenant_id: str) -> dict:
     return designs
 
 
+@router.get("/debug/bottle-designs")
+async def debug_bottle_designs(delivery_number: str, current_user: dict = Depends(get_current_user)):
+    """Admin diagnostic: shows exactly how bottle-design matching resolves for
+    the schedule containing the given delivery number. Open in a browser while
+    logged in, e.g. /api/distributor/delivery-schedules/debug/bottle-designs?delivery_number=DEL-2026-0226"""
+    if current_user.get("role") not in ("CEO", "Admin", "System Admin"):
+        raise HTTPException(status_code=403, detail="Admins only")
+    tenant_id = get_current_tenant_id()
+    d = await db.distributor_deliveries.find_one(
+        {"tenant_id": tenant_id, "delivery_number": delivery_number},
+        {"_id": 0, "id": 1, "account_id": 1, "account_name": 1})
+    if not d:
+        raise HTTPException(status_code=404, detail=f"Delivery {delivery_number} not found")
+    s = await db.distributor_delivery_schedules.find_one(
+        {"tenant_id": tenant_id, "delivery_ids": d["id"]}, {"_id": 0})
+    schedule_id = s.get("id") if s else None
+    if not s:
+        s = {"delivery_ids": [d["id"]]}
+    s = await _enrich_schedule(s, tenant_id)
+    designs = await _collect_sku_bottle_designs(s, tenant_id)
+
+    account_refs = sorted({dv.get("account_id") for dv in s.get("deliveries") or [] if dv.get("account_id")})
+    accounts_report = []
+    if account_refs:
+        async for a in db.accounts.find(
+            {"tenant_id": tenant_id,
+             "$or": [{"id": {"$in": account_refs}}, {"account_id": {"$in": account_refs}}]},
+            {"_id": 0, "id": 1, "account_id": 1, "account_name": 1, "sku_pricing": 1},
+        ):
+            accounts_report.append({
+                "id": a.get("id"), "account_code": a.get("account_id"), "name": a.get("account_name"),
+                "sku_pricing_rows": [
+                    {"sku": r.get("sku"), "sku_id": r.get("sku_id"),
+                     "has_design": bool(r.get("bottle_design_storage_path")),
+                     "storage_path": r.get("bottle_design_storage_path")}
+                    for r in a.get("sku_pricing") or []
+                ],
+            })
+
+    deliveries_report = []
+    for dv in s.get("deliveries") or []:
+        acc_key = dv.get("account_id")
+        items = []
+        for it in dv.get("items") or []:
+            matched = None
+            if designs and acc_key:
+                if (acc_key, it.get("sku_id")) in designs:
+                    matched = "sku_id"
+                elif (acc_key, f"name:{_norm_sku_name(it.get('sku_name'))}") in designs:
+                    matched = "name"
+            items.append({"sku_id": it.get("sku_id"), "sku_name": it.get("sku_name"), "matched_via": matched})
+        deliveries_report.append({
+            "delivery_number": dv.get("delivery_number"), "account_id_on_delivery": acc_key,
+            "customer_name": dv.get("customer_name"), "items": items,
+        })
+
+    return {
+        "schedule_id": schedule_id,
+        "deliveries": deliveries_report,
+        "accounts_checked": accounts_report,
+        "design_keys_resolved": [f"{k[0]} | {k[1]}" for k in designs],
+        "design_bytes": {f"{k[0]} | {k[1]}": len(v) for k, v in designs.items()},
+    }
+
+
 @router.get("/{schedule_id}/pdf")
 async def download_schedule_pdf(schedule_id: str, current_user: dict = Depends(get_current_user)):
     """Generate a driver-friendly delivery sheet PDF for a CONFIRMED schedule."""
