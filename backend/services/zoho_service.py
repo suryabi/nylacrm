@@ -1725,7 +1725,14 @@ async def create_invoice_for_delivery(
     if incentive_total > 0:
         invoice_payload["adjustment"] = -round(incentive_total, 2)
         suffix = f" ({', '.join(cn_numbers)})" if cn_numbers else ""
-        invoice_payload["adjustment_description"] = f"Sustainability Incentive — Bottle Return{suffix}"
+        # Customers asked to see HOW MANY bottles the credit covers — resolve
+        # the bottle count from the credit notes' underlying customer returns.
+        bottles = await _bottles_for_applied_credit_notes(tenant_id, applied_cns)
+        if bottles > 0:
+            invoice_payload["adjustment_description"] = (
+                f"Sustainability Incentive — {bottles} Bottle{'s' if bottles != 1 else ''} Returned{suffix}")
+        else:
+            invoice_payload["adjustment_description"] = f"Sustainability Incentive — Bottle Return{suffix}"
 
     # ── Bill To / Ship To: delegate to the Zoho contact ─────────────────────
     # We deliberately DO NOT send `billing_address` or `shipping_address` on
@@ -2080,6 +2087,47 @@ async def create_credit_note_for_return(
         upsert=True,
     )
     return mapping_doc
+
+
+async def _bottles_for_applied_credit_notes(tenant_id: str, applied: list) -> int:
+    """Total bottles behind the credit notes applied to a delivery.
+
+    Resolves each CN → its customer return → `total_quantity` (bottles).
+    Partial applications are pro-rated by amount so the printed count matches
+    the credit actually given on THIS invoice."""
+    amount_by_cn: dict = {}
+    for a in applied or []:
+        cid = a.get("credit_note_id")
+        if not cid:
+            continue
+        try:
+            amount_by_cn[cid] = amount_by_cn.get(cid, 0.0) + float(a.get("amount_applied") or 0)
+        except (TypeError, ValueError):
+            pass
+    if not amount_by_cn:
+        return 0
+    cns = await db.credit_notes.find(
+        {"tenant_id": tenant_id, "id": {"$in": list(amount_by_cn)}},
+        {"_id": 0, "id": 1, "return_id": 1, "original_amount": 1},
+    ).to_list(len(amount_by_cn))
+    ret_ids = [c["return_id"] for c in cns if c.get("return_id")]
+    rets = {r["id"]: r for r in await db.customer_returns.find(
+        {"tenant_id": tenant_id, "id": {"$in": ret_ids}},
+        {"_id": 0, "id": 1, "total_quantity": 1},
+    ).to_list(len(ret_ids) or 1)} if ret_ids else {}
+    bottles = 0.0
+    for c in cns:
+        ret = rets.get(c.get("return_id"))
+        if not ret:
+            continue
+        qty = float(ret.get("total_quantity") or 0)
+        orig = float(c.get("original_amount") or 0)
+        applied_amt = amount_by_cn.get(c["id"], 0.0)
+        if orig > 0 and applied_amt < orig - 0.01:
+            bottles += qty * (applied_amt / orig)
+        else:
+            bottles += qty
+    return int(round(bottles))
 
 
 async def apply_credit_notes_to_zoho_invoice(

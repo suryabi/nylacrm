@@ -23,6 +23,11 @@ React + FastAPI + MongoDB (multi-tenant). Object storage via Emergent integratio
 - surya.yadavalli@nylaairwater.earth / test123 — Tenant: `nyla-air-water` — Role: CEO/Admin
 
 ## What's implemented (changelog)
+### 2026-07-15 — 🧾 Bottle count on Zoho invoice sustainability credit ✅ DONE (tested)
+- **User request**: customers want to see how many bottles the return credit covers on the Zoho invoice.
+- **Backend** (`services/zoho_service.py`): new `_bottles_for_applied_credit_notes` — resolves each applied CN → its customer return → `total_quantity`, pro-rated by amount on partial applications. Invoice `adjustment_description` now reads "Sustainability Incentive — 10 Bottles Returned (CN-2026-0001)" (falls back to old wording when count can't be resolved).
+- **Verified**: helper tested against real CN data (full=10, half-applied=5, unknown CN/empty → 0 with fallback). Needs production redeploy + next invoice push to see it live in Zoho.
+
 ### 2026-07-15 — 🚚 Bottle designs in the Delivery/Driver Bundle PDF ✅ DONE (tested)
 - **User request**: the Driver Bundle PDF must show each SKU's approved bottle design (full colour, from the account's SKU Details) so the delivery team picks the correct bottle at the warehouse.
 - **Backend** (`routes/distributor_delivery_schedules.py`): `_enrich_schedule` items now carry `sku_id`; new `_collect_sku_bottle_designs(schedule, tenant_id)` maps (account_id, sku_id) → design bytes from `sku_pricing[].bottle_design_storage_path` (object storage, failures logged not fatal); `_build_schedule_pdf(schedule, dist, sku_designs)` renders a full-colour RLImage (≤22mm h / ≤30mm w, aspect kept) under each SKU line in the Crates/packages column. Both `/pdf` (driver sheet) and `/bundle-pdf` (bundle page 1) call sites pass designs.
